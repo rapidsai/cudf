@@ -30,8 +30,8 @@
 #include <cudf/table/table.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/sequence.h>
 
+#include <numeric>
 #include <string>
 
 template <typename T>
@@ -51,26 +51,21 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   static std::size_t mask_size() { return 100; }
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
-  TypedColumnTest()
-    : data{_num_elements * cudf::size_of(type()), rmm::cuda_stream_default},
-      mask{cudf::bitmask_allocation_size_bytes(_num_elements), rmm::cuda_stream_default}
+  TypedColumnTest(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+    : data{_num_elements * cudf::size_of(type()), stream},
+      mask{cudf::bitmask_allocation_size_bytes(_num_elements), stream}
   {
     auto typed_data = static_cast<char*>(data.data());
     auto typed_mask = static_cast<char*>(mask.data());
     std::vector<char> h_data(data_size());
-    thrust::sequence(h_data.begin(), h_data.end());
+    std::iota(h_data.begin(), h_data.end(), char{0});
     std::vector<char> h_mask(mask_size());
-    thrust::sequence(h_mask.begin(), h_mask.end());
-    CUDA_TRY(cudaMemcpyAsync(typed_data,
-                             h_data.data(),
-                             data_size(),
-                             cudaMemcpyHostToDevice,
-                             rmm::cuda_stream_default.value()));
-    CUDA_TRY(cudaMemcpyAsync(typed_mask,
-                             h_mask.data(),
-                             mask_size(),
-                             cudaMemcpyHostToDevice,
-                             rmm::cuda_stream_default.value()));
+    std::iota(h_mask.begin(), h_mask.end(), char{0});
+    CUDA_TRY(cudaMemcpyAsync(
+      typed_data, h_data.data(), data_size(), cudaMemcpyHostToDevice, stream.value()));
+    CUDA_TRY(cudaMemcpyAsync(
+      typed_mask, h_mask.data(), mask_size(), cudaMemcpyHostToDevice, stream.value()));
+    stream.synchronize();
   }
 
   cudf::size_type num_elements() { return _num_elements; }
