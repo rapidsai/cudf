@@ -180,28 +180,31 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_
   size_type const build_table_num_rows{build_device_table->num_rows()};
   std::size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
 
+  /*
   auto hash_table = multimap_type::create(hash_table_size,
                                           stream,
                                           true,
                                           multimap_type::hasher(),
                                           multimap_type::key_equal(),
                                           multimap_type::allocator_type());
+                                          */
+  auto hash_table = std::make_unique<multimap_type>(hash_table_size,
+                                                    std::numeric_limits<hash_value_type>::max(),
+                                                    std::numeric_limits<size_type>::max());
+
+  auto hash_table_view = hash_table->get_device_mutable_view();
 
   row_hash hash_build{*build_device_table};
-  rmm::device_scalar<int> failure(0, stream);
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(build_table_num_rows, block_size);
   auto const row_bitmask = (compare_nulls == null_equality::EQUAL)
                              ? rmm::device_buffer{0, stream}
                              : cudf::detail::bitmask_and(build, stream);
   build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-    *hash_table,
+    hash_table_view,
     hash_build,
     build_table_num_rows,
-    static_cast<bitmask_type const *>(row_bitmask.data()),
-    failure.data());
-  // Check error code from the kernel
-  if (failure.value(stream) == 1) { CUDF_FAIL("Hash Table insert failure."); }
+    static_cast<bitmask_type const *>(row_bitmask.data()));
 
   return hash_table;
 }
@@ -251,6 +254,7 @@ probe_join_hash_table(cudf::table_device_view build_table,
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
+  auto const hash_table_view = hash_table.get_device_view();
 
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(probe_table.num_rows(), block_size);
@@ -258,12 +262,9 @@ probe_join_hash_table(cudf::table_device_view build_table,
   row_hash hash_probe{probe_table};
   row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
   if constexpr (JoinKind == cudf::detail::join_kind::FULL_JOIN) {
-    probe_hash_table<cudf::detail::join_kind::LEFT_JOIN,
-                     multimap_type,
-                     block_size,
-                     DEFAULT_JOIN_CACHE_SIZE>
+    probe_hash_table<cudf::detail::join_kind::LEFT_JOIN, block_size, DEFAULT_JOIN_CACHE_SIZE>
       <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-        hash_table,
+        hash_table_view,
         build_table,
         probe_table,
         hash_probe,
@@ -276,9 +277,9 @@ probe_join_hash_table(cudf::table_device_view build_table,
     left_indices->resize(actual_size, stream);
     right_indices->resize(actual_size, stream);
   } else {
-    probe_hash_table<JoinKind, multimap_type, block_size, DEFAULT_JOIN_CACHE_SIZE>
+    probe_hash_table<JoinKind, block_size, DEFAULT_JOIN_CACHE_SIZE>
       <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-        hash_table,
+        hash_table_view,
         build_table,
         probe_table,
         hash_probe,
@@ -323,17 +324,15 @@ std::size_t get_full_join_size(cudf::table_device_view build_table,
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
+  auto const hash_table_view = hash_table.get_device_view();
 
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(probe_table.num_rows(), block_size);
 
   row_hash hash_probe{probe_table};
   row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
-  probe_hash_table<cudf::detail::join_kind::LEFT_JOIN,
-                   multimap_type,
-                   block_size,
-                   DEFAULT_JOIN_CACHE_SIZE>
-    <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(hash_table,
+  probe_hash_table<cudf::detail::join_kind::LEFT_JOIN, block_size, DEFAULT_JOIN_CACHE_SIZE>
+    <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(hash_table_view,
                                                                              build_table,
                                                                              probe_table,
                                                                              hash_probe,

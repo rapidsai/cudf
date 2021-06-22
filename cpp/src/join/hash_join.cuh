@@ -91,8 +91,9 @@ std::size_t compute_join_output_size(table_device_view build_table,
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   int numBlocks{-1};
 
+  using multimap_view_type = typename multimap_type::device_view;
   CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &numBlocks, compute_join_output_size<JoinKind, multimap_type, block_size>, block_size, 0));
+    &numBlocks, compute_join_output_size<JoinKind, block_size, multimap_view_type>, block_size, 0));
 
   int dev_id{-1};
   CUDA_TRY(cudaGetDevice(&dev_id));
@@ -102,10 +103,11 @@ std::size_t compute_join_output_size(table_device_view build_table,
 
   row_hash hash_probe{probe_table};
   row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
+  auto const hash_table_view = hash_table.get_device_view();
   // Probe the hash table without actually building the output to simply
   // find what the size of the output will be.
-  compute_join_output_size<JoinKind, multimap_type, block_size>
-    <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(hash_table,
+  compute_join_output_size<JoinKind, block_size>
+    <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(hash_table_view,
                                                              build_table,
                                                              probe_table,
                                                              hash_probe,

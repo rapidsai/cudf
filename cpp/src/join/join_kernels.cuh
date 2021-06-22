@@ -77,15 +77,15 @@ constexpr auto remap_sentinel_hash(H hash, S sentinel)
  * value in row `i` of input keys. This is nullptr if nulls are equal.
  * @param[out] error Pointer used to set an error code if the insert fails
  */
-template <typename multimap_type>
-__global__ void build_hash_table(multimap_type multi_map,
+template <typename multimap_view_type>
+__global__ void build_hash_table(multimap_view_type multi_map,
                                  row_hash hash_build,
                                  const cudf::size_type build_table_num_rows,
-                                 bitmask_type const* row_bitmask,
-                                 int* error)
+                                 bitmask_type const* row_bitmask)
 {
   cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
+  /*
   while (i < build_table_num_rows) {
     if (!row_bitmask || cudf::bit_is_set(row_bitmask, i)) {
       // Compute the hash value of this row
@@ -102,6 +102,7 @@ __global__ void build_hash_table(multimap_type multi_map,
     }
     i += blockDim.x * gridDim.x;
   }
+  */
 }
 
 /**
@@ -120,8 +121,8 @@ __global__ void build_hash_table(multimap_type multi_map,
  * @param[in] probe_table_num_rows The number of rows in the probe table
  * @param[out] output_size The resulting output size
  */
-template <join_kind JoinKind, typename multimap_type, int block_size>
-__global__ void compute_join_output_size(multimap_type multi_map,
+template <join_kind JoinKind, int block_size, typename multimap_view_type>
+__global__ void compute_join_output_size(multimap_view_type multi_map,
                                          table_device_view build_table,
                                          table_device_view probe_table,
                                          row_hash hash_probe,
@@ -138,6 +139,7 @@ __global__ void compute_join_output_size(multimap_type multi_map,
   cudf::size_type thread_counter{0};
   const cudf::size_type start_idx = threadIdx.x + blockIdx.x * blockDim.x;
   const cudf::size_type stride    = blockDim.x * gridDim.x;
+  /*
   const auto unused_key           = multi_map.get_unused_key();
   const auto end                  = multi_map.end();
 
@@ -197,6 +199,7 @@ __global__ void compute_join_output_size(multimap_type multi_map,
 
   // Add block counter to global counter
   if (threadIdx.x == 0) atomicAdd(output_size, block_counter);
+  */
 }
 
 /**
@@ -298,10 +301,10 @@ __device__ void flush_output_cache(const unsigned int activemask,
  * @param[in] max_size The maximum size of the output
  */
 template <join_kind JoinKind,
-          typename multimap_type,
           cudf::size_type block_size,
-          cudf::size_type output_cache_size>
-__global__ void probe_hash_table(multimap_type multi_map,
+          cudf::size_type output_cache_size,
+          typename multimap_view_type>
+__global__ void probe_hash_table(multimap_view_type multi_map,
                                  table_device_view build_table,
                                  table_device_view probe_table,
                                  row_hash hash_probe,
@@ -325,6 +328,8 @@ __global__ void probe_hash_table(multimap_type multi_map,
   __syncwarp();
 
   size_type probe_row_index = threadIdx.x + blockIdx.x * blockDim.x;
+
+  /*
 
   const unsigned int activemask = __ballot_sync(0xffffffff, probe_row_index < probe_table_num_rows);
   if (probe_row_index < probe_table_num_rows) {
@@ -425,6 +430,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
                                                        join_output_r);
     }
   }
+*/
 }
 
 /**
