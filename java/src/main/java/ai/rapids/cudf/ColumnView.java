@@ -594,12 +594,80 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new ColumnVector array with slices from the original ColumnVector
    */
   public final ColumnVector[] split(int... indices) {
-    long[] nativeHandles = split(this.getNativeView(), indices);
-    ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
-    for (int i = 0; i < nativeHandles.length; i++) {
-      columnVectors[i] = new ColumnVector(nativeHandles[i]);
+    ColumnView[] views = splitAsViews(indices);
+    ColumnVector[] columnVectors = new ColumnVector[views.length];
+    try {
+      for (int i = 0; i < views.length; i++) {
+        columnVectors[i] = views[i].copyToColumnVector();
+      }
+      return columnVectors;
+    } catch (Throwable t) {
+      for (ColumnVector cv : columnVectors) {
+        if (cv != null) {
+          cv.close();
+        }
+      }
+      throw t;
+    } finally {
+      for (ColumnView view : views) {
+        view.close();
+      }
     }
-    return columnVectors;
+  }
+
+  /**
+   * Splits a ColumnView (including null values) into a set of ColumnViews
+   * according to a set of indices. No data is moved or copied.
+   *
+   * IMPORTANT NOTE: Nothing is copied out from the vector and the slices will only be relevant for
+   * the lifecycle of the underlying ColumnVector.
+   *
+   * The "split" function divides the input column into multiple intervals
+   * of rows using the splits indices values and it stores the intervals into the
+   * output columns. Regarding the interval of indices, a pair of values are taken
+   * from the indices array in a consecutive manner. The pair of indices are
+   * left-closed and right-open.
+   *
+   * The indices array ('splits') is required to be a monotonic non-decreasing set.
+   * The indices in the array are required to comply with the following conditions:
+   * a, b belongs to Range[0, input column size]
+   * a <= b, where the position of 'a' is less or equal to the position of 'b'.
+   *
+   * The split function will take a pair of indices from the indices array
+   * ('splits') in a consecutive manner. For the first pair, the function will
+   * take the value 0 and the first element of the indices array. For the last pair,
+   * the function will take the last element of the indices array and the size of
+   * the input column.
+   *
+   * Exceptional cases for the indices array are:
+   * When the values in the pair are equal, the function return an empty column.
+   * When the values in the pair are 'strictly decreasing', the outcome is
+   * undefined.
+   * When any of the values in the pair don't belong to the range[0, input column
+   * size), the outcome is undefined.
+   * When the indices array is empty, an empty array of ColumnViews is returned.
+   *
+   * The output columns may have different sizes. The number of
+   * columns must be equal to the number of indices in the array plus one.
+   *
+   * Example:
+   * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
+   * splits: {2, 5, 9}
+   * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
+   *
+   * Note that this is very similar to the output from a PartitionedTable.
+   *
+   *
+   * @param indices the indices to split with
+   * @return A new ColumnView array with slices from the original ColumnView
+   */
+  public ColumnView[] splitAsViews(int... indices) {
+    long[] nativeHandles = split(this.getNativeView(), indices);
+    ColumnView[] columnViews = new ColumnView[nativeHandles.length];
+    for (int i = 0; i < nativeHandles.length; i++) {
+      columnViews[i] = new ColumnView(nativeHandles[i]);
+    }
+    return columnViews;
   }
 
   /**

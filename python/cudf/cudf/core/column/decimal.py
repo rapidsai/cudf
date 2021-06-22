@@ -2,11 +2,11 @@
 
 from decimal import Decimal
 from typing import Any, Sequence, Tuple, Union, cast
+from warnings import warn
 
 import cupy as cp
 import numpy as np
 import pyarrow as pa
-from pandas.api.types import is_integer_dtype
 
 import cudf
 from cudf import _lib as libcudf
@@ -22,6 +22,7 @@ from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 from .numerical_base import NumericalBaseColumn
+from ...api.types import is_integer_dtype
 
 
 class DecimalColumn(NumericalBaseColumn):
@@ -146,6 +147,15 @@ class DecimalColumn(NumericalBaseColumn):
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DecimalColumn":
+        if (
+            isinstance(dtype, Decimal64Dtype)
+            and dtype.scale < self.dtype.scale
+        ):
+            warn(
+                "cuDF truncates when downcasting decimals to a lower scale. "
+                "To round, use Series.round() or DataFrame.round()."
+            )
+
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
