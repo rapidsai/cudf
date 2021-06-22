@@ -17,6 +17,12 @@ from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.table import Table
 from cudf._typing import DtypeObj
+from cudf.api.types import (
+    _is_scalar_or_zero_d_array,
+    is_dtype_equal,
+    is_integer,
+    is_string_dtype,
+)
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
@@ -46,13 +52,6 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import cached_property, search_range
-
-from ..api.types import (
-    _is_scalar_or_zero_d_array,
-    is_dtype_equal,
-    is_integer,
-    is_string_dtype,
-)
 
 
 class BaseIndex(SingleColumnFrame, Serializable):
