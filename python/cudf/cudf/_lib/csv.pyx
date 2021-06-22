@@ -432,7 +432,6 @@ cpdef write_csv(
     --------
     cudf.io.csv.to_csv
     """
-
     cdef table_view input_table_view = \
         table.view() if index is True else table.data_view()
     cdef bool include_header_c = header

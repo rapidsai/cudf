@@ -19,26 +19,27 @@ import pyarrow as pa
 from numba import cuda
 from nvtx import annotate
 from pandas._config import get_option
-from pandas.api.types import is_dict_like
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
+from cudf.api.types import is_bool_dtype, is_dict_like
 from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
-from cudf.core.index import Index, RangeIndex, as_index
+from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
 from cudf.core.window import Rolling
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    _is_scalar_or_zero_d_array,
     can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
     find_common_type,
@@ -57,46 +58,36 @@ from cudf.utils.utils import GetAttrGetItemMixin
 T = TypeVar("T", bound="DataFrame")
 
 
-def _unique_name(existing_names, suffix="_unique_name"):
-    ret = suffix
-    i = 1
-    while ret in existing_names:
-        ret = "%s_%d" % (suffix, i)
-        i += 1
-    return ret
-
-
-def _reverse_op(fn):
-    return {
-        "add": "radd",
-        "radd": "add",
-        "sub": "rsub",
-        "rsub": "sub",
-        "mul": "rmul",
-        "rmul": "mul",
-        "mod": "rmod",
-        "rmod": "mod",
-        "pow": "rpow",
-        "rpow": "pow",
-        "floordiv": "rfloordiv",
-        "rfloordiv": "floordiv",
-        "truediv": "rtruediv",
-        "rtruediv": "truediv",
-        "__add__": "__radd__",
-        "__radd__": "__add__",
-        "__sub__": "__rsub__",
-        "__rsub__": "__sub__",
-        "__mul__": "__rmul__",
-        "__rmul__": "__mul__",
-        "__mod__": "__rmod__",
-        "__rmod__": "__mod__",
-        "__pow__": "__rpow__",
-        "__rpow__": "__pow__",
-        "__floordiv__": "__rfloordiv__",
-        "__rfloordiv__": "__floordiv__",
-        "__truediv__": "__rtruediv__",
-        "__rtruediv__": "__truediv__",
-    }[fn]
+_reverse_op = {
+    "add": "radd",
+    "radd": "add",
+    "sub": "rsub",
+    "rsub": "sub",
+    "mul": "rmul",
+    "rmul": "mul",
+    "mod": "rmod",
+    "rmod": "mod",
+    "pow": "rpow",
+    "rpow": "pow",
+    "floordiv": "rfloordiv",
+    "rfloordiv": "floordiv",
+    "truediv": "rtruediv",
+    "rtruediv": "truediv",
+    "__add__": "__radd__",
+    "__radd__": "__add__",
+    "__sub__": "__rsub__",
+    "__rsub__": "__sub__",
+    "__mul__": "__rmul__",
+    "__rmul__": "__mul__",
+    "__mod__": "__rmod__",
+    "__rmod__": "__mod__",
+    "__pow__": "__rpow__",
+    "__rpow__": "__pow__",
+    "__floordiv__": "__rfloordiv__",
+    "__rfloordiv__": "__floordiv__",
+    "__truediv__": "__rtruediv__",
+    "__rtruediv__": "__truediv__",
+}
 
 
 _cupy_nan_methods_map = {
@@ -207,7 +198,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         """
         super().__init__()
 
-        if isinstance(columns, (Series, cudf.Index)):
+        if isinstance(columns, (Series, cudf.BaseIndex)):
             columns = columns.to_pandas()
 
         if isinstance(data, (DataFrame, pd.DataFrame)):
@@ -719,7 +710,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         >>> df[[True, False, True, False]] # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if is_scalar(arg) or isinstance(arg, tuple):
+        if _is_scalar_or_zero_d_array(arg) or isinstance(arg, tuple):
             return self._get_columns_by_label(arg, downcast=True)
 
         elif isinstance(arg, slice):
@@ -1453,11 +1444,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             elif isinstance(labels, tuple):
                 nlevels = len(labels)
             if self._data.multiindex is False or nlevels == self._data.nlevels:
-                out = self._constructor_sliced()._from_data(
+                out = self._constructor_sliced._from_data(
                     new_data, index=self.index, name=labels
                 )
                 return out
-        out = self.__class__()._from_data(
+        out = self.__class__._from_data(
             new_data, index=self.index, columns=new_data.to_pandas_index()
         )
         return out
@@ -1476,8 +1467,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if other is None:
             for col in self._data:
                 result[col] = getattr(self[col], fn)()
-            return result
         elif isinstance(other, Sequence):
+            # This adds the ith element of other to the ith column of self.
             for k, col in enumerate(self._data):
                 result[col] = getattr(self[col], fn)(other[k])
         elif isinstance(other, DataFrame):
@@ -1512,26 +1503,21 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     result[col] = op(lhs[col], rhs[col])
             for col in rhs._data:
                 if col not in lhs._data:
-                    result[col] = fallback(rhs[col], _reverse_op(fn))
+                    result[col] = fallback(rhs[col], _reverse_op[fn])
         elif isinstance(other, Series):
             other_cols = other.to_pandas().to_dict()
-            other_cols_keys = list(other_cols.keys())
-            result_cols = list(self.columns)
-            df_cols = list(result_cols)
-            for new_col in other_cols.keys():
-                if new_col not in result_cols:
-                    result_cols.append(new_col)
+            df_cols = self._column_names
+            result_cols = df_cols + tuple(
+                col for col in other_cols if col not in df_cols
+            )
+
             for col in result_cols:
-                if col in df_cols and col in other_cols_keys:
-                    l_opr = self[col]
-                    r_opr = other_cols[col]
-                else:
-                    if col not in df_cols:
-                        r_opr = other_cols[col]
-                        l_opr = Series(as_column(np.nan, length=len(self)))
-                    if col not in other_cols_keys:
-                        r_opr = None
-                        l_opr = self[col]
+                l_opr = (
+                    self[col]
+                    if col in df_cols
+                    else Series(as_column(np.nan, length=len(self)))
+                )
+                r_opr = other_cols.get(col)
                 result[col] = op(l_opr, r_opr)
 
         elif isinstance(other, (numbers.Number, cudf.Scalar)) or (
@@ -2690,7 +2676,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     @columns.setter  # type: ignore
     @annotate("DATAFRAME_COLUMNS_SETTER", color="yellow", domain="cudf_python")
     def columns(self, columns):
-        if isinstance(columns, (cudf.MultiIndex, cudf.Index)):
+        if isinstance(columns, cudf.BaseIndex):
             columns = columns.to_pandas()
         if columns is None:
             columns = pd.Index(range(len(self._data.columns)))
@@ -2844,7 +2830,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         verify_integrity : boolean, default False
             Check for duplicates in the new index.
         """
-        if not isinstance(index, Index):
+        if not isinstance(index, BaseIndex):
             raise ValueError("Parameter index should be type `Index`.")
 
         df = self if inplace else self.copy(deep=True)
@@ -3153,7 +3139,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2  3.0  c
         """
         positions = as_column(positions)
-        if pd.api.types.is_bool_dtype(positions):
+        if is_bool_dtype(positions):
             return self._apply_boolean_mask(positions)
         out = self._gather(positions, keep_index=keep_index)
         out.columns = self.columns
@@ -3185,7 +3171,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 f"{num_cols * (num_cols > 0)}"
             )
 
-        if is_scalar(value):
+        if _is_scalar_or_zero_d_array(value):
             value = utils.scalar_broadcast_to(value, len(self))
 
         if len(self) == 0:
@@ -5466,7 +5452,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 index=out_index, nullable=nullable
             )
 
-        if isinstance(self.columns, Index):
+        if isinstance(self.columns, BaseIndex):
             out_columns = self.columns.to_pandas()
             if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
                 if self.columns.names is not None:

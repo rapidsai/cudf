@@ -11,25 +11,25 @@ from tlz import partition_all
 import dask
 from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
-from dask.compatibility import apply
 from dask.context import _globals
 from dask.core import flatten
-from dask.dataframe.core import Scalar, finalize, handle_out, map_partitions
+from dask.dataframe.core import (
+    Scalar,
+    finalize,
+    handle_out,
+    make_meta as dask_make_meta,
+    map_partitions,
+)
 from dask.dataframe.utils import raise_on_meta_error
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
-from dask.utils import M, OperatorMethodMixin, derived_from, funcname
+from dask.utils import M, OperatorMethodMixin, apply, derived_from, funcname
 
 import cudf
 from cudf import _lib as libcudf
 
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods
-
-try:
-    from dask.dataframe.utils import make_meta_util as dask_make_meta
-except ImportError:
-    from dask.dataframe.core import make_meta as dask_make_meta
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -251,6 +251,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
         set_divisions=False,
         **kwargs,
     ):
+        if kwargs:
+            raise ValueError(
+                f"Unsupported input arguments passed : {list(kwargs.keys())}"
+            )
+
         if self.npartitions == 1:
             df = self.map_partitions(M.sort_values, by)
         else:

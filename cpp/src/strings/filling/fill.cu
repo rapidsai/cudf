@@ -40,7 +40,7 @@ std::unique_ptr<column> fill(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
   CUDF_EXPECTS((begin >= 0) && (end <= strings_count),
                "Parameters [begin,end) are outside the range of the provided strings column");
   CUDF_EXPECTS(begin <= end, "Parameters [begin,end) have invalid range values");
@@ -80,7 +80,7 @@ std::unique_ptr<column> fill(
   // create the chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
   // fill the chars column
   auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(

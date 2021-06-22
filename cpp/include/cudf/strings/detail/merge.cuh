@@ -20,7 +20,6 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/merge.hpp>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -54,7 +53,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
 {
   using cudf::detail::side;
   size_type strings_count = static_cast<size_type>(std::distance(begin, end));
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   auto lhs_column = column_device_view::create(lhs.parent(), stream);
   auto d_lhs      = *lhs_column;
@@ -84,7 +83,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
   // create the chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
   // merge the strings
   auto d_chars = chars_column->mutable_view().template data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),

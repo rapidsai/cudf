@@ -396,7 +396,7 @@ struct dispatch_from_fixed_point_fn {
     // build chars column
     auto const bytes =
       cudf::detail::get_value<int32_t>(offsets_column->view(), input.size(), stream);
-    auto chars_column = detail::create_chars_child_column(input.size(), bytes, stream, mr);
+    auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
     auto d_chars      = chars_column->mutable_view().template data<char>();
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
@@ -427,7 +427,7 @@ std::unique_ptr<column> from_fixed_point(column_view const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return detail::make_empty_strings_column(stream, mr);
+  if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
   return type_dispatcher(input.type(), dispatch_from_fixed_point_fn{}, input, stream, mr);
 }
 
