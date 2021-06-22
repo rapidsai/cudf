@@ -1351,6 +1351,7 @@ class Series(SingleColumnFrame, Serializable):
         else:
             lhs = self
 
+        # Note that we call the super on lhs, not self.
         return super(Series, lhs)._binaryop(other, fn, fill_value, reflect)
 
     def add(self, other, fill_value=None, axis=0):
