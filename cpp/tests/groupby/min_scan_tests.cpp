@@ -23,6 +23,8 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 
+using namespace cudf::test::iterators;
+
 namespace cudf {
 namespace test {
 using K           = int32_t;
@@ -76,7 +78,7 @@ TYPED_TEST(groupby_min_scan_test, zero_valid_keys)
   using result_wrapper = typename TestFixture::result_wrapper;
 
   // clang-format off
-  key_wrapper keys({1, 2, 3}, iterator_all_nulls());
+  key_wrapper keys({1, 2, 3}, all_nulls());
   value_wrapper vals({3, 4, 5});
 
   key_wrapper expect_keys{};
@@ -94,10 +96,10 @@ TYPED_TEST(groupby_min_scan_test, zero_valid_values)
 
   // clang-format off
   key_wrapper keys   {1, 1, 1};
-  value_wrapper vals({3, 4, 5}, iterator_all_nulls());
+  value_wrapper vals({3, 4, 5}, all_nulls());
 
   key_wrapper expect_keys    {1, 1, 1};
-  result_wrapper expect_vals({-1, -1, -1}, iterator_all_nulls());
+  result_wrapper expect_vals({-1, -1, -1}, all_nulls());
   // clang-format on
 
   auto agg = cudf::make_min_aggregation();
@@ -114,7 +116,7 @@ TYPED_TEST(groupby_min_scan_test, null_keys_and_values)
   value_wrapper vals({5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 4}, {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
                          //  { 1, 1, 1, 2, 2,  2, 2, 3, _, 3, 4}
-  key_wrapper expect_keys(   { 1, 1, 1, 2, 2,  2, 2, 3,    3, 4}, iterator_no_null());
+  key_wrapper expect_keys(   { 1, 1, 1, 2, 2,  2, 2, 3,    3, 4}, no_nulls());
                          //  { _, 8, 1, 6, 9,  _, 4, 7, 2, 3, _}
   result_wrapper expect_vals({-1, 8, 1, 6, 6, -1, 4, 7,    3, -1},
                              { 0, 1, 1, 1, 1,  0, 1, 1,    1, 0});

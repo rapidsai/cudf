@@ -194,7 +194,7 @@ __device__ inline int32_t* reprog_device::startinst_ids() const { return _starti
  * @return >0 if match found
  */
 __device__ inline int32_t reprog_device::regexec(
-  string_view const& dstr, reljunk& jnk, int32_t& begin, int32_t& end, int32_t group_id)
+  string_view const& dstr, reljunk& jnk, int32_t& begin, int32_t& end, string_index_pair* indices)
 {
   int32_t match                   = 0;
   auto checkstart                 = jnk.starttype;
@@ -229,10 +229,9 @@ __device__ inline int32_t reprog_device::regexec(
     }
 
     if (((eos < 0) || (pos < eos)) && match == 0) {
-      // jnk.list1->activate(startinst_id, pos, 0);
       int32_t i = 0;
       auto ids  = startinst_ids();
-      while (ids[i] >= 0) jnk.list1->activate(ids[i++], (group_id == 0 ? pos : -1), -1);
+      while (ids[i] >= 0) jnk.list1->activate(ids[i++], (indices == nullptr ? pos : -1), -1);
     }
 
     c = static_cast<char32_t>(pos >= txtlen ? 0 : *itr);
@@ -257,14 +256,20 @@ __device__ inline int32_t reprog_device::regexec(
           case NCCLASS:
           case END: id_activate = inst_id; break;
           case LBRA:
-            if (inst->u1.subid == group_id) range.x = pos;
+            if (indices && inst->u1.subid == _num_capturing_groups) range.x = pos;
             id_activate = inst->u2.next_id;
             expanded    = true;
+            if (indices) { indices[inst->u1.subid - 1].first = dstr.data() + itr.byte_offset(); }
             break;
           case RBRA:
-            if (inst->u1.subid == group_id) range.y = pos;
+            if (indices && inst->u1.subid == _num_capturing_groups) range.y = pos;
             id_activate = inst->u2.next_id;
             expanded    = true;
+            if (indices) {
+              auto const ptr_offset = indices[inst->u1.subid - 1].first - dstr.data();
+              indices[inst->u1.subid - 1].second =
+                itr.byte_offset() - static_cast<cudf::size_type>(ptr_offset);
+            }
             break;
           case BOL:
             if ((pos == 0) ||
@@ -318,8 +323,9 @@ __device__ inline int32_t reprog_device::regexec(
     } while (expanded);
 
     // execute
+    bool continue_execute = true;
     jnk.list2->reset();
-    for (int16_t i = 0; i < jnk.list1->size; i++) {
+    for (int16_t i = 0; continue_execute && i < jnk.list1->size; i++) {
       int32_t inst_id     = static_cast<int32_t>(jnk.list1->inst_ids[i]);
       int2& range         = jnk.list1->ranges[i];
       const reinst* inst  = get_inst(inst_id);
@@ -346,18 +352,21 @@ __device__ inline int32_t reprog_device::regexec(
         case END:
           match = 1;
           begin = range.x;
-          end   = group_id == 0 ? pos : range.y;
-          goto BreakFor;
+          end   = indices == nullptr ? pos : range.y;
+
+          continue_execute = false;
+          break;
       }
-      if (id_activate >= 0) jnk.list2->activate(id_activate, range.x, range.y);
+      if (continue_execute && (id_activate >= 0))
+        jnk.list2->activate(id_activate, range.x, range.y);
     }
 
-  BreakFor:
     ++pos;
     ++itr;
     swaplist(jnk.list1, jnk.list2);
     checkstart = jnk.list1->size > 0 ? 0 : 1;
   } while (c && (jnk.list1->size > 0 || match == 0));
+
   return match;
 }
 
@@ -373,16 +382,19 @@ __device__ inline int32_t reprog_device::find(int32_t idx,
 }
 
 template <int stack_size>
-__device__ inline int32_t reprog_device::extract(
-  int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id)
+__device__ inline bool reprog_device::extract(int32_t idx,
+                                              string_view const& dstr,
+                                              int32_t begin,
+                                              int32_t end,
+                                              device_span<string_index_pair> indices)
 {
   end = begin + 1;
-  return call_regexec<stack_size>(idx, dstr, begin, end, group_id + 1);
+  return call_regexec<stack_size>(idx, dstr, begin, end, indices.data()) > 0;
 }
 
 template <int stack_size>
 __device__ inline int32_t reprog_device::call_regexec(
-  int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id)
+  int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, string_index_pair* indices)
 {
   u_char data1[stack_size], data2[stack_size];
 
@@ -393,12 +405,12 @@ __device__ inline int32_t reprog_device::call_regexec(
   relist list2(static_cast<int16_t>(_insts_count), data2);
 
   reljunk jnk(&list1, &list2, stype, schar);
-  return regexec(dstr, jnk, begin, end, group_id);
+  return regexec(dstr, jnk, begin, end, indices);
 }
 
 template <>
 __device__ inline int32_t reprog_device::call_regexec<RX_STACK_ANY>(
-  int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id)
+  int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, string_index_pair* indices)
 {
   auto const stype = get_inst(_startinst_id)->type;
   auto const schar = get_inst(_startinst_id)->u1.c;
@@ -407,12 +419,11 @@ __device__ inline int32_t reprog_device::call_regexec<RX_STACK_ANY>(
   u_char* listmem         = reinterpret_cast<u_char*>(_relists_mem);  // beginning of relist buffer;
   listmem += (idx * relists_size * 2);                                // two relist ptrs in reljunk:
 
-  // run ctor on assigned memory buffer
   relist* list1 = new (listmem) relist(static_cast<int16_t>(_insts_count));
   relist* list2 = new (listmem + relists_size) relist(static_cast<int16_t>(_insts_count));
 
   reljunk jnk(list1, list2, stype, schar);
-  return regexec(dstr, jnk, begin, end, group_id);
+  return regexec(dstr, jnk, begin, end, indices);
 }
 
 }  // namespace detail

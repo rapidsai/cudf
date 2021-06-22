@@ -3321,9 +3321,7 @@ public class TableTest extends CudfTestBase {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
           assertColumnsAreEqual(decExpectAggResult, decWindowAggResults.getColumn(0));
           assertColumnsAreEqual(listExpectAggResult, listWindowAggResults.getColumn(0));
-
-          // TODO  this is not gonna work, since libcudf has some issue for lead on struct with default values
-          // assertColumnsAreEqual(structExpectAggResult, structWindowAggResults.getColumn(0));
+          assertColumnsAreEqual(structExpectAggResult, structWindowAggResults.getColumn(0));
         }
 
         // Outside bounds
@@ -3542,8 +3540,7 @@ public class TableTest extends CudfTestBase {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
           assertColumnsAreEqual(decExpectAggResult, decWindowAggResults.getColumn(0));
           assertColumnsAreEqual(listExpectAggResult, listWindowAggResults.getColumn(0));
-          // TODO  this is not gonna work, since libcudf has some issue for lag on struct with default values
-          // assertColumnsAreEqual(structExpectAggResult, structWindowAggResults.getColumn(0));
+          assertColumnsAreEqual(structExpectAggResult, structWindowAggResults.getColumn(0));
         }
 
         // Outside bounds
