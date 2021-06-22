@@ -41,6 +41,9 @@ env
 gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
+gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
+# gpuci_conda_retry install -y "your-pkg=1.0.0"
+gpuci_conda_retry install -y "arrow-cpp=4.0.1 pyarrow=4.0.1"
 
 # Remove rapidsai-nightly channel if we are building main branch
 if [ "$SOURCE_BRANCH" = "main" ]; then
