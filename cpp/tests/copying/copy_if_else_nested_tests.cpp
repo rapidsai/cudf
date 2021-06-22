@@ -153,14 +153,21 @@ TYPED_TEST(TypedCopyIfElseNestedTest, TwoScalarStructs)
   auto rhs_scalar   = cudf::make_struct_scalar(rhs_children);
 
   auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
-  auto result_column   = copy_if_else(*lhs_scalar, *rhs_scalar, selector_column->view());
-
-  std::cout << "GERA: 2 scalar result: ";
-  cudf::test::print(*result_column);
+  std::cout << "GERA: selector_column:" << std::endl;
+  cudf::test::print(selector_column->view());
 
   auto expected_ints    = ints{1, 1, 22, 1, 1, 22, 1};
   auto expected_strings = strings{"1", "1", "22", "1", "1", "22", "1"};
   auto expected_result  = structs{{expected_ints, expected_strings}}.release();
+
+  std::cout << "GERA: before copy_if_else, expecting:" << std::endl;
+  cudf::test::print(expected_result->view());
+
+  auto result_column = copy_if_else(*lhs_scalar, *rhs_scalar, selector_column->view());
+
+  std::cout << "GERA: after copy_if_else, result: " << std::endl;
+  cudf::test::print(*result_column);
+  std::cout << std::endl << "GERA: end 2 scalar result" << std::endl;
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column->view());
 }

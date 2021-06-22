@@ -180,13 +180,6 @@ class logical_not {
   Predicate _pred;
 };
 
-template <typename Filter>
-std::unique_ptr<column> scatter_if_else_scalar_lhs(cudf::scalar lhs,
-                                                   cudf::column_view rhs,
-                                                   size_type size,
-                                                   Filter is_left,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr);
 /**
  * @brief Implementation of copy_if_else() with gather()/scatter().
  *
@@ -246,32 +239,14 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
 
   if constexpr (std::is_same<Left, cudf::scalar>::value &&
                 std::is_same<Right, cudf::column_view>::value) {
-    // auto result = cudf::detail::scatter(
-    //   table_view{std::vector<column_view>{scatter_src_rhs->get_column(0).view()}},
-    //   scatter_scalar_map.begin(),
-    //   scatter_scalar_map_end,
-    //   table_view{std::vector<column_view>{rhs}},
-    //   false,
-    //   stream,
-    //   mr);
-
-    // return std::move(result->release()[0]);
-    return scatter_if_else_scalar_lhs(lhs, rhs, size, is_left, stream, mr);
+    auto lhs_col = cudf::make_column_from_scalar(lhs, size, stream, mr);
+    return scatter_gather_based_if_else(lhs_col->view(), rhs, size, is_left, stream, mr);
   }
 
   if constexpr (std::is_same<Left, cudf::column_view>::value &&
                 std::is_same<Right, cudf::scalar>::value) {
-    // auto result = cudf::detail::scatter(
-    //   table_view{std::vector<column_view>{scatter_src_rhs->get_column(0).view()}},
-    //   scatter_scalar_map.begin(),
-    //   scatter_scalar_map_end,
-    //   table_view{std::vector<column_view>{rhs}},
-    //   false,
-    //   stream,
-    //   mr);
-
-    // return std::move(result->release()[0]);
-    return scatter_if_else_scalar_lhs(rhs, lhs, size, logical_not{is_left}, stream, mr);
+    auto rhs_col = cudf::make_column_from_scalar(rhs, size, stream, mr);
+    return scatter_gather_based_if_else(lhs, rhs_col->view(), size, is_left, stream, mr);
   }
 
   // Bail out for Scalars.
@@ -286,18 +261,6 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
   (void)is_left;
   (void)stream;
   (void)mr;
-}
-
-template <typename Filter>
-std::unique_ptr<column> scatter_if_else_scalar_lhs(cudf::scalar lhs,
-                                                   cudf::column_view rhs,
-                                                   size_type size,
-                                                   Filter is_left,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
-{
-  auto lhs_column = cudf::make_column_from_scalar(lhs, size, stream, mr);
-  return scatter_gather_based_if_else(lhs_column, rhs, size, is_left, stream, mr);
 }
 
 /**
