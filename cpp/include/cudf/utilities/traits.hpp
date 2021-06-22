@@ -544,6 +544,72 @@ constexpr inline bool is_fixed_width(data_type type)
   return cudf::type_dispatcher(type, is_fixed_width_impl{});
 }
 
+/**
+ * @brief Indicates whether the type `T` is a lists type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is a lists-type
+ * @return false  `T` is not lists-type
+ */
+template <typename T>
+constexpr inline bool is_lists()
+{
+  return std::is_same<list_view, T>::value;
+}
+
+struct is_lists_impl {
+  template <typename T>
+  constexpr bool operator()()
+  {
+    return is_lists<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a lists `data_type`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is a lists type
+ * @return false `type` is not a lists type
+ */
+constexpr inline bool is_lists(data_type type)
+{
+  return cudf::type_dispatcher(type, is_lists_impl{});
+}
+
+/**
+ * @brief Indicates whether the type `T` is a structs type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is a structs-type
+ * @return false  `T` is not structs-type
+ */
+template <typename T>
+constexpr inline bool is_structs()
+{
+  return std::is_same<struct_view, T>::value;
+}
+
+struct is_structs_impl {
+  template <typename T>
+  constexpr bool operator()()
+  {
+    return is_structs<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a structs `data_type`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is a structs type
+ * @return false `type` is not a structs type
+ */
+constexpr inline bool is_structs(data_type type)
+{
+  return cudf::type_dispatcher(type, is_structs_impl{});
+}
+
 class string_view;
 
 /**
