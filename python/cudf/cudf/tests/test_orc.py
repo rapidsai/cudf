@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 import datetime
+import decimal
 import os
 from io import BytesIO
 
@@ -10,12 +11,11 @@ import pyarrow as pa
 import pyarrow.orc
 import pyorc
 import pytest
-import decimal
 
 import cudf
+from cudf.core.dtypes import Decimal64Dtype
 from cudf.io.orc import ORCWriter
 from cudf.tests.utils import assert_eq, gen_rand_series, supported_numpy_dtypes
-from cudf.core.dtypes import Decimal64Dtype
 
 
 @pytest.fixture(scope="module")
@@ -281,14 +281,19 @@ def test_orc_read_rows(datadir, skiprows, num_rows):
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(
         path, engine="cudf", skiprows=skiprows, num_rows=num_rows
-    )
+    ).to_pandas()
+
+    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
+    # This is because cuDF returns as float64 as it lacks an equivalent dtype
+    pdf = pdf.apply(pd.to_numeric)
 
     # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
     # have an API to read a subsection of rows from the file
     pdf = pdf[skiprows : skiprows + num_rows]
-    pdf = pdf.reset_index(drop=True)
+    # pdf = pdf.reset_index(drop=True)
 
-    assert_eq(pdf, gdf)
+    # assert_eq(pdf, gdf)
+    np.testing.assert_allclose(pdf, gdf)
 
 
 def test_orc_read_skiprows(tmpdir):
@@ -795,3 +800,30 @@ def test_orc_string_stream_offset_issue():
     df.to_orc(buffer)
 
     assert_eq(df, cudf.read_orc(buffer))
+
+
+def test_orc_reader_decimal(datadir):
+    path = datadir / "TestOrcFile.decimal.orc"
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    pdf = orcfile.read().to_pandas()
+    gdf = cudf.read_orc(path, engine="cudf").to_pandas()
+
+    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
+    # This is because cuDF returns as float64 as it lacks an equivalent dtype
+    pdf = pdf.apply(pd.to_numeric)
+
+    np.testing.assert_allclose(pdf, gdf)
+
+
+def test_orc_reader_decimal_as_int(datadir):
+    path = datadir / "TestOrcFile.decimal.orc"
+
+    gdf = cudf.read_orc(
+        path, engine="cudf", decimals_as_float=False, force_decimal_scale=2
+    ).to_pandas()
+
+    assert gdf["_col0"][0] == -100050  # -1000.5

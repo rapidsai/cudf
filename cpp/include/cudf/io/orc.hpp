@@ -65,6 +65,9 @@ class orc_reader_options {
 
   // Whether to convert decimals to float64
   bool _decimals_as_float64 = false;
+  // For decimals as int, optional forced decimal scale;
+  // -1 is auto (column scale), >=0: number of fractional digits
+  size_type _forced_decimals_scale = -1;
 
   friend orc_reader_options_builder;
 
@@ -136,6 +139,11 @@ class orc_reader_options {
    */
   bool is_enabled_decimals_as_float64() const { return _decimals_as_float64; }
 
+  /**
+   * @brief Returns whether decimal scale is inferred or forced to have limited fractional digits.
+   */
+  size_type get_forced_decimals_scale() const { return _forced_decimals_scale; }
+
   // Setters
 
   /**
@@ -206,6 +214,13 @@ class orc_reader_options {
    * @param val Boolean value to enable/disable.
    */
   void set_decimals_as_float64(bool val) { _decimals_as_float64 = val; }
+
+  /**
+   * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits.
+   *
+   * @param val Length of fractional digits.
+   */
+  void set_forced_decimals_scale(size_type val) { _forced_decimals_scale = val; }
 };
 
 class orc_reader_options_builder {
@@ -319,6 +334,18 @@ class orc_reader_options_builder {
   orc_reader_options_builder& decimals_as_float64(bool val)
   {
     options._decimals_as_float64 = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits.
+   *
+   * @param val Length of fractional digits.
+   * @return this for chaining.
+   */
+  orc_reader_options_builder& forced_decimals_scale(size_type val)
+  {
+    options._forced_decimals_scale = val;
     return *this;
   }
 
