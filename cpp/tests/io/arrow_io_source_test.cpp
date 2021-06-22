@@ -43,60 +43,52 @@ TEST_F(ArrowIOTest, URIFileSystem)
 {
   const std::string file_name = temp_env->get_temp_dir() + "JsonLinesFileTest.json";
   std::ofstream outfile(file_name, std::ofstream::out);
-  outfile << "[11, 1.1]" << std::endl;
-  outfile << "[22, 2.2]" << std::endl;
+  outfile << "[11, 1.1]\n[22, 2.2]";
   outfile.close();
-  std::string line;
-  std::ifstream myfile(file_name);
-  if (myfile.is_open()) {
-    while (getline(myfile, line)) { std::cout << line << '\n'; }
-    myfile.close();
-  } else
-    std::cout << "Unable to open file";
 
-  // std::string file_uri = "file://" + file_name;
-  // std::unique_ptr<cudf::io::arrow_io_source> datasource =
-  //   std::make_unique<cudf::io::arrow_io_source>(file_uri);
+  std::string file_uri = "file://" + file_name;
+  std::unique_ptr<cudf::io::arrow_io_source> datasource =
+    std::make_unique<cudf::io::arrow_io_source>(file_uri);
 
-  // // Populate the JSON Reader Options
-  // cudf::io::json_reader_options options =
-  //   cudf::io::json_reader_options::builder(cudf::io::source_info(datasource.get())).lines(true);
+  // Populate the JSON Reader Options
+  cudf::io::json_reader_options options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info(datasource.get())).lines(true);
 
-  // // Read the JSON file from the LocalFileSystem
-  // cudf::io::table_with_metadata tbl = cudf::io::read_json(options);
+  // Read the JSON file from the LocalFileSystem
+  cudf::io::table_with_metadata tbl = cudf::io::read_json(options);
 
-  // ASSERT_EQ(2, tbl.tbl->num_columns());
-  // ASSERT_EQ(2, tbl.tbl->num_rows());
+  ASSERT_EQ(2, tbl.tbl->num_columns());
+  ASSERT_EQ(2, tbl.tbl->num_rows());
 }
 
 #ifdef S3_ENABLED
 
 TEST_F(ArrowIOTest, S3FileSystem)
 {
-  // std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
-  // std::unique_ptr<cudf::io::arrow_io_source> datasource =
-  //   std::make_unique<cudf::io::arrow_io_source>(s3_uri);
+  std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
+  std::unique_ptr<cudf::io::arrow_io_source> datasource =
+    std::make_unique<cudf::io::arrow_io_source>(s3_uri);
 
-  // // Populate the Parquet Reader Options
-  // cudf::io::source_info src(datasource.get());
-  // std::vector<std::string> single_column;
-  // single_column.insert(single_column.begin(), "total_bill");
-  // cudf::io::parquet_reader_options_builder builder(src);
-  // cudf::io::parquet_reader_options options = builder.columns(single_column).build();
+  // Populate the Parquet Reader Options
+  cudf::io::source_info src(datasource.get());
+  std::vector<std::string> single_column;
+  single_column.insert(single_column.begin(), "total_bill");
+  cudf::io::parquet_reader_options_builder builder(src);
+  cudf::io::parquet_reader_options options = builder.columns(single_column).build();
 
-  // // Read the Parquet file from S3
-  // cudf::io::table_with_metadata tbl = cudf::io::read_parquet(options);
+  // Read the Parquet file from S3
+  cudf::io::table_with_metadata tbl = cudf::io::read_parquet(options);
 
-  // ASSERT_EQ(1, tbl.tbl->num_columns());  // Only single column specified in reader_options
-  // ASSERT_EQ(244, tbl.tbl->num_rows());   // known number of rows from the S3 file
+  ASSERT_EQ(1, tbl.tbl->num_columns());  // Only single column specified in reader_options
+  ASSERT_EQ(244, tbl.tbl->num_rows());   // known number of rows from the S3 file
 }
 
 #else
 
 TEST_F(ArrowIOTest, S3URIWhenNotEnabled)
 {
-  // std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
-  // EXPECT_THROW(std::make_unique<cudf::io::arrow_io_source>(s3_uri), cudf::logic_error);
+  std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
+  EXPECT_THROW(std::make_unique<cudf::io::arrow_io_source>(s3_uri), cudf::logic_error);
 }
 
 #endif
