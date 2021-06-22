@@ -167,7 +167,6 @@ TYPED_TEST(TypedCopyIfElseNestedTest, TwoScalarStructs)
 
   std::cout << "GERA: after copy_if_else, result: " << std::endl;
   cudf::test::print(*result_column);
-  std::cout << std::endl << "GERA: end 2 scalar result" << std::endl;
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column->view());
 }
