@@ -21,6 +21,7 @@
 
 #include <rmm/device_uvector.hpp>
 
+#include <cuco/static_multimap.cuh>
 #include <hash/concurrent_unordered_multimap.cuh>
 
 #include <limits>
@@ -37,14 +38,11 @@ using VectorPair = std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                              std::unique_ptr<rmm::device_uvector<size_type>>>;
 
 using multimap_type =
-  concurrent_unordered_multimap<hash_value_type,
-                                size_type,
-                                size_t,
-                                std::numeric_limits<hash_value_type>::max(),
-                                std::numeric_limits<size_type>::max(),
-                                default_hash<hash_value_type>,
-                                equal_to<hash_value_type>,
-                                default_allocator<thrust::pair<hash_value_type, size_type>>>;
+  cuco::static_multimap<hash_value_type,
+                        size_type,
+                        cuco::double_hashing<hash_value_type, size_type>,
+                        cuda::thread_scope_device,
+                        default_allocator<thrust::pair<hash_value_type, size_type>>>;
 
 using row_hash = cudf::row_hasher<default_hash>;
 
