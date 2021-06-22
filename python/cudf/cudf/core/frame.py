@@ -3463,6 +3463,87 @@ class Frame(libcudf.table.Table):
         # objects have indexes (so that binops work for indexes as lhs).
         return output
 
+    # Binary arithmetic operations.
+    def __add__(self, other):
+        return self._binaryop(other, "add")
+
+    def __radd__(self, other):
+        return self._binaryop(other, "add", reflect=True)
+
+    def __sub__(self, other):
+        return self._binaryop(other, "sub")
+
+    def __rsub__(self, other):
+        return self._binaryop(other, "sub", reflect=True)
+
+    def __mul__(self, other):
+        return self._binaryop(other, "mul")
+
+    def __rmul__(self, other):
+        return self._binaryop(other, "mul", reflect=True)
+
+    def __mod__(self, other):
+        return self._binaryop(other, "mod")
+
+    def __rmod__(self, other):
+        return self._binaryop(other, "mod", reflect=True)
+
+    def __pow__(self, other):
+        return self._binaryop(other, "pow")
+
+    def __rpow__(self, other):
+        return self._binaryop(other, "pow", reflect=True)
+
+    def __floordiv__(self, other):
+        return self._binaryop(other, "floordiv")
+
+    def __rfloordiv__(self, other):
+        return self._binaryop(other, "floordiv", reflect=True)
+
+    def __truediv__(self, other):
+        return self._binaryop(other, "truediv")
+
+    def __rtruediv__(self, other):
+        return self._binaryop(other, "truediv", reflect=True)
+
+    def __and__(self, other):
+        return self._binaryop(other, "and")
+
+    def __or__(self, other):
+        return self._binaryop(other, "or")
+
+    def __xor__(self, other):
+        return self._binaryop(other, "xor")
+
+    # Binary rich comparison operations.
+    def __eq__(self, other):
+        return self._binaryop(other, "eq")
+
+    def __ne__(self, other):
+        return self._binaryop(other, "ne")
+
+    def __lt__(self, other):
+        return self._binaryop(other, "lt")
+
+    def __le__(self, other):
+        return self._binaryop(other, "le")
+
+    def __gt__(self, other):
+        return self._binaryop(other, "gt")
+
+    def __ge__(self, other):
+        return self._binaryop(other, "ge")
+
+    # Unary logical operators
+    def __neg__(self):
+        return -1 * self
+
+    def __pos__(self):
+        return self.copy(deep=True)
+
+    def __abs__(self):
+        return self._unaryop("abs")
+
 
 class SingleColumnFrame(Frame):
     """A one-dimensional frame.
@@ -3827,93 +3908,6 @@ class SingleColumnFrame(Frame):
             return cudf.Scalar(other, dtype=self.dtype)
         else:
             return self._column.normalize_binop_value(other)
-
-    # Binary arithmetic operations.
-    def __add__(self, other):
-        return self._binaryop(other, "add")
-
-    def __radd__(self, other):
-        return self._binaryop(other, "add", reflect=True)
-
-    def __sub__(self, other):
-        return self._binaryop(other, "sub")
-
-    def __rsub__(self, other):
-        return self._binaryop(other, "sub", reflect=True)
-
-    def __mul__(self, other):
-        return self._binaryop(other, "mul")
-
-    def __rmul__(self, other):
-        return self._binaryop(other, "mul", reflect=True)
-
-    def __mod__(self, other):
-        return self._binaryop(other, "mod")
-
-    def __rmod__(self, other):
-        return self._binaryop(other, "mod", reflect=True)
-
-    def __pow__(self, other):
-        return self._binaryop(other, "pow")
-
-    def __rpow__(self, other):
-        return self._binaryop(other, "pow", reflect=True)
-
-    def __floordiv__(self, other):
-        return self._binaryop(other, "floordiv")
-
-    def __rfloordiv__(self, other):
-        return self._binaryop(other, "floordiv", reflect=True)
-
-    def __truediv__(self, other):
-        if is_decimal_dtype(self.dtype):
-            return self._binaryop(other, "div")
-        else:
-            return self._binaryop(other, "truediv")
-
-    def __rtruediv__(self, other):
-        if is_decimal_dtype(self.dtype):
-            return self._binaryop(other, "div", reflect=True)
-        else:
-            return self._binaryop(other, "truediv", reflect=True)
-
-    def __and__(self, other):
-        return self._binaryop(other, "and")
-
-    def __or__(self, other):
-        return self._binaryop(other, "or")
-
-    def __xor__(self, other):
-        return self._binaryop(other, "xor")
-
-    # Binary rich comparison operations.
-    def __eq__(self, other):
-        return self._binaryop(other, "eq")
-
-    def __ne__(self, other):
-        return self._binaryop(other, "ne")
-
-    def __lt__(self, other):
-        return self._binaryop(other, "lt")
-
-    def __le__(self, other):
-        return self._binaryop(other, "le")
-
-    def __gt__(self, other):
-        return self._binaryop(other, "gt")
-
-    def __ge__(self, other):
-        return self._binaryop(other, "ge")
-
-    # Unary logical operators
-    def __neg__(self):
-        return -1 * self
-
-    def __pos__(self):
-        return self.copy(deep=True)
-
-    def __abs__(self):
-        return self._unaryop("abs")
 
 
 def _get_replacement_values_for_columns(
