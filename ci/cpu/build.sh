@@ -41,7 +41,7 @@ env
 gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
-gpuci_conda_retry remove --force arrow-cpp pyarrow "arrow-cpp-proc * cuda"
+gpuci_conda_retry remove -y --force arrow-cpp pyarrow "arrow-cpp-proc * cuda"
 # gpuci_conda_retry install -y "your-pkg=1.0.0"
 gpuci_conda_retry install -y "arrow-cpp=4.0.1 pyarrow=4.0.1 arrow-cpp-proc * cuda"
 
