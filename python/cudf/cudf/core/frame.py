@@ -3828,33 +3828,6 @@ class SingleColumnFrame(Frame):
         else:
             return self._column.normalize_binop_value(other)
 
-    def _bitwise_binop(self, other, op):
-        """Type-coercing wrapper around _binaryop for bitwise operations."""
-        # This will catch attempts at bitwise ops on extension dtypes.
-        try:
-            self_is_bool = np.issubdtype(self.dtype, np.bool_)
-            other_is_bool = np.issubdtype(other.dtype, np.bool_)
-        except TypeError:
-            raise TypeError(
-                f"Operation 'bitwise {op}' not supported between "
-                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
-            )
-
-        if (self_is_bool or np.issubdtype(self.dtype, np.integer)) and (
-            other_is_bool or np.issubdtype(other.dtype, np.integer)
-        ):
-            # TODO: This doesn't work on Series (op) DataFrame
-            # because dataframe doesn't have dtype
-            ser = self._binaryop(other, op)
-            if self_is_bool or other_is_bool:
-                ser = ser.astype(np.bool_)
-            return ser
-        else:
-            raise TypeError(
-                f"Operation 'bitwise {op}' not supported between "
-                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
-            )
-
     # Binary arithmetic operations.
     def __add__(self, other):
         return self._binaryop(other, "add")
@@ -3905,13 +3878,13 @@ class SingleColumnFrame(Frame):
             return self._binaryop(other, "truediv", reflect=True)
 
     def __and__(self, other):
-        return self._bitwise_binop(other, "and")
+        return self._binaryop(other, "and")
 
     def __or__(self, other):
-        return self._bitwise_binop(other, "or")
+        return self._binaryop(other, "or")
 
     def __xor__(self, other):
-        return self._bitwise_binop(other, "xor")
+        return self._binaryop(other, "xor")
 
     # Binary rich comparison operations.
     def __eq__(self, other):
