@@ -1338,6 +1338,8 @@ class Series(SingleColumnFrame, Serializable):
     ):
         if isinstance(other, SingleColumnFrame):
             if (
+                # TODO: The can_reindex logic also needs to be applied for
+                # DataFrame (the methods that need it just don't exist yet).
                 not can_reindex
                 and fn in cudf.utils.utils._EQUALITY_OPS
                 and not self.index.equals(other.index)

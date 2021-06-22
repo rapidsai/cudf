@@ -54,7 +54,6 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.utils import GetAttrGetItemMixin
 
-
 T = TypeVar("T", bound="DataFrame")
 
 
@@ -1461,11 +1460,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if _is_scalar_or_zero_d_array(rhs):
             rhs = [rhs] * lhs._num_columns
 
-        # The various branches of the conditional below construct a dictionary
-        # of the form {col: (left, right)}, where left is a ColumnBase and
-        # right is a suitable right operand for a binary operation with left.
         # For columns that exist in rhs but not lhs, we swap the order so that
-        # we can always assume that left has a binary operator.  This
+        # we can always assume that left has a binary operator. This
         # implementation assumes that binary operations between a column and
         # NULL are always commutative, even for binops (like subtraction) that
         # are normally anticommutative.

@@ -3352,19 +3352,25 @@ class Frame(libcudf.table.Table):
     def _colwise_binop(cls, operands, fn):
         """Implement binary ops between two frame-like objects.
 
-        This method is designed to handle arbitrary binary operations by
-        preprocessing two frame-like objects into a form suitable for pairwise
-        columnar binary operations. The reason that this is implemented as a
-        classmethod is that frequently the semantics of the operations between
-        different types of frames dictate that the object being operated on
-        (the lhs in normal binops and the rhs in reflected binops) needs to be
-        modified before the operation occurs, without that modification
-        actually being reflected in the instance. The classmethod API is
-        designed around that expectation. Additionally, either object could be
-        a scalar value or something else as needed.
+        Binary operations for Frames can be reduced to a sequence of binary
+        operations between column-like objects. Different types of frames need
+        to preprocess different inputs, so subclasses should implement binary
+        operations as a preprocessing step that calls this method.
 
-        Actually lhs will always be a frame, but rhs could be anything.
-        However, lhs need not be self, which is why this is a classmethod.
+        Parameters
+        ----------
+        operands : Dict[str, Tuple[ColumnBase, Any, bool, Any]]
+            A mapping from column names to a tuple containing left and right
+            operands as well as a boolean indicating whether or not to reflect
+            an operation and fill value for nulls.
+        fn : str
+            The operation to perform
+
+        Returns
+        -------
+        Frame
+            A subclass of Frame constructed from the result of performing the
+            requested operation on the operands.
         """
 
         # Now actually perform the binop on the columns in left and right.
@@ -3380,12 +3386,14 @@ class Frame(libcudf.table.Table):
             elif not isinstance(right_column, cudf.core.column.ColumnBase):
                 right_column = left_column.normalize_binop_value(right_column)
 
-            if fn == "truediv" and is_decimal_dtype(left_column.dtype):
-                fn_apply = "div"
-            else:
-                fn_apply = fn
+            fn_apply = fn
+            if fn == "truediv":
+                # Decimals in libcudf don't support truediv, see
+                # https://github.com/rapidsai/cudf/pull/7435 for explanation.
+                if is_decimal_dtype(left_column.dtype):
+                    fn_apply = "div"
 
-            if fn_apply == "truediv":
+                # Division with integer types results in a suitable float.
                 truediv_type = _truediv_int_dtype_corrections.get(
                     left_column.dtype.type
                 )
@@ -3416,8 +3424,7 @@ class Frame(libcudf.table.Table):
             # types are valid, and if so, whether we need to coerce the output
             # columns to booleans.
             coerce_to_bool = False
-            _BITWISE_OPS = {"and", "or", "xor"}
-            if fn_apply in _BITWISE_OPS:
+            if fn_apply in {"and", "or", "xor"}:
                 err_msg = (
                     f"Operation 'bitwise {fn_apply}' not supported between "
                     f"{left_column.dtype.type.__name__} and {{}}"
@@ -3459,8 +3466,6 @@ class Frame(libcudf.table.Table):
 
             output[col] = outcol
 
-        # TODO: Figure out how to handle this depending on whether or not the
-        # objects have indexes (so that binops work for indexes as lhs).
         return output
 
     # Binary arithmetic operations.
