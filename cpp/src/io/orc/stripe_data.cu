@@ -1042,6 +1042,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
       int128_s v     = decode_varint128(bs, pos);
 
       if (col_scale & orc_decimal2float64_scale) {
+        printf("cuda using this section, col_scale: %d\n", col_scale);
         double f      = Int128ToDouble_rn(v.lo, v.hi);
         int32_t scale = (t < numvals) ? val_scale : 0;
         if (scale >= 0)
@@ -1071,7 +1072,6 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
           } else {
             lo /= kPow5i[scale];
           }
-          // XXX: Does this need to be moved after the next '}'???
           vals.i64[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
         }
       }

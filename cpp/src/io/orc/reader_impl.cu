@@ -538,11 +538,14 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         chunk.type_kind     = _metadata->ff.types[_selected_columns[j]].kind;
         // chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale.value_or(0);
         if (_decimals_as_float64) {
-          chunk.decimal_scale =
-            _metadata->ff.types[_selected_columns[j]].scale | orc::gpu::orc_decimal2float64_scale;
+          printf("first\n");
+          chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale.value_or(0) |
+                                orc::gpu::orc_decimal2float64_scale;
         } else if (_decimals_as_int_scale < 0) {
-          chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale;
+          printf("second\n");
+          chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale.value_or(0);
         } else {
+          printf("third, _decimals_as_int_scale: %d\n", _decimals_as_int_scale);
           chunk.decimal_scale = _decimals_as_int_scale;
         }
         chunk.rowgroup_id = num_rowgroups;

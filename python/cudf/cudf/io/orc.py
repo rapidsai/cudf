@@ -223,7 +223,7 @@ def read_orc(
     skiprows=None,
     num_rows=None,
     use_index=True,
-    decimals_as_float=True,
+    decimals_as_float=False,
     force_decimal_scale=None,
     timestamp_type=None,
     **kwargs,
