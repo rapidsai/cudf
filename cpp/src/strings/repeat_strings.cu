@@ -238,7 +238,7 @@ bool is_output_overflow(SizeCompFunc size_comp_fn,
                         rmm::cuda_stream_view stream)
 {
   // Firstly, compute size of the output strings.
-  auto string_sizes      = rmm::device_uvector<size_type>(strings_count + 1, stream);
+  auto string_sizes      = rmm::device_uvector<size_type>(strings_count, stream);
   size_comp_fn.d_offsets = string_sizes.begin();
 
   thrust::for_each_n(rmm::exec_policy(stream),
@@ -252,12 +252,11 @@ bool is_output_overflow(SizeCompFunc size_comp_fn,
   auto has_overflow = rmm::device_uvector<bool>(1, stream);
   CUDA_TRY(cudaMemsetAsync(has_overflow.begin(), 0, sizeof(bool), stream.value()));
 
-  thrust::exclusive_scan(
+  thrust::inclusive_scan(
     rmm::exec_policy(stream),
     string_sizes.begin(),
-    string_sizes.end(),
+    string_sizes.begin() + strings_count,
     string_sizes.begin(),
-    size_type{0},
     [overflow = has_overflow.begin()] __device__(auto const lhs, auto const rhs) {
       auto const sum = static_cast<int64_t>(lhs) + static_cast<int64_t>(rhs);
       if (sum > max_offset) {
