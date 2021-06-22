@@ -146,31 +146,23 @@ TYPED_TEST(TypedCopyIfElseNestedTest, TwoScalarStructs)
   using structs = structs_column_wrapper;
   using bools   = fixed_width_column_wrapper<bool, int32_t>;
 
-  auto lhs_ints_child     = ints{1};
-  auto lhs_strings_child  = strings{"1"};
-  auto lhs_structs_column = structs{{lhs_ints_child, lhs_strings_child}}.release();
-  auto lhs_children       = std::vector<column_view>{lhs_structs_column->view()};
-  auto lhs_scalar =
-    cudf::make_struct_scalar(cudf::host_span<cudf::column_view const>{lhs_children});
+  auto lhs_children = std::vector<column_view>{{ints{1}, strings{"1"}}};
+  auto lhs_scalar   = cudf::make_struct_scalar(lhs_children);
 
-  auto rhs_ints_child     = ints{22};
-  auto rhs_strings_child  = strings{"22"};
-  auto rhs_structs_column = structs{{rhs_ints_child, rhs_strings_child}}.release();
-  auto rhs_children       = std::vector<column_view>{rhs_structs_column->view()};
-  auto rhs_scalar =
-    cudf::make_struct_scalar(cudf::host_span<cudf::column_view const>{rhs_children});
+  auto rhs_children = std::vector<column_view>{{ints{1}, strings{"1"}}};
+  auto rhs_scalar   = cudf::make_struct_scalar(rhs_children);
 
   auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
+  auto result_column   = copy_if_else(*lhs_scalar, *rhs_scalar, selector_column->view());
 
-  auto result_column = copy_if_else(*lhs_scalar, *rhs_scalar, selector_column->view());
-
+  std::cout << "GERA: 2 scalar result: ";
   cudf::test::print(*result_column);
 
   auto expected_ints    = ints{1, 1, 22, 1, 1, 22, 1};
   auto expected_strings = strings{"1", "1", "22", "1", "1", "22", "1"};
   auto expected_result  = structs{{expected_ints, expected_strings}}.release();
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column->view(), expected_result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column->view());
 }
 
 TYPED_TEST(TypedCopyIfElseNestedTest, Lists)
