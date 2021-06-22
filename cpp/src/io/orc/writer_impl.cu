@@ -763,7 +763,6 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
   hostdevice_2dvector<gpu::encoder_chunk_streams> *enc_streams,
   hostdevice_2dvector<gpu::StripeStream> *strm_desc)
 {
-  auto const num_rows = rowgroup_bounds.is_empty() ? 0 : rowgroup_bounds.back()[0].end;
   std::vector<StripeInformation> stripes(stripe_bounds.size());
   for (auto const &stripe : stripe_bounds) {
     for (size_t col_idx = 0; col_idx < enc_streams->size().first; col_idx++) {
@@ -783,9 +782,10 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
       }
     }
 
-    auto const stripe_group_end = *stripe.cend();
-    auto const stripe_end = std::min<size_type>(stripe_group_end * row_index_stride_, num_rows);
-    stripes[stripe.id].numberOfRows = stripe_end - stripe.first * row_index_stride_;
+    stripes[stripe.id].numberOfRows = stripe.size == 0
+                                        ? 0
+                                        : rowgroup_bounds[stripe.first + stripe.size - 1][0].end -
+                                            rowgroup_bounds[stripe.first][0].begin;
   }
 
   strm_desc->host_to_device(stream);
