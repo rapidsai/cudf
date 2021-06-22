@@ -12,7 +12,7 @@ import dask
 import dask.dataframe.optimize
 from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
-from dask.dataframe import (
+from dask.dataframe.core import (
     Scalar,
     finalize,
     handle_out,
