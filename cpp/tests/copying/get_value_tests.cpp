@@ -27,6 +27,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -790,6 +791,70 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNull)
 
   EXPECT_FALSE(s->is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_data, typed_s->view());
+}
+
+struct StructGetValueTest : public BaseFixture {
+};
+template <typename T>
+struct StructGetValueTestTyped : public BaseFixture {
+};
+
+TYPED_TEST_CASE(StructGetValueTestTyped, FixedWidthTypes);
+
+TYPED_TEST(StructGetValueTestTyped, mixed_types_valid)
+{
+  using LCW = lists_column_wrapper<TypeParam, int32_t>;
+
+  // col fields
+  fixed_width_column_wrapper<TypeParam> f1{1, 2, 3};
+  strings_column_wrapper f2{"aa", "bbb", "c"};
+  dictionary_column_wrapper<TypeParam, uint32_t> f3{42, 42, 24};
+  LCW f4{LCW{8, 8, 8}, LCW{9, 9}, LCW{10}};
+
+  structs_column_wrapper col{f1, f2, f3, f4};
+
+  size_type index = 2;
+  auto s          = get_element(col, index);
+  auto typed_s    = static_cast<struct_scalar const *>(s.get());
+
+  // expect fields
+  fixed_width_column_wrapper<TypeParam> ef1{3};
+  strings_column_wrapper ef2{"c"};
+  dictionary_column_wrapper<int32_t, TypeParam> ef3{24};
+  LCW ef4{LCW{10}};
+
+  table_view expect_data{{ef1, ef2, ef3, ef4}};
+
+  EXPECT_TRUE(typed_s->is_valid());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expect_data, typed_s->view());
+}
+
+TYPED_TEST(StructGetValueTestTyped, mixed_types_invalid)
+{
+  using LCW             = lists_column_wrapper<TypeParam, int32_t>;
+  using validity_mask_t = std::vector<valid_type>;
+
+  // col fields
+  fixed_width_column_wrapper<TypeParam> f1{1, 2, 3};
+  strings_column_wrapper f2{"aa", "bbb", "c"};
+  dictionary_column_wrapper<TypeParam, uint32_t> f3{42, 42, 24};
+  LCW f4{LCW{8, 8, 8}, LCW{9, 9}, LCW{10}};
+
+  structs_column_wrapper col({f1, f2, f3, f4}, validity_mask_t{false, true, true}.begin());
+
+  size_type index = 0;
+  auto s          = get_element(col, index);
+  auto typed_s    = static_cast<struct_scalar const *>(s.get());
+
+  EXPECT_FALSE(typed_s->is_valid());
+
+  // expect to preserve types along hierarchy.
+  EXPECT_EQ(typed_s->view().column(0).type().id(), type_to_id<TypeParam>());
+  EXPECT_EQ(typed_s->view().column(1).type().id(), type_id::STRING);
+  EXPECT_EQ(typed_s->view().column(2).type().id(), type_id::DICTIONARY32);
+  EXPECT_EQ(typed_s->view().column(2).child(1).type().id(), type_to_id<TypeParam>());
+  EXPECT_EQ(typed_s->view().column(3).type().id(), type_id::LIST);
+  EXPECT_EQ(typed_s->view().column(3).child(1).type().id(), type_to_id<TypeParam>());
 }
 
 }  // namespace test
