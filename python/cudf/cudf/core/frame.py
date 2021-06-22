@@ -2293,11 +2293,6 @@ class Frame(libcudf.table.Table):
         self._copy_struct_names(other, include_index=include_index)
         self._copy_interval_data(other, include_index=include_index)
 
-    def _unaryop(self, op):
-        data_columns = (col.unary_operator(op) for col in self._columns)
-        data = zip(self._column_names, data_columns)
-        return self.__class__._from_table(Frame(data, self._index))
-
     def isnull(self):
         """
         Identify missing values.
@@ -3347,6 +3342,14 @@ class Frame(libcudf.table.Table):
         )
 
         return self._mimic_inplace(result, inplace=inplace)
+
+    def _unaryop(self, op):
+        data_columns = (col.unary_operator(op) for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
+    def _binaryop(self, *args, **kwargs):
+        raise NotImplementedError
 
     @classmethod
     def _colwise_binop(cls, operands, fn):

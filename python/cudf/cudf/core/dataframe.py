@@ -1530,11 +1530,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             index=lhs._index,
         )
 
-    def _unaryop(self, op):
-        data_columns = (col.unary_operator(op) for col in self._columns)
-        data = zip(self._column_names, data_columns)
-        return self.__class__._from_table(Frame(data, self._index))
-
     def add(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Addition of dataframe and other, element-wise (binary
