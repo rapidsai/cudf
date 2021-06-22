@@ -233,6 +233,7 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
                 std::is_same<Right, cudf::scalar>::value) {
     auto lhs_col = cudf::make_column_from_scalar(lhs, size, stream, mr);
     auto rhs_col = cudf::make_column_from_scalar(rhs, size, stream, mr);
+
     return scatter_gather_based_if_else(
       lhs_col->view(), rhs_col->view(), size, is_left, stream, mr);
   }
@@ -240,20 +241,18 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
   if constexpr (std::is_same<Left, cudf::scalar>::value &&
                 std::is_same<Right, cudf::column_view>::value) {
     auto lhs_col = cudf::make_column_from_scalar(lhs, size, stream, mr);
+
     return scatter_gather_based_if_else(lhs_col->view(), rhs, size, is_left, stream, mr);
   }
 
   if constexpr (std::is_same<Left, cudf::column_view>::value &&
                 std::is_same<Right, cudf::scalar>::value) {
     auto rhs_col = cudf::make_column_from_scalar(rhs, size, stream, mr);
+
     return scatter_gather_based_if_else(lhs, rhs_col->view(), size, is_left, stream, mr);
   }
 
-  // Bail out for Scalars.
-  // For nested types types, scatter/gather based copy_if_else() is not currently supported
-  // if either `lhs` or `rhs` is a scalar, partially because:
-  //   1. Struct scalars are not yet available.
-  //   2. List scalars do not yet support explosion to a full column.
+  // Bail out for unsupported types.
   CUDF_FAIL("Scalars of nested types are not currently supported!");
   (void)lhs;
   (void)rhs;
