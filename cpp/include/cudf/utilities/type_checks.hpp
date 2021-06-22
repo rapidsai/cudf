@@ -7,16 +7,23 @@ namespace cudf {
 /**
  * @brief Compares the type of two `column_view`s
  *
- * For nested columns, this function recursively checks that all
- * children of `lhs` matches the type of `rhs`.
+ * This function returns true if the type of `lhs` equals that of `rhs`.
+ *
+ * Specifically, for fixed point types, the scale is compared.
+ *
+ * For dictionary types, the type of the keys are compared if both are
+ * non-empty columns.
+ *
+ * For lists types, the type of child columns are compared recursively.
+ *
+ * For struct types, the type of each field are compared in order.
+ *
+ * For all other types, the `id` of `data_type` is compared.
  *
  * @param lhs The first `column_view` to compare
  * @param rhs The second `column_view` to compare
- * @return true `lhs` is not equal to `rhs`
- * @return false `lhs` is equal to `rhs`
+ * @return boolean
  */
 bool column_types_equal(column_view const& lhs, column_view const& rhs);
-
-bool scalar_types_equal(scalar const& lhs, scalar const& rhs);
 
 }  // namespace cudf
