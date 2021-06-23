@@ -99,7 +99,7 @@ class orc_reader_options {
   std::vector<std::string> const& get_columns() const { return _columns; }
 
   /**
-   * @brief Returns vector of vector, stripes to read for each input source
+   * @brief Returns vector of vectors, stripes to read for each input source
    */
   std::vector<std::vector<size_type>> const& get_stripes() const { return _stripes; }
 
