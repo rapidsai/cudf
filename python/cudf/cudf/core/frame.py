@@ -3862,10 +3862,6 @@ class SingleColumnFrame(Frame):
             A new instance containing the result of the operation.
         """
 
-        # TODO: Scalar multiplication of a RangeIndex in pandas results in
-        # another RangeIndex, rather than conversion to an int index. That
-        # needs to be fixed by overriding the __mul__ operator for RangeIndex.
-
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
         # the rhs is a _differently_ named Series-like object.
@@ -3881,13 +3877,10 @@ class SingleColumnFrame(Frame):
         if isinstance(other, SingleColumnFrame):
             other = other._column
         elif not _is_scalar_or_zero_d_array(other):
+            # Non-scalar right operands are valid iff they convert to columns.
             try:
                 other = as_column(other)
             except Exception:
-                # TODO: This is a pretty heavy-handed approach, but I'm not
-                # sure we have a better way of determining whether an input can
-                # be coerced into an appropriate type. We should probably
-                # assess employing something similar for DataFrame as well.
                 return NotImplemented
 
         operands = {result_name: (self._column, other, reflect, fill_value)}
