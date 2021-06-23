@@ -33,7 +33,7 @@ build:
 
 requirements:
   build:
-    - cmake >=3.18
+    - cmake >=3.20.1
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
