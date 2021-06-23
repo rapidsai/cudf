@@ -19,6 +19,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/dictionary/update_keys.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -824,6 +825,41 @@ TYPED_TEST(StructGetValueTestTyped, mixed_types_valid)
   LCW ef4{LCW{10}};
 
   table_view expect_data{{ef1, ef2, ef3, ef4}};
+
+  EXPECT_TRUE(typed_s->is_valid());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expect_data, typed_s->view());
+}
+
+TYPED_TEST(StructGetValueTestTyped, mixed_types_valid_with_nulls)
+{
+  using LCW             = lists_column_wrapper<TypeParam, int32_t>;
+  using validity_mask_t = std::vector<bool>;
+
+  // col fields
+  fixed_width_column_wrapper<TypeParam> f1({1, 2, 3}, {true, false, true});
+  strings_column_wrapper f2({"aa", "bbb", "c"}, {false, false, true});
+  dictionary_column_wrapper<TypeParam, uint32_t> f3({42, 42, 24},
+                                                    validity_mask_t{true, true, true}.begin());
+  LCW f4({LCW{8, 8, 8}, LCW{9, 9}, LCW{10}}, validity_mask_t{false, false, false}.begin());
+
+  structs_column_wrapper col{f1, f2, f3, f4};
+
+  size_type index = 1;
+  auto s          = get_element(col, index);
+  auto typed_s    = static_cast<struct_scalar const *>(s.get());
+
+  // expect fields
+  fixed_width_column_wrapper<TypeParam> ef1({-1}, {false});
+  strings_column_wrapper ef2({""}, {false});
+
+  dictionary_column_wrapper<TypeParam, uint32_t> x({42}, {true});
+  dictionary_column_view dict_col(x);
+  fixed_width_column_wrapper<TypeParam> new_key{24};
+  auto ef3 = cudf::dictionary::add_keys(dict_col, new_key);
+
+  LCW ef4({LCW{10}}, validity_mask_t{false}.begin());
+
+  table_view expect_data{{ef1, ef2, *ef3, ef4}};
 
   EXPECT_TRUE(typed_s->is_valid());
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expect_data, typed_s->view());
