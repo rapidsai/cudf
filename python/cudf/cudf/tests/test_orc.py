@@ -786,7 +786,8 @@ def test_orc_writer_decimal(tmpdir, scale):
     assert_eq(expected.to_pandas()["dec_val"], got["dec_val"])
 
 
-def test_orc_reader_multiple_files(datadir):
+@pytest.mark.parametrize("num_rows", [1, 100, 3000])
+def test_orc_reader_multiple_files(datadir, num_rows):
 
     path = datadir / "TestOrcFile.testSnappy.orc"
 
@@ -794,7 +795,14 @@ def test_orc_reader_multiple_files(datadir):
     df_2 = pd.read_orc(path)
     df = pd.concat([df_1, df_2], ignore_index=True)
 
-    gdf = cudf.read_orc([path, path], engine="cudf").to_pandas()
+    gdf = cudf.read_orc(
+        [path, path], engine="cudf", num_rows=num_rows
+    ).to_pandas()
+
+    # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
+    # have an API to read a subsection of rows from the file
+    df = df[:num_rows]
+    df = df.reset_index(drop=True)
 
     assert_eq(df, gdf)
 
