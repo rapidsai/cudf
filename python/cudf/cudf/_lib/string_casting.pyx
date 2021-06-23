@@ -30,7 +30,8 @@ from cudf._lib.cpp.strings.convert.convert_integers cimport (
     to_integers as cpp_to_integers,
     from_integers as cpp_from_integers,
     hex_to_integers as cpp_hex_to_integers,
-    is_hex as cpp_is_hex
+    is_hex as cpp_is_hex,
+    integers_to_hex as cpp_integers_to_hex
 )
 from cudf._lib.cpp.strings.convert.convert_ipv4 cimport (
     ipv4_to_integers as cpp_ipv4_to_integers,
@@ -769,5 +770,28 @@ def is_hex(Column source_strings):
         c_result = move(cpp_is_hex(
             source_view
         ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def itoh(Column input_col):
+    """
+    Converting input column of type integer to a string
+    column with hexadecimal character digits.
+
+    Parameters
+    ----------
+    input_col : input column of type integer
+
+    Returns
+    -------
+    A Column of strings with hexadecimal characters.
+    """
+
+    cdef column_view input_column_view = input_col.view()
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(
+            cpp_integers_to_hex(input_column_view))
 
     return Column.from_unique_ptr(move(c_result))

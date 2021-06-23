@@ -54,14 +54,14 @@ namespace cudf {
  * - `DYNAMIC` defers the assumption of nullability to runtime with the users stating
  *    on construction of the iterator if column has nulls.
  */
-namespace contains_nulls {
-struct YES {
+struct contains_nulls {
+  struct YES {
+  };
+  struct NO {
+  };
+  struct DYNAMIC {
+  };
 };
-struct NO {
-};
-struct DYNAMIC {
-};
-}  // namespace contains_nulls
 
 namespace detail {
 /**

@@ -10,6 +10,7 @@ import pyarrow as pa
 import pyarrow.orc
 import pyorc
 import pytest
+import decimal
 
 import cudf
 from cudf.io.orc import ORCWriter
@@ -780,3 +781,17 @@ def test_orc_writer_decimal(tmpdir, scale):
 
     got = pd.read_orc(fname)
     assert_eq(expected.to_pandas()["dec_val"], got["dec_val"])
+
+
+def test_orc_string_stream_offset_issue():
+    size = 30000
+    vals = {
+        str(x): [decimal.Decimal(1)] * size if x != 0 else ["XYZ"] * size
+        for x in range(0, 5)
+    }
+    df = cudf.DataFrame(vals)
+
+    buffer = BytesIO()
+    df.to_orc(buffer)
+
+    assert_eq(df, cudf.read_orc(buffer))

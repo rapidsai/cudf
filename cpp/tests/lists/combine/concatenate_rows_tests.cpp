@@ -21,6 +21,8 @@
 
 #include <cudf/lists/combine.hpp>
 
+using namespace cudf::test::iterators;
+
 namespace {
 using StrListsCol = cudf::test::lists_column_wrapper<cudf::string_view>;
 using IntListsCol = cudf::test::lists_column_wrapper<int32_t>;
@@ -29,16 +31,6 @@ using TView       = cudf::table_view;
 
 constexpr bool print_all{false};  // For debugging
 constexpr int32_t null{0};
-
-auto all_nulls() { return cudf::test::iterator_all_nulls(); }
-
-auto null_at(cudf::size_type idx) { return cudf::test::iterator_with_null_at(idx); }
-
-auto null_at(std::vector<cudf::size_type> const& indices)
-{
-  return cudf::test::iterator_with_null_at(cudf::host_span<cudf::size_type const>{indices});
-}
-
 }  // namespace
 
 struct ListConcatenateRowsTest : public cudf::test::BaseFixture {
@@ -186,7 +178,7 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SimpleInputWithNulls)
                               ListsCol{{1, 2, null, 4}, null_at(2)},
                               ListsCol{{1, 2, 3, null}, null_at(3)},
                               ListsCol{} /*NULL*/},
-                             null_at({3, 6})}
+                             nulls_at({3, 6})}
                       .release();
   auto const col2 = ListsCol{{ListsCol{{10, 11, 12, null}, null_at(3)},
                               ListsCol{{13, 14, 15, 16, 17, null}, null_at(5)},
@@ -195,16 +187,16 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SimpleInputWithNulls)
                               ListsCol{{19, 20, null}, null_at(2)},
                               ListsCol{{null}, null_at(0)},
                               ListsCol{} /*NULL*/},
-                             null_at({2, 6})}
+                             nulls_at({2, 6})}
                       .release();
   auto const col3 = ListsCol{{ListsCol{} /*NULL*/,
                               ListsCol{{20, null}, null_at(1)},
-                              ListsCol{{null, 21, null, null}, null_at({0, 2, 3})},
+                              ListsCol{{null, 21, null, null}, nulls_at({0, 2, 3})},
                               ListsCol{},
                               ListsCol{22, 23, 24, 25},
                               ListsCol{{null, null, null, null, null}, all_nulls()},
                               ListsCol{} /*NULL*/},
-                             null_at({0, 6})}
+                             nulls_at({0, 6})}
                       .release();
 
   // Ignore null list elements
@@ -212,13 +204,13 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SimpleInputWithNulls)
     auto const results =
       cudf::lists::concatenate_rows(TView{{col1->view(), col2->view(), col3->view()}});
     auto const expected =
-      ListsCol{{ListsCol{{1, null, 3, 4, 10, 11, 12, null}, null_at({1, 7})},
-                ListsCol{{null, 2, 3, 4, 13, 14, 15, 16, 17, null, 20, null}, null_at({0, 9, 11})},
-                ListsCol{{null, 2, 3, 4, null, 21, null, null}, null_at({0, 4, 6, 7})},
+      ListsCol{{ListsCol{{1, null, 3, 4, 10, 11, 12, null}, nulls_at({1, 7})},
+                ListsCol{{null, 2, 3, 4, 13, 14, 15, 16, 17, null, 20, null}, nulls_at({0, 9, 11})},
+                ListsCol{{null, 2, 3, 4, null, 21, null, null}, nulls_at({0, 4, 6, 7})},
                 ListsCol{{null, 18}, null_at(0)},
-                ListsCol{{1, 2, null, 4, 19, 20, null, 22, 23, 24, 25}, null_at({2, 6})},
+                ListsCol{{1, 2, null, 4, 19, 20, null, 22, 23, 24, 25}, nulls_at({2, 6})},
                 ListsCol{{1, 2, 3, null, null, null, null, null, null, null},
-                         null_at({3, 4, 5, 6, 7, 8, 9})},
+                         nulls_at({3, 4, 5, 6, 7, 8, 9})},
                 ListsCol{} /*NULL*/},
                null_at(6)}
         .release();
@@ -232,14 +224,14 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SimpleInputWithNulls)
                                     cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW);
     auto const expected =
       ListsCol{{ListsCol{} /*NULL*/,
-                ListsCol{{null, 2, 3, 4, 13, 14, 15, 16, 17, null, 20, null}, null_at({0, 9, 11})},
+                ListsCol{{null, 2, 3, 4, 13, 14, 15, 16, 17, null, 20, null}, nulls_at({0, 9, 11})},
                 ListsCol{} /*NULL*/,
                 ListsCol{} /*NULL*/,
-                ListsCol{{1, 2, null, 4, 19, 20, null, 22, 23, 24, 25}, null_at({2, 6})},
+                ListsCol{{1, 2, null, 4, 19, 20, null, 22, 23, 24, 25}, nulls_at({2, 6})},
                 ListsCol{{1, 2, 3, null, null, null, null, null, null, null},
-                         null_at({3, 4, 5, 6, 7, 8, 9})},
+                         nulls_at({3, 4, 5, 6, 7, 8, 9})},
                 ListsCol{} /*NULL*/},
-               null_at({0, 2, 3, 6})}
+               nulls_at({0, 2, 3, 6})}
         .release();
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
   }
@@ -249,12 +241,13 @@ TEST_F(ListConcatenateRowsTest, SimpleInputStringsColumnsWithNulls)
 {
   auto const col1 = StrListsCol{
     StrListsCol{{"Tomato", "Bear" /*NULL*/, "Apple"}, null_at(1)},
-    StrListsCol{{"Banana", "Pig" /*NULL*/, "Kiwi", "Cherry", "Whale" /*NULL*/}, null_at({1, 4})},
+    StrListsCol{{"Banana", "Pig" /*NULL*/, "Kiwi", "Cherry", "Whale" /*NULL*/}, nulls_at({1, 4})},
     StrListsCol{
       "Coconut"}}.release();
   auto const col2 =
     StrListsCol{
-      {StrListsCol{{"Orange", "Dog" /*NULL*/, "Fox" /*NULL*/, "Duck" /*NULL*/}, null_at({1, 2, 3})},
+      {StrListsCol{{"Orange", "Dog" /*NULL*/, "Fox" /*NULL*/, "Duck" /*NULL*/},
+                   nulls_at({1, 2, 3})},
        StrListsCol{"Lemon", "Peach"},
        StrListsCol{{"Deer" /*NULL*/, "Snake" /*NULL*/, "Horse" /*NULL*/}, all_nulls()}}, /*NULL*/
       null_at(2)}
@@ -265,9 +258,9 @@ TEST_F(ListConcatenateRowsTest, SimpleInputStringsColumnsWithNulls)
     auto const results  = cudf::lists::concatenate_rows(TView{{col1->view(), col2->view()}});
     auto const expected = StrListsCol{
       StrListsCol{{"Tomato", "" /*NULL*/, "Apple", "Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/},
-                  null_at({1, 4, 5, 6})},
+                  nulls_at({1, 4, 5, 6})},
       StrListsCol{{"Banana", "" /*NULL*/, "Kiwi", "Cherry", "" /*NULL*/, "Lemon", "Peach"},
-                  null_at({1, 4})},
+                  nulls_at({1, 4})},
       StrListsCol{
         "Coconut"}}.release();
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
@@ -282,9 +275,9 @@ TEST_F(ListConcatenateRowsTest, SimpleInputStringsColumnsWithNulls)
       StrListsCol{
         {StrListsCol{
            {"Tomato", "" /*NULL*/, "Apple", "Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/},
-           null_at({1, 4, 5, 6})},
+           nulls_at({1, 4, 5, 6})},
          StrListsCol{{"Banana", "" /*NULL*/, "Kiwi", "Cherry", "" /*NULL*/, "Lemon", "Peach"},
-                     null_at({1, 4})},
+                     nulls_at({1, 4})},
          StrListsCol{""} /*NULL*/},
         null_at(2)}
         .release();
@@ -309,7 +302,8 @@ TEST_F(ListConcatenateRowsTest, SimpleInputStringsColumnsWithEmptyLists)
     auto const results =
       cudf::lists::concatenate_rows(TView{{col1->view(), col2->view(), col3->view()}});
     auto const expected = StrListsCol{
-      StrListsCol{{"" /*NULL*/, "Tomato", "" /*NULL*/, "Apple", "Lemon", "Peach"}, null_at({0, 2})},
+      StrListsCol{{"" /*NULL*/, "Tomato", "" /*NULL*/, "Apple", "Lemon", "Peach"},
+                  nulls_at({0, 2})},
       StrListsCol{"One",
                   "Two"}}.release();
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
@@ -322,7 +316,7 @@ TEST_F(ListConcatenateRowsTest, SimpleInputStringsColumnsWithEmptyLists)
                                     cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW);
     auto const expected =
       StrListsCol{{StrListsCol{{"" /*NULL*/, "Tomato", "" /*NULL*/, "Apple", "Lemon", "Peach"},
-                               null_at({0, 2})},
+                               nulls_at({0, 2})},
                    StrListsCol{""} /*NULL*/},
                   null_at(1)}
         .release();
@@ -358,7 +352,7 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SlicedColumnsInputWithNulls)
                                       ListsCol{},     /*NULL*/
                                       ListsCol{7},
                                       ListsCol{8, 9, 10}},
-                                     null_at({1, 3, 4})}
+                                     nulls_at({1, 3, 4})}
                               .release();
   auto const col1     = cudf::slice(col_original->view(), {0, 3})[0];
   auto const col2     = cudf::slice(col_original->view(), {1, 4})[0];
@@ -366,7 +360,7 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SlicedColumnsInputWithNulls)
   auto const col4     = cudf::slice(col_original->view(), {3, 6})[0];
   auto const col5     = cudf::slice(col_original->view(), {4, 7})[0];
   auto const expected = ListsCol{
-    ListsCol{{null, 2, 3, 3, null, 5, 6}, null_at({0, 4})},
+    ListsCol{{null, 2, 3, 3, null, 5, 6}, nulls_at({0, 4})},
     ListsCol{{3, null, 5, 6, 7}, null_at(1)},
     ListsCol{{3, null, 5, 6, 7, 8, 9, 10},
              null_at(1)}}.release();
@@ -379,9 +373,11 @@ TEST_F(ListConcatenateRowsTest, SlicedStringsColumnsInputWithNulls)
   auto const col =
     StrListsCol{
       {StrListsCol{{"Tomato", "Bear" /*NULL*/, "Apple"}, null_at(1)},
-       StrListsCol{{"Banana", "Pig" /*NULL*/, "Kiwi", "Cherry", "Whale" /*NULL*/}, null_at({1, 4})},
+       StrListsCol{{"Banana", "Pig" /*NULL*/, "Kiwi", "Cherry", "Whale" /*NULL*/},
+                   nulls_at({1, 4})},
        StrListsCol{"Coconut"},
-       StrListsCol{{"Orange", "Dog" /*NULL*/, "Fox" /*NULL*/, "Duck" /*NULL*/}, null_at({1, 2, 3})},
+       StrListsCol{{"Orange", "Dog" /*NULL*/, "Fox" /*NULL*/, "Duck" /*NULL*/},
+                   nulls_at({1, 2, 3})},
        StrListsCol{"Lemon", "Peach"},
        StrListsCol{{"Deer" /*NULL*/, "Snake" /*NULL*/, "Horse" /*NULL*/}, all_nulls()}}, /*NULL*/
       null_at(5)}
@@ -393,45 +389,44 @@ TEST_F(ListConcatenateRowsTest, SlicedStringsColumnsInputWithNulls)
 
   {
     auto const results  = cudf::lists::concatenate_rows(TView{{col1, col2, col3, col4}});
-    auto const expected = StrListsCol{
-      StrListsCol{{"Tomato",
-                   "" /*NULL*/,
-                   "Apple",
-                   "Banana",
-                   "" /*NULL*/,
-                   "Kiwi",
-                   "Cherry",
-                   "" /*NULL*/,
-                   "Coconut",
-                   "Orange",
-                   "" /*NULL*/,
-                   "" /*NULL*/,
-                   "" /*NULL*/},
-                  null_at({1, 4, 7, 10, 11, 12})},
-      StrListsCol{{"Banana",
-                   "" /*NULL*/,
-                   "Kiwi",
-                   "Cherry",
-                   "" /*NULL*/,
-                   "Coconut",
-                   "Orange",
-                   "" /*NULL*/,
-                   "" /*NULL*/,
-                   "", /*NULL*/
-                   "Lemon",
-                   "Peach"},
-                  null_at({1, 4, 7, 8, 9})},
-      StrListsCol{
-        {
-          "Coconut",
-          "Orange",
-          "" /*NULL*/,
-          "" /*NULL*/,
-          "", /*NULL*/
-          "Lemon",
-          "Peach",
-        },
-        null_at({2, 3, 4})}}.release();
+    auto const expected = StrListsCol{StrListsCol{{"Tomato",
+                                                   "" /*NULL*/,
+                                                   "Apple",
+                                                   "Banana",
+                                                   "" /*NULL*/,
+                                                   "Kiwi",
+                                                   "Cherry",
+                                                   "" /*NULL*/,
+                                                   "Coconut",
+                                                   "Orange",
+                                                   "" /*NULL*/,
+                                                   "" /*NULL*/,
+                                                   "" /*NULL*/},
+                                                  nulls_at({1, 4, 7, 10, 11, 12})},
+                                      StrListsCol{{"Banana",
+                                                   "" /*NULL*/,
+                                                   "Kiwi",
+                                                   "Cherry",
+                                                   "" /*NULL*/,
+                                                   "Coconut",
+                                                   "Orange",
+                                                   "" /*NULL*/,
+                                                   "" /*NULL*/,
+                                                   "", /*NULL*/
+                                                   "Lemon",
+                                                   "Peach"},
+                                                  nulls_at({1, 4, 7, 8, 9})},
+                                      StrListsCol{{
+                                                    "Coconut",
+                                                    "Orange",
+                                                    "" /*NULL*/,
+                                                    "" /*NULL*/,
+                                                    "", /*NULL*/
+                                                    "Lemon",
+                                                    "Peach",
+                                                  },
+                                                  nulls_at({2, 3, 4})}}
+                            .release();
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
   }
 
@@ -451,7 +446,7 @@ TEST_F(ListConcatenateRowsTest, SlicedStringsColumnsInputWithNulls)
                                                     "" /*NULL*/,
                                                     "" /*NULL*/,
                                                     "" /*NULL*/},
-                                                   null_at({1, 4, 7, 10, 11, 12})},
+                                                   nulls_at({1, 4, 7, 10, 11, 12})},
                                        StrListsCol{{"Banana",
                                                     "" /*NULL*/,
                                                     "Kiwi",
@@ -464,7 +459,7 @@ TEST_F(ListConcatenateRowsTest, SlicedStringsColumnsInputWithNulls)
                                                     "", /*NULL*/
                                                     "Lemon",
                                                     "Peach"},
-                                                   null_at({1, 4, 7, 8, 9})},
+                                                   nulls_at({1, 4, 7, 8, 9})},
                                        StrListsCol{} /*NULL*/},
                                       null_at(2)}
                             .release();

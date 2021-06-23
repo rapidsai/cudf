@@ -24,6 +24,8 @@
 #include <cudf/search.hpp>
 #include <cudf/table/table_view.hpp>
 
+using namespace cudf::test::iterators;
+
 using bools_col   = cudf::test::fixed_width_column_wrapper<bool>;
 using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
 using structs_col = cudf::test::structs_column_wrapper;
@@ -66,8 +68,6 @@ auto search_bounds(std::unique_ptr<cudf::column> const& t_col,
 {
   return search_bounds(t_col->view(), values_col, column_orders, null_precedence);
 }
-
-auto null_at(cudf::size_type idx) { return cudf::test::iterator_with_null_at(idx); }
 
 }  // namespace
 
@@ -298,8 +298,8 @@ TYPED_TEST(TypedStructSearchTest, OneColumnHasNullMaskButNoNullElementTest)
   auto const structs_col2 = structs_col{child_col2}.release();
 
   // structs_col3 (and its child column) will have a null mask but no null element
-  auto child_col3         = col_wrapper{{0, 10, 10}, cudf::test::iterator_no_null()};
-  auto const structs_col3 = structs_col{{child_col3}, cudf::test::iterator_no_null()}.release();
+  auto child_col3         = col_wrapper{{0, 10, 10}, no_nulls()};
+  auto const structs_col3 = structs_col{{child_col3}, no_nulls()}.release();
 
   // Search struct elements of structs_col2 and structs_col3 in the column structs_col1
   {
