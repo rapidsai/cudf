@@ -1438,7 +1438,7 @@ __global__ void __launch_bounds__(block_size)
   __syncthreads();
 
   while (is_valid && (s->top.data.cur_row < s->top.data.end_row)) {
-    uint64_t list_child_elements = 0;
+    uint32_t list_child_elements = 0;
     bytestream_fill(&s->bs, t);
     bytestream_fill(&s->bs2, t);
     __syncthreads();
@@ -1545,9 +1545,9 @@ __global__ void __launch_bounds__(block_size)
         __syncthreads();
       } else if (s->chunk.type_kind == LIST) {
         if (is_rlev1(s->chunk.encoding_kind)) {
-          numvals = Integer_RLEv1<uint32_t>(&s->bs2, &s->u.rlev1, s->vals.u32, numvals, t);
+          numvals = Integer_RLEv1<uint64_t>(&s->bs2, &s->u.rlev1, s->vals.u64, numvals, t);
         } else {
-          numvals = Integer_RLEv2<uint32_t>(&s->bs2, &s->u.rlev2, s->vals.u32, numvals, t);
+          numvals = Integer_RLEv2<uint64_t>(&s->bs2, &s->u.rlev2, s->vals.u64, numvals, t);
         }
         // If we're using an index, we may have to drop values from the initial run
         uint32_t skip = 0;
@@ -1683,15 +1683,20 @@ __global__ void __launch_bounds__(block_size)
           switch (s->chunk.type_kind) {
             case FLOAT:
             case INT: static_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped]; break;
-            case LIST:
-              static_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped];
-              list_child_elements                    = s->vals.u32[t + vals_skipped];
-              break;
             case DOUBLE:
             case LONG:
             case DECIMAL:
               static_cast<uint64_t *>(data_out)[row] = s->vals.u64[t + vals_skipped];
               break;
+            case LIST: {
+              // Since the offsets column in cudf is `size_type`,
+              // If the limit is exceeded then value will be 0.
+              uint32_t val = (s->vals.u64[t + vals_skipped] > std::numeric_limits<size_type>::max())
+                               ? 0
+                               : s->vals.u64[t + vals_skipped];
+              static_cast<uint32_t *>(data_out)[row] = val;
+              list_child_elements                    = val;
+            } break;
             case SHORT:
               static_cast<uint16_t *>(data_out)[row] =
                 static_cast<uint16_t>(s->vals.u32[t + vals_skipped]);
