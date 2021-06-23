@@ -30,6 +30,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <iterator>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
@@ -281,23 +282,27 @@ class aggregate_orc_metadata {
       num_columns(calc_num_cols()),
       num_stripes(calc_num_stripes())
   {
-    // Verify that the input files have matching numbers of columns
-    int num_cols = -1;
+    // Verify that the input files have the same number of columns,
+    // as well as matching types, compression, and names
     for (auto const &pfm : per_file_metadata) {
-      if (num_cols == -1) { num_cols = pfm.get_num_columns(); }
-      if (pfm.get_num_columns() != num_cols) {
-        CUDF_EXPECTS(num_cols == static_cast<int>(pfm.get_num_columns()),
-                     "All sources must have the same number of columns");
+      CUDF_EXPECTS(per_file_metadata[0].get_num_columns() == pfm.get_num_columns(),
+                   "All sources must have the same number of columns");
+      CUDF_EXPECTS(per_file_metadata[0].ps.compression == pfm.ps.compression,
+                   "All sources must have the same compression type");
+
+      // Check the types, column names, and decimal scale
+      for (size_t i = 0; i < pfm.ff.types.size(); i++) {
+        CUDF_EXPECTS(std::equal(pfm.ff.types[i].fieldNames.begin(),
+                                pfm.ff.types[i].fieldNames.end(),
+                                per_file_metadata[0].ff.types[i].fieldNames.begin()),
+                     "All source column names must be the same");
+        CUDF_EXPECTS(
+          pfm.ff.types[i].scale.value_or(0) == per_file_metadata[0].ff.types[i].scale.value_or(0),
+          "All scale values must be the same");
+        CUDF_EXPECTS(pfm.ff.types[i].kind == per_file_metadata[0].ff.types[i].kind,
+                     "Column types across all input sources must be the same");
       }
     }
-
-    // XXX: Need to talk with Vukasin about the best way to compare this schema ....
-    // Comparing types is likely the best thing to do here.
-    // // Verify that the input files have matching schemas
-    // for (auto const &pfm : per_file_metadata) {
-    //   CUDF_EXPECTS(per_file_metadata[0].schema == pfm.schema,
-    //                "All sources must have the same schemas");
-    // }
   }
 
   auto const &get_schema(int schema_idx) const { return per_file_metadata[0].ff.types[schema_idx]; }
@@ -314,7 +319,7 @@ class aggregate_orc_metadata {
 
   auto get_num_source_files() const { return per_file_metadata.size(); }
 
-  auto get_types() const { return per_file_metadata[0].ff.types; }
+  auto const &get_types() const { return per_file_metadata[0].ff.types; }
 
   int get_row_index_stride() const { return per_file_metadata[0].ff.rowIndexStride; }
 
@@ -347,9 +352,8 @@ class aggregate_orc_metadata {
         // Coalesce stripe info at the source file later since that makes downstream processing much
         // easier in impl::read
         for (const size_t &stripe_idx : user_specified_stripes[src_file_idx]) {
-          CUDF_EXPECTS(
-            stripe_idx >= 0 && stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size(),
-            "Invalid stripe index");
+          CUDF_EXPECTS(stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size(),
+                       "Invalid stripe index");
           stripe_idxs.push_back(stripe_idx);
           stripe_infos.push_back(
             std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
@@ -394,11 +398,6 @@ class aggregate_orc_metadata {
     if (not selected_stripes_mapping.empty()) {
       for (auto &mapping : selected_stripes_mapping) {
         // Resize to all stripe_info for the source level
-
-        // Get the number of unique stripes since the same stripes could be specified more than once
-        // by the user
-        // size_t uniqueCount = std::unique(mapping.stripe_idx_in_source.begin(),
-        // mapping.stripe_idx_in_source.end()) - mapping.stripe_idx_in_source.begin();
         per_file_metadata[mapping.source_idx].stripefooters.resize(
           mapping.stripe_idx_in_source.size());
 
@@ -683,13 +682,13 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     auto col_type = to_type_id(_metadata->get_col_type(col), _use_np_dtypes, _timestamp_type.id());
     CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
     // Remove this once we support Decimal128 data type
-    CUDF_EXPECTS((col_type != type_id::DECIMAL64) or (_metadata->get_types()[col].precision <= 18),
+    CUDF_EXPECTS((col_type != type_id::DECIMAL64) or (_metadata->get_col_type(col).precision <= 18),
                  "Decimal data has precision > 18, Decimal64 data type doesn't support it.");
     if (col_type == type_id::DECIMAL64) {
       // sign of the scale is changed since cuDF follows c++ libraries like CNL
       // which uses negative scaling, but liborc and other libraries
       // follow positive scaling.
-      auto const scale = -static_cast<int32_t>(_metadata->get_types()[col].scale.value_or(0));
+      auto const scale = -static_cast<int32_t>(_metadata->get_col_type(col).scale.value_or(0));
       column_types.emplace_back(col_type, scale);
     } else {
       column_types.emplace_back(col_type);
@@ -707,10 +706,13 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                    [](auto const &dtype) { return make_empty_column(dtype); });
   } else {
     // Get the total number of stripes across all input files.
-    size_t total_num_stripes = 0;
-    for (const auto &stripe_source_mapping : selected_stripes) {
-      total_num_stripes += stripe_source_mapping.stripe_idx_in_source.size();
-    }
+    size_t total_num_stripes =
+      std::accumulate(selected_stripes.begin(),
+                      selected_stripes.end(),
+                      0,
+                      [](size_t sum, auto &stripe_source_mapping) {
+                        return sum + stripe_source_mapping.stripe_idx_in_source.size();
+                      });
 
     const auto num_columns = _selected_columns.size();
     const auto num_chunks  = total_num_stripes * num_columns;
@@ -896,8 +898,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     out_metadata.column_names[i] = _metadata->get_column_name(0, _selected_columns[i]);
   }
 
-  // XXX: Review question. Should metadata from all input files be included here as I am doing or
-  // just a single input file? Return user metadata
   for (const auto &meta : _metadata->per_file_metadata) {
     for (const auto &kv : meta.ff.metadata) { out_metadata.user_data.insert({kv.name, kv.value}); }
   }

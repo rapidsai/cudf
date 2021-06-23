@@ -799,13 +799,22 @@ def test_orc_reader_multiple_files(datadir):
     assert_eq(df, gdf)
 
 
-def test_orc_reader_multiple_files_single_stripe(datadir):
+def test_orc_reader_multi_file_single_stripe(datadir):
 
     path = datadir / "TestOrcFile.testSnappy.orc"
 
     # should raise an exception
     with pytest.raises(ValueError):
         cudf.read_orc([path, path], engine="cudf", stripes=[0])
+
+
+def test_orc_reader_multi_file_multi_stripe(datadir):
+
+    path = datadir / "TestOrcFile.testStripeLevelStats.orc"
+
+    # should raise an exception
+    with pytest.raises(ValueError):
+        cudf.read_orc([path, path], engine="cudf", stripes=[0, 2])
 
 
 def test_orc_string_stream_offset_issue():

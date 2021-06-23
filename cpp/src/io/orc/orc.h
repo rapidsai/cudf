@@ -547,6 +547,7 @@ class metadata {
  public:
   struct stripe_source_mapping {
     int source_idx;
+    std::vector<int> stripe_idx_in_source;  // Maps to stripe_info and will be same size
     std::vector<OrcStripeInfo> stripe_info;
   };
 
