@@ -553,17 +553,6 @@ class metadata {
  public:
   explicit metadata(datasource *const src);
 
-  /**
-   * @brief Filters and reduces down to a selection of columns
-   *
-   * @param[in] use_names List of column names to select
-   * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
-   *
-   * @return List of ORC column indexes
-   */
-  std::vector<int> select_columns(std::vector<std::string> const &use_names,
-                                  bool &has_timestamp_column) const;
-
   size_t get_total_rows() const { return ff.numberOfRows; }
   int get_num_stripes() const { return ff.stripes.size(); }
   int get_num_columns() const { return ff.types.size(); }

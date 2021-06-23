@@ -292,6 +292,8 @@ class aggregate_orc_metadata {
 
       // Check the types, column names, and decimal scale
       for (size_t i = 0; i < pfm.ff.types.size(); i++) {
+        CUDF_EXPECTS(pfm.ff.types[i].kind == per_file_metadata[0].ff.types[i].kind,
+                     "Column types across all input sources must be the same");
         CUDF_EXPECTS(std::equal(pfm.ff.types[i].fieldNames.begin(),
                                 pfm.ff.types[i].fieldNames.end(),
                                 per_file_metadata[0].ff.types[i].fieldNames.begin()),
@@ -299,15 +301,11 @@ class aggregate_orc_metadata {
         CUDF_EXPECTS(
           pfm.ff.types[i].scale.value_or(0) == per_file_metadata[0].ff.types[i].scale.value_or(0),
           "All scale values must be the same");
-        CUDF_EXPECTS(pfm.ff.types[i].kind == per_file_metadata[0].ff.types[i].kind,
-                     "Column types across all input sources must be the same");
       }
     }
   }
 
   auto const &get_schema(int schema_idx) const { return per_file_metadata[0].ff.types[schema_idx]; }
-
-  auto get_metadata_at_idx(int metadata_idx) const { return &per_file_metadata[metadata_idx]; };
 
   auto get_col_type(int col_idx) const { return per_file_metadata[0].ff.types[col_idx]; }
 
@@ -325,6 +323,10 @@ class aggregate_orc_metadata {
 
   auto get_column_name(const int source_idx, const int column_idx) const
   {
+    CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
+                 "Out of range source_idx provided");
+    CUDF_EXPECTS(column_idx <= per_file_metadata[source_idx].get_num_columns(),
+                 "Out of range column_idx provided");
     return per_file_metadata[source_idx].get_column_name(column_idx);
   }
 
@@ -346,7 +348,6 @@ class aggregate_orc_metadata {
       // Each vector entry represents a source file; each nested vector represents the
       // user_defined_stripes to get from that source file
       for (size_t src_file_idx = 0; src_file_idx < user_specified_stripes.size(); ++src_file_idx) {
-        std::vector<int> stripe_idxs;
         std::vector<OrcStripeInfo> stripe_infos;
 
         // Coalesce stripe info at the source file later since that makes downstream processing much
@@ -354,13 +355,11 @@ class aggregate_orc_metadata {
         for (const size_t &stripe_idx : user_specified_stripes[src_file_idx]) {
           CUDF_EXPECTS(stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size(),
                        "Invalid stripe index");
-          stripe_idxs.push_back(stripe_idx);
           stripe_infos.push_back(
             std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
           row_count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
         }
-        selected_stripes_mapping.push_back(
-          {static_cast<int>(src_file_idx), stripe_idxs, stripe_infos});
+        selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
       }
     } else {
       row_start = std::max(row_start, 0);
@@ -374,23 +373,23 @@ class aggregate_orc_metadata {
 
       size_type count = 0;
       // Iterate all source files, each source file has corelating metadata
-      for (size_t src_file_idx = 0; src_file_idx < per_file_metadata.size(); ++src_file_idx) {
-        std::vector<int> stripe_idxs;
+      for (size_t src_file_idx = 0;
+           src_file_idx < per_file_metadata.size() && count < row_start + row_count;
+           ++src_file_idx) {
         std::vector<OrcStripeInfo> stripe_infos;
 
-        for (size_t stripe_idx = 0; stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size();
+        for (size_t stripe_idx = 0;
+             stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size() &&
+             count < row_start + row_count;
              ++stripe_idx) {
           count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
           if (count > row_start || count == 0) {
-            stripe_idxs.push_back(stripe_idx);
             stripe_infos.push_back(
               std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
           }
-          if (count >= row_start + row_count) { break; }
         }
 
-        selected_stripes_mapping.push_back(
-          {static_cast<int>(src_file_idx), stripe_idxs, stripe_infos});
+        selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
       }
     }
 
@@ -806,7 +805,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                   .scale.value_or(0);
           chunk.rowgroup_id = num_rowgroups;
           chunk.dtype_len   = (column_types[col_idx].id() == type_id::STRING)
-                              ? sizeof(thurst::pair<const char *, size_type>)
+                              ? sizeof(string_index_pair)
                               : cudf::size_of(column_types[col_idx]);
           if (chunk.type_kind == orc::TIMESTAMP) {
             chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
