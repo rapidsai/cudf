@@ -29,6 +29,9 @@ requirements:
     - python
     - cython >=0.29,<0.30
     - setuptools
+    - pyarrow=4.0.1
+    - arrow-cpp=4.0.1
+    - arrow-cpp-proc * cuda
     - cudf {{ version }}
     - libcudf_kafka {{ version }}
   run:
