@@ -10,9 +10,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120
-
-from ..api.types import (  # noqa: F401
+from cudf.api.types import (  # noqa: F401
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
     infer_dtype,
@@ -33,6 +31,7 @@ from ..api.types import (  # noqa: F401
     is_timedelta_dtype,
     pandas_dtype,
 )
+from cudf.core._compat import PANDAS_GE_120
 
 _NA_REP = "<NA>"
 _np_pa_dtypes = {

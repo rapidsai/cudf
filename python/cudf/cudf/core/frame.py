@@ -17,6 +17,7 @@ from nvtx import annotate
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
+from cudf.api.types import is_dict_like, is_dtype_equal
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -35,8 +36,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     min_scalar_type,
 )
-
-from ..api.types import is_dict_like, is_dtype_equal
 
 T = TypeVar("T", bound="Frame")
 

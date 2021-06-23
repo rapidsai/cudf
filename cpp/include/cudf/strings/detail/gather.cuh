@@ -229,7 +229,7 @@ std::unique_ptr<cudf::column> gather_chars(StringIterator strings_begin,
   auto const output_count = std::distance(map_begin, map_end);
   if (output_count == 0) return make_empty_column(data_type{type_id::INT8});
 
-  auto chars_column  = create_chars_child_column(output_count, chars_bytes, stream, mr);
+  auto chars_column  = create_chars_child_column(chars_bytes, stream, mr);
   auto const d_chars = chars_column->mutable_view().template data<char>();
 
   constexpr int warps_per_threadblock = 4;
