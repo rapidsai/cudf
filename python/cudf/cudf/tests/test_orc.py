@@ -812,8 +812,8 @@ def test_orc_reader_multi_file_multi_stripe(datadir):
 
     path = datadir / "TestOrcFile.testStripeLevelStats.orc"
     gdf = cudf.read_orc([path, path], engine="cudf", stripes=[[0, 1], [2]])
-    assert_eq(gdf.shape[0], 11000)
-    assert_eq(gdf.shape[1], 2)
+    pdf = pd.read_orc(path)
+    assert_eq(pdf, gdf)
 
 
 def test_orc_string_stream_offset_issue():
