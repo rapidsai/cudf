@@ -771,7 +771,7 @@ public abstract class Aggregation {
 
     /**
      * Merge the partial lists produced by multiple CollectListAggregations.
-     * NOTICE: The partial lists to be merged should NOT include any null value.
+     * NOTICE: The partial lists to be merged should NOT include any null list element (but can include null list entries).
      */
     public static MergeListsAggregation mergeLists() {
         return new MergeListsAggregation();
