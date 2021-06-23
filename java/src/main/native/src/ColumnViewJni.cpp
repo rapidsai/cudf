@@ -50,6 +50,7 @@
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/padding.hpp>
+#include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/split/split.hpp>
@@ -470,14 +471,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_split(JNIEnv *env, j
     }
 
     std::vector<cudf::column_view> result = cudf::split(*n_column, indices);
+
     cudf::jni::native_jlongArray n_result(env, result.size());
-    std::vector<std::unique_ptr<cudf::column>> column_result(result.size());
     for (size_t i = 0; i < result.size(); i++) {
-      column_result[i].reset(new cudf::column(result[i]));
-      n_result[i] = reinterpret_cast<jlong>(column_result[i].get());
-    }
-    for (size_t i = 0; i < result.size(); i++) {
-      column_result[i].release();
+      cudf::column_view const * c = new cudf::column_view(result[i]);
+      n_result[i] = reinterpret_cast<jlong>(c);
     }
     return n_result.get_jArray();
   }
@@ -1958,6 +1956,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringConcatenationListEl
       cudf::strings::join_list_elements(lcv, separator_scalar, narep_scalar,
                                         null_policy, empty_list_output);
     return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_repeatStrings(JNIEnv *env, jclass,
+                                                                     jlong column_handle,
+                                                                     jint repeat_times) {
+  JNI_NULL_CHECK(env, column_handle, "column handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const cv = *reinterpret_cast<cudf::column_view *>(column_handle);
+    auto const strs_col = cudf::strings_column_view(cv);
+    return reinterpret_cast<jlong>(cudf::strings::repeat_strings(strs_col, repeat_times).release());
   }
   CATCH_STD(env, 0);
 }

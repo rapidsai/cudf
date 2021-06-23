@@ -22,10 +22,10 @@
 
 #include <cudf/reshape.hpp>
 
-using namespace cudf::test;
+using namespace cudf::test::iterators;
 
 template <typename T>
-struct InterleaveColumnsTest : public BaseFixture {
+struct InterleaveColumnsTest : public cudf::test::BaseFixture {
 };
 
 TYPED_TEST_CASE(InterleaveColumnsTest, cudf::test::FixedWidthTypes);
@@ -41,11 +41,11 @@ TYPED_TEST(InterleaveColumnsTest, OneColumn)
 {
   using T = TypeParam;
 
-  fixed_width_column_wrapper<T, int32_t> a({-1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> a({-1, 0, 1});
 
   cudf::table_view in(std::vector<cudf::column_view>{a});
 
-  auto expected = fixed_width_column_wrapper<T, int32_t>({-1, 0, 1});
+  auto expected = cudf::test::fixed_width_column_wrapper<T, int32_t>({-1, 0, 1});
   auto actual   = cudf::interleave_columns(in);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, actual->view());
@@ -55,12 +55,12 @@ TYPED_TEST(InterleaveColumnsTest, TwoColumns)
 {
   using T = TypeParam;
 
-  auto a = fixed_width_column_wrapper<T, int32_t>({0, 2});
-  auto b = fixed_width_column_wrapper<T, int32_t>({1, 3});
+  auto a = cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 2});
+  auto b = cudf::test::fixed_width_column_wrapper<T, int32_t>({1, 3});
 
   cudf::table_view in(std::vector<cudf::column_view>{a, b});
 
-  auto expected = fixed_width_column_wrapper<T, int32_t>({0, 1, 2, 3});
+  auto expected = cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 1, 2, 3});
   auto actual   = cudf::interleave_columns(in);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, actual->view());
@@ -70,13 +70,13 @@ TYPED_TEST(InterleaveColumnsTest, ThreeColumns)
 {
   using T = TypeParam;
 
-  auto a = fixed_width_column_wrapper<T, int32_t>({0, 3, 6});
-  auto b = fixed_width_column_wrapper<T, int32_t>({1, 4, 7});
-  auto c = fixed_width_column_wrapper<T, int32_t>({2, 5, 8});
+  auto a = cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 3, 6});
+  auto b = cudf::test::fixed_width_column_wrapper<T, int32_t>({1, 4, 7});
+  auto c = cudf::test::fixed_width_column_wrapper<T, int32_t>({2, 5, 8});
 
   cudf::table_view in(std::vector<cudf::column_view>{a, b, c});
 
-  auto expected = fixed_width_column_wrapper<T, int32_t>({0, 1, 2, 3, 4, 5, 6, 7, 8});
+  auto expected = cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 1, 2, 3, 4, 5, 6, 7, 8});
   auto actual   = cudf::interleave_columns(in);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, actual->view());
@@ -86,11 +86,11 @@ TYPED_TEST(InterleaveColumnsTest, OneColumnEmpty)
 {
   using T = TypeParam;
 
-  fixed_width_column_wrapper<T> a({});
+  cudf::test::fixed_width_column_wrapper<T> a({});
 
   cudf::table_view in(std::vector<cudf::column_view>{a});
 
-  auto expected = fixed_width_column_wrapper<T>({});
+  auto expected = cudf::test::fixed_width_column_wrapper<T>({});
   auto actual   = cudf::interleave_columns(in);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, actual->view());
@@ -100,13 +100,13 @@ TYPED_TEST(InterleaveColumnsTest, ThreeColumnsEmpty)
 {
   using T = TypeParam;
 
-  fixed_width_column_wrapper<T> a({});
-  fixed_width_column_wrapper<T> b({});
-  fixed_width_column_wrapper<T> c({});
+  cudf::test::fixed_width_column_wrapper<T> a({});
+  cudf::test::fixed_width_column_wrapper<T> b({});
+  cudf::test::fixed_width_column_wrapper<T> c({});
 
   cudf::table_view in(std::vector<cudf::column_view>{a, b, c});
 
-  auto expected = fixed_width_column_wrapper<T>({});
+  auto expected = cudf::test::fixed_width_column_wrapper<T>({});
   auto actual   = cudf::interleave_columns(in);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, actual->view());
@@ -116,11 +116,11 @@ TYPED_TEST(InterleaveColumnsTest, OneColumnNullable)
 {
   using T = TypeParam;
 
-  fixed_width_column_wrapper<T, int32_t> a({1, 2, 3}, {0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> a({1, 2, 3}, {0, 1, 0});
 
   cudf::table_view in(std::vector<cudf::column_view>{a});
 
-  auto expected = fixed_width_column_wrapper<T, int32_t>({0, 2, 0}, {0, 1, 0});
+  auto expected = cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 2, 0}, {0, 1, 0});
   auto actual   = cudf::interleave_columns(in);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, actual->view());
@@ -130,13 +130,14 @@ TYPED_TEST(InterleaveColumnsTest, TwoColumnNullable)
 {
   using T = TypeParam;
 
-  fixed_width_column_wrapper<T, int32_t> a({1, 2, 3}, {0, 1, 0});
-  fixed_width_column_wrapper<T, int32_t> b({4, 5, 6}, {1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> a({1, 2, 3}, {0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> b({4, 5, 6}, {1, 0, 1});
 
   cudf::table_view in(std::vector<cudf::column_view>{a, b});
 
-  auto expected = fixed_width_column_wrapper<T, int32_t>({0, 4, 2, 0, 0, 6}, {0, 1, 1, 0, 0, 1});
-  auto actual   = cudf::interleave_columns(in);
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 4, 2, 0, 0, 6}, {0, 1, 1, 0, 0, 1});
+  auto actual = cudf::interleave_columns(in);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, actual->view());
 }
@@ -145,14 +146,14 @@ TYPED_TEST(InterleaveColumnsTest, ThreeColumnsNullable)
 {
   using T = TypeParam;
 
-  fixed_width_column_wrapper<T, int32_t> a({1, 4, 7}, {1, 0, 1});
-  fixed_width_column_wrapper<T, int32_t> b({2, 5, 8}, {0, 1, 0});
-  fixed_width_column_wrapper<T, int32_t> c({3, 6, 9}, {1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> a({1, 4, 7}, {1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> b({2, 5, 8}, {0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> c({3, 6, 9}, {1, 0, 1});
 
   cudf::table_view in(std::vector<cudf::column_view>{a, b, c});
 
-  auto expected = fixed_width_column_wrapper<T, int32_t>({1, 0, 3, 0, 5, 0, 7, 0, 9},
-                                                         {1, 0, 1, 0, 1, 0, 1, 0, 1});
+  auto expected = cudf::test::fixed_width_column_wrapper<T, int32_t>({1, 0, 3, 0, 5, 0, 7, 0, 9},
+                                                                     {1, 0, 1, 0, 1, 0, 1, 0, 1});
   auto actual   = cudf::interleave_columns(in);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, actual->view());
@@ -163,8 +164,8 @@ TYPED_TEST(InterleaveColumnsTest, MismatchedDtypes)
   using T = TypeParam;
 
   if (not std::is_same<int, T>::value and not cudf::is_fixed_point<T>()) {
-    fixed_width_column_wrapper<int32_t> input_a({1, 4, 7}, {1, 0, 1});
-    fixed_width_column_wrapper<T, int32_t> input_b({2, 5, 8}, {0, 1, 0});
+    cudf::test::fixed_width_column_wrapper<int32_t> input_a({1, 4, 7}, {1, 0, 1});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> input_b({2, 5, 8}, {0, 1, 0});
 
     cudf::table_view input(std::vector<cudf::column_view>{input_a, input_b});
 
@@ -172,7 +173,7 @@ TYPED_TEST(InterleaveColumnsTest, MismatchedDtypes)
   }
 }
 
-struct InterleaveStringsColumnsTest : public BaseFixture {
+struct InterleaveStringsColumnsTest : public cudf::test::BaseFixture {
 };
 
 TEST_F(InterleaveStringsColumnsTest, ZeroSizedColumns)
@@ -377,16 +378,6 @@ using TView       = cudf::table_view;
 
 constexpr bool print_all{false};  // For debugging
 constexpr int32_t null{0};
-
-auto all_nulls() { return cudf::test::iterator_all_nulls(); }
-
-auto null_at(cudf::size_type idx) { return cudf::test::iterator_with_null_at(idx); }
-
-auto null_at(std::vector<cudf::size_type> const& indices)
-{
-  return cudf::test::iterator_with_null_at(cudf::host_span<cudf::size_type const>{indices});
-}
-
 }  // namespace
 
 struct ListsColumnsInterleaveTest : public cudf::test::BaseFixture {
@@ -509,7 +500,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputWithNulls)
                       .release();
   auto const col3 = ListsCol{{ListsCol{} /*NULL*/,
                               ListsCol{{20, null}, null_at(1)},
-                              ListsCol{{null, 21, null, null}, null_at({0, 2, 3})},
+                              ListsCol{{null, 21, null, null}, nulls_at({0, 2, 3})},
                               ListsCol{},
                               ListsCol{22, 23, 24, 25},
                               ListsCol{{null, null, null, null, null}, all_nulls()}},
@@ -523,7 +514,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputWithNulls)
                                   ListsCol{{20, null}, null_at(1)},
                                   ListsCol{{null, 2, 3, 4}, null_at(0)},
                                   ListsCol{} /*NULL*/,
-                                  ListsCol{{null, 21, null, null}, null_at({0, 2, 3})},
+                                  ListsCol{{null, 21, null, null}, nulls_at({0, 2, 3})},
                                   ListsCol{} /*NULL*/,
                                   ListsCol{{null, 18}, null_at(0)},
                                   ListsCol{},
@@ -533,7 +524,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputWithNulls)
                                   ListsCol{{1, 2, 3, null}, null_at(3)},
                                   ListsCol{{null}, null_at(0)},
                                   ListsCol{{null, null, null, null, null}, all_nulls()}},
-                                 null_at({2, 7, 9})}
+                                 nulls_at({2, 7, 9})}
                           .release();
   auto const results = cudf::interleave_columns(TView{{col1->view(), col2->view(), col3->view()}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
@@ -556,12 +547,13 @@ TEST_F(ListsColumnsInterleaveTest, SimpleInputStringsColumnsWithNulls)
 {
   auto const col1 = StrListsCol{
     StrListsCol{{"Tomato", "Bear" /*NULL*/, "Apple"}, null_at(1)},
-    StrListsCol{{"Banana", "Pig" /*NULL*/, "Kiwi", "Cherry", "Whale" /*NULL*/}, null_at({1, 4})},
+    StrListsCol{{"Banana", "Pig" /*NULL*/, "Kiwi", "Cherry", "Whale" /*NULL*/}, nulls_at({1, 4})},
     StrListsCol{
       "Coconut"}}.release();
   auto const col2 =
     StrListsCol{
-      {StrListsCol{{"Orange", "Dog" /*NULL*/, "Fox" /*NULL*/, "Duck" /*NULL*/}, null_at({1, 2, 3})},
+      {StrListsCol{{"Orange", "Dog" /*NULL*/, "Fox" /*NULL*/, "Duck" /*NULL*/},
+                   nulls_at({1, 2, 3})},
        StrListsCol{"Lemon", "Peach"},
        StrListsCol{{"Deer" /*NULL*/, "Snake" /*NULL*/, "Horse" /*NULL*/}, all_nulls()}}, /*NULL*/
       null_at(2)}
@@ -570,8 +562,8 @@ TEST_F(ListsColumnsInterleaveTest, SimpleInputStringsColumnsWithNulls)
   auto const expected =
     StrListsCol{
       {StrListsCol{{"Tomato", "" /*NULL*/, "Apple"}, null_at(1)},
-       StrListsCol{{"Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, null_at({1, 2, 3})},
-       StrListsCol{{"Banana", "" /*NULL*/, "Kiwi", "Cherry", "" /*NULL*/}, null_at({1, 4})},
+       StrListsCol{{"Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, nulls_at({1, 2, 3})},
+       StrListsCol{{"Banana", "" /*NULL*/, "Kiwi", "Cherry", "" /*NULL*/}, nulls_at({1, 4})},
        StrListsCol{"Lemon", "Peach"},
        StrListsCol{"Coconut"},
        StrListsCol{}}, /*NULL*/
@@ -589,7 +581,7 @@ TEST_F(ListsColumnsInterleaveTest, SimpleInputStringsColumnsWithNullableChild)
     StrListsCol{
       "Coconut"}}.release();
   auto const col2 = StrListsCol{
-    StrListsCol{{"Orange", "Dog" /*NULL*/, "Fox" /*NULL*/, "Duck" /*NULL*/}, null_at({1, 2, 3})},
+    StrListsCol{{"Orange", "Dog" /*NULL*/, "Fox" /*NULL*/, "Duck" /*NULL*/}, nulls_at({1, 2, 3})},
     StrListsCol{"Lemon", "Peach"},
     StrListsCol{
       {"Deer" /*NULL*/, "Snake" /*NULL*/, "Horse" /*NULL*/},
@@ -597,7 +589,7 @@ TEST_F(ListsColumnsInterleaveTest, SimpleInputStringsColumnsWithNullableChild)
 
   auto const expected = StrListsCol{
     StrListsCol{"Tomato", "Bear", "Apple"},
-    StrListsCol{{"Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, null_at({1, 2, 3})},
+    StrListsCol{{"Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, nulls_at({1, 2, 3})},
     StrListsCol{"Banana", "Pig", "Kiwi", "Cherry", "Whale"},
     StrListsCol{"Lemon", "Peach"},
     StrListsCol{"Coconut"},
@@ -645,7 +637,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputWithNulls)
                              ListsCol{},     /*NULL*/
                              ListsCol{7},
                              ListsCol{8, 9, 10}},
-                            null_at({1, 3, 4})}
+                            nulls_at({1, 3, 4})}
                      .release();
   auto const col1     = cudf::slice(col->view(), {0, 3})[0];
   auto const col2     = cudf::slice(col->view(), {1, 4})[0];
@@ -667,7 +659,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputWithNulls)
                                   ListsCol{}, /*NULL*/
                                   ListsCol{7},
                                   ListsCol{8, 9, 10}},
-                                 null_at({1, 3, 4, 5, 7, 8, 11, 12})}
+                                 nulls_at({1, 3, 4, 5, 7, 8, 11, 12})}
                           .release();
   auto const results = cudf::interleave_columns(TView{{col1, col2, col3, col4, col5}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
@@ -705,9 +697,11 @@ TEST_F(ListsColumnsInterleaveTest, SlicedStringsColumnsInputWithNulls)
   auto const col =
     StrListsCol{
       {StrListsCol{{"Tomato", "Bear" /*NULL*/, "Apple"}, null_at(1)},
-       StrListsCol{{"Banana", "Pig" /*NULL*/, "Kiwi", "Cherry", "Whale" /*NULL*/}, null_at({1, 4})},
+       StrListsCol{{"Banana", "Pig" /*NULL*/, "Kiwi", "Cherry", "Whale" /*NULL*/},
+                   nulls_at({1, 4})},
        StrListsCol{"Coconut"},
-       StrListsCol{{"Orange", "Dog" /*NULL*/, "Fox" /*NULL*/, "Duck" /*NULL*/}, null_at({1, 2, 3})},
+       StrListsCol{{"Orange", "Dog" /*NULL*/, "Fox" /*NULL*/, "Duck" /*NULL*/},
+                   nulls_at({1, 2, 3})},
        StrListsCol{"Lemon", "Peach"},
        StrListsCol{{"Deer" /*NULL*/, "Snake" /*NULL*/, "Horse" /*NULL*/}, all_nulls()}}, /*NULL*/
       null_at(5)}
@@ -719,15 +713,15 @@ TEST_F(ListsColumnsInterleaveTest, SlicedStringsColumnsInputWithNulls)
   auto const expected =
     StrListsCol{
       {StrListsCol{{"Tomato", "" /*NULL*/, "Apple"}, null_at(1)},
-       StrListsCol{{"Banana", "" /*NULL*/, "Kiwi", "Cherry", "" /*NULL*/}, null_at({1, 4})},
+       StrListsCol{{"Banana", "" /*NULL*/, "Kiwi", "Cherry", "" /*NULL*/}, nulls_at({1, 4})},
        StrListsCol{"Coconut"},
-       StrListsCol{{"Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, null_at({1, 2, 3})},
-       StrListsCol{{"Banana", "" /*NULL*/, "Kiwi", "Cherry", "" /*NULL*/}, null_at({1, 4})},
+       StrListsCol{{"Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, nulls_at({1, 2, 3})},
+       StrListsCol{{"Banana", "" /*NULL*/, "Kiwi", "Cherry", "" /*NULL*/}, nulls_at({1, 4})},
        StrListsCol{"Coconut"},
-       StrListsCol{{"Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, null_at({1, 2, 3})},
+       StrListsCol{{"Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, nulls_at({1, 2, 3})},
        StrListsCol{"Lemon", "Peach"},
        StrListsCol{"Coconut"},
-       StrListsCol{{"Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, null_at({1, 2, 3})},
+       StrListsCol{{"Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, nulls_at({1, 2, 3})},
        StrListsCol{"Lemon", "Peach"},
        StrListsCol{}}, /*NULL*/
       null_at(11)}

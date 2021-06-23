@@ -14,11 +14,11 @@ import cupy
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
-from pandas.api.types import is_dict_like
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
+from cudf.api.types import is_bool_dtype, is_dict_like, is_dtype_equal
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     DatetimeColumn,
@@ -47,14 +47,14 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
     find_common_type,
-    is_decimal_dtype,
-    is_struct_dtype,
     is_categorical_dtype,
+    is_decimal_dtype,
     is_interval_dtype,
     is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
     is_scalar,
+    is_struct_dtype,
     min_scalar_type,
 )
 from cudf.utils.utils import (
@@ -1225,7 +1225,7 @@ class Series(SingleColumnFrame, Serializable):
             if get_option("display.max_rows") == 0
             else get_option("display.max_rows")
         )
-        if len(self) > max_rows and max_rows != 0:
+        if max_rows not in (0, None) and len(self) > max_rows:
             top = self.head(int(max_rows / 2 + 1))
             bottom = self.tail(int(max_rows / 2 + 1))
             preprocess = cudf.concat([top, bottom])
@@ -1253,7 +1253,7 @@ class Series(SingleColumnFrame, Serializable):
         ):
             min_rows = (
                 height
-                if get_option("display.max_rows") == 0
+                if get_option("display.min_rows") == 0
                 else get_option("display.min_rows")
             )
             show_dimensions = get_option("display.show_dimensions")
@@ -2415,7 +2415,7 @@ class Series(SingleColumnFrame, Serializable):
         col = _concat_columns([o._column for o in objs])
 
         if isinstance(col, cudf.core.column.DecimalColumn):
-            col = objs[0]._column._copy_type_metadata(col)
+            col = col._with_type_metadata(objs[0]._column.dtype)
 
         return cls(data=col, index=index, name=name)
 
@@ -2988,7 +2988,7 @@ class Series(SingleColumnFrame, Serializable):
                  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0],
              dtype=uint8)
         """
-        if not pd.api.types.is_bool_dtype(self.dtype):
+        if not is_bool_dtype(self.dtype):
             raise TypeError(
                 f"Series must of boolean dtype, found: {self.dtype}"
             )
@@ -3082,7 +3082,7 @@ class Series(SingleColumnFrame, Serializable):
                 )
             dtype = dtype[self.name]
 
-        if pd.api.types.is_dtype_equal(dtype, self.dtype):
+        if is_dtype_equal(dtype, self.dtype):
             return self.copy(deep=copy)
         try:
             data = self._column.astype(dtype)
@@ -5603,7 +5603,7 @@ class Series(SingleColumnFrame, Serializable):
             # pandas defaults
             percentiles = np.array([0.25, 0.5, 0.75])
 
-        if pd.api.types.is_bool_dtype(self.dtype):
+        if is_bool_dtype(self.dtype):
             return _describe_categorical(self)
         elif isinstance(self._column, cudf.core.column.NumericalColumn):
             return _describe_numeric(self)

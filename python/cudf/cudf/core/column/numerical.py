@@ -8,7 +8,6 @@ from typing import Any, Mapping, Sequence, Tuple, Union, cast
 import cupy
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_integer_dtype
 
 import cudf
 from cudf import _lib as libcudf
@@ -21,7 +20,7 @@ from cudf.core.column import (
     column,
     string,
 )
-from cudf.core.dtypes import Decimal64Dtype
+from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
@@ -32,6 +31,7 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 
+from ...api.types import is_integer_dtype, is_number
 from .numerical_base import NumericalBaseColumn
 
 
@@ -393,7 +393,7 @@ class NumericalColumn(NumericalBaseColumn):
         if closest=True.
         """
         value = to_cudf_compatible_scalar(value)
-        if not pd.api.types.is_number(value):
+        if not is_number(value):
             raise ValueError("Expected a numeric value")
         found = 0
         if len(self):
@@ -422,7 +422,7 @@ class NumericalColumn(NumericalBaseColumn):
         if closest=True.
         """
         value = to_cudf_compatible_scalar(value)
-        if not pd.api.types.is_number(value):
+        if not is_number(value):
             raise ValueError("Expected a numeric value")
         found = 0
         if len(self):
@@ -455,10 +455,11 @@ class NumericalColumn(NumericalBaseColumn):
             else:
                 # Kinds are the same but to_dtype is smaller
                 if "float" in to_dtype.name:
-                    info = np.finfo(to_dtype)
+                    finfo = np.finfo(to_dtype)
+                    lower_, upper_ = finfo.min, finfo.max
                 elif "int" in to_dtype.name:
-                    info = np.iinfo(to_dtype)
-                lower_, upper_ = info.min, info.max
+                    iinfo = np.iinfo(to_dtype)
+                    lower_, upper_ = iinfo.min, iinfo.max
 
                 if self.dtype.kind == "f":
                     # Exclude 'np.inf', '-np.inf'
@@ -529,8 +530,8 @@ class NumericalColumn(NumericalBaseColumn):
 
         # want to cast float to int:
         elif self.dtype.kind == "f" and to_dtype.kind in {"i", "u"}:
-            info = np.iinfo(to_dtype)
-            min_, max_ = info.min, info.max
+            iinfo = np.iinfo(to_dtype)
+            min_, max_ = iinfo.min, iinfo.max
 
             # best we can do is hope to catch it here and avoid compare
             if (self.min() >= min_) and (self.max() <= max_):
@@ -543,6 +544,20 @@ class NumericalColumn(NumericalBaseColumn):
                 return False
 
         return False
+
+    def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
+        if isinstance(dtype, CategoricalDtype):
+            return column.build_categorical_column(
+                categories=dtype.categories._values,
+                codes=as_column(self.base_data, dtype=self.dtype),
+                mask=self.base_mask,
+                ordered=dtype.ordered,
+                size=self.size,
+                offset=self.offset,
+                null_count=self.null_count,
+            )
+
+        return self
 
     def to_pandas(
         self, index: pd.Index = None, nullable: bool = False, **kwargs

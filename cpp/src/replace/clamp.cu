@@ -67,8 +67,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
   // build chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column =
-    cudf::strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
 
   return std::make_pair(std::move(offsets_column), std::move(chars_column));
 }
@@ -107,10 +106,8 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
     return bytes;
   };
 
-  auto offset_and_char =
+  auto [offsets_column, chars_column] =
     form_offsets_and_char_column(d_input, null_count, offsets_transformer, stream, mr);
-  auto offsets_column(std::move(offset_and_char.first));
-  auto chars_column(std::move(offset_and_char.second));
 
   auto d_offsets = offsets_column->view().template data<size_type>();
   auto d_chars   = chars_column->mutable_view().template data<char>();

@@ -378,6 +378,7 @@ def test_list_scalar_host_construction(data):
     breakpoint()
     slr = cudf.Scalar(data)
     assert slr.value == data
+    assert slr.device_value.value == data
 
 
 @pytest.mark.parametrize(
@@ -437,3 +438,23 @@ def test_construction_series_with_nulls(input_obj):
     got = cudf.Series(input_obj).to_arrow()
 
     assert expect == got
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [[]]},
+        {"a": [[1, 2, None, 4]]},
+        {"a": [["cat", None, "dog"]]},
+        {
+            "a": [[1, 2, 3, None], [4, None, 5]],
+            "b": [None, ["fish", "bird"]],
+            "c": [[], []],
+        },
+        {"a": [[1, 2, 3, None], [4, None, 5], None, [6, 7]]},
+    ],
+)
+def test_serialize_list_columns(data):
+    df = cudf.DataFrame(data)
+    recreated = df.__class__.deserialize(*df.serialize())
+    assert_eq(recreated, df)
