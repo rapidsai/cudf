@@ -191,9 +191,18 @@ else
     else
         "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka -l --ptds
     fi
+
 fi
 
 # Both regular and Project Flash proceed here
+
+################################################################################
+# BUILD - Build libcudf examples
+################################################################################
+
+# If examples grows too large to build, should move to cpu side
+gpuci_logger "Building libcudf examples"
+$WORKSPACE/cpp/examples/build.sh
 
 # set environment variable for numpy 1.16
 # will be enabled for later versions by default
@@ -201,7 +210,6 @@ np_ver=$(python -c "import numpy; print('.'.join(numpy.__version__.split('.')[:-
 if [ "$np_ver" == "1.16" ];then
     export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
 fi
-
 
 ################################################################################
 # TEST - Run py.test, notebooks

@@ -23,6 +23,8 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 
+using namespace cudf::test::iterators;
+
 namespace cudf {
 namespace test {
 template <typename V>
@@ -93,7 +95,7 @@ TYPED_TEST(groupby_nunique_test, zero_valid_keys)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::NUNIQUE>;
 
-  fixed_width_column_wrapper<K> keys({1, 2, 3}, iterator_all_nulls());
+  fixed_width_column_wrapper<K> keys({1, 2, 3}, all_nulls());
   fixed_width_column_wrapper<V> vals({3, 4, 5});
 
   fixed_width_column_wrapper<K> expect_keys{};
@@ -109,7 +111,7 @@ TYPED_TEST(groupby_nunique_test, zero_valid_values)
   using R = cudf::detail::target_type_t<V, aggregation::NUNIQUE>;
 
   fixed_width_column_wrapper<K> keys{1, 1, 1};
-  fixed_width_column_wrapper<V> vals({3, 4, 5}, iterator_all_nulls());
+  fixed_width_column_wrapper<V> vals({3, 4, 5}, all_nulls());
 
   fixed_width_column_wrapper<K> expect_keys{1};
   fixed_width_column_wrapper<R> expect_vals{0};
@@ -129,7 +131,7 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values)
                                      {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
   //                                        {1, 1,     2, 2, 2,   3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, iterator_no_null());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
   // all unique values only                 {3, 6,     1, 4, 9,   2, 8,    -}
   fixed_width_column_wrapper<R> expect_vals{2, 3, 2, 0};
   fixed_width_column_wrapper<R> expect_bool_vals{1, 1, 1, 0};
@@ -152,7 +154,7 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values_with_duplicates)
                                      {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
 
   //  { 1, 1,     2, 2, 2,    3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, iterator_no_null());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
   //  { 3, 6,-    1, 4, 9,-   2*, 8,   -*}
   //  unique,     with null,  dup,     dup null
   fixed_width_column_wrapper<R> expect_vals{2, 3, 2, 0};
@@ -176,7 +178,7 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
                                      {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
 
   //  { 1, 1,     2, 2, 2,    3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, iterator_no_null());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
   //  { 3, 6,-    1, 4, 9,-   2*, 8,   -*}
   //  unique,     with null,  dup,     dup null
   fixed_width_column_wrapper<R> expect_vals{3, 4, 2, 1};
@@ -201,7 +203,7 @@ TYPED_TEST(groupby_nunique_test, dictionary)
                                      {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
 
   // { 1, 1,   2, 2, 2,   3, 3,   4}
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, iterator_no_null());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
   // { 3, 6,-  1, 4, 9,-  2*, 8,  -*}
   //  unique,  with null, dup,    dup null
   fixed_width_column_wrapper<R> expect_fixed_vals({3, 4, 2, 1});
