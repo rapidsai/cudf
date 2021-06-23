@@ -307,7 +307,9 @@ cdef _set_list_from_pylist(unique_ptr[scalar]& s,
     cdef Column col
     if isinstance(dtype.element_type, ListDtype):
         col = cudf.core.column.as_column(
-            pa.array(value, from_pandas=True, type=dtype.element_type.to_arrow())
+            pa.array(
+                value, from_pandas=True, type=dtype.element_type.to_arrow()
+            )
         )
     else:
         col = cudf.core.column.as_column(
