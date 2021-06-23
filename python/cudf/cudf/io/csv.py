@@ -45,6 +45,7 @@ def read_csv(
     na_filter=True,
     prefix=None,
     index_col=None,
+    storage_options=None,
     **kwargs,
 ):
     """{docstring}"""
@@ -100,6 +101,7 @@ def read_csv(
         na_filter=na_filter,
         prefix=prefix,
         index_col=index_col,
+        storage_options=None,
     )
 
 

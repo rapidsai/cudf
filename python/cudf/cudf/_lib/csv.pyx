@@ -353,6 +353,7 @@ def read_csv(
     bool na_filter=True,
     object prefix=None,
     object index_col=None,
+    object storage_options=None,
     **kwargs,
 ):
     """
