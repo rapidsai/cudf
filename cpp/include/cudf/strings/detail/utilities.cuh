@@ -148,7 +148,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_strings_childre
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view          = offsets_column->mutable_view();
   auto d_offsets             = offsets_view.template data<int32_t>();
-  size_and_exec_fn.d_offsets = &d_offsets[1];
+  size_and_exec_fn.d_offsets = d_offsets;
 
   // This is called twice -- once for offsets and once for chars.
   // Reducing the number of places size_and_exec_fn is inlined speeds up compile time.
@@ -166,12 +166,13 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_strings_childre
   CUDA_TRY(cudaMemsetAsync(has_overflow.begin(), 0, sizeof(bool), stream.value()));
 
   static constexpr int64_t max_offset = static_cast<int64_t>(std::numeric_limits<size_type>::max());
-  CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(offset_type), stream.value()));
-  thrust::inclusive_scan(
+  CUDA_TRY(cudaMemsetAsync(d_offsets + strings_count, 0, sizeof(offset_type), stream.value()));
+  thrust::exclusive_scan(
     rmm::exec_policy(stream),
-    d_offsets + 1,
-    d_offsets + 1 + strings_count,
-    d_offsets + 1,
+    d_offsets,
+    d_offsets + strings_count + 1,
+    d_offsets,
+    size_type{0},
     [overflow = has_overflow.begin()] __device__(auto const lhs, auto const rhs) {
       auto const sum = static_cast<int64_t>(lhs) + static_cast<int64_t>(rhs);
       if (sum > max_offset) {
@@ -190,9 +191,6 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_strings_childre
       "Size of the output strings column exceeds the maximum value that can be indexed by "
       "size_type (offset_type)");
   }
-
-  //  thrust::exclusive_scan(
-  //    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
 
   // Now build the chars column
   auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
@@ -268,7 +266,7 @@ make_strings_children_with_null_mask(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view          = offsets_column->mutable_view();
   auto d_offsets             = offsets_view.template data<int32_t>();
-  size_and_exec_fn.d_offsets = &d_offsets[1];
+  size_and_exec_fn.d_offsets = d_offsets;
 
   auto validities               = rmm::device_uvector<int8_t>(strings_count, stream);
   size_and_exec_fn.d_validities = validities.begin();
@@ -284,20 +282,18 @@ make_strings_children_with_null_mask(
   // Compute the string sizes (storing in `d_offsets`) and string validities
   for_each_fn(size_and_exec_fn);
 
-  // Compute the offsets from string sizes
-  //  thrust::exclusive_scan(
-  //    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
-
   auto has_overflow = rmm::device_uvector<bool>(1, stream);
   CUDA_TRY(cudaMemsetAsync(has_overflow.begin(), 0, sizeof(bool), stream.value()));
 
+  // Compute the offsets from string sizes
   static constexpr int64_t max_offset = static_cast<int64_t>(std::numeric_limits<size_type>::max());
-  CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(offset_type), stream.value()));
-  thrust::inclusive_scan(
+  CUDA_TRY(cudaMemsetAsync(d_offsets + strings_count, 0, sizeof(offset_type), stream.value()));
+  thrust::exclusive_scan(
     rmm::exec_policy(stream),
-    d_offsets + 1,
-    d_offsets + 1 + strings_count,
-    d_offsets + 1,
+    d_offsets,
+    d_offsets + strings_count + 1,
+    d_offsets,
+    size_type{0},
     [overflow = has_overflow.begin()] __device__(auto const lhs, auto const rhs) {
       auto const sum = static_cast<int64_t>(lhs) + static_cast<int64_t>(rhs);
       if (sum > max_offset) {
