@@ -76,11 +76,8 @@ TYPED_TEST(ColumnTypeCheckTestTyped, SameDictionary)
   DCW lhs{1, 1, 2, 3}, rhs{5, 5};
   EXPECT_TRUE(column_types_equal(lhs, rhs));
 
-  DCW lhs2{1, 1, 2, 3}, rhs2{};
+  DCW lhs2{}, rhs2{};
   EXPECT_TRUE(column_types_equal(lhs2, rhs2));
-
-  DCW lhs3{}, rhs3{};
-  EXPECT_TRUE(column_types_equal(lhs3, rhs3));
 }
 
 TEST_F(ColumnTypeCheckTest, SameStruct)
@@ -174,6 +171,9 @@ TEST_F(ColumnTypeCheckTest, DifferentDictionary)
   dictionary_column_wrapper<duration_s, uint32_t> rhs3{8, 8};
 
   EXPECT_FALSE(column_types_equal(lhs3, rhs3));
+
+  dictionary_column_wrapper<int32_t, uint32_t> lhs4{1, 1, 2, 3}, rhs4{};
+  EXPECT_FALSE(column_types_equal(lhs4, rhs4));
 }
 
 TEST_F(ColumnTypeCheckTest, DifferentLists)

@@ -545,69 +545,69 @@ constexpr inline bool is_fixed_width(data_type type)
 }
 
 /**
- * @brief Indicates whether the type `T` is a lists type.
+ * @brief Indicates whether the type `T` is a list type.
  *
  * @tparam T  The type to verify
- * @return true `T` is a lists-type
- * @return false  `T` is not lists-type
+ * @return true `T` is a list-type
+ * @return false  `T` is not list-type
  */
 template <typename T>
-constexpr inline bool is_lists()
+constexpr inline bool is_list()
 {
   return std::is_same<list_view, T>::value;
 }
 
-struct is_lists_impl {
+struct is_list_impl {
   template <typename T>
   constexpr bool operator()()
   {
-    return is_lists<T>();
+    return is_list<T>();
   }
 };
 
 /**
- * @brief Indicates whether `type` is a lists `data_type`.
+ * @brief Indicates whether `type` is a list `data_type`.
  *
  * @param type The `data_type` to verify
- * @return true `type` is a lists type
- * @return false `type` is not a lists type
+ * @return true `type` is a list type
+ * @return false `type` is not a list type
  */
-constexpr inline bool is_lists(data_type type)
+constexpr inline bool is_list(data_type type)
 {
-  return cudf::type_dispatcher(type, is_lists_impl{});
+  return cudf::type_dispatcher(type, is_list_impl{});
 }
 
 /**
- * @brief Indicates whether the type `T` is a structs type.
+ * @brief Indicates whether the type `T` is a struct type.
  *
  * @tparam T  The type to verify
- * @return true `T` is a structs-type
- * @return false  `T` is not structs-type
+ * @return true `T` is a struct-type
+ * @return false  `T` is not struct-type
  */
 template <typename T>
-constexpr inline bool is_structs()
+constexpr inline bool is_struct()
 {
   return std::is_same<struct_view, T>::value;
 }
 
-struct is_structs_impl {
+struct is_struct_impl {
   template <typename T>
   constexpr bool operator()()
   {
-    return is_structs<T>();
+    return is_struct<T>();
   }
 };
 
 /**
- * @brief Indicates whether `type` is a structs `data_type`.
+ * @brief Indicates whether `type` is a struct `data_type`.
  *
  * @param type The `data_type` to verify
- * @return true `type` is a structs type
- * @return false `type` is not a structs type
+ * @return true `type` is a struct type
+ * @return false `type` is not a struct type
  */
-constexpr inline bool is_structs(data_type type)
+constexpr inline bool is_struct(data_type type)
 {
-  return cudf::type_dispatcher(type, is_structs_impl{});
+  return cudf::type_dispatcher(type, is_struct_impl{});
 }
 
 class string_view;

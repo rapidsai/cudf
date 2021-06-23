@@ -40,17 +40,17 @@ struct columns_equal_fn {
     auto const kidx = dictionary_column_view::keys_column_index;
     return lhs.num_children() > 0 and rhs.num_children() > 0
              ? lhs.child(kidx).type() == rhs.child(kidx).type()
-             : true;
+             : lhs.is_empty() and rhs.is_empty();
   }
 
-  template <typename T, CUDF_ENABLE_IF(is_lists<T>())>
+  template <typename T, CUDF_ENABLE_IF(is_list<T>())>
   bool operator()(column_view lhs, column_view rhs)
   {
     auto const& ci = lists_column_view::child_column_index;
     return column_types_equal(lhs.child(ci), rhs.child(ci));
   }
 
-  template <typename T, CUDF_ENABLE_IF(is_structs<T>())>
+  template <typename T, CUDF_ENABLE_IF(is_struct<T>())>
   bool operator()(column_view lhs, column_view rhs)
   {
     return lhs.num_children() == rhs.num_children() and
