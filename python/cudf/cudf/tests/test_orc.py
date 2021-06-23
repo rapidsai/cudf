@@ -180,7 +180,7 @@ def test_orc_read_statistics(datadir):
         (
             file_statistics,
             stripes_statistics,
-        ) = cudf.io.orc.read_orc_statistics([path])
+        ) = cudf.io.orc.read_orc_statistics([path, path])
     except pa.ArrowIOError as e:
         pytest.skip(".orc file is not found: %s" % e)
 

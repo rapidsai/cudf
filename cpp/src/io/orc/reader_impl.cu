@@ -275,7 +275,6 @@ class aggregate_orc_metadata {
       });
   }
 
- public:
   aggregate_orc_metadata(std::vector<std::unique_ptr<datasource>> const &sources)
     : per_file_metadata(metadatas_from_sources(sources)),
       num_rows(calc_num_rows()),
@@ -307,9 +306,9 @@ class aggregate_orc_metadata {
 
   auto get_col_type(int col_idx) const { return per_file_metadata[0].ff.types[col_idx]; }
 
-  size_type get_num_rows() const { return num_rows; }
+  auto get_num_rows() const { return num_rows; }
 
-  size_type get_num_cols() const { return per_file_metadata[0].get_num_columns(); }
+  auto get_num_cols() const { return per_file_metadata[0].get_num_columns(); }
 
   auto get_num_stripes() const { return num_stripes; }
 
