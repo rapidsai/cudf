@@ -1050,12 +1050,11 @@ def _is_local_filesystem(fs):
     return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
 
 
-def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
+def ensure_single_filepath_or_buffer(path_or_data, storage_options=None, **kwargs):
     """Return False if `path_or_data` resolves to multiple filepaths or buffers
     """
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
-        storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
         try:
             fs, _, paths = fsspec.get_fs_token_paths(
@@ -1098,7 +1097,7 @@ def is_directory(path_or_data, **kwargs):
 
 
 def get_filepath_or_buffer(
-    path_or_data, compression, mode="rb", iotypes=(BytesIO), **kwargs,
+    path_or_data, compression, mode="rb", iotypes=(BytesIO), storage_options=None, **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
@@ -1114,6 +1113,9 @@ def get_filepath_or_buffer(
         Mode in which file is opened
     iotypes : (), default (BytesIO)
         Object type to exclude from file-like check
+    storage_options: dict, optional
+        Extra options that make sense for a particular 
+        storage connection
 
     Returns
     -------
@@ -1126,7 +1128,6 @@ def get_filepath_or_buffer(
     path_or_data = stringify_pathlike(path_or_data)
 
     if isinstance(path_or_data, str):
-        storage_options = kwargs.get("storage_options")
         # fsspec does not expanduser so handle here
         path_or_data = os.path.expanduser(path_or_data)
 

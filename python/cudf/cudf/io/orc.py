@@ -224,6 +224,7 @@ def read_orc(
     num_rows=None,
     use_index=True,
     timestamp_type=None,
+    storage_options=None,
     **kwargs,
 ):
     """{docstring}"""
@@ -231,7 +232,7 @@ def read_orc(
     from cudf import DataFrame
 
     is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
-        path_or_data=filepath_or_buffer, **kwargs,
+        path_or_data=filepath_or_buffer,storage_options=storage_options,**kwargs,
     )
     if not is_single_filepath_or_buffer:
         raise NotImplementedError(
@@ -239,7 +240,7 @@ def read_orc(
         )
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        path_or_data=filepath_or_buffer, compression=None, **kwargs
+        path_or_data=filepath_or_buffer, compression=None, storage_options=storage_options, **kwargs
     )
     if compression is not None:
         ValueError("URL content-encoding decompression is not supported")

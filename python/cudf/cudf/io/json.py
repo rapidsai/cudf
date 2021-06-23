@@ -27,6 +27,7 @@ def read_json(
     lines=False,
     compression="infer",
     byte_range=None,
+    storage_options=None,
     *args,
     **kwargs,
 ):
@@ -53,6 +54,7 @@ def read_json(
                 path_or_data=source,
                 compression=compression,
                 iotypes=(BytesIO, StringIO),
+                storage_options=storage_options,
                 **kwargs,
             )
             if isinstance(tmp_source, list):
@@ -72,7 +74,7 @@ def read_json(
         )
 
         if not ioutils.ensure_single_filepath_or_buffer(
-            path_or_data=path_or_buf, **kwargs,
+            path_or_data=path_or_buf, storage_options=storage_options, **kwargs,
         ):
             raise NotImplementedError(
                 "`read_json` does not yet support reading "
@@ -83,6 +85,7 @@ def read_json(
             path_or_data=path_or_buf,
             compression=compression,
             iotypes=(BytesIO, StringIO),
+            storage_options=storage_options,
             **kwargs,
         )
 
@@ -91,6 +94,7 @@ def read_json(
                 path_or_buf,
                 lines=lines,
                 compression=compression,
+                storage_options=storage_options,
                 *args,
                 **kwargs,
             )
@@ -100,6 +104,7 @@ def read_json(
                 lines=lines,
                 dtype=dtype,
                 compression=compression,
+                storage_options=storage_options,
                 *args,
                 **kwargs,
             )
