@@ -94,14 +94,6 @@ struct encoder_decimal_info {
 };
 
 /**
- * @brief Returns the total number of rowgroups in the list of contigious stripes.
- */
-inline auto stripes_size(host_span<stripe_rowgroups const> stripes)
-{
-  return !stripes.empty() ? *stripes.back().cend() - stripes.front().first : 0;
-}
-
-/**
  * @brief List of per-column ORC streams.
  *
  * Provides interface to calculate their offsets.
@@ -323,7 +315,7 @@ class writer::impl {
    */
   std::vector<std::vector<uint8_t>> gather_statistic_blobs(
     const table_device_view& table,
-    host_span<orc_column_view const> columns,
+    orc_table_view const& orc_table,
     device_2dspan<rows_range const> rowgroup_bounds,
     host_span<stripe_rowgroups const> stripe_bounds);
 

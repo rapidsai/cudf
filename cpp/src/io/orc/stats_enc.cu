@@ -50,7 +50,6 @@ __global__ void __launch_bounds__(init_threads_per_block)
   auto const num_rowgroups = rowgroup_bounds.size().first;
   statistics_group *group  = &group_g[threadIdx.y];
   if (chunk_id < num_rowgroups and t == 0) {
-    uint32_t num_rows                         = cols[col_id].leaf_column->size();
     group->col                                = &cols[col_id];
     group->start_row                          = rowgroup_bounds[chunk_id][col_id].begin;
     group->num_rows                           = rowgroup_bounds[chunk_id][col_id].size();

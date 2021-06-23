@@ -595,7 +595,7 @@ encoded_data writer::impl::encode_columns(orc_table_view const &orc_table,
                                           orc_streams const &streams)
 {
   auto const num_columns   = orc_table.num_columns();
-  auto const num_rowgroups = stripes_size(stripe_bounds);
+  auto const num_rowgroups = rowgroup_bounds.size().first;
   hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, num_rowgroups, stream);
   auto const stream_offsets = streams.compute_offsets(orc_table.columns, num_rowgroups);
   rmm::device_uvector<uint8_t> encoded_data(stream_offsets.data_size(), stream);
@@ -796,23 +796,30 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
   return stripes;
 }
 
+void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
+                             device_span<stats_column_desc> stat_desc,
+                             rmm::cuda_stream_view stream)
+{
+  thrust::for_each(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0ul),
+    thrust::make_counting_iterator(stat_desc.size()),
+    [=] __device__(auto idx) { stat_desc[idx].leaf_column = &columns[idx].cudf_column; });
+}
+
 std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   const table_device_view &table,
-  host_span<orc_column_view const> columns,
+  orc_table_view const &orc_table,
   device_2dspan<rows_range const> rowgroup_bounds,
   host_span<stripe_rowgroups const> stripe_bounds)
 {
-  auto const num_rowgroups = stripes_size(stripe_bounds);
-  size_t num_stat_blobs    = (1 + stripe_bounds.size()) * columns.size();
-  size_t num_chunks        = num_rowgroups * columns.size();
+  auto const num_rowgroups  = rowgroup_bounds.size().first;
+  auto const num_stat_blobs = (1 + stripe_bounds.size()) * orc_table.num_columns();
 
-  std::vector<std::vector<uint8_t>> stat_blobs(num_stat_blobs);
-  hostdevice_vector<stats_column_desc> stat_desc(columns.size(), stream);
+  hostdevice_vector<stats_column_desc> stat_desc(orc_table.num_columns(), stream);
   hostdevice_vector<statistics_merge_group> stat_merge(num_stat_blobs, stream);
-  rmm::device_uvector<statistics_chunk> stat_chunks(num_chunks + num_stat_blobs, stream);
-  rmm::device_uvector<statistics_group> stat_groups(num_chunks, stream);
 
-  for (auto const &column : columns) {
+  for (auto const &column : orc_table.columns) {
     stats_column_desc *desc = &stat_desc[column.flat_index()];
     switch (column.orc_kind()) {
       case TypeKind::BYTE: desc->stats_dtype = dtype_int8; break;
@@ -849,34 +856,35 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
       grp->num_chunks  = stripe.size;
     }
     statistics_merge_group *col_stats =
-      &stat_merge[stripe_bounds.size() * columns.size() + column.flat_index()];
+      &stat_merge[stripe_bounds.size() * orc_table.num_columns() + column.flat_index()];
     col_stats->col         = stat_desc.device_ptr(column.flat_index());
     col_stats->start_chunk = static_cast<uint32_t>(column.flat_index() * stripe_bounds.size());
     col_stats->num_chunks  = static_cast<uint32_t>(stripe_bounds.size());
   }
   stat_desc.host_to_device(stream);
   stat_merge.host_to_device(stream);
+  set_stat_desc_leaf_cols(orc_table.d_columns, stat_desc, stream);
 
-  rmm::device_uvector<column_device_view> leaf_column_views =
-    create_leaf_column_device_views<stats_column_desc>(
-      stat_desc, table, stream);  // what needs to be passed here? all but list and struct columns?
-
+  auto const num_chunks = rowgroup_bounds.count();
+  rmm::device_uvector<statistics_chunk> stat_chunks(num_chunks + num_stat_blobs, stream);
+  rmm::device_uvector<statistics_group> stat_groups(num_chunks, stream);
   gpu::orc_init_statistics_groups(
     stat_groups.data(), stat_desc.device_ptr(), rowgroup_bounds, stream);
 
   detail::calculate_group_statistics<detail::io_file_format::ORC>(
     stat_chunks.data(), stat_groups.data(), num_chunks, stream);
-  detail::merge_group_statistics<detail::io_file_format::ORC>(stat_chunks.data() + num_chunks,
-                                                              stat_chunks.data(),
-                                                              stat_merge.device_ptr(),
-                                                              stripe_bounds.size() * columns.size(),
-                                                              stream);
+  detail::merge_group_statistics<detail::io_file_format::ORC>(
+    stat_chunks.data() + num_chunks,
+    stat_chunks.data(),
+    stat_merge.device_ptr(),
+    stripe_bounds.size() * orc_table.num_columns(),
+    stream);
 
   detail::merge_group_statistics<detail::io_file_format::ORC>(
-    stat_chunks.data() + num_chunks + stripe_bounds.size() * columns.size(),
+    stat_chunks.data() + num_chunks + stripe_bounds.size() * orc_table.num_columns(),
     stat_chunks.data() + num_chunks,
-    stat_merge.device_ptr(stripe_bounds.size() * columns.size()),
-    columns.size(),
+    stat_merge.device_ptr(stripe_bounds.size() * orc_table.num_columns()),
+    orc_table.num_columns(),
     stream);
   gpu::orc_init_statistics_buffersize(
     stat_merge.device_ptr(), stat_chunks.data() + num_chunks, num_stat_blobs, stream);
@@ -892,6 +900,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   stat_merge.device_to_host(stream);
   blobs.device_to_host(stream, true);
 
+  std::vector<std::vector<uint8_t>> stat_blobs(num_stat_blobs);
   for (size_t i = 0; i < num_stat_blobs; i++) {
     const uint8_t *stat_begin = blobs.host_ptr(stat_merge[i].start_chunk);
     const uint8_t *stat_end   = stat_begin + stat_merge[i].num_chunks;
@@ -1344,8 +1353,7 @@ void writer::impl::write(table_view const &table)
   // Gather column statistics
   std::vector<ColStatsBlob> column_stats;
   if (enable_statistics_ && table.num_columns() > 0 && num_rows > 0) {
-    column_stats =
-      gather_statistic_blobs(*d_table, orc_table.columns, rowgroup_bounds, stripe_bounds);
+    column_stats = gather_statistic_blobs(*d_table, orc_table, rowgroup_bounds, stripe_bounds);
   }
 
   // Allocate intermediate output stream buffer
