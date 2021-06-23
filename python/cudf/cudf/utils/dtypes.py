@@ -1,9 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import datetime as dt
-import numbers
 from collections import namedtuple
-from collections.abc import Sequence
 from decimal import Decimal
 
 import cupy as cp
@@ -11,10 +9,25 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.core.dtypes.common import infer_dtype_from_object
-from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
-from cudf._lib.scalar import DeviceScalar
+from cudf.api.types import (  # noqa: F401
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
+    is_categorical_dtype,
+    is_datetime_dtype as is_datetime_dtype,
+    is_decimal_dtype,
+    is_integer,
+    is_integer_dtype,
+    is_interval_dtype,
+    is_list_dtype,
+    is_list_like,
+    is_numeric_dtype as is_numerical_dtype,
+    is_scalar,
+    is_string_dtype,
+    is_struct_dtype,
+    is_timedelta_dtype,
+)
 from cudf.core._compat import PANDAS_GE_120
 
 _NA_REP = "<NA>"
@@ -144,152 +157,6 @@ def numeric_normalize_types(*args):
     return [a.astype(dtype) for a in args]
 
 
-def is_numerical_dtype(obj):
-    # TODO: we should handle objects with a `.dtype` attribute,
-    # e.g., arrays, here.
-    try:
-        dtype = np.dtype(obj)
-    except TypeError:
-        return False
-    return dtype.kind in "biuf"
-
-
-def is_integer_dtype(obj):
-    try:
-        dtype = np.dtype(obj)
-    except TypeError:
-        return pd.api.types.is_integer_dtype(obj)
-    return dtype.kind in "iu"
-
-
-def is_integer(obj):
-    if isinstance(obj, cudf.Scalar):
-        return is_integer_dtype(obj.dtype)
-    return pd.api.types.is_integer(obj)
-
-
-def is_string_dtype(obj):
-    return (
-        pd.api.types.is_string_dtype(obj)
-        # Reject all cudf extension types.
-        and not is_categorical_dtype(obj)
-        and not is_decimal_dtype(obj)
-        and not is_list_dtype(obj)
-        and not is_struct_dtype(obj)
-        and not is_interval_dtype(obj)
-    )
-
-
-def is_datetime_dtype(obj):
-    if obj is None:
-        return False
-    if not hasattr(obj, "str"):
-        return False
-    return "M8" in obj.str
-
-
-def is_timedelta_dtype(obj):
-    if obj is None:
-        return False
-    if not hasattr(obj, "str"):
-        return False
-    return "m8" in obj.str
-
-
-def is_categorical_dtype(obj):
-    """Infer whether a given pandas, numpy, or cuDF Column, Series, or dtype
-    is a pandas CategoricalDtype.
-    """
-    if obj is None:
-        return False
-    if isinstance(obj, cudf.CategoricalDtype):
-        return True
-    if obj is cudf.CategoricalDtype:
-        return True
-    if isinstance(obj, np.dtype):
-        return False
-    if isinstance(obj, CategoricalDtype):
-        return True
-    if obj is CategoricalDtype:
-        return True
-    if obj is CategoricalDtypeType:
-        return True
-    if isinstance(obj, str) and obj == "category":
-        return True
-    if isinstance(
-        obj,
-        (
-            CategoricalDtype,
-            cudf.core.index.CategoricalIndex,
-            cudf.core.column.CategoricalColumn,
-            pd.Categorical,
-            pd.CategoricalIndex,
-        ),
-    ):
-        return True
-    if isinstance(obj, np.ndarray):
-        return False
-    if isinstance(
-        obj,
-        (
-            cudf.Index,
-            cudf.Series,
-            cudf.core.column.ColumnBase,
-            pd.Index,
-            pd.Series,
-        ),
-    ):
-        return is_categorical_dtype(obj.dtype)
-    if hasattr(obj, "type"):
-        if obj.type is CategoricalDtypeType:
-            return True
-    return pd.api.types.is_categorical_dtype(obj)
-
-
-def is_list_dtype(obj):
-    return (
-        type(obj) is cudf.core.dtypes.ListDtype
-        or obj is cudf.core.dtypes.ListDtype
-        or type(obj) is cudf.core.column.ListColumn
-        or obj is cudf.core.column.ListColumn
-        or (isinstance(obj, str) and obj == cudf.core.dtypes.ListDtype.name)
-        or (hasattr(obj, "dtype") and is_list_dtype(obj.dtype))
-    )
-
-
-def is_struct_dtype(obj):
-    return (
-        isinstance(obj, cudf.core.dtypes.StructDtype)
-        or obj is cudf.core.dtypes.StructDtype
-        or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
-        or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
-    )
-
-
-def is_interval_dtype(obj):
-    return (
-        isinstance(obj, cudf.core.dtypes.IntervalDtype)
-        or isinstance(obj, pd.core.dtypes.dtypes.IntervalDtype)
-        or obj is cudf.core.dtypes.IntervalDtype
-        or (
-            isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
-        )
-        or (hasattr(obj, "dtype") and is_interval_dtype(obj.dtype))
-    )
-
-
-def is_decimal_dtype(obj):
-    return (
-        type(obj) is cudf.core.dtypes.Decimal64Dtype
-        or obj is cudf.core.dtypes.Decimal64Dtype
-        or (
-            isinstance(obj, str)
-            and obj == cudf.core.dtypes.Decimal64Dtype.name
-        )
-        or (hasattr(obj, "dtype") and is_decimal_dtype(obj.dtype))
-    )
-
-
 def _find_common_type_decimal(dtypes):
     # Find the largest scale and the largest difference between
     # precision and scale of the columns to be concatenated
@@ -340,26 +207,10 @@ def cudf_dtype_from_pa_type(typ):
         return cudf.core.dtypes.ListDtype.from_arrow(typ)
     elif pa.types.is_struct(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
+    elif pa.types.is_decimal(typ):
+        return cudf.core.dtypes.Decimal64Dtype.from_arrow(typ)
     else:
         return pd.api.types.pandas_dtype(typ.to_pandas_dtype())
-
-
-def is_scalar(val):
-    return (
-        val is None
-        or isinstance(val, DeviceScalar)
-        or isinstance(val, cudf.Scalar)
-        or isinstance(val, str)
-        or isinstance(val, numbers.Number)
-        or np.isscalar(val)
-        or (isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0)
-        or isinstance(val, pd.Timestamp)
-        or (isinstance(val, pd.Categorical) and len(val) == 1)
-        or (isinstance(val, pd.Timedelta))
-        or (isinstance(val, pd.Timestamp))
-        or (isinstance(val, dt.datetime))
-        or (isinstance(val, dt.timedelta))
-    )
 
 
 def to_cudf_compatible_scalar(val, dtype=None):
@@ -375,7 +226,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
     ):
         return val
 
-    if not is_scalar(val):
+    if not _is_scalar_or_zero_d_array(val):
         raise ValueError(
             f"Cannot convert value of type {type(val).__name__} "
             "to cudf scalar"
@@ -414,27 +265,6 @@ def to_cudf_compatible_scalar(val, dtype=None):
             val = val.astype("timedelta64[ns]")
 
     return val
-
-
-def is_list_like(obj):
-    """
-    This function checks if the given `obj`
-    is a list-like (list, tuple, Series...)
-    type or not.
-
-    Parameters
-    ----------
-    obj : object of any type which needs to be validated.
-
-    Returns
-    -------
-    Boolean: True or False depending on whether the
-    input `obj` is like-like or not.
-    """
-
-    return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(
-        obj, (str, bytes)
-    )
 
 
 def is_column_like(obj):

@@ -2622,6 +2622,42 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testRepeatStrings() {
+     // Empty strings column.
+    try (ColumnVector sv = ColumnVector.fromStrings("", "", "");
+         ColumnVector result = sv.repeatStrings(1)) {
+      assertColumnsAreEqual(sv, result);
+    }
+
+    // Zero repeatTimes.
+    try (ColumnVector sv = ColumnVector.fromStrings("abc", "xyz", "123");
+         ColumnVector result = sv.repeatStrings(0);
+         ColumnVector expected = ColumnVector.fromStrings("", "", "")) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    // Negative repeatTimes.
+    try (ColumnVector sv = ColumnVector.fromStrings("abc", "xyz", "123");
+         ColumnVector result = sv.repeatStrings(-1);
+         ColumnVector expected = ColumnVector.fromStrings("", "", "")) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    // Strings column containing both null and empty, output is copied exactly from input.
+    try (ColumnVector sv = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector result = sv.repeatStrings(1)) {
+      assertColumnsAreEqual(sv, result);
+    }
+
+    // Strings column containing both null and empty.
+    try (ColumnVector sv = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector result = sv.repeatStrings( 2);
+         ColumnVector expected = ColumnVector.fromStrings("abcabc", "", null, "123123", null)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void testListConcatByRow() {
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
             new HostColumnVector.BasicType(true, DType.INT32)),
