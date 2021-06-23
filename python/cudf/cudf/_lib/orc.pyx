@@ -96,7 +96,7 @@ cpdef read_orc(object filepath_or_buffer,
             )
         ),
         use_index,
-        decimal_cols_as_float,
+        decimal_cols_as_float or [],
     )
 
     cdef table_with_metadata c_result
