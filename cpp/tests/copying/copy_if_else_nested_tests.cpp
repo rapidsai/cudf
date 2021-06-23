@@ -209,6 +209,44 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ScalarStructLeft)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column->view());
 }
 
+TYPED_TEST(TypedCopyIfElseNestedTest, ScalarStructRight)
+{
+  using T = TypeParam;
+
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using ints    = fixed_width_column_wrapper<T, int32_t>;
+  using strings = strings_column_wrapper;
+  using structs = structs_column_wrapper;
+  using bools   = fixed_width_column_wrapper<bool, int32_t>;
+
+  auto rhs_children = std::vector<column_view>{{ints{1}, strings{"1"}}};
+  auto rhs_scalar   = cudf::make_struct_scalar(rhs_children);
+
+  auto lhs_child_ints    = ints{22, 22, 22, 22, 22, 22, 22};
+  auto lhs_child_strings = strings{"22", "22", "22", "22", "22", "22", "22"};
+  auto lhs_column        = structs{{lhs_child_ints, lhs_child_strings}}.release();
+
+  auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
+  std::cout << "GERA: selector_column:" << std::endl;
+  cudf::test::print(selector_column->view());
+
+  auto expected_ints    = ints{1, 1, 22, 1, 1, 22, 1};
+  auto expected_strings = strings{"1", "1", "22", "1", "1", "22", "1"};
+  auto expected_result  = structs{{expected_ints, expected_strings}}.release();
+
+  std::cout << "GERA: before copy_if_else, expecting:" << std::endl;
+  cudf::test::print(expected_result->view());
+
+  auto result_column = copy_if_else(lhs_column->view(), *rhs_scalar, selector_column->view());
+
+  std::cout << "GERA: after copy_if_else, result: " << std::endl;
+  cudf::test::print(*result_column);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column->view());
+}
+
 TYPED_TEST(TypedCopyIfElseNestedTest, Lists)
 {
   using T = TypeParam;
