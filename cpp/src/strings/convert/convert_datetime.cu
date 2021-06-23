@@ -911,14 +911,9 @@ struct dispatch_from_timestamps_fn {
                        d_timestamps.size(),
                        pfn);
   }
-  template <typename T, std::enable_if_t<not cudf::is_timestamp<T>()>* = nullptr>
-  void operator()(column_device_view const&,
-                  format_item const*,
-                  size_type,
-                  timestamp_units,
-                  const int32_t*,
-                  char* d_chars,
-                  rmm::cuda_stream_view stream) const
+
+  template <typename T, typename... Args>
+  std::enable_if_t<not cudf::is_timestamp<T>(), void> operator()(Args&&...) const
   {
     CUDF_FAIL("Only timestamps type are expected");
   }
@@ -963,7 +958,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   // build chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().template data<char>();
   // fill in chars column with timestamps
   // dispatcher is called to handle the different timestamp types

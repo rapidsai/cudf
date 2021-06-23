@@ -370,10 +370,9 @@ struct MathOpDispatcher {
       return transform_fn<T, UFN>(input, stream, mr);
     }
 
-    template <typename T, typename std::enable_if_t<!std::is_arithmetic<T>::value>* = nullptr>
-    std::unique_ptr<cudf::column> operator()(cudf::dictionary_column_view const& input,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+    template <typename T, typename... Args>
+    std::enable_if_t<!std::is_arithmetic<T>::value, std::unique_ptr<cudf::column>> operator()(
+      Args&&...)
     {
       CUDF_FAIL("dictionary keys must be numeric for this operation");
     }
@@ -392,12 +391,10 @@ struct MathOpDispatcher {
       dictionary_col.keys().type(), dictionary_dispatch{}, dictionary_col, stream, mr);
   }
 
-  template <typename T,
-            typename std::enable_if_t<!std::is_arithmetic<T>::value and
-                                      !std::is_same<T, dictionary32>::value>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+  template <typename T, typename... Args>
+  std::enable_if_t<!std::is_arithmetic<T>::value and !std::is_same<T, dictionary32>::value,
+                   std::unique_ptr<cudf::column>>
+  operator()(Args&&...)
   {
     CUDF_FAIL("Unsupported data type for operation");
   }
@@ -427,10 +424,9 @@ struct BitwiseOpDispatcher {
       return transform_fn<T, UFN>(input, stream, mr);
     }
 
-    template <typename T, typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
-    std::unique_ptr<cudf::column> operator()(cudf::dictionary_column_view const& input,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+    template <typename T, typename... Args>
+    std::enable_if_t<!std::is_integral<T>::value, std::unique_ptr<cudf::column>> operator()(
+      Args&&...)
     {
       CUDF_FAIL("dictionary keys type not supported for this operation");
     }
@@ -449,12 +445,10 @@ struct BitwiseOpDispatcher {
       dictionary_col.keys().type(), dictionary_dispatch{}, dictionary_col, stream, mr);
   }
 
-  template <typename T,
-            typename std::enable_if_t<!std::is_integral<T>::value and
-                                      !std::is_same<T, dictionary32>::value>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+  template <typename T, typename... Args>
+  std::enable_if_t<!std::is_integral<T>::value and !std::is_same<T, dictionary32>::value,
+                   std::unique_ptr<cudf::column>>
+  operator()(Args&&...)
   {
     CUDF_FAIL("Unsupported datatype for operation");
   }
@@ -500,10 +494,8 @@ struct LogicalOpDispatcher {
                                      mr);
     }
 
-    template <typename T, typename std::enable_if_t<!is_supported<T>()>* = nullptr>
-    std::unique_ptr<cudf::column> operator()(cudf::dictionary_column_view const& input,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+    template <typename T, typename... Args>
+    std::enable_if_t<!is_supported<T>(), std::unique_ptr<cudf::column>> operator()(Args&&...)
     {
       CUDF_FAIL("dictionary keys type not supported for this operation");
     }
@@ -522,13 +514,10 @@ struct LogicalOpDispatcher {
       dictionary_col.keys().type(), dictionary_dispatch{}, dictionary_col, stream, mr);
   }
 
-  // template <typename T, typename std::enable_if_t<!is_supported<T>()>* = nullptr>
-  template <typename T,
-            typename std::enable_if_t<!is_supported<T>() and
-                                      !std::is_same<T, dictionary32>::value>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+  template <typename T, typename... Args>
+  std::enable_if_t<!is_supported<T>() and !std::is_same<T, dictionary32>::value,
+                   std::unique_ptr<cudf::column>>
+  operator()(Args&&...)
   {
     CUDF_FAIL("Unsupported datatype for operation");
   }
@@ -536,8 +525,7 @@ struct LogicalOpDispatcher {
 
 struct FixedPointOpDispatcher {
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_fixed_point<T>(), std::unique_ptr<column>> operator()(
-    Args&&... args)
+  std::enable_if_t<not cudf::is_fixed_point<T>(), std::unique_ptr<column>> operator()(Args&&...)
   {
     CUDF_FAIL("FixedPointOpDispatcher only for fixed_point");
   }

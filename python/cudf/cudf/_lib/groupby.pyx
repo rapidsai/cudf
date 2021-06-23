@@ -136,7 +136,7 @@ cdef class GroupBy:
                 _LIST_AGGS if is_list_dtype(dtype)
                 else _STRING_AGGS if is_string_dtype(dtype)
                 else _CATEGORICAL_AGGS if is_categorical_dtype(dtype)
-                else _STRING_AGGS if is_struct_dtype(dtype)
+                else _STRUCT_AGGS if is_struct_dtype(dtype)
                 else _INTERVAL_AGGS if is_interval_dtype(dtype)
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)
                 else "ALL"
