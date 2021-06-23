@@ -310,7 +310,7 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
         return cudf.NA
 
     cdef table_view struct_table_view = (<struct_scalar*>s.get()).view()
-    columns = list(range(struct_table_view.num_columns()))
+    columns = [str(i) for i in range(struct_table_view.num_columns())]
 
     cdef Table to_arrow_table = Table.from_table_view(
         struct_table_view,
@@ -318,15 +318,9 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
         column_names=columns
     )
 
-    # arrow_table = to_arrow(to_arrow_table, [columns + [[]]])
-    '''
-    cdef Table to_arrow_table = Table.from_table_view(struct_col_view, None)
+    python_dict = to_arrow(to_arrow_table, columns).to_pydict()
 
-    arrow_table = to_arrow(to_arrow_table, [["col", []]])
-    result = arrow_table['col'].to_pylist()
-
-    return _nested_na_replace_dict(result)
-    '''
+    return {k: _nested_na_replace(python_dict[k])[0] for k in python_dict}
 
 cdef _get_py_list_from_list(unique_ptr[scalar]& s):
 
@@ -340,6 +334,7 @@ cdef _get_py_list_from_list(unique_ptr[scalar]& s):
     arrow_table = to_arrow(to_arrow_table, [["col", []]])
     result = arrow_table['col'].to_pylist()
     return _nested_na_replace(result)
+
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):
     if not s.get()[0].is_valid():
@@ -525,20 +520,4 @@ def _nested_na_replace(input_list):
             _nested_na_replace(value)
         elif value is None:
             input_list[idx] = cudf.NA
-    return input_list
-
-
-def _nested_na_replace_dict(input_list):
-    '''
-    Replace `None` with `cudf.NA` in the result of
-    `__getitem__` calls to struct type columns
-    '''
-
-    # just a first level traversal
-    for value in input_list:
-        if isinstance(value, dict):
-            for key, val in value.items():
-                if val is None:
-                    value[key] = cudf.NA
-
     return input_list
