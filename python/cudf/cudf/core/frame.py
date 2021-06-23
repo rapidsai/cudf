@@ -18,12 +18,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.api.types import is_dict_like, is_dtype_equal
-from cudf.core.column import (
-    ColumnBase,
-    as_column,
-    build_categorical_column,
-    column_empty,
-)
+from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
@@ -3887,25 +3882,15 @@ class SingleColumnFrame(Frame):
 
         operands = {result_name: (self._column, other, reflect, fill_value)}
 
+        # TODO: This factory is slower than the original _copy_construct that
+        # was being used. _from_data needs to be optimized to avoid adding
+        # overhead in binary ops for SingleColumnFrame types.
         result = self._from_data(
             ColumnAccessor(type(self)._colwise_binop(operands, fn)),
             index=self._index,
         )
         result.name = result_name
         return result
-
-    def _normalize_binop_value(self, other):
-        """Returns a *column* (not a Series) or scalar for performing
-        binary operations with self._column.
-        """
-        if isinstance(other, ColumnBase):
-            return other
-        if isinstance(other, SingleColumnFrame):
-            return other._column
-        if other is cudf.NA:
-            return cudf.Scalar(other, dtype=self.dtype)
-        else:
-            return self._column.normalize_binop_value(other)
 
 
 def _get_replacement_values_for_columns(
