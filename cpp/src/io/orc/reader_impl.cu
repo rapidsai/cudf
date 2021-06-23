@@ -398,11 +398,9 @@ class aggregate_orc_metadata {
     if (not selected_stripes_mapping.empty()) {
       for (auto &mapping : selected_stripes_mapping) {
         // Resize to all stripe_info for the source level
-        per_file_metadata[mapping.source_idx].stripefooters.resize(
-          mapping.stripe_idx_in_source.size());
+        per_file_metadata[mapping.source_idx].stripefooters.resize(mapping.stripe_info.size());
 
-        for (size_t i = 0; i < mapping.stripe_idx_in_source.size(); i++) {
-          // int stripe_idx            = mapping.stripe_idx_in_source[i];
+        for (size_t i = 0; i < mapping.stripe_info.size(); i++) {
           const auto stripe         = mapping.stripe_info[i].first;
           const auto sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
           const auto sf_comp_length = stripe->footerLength;
@@ -711,7 +709,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                       selected_stripes.end(),
                       0,
                       [](size_t sum, auto &stripe_source_mapping) {
-                        return sum + stripe_source_mapping.stripe_idx_in_source.size();
+                        return sum + stripe_source_mapping.stripe_info.size();
                       });
 
     const auto num_columns = _selected_columns.size();
@@ -742,8 +740,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
     for (auto &stripe_source_mapping : selected_stripes) {
       // Iterate through the source files selected stripes
-      for (size_t stripe_pos_index = 0;
-           stripe_pos_index < stripe_source_mapping.stripe_idx_in_source.size();
+      for (size_t stripe_pos_index = 0; stripe_pos_index < stripe_source_mapping.stripe_info.size();
            stripe_pos_index++) {
         auto &stripe_pair        = stripe_source_mapping.stripe_info[stripe_pos_index];
         const auto stripe_info   = stripe_pair.first;
