@@ -97,7 +97,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
   auto null_mask = null_count
                      ? cudf::detail::create_null_mask(1, cudf::mask_state::ALL_NULL, stream, mr)
                      : rmm::device_buffer{0, stream, mr};
-  auto chars_column = detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
     rmm::exec_policy(stream),

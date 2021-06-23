@@ -170,15 +170,25 @@ class reader::impl {
   size_t find_first_row_start(host_span<char const> data);
 
   /**
-   * @brief Returns a detected or parsed list of column dtypes.
+   * @brief Automatically infers each column's data type based on the CSV's data within that column.
    *
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return `std::vector<data_type>` List of column types
+   * @param data The CSV data from which to infer the columns' data types
+   * @param row_offsets The row offsets into the CSV's data
+   * @param stream The stream to which the type inference-kernel will be dispatched
+   * @return The columns' inferred data types
    */
-  std::vector<data_type> gather_column_types(device_span<char const> data,
-                                             device_span<uint64_t const> row_offsets,
-                                             rmm::cuda_stream_view stream);
+  std::vector<data_type> infer_column_types(device_span<char const> data,
+                                            device_span<uint64_t const> row_offsets,
+                                            rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Parses the columns' data types from the vector of dtypes that are provided as strings.
+   *
+   * @param types_as_strings The vector of strings from which to parse the columns' target data
+   * types
+   * @return List of columns' data types
+   */
+  std::vector<data_type> parse_column_types(std::vector<std::string> const &types_as_strings);
 
   /**
    * @brief Converts the row-column data and outputs to column bufferrs.

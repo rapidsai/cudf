@@ -17,8 +17,6 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/gather.cuh>
-#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>

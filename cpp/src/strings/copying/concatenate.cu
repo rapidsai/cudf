@@ -22,6 +22,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 
@@ -226,9 +227,8 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
 
   // create chars column
-  auto chars_column =
-    make_numeric_column(data_type{type_id::INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
-  auto d_new_chars = chars_column->mutable_view().data<char>();
+  auto chars_column = create_chars_child_column(total_bytes, stream, mr);
+  auto d_new_chars  = chars_column->mutable_view().data<char>();
   chars_column->set_null_count(0);
 
   // create offsets column

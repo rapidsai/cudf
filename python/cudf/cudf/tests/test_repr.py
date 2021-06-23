@@ -86,12 +86,12 @@ def test_null_dataframe(ncols):
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
-@pytest.mark.parametrize("nrows", [0, 1, 2, 9, 10, 11, 19, 20, 21])
+@pytest.mark.parametrize("nrows", [None, 0, 1, 2, 9, 10, 11, 19, 20, 21])
 def test_full_series(nrows, dtype):
     size = 20
     ps = pd.Series(np.random.randint(0, 100, size)).astype(dtype)
     sr = cudf.from_pandas(ps)
-    pd.options.display.max_rows = int(nrows)
+    pd.options.display.max_rows = nrows
     assert ps.__repr__() == sr.__repr__()
     pd.reset_option("display.max_rows")
 
