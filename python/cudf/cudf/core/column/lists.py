@@ -77,12 +77,14 @@ class ListColumn(ColumnBase):
     def __setitem__(self, key, value):
         if isinstance(value, cudf.Scalar):
             if value.dtype != self.dtype:
-                raise TypeError("fill in later")
+                raise TypeError("list nesting level mismatch")
             else:
                 super().__setitem__(key, value)
         elif isinstance(value, list):
             value = cudf.Scalar([value])
             super().__setitem__(key, value)
+        elif value is cudf.NA:
+            super().__setitem__(key, cudf.Scalar(value, dtype=self.dtype))
         else:
             raise ValueError('something went wrong')
 
