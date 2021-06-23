@@ -3825,6 +3825,16 @@ class SingleColumnFrame(Frame):
         """
         return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
+    @property
+    def _copy_construct_defaults(self):
+        """A default dictionary of kwargs to be used for copy construction."""
+        raise NotImplementedError
+
+    def _copy_construct(self, **kwargs):
+        """Shallow copy this object by replacing certain ctor args.
+        """
+        return self.__class__(**{**self._copy_construct_defaults, **kwargs})
+
     def _binaryop(
         self, other, fn, fill_value=None, reflect=False, *args, **kwargs,
     ):
@@ -3882,15 +3892,10 @@ class SingleColumnFrame(Frame):
 
         operands = {result_name: (self._column, other, reflect, fill_value)}
 
-        # TODO: This factory is slower than the original _copy_construct that
-        # was being used. _from_data needs to be optimized to avoid adding
-        # overhead in binary ops for SingleColumnFrame types.
-        result = self._from_data(
-            ColumnAccessor(type(self)._colwise_binop(operands, fn)),
-            index=self._index,
+        return self._copy_construct(
+            data=type(self)._colwise_binop(operands, fn)[result_name],
+            name=result_name,
         )
-        result.name = result_name
-        return result
 
 
 def _get_replacement_values_for_columns(

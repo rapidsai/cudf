@@ -723,6 +723,49 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         return difference
 
+    def _copy_construct(self, **kwargs):
+        # Need to override the parent behavior because pandas allows operations
+        # on unsigned types to return signed values, forcing us to choose the
+        # right index type here.
+        data = kwargs.get("data")
+        cls = self.__class__
+
+        if data is not None:
+            if self.dtype != data.dtype:
+                # TODO: This logic is largely copied from `as_index`. The two
+                # should be unified via a centralized type dispatching scheme.
+                if isinstance(data, NumericalColumn):
+                    try:
+                        cls = _dtype_to_index[data.dtype.type]
+                    except KeyError:
+                        cls = GenericIndex
+                elif isinstance(data, StringColumn):
+                    cls = StringIndex
+                elif isinstance(data, DatetimeColumn):
+                    cls = DatetimeIndex
+                elif isinstance(data, TimeDeltaColumn):
+                    cls = TimedeltaIndex
+                elif isinstance(data, CategoricalColumn):
+                    cls = CategoricalIndex
+            elif cls is RangeIndex:
+                # RangeIndex must convert to other numerical types for ops
+
+                # TODO: The one exception to the output type selected here is
+                # that scalar multiplication of a RangeIndex in pandas results
+                # in another RangeIndex. Propagating that information through
+                # cudf with the current internals is possible, but requires
+                # significant hackery since we'd need _copy_construct or some
+                # other constructor to be intrinsically capable of processing
+                # operations. We should fix this behavior once we've completed
+                # a more thorough refactoring of the various Index classes that
+                # makes it easier to propagate this logic.
+                try:
+                    cls = _dtype_to_index[data.dtype.type]
+                except KeyError:
+                    cls = GenericIndex
+
+        return cls(**{**self._copy_construct_defaults, **kwargs})
+
     def sort_values(self, return_indexer=False, ascending=True, key=None):
         """
         Return a sorted copy of the index, and optionally return the indices
