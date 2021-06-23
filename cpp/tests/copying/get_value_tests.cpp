@@ -833,7 +833,7 @@ TYPED_TEST(StructGetValueTestTyped, mixed_types_valid)
 TYPED_TEST(StructGetValueTestTyped, mixed_types_valid_with_nulls)
 {
   using LCW             = lists_column_wrapper<TypeParam, int32_t>;
-  using validity_mask_t = std::vector<bool>;
+  using validity_mask_t = std::vector<valid_type>;
 
   // col fields
   fixed_width_column_wrapper<TypeParam> f1({1, 2, 3}, {true, false, true});
@@ -884,13 +884,43 @@ TYPED_TEST(StructGetValueTestTyped, mixed_types_invalid)
 
   EXPECT_FALSE(typed_s->is_valid());
 
-  // expect to preserve types along hierarchy.
+  // expect to preserve types along column hierarchy.
+  // TODO: use `column_types_equal` after GH 8505 merged
   EXPECT_EQ(typed_s->view().column(0).type().id(), type_to_id<TypeParam>());
   EXPECT_EQ(typed_s->view().column(1).type().id(), type_id::STRING);
   EXPECT_EQ(typed_s->view().column(2).type().id(), type_id::DICTIONARY32);
   EXPECT_EQ(typed_s->view().column(2).child(1).type().id(), type_to_id<TypeParam>());
   EXPECT_EQ(typed_s->view().column(3).type().id(), type_id::LIST);
   EXPECT_EQ(typed_s->view().column(3).child(1).type().id(), type_to_id<TypeParam>());
+}
+
+TEST_F(StructGetValueTest, multi_level_nested)
+{
+  using LCW             = lists_column_wrapper<int32_t, int32_t>;
+  using validity_mask_t = std::vector<valid_type>;
+
+  // col fields
+  LCW l3({LCW{1, 1, 1}, LCW{2, 2}, LCW{3}}, validity_mask_t{false, true, true}.begin());
+  structs_column_wrapper l2{l3};
+  auto l1 = make_lists_column(1,
+                              fixed_width_column_wrapper<offset_type>{0, 3}.release(),
+                              l2.release(),
+                              0,
+                              create_null_mask(1, mask_state::UNALLOCATED));
+  std::vector<std::unique_ptr<column>> l0_fields;
+  l0_fields.emplace_back(std::move(l1));
+  structs_column_wrapper l0(std::move(l0_fields));
+
+  size_type index = 0;
+  auto s          = get_element(l0, index);
+  auto typed_s    = static_cast<struct_scalar const *>(s.get());
+
+  // Expect fields
+  column_view cv = column_view(l0);
+  table_view fields(std::vector<column_view>(cv.child_begin(), cv.child_end()));
+
+  EXPECT_TRUE(typed_s->is_valid());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(fields, typed_s->view());
 }
 
 }  // namespace test
