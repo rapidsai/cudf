@@ -65,12 +65,12 @@ __global__ void generic_udf_kernel(cudf::size_type size,
                                    bool* out_mask,
                                    Arguments... args)
 {
-  int tid    = threadIdx.x;
-  int blkid  = blockIdx.x;
-  int blksz  = blockDim.x;
-  int gridsz = gridDim.x;
-  int start  = tid + blkid * blksz;
-  int step   = blksz * gridsz;
+  int const tid    = threadIdx.x;
+  int const blkid  = blockIdx.x;
+  int const blksz  = blockDim.x;
+  int const gridsz = gridDim.x;
+  int const start  = tid + blkid * blksz;
+  int const step   = blksz * gridsz;
 
   Masked<TypeOut> output;
   for (cudf::size_type i = start; i < size; i += step) {
