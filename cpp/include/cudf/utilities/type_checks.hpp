@@ -31,7 +31,7 @@ namespace cudf {
  *
  * @param lhs The first `column_view` to compare
  * @param rhs The second `column_view` to compare
- * @return boolean
+ * @return true if column types match
  */
 bool column_types_equal(column_view const& lhs, column_view const& rhs);
 
