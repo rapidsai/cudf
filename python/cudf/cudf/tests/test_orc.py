@@ -814,8 +814,7 @@ def test_orc_string_stream_offset_issue():
     assert_eq(df, cudf.read_orc(buffer))
 
 
-@pytest.fixture
-def list_struct_buff():
+def generate_list_struct_buff(size=28000):
     rd = random.Random(0)
     np.random.seed(seed=0)
 
@@ -843,8 +842,6 @@ def list_struct_buff():
     }
 
     schema = po.Struct(**schema)
-
-    size = 20000
 
     lvl3_list = [
         [
@@ -899,7 +896,7 @@ def list_struct_buff():
         }
     )
 
-    writer = po.Writer(buff, schema)
+    writer = po.Writer(buff, schema, stripe_size=1024)
     tuples = list(
         map(
             lambda x: (None,) if x[0] is pd.NA else x,
@@ -912,6 +909,9 @@ def list_struct_buff():
     return buff
 
 
+list_struct_buff = generate_list_struct_buff()
+
+
 @pytest.mark.parametrize(
     "columns",
     [
@@ -920,11 +920,11 @@ def list_struct_buff():
         ["lvl1_struct", "lvl2_struct"],
     ],
 )
-@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 20000])
+@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 28000])
 @pytest.mark.parametrize("use_index", [True, False])
 @pytest.mark.parametrize("skip_rows", [0, 101, 1007])
 def test_lists_struct_nests(
-    list_struct_buff, columns, num_rows, use_index, skip_rows
+    columns, num_rows, use_index, skip_rows,
 ):
 
     has_lists = (
@@ -951,9 +951,8 @@ def test_lists_struct_nests(
             skiprows=skip_rows,
         )
 
-        # pyarrow_tbl = pd.read_orc(buff)
         pyarrow_tbl = pyarrow.orc.ORCFile(list_struct_buff).read()
-        # breakpoint()
+
         pyarrow_tbl = (
             pyarrow_tbl[skip_rows : skip_rows + num_rows]
             if columns is None
@@ -961,7 +960,6 @@ def test_lists_struct_nests(
         )
 
         if num_rows > 0:
-            # pyarrow_tbl = pyarrow.Table.from_pandas(pyarrow_tbl)
             assert_eq(True, pyarrow_tbl.equals(gdf.to_arrow()))
         else:
             assert_eq(pyarrow_tbl.to_pandas(), gdf)
