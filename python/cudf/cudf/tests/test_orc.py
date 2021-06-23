@@ -813,7 +813,7 @@ def test_orc_reader_decimal(datadir, data):
     ).to_pandas()
 
     # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
-    # This is because cuDF returns as float64 because of
+    # This is because cuDF returns as float64
     pdf = pdf.apply(pd.to_numeric)
 
     assert_eq(pdf, gdf)
