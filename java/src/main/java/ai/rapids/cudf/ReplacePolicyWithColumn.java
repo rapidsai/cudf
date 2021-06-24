@@ -19,23 +19,28 @@
 package ai.rapids.cudf;
 
 /**
- * How should NaNs be compared in an operation. In floating point there are multiple
- * different binary representations for NaN.
+ * A replacement policy for a specific column
  */
-public enum NaNEquality {
-  /**
-   * No NaN representation is considered equal to any NaN representation, even for the
-   * exact same representation.
-   */
-  UNEQUAL(false),
-  /**
-   * All representations of NaN are considered to be equal.
-   */
-  ALL_EQUAL(true);
+public class ReplacePolicyWithColumn {
+  final int column;
+  final ReplacePolicy policy;
 
-  NaNEquality(boolean nansEqual) {
-    this.nansEqual = nansEqual;
+  ReplacePolicyWithColumn(int column, ReplacePolicy policy) {
+    this.column = column;
+    this.policy = policy;
   }
 
-  final boolean nansEqual;
+  @Override
+  public boolean equals(Object other) {
+    if (!(other instanceof ReplacePolicyWithColumn)) {
+      return false;
+    }
+    ReplacePolicyWithColumn ro = (ReplacePolicyWithColumn)other;
+    return this.column == ro.column && this.policy.equals(ro.policy);
+  }
+
+  @Override
+  public int hashCode() {
+    return 31 * column + policy.hashCode();
+  }
 }

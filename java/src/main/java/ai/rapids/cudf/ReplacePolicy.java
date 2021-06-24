@@ -19,23 +19,28 @@
 package ai.rapids.cudf;
 
 /**
- * How should NaNs be compared in an operation. In floating point there are multiple
- * different binary representations for NaN.
+ * Policy to specify the position of replacement values relative to null rows.
  */
-public enum NaNEquality {
+public enum ReplacePolicy {
   /**
-   * No NaN representation is considered equal to any NaN representation, even for the
-   * exact same representation.
+   * The replacement value is the first non-null value preceding the null row.
    */
-  UNEQUAL(false),
+  PRECEDING(true),
   /**
-   * All representations of NaN are considered to be equal.
+   * The replacement value is the first non-null value following the null row.
    */
-  ALL_EQUAL(true);
+  FOLLOWING(false);
 
-  NaNEquality(boolean nansEqual) {
-    this.nansEqual = nansEqual;
+  ReplacePolicy(boolean isPreceding) {
+    this.isPreceding = isPreceding;
   }
 
-  final boolean nansEqual;
+  final boolean isPreceding;
+
+  /**
+   * Indicate which column the replacement should happen on.
+   */
+  public ReplacePolicyWithColumn onColumn(int columnNumber) {
+    return new ReplacePolicyWithColumn(columnNumber, this);
+  }
 }
