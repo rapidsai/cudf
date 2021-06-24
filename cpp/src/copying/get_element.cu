@@ -187,8 +187,7 @@ struct get_element_functor {
     auto row_contents =
       std::make_unique<column>(slice(input, index, index + 1), stream, mr)->release();
     auto scalar_contents = table(std::move(row_contents.children));
-    auto res = std::make_unique<struct_scalar>(std::move(scalar_contents), valid, stream, mr);
-    return res;
+    return std::make_unique<struct_scalar>(std::move(scalar_contents), valid, stream, mr);
   }
 };
 
