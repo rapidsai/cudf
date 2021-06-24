@@ -82,10 +82,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
         break;
       // case 18: COLLECT_LIST
       // case 19: COLLECT_SET
-      // case 20: LEAD
-      // case 21: LAG
-      // case 22: PTX
-      // case 23: CUDA
+      // case 20: MERGE_LISTS
+      case 20:
+        ret = cudf::make_merge_lists_aggregation();
+        break;
+      // case 21: MERGE_SETS
+      // case 22: LEAD
+      // case 23: LAG
+      // case 24: PTX
+      // case 25: CUDA
       default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
     }
 
@@ -223,6 +228,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCollectSetAgg(JNIE
         nans_equal ? cudf::nan_equality::ALL_EQUAL : cudf::nan_equality::UNEQUAL;
     std::unique_ptr<cudf::aggregation> ret =
         cudf::make_collect_set_aggregation(null_policy, null_equality, nan_equality);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createMergeSetsAgg(JNIEnv *env,
+                                                                           jclass class_object,
+                                                                           jboolean nulls_equal,
+                                                                           jboolean nans_equal) {
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::null_equality null_equality =
+        nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    cudf::nan_equality nan_equality =
+        nans_equal ? cudf::nan_equality::ALL_EQUAL : cudf::nan_equality::UNEQUAL;
+    std::unique_ptr<cudf::aggregation> ret = cudf::make_merge_sets_aggregation(null_equality,
+                                                                               nan_equality);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
