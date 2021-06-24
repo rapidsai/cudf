@@ -3448,8 +3448,14 @@ class Frame(libcudf.table.Table):
                         err_msg.format(right_column.dtype.type.__name__)
                     )
 
-            outcol = left_column.binary_operator(
-                fn_apply, right_column, reflect=reflect
+            outcol = (
+                left_column.binary_operator(
+                    fn_apply, right_column, reflect=reflect
+                )
+                if right_column is not None
+                else column_empty(
+                    left_column.size, left_column.dtype, masked=True
+                )
             )
 
             if output_mask is not None:
