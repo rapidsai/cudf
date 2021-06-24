@@ -18,6 +18,7 @@ from pandas._config import get_option
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
+from cudf.api.types import is_bool_dtype, is_dict_like, is_dtype_equal
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     DatetimeColumn,
@@ -57,8 +58,6 @@ from cudf.utils.utils import (
     get_appropriate_dispatched_func,
     get_relevant_submodule,
 )
-
-from ..api.types import is_bool_dtype, is_dict_like, is_dtype_equal
 
 
 class Series(SingleColumnFrame, Serializable):
@@ -1223,7 +1222,7 @@ class Series(SingleColumnFrame, Serializable):
             if get_option("display.max_rows") == 0
             else get_option("display.max_rows")
         )
-        if len(self) > max_rows and max_rows != 0:
+        if max_rows not in (0, None) and len(self) > max_rows:
             top = self.head(int(max_rows / 2 + 1))
             bottom = self.tail(int(max_rows / 2 + 1))
             preprocess = cudf.concat([top, bottom])
@@ -1251,7 +1250,7 @@ class Series(SingleColumnFrame, Serializable):
         ):
             min_rows = (
                 height
-                if get_option("display.max_rows") == 0
+                if get_option("display.min_rows") == 0
                 else get_option("display.min_rows")
             )
             show_dimensions = get_option("display.show_dimensions")
