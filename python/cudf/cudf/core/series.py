@@ -10,7 +10,7 @@ from shutil import get_terminal_size
 from typing import Any, Optional
 from uuid import uuid4
 
-import cupy
+import cupy as cp
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
@@ -334,6 +334,7 @@ class Series(SingleColumnFrame, Serializable):
         3     NaN
         dtype: float64
         """
+        print("hello")
         return cls(s, nan_as_null=nan_as_null)
 
     def serialize(self):
@@ -5450,13 +5451,12 @@ class Series(SingleColumnFrame, Serializable):
         0.75    3.25
         dtype: float64
         """
-
         result = self._column.quantile(q, interpolation, exact)
 
         if isinstance(q, Number):
             return result
 
-        if quant_index:
+        if quant_index and not isinstance(q, cp.ndarray): #if cupy skip over index
             index = np.asarray(q)
             if len(self) == 0:
                 result = column_empty_like(
