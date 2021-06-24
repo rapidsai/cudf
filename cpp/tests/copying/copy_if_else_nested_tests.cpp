@@ -372,3 +372,36 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ListsWithStructs)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column->view(), expected->view());
 }
+
+TYPED_TEST(TypedCopyIfElseNestedTest, ScalarListBoth)
+{
+  using T = TypeParam;
+
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using ints  = fixed_width_column_wrapper<T, int32_t>;
+  using bools = fixed_width_column_wrapper<bool, int32_t>;
+  using lcw   = lists_column_wrapper<T, int32_t>;
+
+  auto lhs_scalar = cudf::make_list_scalar(ints{{33, 33, 33}});
+  auto rhs_scalar = cudf::make_list_scalar(ints{{22, 22}});
+
+  auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
+
+  auto expected =
+    lcw{
+      {33, 33, 33},
+      {33, 33, 33},
+      {22, 22},
+      {33, 33, 33},
+      {33, 33, 33},
+      {22, 22},
+      {33, 33, 33},
+    }
+      .release();
+
+  auto result = copy_if_else(*lhs_scalar, *rhs_scalar, selector_column->view());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), result->view());
+}
