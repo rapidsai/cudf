@@ -1765,7 +1765,9 @@ dremel_data get_dremel_data(column_view h_col,
                             rmm::cuda_stream_view stream)
 {
   auto get_list_level = [](column_view col) {
-    while (col.type().id() == type_id::STRUCT) { col = col.child(0); }
+    while (col.type().id() == type_id::STRUCT) {
+      col = col.child(0);
+    }
     return col;
   };
 

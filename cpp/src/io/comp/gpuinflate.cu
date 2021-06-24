@@ -287,7 +287,8 @@ __device__ int construct(
   int16_t* offs = s->u.scratch.offs;
 
   // count number of codes of each length
-  for (len = 0; len <= max_bits; len++) counts[len] = 0;
+  for (len = 0; len <= max_bits; len++)
+    counts[len] = 0;
   for (symbol = 0; symbol < n; symbol++)
     (counts[length[symbol]])++;  // assumes lengths are within bounds
   if (counts[0] == n)            // no codes!
@@ -303,7 +304,8 @@ __device__ int construct(
 
   // generate offsets into symbol table for each length for sorting
   offs[1] = 0;
-  for (len = 1; len < max_bits; len++) offs[len + 1] = offs[len] + counts[len];
+  for (len = 1; len < max_bits; len++)
+    offs[len + 1] = offs[len] + counts[len];
 
   // put symbols in table sorted by length, by symbol order within each length
   for (symbol = 0; symbol < n; symbol++)
@@ -333,8 +335,10 @@ __device__ int init_dynamic(inflate_state_s* s)
     return -3;  // bad counts
   }
   // read code length code lengths (really), missing lengths are zero
-  for (index = 0; index < ncode; index++) lengths[g_code_order[index]] = getbits(s, 3);
-  for (; index < 19; index++) lengths[g_code_order[index]] = 0;
+  for (index = 0; index < ncode; index++)
+    lengths[g_code_order[index]] = getbits(s, 3);
+  for (; index < 19; index++)
+    lengths[g_code_order[index]] = 0;
 
   // build huffman table for code lengths codes (use lencode temporarily)
   err = construct(s, s->lencnt, s->lensym, lengths, 19);
@@ -410,14 +414,19 @@ __device__ int init_fixed(inflate_state_s* s)
   int symbol;
 
   // literal/length table
-  for (symbol = 0; symbol < 144; symbol++) lengths[symbol] = 8;
-  for (; symbol < 256; symbol++) lengths[symbol] = 9;
-  for (; symbol < 280; symbol++) lengths[symbol] = 7;
-  for (; symbol < fix_l_codes; symbol++) lengths[symbol] = 8;
+  for (symbol = 0; symbol < 144; symbol++)
+    lengths[symbol] = 8;
+  for (; symbol < 256; symbol++)
+    lengths[symbol] = 9;
+  for (; symbol < 280; symbol++)
+    lengths[symbol] = 7;
+  for (; symbol < fix_l_codes; symbol++)
+    lengths[symbol] = 8;
   construct(s, s->lencnt, s->lensym, lengths, fix_l_codes);
 
   // distance table
-  for (symbol = 0; symbol < max_d_codes; symbol++) lengths[symbol] = 5;
+  for (symbol = 0; symbol < max_d_codes; symbol++)
+    lengths[symbol] = 5;
 
   // build huffman table for distance codes
   construct(s, s->distcnt, s->distsym, lengths, max_d_codes);

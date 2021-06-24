@@ -307,7 +307,8 @@ class ProtobufReader {
   {
     auto const len       = get<uint32_t>();
     auto const field_end = std::min(m_cur + len, end);
-    while (m_cur < field_end) value.push_back(get<typename T::value_type>());
+    while (m_cur < field_end)
+      value.push_back(get<typename T::value_type>());
   }
 
   template <typename T>

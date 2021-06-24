@@ -270,7 +270,9 @@ __global__ void __launch_bounds__(block_size, 1)
       bool reorder_check = (is_valid && is_dupe && next - 1 > row);
       if (reorder_check) {
         next = s->col.dict_index[next - 1];
-        while (next & (1u << 31)) { next = s->col.dict_index[next & 0x7fffffff]; }
+        while (next & (1u << 31)) {
+          next = s->col.dict_index[next & 0x7fffffff];
+        }
       }
       if (__syncthreads_or(reorder_check)) {
         if (reorder_check) { atomicMin(&s->col.dict_index[next], row); }

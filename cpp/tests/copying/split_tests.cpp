@@ -717,7 +717,9 @@ void split_null_input_strings_column_value(SplitFunc Split, CompareFunc Compare)
 
   auto expected = create_expected_string_tables_for_splits(strings, validity_masks, splits);
 
-  for (std::size_t i = 0; i < result.size(); ++i) { Compare(expected[i], result[i]); }
+  for (std::size_t i = 0; i < result.size(); ++i) {
+    Compare(expected[i], result[i]);
+  }
 }
 
 // split with strings

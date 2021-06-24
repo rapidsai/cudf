@@ -924,7 +924,9 @@ void writer::impl::write(table_view const& table)
   // Mass allocation of column_device_views for each parquet_column_view
   std::vector<column_view> cudf_cols;
   cudf_cols.reserve(parquet_columns.size());
-  for (auto const& parq_col : parquet_columns) { cudf_cols.push_back(parq_col.cudf_column_view()); }
+  for (auto const& parq_col : parquet_columns) {
+    cudf_cols.push_back(parq_col.cudf_column_view());
+  }
   table_view single_streams_table(cudf_cols);
   size_type num_columns = single_streams_table.num_columns();
 
@@ -1088,7 +1090,9 @@ void writer::impl::write(table_view const& table)
   }
 
   // Free unused dictionaries
-  for (auto& col : parquet_columns) { col.check_dictionary_used(stream); }
+  for (auto& col : parquet_columns) {
+    col.check_dictionary_used(stream);
+  }
 
   // Build chunk dictionaries and count pages
   if (num_chunks != 0) {
@@ -1276,7 +1280,9 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
                    reinterpret_cast<const uint8_t*>(&fhdr),
                    reinterpret_cast<const uint8_t*>(&fhdr) + sizeof(fhdr));
     for (auto& rowgroup : md.row_groups) {
-      for (auto& col : rowgroup.columns) { col.file_path = column_chunks_file_path; }
+      for (auto& col : rowgroup.columns) {
+        col.file_path = column_chunks_file_path;
+      }
     }
     fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
     buffer_.insert(buffer_.end(),

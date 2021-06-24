@@ -422,7 +422,9 @@ size_t reader::impl::find_first_row_start(host_span<char const> data)
   // For now, look for the first terminator (assume the first terminator isn't within a quote)
   // TODO: Attempt to infer this from the data
   size_t pos = 0;
-  while (pos < data.size() && data[pos] != opts.terminator) { ++pos; }
+  while (pos < data.size() && data[pos] != opts.terminator) {
+    ++pos;
+  }
   return std::min(pos + 1, data.size());
 }
 
@@ -529,7 +531,9 @@ reader::impl::load_data_and_gather_row_offsets(host_span<char const> data,
         stream.synchronize();
 
         size_t rows_out_of_range = 0;
-        for (uint32_t i = 0; i < num_blocks; i++) { rows_out_of_range += row_ctx[i]; }
+        for (uint32_t i = 0; i < num_blocks; i++) {
+          rows_out_of_range += row_ctx[i];
+        }
         if (rows_out_of_range != 0) {
           // Keep one row out of range (used to infer length of previous row)
           auto new_row_offsets_size =
@@ -670,7 +674,9 @@ std::vector<data_type> reader::impl::parse_column_types(
       column_parse::flags col_flags_;
       std::tie(dtype_, col_flags_) = get_dtype_info(types_as_strings[0]);
       dtypes.resize(num_active_cols_, dtype_);
-      for (int col = 0; col < num_actual_cols_; col++) { column_flags_[col] |= col_flags_; }
+      for (int col = 0; col < num_actual_cols_; col++) {
+        column_flags_[col] |= col_flags_;
+      }
       CUDF_EXPECTS(dtypes.back().id() != cudf::type_id::EMPTY, "Unsupported data type");
     } else {
       // If it's a list, assign dtypes to active columns in the given order

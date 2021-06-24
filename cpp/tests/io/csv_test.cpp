@@ -751,7 +751,9 @@ TEST_F(CsvReaderTest, IntegersCastToTimestampSeconds)
     column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>(input_vals.begin(), input_vals.end());
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    for (auto v : input_vals) { outfile << v << "\n"; }
+    for (auto v : input_vals) {
+      outfile << v << "\n";
+    }
   }
 
   cudf_io::csv_reader_options in_opts =
@@ -778,7 +780,9 @@ TEST_F(CsvReaderTest, IntegersCastToTimestampMilliSeconds)
     input_vals.begin(), input_vals.end());
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    for (auto v : input_vals) { outfile << v << "\n"; }
+    for (auto v : input_vals) {
+      outfile << v << "\n";
+    }
   }
 
   cudf_io::csv_reader_options in_opts =
@@ -805,7 +809,9 @@ TEST_F(CsvReaderTest, IntegersCastToTimestampMicroSeconds)
     input_vals.begin(), input_vals.end());
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    for (auto v : input_vals) { outfile << v << "\n"; }
+    for (auto v : input_vals) {
+      outfile << v << "\n";
+    }
   }
 
   cudf_io::csv_reader_options in_opts =
@@ -832,7 +838,9 @@ TEST_F(CsvReaderTest, IntegersCastToTimestampNanoSeconds)
     input_vals.begin(), input_vals.end());
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    for (auto v : input_vals) { outfile << v << "\n"; }
+    for (auto v : input_vals) {
+      outfile << v << "\n";
+    }
   }
 
   cudf_io::csv_reader_options in_opts =
@@ -1153,7 +1161,8 @@ TEST_F(CsvReaderTest, InvalidFloatingPoint)
 
   const auto col_data = cudf::test::to_host<float>(view.column(0));
   // col_data.first contains the column data
-  for (const auto& elem : col_data.first) ASSERT_TRUE(std::isnan(elem));
+  for (const auto& elem : col_data.first)
+    ASSERT_TRUE(std::isnan(elem));
   // col_data.second contains the bitmasks
   ASSERT_EQ(0u, col_data.second[0]);
 }

@@ -592,7 +592,9 @@ static __device__ void BuildCodeLengthsHuffmanTable(huff_scratch_s* hs)
   // Special case: all symbols but one have 0 code length.
   if (hs->offset[0] == 0) {
     code = huffcode(0, hs->sorted[0]);
-    for (key = 0; key < table_size; ++key) { hs->lenvlctab[key] = code; }
+    for (key = 0; key < table_size; ++key) {
+      hs->lenvlctab[key] = code;
+    }
     return;
   }
 
@@ -654,7 +656,8 @@ static __device__ uint32_t BuildHuffmanTable(uint16_t* root_lut,
   int max_length = -1;
   int bits;
 
-  while (symbol_lists[max_length] == 0xFFFF) max_length--;
+  while (symbol_lists[max_length] == 0xFFFF)
+    max_length--;
   max_length += 16;
 
   lut        = root_lut;
@@ -1195,7 +1198,9 @@ static __device__ void DecodeMetaBlockHeader(debrotli_state_s* s)
       }
       skipbits(s, len);
       if (getbits_bytealign(s) != 0) { s->error = 1; }
-      for (len = mskiplen; len >= 32; len -= 32) { skipbits(s, 32); }
+      for (len = mskiplen; len >= 32; len -= 32) {
+        skipbits(s, 32);
+      }
     }
   }
   skipbits(s, len);
@@ -1375,7 +1380,9 @@ static __device__ void DetectTrivialLiteralBlockTypes(debrotli_state_s* s)
     uint32_t error  = 0;
     uint32_t sample = s->context_map[offset];
     uint32_t j;
-    for (j = 0; j < (1u << 6); ++j) { error |= s->context_map[offset + j] ^ sample; }
+    for (j = 0; j < (1u << 6); ++j) {
+      error |= s->context_map[offset + j] ^ sample;
+    }
     if (error == 0) { s->context_modes[i] |= 4u; }
   }
 }
@@ -1466,7 +1473,9 @@ static __device__ void DecodeHuffmanTreeGroups(debrotli_state_s* s,
   s->distance_postfix_mask     = (1 << npostfix) - 1;
   nbltypesl                    = s->num_block_types[0];
   s->context_modes             = local_alloc(s, nbltypesl);
-  for (uint32_t i = 0; i < nbltypesl; i++) { s->context_modes[i] = getbits(s, 2); }
+  for (uint32_t i = 0; i < nbltypesl; i++) {
+    s->context_modes[i] = getbits(s, 2);
+  }
   context_map_vlc = reinterpret_cast<uint16_t*>(
     local_heap_shrink(s, brotli_huffman_max_size_272 * sizeof(uint16_t)));
   context_map_size   = nbltypesl << 6;
@@ -1580,7 +1589,9 @@ static __device__ int TransformDictionaryWord(uint8_t* dst,
   const uint8_t* suffix = brotli_transform_suffix(transform_idx);
   {
     int prefix_len = *prefix++;
-    while (prefix_len--) { dst[idx++] = *prefix++; }
+    while (prefix_len--) {
+      dst[idx++] = *prefix++;
+    }
   }
   {
     const int t = type;
@@ -1592,7 +1603,9 @@ static __device__ int TransformDictionaryWord(uint8_t* dst,
       word += skip;
       len -= skip;
     }
-    while (i < len) { dst[idx++] = word[i++]; }
+    while (i < len) {
+      dst[idx++] = word[i++];
+    }
     if (t == BROTLI_TRANSFORM_UPPERCASE_FIRST) {
       ToUpperCase(&dst[idx - len]);
     } else if (t == BROTLI_TRANSFORM_UPPERCASE_ALL) {
@@ -1606,7 +1619,9 @@ static __device__ int TransformDictionaryWord(uint8_t* dst,
   }
   {
     int suffix_len = *suffix++;
-    while (suffix_len--) { dst[idx++] = *suffix++; }
+    while (suffix_len--) {
+      dst[idx++] = *suffix++;
+    }
     return idx;
   }
 }
@@ -1954,7 +1969,9 @@ extern "C" __global__ void __launch_bounds__(block_size, 2)
           __syncthreads();
           if (!s->error) {
             // Simple block-wide memcpy
-            for (int32_t i = t; i < s->meta_block_len; i += block_size) { dst[i] = src[i]; }
+            for (int32_t i = t; i < s->meta_block_len; i += block_size) {
+              dst[i] = src[i];
+            }
           }
         } else {
           // Compressed block

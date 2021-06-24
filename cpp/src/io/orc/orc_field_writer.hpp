@@ -73,7 +73,8 @@ struct ProtobufWriter::ProtobufFieldWriter {
     size_t len = value.length();
     struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
     struct_size += p->put_uint(len) + len;
-    for (size_t i = 0; i < len; i++) p->putb(value[i]);
+    for (size_t i = 0; i < len; i++)
+      p->putb(value[i]);
   }
 
   /**
@@ -85,7 +86,8 @@ struct ProtobufWriter::ProtobufFieldWriter {
     size_t len = value.size();
     struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
     struct_size += p->put_uint(len) + len;
-    for (size_t i = 0; i < len; i++) p->putb(value[i]);
+    for (size_t i = 0; i < len; i++)
+      p->putb(value[i]);
   }
 
   /**
@@ -109,7 +111,8 @@ struct ProtobufWriter::ProtobufFieldWriter {
    */
   void field_repeated_string(int field, const std::vector<std::string>& value)
   {
-    for (const auto& elem : value) field_string(field, elem);
+    for (const auto& elem : value)
+      field_string(field, elem);
   }
 
   /**
@@ -118,7 +121,8 @@ struct ProtobufWriter::ProtobufFieldWriter {
   template <typename T>
   void field_repeated_struct(int field, const std::vector<T>& value)
   {
-    for (const auto& elem : value) field_struct(field, elem);
+    for (const auto& elem : value)
+      field_struct(field, elem);
   }
 
   /**
@@ -128,7 +132,8 @@ struct ProtobufWriter::ProtobufFieldWriter {
   template <typename T>
   void field_repeated_struct_blob(int field, const std::vector<T>& value)
   {
-    for (const auto& elem : value) field_blob(field, elem);
+    for (const auto& elem : value)
+      field_blob(field, elem);
   }
 
   /**

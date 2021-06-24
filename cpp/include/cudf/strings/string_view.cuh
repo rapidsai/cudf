@@ -121,7 +121,8 @@ __device__ inline string_view::const_iterator string_view::const_iterator::opera
 {
   const_iterator tmp(*this);
   size_type adjust = abs(offset);
-  while (adjust-- > 0) offset > 0 ? ++tmp : --tmp;
+  while (adjust-- > 0)
+    offset > 0 ? ++tmp : --tmp;
   return tmp;
 }
 
@@ -129,7 +130,8 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
   string_view::const_iterator::difference_type offset)
 {
   size_type adjust = abs(offset);
-  while (adjust-- > 0) offset > 0 ? operator++() : operator--();
+  while (adjust-- > 0)
+    offset > 0 ? operator++() : operator--();
   return *this;
 }
 
@@ -153,7 +155,8 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
   string_view::const_iterator::difference_type offset)
 {
   size_type adjust = abs(offset);
-  while (adjust-- > 0) offset > 0 ? operator--() : operator++();
+  while (adjust-- > 0)
+    offset > 0 ? operator--() : operator++();
   return *this;
 }
 
@@ -162,7 +165,8 @@ __device__ inline string_view::const_iterator string_view::const_iterator::opera
 {
   const_iterator tmp(*this);
   size_type adjust = abs(offset);
-  while (adjust-- > 0) offset > 0 ? --tmp : ++tmp;
+  while (adjust-- > 0)
+    offset > 0 ? --tmp : ++tmp;
   return tmp;
 }
 
@@ -327,7 +331,8 @@ __device__ inline size_type string_view::find(const char* str,
   const char* ptr2 = str;
   for (size_type idx = 0; idx < len1; ++idx) {
     bool match = true;
-    for (size_type jdx = 0; match && (jdx < len2); ++jdx) match = (ptr1[jdx] == ptr2[jdx]);
+    for (size_type jdx = 0; match && (jdx < len2); ++jdx)
+      match = (ptr1[jdx] == ptr2[jdx]);
     if (match) return character_offset(idx + spos);
     ptr1++;
   }
@@ -368,7 +373,8 @@ __device__ inline size_type string_view::rfind(const char* str,
   const char* ptr2 = str;
   for (int idx = 0; idx < len1; ++idx) {
     bool match = true;
-    for (size_type jdx = 0; match && (jdx < len2); ++jdx) match = (ptr1[jdx] == ptr2[jdx]);
+    for (size_type jdx = 0; match && (jdx < len2); ++jdx)
+      match = (ptr1[jdx] == ptr2[jdx]);
     if (match) return character_offset(epos - len2 - idx);
     ptr1--;  // go backwards
   }

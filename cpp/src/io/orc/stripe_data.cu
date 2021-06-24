@@ -602,7 +602,9 @@ static __device__ uint32_t Integer_RLEv1(
       int delta        = run_data >> 24;
       uint32_t base    = run_data & 0x3ff;
       uint32_t pos     = vals[base] & 0xffff;
-      for (int i = 1 + tr; i < n; i += 32) { vals[base + i] = ((delta * i) << 16) | pos; }
+      for (int i = 1 + tr; i < n; i += 32) {
+        vals[base + i] = ((delta * i) << 16) | pos;
+      }
     }
     __syncthreads();
   }
@@ -864,7 +866,9 @@ static __device__ uint32_t Integer_RLEv2(
         baseval = rle->baseval.u32[r];
       else
         baseval = rle->baseval.u64[r];
-      for (uint32_t j = tr; j < n; j += 32) { vals[base + j] += baseval; }
+      for (uint32_t j = tr; j < n; j += 32) {
+        vals[base + j] += baseval;
+      }
     }
   }
   __syncthreads();

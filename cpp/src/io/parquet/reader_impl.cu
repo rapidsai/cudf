@@ -322,7 +322,9 @@ class aggregate_metadata {
     std::map<std::string, std::string> merged;
     // merge key/value maps TODO: warn/throw if there are mismatches?
     for (auto const& pfm : per_file_metadata) {
-      for (auto const& kv : pfm.key_value_metadata) { merged[kv.key] = kv.value; }
+      for (auto const& kv : pfm.key_value_metadata) {
+        merged[kv.key] = kv.value;
+      }
     }
     return merged;
   }
@@ -920,7 +922,9 @@ rmm::device_buffer reader::impl::decompress_page_data(
     for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
       const auto page_stride = chunks[c].max_num_pages;
       if (chunks[c].codec == codec) {
-        for (int k = 0; k < page_stride; k++) { f(page_count + k); }
+        for (int k = 0; k < page_stride; k++) {
+          f(page_count + k);
+        }
       }
       page_count += page_stride;
     }

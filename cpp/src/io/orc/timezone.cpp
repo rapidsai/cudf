@@ -144,7 +144,9 @@ struct timezone_file {
     if (is_header_from_64bit) {
       fin.read(reinterpret_cast<char*>(transition_times.data()),
                transition_times.size() * sizeof(int64_t));
-      for (auto& tt : transition_times) { tt = __builtin_bswap64(tt); }
+      for (auto& tt : transition_times) {
+        tt = __builtin_bswap64(tt);
+      }
     } else {
       std::vector<int32_t> tt32(timecnt());
       fin.read(reinterpret_cast<char*>(tt32.data()), tt32.size() * sizeof(int32_t));
@@ -365,7 +367,9 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
       day += 7;
     }
     // Add months
-    for (int m = 1; m < month; m++) { day += days_in_month(m, is_leap); }
+    for (int m = 1; m < month; m++) {
+      day += days_in_month(m, is_leap);
+    }
   } else if (trans.type == 'J') {
     // Account for 29th of February on leap years
     day += (day > 31 + 29 && is_leap_year(year));

@@ -251,7 +251,9 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
   // Iterate through the user defined sources and read the contents into the local buffer
   CUDF_EXPECTS(!sources_.empty(), "No sources were defined");
   size_t total_source_size = 0;
-  for (const auto& source : sources_) { total_source_size += source->size(); }
+  for (const auto& source : sources_) {
+    total_source_size += source->size();
+  }
   total_source_size = total_source_size - range_offset;
 
   buffer_.resize(total_source_size);

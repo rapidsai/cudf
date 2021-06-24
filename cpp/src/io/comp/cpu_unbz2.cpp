@@ -297,9 +297,11 @@ int32_t bz2_decompress_block(unbz_state_s* s)
       sel->base[i]  = 0;
       sel->limit[i] = 0;
     }
-    for (i = 0; i < alphaSize; i++) sel->base[length[i] + 1]++;
+    for (i = 0; i < alphaSize; i++)
+      sel->base[length[i] + 1]++;
 
-    for (i = 1; i < BZ_MAX_CODE_LEN; i++) sel->base[i] += sel->base[i - 1];
+    for (i = 1; i < BZ_MAX_CODE_LEN; i++)
+      sel->base[i] += sel->base[i - 1];
 
     vec = 0;
     for (i = minLen; i <= maxLen; i++) {
@@ -318,7 +320,8 @@ int32_t bz2_decompress_block(unbz_state_s* s)
   EOB       = nInUse + 1;
   nblockMAX = 100000 * s->blockSize100k;
 
-  for (i = 0; i <= 255; i++) s->unzftab[i] = 0;
+  for (i = 0; i <= 255; i++)
+    s->unzftab[i] = 0;
 
   // MTF init
   {

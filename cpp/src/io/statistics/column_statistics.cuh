@@ -151,7 +151,9 @@ struct merge_group_statistics_functor {
 
     typed_statistics_chunk<T, detail::statistics_type_category<T, IO>::is_aggregated> chunk;
 
-    for (uint32_t i = t; i < num_chunks; i += block_size) { chunk.reduce(chunks[i]); }
+    for (uint32_t i = t; i < num_chunks; i += block_size) {
+      chunk.reduce(chunks[i]);
+    }
     chunk.has_minmax = (chunk.minimum_value <= chunk.maximum_value);
 
     chunk = block_reduce(chunk, storage);

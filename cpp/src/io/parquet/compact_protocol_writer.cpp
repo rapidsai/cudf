@@ -124,7 +124,8 @@ void CompactProtocolFieldWriter::put_byte(uint8_t v) { writer.m_buf.push_back(v)
 
 void CompactProtocolFieldWriter::put_byte(const uint8_t* raw, uint32_t len)
 {
-  for (uint32_t i = 0; i < len; i++) writer.m_buf.push_back(raw[i]);
+  for (uint32_t i = 0; i < len; i++)
+    writer.m_buf.push_back(raw[i]);
 }
 
 uint32_t CompactProtocolFieldWriter::put_uint(uint64_t v)
@@ -175,7 +176,9 @@ inline void CompactProtocolFieldWriter::field_int_list(int field, const std::vec
   put_field_header(field, current_field_value, ST_FLD_LIST);
   put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_I32));
   if (val.size() >= 0xf) put_uint(val.size());
-  for (auto& v : val) { put_int(static_cast<int32_t>(v)); }
+  for (auto& v : val) {
+    put_int(static_cast<int32_t>(v));
+  }
   current_field_value = field;
 }
 
@@ -193,7 +196,9 @@ inline void CompactProtocolFieldWriter::field_struct_list(int field, const std::
   put_field_header(field, current_field_value, ST_FLD_LIST);
   put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_STRUCT));
   if (val.size() >= 0xf) put_uint(val.size());
-  for (auto& v : val) { writer.write(v); }
+  for (auto& v : val) {
+    writer.write(v);
+  }
   current_field_value = field;
 }
 

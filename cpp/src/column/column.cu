@@ -91,7 +91,9 @@ column_view column::view() const
   // Create views of children
   std::vector<column_view> child_views;
   child_views.reserve(_children.size());
-  for (auto const& c : _children) { child_views.emplace_back(*c); }
+  for (auto const& c : _children) {
+    child_views.emplace_back(*c);
+  }
 
   return column_view{type(),
                      size(),
@@ -110,7 +112,9 @@ mutable_column_view column::mutable_view()
   // create views of children
   std::vector<mutable_column_view> child_views;
   child_views.reserve(_children.size());
-  for (auto const& c : _children) { child_views.emplace_back(*c); }
+  for (auto const& c : _children) {
+    child_views.emplace_back(*c);
+  }
 
   // Store the old null count before resetting it. By accessing the value directly instead of
   // calling `null_count()`, we can avoid a potential invocation of `count_unset_bits()`. This does

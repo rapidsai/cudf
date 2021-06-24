@@ -37,7 +37,9 @@ void assert_same_data_type(column_view const& lhs, column_view const& rhs)
   CUDF_EXPECTS(lhs.type().id() == type_id::STRING or lhs.num_children() == rhs.num_children(),
                "Mismatched number of child columns.");
 
-  for (int i{0}; i < lhs.num_children(); ++i) { assert_same_data_type(lhs.child(i), rhs.child(i)); }
+  for (int i{0}; i < lhs.num_children(); ++i) {
+    assert_same_data_type(lhs.child(i), rhs.child(i));
+  }
 }
 
 /**

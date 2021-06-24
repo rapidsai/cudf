@@ -270,7 +270,9 @@ TEST_F(CountUnsetBitsTest, NullMask)
   std::vector<cudf::size_type> indices = {0, 32, 7, 25};
   auto counts                          = cudf::segmented_count_unset_bits(nullptr, indices);
   EXPECT_EQ(indices.size(), counts.size() * 2);
-  for (size_t i = 0; i < counts.size(); i++) { EXPECT_EQ(0, counts[i]); }
+  for (size_t i = 0; i < counts.size(); i++) {
+    EXPECT_EQ(0, counts[i]);
+  }
 }
 
 TEST_F(CountUnsetBitsTest, SingleWordAllBits)
@@ -421,7 +423,9 @@ TEST_F(CopyBitmaskTest, NullPtr)
 TEST_F(CopyBitmaskTest, TestZeroOffset)
 {
   std::vector<int> validity_bit(1000);
-  for (auto& m : validity_bit) { m = this->generate(); }
+  for (auto& m : validity_bit) {
+    m = this->generate();
+  }
   auto input_mask = cudf::test::detail::make_null_mask(validity_bit.begin(), validity_bit.end());
 
   int begin_bit         = 0;
@@ -441,7 +445,9 @@ TEST_F(CopyBitmaskTest, TestZeroOffset)
 TEST_F(CopyBitmaskTest, TestNonZeroOffset)
 {
   std::vector<int> validity_bit(1000);
-  for (auto& m : validity_bit) { m = this->generate(); }
+  for (auto& m : validity_bit) {
+    m = this->generate();
+  }
   auto input_mask = cudf::test::detail::make_null_mask(validity_bit.begin(), validity_bit.end());
 
   int begin_bit         = 321;
@@ -463,7 +469,9 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorContiguous)
   cudf::data_type t{cudf::type_id::INT32};
   cudf::size_type num_elements = 1001;
   std::vector<int> validity_bit(num_elements);
-  for (auto& m : validity_bit) { m = this->generate(); }
+  for (auto& m : validity_bit) {
+    m = this->generate();
+  }
   auto gold_mask = cudf::test::detail::make_null_mask(validity_bit.begin(), validity_bit.end());
 
   rmm::device_buffer copy_mask{gold_mask, rmm::cuda_stream_default};
@@ -501,7 +509,9 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorDiscontiguous)
   cudf::data_type t{cudf::type_id::INT32};
   cudf::size_type num_elements = 1001;
   std::vector<int> validity_bit(num_elements);
-  for (auto& m : validity_bit) { m = this->generate(); }
+  for (auto& m : validity_bit) {
+    m = this->generate();
+  }
   auto gold_mask = cudf::test::detail::make_null_mask(validity_bit.begin(), validity_bit.end());
   std::vector<cudf::size_type> split{0, 104, 128, 152, 311, 491, 583, 734, 760, num_elements};
 

@@ -747,7 +747,9 @@ class ParquetFieldEnumListFunctor {
     int n = current_byte >> 4;
     if (n == 0xf) n = cpr->get_u32();
     val.resize(n);
-    for (int32_t i = 0; i < n; i++) { val[i] = static_cast<Enum>(cpr->get_i32()); }
+    for (int32_t i = 0; i < n; i++) {
+      val[i] = static_cast<Enum>(cpr->get_i32());
+    }
     return false;
   }
 

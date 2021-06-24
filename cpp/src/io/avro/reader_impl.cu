@@ -149,7 +149,9 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer& comp_
     // Guess an initial maximum uncompressed block size
     uint32_t initial_blk_len = (_metadata->max_block_size * 2 + 0xfff) & ~0xfff;
     uncompressed_data_size   = initial_blk_len * _metadata->block_list.size();
-    for (size_t i = 0; i < inflate_in.size(); ++i) { inflate_in[i].dstSize = initial_blk_len; }
+    for (size_t i = 0; i < inflate_in.size(); ++i) {
+      inflate_in[i].dstSize = initial_blk_len;
+    }
   } else if (_metadata->codec == "snappy") {
     // Extract the uncompressed length from the snappy stream
     for (size_t i = 0; i < _metadata->block_list.size(); i++) {
@@ -400,7 +402,9 @@ table_with_metadata reader::impl::read(avro_reader_options const& options,
         dict[i].first    = static_cast<uint32_t>(total_dictionary_entries);
         dict[i].second   = static_cast<uint32_t>(col_schema.symbols.size());
         total_dictionary_entries += dict[i].second;
-        for (const auto& sym : col_schema.symbols) { dictionary_data_size += sym.length(); }
+        for (const auto& sym : col_schema.symbols) {
+          dictionary_data_size += sym.length();
+        }
       }
 
       rmm::device_uvector<string_index_pair> d_global_dict(total_dictionary_entries, stream);

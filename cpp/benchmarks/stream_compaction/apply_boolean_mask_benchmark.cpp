@@ -35,13 +35,15 @@ constexpr cudf::size_type fifty_percent = 50;
 void percent_range(benchmark::internal::Benchmark* b)
 {
   b->Unit(benchmark::kMillisecond);
-  for (int percent = 0; percent <= 100; percent += 10) b->Args({hundredM, percent});
+  for (int percent = 0; percent <= 100; percent += 10)
+    b->Args({hundredM, percent});
 }
 
 void size_range(benchmark::internal::Benchmark* b)
 {
   b->Unit(benchmark::kMillisecond);
-  for (int size = tenK; size <= hundredM; size *= 10) b->Args({size, fifty_percent});
+  for (int size = tenK; size <= hundredM; size *= 10)
+    b->Args({size, fifty_percent});
 }
 
 template <typename T>

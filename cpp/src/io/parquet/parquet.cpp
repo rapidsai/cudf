@@ -63,7 +63,8 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
       if (n == 0xf) n = get_i32();
       t = g_list2struct[c & 0xf];
       if (depth > 10) return false;
-      for (int32_t i = 0; i < n; i++) skip_struct_field(t, depth + 1);
+      for (int32_t i = 0; i < n; i++)
+        skip_struct_field(t, depth + 1);
     } break;
     case ST_FLD_STRUCT:
       for (;;) {
