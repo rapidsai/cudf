@@ -138,6 +138,7 @@ struct compute_size_and_repeat_fn {
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        size_type repeat_times,
+                                       check_output_overflow overflow_checking,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -346,6 +347,7 @@ struct dispatch_repeat_strings_separately_fn {
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        column_view const& repeat_times,
+                                       check_output_overflow overflow_checking,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -383,18 +385,22 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        size_type repeat_times,
+                                       check_output_overflow overflow_checking,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_strings(input, repeat_times, rmm::cuda_stream_default, mr);
+  return detail::repeat_strings(
+    input, repeat_times, overflow_checking, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        column_view const& repeat_times,
+                                       check_output_overflow overflow_checking,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_strings(input, repeat_times, rmm::cuda_stream_default, mr);
+  return detail::repeat_strings(
+    input, repeat_times, overflow_checking, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
