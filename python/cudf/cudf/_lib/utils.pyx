@@ -140,7 +140,7 @@ cpdef generate_pandas_metadata(Table table, index):
     metadata = pa.pandas_compat.construct_metadata(
         columns_to_convert=[
             col
-            for col in table._data.columns
+            for col in table._columns
         ],
         df=table,
         column_names=col_names,
