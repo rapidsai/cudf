@@ -29,8 +29,8 @@ namespace parquet {
 namespace gpu {
 struct dict_state_s {
   uint32_t row_cnt;
-  PageFragment *cur_fragment;
-  uint32_t *hashmap;
+  PageFragment* cur_fragment;
+  uint32_t* hashmap;
   uint32_t total_dict_entries;  //!< Total number of entries in dictionary
   uint32_t dictionary_size;     //!< Total dictionary size in bytes
   uint32_t num_dict_entries;    //!< Dictionary entries in current fragment to add
@@ -52,14 +52,14 @@ inline __device__ uint32_t uint64_hash16(uint64_t v)
   return uint32_hash16((uint32_t)(v + (v >> 32)));
 }
 
-inline __device__ uint32_t hash_string(const string_view &val)
+inline __device__ uint32_t hash_string(const string_view& val)
 {
-  const char *p = val.data();
+  const char* p = val.data();
   uint32_t len  = val.size_bytes();
   uint32_t hash = len;
   if (len > 0) {
     uint32_t align_p    = 3 & reinterpret_cast<uintptr_t>(p);
-    const uint32_t *p32 = reinterpret_cast<const uint32_t *>(p - align_p);
+    const uint32_t* p32 = reinterpret_cast<const uint32_t*>(p - align_p);
     uint32_t ofs        = align_p * 8;
     uint32_t v;
     while (len > 4) {
@@ -85,8 +85,8 @@ inline __device__ uint32_t hash_string(const string_view &val)
  * @param[in] frag_start_row row position of current fragment
  * @param[in] t thread id
  */
-__device__ void FetchDictionaryFragment(dict_state_s *s,
-                                        uint32_t *dict_data,
+__device__ void FetchDictionaryFragment(dict_state_s* s,
+                                        uint32_t* dict_data,
                                         uint32_t frag_start_row,
                                         uint32_t t)
 {
@@ -108,12 +108,12 @@ __device__ void FetchDictionaryFragment(dict_state_s *s,
 
 /// Generate dictionary indices in ascending row order
 template <int block_size>
-__device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
+__device__ void GenerateDictionaryIndices(dict_state_s* s, uint32_t t)
 {
   using block_scan = cub::BlockScan<uint32_t, block_size>;
   __shared__ typename block_scan::TempStorage temp_storage;
-  uint32_t *dict_index      = s->col.dict_index;
-  uint32_t *dict_data       = s->col.dict_data + s->ck.start_row;
+  uint32_t* dict_index      = s->col.dict_index;
+  uint32_t* dict_data       = s->col.dict_data + s->ck.start_row;
   uint32_t num_dict_entries = 0;
 
   for (uint32_t i = 0; i < s->row_cnt; i += 1024) {
@@ -150,13 +150,13 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
 // blockDim(1024, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
-  gpuBuildChunkDictionaries(device_span<EncColumnChunk> chunks, uint32_t *dev_scratch)
+  gpuBuildChunkDictionaries(device_span<EncColumnChunk> chunks, uint32_t* dev_scratch)
 {
   __shared__ __align__(8) dict_state_s state_g;
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
   __shared__ typename block_reduce::TempStorage temp_storage;
 
-  dict_state_s *const s = &state_g;
+  dict_state_s* const s = &state_g;
   uint32_t t            = threadIdx.x;
   uint32_t dtype, dtype_len, dtype_len_in;
 
@@ -320,7 +320,7 @@ __global__ void __launch_bounds__(block_size, 1)
  * @param[in] stream CUDA stream to use, default 0
  */
 void BuildChunkDictionaries(device_span<EncColumnChunk> chunks,
-                            uint32_t *dev_scratch,
+                            uint32_t* dev_scratch,
                             rmm::cuda_stream_view stream)
 {
   auto num_chunks = chunks.size();

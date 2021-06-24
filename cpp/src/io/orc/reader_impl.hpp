@@ -59,8 +59,8 @@ class reader::impl {
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<datasource> source,
-                orc_reader_options const &options,
-                rmm::mr::device_memory_resource *mr);
+                orc_reader_options const& options,
+                rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns
@@ -74,7 +74,7 @@ class reader::impl {
    */
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
-                           const std::vector<size_type> &stripes,
+                           const std::vector<size_type>& stripes,
                            rmm::cuda_stream_view stream);
 
  private:
@@ -92,10 +92,10 @@ class reader::impl {
    *
    * @return Device buffer to decompressed page data
    */
-  rmm::device_buffer decompress_stripe_data(hostdevice_vector<gpu::ColumnDesc> &chunks,
-                                            const std::vector<rmm::device_buffer> &stripe_data,
-                                            const OrcDecompressor *decompressor,
-                                            std::vector<orc_stream_info> &stream_info,
+  rmm::device_buffer decompress_stripe_data(hostdevice_vector<gpu::ColumnDesc>& chunks,
+                                            const std::vector<rmm::device_buffer>& stripe_data,
+                                            const OrcDecompressor* decompressor,
+                                            std::vector<orc_stream_info>& stream_info,
                                             size_t num_stripes,
                                             device_span<gpu::RowGroup> row_groups,
                                             size_t row_index_stride,
@@ -114,18 +114,18 @@ class reader::impl {
    * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks,
+  void decode_stream_data(hostdevice_vector<gpu::ColumnDesc>& chunks,
                           size_t num_dicts,
                           size_t skip_rows,
                           size_t num_rows,
                           timezone_table_view tz_table,
                           device_span<gpu::RowGroup const> row_groups,
                           size_t row_index_stride,
-                          std::vector<column_buffer> &out_buffers,
+                          std::vector<column_buffer>& out_buffers,
                           rmm::cuda_stream_view stream);
 
  private:
-  rmm::mr::device_memory_resource *_mr = nullptr;
+  rmm::mr::device_memory_resource* _mr = nullptr;
   std::unique_ptr<datasource> _source;
   std::unique_ptr<cudf::io::orc::metadata> _metadata;
 

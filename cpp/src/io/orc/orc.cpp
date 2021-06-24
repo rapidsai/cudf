@@ -23,7 +23,7 @@ namespace cudf {
 namespace io {
 namespace orc {
 
-uint32_t ProtobufReader::read_field_size(const uint8_t *end)
+uint32_t ProtobufReader::read_field_size(const uint8_t* end)
 {
   auto const size = get<uint32_t>();
   CUDF_EXPECTS(size <= static_cast<uint32_t>(end - m_cur), "Protobuf parsing out of bounds");
@@ -43,7 +43,7 @@ void ProtobufReader::skip_struct_field(int t)
   }
 }
 
-void ProtobufReader::read(PostScript &s, size_t maxlen)
+void ProtobufReader::read(PostScript& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.footerLength),
                             make_field_reader(2, s.compression),
@@ -54,7 +54,7 @@ void ProtobufReader::read(PostScript &s, size_t maxlen)
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(FileFooter &s, size_t maxlen)
+void ProtobufReader::read(FileFooter& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.headerLength),
                             make_field_reader(2, s.contentLength),
@@ -67,7 +67,7 @@ void ProtobufReader::read(FileFooter &s, size_t maxlen)
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(StripeInformation &s, size_t maxlen)
+void ProtobufReader::read(StripeInformation& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.offset),
                             make_field_reader(2, s.indexLength),
@@ -77,7 +77,7 @@ void ProtobufReader::read(StripeInformation &s, size_t maxlen)
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(SchemaType &s, size_t maxlen)
+void ProtobufReader::read(SchemaType& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.kind),
                             make_packed_field_reader(2, s.subtypes),
@@ -88,13 +88,13 @@ void ProtobufReader::read(SchemaType &s, size_t maxlen)
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(UserMetadataItem &s, size_t maxlen)
+void ProtobufReader::read(UserMetadataItem& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.name), make_field_reader(2, s.value));
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(StripeFooter &s, size_t maxlen)
+void ProtobufReader::read(StripeFooter& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.streams),
                             make_field_reader(2, s.columns),
@@ -102,7 +102,7 @@ void ProtobufReader::read(StripeFooter &s, size_t maxlen)
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(Stream &s, size_t maxlen)
+void ProtobufReader::read(Stream& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.kind),
                             make_field_reader(2, s.column_id),
@@ -110,59 +110,59 @@ void ProtobufReader::read(Stream &s, size_t maxlen)
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(ColumnEncoding &s, size_t maxlen)
+void ProtobufReader::read(ColumnEncoding& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.kind), make_field_reader(2, s.dictionarySize));
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(integer_statistics &s, size_t maxlen)
+void ProtobufReader::read(integer_statistics& s, size_t maxlen)
 {
   auto op = std::make_tuple(
     make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(double_statistics &s, size_t maxlen)
+void ProtobufReader::read(double_statistics& s, size_t maxlen)
 {
   auto op = std::make_tuple(
     make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(string_statistics &s, size_t maxlen)
+void ProtobufReader::read(string_statistics& s, size_t maxlen)
 {
   auto op = std::make_tuple(
     make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(bucket_statistics &s, size_t maxlen)
+void ProtobufReader::read(bucket_statistics& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_packed_field_reader(1, s.count));
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(decimal_statistics &s, size_t maxlen)
+void ProtobufReader::read(decimal_statistics& s, size_t maxlen)
 {
   auto op = std::make_tuple(
     make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(date_statistics &s, size_t maxlen)
+void ProtobufReader::read(date_statistics& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.minimum), make_field_reader(2, s.maximum));
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(binary_statistics &s, size_t maxlen)
+void ProtobufReader::read(binary_statistics& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.sum));
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(timestamp_statistics &s, size_t maxlen)
+void ProtobufReader::read(timestamp_statistics& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.minimum),
                             make_field_reader(2, s.maximum),
@@ -171,7 +171,7 @@ void ProtobufReader::read(timestamp_statistics &s, size_t maxlen)
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(column_statistics &s, size_t maxlen)
+void ProtobufReader::read(column_statistics& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.number_of_values),
                             make_field_reader(2, s.int_stats),
@@ -185,13 +185,13 @@ void ProtobufReader::read(column_statistics &s, size_t maxlen)
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(StripeStatistics &s, size_t maxlen)
+void ProtobufReader::read(StripeStatistics& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_raw_field_reader(1, s.colStats));
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(Metadata &s, size_t maxlen)
+void ProtobufReader::read(Metadata& s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.stripeStats));
   function_builder(s, maxlen, op);
@@ -245,7 +245,7 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
   m_buf->data()[lpos + 2] = (uint8_t)(sz);
 }
 
-size_t ProtobufWriter::write(const PostScript &s)
+size_t ProtobufWriter::write(const PostScript& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.footerLength);
@@ -257,7 +257,7 @@ size_t ProtobufWriter::write(const PostScript &s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const FileFooter &s)
+size_t ProtobufWriter::write(const FileFooter& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.headerLength);
@@ -271,7 +271,7 @@ size_t ProtobufWriter::write(const FileFooter &s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const StripeInformation &s)
+size_t ProtobufWriter::write(const StripeInformation& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.offset);
@@ -282,7 +282,7 @@ size_t ProtobufWriter::write(const StripeInformation &s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const SchemaType &s)
+size_t ProtobufWriter::write(const SchemaType& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.kind);
@@ -294,7 +294,7 @@ size_t ProtobufWriter::write(const SchemaType &s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const UserMetadataItem &s)
+size_t ProtobufWriter::write(const UserMetadataItem& s)
 {
   ProtobufFieldWriter w(this);
   w.field_string(1, s.name);
@@ -302,7 +302,7 @@ size_t ProtobufWriter::write(const UserMetadataItem &s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const StripeFooter &s)
+size_t ProtobufWriter::write(const StripeFooter& s)
 {
   ProtobufFieldWriter w(this);
   w.field_repeated_struct(1, s.streams);
@@ -311,7 +311,7 @@ size_t ProtobufWriter::write(const StripeFooter &s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const Stream &s)
+size_t ProtobufWriter::write(const Stream& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.kind);
@@ -320,7 +320,7 @@ size_t ProtobufWriter::write(const Stream &s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const ColumnEncoding &s)
+size_t ProtobufWriter::write(const ColumnEncoding& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.kind);
@@ -328,14 +328,14 @@ size_t ProtobufWriter::write(const ColumnEncoding &s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const StripeStatistics &s)
+size_t ProtobufWriter::write(const StripeStatistics& s)
 {
   ProtobufFieldWriter w(this);
   w.field_repeated_struct_blob(1, s.colStats);
   return w.value();
 }
 
-size_t ProtobufWriter::write(const Metadata &s)
+size_t ProtobufWriter::write(const Metadata& s)
 {
   ProtobufFieldWriter w(this);
   w.field_repeated_struct(1, s.stripeStats);
@@ -376,7 +376,7 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
  *
  * @returns pointer to uncompressed data, nullptr if error
  */
-const uint8_t *OrcDecompressor::Decompress(const uint8_t *srcBytes, size_t srcLen, size_t *dstLen)
+const uint8_t* OrcDecompressor::Decompress(const uint8_t* srcBytes, size_t srcLen, size_t* dstLen)
 {
   // If uncompressed, just pass-through the input
   if (m_kind == NONE) {
@@ -431,7 +431,7 @@ const uint8_t *OrcDecompressor::Decompress(const uint8_t *srcBytes, size_t srcLe
   return m_buf.data();
 }
 
-metadata::metadata(datasource *const src) : source(src)
+metadata::metadata(datasource* const src) : source(src)
 {
   const auto len         = source->size();
   const auto max_ps_size = std::min(len, static_cast<size_t>(256));
@@ -439,7 +439,7 @@ metadata::metadata(datasource *const src) : source(src)
   // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
   auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
   const size_t ps_length = buffer->data()[max_ps_size - 1];
-  const uint8_t *ps_data = &buffer->data()[max_ps_size - ps_length - 1];
+  const uint8_t* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
   ProtobufReader(ps_data, ps_length).read(ps);
   CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
 
@@ -462,15 +462,15 @@ metadata::metadata(datasource *const src) : source(src)
   orc::ProtobufReader(md_data, md_length).read(md);
 }
 
-std::vector<metadata::OrcStripeInfo> metadata::select_stripes(const std::vector<size_type> &stripes,
-                                                              size_type &row_start,
-                                                              size_type &row_count)
+std::vector<metadata::OrcStripeInfo> metadata::select_stripes(const std::vector<size_type>& stripes,
+                                                              size_type& row_start,
+                                                              size_type& row_count)
 {
   std::vector<OrcStripeInfo> selection;
 
   if (!stripes.empty()) {
     size_t stripe_rows = 0;
-    for (const auto &stripe_idx : stripes) {
+    for (const auto& stripe_idx : stripes) {
       CUDF_EXPECTS(stripe_idx >= 0 && stripe_idx < get_num_stripes(), "Invalid stripe index");
       selection.emplace_back(&ff.stripes[stripe_idx], nullptr);
       stripe_rows += ff.stripes[stripe_idx].numberOfRows;
@@ -528,13 +528,13 @@ std::vector<metadata::OrcStripeInfo> metadata::select_stripes(const std::vector<
 }
 
 std::vector<int> metadata::select_columns(std::vector<std::string> use_names,
-                                          bool &has_timestamp_column)
+                                          bool& has_timestamp_column)
 {
   std::vector<int> selection;
 
   if (not use_names.empty()) {
     int index = 0;
-    for (const auto &use_name : use_names) {
+    for (const auto& use_name : use_names) {
       bool name_found = false;
       for (int i = 0; i < get_num_columns(); ++i, ++index) {
         if (index >= get_num_columns()) { index = 0; }
@@ -564,7 +564,7 @@ std::vector<int> metadata::select_columns(std::vector<std::string> use_names,
 void metadata::init_column_names()
 {
   auto const schema_idxs = get_schema_indexes();
-  auto const &types      = ff.types;
+  auto const& types      = ff.types;
   for (int32_t col_id = 0; col_id < get_num_columns(); ++col_id) {
     std::string col_name;
     uint32_t parent_idx = col_id;
@@ -592,7 +592,7 @@ std::vector<metadata::schema_indexes> metadata::get_schema_indexes() const
 
   auto const schema_size = static_cast<uint32_t>(result.size());
   for (uint32_t i = 0; i < schema_size; i++) {
-    auto const &subtypes    = ff.types[i].subtypes;
+    auto const& subtypes    = ff.types[i].subtypes;
     auto const num_children = static_cast<uint32_t>(subtypes.size());
     if (result[i].parent == -1) {  // Not initialized
       result[i].parent = i;        // set root node as its own parent

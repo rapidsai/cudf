@@ -47,7 +47,7 @@ TYPED_TEST(FixedWidthGetValueTest, BasicGet)
   auto s = get_element(col, 0);
 
   using ScalarType = scalar_type_t<TypeParam>;
-  auto typed_s     = static_cast<ScalarType const *>(s.get());
+  auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   EXPECT_EQ(cudf::test::make_type_param_scalar<TypeParam>(9), typed_s->value());
@@ -59,7 +59,7 @@ TYPED_TEST(FixedWidthGetValueTest, GetFromNullable)
   auto s = get_element(col, 1);
 
   using ScalarType = scalar_type_t<TypeParam>;
-  auto typed_s     = static_cast<ScalarType const *>(s.get());
+  auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   EXPECT_EQ(cudf::test::make_type_param_scalar<TypeParam>(8), typed_s->value());
@@ -89,7 +89,7 @@ TEST_F(StringGetValueTest, BasicGet)
   strings_column_wrapper col{"this", "is", "a", "test"};
   auto s = get_element(col, 3);
 
-  auto typed_s = static_cast<string_scalar const *>(s.get());
+  auto typed_s = static_cast<string_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   EXPECT_EQ("test", typed_s->to_string());
@@ -100,7 +100,7 @@ TEST_F(StringGetValueTest, GetEmpty)
   strings_column_wrapper col{"this", "is", "", "test"};
   auto s = get_element(col, 2);
 
-  auto typed_s = static_cast<string_scalar const *>(s.get());
+  auto typed_s = static_cast<string_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   EXPECT_EQ("", typed_s->to_string());
@@ -111,7 +111,7 @@ TEST_F(StringGetValueTest, GetFromNullable)
   strings_column_wrapper col({"this", "is", "a", "test"}, {0, 1, 0, 1});
   auto s = get_element(col, 1);
 
-  auto typed_s = static_cast<string_scalar const *>(s.get());
+  auto typed_s = static_cast<string_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   EXPECT_EQ("is", typed_s->to_string());
@@ -140,7 +140,7 @@ TYPED_TEST(DictionaryGetValueTest, BasicGet)
   auto s = get_element(*col, 2);
 
   using ScalarType = scalar_type_t<TypeParam>;
-  auto typed_s     = static_cast<ScalarType const *>(s.get());
+  auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   EXPECT_EQ(cudf::test::make_type_param_scalar<TypeParam>(7), typed_s->value());
@@ -155,7 +155,7 @@ TYPED_TEST(DictionaryGetValueTest, GetFromNullable)
   auto s = get_element(*col, 3);
 
   using ScalarType = scalar_type_t<TypeParam>;
-  auto typed_s     = static_cast<ScalarType const *>(s.get());
+  auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   EXPECT_EQ(cudf::test::make_type_param_scalar<TypeParam>(8), typed_s->value());
@@ -202,7 +202,7 @@ TYPED_TEST(ListGetFixedWidthValueTest, NonNestedGetNonNullNonEmpty)
   size_type index = 0;
 
   auto s       = get_element(col, index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
@@ -217,7 +217,7 @@ TYPED_TEST(ListGetFixedWidthValueTest, NonNestedGetNonNullEmpty)
   size_type index = 1;
 
   auto s       = get_element(col, index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
@@ -232,7 +232,7 @@ TYPED_TEST(ListGetFixedWidthValueTest, NonNestedGetNull)
   size_type index = 2;
 
   auto s       = get_element(col, index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_FALSE(s->is_valid());
   // Test preserve column hierarchy
@@ -256,7 +256,7 @@ TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNonNullNonEmpty)
   size_type index = 3;
 
   auto s       = get_element(col, index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
@@ -279,7 +279,7 @@ TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNonNullNonEmptyPreserveNull)
   size_type index = 3;
 
   auto s       = get_element(col, index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
@@ -301,7 +301,7 @@ TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNonNullEmpty)
   size_type index = 1;
 
   auto s       = get_element(col, index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
@@ -326,7 +326,7 @@ TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNull)
   size_type index = 1;
 
   auto s       = get_element(col, index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   auto expected_data =
     make_lists_column(0, offset_t{}.release(), FCW{}.release(), 0, rmm::device_buffer{});
@@ -356,7 +356,7 @@ TEST_F(ListGetStringValueTest, NonNestedGetNonNullNonEmpty)
   size_type index = 0;
 
   auto s       = get_element(col, index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
@@ -371,7 +371,7 @@ TEST_F(ListGetStringValueTest, NonNestedGetNonNullEmpty)
   size_type index = 1;
 
   auto s       = get_element(col, index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
@@ -387,7 +387,7 @@ TEST_F(ListGetStringValueTest, NonNestedGetNull)
   size_type index = 2;
 
   auto s       = get_element(col, index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_FALSE(s->is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(typed_s->view(), StringCW{});
@@ -409,7 +409,7 @@ TEST_F(ListGetStringValueTest, NestedGetNonNullNonEmpty)
   size_type index = 2;
 
   auto s       = get_element(col, index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
@@ -433,7 +433,7 @@ TEST_F(ListGetStringValueTest, NestedGetNonNullNonEmptyPreserveNull)
   size_type index = 2;
 
   auto s       = get_element(col, index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
@@ -455,7 +455,7 @@ TEST_F(ListGetStringValueTest, NestedGetNonNullEmpty)
   size_type index = 3;
 
   auto s       = get_element(col, index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   // Relax to equivalent. `expected_data` leaf string column does not
@@ -482,7 +482,7 @@ TEST_F(ListGetStringValueTest, NestedGetNull)
   size_type index = 0;
 
   auto s       = get_element(col, index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   auto expected_data =
     make_lists_column(0, offset_t{}.release(), StringCW{}.release(), 0, rmm::device_buffer{});
@@ -519,7 +519,7 @@ struct ListGetStructValueTest : public BaseFixture {
       std::for_each(
         thrust::make_counting_iterator(0), thrust::make_counting_iterator(num_lists), [&](auto i) {
           if (*(null_mask.begin() + i)) {
-            set_null_mask(static_cast<bitmask_type *>(d_null_mask.data()), i, i + 1, true);
+            set_null_mask(static_cast<bitmask_type*>(d_null_mask.data()), i, i + 1, true);
           }
         });
     }
@@ -551,7 +551,7 @@ struct ListGetStructValueTest : public BaseFixture {
   {
     std::vector<column_view> views;
     std::transform(
-      rows.begin(), rows.end(), std::back_inserter(views), [](auto &r) { return column_view(r); });
+      rows.begin(), rows.end(), std::back_inserter(views), [](auto& r) { return column_view(r); });
     return cudf::concatenate(views);
   }
 
@@ -614,7 +614,7 @@ TYPED_TEST(ListGetStructValueTest, NonNestedGetNonNullNonEmpty)
   auto expected_data = this->row2();
 
   auto s       = get_element(list_column->view(), index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   // Relax to equivalent. The nested list column in struct allocates `null_mask`.
@@ -632,7 +632,7 @@ TYPED_TEST(ListGetStructValueTest, NonNestedGetNonNullNonEmpty2)
   auto expected_data = this->concat({this->row0(), this->row1()});
 
   auto s       = get_element(list_column->view(), index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_data, typed_s->view());
@@ -652,7 +652,7 @@ TYPED_TEST(ListGetStructValueTest, NonNestedGetNonNullEmpty)
   auto expected_data = this->zero_length_struct();
 
   auto s       = get_element(list_column->view(), index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   // Relax to equivalent. The nested list column in struct allocates `null_mask`.
@@ -671,7 +671,7 @@ TYPED_TEST(ListGetStructValueTest, NonNestedGetNull)
   size_type index  = 0;
 
   auto s       = get_element(list_column->view(), index);
-  auto typed_s = static_cast<list_scalar const *>(s.get());
+  auto typed_s = static_cast<list_scalar const*>(s.get());
 
   auto expected_data = this->make_test_structs_column({}, {}, {}, valid_t{}.begin());
 
@@ -693,7 +693,7 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNonNullNonEmpty)
 
   size_type index = 0;
   auto s          = get_element(list_column_nested->view(), index);
-  auto typed_s    = static_cast<list_scalar const *>(s.get());
+  auto typed_s    = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_data, typed_s->view());
@@ -714,7 +714,7 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNonNullNonEmpty2)
 
   size_type index = 0;
   auto s          = get_element(list_column_nested->view(), index);
-  auto typed_s    = static_cast<list_scalar const *>(s.get());
+  auto typed_s    = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_data, typed_s->view());
@@ -734,7 +734,7 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNonNullNonEmpty3)
 
   size_type index = 1;
   auto s          = get_element(list_column_nested->view(), index);
-  auto typed_s    = static_cast<list_scalar const *>(s.get());
+  auto typed_s    = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   // Relax to equivalent. For `get_element`, the nested list column in struct
@@ -758,7 +758,7 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNonNullEmpty)
 
   size_type index = 1;
   auto s          = get_element(list_column_nested->view(), index);
-  auto typed_s    = static_cast<list_scalar const *>(s.get());
+  auto typed_s    = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
   // Relax to equivalent. The sliced version still has the array for fields
@@ -782,7 +782,7 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNull)
 
   size_type index = 2;
   auto s          = get_element(list_column_nested->view(), index);
-  auto typed_s    = static_cast<list_scalar const *>(s.get());
+  auto typed_s    = static_cast<list_scalar const*>(s.get());
 
   auto nested = this->make_test_structs_column({}, {}, {}, valid_t{}.begin());
   auto expected_data =

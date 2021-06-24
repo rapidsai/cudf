@@ -104,7 +104,7 @@ struct TypeList<Types<TYPES...>> {
       {                                                             \
         try {                                                       \
           x;                                                        \
-        } catch (const exception &e) {                              \
+        } catch (const exception& e) {                              \
           ASSERT_NE(nullptr, e.what());                             \
           EXPECT_THAT(e.what(), testing::StartsWith((startswith))); \
           EXPECT_THAT(e.what(), testing::EndsWith((endswith)));     \
