@@ -159,7 +159,7 @@ from cudf._lib.strings.translate import (
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.core.buffer import Buffer
-from cudf.core.column import column, datetime
+from cudf.core.column import column, datetime, string
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.utils import utils
 from cudf.utils.docutils import copy_docstring
@@ -183,7 +183,7 @@ _str_to_numeric_typecast_functions = {
     np.dtype("uint64"): str_cast.stoul,
     np.dtype("float32"): str_cast.stof,
     np.dtype("float64"): str_cast.stod,
-    np.dtype("bool"): str_cast.to_booleans,
+    np.dtype("bool"): string.str_to_boolean,
 }
 
 _numeric_to_str_typecast_functions = {
@@ -218,6 +218,11 @@ _timedelta_to_str_typecast_functions = {
 
 
 ParentType = Union["cudf.Series", "cudf.core.index.BaseIndex"]
+
+
+def str_to_boolean(column):
+    """Takes in string column and returns boolean column """
+    return (column.str.len() > 0).fillna(False)
 
 
 class StringMethods(ColumnMethodsMixin):
