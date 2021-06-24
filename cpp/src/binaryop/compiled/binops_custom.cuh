@@ -29,6 +29,20 @@ namespace cudf {
 namespace binops {
 namespace compiled {
 
+template <typename BinaryOperator>
+constexpr bool is_bool_result()
+{
+  return std::is_same_v<BinaryOperator, ops::NullEquals> or
+         std::is_same_v<BinaryOperator, ops::Equal> or
+         std::is_same_v<BinaryOperator, ops::NotEqual> or
+         std::is_same_v<BinaryOperator, ops::Less> or
+         std::is_same_v<BinaryOperator, ops::Greater> or
+         std::is_same_v<BinaryOperator, ops::LessEqual> or
+         std::is_same_v<BinaryOperator, ops::GreaterEqual> or
+         std::is_same_v<BinaryOperator, ops::LogicalOr> or
+         std::is_same_v<BinaryOperator, ops::LogicalAnd>;
+}
+
 /**
  * @brief Type casts each element of the column to `CastType`
  *
@@ -77,7 +91,7 @@ struct typed_casted_writer {
  *
  * @tparam BinaryOperator binary operator functor
  */
-template <typename BinaryOperator, bool store_as_result = false>
+template <typename BinaryOperator>
 struct ops_wrapper {
   mutable_column_device_view& out;
   column_device_view const& lhs;
@@ -111,7 +125,7 @@ struct ops_wrapper {
         // To supress nvcc warning
         return std::invoke_result_t<BinaryOperator, TypeCommon, TypeCommon>{};
       }();
-      if constexpr (store_as_result)
+      if constexpr (is_bool_result<BinaryOperator>())
         out.element<decltype(result)>(i) = result;
       else
         type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
@@ -125,7 +139,7 @@ struct ops_wrapper {
  *
  * @tparam BinaryOperator binary operator functor
  */
-template <typename BinaryOperator, bool store_as_result = false>
+template <typename BinaryOperator>
 struct ops2_wrapper {
   mutable_column_device_view& out;
   column_device_view const& lhs;
@@ -158,7 +172,7 @@ struct ops2_wrapper {
         // To supress nvcc warning
         return std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>{};
       }();
-      if constexpr (store_as_result)
+      if constexpr (is_bool_result<BinaryOperator>())
         out.element<decltype(result)>(i) = result;
       else
         type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
@@ -175,7 +189,7 @@ struct ops2_wrapper {
  *
  * @tparam BinaryOperator binary operator functor
  */
-template <class BinaryOperator, bool store_as_result = false>
+template <class BinaryOperator>
 struct device_type_dispatcher {
   mutable_column_device_view out;
   column_device_view lhs;
@@ -187,15 +201,14 @@ struct device_type_dispatcher {
   __device__ void operator()(size_type i)
   {
     if (common_data_type) {
-      type_dispatcher(
-        *common_data_type,
-        ops_wrapper<BinaryOperator, store_as_result>{out, lhs, rhs, is_lhs_scalar, is_rhs_scalar},
-        i);
+      type_dispatcher(*common_data_type,
+                      ops_wrapper<BinaryOperator>{out, lhs, rhs, is_lhs_scalar, is_rhs_scalar},
+                      i);
     } else {
       double_type_dispatcher(
         lhs.type(),
         rhs.type(),
-        ops2_wrapper<BinaryOperator, store_as_result>{out, lhs, rhs, is_lhs_scalar, is_rhs_scalar},
+        ops2_wrapper<BinaryOperator>{out, lhs, rhs, is_lhs_scalar, is_rhs_scalar},
         i);
     }
   }
