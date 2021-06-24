@@ -107,10 +107,14 @@ struct capitalize_fn : base_fn {
  */
 struct title_fn : base_fn {
   column_device_view const d_column;
+  string_character_types sequence_type;
   offset_type* d_offsets{};
   char* d_chars{};
 
-  title_fn(column_device_view const& d_column) : base_fn(), d_column(d_column) {}
+  title_fn(column_device_view const& d_column, string_character_types sequence_type)
+    : base_fn(), d_column(d_column), sequence_type(sequence_type)
+  {
+  }
 
   __device__ void operator()(size_type idx)
   {
@@ -123,12 +127,13 @@ struct title_fn : base_fn {
     auto d_buffer     = d_chars ? d_chars + d_offsets[idx] : nullptr;
     bool capitalize   = true;
     for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
-      auto const info        = get_char_info(*itr);
-      auto const flag        = info.second;
-      auto const change_case = IS_ALPHA(flag) && (capitalize ? IS_LOWER(flag) : IS_UPPER(flag));
-      auto const new_char    = change_case ? convert_char(info) : *itr;
-      // capitalize next char if this one is not alphabetic
-      capitalize = !IS_ALPHA(flag);
+      auto const info = get_char_info(*itr);
+      auto const flag = info.second;
+      auto const change_case =
+        (flag & sequence_type) && (capitalize ? IS_LOWER(flag) : IS_UPPER(flag));
+      auto const new_char = change_case ? convert_char(info) : *itr;
+      // capitalize the next char if this one is not a sequence_type
+      capitalize = (flag & sequence_type) == 0;
 
       if (d_buffer)
         d_buffer += detail::from_char_utf8(new_char, d_buffer);
@@ -177,28 +182,30 @@ std::unique_ptr<column> capitalize(strings_column_view const& input,
 }
 
 std::unique_ptr<column> title(strings_column_view const& input,
+                              string_character_types sequence_type,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
   auto d_column = column_device_view::create(input.parent(), stream);
-  return capitalize_utility(title_fn{*d_column}, input, stream, mr);
+  return capitalize_utility(title_fn{*d_column, sequence_type}, input, stream, mr);
 }
 
 }  // namespace detail
 
-std::unique_ptr<column> capitalize(strings_column_view const& strings,
+std::unique_ptr<column> capitalize(strings_column_view const& input,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::capitalize(strings, rmm::cuda_stream_default, mr);
+  return detail::capitalize(input, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> title(strings_column_view const& strings,
+std::unique_ptr<column> title(strings_column_view const& input,
+                              string_character_types sequence_type,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::title(strings, rmm::cuda_stream_default, mr);
+  return detail::title(input, sequence_type, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
