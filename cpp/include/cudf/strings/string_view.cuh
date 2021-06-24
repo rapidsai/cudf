@@ -51,7 +51,8 @@ __device__ inline size_type characters_in_string(const char* str, size_type byte
     thrust::seq, ptr, ptr + bytes, [](uint8_t chr) { return is_begin_utf8_char(chr); });
 #else
   size_type chars = 0;
-  while (ptr < ptr + bytes) { chars += is_begin_utf8_char(*ptr++); }
+  auto const end  = ptr + bytes;
+  while (ptr < end) { chars += is_begin_utf8_char(*ptr++); }
   return chars;
 #endif
 }
