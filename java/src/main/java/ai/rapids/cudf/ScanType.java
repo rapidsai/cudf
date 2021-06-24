@@ -18,11 +18,17 @@
 
 package ai.rapids.cudf;
 
-/*
- * This is analogous to the native 'scan_type'.
+/**
+ * Scan operation type.
  */
 public enum ScanType {
+  /**
+   * Include the current row in the scan.
+   */
   INCLUSIVE(true),
+  /**
+   * Exclude the current row from the scan.
+   */
   EXCLUSIVE(false);
 
   ScanType(boolean isInclusive) {

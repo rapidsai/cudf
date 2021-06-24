@@ -18,11 +18,17 @@
 
 package ai.rapids.cudf;
 
-/*
- * This is analogous to the native 'replace_policy'.
+/**
+ * Policy to specify the position of replacement values relative to null rows.
  */
 public enum ReplacePolicy {
+  /**
+   * The replacement value is the first non-null value preceding the null row.
+   */
   PRECEDING(true),
+  /**
+   * The replacement value is the first non-null value following the null row.
+   */
   FOLLOWING(false);
 
   ReplacePolicy(boolean isPreceding) {

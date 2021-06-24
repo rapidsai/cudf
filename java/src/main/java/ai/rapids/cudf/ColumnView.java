@@ -1388,8 +1388,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Compute the cumulative sum/prefix sum of the values in this column.
-   * This is just a convenience method for an inclusive scan ona SUM.
+   * Compute the prefix sum (aka cumulative sum) of the values in this column.
+   * This is just a convenience method for an inclusive scan with a SUM aggregation.
    */
   public final ColumnVector prefixSum() {
     return scan(Aggregation.sum());
