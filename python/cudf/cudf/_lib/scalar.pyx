@@ -313,12 +313,13 @@ cdef _set_list_from_pylist(unique_ptr[scalar]& s,
         )
     else:
         col = cudf.core.column.as_column(
-            pa.array(value, from_pandas=True)
+            pa.array(value, from_pandas=True, type=dtype.to_arrow().value_type)
         )
     cdef column_view col_view = col.view()
     s.reset(
-        new list_scalar(col_view)
+        new list_scalar(col_view, valid)
     )
+
 
 cdef _get_py_list_from_list(unique_ptr[scalar]& s):
 
@@ -479,7 +480,6 @@ def as_device_scalar(val, dtype=None):
             raise TypeError("Can't update dtype of existing GPU scalar")
     else:
         return cudf.Scalar(val, dtype=dtype).device_value
-
 
 
 def _is_null_host_scalar(slr):

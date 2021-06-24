@@ -227,9 +227,6 @@ def _scatter_scalar(scalars, Column scatter_map,
     cdef DeviceScalar slr
     for val, col in zip(scalars, target_table._columns):
         slr = as_device_scalar(val, col.dtype)
-        print(slr)
-        print(slr.dtype)
-        assert slr.dtype == col.dtype
         source_scalars.push_back(reference_wrapper[constscalar](
             slr.get_raw_ptr()[0]))
     cdef column_view scatter_map_view = scatter_map.view()
