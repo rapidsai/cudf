@@ -1415,49 +1415,6 @@ class CategoricalColumn(column.ColumnBase):
             "Categorical column views are not currently supported"
         )
 
-    # @staticmethod
-    # def _concat(objs: MutableSequence[CategoricalColumn]) -> CategoricalColumn:
-    #     # TODO: This function currently assumes it is being called from
-    #     # column._concat_columns, at least to the extent that all the
-    #     # preprocessing in that function has already been done. That should be
-    #     # improved as the concatenation API is solidified.
-
-    #     # Find the first non-null column:
-    #     head = next((obj for obj in objs if obj.valid_count), objs[0])
-
-    #     # Combine and de-dupe the categories
-    #     cats = (
-    #         cudf.concat([o.cat().categories for o in objs])
-    #         .drop_duplicates()
-    #         ._column
-    #     )
-    #     objs = [
-    #         o.cat()._set_categories(o.cat().categories, cats, is_unique=True)
-    #         for o in objs
-    #     ]
-    #     codes = [o.codes for o in objs]
-
-    #     newsize = sum(map(len, codes))
-    #     if newsize > libcudf.MAX_COLUMN_SIZE:
-    #         raise MemoryError(
-    #             f"Result of concat cannot have "
-    #             f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
-    #         )
-    #     elif newsize == 0:
-    #         codes_col = column.column_empty(0, head.codes.dtype, masked=True)
-    #     else:
-    #         # Filter out inputs that have 0 length, then concatenate.
-    #         codes = [o for o in codes if len(o)]
-    #         codes_col = libcudf.concat.concat_columns(objs)
-
-    #     return column.build_categorical_column(
-    #         categories=column.as_column(cats),
-    #         codes=column.as_column(codes_col.base_data, dtype=codes_col.dtype),
-    #         mask=codes_col.base_mask,
-    #         size=codes_col.size,
-    #         offset=codes_col.offset,
-    #     )
-
     def _with_type_metadata(
         self: CategoricalColumn, dtype: Dtype
     ) -> CategoricalColumn:

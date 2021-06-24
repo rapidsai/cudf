@@ -2249,20 +2249,6 @@ def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
             else:
                 raise ValueError("All columns must be the same type")
 
-    # TODO: This logic should be generalized to a dispatch to
-    # ColumnBase._concat so that all subclasses can override necessary
-    # behavior. However, at the moment it's not clear what that API should look
-    # like, so CategoricalColumn simply implements a minimal working API.
-    # if all(is_categorical_dtype(o.dtype) for o in objs):
-    #     return cudf.core.column.categorical.CategoricalColumn._concat(
-    #         cast(
-    #             MutableSequence[
-    #                 cudf.core.column.categorical.CategoricalColumn
-    #             ],
-    #             objs,
-    #         )
-    #     )
-
     newsize = sum(map(len, objs))
     if newsize > libcudf.MAX_COLUMN_SIZE:
         raise MemoryError(
