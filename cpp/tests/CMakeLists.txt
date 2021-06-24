@@ -203,7 +203,7 @@ ConfigureTest(SORT_TEST
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
 ConfigureTest(COPYING_TEST
-    copying/concatenate_tests.cu
+    copying/concatenate_tests.cpp
     copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
     copying/copy_tests.cu

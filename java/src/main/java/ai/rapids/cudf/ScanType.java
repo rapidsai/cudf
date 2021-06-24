@@ -19,23 +19,21 @@
 package ai.rapids.cudf;
 
 /**
- * How should NaNs be compared in an operation. In floating point there are multiple
- * different binary representations for NaN.
+ * Scan operation type.
  */
-public enum NaNEquality {
+public enum ScanType {
   /**
-   * No NaN representation is considered equal to any NaN representation, even for the
-   * exact same representation.
+   * Include the current row in the scan.
    */
-  UNEQUAL(false),
+  INCLUSIVE(true),
   /**
-   * All representations of NaN are considered to be equal.
+   * Exclude the current row from the scan.
    */
-  ALL_EQUAL(true);
+  EXCLUSIVE(false);
 
-  NaNEquality(boolean nansEqual) {
-    this.nansEqual = nansEqual;
+  ScanType(boolean isInclusive) {
+    this.isInclusive = isInclusive;
   }
 
-  final boolean nansEqual;
+  final boolean isInclusive;
 }
