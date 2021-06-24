@@ -26,7 +26,7 @@ requirements:
   build:
     - cmake >=3.20.1
   host:
-    - libcudf-{{version}}-cuda{{ cuda_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+    - libcudf {{version}} {{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
     - librdkafka >=1.5.0,<1.5.3
   run:
     - {{ pin_compatible('librdkafka', max_pin='x.x') }} #TODO: librdkafka should be automatically included here by run_exports but is not
