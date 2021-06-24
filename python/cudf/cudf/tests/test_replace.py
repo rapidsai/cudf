@@ -410,7 +410,7 @@ def test_fillna_decimal(gsr_data, fill_value, inplace):
 @pytest.mark.parametrize(
     "fill_value",
     [
-        # "c",
+        "c",
         pd.Series(["c", "c", "c", "c", "c", "a"], dtype="category"),
         pd.Series(
             ["a", "b", "a", None, "c", None],
