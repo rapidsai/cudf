@@ -140,11 +140,13 @@ class orc_column_view {
    */
   explicit orc_column_view(uint32_t index,
                            uint32_t str_id,
+                           bool is_child,
                            column_view const &col,
                            const table_metadata *metadata)
     : cudf_column{col},
       _index{index},
       _str_id{str_id},
+      _is_child{is_child},
       _type_width{cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : 0},
       _scale{(to_orc_type(col.type().id()) == TypeKind::DECIMAL) ? -col.type().scale()
                                                                  : to_clockscale(col.type().id())},
@@ -203,6 +205,7 @@ class orc_column_view {
   auto flat_index() const noexcept { return _index; }
   // Id in the ORC file
   auto id() const noexcept { return _index + 1; }
+  auto is_child() const noexcept { return _is_child; }
   auto type_width() const noexcept { return _type_width; }
   auto size() const noexcept { return cudf_column.size(); }
   auto null_count() const noexcept { return cudf_column.null_count(); }
@@ -224,6 +227,7 @@ class orc_column_view {
   uint32_t _index = 0;
   // Identifier within the set of string columns
   uint32_t _str_id = 0;
+  bool _is_child   = false;
 
   size_t _type_width = 0;
   int32_t _scale     = 0;
@@ -808,7 +812,6 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
 }
 
 std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
-  const table_device_view &table,
   orc_table_view const &orc_table,
   device_2dspan<rows_range const> rowgroup_bounds,
   host_span<stripe_rowgroups const> stripe_bounds)
@@ -1109,17 +1112,20 @@ orc_table_view get_columns_info(table_view const &table,
   std::vector<orc_column_view> orc_columns;
   std::vector<int> str_col_flat_indexes;
 
-  std::function<void(column_view const &)> append_orc_column = [&](column_view const &col) {
-    orc_columns.emplace_back(orc_columns.size(), str_col_flat_indexes.size(), col, user_metadata);
+  std::function<void(column_view const &, bool)> append_orc_column = [&](column_view const &col,
+                                                                         bool is_child) {
+    orc_columns.emplace_back(
+      orc_columns.size(), str_col_flat_indexes.size(), is_child, col, user_metadata);
     if (orc_columns.back().is_string()) {
       str_col_flat_indexes.push_back(orc_columns.back().flat_index());
     }
-    if (col.type().id() == type_id::LIST) append_orc_column(col.child(1));
+    if (col.type().id() == type_id::LIST) append_orc_column(col.child(1), true);
     if (col.type().id() == type_id::STRUCT)
-      std::for_each(col.child_begin(), col.child_end(), append_orc_column);
+      for (auto child = col.child_begin(); child != col.child_end(); ++child)
+        append_orc_column(*child, true);
   };
 
-  for (auto const &column : table) { append_orc_column(column); }
+  for (auto const &column : table) { append_orc_column(column, false); }
 
   rmm::device_uvector<orc_column_device_view> d_orc_columns(orc_columns.size(), stream);
 
@@ -1353,7 +1359,7 @@ void writer::impl::write(table_view const &table)
   // Gather column statistics
   std::vector<ColStatsBlob> column_stats;
   if (enable_statistics_ && table.num_columns() > 0 && num_rows > 0) {
-    column_stats = gather_statistic_blobs(*d_table, orc_table, rowgroup_bounds, stripe_bounds);
+    column_stats = gather_statistic_blobs(orc_table, rowgroup_bounds, stripe_bounds);
   }
 
   // Allocate intermediate output stream buffer
@@ -1511,16 +1517,21 @@ void writer::impl::write(table_view const &table)
     ff.rowIndexStride = row_index_stride_;
     ff.types.resize(1 + orc_table.num_columns());
     ff.types[0].kind = STRUCT;
-    ff.types[0].subtypes.resize(table.num_columns());
-    ff.types[0].fieldNames.resize(table.num_columns());
     for (auto const &column : orc_table.columns) {
-      ff.types[column.id()].kind = column.orc_kind();
-      if (column.orc_kind() == DECIMAL) {
-        ff.types[column.id()].scale     = static_cast<uint32_t>(column.scale());
-        ff.types[column.id()].precision = column.precision();
+      if (!column.is_child()) {
+        ff.types[0].subtypes.emplace_back(column.id());
+        ff.types[0].fieldNames.emplace_back(column.orc_name());
       }
-      ff.types[0].subtypes[column.flat_index()]   = column.id();
-      ff.types[0].fieldNames[column.flat_index()] = column.orc_name();
+    }
+    for (auto const &column : orc_table.columns) {
+      auto &schema_type = ff.types[column.id()];
+      schema_type.kind  = column.orc_kind();
+      if (column.orc_kind() == DECIMAL) {
+        schema_type.scale     = static_cast<uint32_t>(column.scale());
+        schema_type.precision = column.precision();
+      }
+
+      if (column.orc_kind() == LIST) { schema_type.subtypes.emplace_back(column.id() + 1); }
     }
   } else {
     // verify the user isn't passing mismatched tables
@@ -1536,6 +1547,9 @@ void writer::impl::write(table_view const &table)
                     std::make_move_iterator(stripes.begin()),
                     std::make_move_iterator(stripes.end()));
   ff.numberOfRows += num_rows;
+
+  // stream.synchronize();
+  // CUDF_FAIL("stop.");
 }
 
 void writer::impl::close()

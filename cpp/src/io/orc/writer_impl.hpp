@@ -306,7 +306,7 @@ class writer::impl {
    * @brief Returns per-stripe and per-file column statistics encoded
    * in ORC protobuf format.
    *
-   * @param table Table information to be written
+   * @param orc_table Table information to be written
    * @param columns List of columns
    * @param rowgroup_bounds List of rowgroup boundaries
    * @param stripe_bounds List of stripe boundaries
@@ -314,7 +314,6 @@ class writer::impl {
    * @return The statistic blobs
    */
   std::vector<std::vector<uint8_t>> gather_statistic_blobs(
-    const table_device_view& table,
     orc_table_view const& orc_table,
     device_2dspan<rows_range const> rowgroup_bounds,
     host_span<stripe_rowgroups const> stripe_bounds);
