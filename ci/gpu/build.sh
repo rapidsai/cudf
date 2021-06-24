@@ -85,7 +85,7 @@ gpuci_conda_retry install -y \
 # https://docs.rapids.ai/maintainers/depmgmt/
 gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_conda_retry install -y "your-pkg=1.0.0"
-gpuci_conda_retry install -y "arrow-cpp=4.0.1" "pyarrow=4.0.1" 'arrow-cpp-proc=*=cuda'
+gpuci_conda_retry install -y "arrow-cpp=4.0.1" "pyarrow=4.0.1" 'arrow-cpp-proc=*=cuda' "pyorc"
 
 
 gpuci_logger "Check compiler versions"
@@ -218,7 +218,7 @@ fi
 
 cd "$WORKSPACE/python/cudf"
 gpuci_logger "Python py.test for cuDF"
-py.test -n 6 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term
+py.test -n 6 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term
 
 cd "$WORKSPACE/python/dask_cudf"
 gpuci_logger "Python py.test for dask-cudf"
