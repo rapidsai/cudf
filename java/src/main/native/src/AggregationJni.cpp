@@ -83,9 +83,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
       // case 18: COLLECT_LIST
       // case 19: COLLECT_SET
       // case 20: MERGE_LISTS
-      case 20:
-        ret = cudf::make_merge_lists_aggregation();
-        break;
+      case 20: ret = cudf::make_merge_lists_aggregation(); break;
       // case 21: MERGE_SETS
       // case 22: LEAD
       // case 23: LAG
@@ -243,8 +241,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createMergeSetsAgg(JNIEn
         nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     cudf::nan_equality nan_equality =
         nans_equal ? cudf::nan_equality::ALL_EQUAL : cudf::nan_equality::UNEQUAL;
-    std::unique_ptr<cudf::aggregation> ret = cudf::make_merge_sets_aggregation(null_equality,
-                                                                               nan_equality);
+    std::unique_ptr<cudf::aggregation> ret =
+        cudf::make_merge_sets_aggregation(null_equality, nan_equality);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
