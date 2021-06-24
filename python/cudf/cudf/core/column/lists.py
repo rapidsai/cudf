@@ -86,7 +86,7 @@ class ListColumn(ColumnBase):
         elif value is cudf.NA:
             super().__setitem__(key, cudf.Scalar(value, dtype=self.dtype))
         else:
-            raise ValueError('something went wrong')
+            raise ValueError(f"Can not set {value} into ListColumn")
 
 
     @property
