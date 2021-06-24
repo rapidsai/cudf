@@ -41,7 +41,11 @@ from cudf._lib.cpp.types cimport (
     data_type, type_id, size_type
 )
 
-from cudf._lib.io.utils cimport make_source_info, make_sink_info
+from cudf._lib.io.utils cimport (
+    make_source_info,
+    make_sink_info,
+    update_struct_field_names,
+)
 from cudf._lib.table cimport Table
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
@@ -68,41 +72,6 @@ cpdef read_raw_orc_statistics(filepath_or_buffer):
         libcudf_read_raw_orc_statistics(make_source_info([filepath_or_buffer]))
     )
     return (raw.column_names, raw.file_stats, raw.stripes_stats)
-
-
-cdef _update_struct_field_names(
-    Table table,
-    vector[column_name_info]& schema_info
-):
-    for i, (name, col) in enumerate(table._data.items()):
-        table._data[name] = _update_column_struct_field_names(
-            col, schema_info[i]
-        )
-
-
-cdef Column _update_column_struct_field_names(
-    Column col,
-    column_name_info& info
-):
-    cdef vector[string] field_names
-
-    if is_struct_dtype(col):
-        field_names.reserve(len(col.base_children))
-        for i in range(info.children.size()):
-            field_names.push_back(info.children[i].name)
-        col = col._rename_fields(
-            field_names
-        )
-
-    if col.children:
-        children = list(col.children)
-        for i, child in enumerate(children):
-            children[i] = _update_column_struct_field_names(
-                child,
-                info.children[i]
-            )
-        col.set_base_children(tuple(children))
-    return col
 
 
 cpdef read_orc(object filepaths_or_buffers,
@@ -146,7 +115,7 @@ cpdef read_orc(object filepaths_or_buffers,
 
     tbl = Table.from_unique_ptr(move(c_result.tbl), names)
 
-    _update_struct_field_names(tbl, c_result.metadata.schema_info)
+    update_struct_field_names(tbl, c_result.metadata.schema_info)
 
     return tbl
 

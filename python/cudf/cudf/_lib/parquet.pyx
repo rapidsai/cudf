@@ -61,7 +61,8 @@ from cudf._lib.cpp.io.parquet cimport (
 from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport (
     make_source_info,
-    make_sink_info
+    make_sink_info,
+    update_struct_field_names,
 )
 
 cimport cudf._lib.cpp.types as cudf_types
@@ -187,7 +188,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         )
     )
 
-    _update_struct_field_names(df, c_out_table.metadata.schema_info)
+    update_struct_field_names(df, c_out_table.metadata.schema_info)
 
     if df.empty and meta is not None:
         cols_dtype_map = {}
@@ -518,39 +519,6 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
     else:
         raise ValueError("Unsupported `compression` type")
 
-
-cdef _update_struct_field_names(
-    Table table,
-    vector[cudf_io_types.column_name_info]& schema_info
-):
-    for i, (name, col) in enumerate(table._data.items()):
-        table._data[name] = _update_column_struct_field_names(
-            col, schema_info[i]
-        )
-
-cdef Column _update_column_struct_field_names(
-    Column col,
-    cudf_io_types.column_name_info& info
-):
-    cdef vector[string] field_names
-
-    if is_struct_dtype(col):
-        field_names.reserve(len(col.base_children))
-        for i in range(info.children.size()):
-            field_names.push_back(info.children[i].name)
-        col = col._rename_fields(
-            field_names
-        )
-
-    if col.children:
-        children = list(col.children)
-        for i, child in enumerate(children):
-            children[i] = _update_column_struct_field_names(
-                child,
-                info.children[i]
-            )
-        col.set_base_children(tuple(children))
-    return col
 
 cdef _set_col_metadata(Column col, column_in_metadata& col_meta):
     if is_struct_dtype(col):

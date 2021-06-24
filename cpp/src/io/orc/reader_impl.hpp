@@ -173,7 +173,7 @@ class reader::impl {
                       rmm::cuda_stream_view stream);
 
   /**
-   * @brief Create columns and respective schema information from the buffer.
+   * @brief Create empty columns and respective schema information from the buffer.
    *
    * @param col_buffers Column buffers for columns and children.
    * @param schema_info Vector of schema information formed from column buffers.

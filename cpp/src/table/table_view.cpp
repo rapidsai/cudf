@@ -30,12 +30,6 @@ table_view_base<ColumnView>::table_view_base(std::vector<ColumnView> const& cols
 {
   if (num_columns() > 0) {
     std::for_each(_columns.begin(), _columns.end(), [this](ColumnView col) {
-      if (col.size() != _columns.front().size())
-        printf("RGSL : col size mismatch is type %d %d and %d %d\n",
-               static_cast<int>(_columns.front().type().id()),
-               _columns.front().size(),
-               col.size(),
-               static_cast<int>(col.type().id()));
       CUDF_EXPECTS(col.size() == _columns.front().size(), "Column size mismatch.");
     });
     _num_rows = _columns.front().size();

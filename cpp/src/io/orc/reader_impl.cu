@@ -1012,7 +1012,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           // Update chunks to reference streams pointers
           uint32_t max_num_rows = 0;
           for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-            auto &chunk     = chunks[stripe_idx * num_columns + col_idx];
+            auto &chunk = chunks[stripe_idx * num_columns + col_idx];
+            // start row, number of rows in a each stripe and total number of rows
+            // may change in lower levels of nesting
             chunk.start_row = (level == 0)
                                 ? stripe_start_row
                                 : _col_meta.child_start_row[stripe_idx * num_columns + col_idx];

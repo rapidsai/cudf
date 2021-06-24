@@ -705,8 +705,7 @@ static __device__ uint32_t Integer_RLEv2(
       pos += l;
       if (pos > maxpos) break;
       ((numvals == 0) and (n > maxvals)) ? numvals = maxvals : numvals += n;
-      // numvals += n;
-      lastpos = pos;
+      lastpos                                      = pos;
       numruns++;
     }
     rle->num_vals = numvals;
@@ -1377,8 +1376,8 @@ __global__ void __launch_bounds__(block_size)
   __shared__ __align__(16) orcdec_state_s state_g;
   using block_reduce = cub::BlockReduce<uint64_t, block_size>;
   __shared__ union {
-    typename cub::BlockReduce<uint32_t, block_size>::TempStorage bk_uint32;
-    typename cub::BlockReduce<uint64_t, block_size>::TempStorage bk_uint64;
+    typename cub::BlockReduce<uint32_t, block_size>::TempStorage blk_uint32;
+    typename cub::BlockReduce<uint64_t, block_size>::TempStorage blk_uint64;
   } temp_storage;
 
   orcdec_state_s *const s = &state_g;
@@ -1399,6 +1398,7 @@ __global__ void __launch_bounds__(block_size)
     s->num_child_rows = 0;
   }
   __syncthreads();
+  // Struct doesn't have any data in itself, so skip
   is_valid            = is_valid && (s->chunk.type_kind != STRUCT);
   size_t max_num_rows = s->chunk.column_num_rows;
   if (t == 0 and is_valid) {
@@ -1666,7 +1666,7 @@ __global__ void __launch_bounds__(block_size)
       __syncthreads();
       // Use the valid bits to compute non-null row positions until we get a full batch of values to
       // decode
-      DecodeRowPositions(s, first_row, t, temp_storage.bk_uint32);
+      DecodeRowPositions(s, first_row, t, temp_storage.blk_uint32);
       if (!s->top.data.nrows && !s->u.rowdec.nz_count && !vals_skipped) {
         // This is a bug (could happen with bitstream errors with a bad run that would produce more
         // values than the number of remaining rows)
@@ -1690,7 +1690,7 @@ __global__ void __launch_bounds__(block_size)
               break;
             case LIST: {
               // Since the offsets column in cudf is `size_type`,
-              // If the limit is exceeded then value will be 0.
+              // If the limit exceeds then value will be 0, which is Fail.
               uint32_t val = (s->vals.u64[t + vals_skipped] > std::numeric_limits<size_type>::max())
                                ? 0
                                : s->vals.u64[t + vals_skipped];
@@ -1765,7 +1765,7 @@ __global__ void __launch_bounds__(block_size)
       }
       // Aggregate num of elements for the chunk
       if (s->chunk.type_kind == LIST) {
-        list_child_elements = block_reduce(temp_storage.bk_uint64).Sum(list_child_elements);
+        list_child_elements = block_reduce(temp_storage.blk_uint64).Sum(list_child_elements);
       }
       __syncthreads();
       // Buffer secondary stream values

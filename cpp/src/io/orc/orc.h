@@ -538,9 +538,10 @@ class OrcDecompressor {
 };
 
 /**
- * @brief Stores orc id for a column and adjacent number of children of the column
- * in case of struct or number of children in list column. If list has struct column,
- * then all child columns of that struct are treated as child column of list.
+ * @brief Stores orc id for each column and its adjacent number of children
+ * in case of struct or number of children in case of list column.
+ * If list column has struct column, then all child columns of that struct are treated as child
+ * column of list.
  *
  * @code{.pseudo}
  * Consider following data where a struct has two members and a list column
