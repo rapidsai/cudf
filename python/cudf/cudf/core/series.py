@@ -22,6 +22,7 @@ from cudf.api.types import is_bool_dtype, is_dict_like, is_dtype_equal
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     DatetimeColumn,
+    IntervalColumn,
     TimeDeltaColumn,
     arange,
     as_column,
@@ -5213,27 +5214,9 @@ class Series(SingleColumnFrame, Serializable):
         # Pandas returns an IntervalIndex as the index of res
         # this condition makes sure we do too if bins is given
         if bins is not None and len(res) == len(res.index.categories):
-            # Thinking through a less terrible way to change Categorical
-            # index to an IntervalIndex
-            left_interval = res.index.dtype.categories._values.children[0]
-            right_interval = res.index.dtype.categories._values.children[1]
-            interval_indx = res.index._column.children
-            left = [left_interval[x] for x in interval_indx]
-            left_col = column.as_column(left[0].values.tolist())
-            right = [right_interval[x] for x in interval_indx]
-            right_col = column.as_column(right[0].values.tolist())
-            new_dtype = res.index.categories.dtype
-            int_col = column.build_column(
-                data=None,
-                dtype=new_dtype,
-                mask=None,
-                size=len(left_col),
-                offset=0,
-                null_count=None,
-                children=(left_col, right_col),
+            int_index = IntervalColumn.as_interval_column(
+                res.index._column, res.index.categories.dtype
             )
-            int_index = cudf.IntervalIndex(int_col)
-
             res.index = int_index
 
         return res
