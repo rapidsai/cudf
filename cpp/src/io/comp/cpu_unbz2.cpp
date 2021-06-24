@@ -101,13 +101,13 @@ namespace io {
 // Constants for the back end.
 
 #define BZ_MAX_ALPHA_SIZE 258
-#define BZ_MAX_CODE_LEN 23
+#define BZ_MAX_CODE_LEN   23
 
 #define BZ_RUNA 0
 #define BZ_RUNB 1
 
 #define BZ_N_GROUPS 6
-#define BZ_G_SIZE 50
+#define BZ_G_SIZE   50
 
 #define BZ_MAX_SELECTORS (2 + (900000 / BZ_G_SIZE))
 
