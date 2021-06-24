@@ -75,18 +75,16 @@ class ListColumn(ColumnBase):
         return self._cached_sizeof
 
     def __setitem__(self, key, value):
+        if isinstance(value, list):
+            value = cudf.Scalar(value)
         if isinstance(value, cudf.Scalar):
             if value.dtype != self.dtype:
                 raise TypeError("list nesting level mismatch")
-            else:
-                super().__setitem__(key, value)
-        elif isinstance(value, list):
-            value = cudf.Scalar([value])
-            super().__setitem__(key, value)
         elif value is cudf.NA:
-            super().__setitem__(key, cudf.Scalar(value, dtype=self.dtype))
+            value = cudf.Scalar(value, dtype=self.dtype)
         else:
             raise ValueError(f"Can not set {value} into ListColumn")
+        super().__setitem__(key, value)
 
 
     @property

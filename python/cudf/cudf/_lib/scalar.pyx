@@ -306,15 +306,12 @@ cdef _set_list_from_pylist(unique_ptr[scalar]& s,
     value = value if valid else [cudf.NA]
     cdef Column col
     if isinstance(dtype.element_type, ListDtype):
-        col = cudf.core.column.as_column(
-            pa.array(
-                value, from_pandas=True, type=dtype.element_type.to_arrow()
-            )
-        )
+        pa_type = dtype.element_type.to_arrow()
     else:
-        col = cudf.core.column.as_column(
-            pa.array(value, from_pandas=True, type=dtype.to_arrow().value_type)
-        )
+        pa_type = dtype.to_arrow().value_type
+    col = cudf.core.column.as_column(
+        pa.array(value, from_pandas=True, type=pa_type)
+    )
     cdef column_view col_view = col.view()
     s.reset(
         new list_scalar(col_view, valid)
