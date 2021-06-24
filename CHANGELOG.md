@@ -2,9 +2,104 @@
 
 Please see https://github.com/rapidsai/cudf/releases/tag/v21.08.00a for the latest changes to this development branch.
 
-# cuDF 21.06.00 (Date TBD)
+# cuDF 21.06.00 (9 Jun 2021)
 
-Please see https://github.com/rapidsai/cudf/releases/tag/v21.06.00a for the latest changes to this development branch.
+## 🚨 Breaking Changes
+
+- Add support for `make_meta_obj` dispatch in `dask-cudf` ([#8342](https://github.com/rapidsai/cudf/pull/8342)) [@galipremsagar](https://github.com/galipremsagar)
+- Add separator-on-null parameter to strings concatenate APIs ([#8282](https://github.com/rapidsai/cudf/pull/8282)) [@davidwendt](https://github.com/davidwendt)
+- Introduce a common parent class for NumericalColumn and DecimalColumn ([#8278](https://github.com/rapidsai/cudf/pull/8278)) [@vyasr](https://github.com/vyasr)
+- Update ORC statistics API to use C++17 standard library ([#8241](https://github.com/rapidsai/cudf/pull/8241)) [@vuule](https://github.com/vuule)
+- Preserve column hierarchy when getting NULL row from `LIST` column ([#8206](https://github.com/rapidsai/cudf/pull/8206)) [@isVoid](https://github.com/isVoid)
+- `Groupby.shift` c++ API refactor and python binding ([#8131](https://github.com/rapidsai/cudf/pull/8131)) [@isVoid](https://github.com/isVoid)
+
+## 🐛 Bug Fixes
+
+- Fix struct flattening to add a validity column only when the input column has null element ([#8374](https://github.com/rapidsai/cudf/pull/8374)) [@ttnghia](https://github.com/ttnghia)
+- Compilation fix: Remove redefinition for `std::is_same_v()` ([#8369](https://github.com/rapidsai/cudf/pull/8369)) [@mythrocks](https://github.com/mythrocks)
+- Add backward compatibility for `dask-cudf` to work with other versions of `dask` ([#8368](https://github.com/rapidsai/cudf/pull/8368)) [@galipremsagar](https://github.com/galipremsagar)
+- Handle empty results with nested types in copy_if_else ([#8359](https://github.com/rapidsai/cudf/pull/8359)) [@nvdbaranec](https://github.com/nvdbaranec)
+- Handle nested column types properly for empty parquet files. ([#8350](https://github.com/rapidsai/cudf/pull/8350)) [@nvdbaranec](https://github.com/nvdbaranec)
+- Raise error when unsupported arguments are passed to `dask_cudf.DataFrame.sort_values` ([#8349](https://github.com/rapidsai/cudf/pull/8349)) [@galipremsagar](https://github.com/galipremsagar)
+- Raise `NotImplementedError` for axis=1 in `rank` ([#8347](https://github.com/rapidsai/cudf/pull/8347)) [@galipremsagar](https://github.com/galipremsagar)
+- Add support for `make_meta_obj` dispatch in `dask-cudf` ([#8342](https://github.com/rapidsai/cudf/pull/8342)) [@galipremsagar](https://github.com/galipremsagar)
+- Update Java string concatenate test for single column ([#8330](https://github.com/rapidsai/cudf/pull/8330)) [@tgravescs](https://github.com/tgravescs)
+- Use empty_like in scatter ([#8314](https://github.com/rapidsai/cudf/pull/8314)) [@revans2](https://github.com/revans2)
+- Fix concatenate_lists_ignore_null on rows of all_nulls ([#8312](https://github.com/rapidsai/cudf/pull/8312)) [@sperlingxx](https://github.com/sperlingxx)
+- Add separator-on-null parameter to strings concatenate APIs ([#8282](https://github.com/rapidsai/cudf/pull/8282)) [@davidwendt](https://github.com/davidwendt)
+- COLLECT_LIST support returning empty output columns. ([#8279](https://github.com/rapidsai/cudf/pull/8279)) [@mythrocks](https://github.com/mythrocks)
+- Update io util to convert path like object to string ([#8275](https://github.com/rapidsai/cudf/pull/8275)) [@ayushdg](https://github.com/ayushdg)
+- Fix result column types for empty inputs to rolling window ([#8274](https://github.com/rapidsai/cudf/pull/8274)) [@mythrocks](https://github.com/mythrocks)
+- Actually test equality in assert_groupby_results_equal ([#8272](https://github.com/rapidsai/cudf/pull/8272)) [@shwina](https://github.com/shwina)
+- CMake always explicitly specify a source files extension ([#8270](https://github.com/rapidsai/cudf/pull/8270)) [@robertmaynard](https://github.com/robertmaynard)
+- Fix struct binary search and struct flattening ([#8268](https://github.com/rapidsai/cudf/pull/8268)) [@ttnghia](https://github.com/ttnghia)
+- Revert &quot;patch thrust to fix intmax num elements limitation in scan_by_key&quot; ([#8263](https://github.com/rapidsai/cudf/pull/8263)) [@cwharris](https://github.com/cwharris)
+- upgrade dlpack to 0.5 ([#8262](https://github.com/rapidsai/cudf/pull/8262)) [@cwharris](https://github.com/cwharris)
+- Fixes CSV-reader type inference for thousands separator and decimal point ([#8261](https://github.com/rapidsai/cudf/pull/8261)) [@elstehle](https://github.com/elstehle)
+- Fix incorrect assertion in Java concat ([#8258](https://github.com/rapidsai/cudf/pull/8258)) [@sperlingxx](https://github.com/sperlingxx)
+- Copy nested types upon construction ([#8244](https://github.com/rapidsai/cudf/pull/8244)) [@isVoid](https://github.com/isVoid)
+- Preserve column hierarchy when getting NULL row from `LIST` column ([#8206](https://github.com/rapidsai/cudf/pull/8206)) [@isVoid](https://github.com/isVoid)
+- Clip decimal binary op precision at max precision ([#8194](https://github.com/rapidsai/cudf/pull/8194)) [@ChrisJar](https://github.com/ChrisJar)
+
+## 📖 Documentation
+
+- Add docstring for `dask_cudf.read_csv` ([#8355](https://github.com/rapidsai/cudf/pull/8355)) [@galipremsagar](https://github.com/galipremsagar)
+- Fix cudf release version in readme ([#8331](https://github.com/rapidsai/cudf/pull/8331)) [@galipremsagar](https://github.com/galipremsagar)
+- Fix structs column description in dev docs ([#8318](https://github.com/rapidsai/cudf/pull/8318)) [@isVoid](https://github.com/isVoid)
+- Update readme with correct CUDA versions ([#8315](https://github.com/rapidsai/cudf/pull/8315)) [@raydouglass](https://github.com/raydouglass)
+- Add description of the cuIO GDS integration ([#8293](https://github.com/rapidsai/cudf/pull/8293)) [@vuule](https://github.com/vuule)
+- Remove unused parameter from copy_partition kernel documentation ([#8283](https://github.com/rapidsai/cudf/pull/8283)) [@robertmaynard](https://github.com/robertmaynard)
+
+## 🚀 New Features
+
+- Add support merging b/w categorical data ([#8332](https://github.com/rapidsai/cudf/pull/8332)) [@galipremsagar](https://github.com/galipremsagar)
+- Java: Support struct scalar ([#8327](https://github.com/rapidsai/cudf/pull/8327)) [@sperlingxx](https://github.com/sperlingxx)
+- added _is_homogeneous property ([#8299](https://github.com/rapidsai/cudf/pull/8299)) [@shaneding](https://github.com/shaneding)
+- Added decimal writing for CSV writer ([#8296](https://github.com/rapidsai/cudf/pull/8296)) [@kaatish](https://github.com/kaatish)
+- Java: Support creating a scalar from utf8 string ([#8294](https://github.com/rapidsai/cudf/pull/8294)) [@firestarman](https://github.com/firestarman)
+- Add Java API for Concatenate strings with separator ([#8289](https://github.com/rapidsai/cudf/pull/8289)) [@tgravescs](https://github.com/tgravescs)
+- `strings::join_list_elements` options for empty list inputs ([#8285](https://github.com/rapidsai/cudf/pull/8285)) [@ttnghia](https://github.com/ttnghia)
+- Return python lists for __getitem__ calls to list type series ([#8265](https://github.com/rapidsai/cudf/pull/8265)) [@brandon-b-miller](https://github.com/brandon-b-miller)
+- add unit tests for lead/lag on list for row window ([#8259](https://github.com/rapidsai/cudf/pull/8259)) [@wbo4958](https://github.com/wbo4958)
+- Create a String column from UTF8 String byte arrays ([#8257](https://github.com/rapidsai/cudf/pull/8257)) [@firestarman](https://github.com/firestarman)
+- Support scattering `list_scalar` ([#8256](https://github.com/rapidsai/cudf/pull/8256)) [@isVoid](https://github.com/isVoid)
+- Implement `lists::concatenate_list_elements` ([#8231](https://github.com/rapidsai/cudf/pull/8231)) [@ttnghia](https://github.com/ttnghia)
+- Support for struct scalars. ([#8220](https://github.com/rapidsai/cudf/pull/8220)) [@nvdbaranec](https://github.com/nvdbaranec)
+- Add support for decimal types in ORC writer ([#8198](https://github.com/rapidsai/cudf/pull/8198)) [@vuule](https://github.com/vuule)
+- Support create lists column from a `list_scalar` ([#8185](https://github.com/rapidsai/cudf/pull/8185)) [@isVoid](https://github.com/isVoid)
+- `Groupby.shift` c++ API refactor and python binding ([#8131](https://github.com/rapidsai/cudf/pull/8131)) [@isVoid](https://github.com/isVoid)
+- Add `groupby::replace_nulls(replace_policy)` api ([#7118](https://github.com/rapidsai/cudf/pull/7118)) [@isVoid](https://github.com/isVoid)
+
+## 🛠️ Improvements
+
+- Support Dask + Distributed 2021.05.1 ([#8392](https://github.com/rapidsai/cudf/pull/8392)) [@jakirkham](https://github.com/jakirkham)
+- Add aliases for string methods ([#8353](https://github.com/rapidsai/cudf/pull/8353)) [@shwina](https://github.com/shwina)
+- Update environment variable used to determine `cuda_version` ([#8321](https://github.com/rapidsai/cudf/pull/8321)) [@ajschmidt8](https://github.com/ajschmidt8)
+- JNI: Refactor the code of making column from scalar ([#8310](https://github.com/rapidsai/cudf/pull/8310)) [@firestarman](https://github.com/firestarman)
+- Update `CHANGELOG.md` links for calver ([#8303](https://github.com/rapidsai/cudf/pull/8303)) [@ajschmidt8](https://github.com/ajschmidt8)
+- Merge `branch-0.19` into `branch-21.06` ([#8302](https://github.com/rapidsai/cudf/pull/8302)) [@ajschmidt8](https://github.com/ajschmidt8)
+- use address and length for GDS reads/writes ([#8301](https://github.com/rapidsai/cudf/pull/8301)) [@rongou](https://github.com/rongou)
+- Update cudfjni version to 21.06.0 ([#8292](https://github.com/rapidsai/cudf/pull/8292)) [@pxLi](https://github.com/pxLi)
+- Update docs build script ([#8284](https://github.com/rapidsai/cudf/pull/8284)) [@ajschmidt8](https://github.com/ajschmidt8)
+- Make device_buffer streams explicit and enforce move construction ([#8280](https://github.com/rapidsai/cudf/pull/8280)) [@harrism](https://github.com/harrism)
+- Introduce a common parent class for NumericalColumn and DecimalColumn ([#8278](https://github.com/rapidsai/cudf/pull/8278)) [@vyasr](https://github.com/vyasr)
+- Do not add nulls to the hash table when null_equality::NOT_EQUAL is passed to left_semi_join and left_anti_join ([#8277](https://github.com/rapidsai/cudf/pull/8277)) [@nvdbaranec](https://github.com/nvdbaranec)
+- Enable implicit casting when concatenating mixed types ([#8276](https://github.com/rapidsai/cudf/pull/8276)) [@ChrisJar](https://github.com/ChrisJar)
+- Fix CMake FindPackage rmm, pin dev envs&#39; dlpack to v0.3 ([#8271](https://github.com/rapidsai/cudf/pull/8271)) [@trxcllnt](https://github.com/trxcllnt)
+- Update cudfjni version to 21.06 ([#8267](https://github.com/rapidsai/cudf/pull/8267)) [@pxLi](https://github.com/pxLi)
+- support RMM aligned resource adapter in JNI ([#8266](https://github.com/rapidsai/cudf/pull/8266)) [@rongou](https://github.com/rongou)
+- Pass compiler environment variables to conda python build ([#8260](https://github.com/rapidsai/cudf/pull/8260)) [@Ethyling](https://github.com/Ethyling)
+- Remove abc inheritance from Serializable ([#8254](https://github.com/rapidsai/cudf/pull/8254)) [@vyasr](https://github.com/vyasr)
+- Move more methods into SingleColumnFrame ([#8253](https://github.com/rapidsai/cudf/pull/8253)) [@vyasr](https://github.com/vyasr)
+- Update ORC statistics API to use C++17 standard library ([#8241](https://github.com/rapidsai/cudf/pull/8241)) [@vuule](https://github.com/vuule)
+- Correct unused parameter warnings in dictonary algorithms ([#8239](https://github.com/rapidsai/cudf/pull/8239)) [@robertmaynard](https://github.com/robertmaynard)
+- Correct unused parameters in the copying algorithms ([#8232](https://github.com/rapidsai/cudf/pull/8232)) [@robertmaynard](https://github.com/robertmaynard)
+- IO statistics cleanup ([#8191](https://github.com/rapidsai/cudf/pull/8191)) [@kaatish](https://github.com/kaatish)
+- Refactor of rolling_window implementation. ([#8158](https://github.com/rapidsai/cudf/pull/8158)) [@nvdbaranec](https://github.com/nvdbaranec)
+- Add a flag for allowing single quotes in JSON strings. ([#8144](https://github.com/rapidsai/cudf/pull/8144)) [@nvdbaranec](https://github.com/nvdbaranec)
+- Column refactoring 2 ([#8130](https://github.com/rapidsai/cudf/pull/8130)) [@vyasr](https://github.com/vyasr)
+- support space in workspace ([#7956](https://github.com/rapidsai/cudf/pull/7956)) [@jolorunyomi](https://github.com/jolorunyomi)
+- Support collect_set on rolling window ([#7881](https://github.com/rapidsai/cudf/pull/7881)) [@sperlingxx](https://github.com/sperlingxx)
 
 # cuDF 0.19.0 (21 Apr 2021)
 

@@ -21,6 +21,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
+#include <cudf/strings/detail/convert/fixed_point.cuh>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
@@ -41,94 +42,6 @@ namespace strings {
 namespace detail {
 namespace {
 
-struct string_to_decimal_base {
-  /**
-   * @brief Return the integer component of a decimal string.
-   *
-   * This is reads everything up to the exponent 'e' notation.
-   * The return includes the integer digits and any exponent offset.
-   *
-   * @param[in,out] iter Start of characters to parse
-   * @param[in] end End of characters to parse
-   * @return Integer component and exponent offset.
-   */
-  __device__ thrust::pair<uint64_t, int32_t> parse_integer(char const*& iter,
-                                                           char const* iter_end) const
-  {
-    // highest value where another decimal digit cannot be appended without an overflow;
-    // this preserves the most digits when scaling the final result
-    constexpr uint64_t decimal_max = (std::numeric_limits<uint64_t>::max() - 9L) / 10L;
-
-    uint64_t value     = 0;  // for checking overflow
-    int32_t exp_offset = 0;
-    bool decimal_found = false;
-
-    while (iter < iter_end) {
-      auto const ch = *iter++;
-      if (ch == '.' && !decimal_found) {
-        decimal_found = true;
-        continue;
-      }
-      if (ch < '0' || ch > '9') {
-        --iter;
-        break;
-      }
-      if (value > decimal_max) {
-        exp_offset += static_cast<int32_t>(!decimal_found);
-      } else {
-        value = (value * 10) + static_cast<uint64_t>(ch - '0');
-        exp_offset -= static_cast<int32_t>(decimal_found);
-      }
-    }
-    return {value, exp_offset};
-  }
-
-  /**
-   * @brief Return the exponent of a decimal string.
-   *
-   * This should only be called after the exponent 'e' notation was detected.
-   * The return is the exponent (base-10) integer and can only be
-   * invalid if `check_only == true` and invalid characters are found or the
-   * exponent overflows an int32.
-   *
-   * @tparam check_only Set to true to verify the characters are valid and the
-   *         exponent value in the decimal string does not overflow int32
-   * @param[in,out] iter Start of characters to parse
-   *                     (points to the character after the 'E' or 'e')
-   * @param[in] end End of characters to parse
-   * @return Integer value of the exponent
-   */
-  template <bool check_only = false>
-  __device__ thrust::optional<int32_t> parse_exponent(char const* iter, char const* iter_end) const
-  {
-    constexpr uint32_t exponent_max = static_cast<uint32_t>(std::numeric_limits<int32_t>::max());
-
-    // get optional exponent sign
-    int32_t const exp_sign = [&iter] {
-      auto const ch = *iter;
-      if (ch != '-' && ch != '+') { return 1; }
-      ++iter;
-      return (ch == '-' ? -1 : 1);
-    }();
-
-    // parse exponent integer
-    int32_t exp_ten = 0;
-    while (iter < iter_end) {
-      auto const ch = *iter++;
-      if (ch < '0' || ch > '9') {
-        if (check_only) { return thrust::nullopt; }
-        break;
-      }
-
-      uint32_t exp_check = static_cast<uint32_t>(exp_ten * 10) + static_cast<uint32_t>(ch - '0');
-      if (check_only && (exp_check > exponent_max)) { return thrust::nullopt; }  // check overflow
-      exp_ten = static_cast<int32_t>(exp_check);
-    }
-
-    return exp_ten * exp_sign;
-  }
-};
-
 /**
  * @brief Converts strings into an integers and records decimal places.
  *
@@ -136,7 +49,7 @@ struct string_to_decimal_base {
  * integer. This can prevent overflow for strings with many digits.
  */
 template <typename DecimalType>
-struct string_to_decimal_fn : string_to_decimal_base {
+struct string_to_decimal_fn {
   column_device_view const d_strings;
   int32_t const scale;
 
@@ -151,34 +64,10 @@ struct string_to_decimal_fn : string_to_decimal_base {
     auto const d_str = d_strings.element<string_view>(idx);
     if (d_str.empty()) { return 0; }
 
-    auto const sign = [&] {
-      if (d_str.data()[0] == '-') { return -1; }
-      if (d_str.data()[0] == '+') { return 1; }
-      return 0;
-    }();
-    auto iter = d_str.data() + (sign != 0);
-
+    auto iter           = d_str.data();
     auto const iter_end = d_str.data() + d_str.size_bytes();
 
-    auto [value, exp_offset] = parse_integer(iter, iter_end);
-    if (value == 0) { return DecimalType{0}; }
-
-    // check for exponent
-    int32_t exp_ten = 0;
-    if ((iter < iter_end) && (*iter == 'e' || *iter == 'E')) {
-      ++iter;
-      if (iter < iter_end) { exp_ten = parse_exponent<false>(iter, iter_end).value(); }
-    }
-    exp_ten += exp_offset;
-
-    // shift the output value based on the exp_ten and the scale values
-    if (exp_ten < scale) {
-      value = value / static_cast<uint64_t>(exp10(static_cast<double>(scale - exp_ten)));
-    } else {
-      value = value * static_cast<uint64_t>(exp10(static_cast<double>(exp_ten - scale)));
-    }
-
-    return static_cast<DecimalType>(value) * (sign == 0 ? 1 : sign);
+    return parse_decimal<DecimalType>(iter, iter_end, scale);
   }
 };
 
@@ -189,7 +78,7 @@ struct string_to_decimal_fn : string_to_decimal_base {
  * characters for conversion and the integer component does not overflow.
  */
 template <typename DecimalType>
-struct string_to_decimal_check_fn : string_to_decimal_base {
+struct string_to_decimal_check_fn {
   column_device_view const d_strings;
   int32_t const scale;
 
@@ -396,7 +285,7 @@ struct dispatch_from_fixed_point_fn {
     // build chars column
     auto const bytes =
       cudf::detail::get_value<int32_t>(offsets_column->view(), input.size(), stream);
-    auto chars_column = detail::create_chars_child_column(input.size(), bytes, stream, mr);
+    auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
     auto d_chars      = chars_column->mutable_view().template data<char>();
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),

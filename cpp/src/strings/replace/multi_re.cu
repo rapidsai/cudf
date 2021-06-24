@@ -169,7 +169,6 @@ std::unique_ptr<column> replace_re(
   auto d_found_ranges = found_ranges.data();
 
   // create child columns
-  // std::pair<std::unique_ptr<column>, std::unique_ptr<column>> children(nullptr, nullptr);
   auto children = [&] {
     // Each invocation is predicated on the stack size which is dependent on the number of regex
     // instructions

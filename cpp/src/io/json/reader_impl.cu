@@ -227,7 +227,7 @@ std::pair<std::vector<std::string>, col_map_ptr_type> reader::impl::get_json_obj
 /**
  * @brief Ingest input JSON file/buffer, without decompression.
  *
- * Sets the source_, byte_range_offset_, and byte_range_size_ data members
+ * Sets the sources_, byte_range_offset_, and byte_range_size_ data members
  *
  * @param[in] range_offset Number of bytes offset from the start
  * @param[in] range_size Bytes to read; use `0` for all remaining data
@@ -241,14 +241,26 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
 
   // Support delayed opening of the file if using memory mapping datasource
   // This allows only mapping of a subset of the file if using byte range
-  if (source_ == nullptr) {
-    assert(!filepath_.empty());
-    source_ = datasource::create(filepath_, range_offset, map_range_size);
+  if (sources_.empty()) {
+    assert(!filepaths_.empty());
+    for (const auto &path : filepaths_) {
+      sources_.emplace_back(datasource::create(path, range_offset, map_range_size));
+    }
   }
 
-  if (!source_->is_empty()) {
-    auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
-    buffer_        = source_->host_read(range_offset, data_size);
+  // Iterate through the user defined sources and read the contents into the local buffer
+  CUDF_EXPECTS(!sources_.empty(), "No sources were defined");
+  size_t total_source_size = 0;
+  for (const auto &source : sources_) { total_source_size += source->size(); }
+  total_source_size = total_source_size - range_offset;
+
+  buffer_.resize(total_source_size);
+  size_t bytes_read = 0;
+  for (const auto &source : sources_) {
+    if (!source->is_empty()) {
+      auto data_size = (map_range_size != 0) ? map_range_size : source->size();
+      bytes_read += source->host_read(range_offset, data_size, &buffer_[bytes_read]);
+    }
   }
 
   byte_range_offset_ = range_offset;
@@ -266,17 +278,17 @@ void reader::impl::decompress_input(rmm::cuda_stream_view stream)
 {
   const auto compression_type =
     infer_compression_type(options_.get_compression(),
-                           filepath_,
+                           filepaths_.size() > 0 ? filepaths_[0] : "",
                            {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
   if (compression_type == "none") {
     // Do not use the owner vector here to avoid extra copy
-    uncomp_data_ = reinterpret_cast<const char *>(buffer_->data());
-    uncomp_size_ = buffer_->size();
+    uncomp_data_ = reinterpret_cast<const char *>(buffer_.data());
+    uncomp_size_ = buffer_.size();
   } else {
     uncomp_data_owner_ = get_uncompressed_data(  //
       host_span<char const>(                     //
-        reinterpret_cast<const char *>(buffer_->data()),
-        buffer_->size()),
+        reinterpret_cast<const char *>(buffer_.data()),
+        buffer_.size()),
       compression_type);
 
     uncomp_data_ = uncomp_data_owner_.data();
@@ -620,12 +632,12 @@ table_with_metadata reader::impl::convert_data_to_table(device_span<uint64_t con
   return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata_};
 }
 
-reader::impl::impl(std::unique_ptr<datasource> source,
-                   std::string filepath,
+reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
+                   std::vector<std::string> const &filepaths,
                    json_reader_options const &options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource *mr)
-  : options_(options), mr_(mr), source_(std::move(source)), filepath_(filepath)
+  : options_(options), mr_(mr), sources_(std::move(sources)), filepaths_(filepaths)
 {
   CUDF_EXPECTS(options_.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
@@ -652,7 +664,7 @@ table_with_metadata reader::impl::read(json_reader_options const &options,
   auto range_size   = options.get_byte_range_size();
 
   ingest_raw_input(range_offset, range_size);
-  CUDF_EXPECTS(buffer_ != nullptr, "Ingest failed: input data is null.\n");
+  CUDF_EXPECTS(buffer_.size() != 0, "Ingest failed: input data is null.\n");
 
   decompress_input(stream);
   CUDF_EXPECTS(uncomp_data_ != nullptr, "Ingest failed: uncompressed input data is null.\n");
@@ -679,10 +691,10 @@ reader::reader(std::vector<std::string> const &filepaths,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
-  CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
-  _impl = std::make_unique<impl>(nullptr, filepaths[0], options, stream, mr);
+  std::vector<std::unique_ptr<datasource>> src = {};  // Empty datasources
+  _impl = std::make_unique<impl>(std::move(src), filepaths, options, stream, mr);
 }
 
 // Forward to implementation
@@ -691,8 +703,8 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
-  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
-  _impl = std::make_unique<impl>(std::move(sources[0]), "", options, stream, mr);
+  std::vector<std::string> file_paths = {};  // Empty filepaths
+  _impl = std::make_unique<impl>(std::move(sources), file_paths, options, stream, mr);
 }
 
 // Destructor within this translation unit

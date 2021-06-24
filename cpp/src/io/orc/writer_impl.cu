@@ -565,6 +565,8 @@ orc_streams::orc_stream_offsets orc_streams::compute_offsets(
       // Everything else uses RLE
       return true;
     }();
+    // non-RLE and RLE streams are separated in the buffer that stores encoded data
+    // The computed offsets do not take the streams of the other type into account
     if (is_rle_data) {
       strm_offsets[i] = rle_data_size;
       rle_data_size += (stream.length * num_rowgroups + 7) & ~7;
@@ -681,6 +683,10 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
                     : (((stripe_dict->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
                 if (stripe.id == 0) {
                   strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.offsets[strm_id];
+                  // Dictionary lengths are encoded as RLE, which are all stored after non-RLE data:
+                  // include non-RLE data size in the offset only in that case
+                  if (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)
+                    strm.data_ptrs[strm_type] += stream_offsets.non_rle_data_size;
                 } else {
                   auto const &strm_up = col_streams[stripe_dict[-dict_stride].start_chunk];
                   strm.data_ptrs[strm_type] =
@@ -710,7 +716,8 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
                                             : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
                                                col_streams[rg_idx - 1].lengths[strm_type]);
             } else {
-              strm.lengths[strm_type]   = streams[strm_id].length;
+              strm.lengths[strm_type] = streams[strm_id].length;
+              // RLE encoded streams are stored after all non-RLE streams
               strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.non_rle_data_size +
                                           stream_offsets.offsets[strm_id] +
                                           streams[strm_id].length * rg_idx;

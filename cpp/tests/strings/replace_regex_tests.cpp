@@ -167,22 +167,22 @@ TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest2)
+TEST_F(StringsReplaceTests, ReplaceBackrefsRegexReversedTest)
 {
   cudf::test::strings_column_wrapper strings(
     {"A543", "Z756", "", "tést-string", "two-thréé four-fivé", "abcd-éfgh", "tést-string-again"});
   auto strings_view         = cudf::strings_column_view(strings);
   std::string pattern       = "([a-z])-([a-zé])";
-  std::string repl_template = "X\\1+\\2Z";
+  std::string repl_template = "X\\2+\\1Z";
   auto results = cudf::strings::replace_with_backrefs(strings_view, pattern, repl_template);
 
   cudf::test::strings_column_wrapper expected({"A543",
                                                "Z756",
                                                "",
-                                               "tésXt+sZtring",
-                                               "twXo+tZhréé fouXr+fZivé",
-                                               "abcXd+éZfgh",
-                                               "tésXt+sZtrinXg+aZgain"});
+                                               "tésXs+tZtring",
+                                               "twXt+oZhréé fouXf+rZivé",
+                                               "abcXé+dZfgh",
+                                               "tésXs+tZtrinXa+gZgain"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

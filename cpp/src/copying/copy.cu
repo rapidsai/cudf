@@ -195,21 +195,6 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
 {
   if constexpr (std::is_same<Left, cudf::column_view>::value &&
                 std::is_same<Right, cudf::column_view>::value) {
-    auto const null_map_entry = size + 1;  // Out of bounds index, for gather() to nullify.
-
-    auto const gather_lhs = make_counting_transform_iterator(
-      size_type{0}, lhs_gather_map_functor<Filter>{is_left, null_map_entry});
-
-    auto const lhs_gathered_columns =
-      cudf::detail::gather(table_view{std::vector<cudf::column_view>{lhs}},
-                           gather_lhs,
-                           gather_lhs + size,
-                           out_of_bounds_policy::NULLIFY,
-                           stream,
-                           mr)
-        ->release();
-    auto& lhs_partial_output = lhs_gathered_columns[0];
-
     auto scatter_map_rhs = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
     auto const scatter_map_end = thrust::copy_if(rmm::exec_policy(stream),
                                                  thrust::make_counting_iterator(size_type{0}),
@@ -227,7 +212,7 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
       table_view{std::vector<column_view>{scatter_src_rhs->get_column(0).view()}},
       scatter_map_rhs.begin(),
       scatter_map_end,
-      table_view{std::vector<column_view>{lhs_partial_output->view()}},
+      table_view{std::vector<column_view>{lhs}},
       false,
       stream,
       mr);
