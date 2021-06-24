@@ -157,7 +157,10 @@ add_library(cudf
     src/binaryop/compiled/BitwiseAnd.cu
     src/binaryop/compiled/BitwiseOr.cu
     src/binaryop/compiled/BitwiseXor.cu
-    src/binaryop/compiled/comparison_ops.cu
+    src/binaryop/compiled/Less.cu
+    src/binaryop/compiled/Greater.cu
+    src/binaryop/compiled/LessEqual.cu
+    src/binaryop/compiled/GreaterEqual.cu
     src/binaryop/compiled/Div.cu
     src/binaryop/compiled/equality_ops.cu
     src/binaryop/compiled/FloorDiv.cu
