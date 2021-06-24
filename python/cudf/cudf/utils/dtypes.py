@@ -184,6 +184,8 @@ def cudf_dtype_from_pydata_dtype(dtype):
         return cudf.core.dtypes.Decimal64Dtype
     elif dtype in cudf._lib.types.np_to_cudf_types:
         return dtype.type
+    elif isinstance(pandas_dtype(dtype), np.dtype):
+        return dtype
 
     return infer_dtype(dtype)
 
