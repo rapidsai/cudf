@@ -1141,22 +1141,3 @@ cuIO is a component of libcudf that provides GPU-accelerated reading and writing
 formats commonly used in data analytics, including CSV, Parquet, ORC, Avro, and JSON_Lines.
 
 // TODO: add more detail and move to a separate file.
-
-# Debugging libcudf
-
-## Building debug
-
-General build instructions for cudf and libcudf are documented [here](../../CONTRIBUTING.md#setting-up-your-build-environment).
-
-To build libcudf with debug symbols, specify the cmake option `CMAKE_BUILD_TYPE=Debug`.
-Basically this will add the `-g` option to the compile statements but does not add `-G` nvcc option.
-Adding device debug symbols for libcudf.so causes the runtime to take several minutes to load
-making it impractical to use for debugging.
-
-Therefore, it is recommended to add device debug symbols only to specific files by
-specifying the `-G` compile option locally in your `cpp/CMakeLists.txt` for that file.
-Here is an example adding the `-G` option when compiling the `src/copying/copy.cu` source file:
-
-```
-set_source_files_properties(src/copying/copy.cu PROPERTIES COMPILE_OPTIONS "-G")
-```
