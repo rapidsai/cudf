@@ -203,7 +203,7 @@ cdef dtype_from_dictionary_column_view(column_view cv):
     carried in libucdf dictionray columns. This information will need
     to be recovered at a later stage.
     """
-    categories = Column.from_column_view(cv.child(1), None)
+    categories = Column.from_column_view(cv.child(1), None) if cv.num_children() > 0 else []
     return CategoricalDtype(categories=categories, ordered=False)
 
 cdef dtype_from_column_view(column_view cv):
