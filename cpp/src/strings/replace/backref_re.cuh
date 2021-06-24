@@ -68,7 +68,7 @@ struct backrefs_fn {
       nbytes += d_repl.size_bytes() - (epos - spos);  // compute the output size
 
       // copy the string data before the matched section
-      if (out_ptr) out_ptr = copy_and_increment(out_ptr, in_ptr + lpos, spos - lpos);
+      if (out_ptr) { out_ptr = copy_and_increment(out_ptr, in_ptr + lpos, spos - lpos); }
       size_type lpos_template = 0;              // last end pos of replace template
       auto const repl_ptr     = d_repl.data();  // replace template pattern
 
@@ -81,20 +81,23 @@ struct backrefs_fn {
           }
           // extract the specific group's string for this backref's index
           auto extracted = prog.extract<stack_size>(idx, d_str, begin, end, backref.first - 1);
-          if (!extracted || (extracted.value().second <= extracted.value().first))
+          if (!extracted || (extracted.value().second <= extracted.value().first)) {
             return;  // no value for this backref number; that is ok
+          }
           auto spos_extract = d_str.byte_offset(extracted.value().first);   // convert
           auto epos_extract = d_str.byte_offset(extracted.value().second);  // to bytes
           nbytes += epos_extract - spos_extract;
-          if (out_ptr)
+          if (out_ptr) {
             out_ptr =
               copy_and_increment(out_ptr, in_ptr + spos_extract, (epos_extract - spos_extract));
+          }
         });
 
       // copy remainder of template
-      if (out_ptr && (lpos_template < d_repl.size_bytes()))
+      if (out_ptr && (lpos_template < d_repl.size_bytes())) {
         out_ptr = copy_and_increment(
           out_ptr, repl_ptr + lpos_template, d_repl.size_bytes() - lpos_template);
+      }
 
       // setup to match the next section
       lpos  = epos;
@@ -103,10 +106,11 @@ struct backrefs_fn {
     }
 
     // finally, copy remainder of input string
-    if (out_ptr && (lpos < d_str.size_bytes()))
+    if (out_ptr && (lpos < d_str.size_bytes())) {
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
-    else if (!out_ptr)
+    } else if (!out_ptr) {
       d_offsets[idx] = static_cast<int32_t>(nbytes);
+    }
   }
 };
 
