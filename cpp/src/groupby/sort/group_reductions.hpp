@@ -218,6 +218,47 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
                                         rmm::mr::device_memory_resource* mr);
 
 /**
+ * @brief Internal API to calculate groupwise sum of squares of differences from the current mean
+ *
+ * @code{.pseudo}
+ * values       = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
+ * group_labels = [0, 0, 0,  1,  1,    2, 2,    3]
+ * group_means  = [2.333333, -1.5, 4.0, <NA>]
+ *
+ * group_m2     = [4.666666, 1.0, 0, <NA>]
+ * @endcode
+ *
+ * @param values Grouped values to get M2 of
+ * @param group_means Pre-calculated groupwise MEAN
+ * @param group_labels ID of group corresponding value in @p values belongs to
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> group_m2(column_view const& values,
+                                 column_view const& group_means,
+                                 cudf::device_span<size_type const> group_labels,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief group_var
+ * @param values
+ * @param group_means
+ * @param group_sizes
+ * @param group_labels
+ * @param ddof
+ * @param stream
+ * @param mr
+ * @return
+ */
+std::unique_ptr<column> group_var_from_m2(column_view const& group_m2,
+                                          column_view const& group_sizes,
+                                          cudf::device_span<size_type const> group_labels,
+                                          size_type ddof,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr);
+
+/**
  * @brief Internal API to calculate groupwise variance
  *
  * @code{.pseudo}
@@ -391,6 +432,30 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
                                           size_type num_groups,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr);
+
+// todo
+/**
+ * @brief Internal API to merge grouped variances into one variance value.
+ *
+ * @code{.pseudo}
+ * values        = [[2, 1], [], [4, -1, -2], [], [<NA>, 4, <NA>]]
+ * group_offsets = [0,                        3,                  5]
+ * num_groups    = 2
+ *
+ * group_merge_lists(...) = [[2, 1, 4, -1, -2], [<NA>, 4, <NA>]]
+ * @endcode
+ *
+ * @param values Grouped values (lists column) to collect.
+ * @param group_offsets Offsets of groups' starting points within @p values.
+ * @param num_groups Number of groups.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ */
+std::unique_ptr<column> group_merge_variances(column_view const& values,
+                                              cudf::device_span<size_type const> group_offsets,
+                                              size_type num_groups,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr);
 
 /** @endinternal
  *
