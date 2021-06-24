@@ -405,3 +405,84 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ScalarListBoth)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), result->view());
 }
+
+TYPED_TEST(TypedCopyIfElseNestedTest, ScalarListLeft)
+{
+  using T = TypeParam;
+
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using ints  = fixed_width_column_wrapper<T, int32_t>;
+  using bools = fixed_width_column_wrapper<bool, int32_t>;
+  using lcw   = lists_column_wrapper<T, int32_t>;
+
+  auto lhs_scalar = cudf::make_list_scalar(ints{{33, 33, 33}});
+  auto rhs_column = lcw{
+    {-2, -1},
+    {-2, -1, 0},
+    {21, 22},
+    {-20, -10, 0},
+    {-200, -100, 0, 100},
+    {23, 24, 25, 26, 27, 28},
+    {-400}}.release();
+
+  auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
+
+  auto expected =
+    lcw{
+      {33, 33, 33},
+      {33, 33, 33},
+      {21, 22},
+      {33, 33, 33},
+      {33, 33, 33},
+      {23, 24, 25, 26, 27, 28},
+      {33, 33, 33},
+    }
+      .release();
+
+  auto result = copy_if_else(*lhs_scalar, rhs_column->view(), selector_column->view());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), result->view());
+}
+
+TYPED_TEST(TypedCopyIfElseNestedTest, ScalarListRight)
+{
+  using T = TypeParam;
+
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using ints  = fixed_width_column_wrapper<T, int32_t>;
+  using bools = fixed_width_column_wrapper<bool, int32_t>;
+  using lcw   = lists_column_wrapper<T, int32_t>;
+
+  auto lhs_column = lcw{
+    {-2, -1},
+    {-2, -1, 0},
+    {21, 22},
+    {-20, -10, 0},
+    {-200, -100, 0, 100},
+    {23, 24, 25, 26, 27, 28},
+    {-400}}.release();
+
+  auto rhs_scalar = cudf::make_list_scalar(ints{{33, 33, 33}});
+
+  auto selector_column = bools{0, 0, 1, 0, 0, 1, 0}.release();
+
+  auto expected =
+    lcw{
+      {33, 33, 33},
+      {33, 33, 33},
+      {21, 22},
+      {33, 33, 33},
+      {33, 33, 33},
+      {23, 24, 25, 26, 27, 28},
+      {33, 33, 33},
+    }
+      .release();
+
+  auto result = copy_if_else(lhs_column->view(), *rhs_scalar, selector_column->view());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), result->view());
+}
