@@ -57,7 +57,7 @@ struct VisitorOverload : Ts... {
   using Ts::operator()...;
 };
 template <class... Ts>
-VisitorOverload(Ts...)->VisitorOverload<Ts...>;
+VisitorOverload(Ts...) -> VisitorOverload<Ts...>;
 }  // namespace
 
 namespace cudf {
