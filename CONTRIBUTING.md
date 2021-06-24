@@ -273,7 +273,8 @@ the libcudf.so library.
 
 Therefore, it is recommended to add device debug symbols only to specific files by
 setting the `-G` compile option locally in your `cpp/CMakeLists.txt` for that file.
-Here is an example adding the `-G` option when compiling the `src/copying/copy.cu` source file:
+Here is an example of adding the `-G` option to the compile command for
+`src/copying/copy.cu` source file:
 
 ```
 set_source_files_properties(src/copying/copy.cu PROPERTIES COMPILE_OPTIONS "-G")
