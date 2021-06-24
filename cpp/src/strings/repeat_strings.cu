@@ -91,6 +91,8 @@ auto generate_empty_output(strings_column_view const& input,
                              mr);
 }
 
+static constexpr int64_t max_offset = static_cast<int64_t>(std::numeric_limits<size_type>::max());
+
 /**
  * @brief Functor to compute string sizes and repeat the input strings.
  *
@@ -103,6 +105,8 @@ struct compute_size_and_repeat_fn {
   size_type const repeat_times;
   bool const has_nulls;
 
+  bool* has_overflow;
+
   offset_type* d_offsets{nullptr};
 
   // If d_chars == nullptr: only compute sizes of the output strings.
@@ -110,15 +114,18 @@ struct compute_size_and_repeat_fn {
   char* d_chars{nullptr};
 
   // `idx` will be in the range of [0, repeat_times * strings_count).
-  __device__ void operator()(size_type const idx) const noexcept
+  __device__ void operator()(size_type const idx) noexcept
   {
     auto const str_idx    = idx / repeat_times;  // value cycles in [0, string_count)
     auto const repeat_idx = idx % repeat_times;  // value cycles in [0, repeat_times)
     auto const is_valid   = !has_nulls || strings_dv.is_valid_nocheck(str_idx);
 
     if (!d_chars && repeat_idx == 0) {
-      d_offsets[str_idx] =
-        is_valid ? repeat_times * strings_dv.element<string_view>(str_idx).size_bytes() : 0;
+      auto const new_size =
+        static_cast<int64_t>(strings_dv.element<string_view>(str_idx).size_bytes()) *
+        static_cast<int64_t>(repeat_times);
+      d_offsets[str_idx] = is_valid ? new_size : 0;
+      if (new_size > max_offset) { *has_overflow = true; }
     }
 
     // Each input string will be copied by `repeat_times` threads into the output string.
@@ -133,6 +140,220 @@ struct compute_size_and_repeat_fn {
     }
   }
 };
+
+/**
+ * @brief Creates child offsets and chars columns by applying the template function that
+ * can be used for computing the output size of each string as well as create the output.
+ *
+ * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
+ *         It must also have members d_offsets and d_chars which are set to
+ *         memory containing the offsets and chars columns during write.
+ *
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string.
+ *        After that, the d_offsets and d_chars are set and this is called again to fill in the
+ *        chars memory.
+ * @param exec_size Number of rows for executing the `size_and_exec_fn` function.
+ * @param strings_count Number of strings.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return offsets child column and chars child column for a strings column
+ */
+template <typename SizeAndExecuteFunction>
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> my_make_strings_children(
+  SizeAndExecuteFunction size_and_exec_fn,
+  size_type exec_size,
+  size_type strings_count,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  auto offsets_column = make_numeric_column(
+    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_view          = offsets_column->mutable_view();
+  auto d_offsets             = offsets_view.template data<int32_t>();
+  size_and_exec_fn.d_offsets = d_offsets;
+
+  // This is called twice -- once for offsets and once for chars.
+  // Reducing the number of places size_and_exec_fn is inlined speeds up compile time.
+  auto for_each_fn = [exec_size, stream](SizeAndExecuteFunction& size_and_exec_fn) {
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       exec_size,
+                       size_and_exec_fn);
+  };
+
+  auto has_overflow = rmm::device_uvector<bool>(1, stream);
+  CUDA_TRY(cudaMemsetAsync(has_overflow.begin(), 0, sizeof(bool), stream.value()));
+  size_and_exec_fn.has_overflow = has_overflow.begin();
+
+  // Compute the string sizes and offset values
+  for_each_fn(size_and_exec_fn);
+
+  CUDA_TRY(cudaMemsetAsync(d_offsets + strings_count, 0, sizeof(offset_type), stream.value()));
+  thrust::exclusive_scan(
+    rmm::exec_policy(stream),
+    d_offsets,
+    d_offsets + strings_count + 1,
+    d_offsets,
+    size_type{0},
+    [overflow = has_overflow.begin()] __device__(auto const lhs, auto const rhs) {
+      auto const sum = static_cast<int64_t>(lhs) + static_cast<int64_t>(rhs);
+      if (sum > max_offset) {
+        *overflow = true;
+        return 0;
+      }
+      return static_cast<size_type>(sum);
+    });
+
+  bool is_overflow;
+  CUDA_TRY(cudaMemcpyAsync(
+    &is_overflow, has_overflow.begin(), sizeof(bool), cudaMemcpyDeviceToHost, stream.value()));
+
+  // Now build the chars column
+  auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
+  if (is_overflow) {
+    CUDF_FAIL(
+      "Size of the output strings column exceeds the maximum value that can be indexed by "
+      "size_type (offset_type)");
+  }
+  std::unique_ptr<column> chars_column = create_chars_child_column(bytes, stream, mr);
+
+  // Execute the function fn again to fill the chars column.
+  // Note that if the output chars column has zero size, the function fn should not be called to
+  // avoid accidentally overwriting the offsets.
+  if (bytes > 0) {
+    size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>();
+    for_each_fn(size_and_exec_fn);
+  }
+
+  return std::make_pair(std::move(offsets_column), std::move(chars_column));
+}
+
+/**
+ * @brief Creates child offsets and chars columns by applying the template function that
+ * can be used for computing the output size of each string as well as create the output.
+ *
+ * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
+ *         It must also have members d_offsets and d_chars which are set to
+ *         memory containing the offsets and chars columns during write.
+ *
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string.
+ *        After that, the d_offsets and d_chars are set and this is called again to fill in the
+ *        chars memory.
+ * @param strings_count Number of strings.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return offsets child column and chars child column for a strings column
+ */
+template <typename SizeAndExecuteFunction>
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> my_make_strings_children(
+  SizeAndExecuteFunction size_and_exec_fn,
+  size_type strings_count,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  return my_make_strings_children(size_and_exec_fn, strings_count, strings_count, stream, mr);
+}
+
+/**
+ * @brief Creates child offsets, chars columns and null mask, null count of a strings column by
+ * applying the template function that can be used for computing the output size of each string as
+ * well as create the output.
+ *
+ * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
+ *         It must have members `d_offsets`, `d_chars`, and `d_validities` which are set to memory
+ *         containing the offsets column, chars column and string validities during write.
+ *
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string, which is
+ *                         written into the `d_offsets` array. After that, `d_chars` is set and this
+ *                         is called again to fill in the chars memory. The `d_validities` array may
+ *                         be modified to set the value `0` for the corresponding rows that contain
+ *                         null string elements.
+ * @param exec_size Range for executing the function `size_and_exec_fn`.
+ * @param strings_count Number of strings.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return offsets child column, chars child column, null_mask, and null_count for a strings column.
+ */
+template <typename SizeAndExecuteFunction>
+std::tuple<std::unique_ptr<column>, std::unique_ptr<column>, rmm::device_buffer, size_type>
+my_make_strings_children_with_null_mask(
+  SizeAndExecuteFunction size_and_exec_fn,
+  size_type exec_size,
+  size_type strings_count,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  auto offsets_column = make_numeric_column(
+    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_view          = offsets_column->mutable_view();
+  auto d_offsets             = offsets_view.template data<int32_t>();
+  size_and_exec_fn.d_offsets = d_offsets;
+
+  auto validities               = rmm::device_uvector<int8_t>(strings_count, stream);
+  size_and_exec_fn.d_validities = validities.begin();
+
+  // This is called twice: once for offsets and validities, and once for chars
+  auto for_each_fn = [exec_size, stream](SizeAndExecuteFunction& size_and_exec_fn) {
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       exec_size,
+                       size_and_exec_fn);
+  };
+
+  auto has_overflow = rmm::device_uvector<bool>(1, stream);
+  CUDA_TRY(cudaMemsetAsync(has_overflow.begin(), 0, sizeof(bool), stream.value()));
+  size_and_exec_fn.has_overflow = has_overflow.begin();
+
+  // Compute the string sizes (storing in `d_offsets`) and string validities
+  for_each_fn(size_and_exec_fn);
+
+  // Compute the offsets from string sizes
+  CUDA_TRY(cudaMemsetAsync(d_offsets + strings_count, 0, sizeof(offset_type), stream.value()));
+  thrust::exclusive_scan(
+    rmm::exec_policy(stream),
+    d_offsets,
+    d_offsets + strings_count + 1,
+    d_offsets,
+    size_type{0},
+    [overflow = has_overflow.begin()] __device__(auto const lhs, auto const rhs) {
+      auto const sum = static_cast<int64_t>(lhs) + static_cast<int64_t>(rhs);
+      if (sum > max_offset) {
+        *overflow = true;
+        return 0;
+      }
+      return static_cast<size_type>(sum);
+    });
+
+  bool is_overflow;
+  CUDA_TRY(cudaMemcpyAsync(
+    &is_overflow, has_overflow.begin(), sizeof(bool), cudaMemcpyDeviceToHost, stream.value()));
+
+  // Now build the chars column
+  auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
+  if (is_overflow) {
+    CUDF_FAIL(
+      "Size of the output strings column exceeds the maximum value that can be indexed by "
+      "size_type (offset_type)");
+  }
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
+
+  // Execute the function fn again to fill the chars column.
+  // Note that if the output chars column has zero size, the function fn should not be called to
+  // avoid accidentally overwriting the offsets.
+  if (bytes > 0) {
+    size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>();
+    for_each_fn(size_and_exec_fn);
+  }
+
+  // Finally compute null mask and null count from the validities array
+  auto [null_mask, null_count] = cudf::detail::valid_if(
+    validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr);
+
+  return std::make_tuple(std::move(offsets_column),
+                         std::move(chars_column),
+                         null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
+                         null_count);
+}
 
 }  // namespace
 
@@ -180,7 +401,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   // value that can be indexed by size_type (offset_type).
   // In such situations, an exception may be thrown, or the output result is undefined.
   auto [offsets_column, chars_column] =
-    make_strings_children(fn, strings_count * repeat_times, strings_count, stream, mr);
+    my_make_strings_children(fn, strings_count * repeat_times, strings_count, stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
@@ -203,6 +424,8 @@ struct compute_size_and_repeat_separately_fn {
   bool const strings_has_nulls;
   bool const rtimes_has_nulls;
 
+  bool* has_overflow;
+
   offset_type* d_offsets{nullptr};
 
   // If d_chars == nullptr: only compute sizes of the output strings.
@@ -213,7 +436,7 @@ struct compute_size_and_repeat_separately_fn {
   // and only do that when both input columns have nulls.
   int8_t* d_validities{nullptr};
 
-  __device__ void operator()(size_type const idx) const noexcept
+  __device__ void operator()(size_type const idx) noexcept
   {
     auto const string_is_valid = !strings_has_nulls || strings_dv.is_valid_nocheck(idx);
     auto const rtimes_is_valid = !rtimes_has_nulls || repeat_times_dv.is_valid_nocheck(idx);
@@ -227,8 +450,11 @@ struct compute_size_and_repeat_separately_fn {
     auto const repeat_times = is_valid ? repeat_times_dv.element<IntType>(idx) : IntType{0};
 
     if (!d_chars) {
-      d_offsets[idx] =
-        repeat_times > 0 ? repeat_times * strings_dv.element<string_view>(idx).size_bytes() : 0;
+      auto const new_size =
+        static_cast<int64_t>(strings_dv.element<string_view>(idx).size_bytes()) *
+        static_cast<int64_t>(repeat_times);
+      d_offsets[idx] = is_valid ? new_size : 0;
+      if (new_size > max_offset) { *has_overflow = true; }
 
       // We will allocate memory for `d_validities` only when both input columns have nulls.
       if (d_validities) { d_validities[idx] = is_valid; }
@@ -264,8 +490,6 @@ bool is_output_overflow(SizeCompFunc size_comp_fn,
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      size_comp_fn);
-
-  static constexpr int64_t max_offset = static_cast<int64_t>(std::numeric_limits<size_type>::max());
 
   // Compute offsets of the output strings and detect overflow at the same time.
   auto has_overflow = rmm::device_uvector<bool>(1, stream);
@@ -328,11 +552,11 @@ struct dispatch_repeat_strings_separately_fn {
     // In such situations, an exception may be thrown, or the output result is undefined.
     // If both input columns have nulls, we need to generate a new null mask.
     if (strings_has_nulls && rtimes_has_nulls) {
-      return make_strings_children_with_null_mask(fn, strings_count, strings_count, stream, mr);
+      return my_make_strings_children_with_null_mask(fn, strings_count, strings_count, stream, mr);
     }
 
     // Generate output strings without null mask.
-    auto [offsets_column, chars_column] = make_strings_children(fn, strings_count, stream, mr);
+    auto [offsets_column, chars_column] = my_make_strings_children(fn, strings_count, stream, mr);
 
     // If only one input column has nulls, we just copy its null mask and null count.
     if (strings_has_nulls ^ rtimes_has_nulls) {
