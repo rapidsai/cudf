@@ -186,10 +186,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createLeadLagAgg(JNIEnv 
     std::unique_ptr<cudf::aggregation> ret;
     // These numbers come from Aggregation.java and must stay in sync
     switch (kind) {
-      case 20: // LEAD
+      case 22: // LEAD
         ret = cudf::make_lead_aggregation(offset);
         break;
-      case 21: // LAG
+      case 23: // LAG
         ret = cudf::make_lag_aggregation(offset);
         break;
       default: throw std::logic_error("Unsupported Lead/Lag Aggregation Operation");
