@@ -48,9 +48,6 @@ export GIT_COMMITTER_EMAIL="ci@nvidia.com"
 export CUDACXX=/usr/local/cuda/bin/nvcc
 export LIBCUDF_KERNEL_CACHE_PATH=/rapids
 
-# add cmake 3.19 to PATH
-export PATH=/usr/local/cmake-3.19.0-Linux-x86_64/bin:$PATH
-
 ###### Build libcudf ######
 rm -rf "$WORKSPACE/cpp/build"
 mkdir -p "$WORKSPACE/cpp/build"
