@@ -489,16 +489,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             self.columns = columns
 
     @classmethod
-    def _from_table(cls, table, index=None):
-        if index is None:
-            if table._index is not None:
-                index = Index._from_table(table._index)
-            else:
-                index = RangeIndex(table._num_rows)
-        out = cls.__new__(cls)
-        out._data = table._data
-        out._index = index
-        return out
+    def _from_table(
+        cls, table: libcudf.table.Table, index: Optional[Index] = None
+    ):
+        if index is None and table._index is not None:
+            # TODO: We should be able to just copy here, but unfortunately
+            # there are currently many situations in cudf where table._index
+            # can be a non-Index type Table that does not currently support
+            # copy. We could implement copy as a stopgap, but the correct
+            # long-term solution is to ensure that _index is always an index.
+            index = Index._from_table(table._index)
+        return cls._from_data(table._data, index)
 
     @classmethod
     def _from_data(
@@ -508,10 +509,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         columns: Any = None,
     ) -> DataFrame:
         out = cls.__new__(cls)
-        out._data = data
-        if index is None:
-            index = cudf.Index(range(data.nrows))
-        out._index = index
+        super(DataFrame, out).__init__(
+            data=data,
+            index=index if index is not None else cudf.RangeIndex(data.nrows),
+        )
+
         if columns is not None:
             out.columns = columns
         return out
