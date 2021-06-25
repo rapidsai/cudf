@@ -9,7 +9,7 @@ import pytest
 import cudf
 from cudf import NA
 from cudf._lib.copying import get_element
-from cudf.tests._utils import (
+from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
