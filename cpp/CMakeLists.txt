@@ -151,7 +151,6 @@ add_library(cudf
     src/ast/transform.cu
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
-    src/binaryop/compiled/binops_custom.cu
     src/binaryop/compiled/Add.cu
     src/binaryop/compiled/ATan2.cu
     src/binaryop/compiled/BitwiseAnd.cu

@@ -213,30 +213,6 @@ void apply_binary_op(mutable_column_device_view&,
                      bool is_rhs_scalar,
                      rmm::cuda_stream_view stream);
 /**
- * @brief Deploys single type or double type dispatcher that runs comparison operation on each
- * element of @p lhsd and @p rhsd columns.
- *
- * Comparison operators are LESS, GREATER, LESS_EQUAL, GREATER_EQUAL.
- * @p outd type is boolean.
- *
- * This template is instantiated for each binary operator.
- *
- * @param outd mutable device view of output column
- * @param lhsd device view of left operand column
- * @param rhsd device view of right operand column
- * @param is_lhs_scalar true if @p lhsd is a single element column representing a scalar
- * @param is_rhs_scalar true if @p rhsd is a single element column representing a scalar
- * @param op comparison binary operator
- * @param stream CUDA stream used for device memory operations
- */
-void dispatch_comparison_op(mutable_column_device_view& outd,
-                            column_device_view const& lhsd,
-                            column_device_view const& rhsd,
-                            bool is_lhs_scalar,
-                            bool is_rhs_scalar,
-                            binary_operator op,
-                            rmm::cuda_stream_view stream);
-/**
  * @brief Deploys single type or double type dispatcher that runs equality operation on each element
  * of @p lhsd and @p rhsd columns.
  *
