@@ -2659,6 +2659,60 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByScan() {
+    try (Table t1 = new Table.TestBuilder()
+        .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
+        .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
+        .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, 10.0)
+        .build()) {
+      try (Table result = t1
+          .groupBy(GroupByOptions.builder()
+              .withKeysSorted(true)
+              .withKeysDescending(false, false)
+              .build(), 0, 1)
+          .scan(Aggregation.sum().onColumn(2),
+              Aggregation.count(NullPolicy.INCLUDE).onColumn(2),
+              Aggregation.min().onColumn(2),
+              Aggregation.max().onColumn(2));
+           Table expected = new Table.TestBuilder()
+               .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
+               .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
+               .column(12.0, 14.0, 13.0, 30.0, 17.0, 34.0, null, null, 11.0, null, 21.0)
+               .column(   0,    0,    0,    1,    0,    1,    2,    0,    1,    2,    3) // odd why is this not 1 based?
+               .column(12.0, 14.0, 13.0, 13.0, 17.0, 17.0, null, null, 11.0, null, 10.0)
+               .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, 11.0)
+               .build()) {
+        assertTablesAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByReplaceNulls() {
+    try (Table t1 = new Table.TestBuilder()
+        .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
+        .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
+        .column(null, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, null)
+        .build()) {
+      try (Table result = t1
+          .groupBy(GroupByOptions.builder()
+              .withKeysSorted(true)
+              .withKeysDescending(false, false)
+              .build(), 0, 1)
+          .replaceNulls(ReplacePolicy.PRECEDING.onColumn(2),
+              ReplacePolicy.FOLLOWING.onColumn(2));
+           Table expected = new Table.TestBuilder()
+               .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
+               .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
+               .column(null, 14.0, 13.0, 17.0, 17.0, 17.0, 17.0, null, 11.0, 11.0, 11.0)
+               .column(null, 14.0, 13.0, 17.0, 17.0, 17.0, null, 11.0, 11.0, null, null)
+               .build()) {
+        assertTablesAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
   void testGroupByUniqueCount() {
     try (Table t1 = new Table.TestBuilder()
             .column( "1",  "1",  "1",  "1",  "1",  "1")
