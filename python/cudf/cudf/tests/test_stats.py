@@ -342,7 +342,6 @@ def test_series_pct_change(data, periods, fill_method):
         )
 
 
-
 @pytest.mark.parametrize(
     "data1",
     [

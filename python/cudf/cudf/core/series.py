@@ -6043,9 +6043,7 @@ class Series(SingleColumnFrame, Serializable):
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
         if fill_method not in ["ffill", "bfill"]:
-            raise ValueError(
-                "fill_method must be either 'ffill' or 'bfill'."
-            )
+            raise ValueError("fill_method must be either 'ffill' or 'bfill'.")
 
         data = self.fillna(method=fill_method, limit=limit)
         diff = data.diff(periods=periods)
