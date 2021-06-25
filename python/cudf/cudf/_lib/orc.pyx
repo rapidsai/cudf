@@ -65,7 +65,7 @@ cpdef read_raw_orc_statistics(filepath_or_buffer):
     return (raw.column_names, raw.file_stats, raw.stripes_stats)
 
 
-cpdef read_orc(object filepath_or_buffer,
+cpdef read_orc(object filepaths_or_buffers,
                object columns=None,
                object stripes=None,
                object skip_rows=None,
@@ -80,7 +80,7 @@ cpdef read_orc(object filepath_or_buffer,
     cudf.io.orc.read_orc
     """
     cdef orc_reader_options c_orc_reader_options = make_orc_reader_options(
-        filepath_or_buffer,
+        filepaths_or_buffers,
         columns or [],
         stripes or [],
         get_size_t_arg(skip_rows, "skip_rows"),
@@ -162,7 +162,7 @@ cdef size_type get_size_t_arg(object arg, str name) except*:
 
 
 cdef orc_reader_options make_orc_reader_options(
-    object filepath_or_buffer,
+    object filepaths_or_buffers,
     object column_names,
     object stripes,
     size_type skip_rows,
@@ -172,12 +172,12 @@ cdef orc_reader_options make_orc_reader_options(
 ) except*:
 
     cdef vector[string] c_column_names
-    cdef vector[size_type] strps = stripes
+    cdef vector[vector[size_type]] strps = stripes
     c_column_names.reserve(len(column_names))
     for col in column_names:
         c_column_names.push_back(str(col).encode())
     cdef orc_reader_options opts
-    cdef source_info src = make_source_info([filepath_or_buffer])
+    cdef source_info src = make_source_info(filepaths_or_buffers)
     opts = move(
         orc_reader_options.builder(src)
         .columns(c_column_names)
