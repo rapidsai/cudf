@@ -130,7 +130,7 @@ class NumericalBaseColumn(ColumnBase):
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> NumericalBaseColumn:
         if isinstance(q, cp.ndarray):
-           q = q.get()
+            q = q.get()
         if isinstance(q, Number) or cudf.utils.dtypes.is_list_like(q):
             np_array_q = np.asarray(q)
             if np.logical_or(np_array_q < 0, np_array_q > 1).any():

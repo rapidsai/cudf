@@ -187,9 +187,9 @@ def test_approx_quantiles():
     q1 = gdf_series.quantile(quant_values, exact=False)
     q2 = pdf_series.quantile(quant_values)
     q3 = gdf_series.quantile(cp_quant)
-    q4 = gdf_series.quantile(cp_quant, quant_index=False)
 
     assert_eq(q1, q2)
+    assert_eq(q1, q3)
 
 
 def test_approx_quantiles_int():

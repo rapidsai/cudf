@@ -5456,8 +5456,11 @@ class Series(SingleColumnFrame, Serializable):
         if isinstance(q, Number):
             return result
 
-        if quant_index and not isinstance(q, cp.ndarray): #if cupy skip over index
-            index = np.asarray(q)
+        if quant_index:
+            if isinstance(q, cp.ndarray):
+                index = cp.asarray(q)
+            else:
+                index = np.asarray(q)
             if len(self) == 0:
                 result = column_empty_like(
                     index, dtype=self.dtype, masked=True, newsize=len(index),
