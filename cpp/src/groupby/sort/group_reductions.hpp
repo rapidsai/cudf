@@ -348,19 +348,19 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
  *
  * @code{.pseudo}
  * values        = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
- * group_offsets = [0,        3,        5,   7, 8]
+ * group_offsets = [0,        3,        5,       7, 8]
  * num_groups    = 4
  *
- * group_collect = [[2, 1, 4], [-1, -2] [<NA>, 4], [<NA>]]
+ * group_collect(...) = [[2, 1, 4], [-1, -2], [<NA>, 4], [<NA>]]
  * @endcode
  *
- * @param values Grouped values to collect
- * @param group_offsets Offsets of groups' starting points within @p values
- * @param num_groups Number of groups
+ * @param values Grouped values to collect.
+ * @param group_offsets Offsets of groups' starting points within @p values.
+ * @param num_groups Number of groups.
  * @param null_handling Exclude nulls while counting if null_policy::EXCLUDE,
- *  Include nulls if null_policy::INCLUDE.
+ *        include nulls if null_policy::INCLUDE.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<column> group_collect(column_view const& values,
                                       cudf::device_span<size_type const> group_offsets,
@@ -368,6 +368,29 @@ std::unique_ptr<column> group_collect(column_view const& values,
                                       null_policy null_handling,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Internal API to merge grouped lists into one list.
+ *
+ * @code{.pseudo}
+ * values        = [[2, 1], [], [4, -1, -2], [], [<NA>, 4, <NA>]]
+ * group_offsets = [0,                        3,                  5]
+ * num_groups    = 2
+ *
+ * group_merge_lists(...) = [[2, 1, 4, -1, -2], [<NA>, 4, <NA>]]
+ * @endcode
+ *
+ * @param values Grouped values (lists column) to collect.
+ * @param group_offsets Offsets of groups' starting points within @p values.
+ * @param num_groups Number of groups.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ */
+std::unique_ptr<column> group_merge_lists(column_view const& values,
+                                          cudf::device_span<size_type const> group_offsets,
+                                          size_type num_groups,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr);
 
 /** @endinternal
  *
