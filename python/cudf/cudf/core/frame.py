@@ -2652,6 +2652,31 @@ class Frame(libcudf.table.Table):
 
         return libcudf.sort.order_by(to_sort, ascending, na_position)
 
+    
+    def abs(self):
+        """Absolute value of each element of the DataFrame.
+        Returns
+        -------
+        abs
+            DataFrame containing the absolute value of each element.
+        Examples
+        --------
+        >>> import cudf
+        >>> test = cudf.DataFrame([[-1, -2, 3],[-4, 5, -6]])
+        >>> test
+       	     0	 1	2
+        0	-1	-2	3
+        1	-4	 5 -6   
+        dtype: float64
+        >>> series.abs()
+        	0	1	2
+        0	1	2	3
+        1	4	5	6
+        dtype: float64
+        """
+        return self._unaryop("abs")
+
+
     def sin(self):
         """
         Get Trigonometric sine, element-wise.
