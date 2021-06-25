@@ -334,7 +334,6 @@ class Series(SingleColumnFrame, Serializable):
         3     NaN
         dtype: float64
         """
-        print("hello")
         return cls(s, nan_as_null=nan_as_null)
 
     def serialize(self):
