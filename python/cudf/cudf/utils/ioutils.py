@@ -8,6 +8,7 @@ from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 import fsspec
 import fsspec.implementations.local
 import pandas as pd
+from fsspec.core import get_fs_token_paths
 
 from cudf.utils.docutils import docfmt_partial
 
@@ -1373,3 +1374,11 @@ def _prepare_filters(filters):
         filters = [filters]
 
     return filters
+
+
+def _ensure_filesystem(passed_filesystem, path):
+    if passed_filesystem is None:
+        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
+            0
+        ]
+    return passed_filesystem
