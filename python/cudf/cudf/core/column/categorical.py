@@ -1111,6 +1111,7 @@ class CategoricalColumn(column.ColumnBase):
         return pd.Series(data, index=index)
 
     def to_arrow(self) -> pa.Array:
+        print("to_arrow")
         result = super().to_arrow()
         min_type_codes = self.cat()._min_type_codes
         return pa.DictionaryArray.from_arrays(indices=min_type_codes.to_arrow(), dictionary=result.dictionary)
@@ -1222,7 +1223,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
         return column.build_categorical_column(
-            categories=new_cats["cats"],
+            categories=new_cats["cats"]._column,
             codes=column.as_column(output.base_data, dtype=output.dtype),
             mask=output.base_mask,
             offset=output.offset,
@@ -1418,16 +1419,25 @@ class CategoricalColumn(column.ColumnBase):
     def _with_type_metadata(
         self: CategoricalColumn, dtype: Dtype
     ) -> CategoricalColumn:
-        # if isinstance(dtype, CategoricalDtype):
-        #     return column.build_categorical_column(
-        #         categories=self.base_children[1],
-        #         codes=self.base_children[0],
-        #         mask=self.base_mask,
-        #         ordered=dtype.ordered,
-        #         size=self.size,
-        #         offset=self.offset,
-        #         null_count=self.null_count,
-        #     )
+        if isinstance(dtype, CategoricalDtype):
+            if len(self.base_children) == 0:
+                if dtype._categories is not None:
+                    categories = dtype._categories
+                else:
+                    categories = column.column_empty(0, "int32", masked=False)
+                codes = column.column_empty(0, "uint32", masked=False)
+            else:
+                categories = self.base_children[1]
+                codes = self.base_children[0]
+            return column.build_categorical_column(
+                categories=categories,
+                codes=codes,
+                mask=self.base_mask,
+                ordered=dtype.ordered,
+                size=self.size,
+                offset=self.offset,
+                null_count=self.null_count,
+            )
 
         return self
 
