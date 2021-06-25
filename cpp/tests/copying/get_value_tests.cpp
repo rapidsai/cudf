@@ -816,7 +816,7 @@ TYPED_TEST(StructGetValueTestTyped, mixed_types_valid)
 
   size_type index = 2;
   auto s          = get_element(col, index);
-  auto typed_s    = static_cast<struct_scalar const *>(s.get());
+  auto typed_s    = static_cast<struct_scalar const*>(s.get());
 
   // expect fields
   fixed_width_column_wrapper<TypeParam> ef1{3};
@@ -846,7 +846,7 @@ TYPED_TEST(StructGetValueTestTyped, mixed_types_valid_with_nulls)
 
   size_type index = 1;
   auto s          = get_element(col, index);
-  auto typed_s    = static_cast<struct_scalar const *>(s.get());
+  auto typed_s    = static_cast<struct_scalar const*>(s.get());
 
   // expect fields
   fixed_width_column_wrapper<TypeParam> ef1({-1}, {false});
@@ -880,7 +880,7 @@ TYPED_TEST(StructGetValueTestTyped, mixed_types_invalid)
 
   size_type index = 0;
   auto s          = get_element(col, index);
-  auto typed_s    = static_cast<struct_scalar const *>(s.get());
+  auto typed_s    = static_cast<struct_scalar const*>(s.get());
 
   EXPECT_FALSE(typed_s->is_valid());
 
@@ -912,7 +912,7 @@ TEST_F(StructGetValueTest, multi_level_nested)
 
   size_type index = 0;
   auto s          = get_element(l0, index);
-  auto typed_s    = static_cast<struct_scalar const *>(s.get());
+  auto typed_s    = static_cast<struct_scalar const*>(s.get());
 
   // Expect fields
   column_view cv = column_view(l0);
