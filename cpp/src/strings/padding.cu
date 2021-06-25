@@ -82,7 +82,7 @@ std::unique_ptr<column> pad(
   // build chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
 
   if (side == pad_side::LEFT) {
@@ -170,7 +170,7 @@ std::unique_ptr<column> zfill(
   // build chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
 
   thrust::for_each_n(rmm::exec_policy(stream),
