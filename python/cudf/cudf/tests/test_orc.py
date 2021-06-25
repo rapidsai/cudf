@@ -181,7 +181,7 @@ def test_orc_read_statistics(datadir):
         (
             file_statistics,
             stripes_statistics,
-        ) = cudf.io.orc.read_orc_statistics([path])
+        ) = cudf.io.orc.read_orc_statistics([path, path])
     except pa.ArrowIOError as e:
         pytest.skip(".orc file is not found: %s" % e)
 
@@ -787,7 +787,8 @@ def test_orc_writer_decimal(tmpdir, scale):
     assert_eq(expected.to_pandas()["dec_val"], got["dec_val"])
 
 
-def test_orc_reader_multiple_files(datadir):
+@pytest.mark.parametrize("num_rows", [1, 100, 3000])
+def test_orc_reader_multiple_files(datadir, num_rows):
 
     path = datadir / "TestOrcFile.testSnappy.orc"
 
@@ -795,9 +796,33 @@ def test_orc_reader_multiple_files(datadir):
     df_2 = pd.read_orc(path)
     df = pd.concat([df_1, df_2], ignore_index=True)
 
-    gdf = cudf.read_orc([path, path], engine="cudf").to_pandas()
+    gdf = cudf.read_orc(
+        [path, path], engine="cudf", num_rows=num_rows
+    ).to_pandas()
+
+    # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
+    # have an API to read a subsection of rows from the file
+    df = df[:num_rows]
+    df = df.reset_index(drop=True)
 
     assert_eq(df, gdf)
+
+
+def test_orc_reader_multi_file_single_stripe(datadir):
+
+    path = datadir / "TestOrcFile.testSnappy.orc"
+
+    # should raise an exception
+    with pytest.raises(ValueError):
+        cudf.read_orc([path, path], engine="cudf", stripes=[0])
+
+
+def test_orc_reader_multi_file_multi_stripe(datadir):
+
+    path = datadir / "TestOrcFile.testStripeLevelStats.orc"
+    gdf = cudf.read_orc([path, path], engine="cudf", stripes=[[0, 1], [2]])
+    pdf = pd.read_orc(path)
+    assert_eq(pdf, gdf)
 
 
 def test_orc_string_stream_offset_issue():

@@ -99,7 +99,7 @@ class orc_reader_options {
   std::vector<std::string> const& get_columns() const { return _columns; }
 
   /**
-   * @brief Returns list of individual stripes to read.
+   * @brief Returns vector of vectors, stripes to read for each input source
    */
   std::vector<std::vector<size_type>> const& get_stripes() const { return _stripes; }
 
@@ -138,9 +138,9 @@ class orc_reader_options {
   void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
   /**
-   * @brief Sets list of individual stripes to read.
+   * @brief Sets list of stripes to read for each input source
    *
-   * @param stripes Vector of individual stripes.
+   * @param stripes Vector of vectors, mapping stripes to read to input sources
    */
   void set_stripes(std::vector<std::vector<size_type>> stripes)
   {
@@ -224,9 +224,9 @@ class orc_reader_options_builder {
   }
 
   /**
-   * @brief Sets list of individual stripes to read.
+   * @brief Sets list of individual stripes to read per source
    *
-   * @param stripes Vector of individual stripes.
+   * @param stripes Vector of vectors, mapping stripes to read to input sources
    * @return this for chaining.
    */
   orc_reader_options_builder& stripes(std::vector<std::vector<size_type>> stripes)

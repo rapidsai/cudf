@@ -31,6 +31,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <iterator>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
@@ -279,52 +280,57 @@ class aggregate_orc_metadata {
       });
   }
 
- public:
   aggregate_orc_metadata(std::vector<std::unique_ptr<datasource>> const &sources)
     : per_file_metadata(metadatas_from_sources(sources)),
       num_rows(calc_num_rows()),
       num_columns(calc_num_cols()),
       num_stripes(calc_num_stripes())
   {
-    // Verify that the input files have matching numbers of columns
-    int num_cols = -1;
+    // Verify that the input files have the same number of columns,
+    // as well as matching types, compression, and names
     for (auto const &pfm : per_file_metadata) {
-      if (num_cols == -1) { num_cols = pfm.get_num_columns(); }
-      if (pfm.get_num_columns() != num_cols) {
-        CUDF_EXPECTS(num_cols == static_cast<int>(pfm.get_num_columns()),
-                     "All sources must have the same number of columns");
+      CUDF_EXPECTS(per_file_metadata[0].get_num_columns() == pfm.get_num_columns(),
+                   "All sources must have the same number of columns");
+      CUDF_EXPECTS(per_file_metadata[0].ps.compression == pfm.ps.compression,
+                   "All sources must have the same compression type");
+
+      // Check the types, column names, and decimal scale
+      for (size_t i = 0; i < pfm.ff.types.size(); i++) {
+        CUDF_EXPECTS(pfm.ff.types[i].kind == per_file_metadata[0].ff.types[i].kind,
+                     "Column types across all input sources must be the same");
+        CUDF_EXPECTS(std::equal(pfm.ff.types[i].fieldNames.begin(),
+                                pfm.ff.types[i].fieldNames.end(),
+                                per_file_metadata[0].ff.types[i].fieldNames.begin()),
+                     "All source column names must be the same");
+        CUDF_EXPECTS(
+          pfm.ff.types[i].scale.value_or(0) == per_file_metadata[0].ff.types[i].scale.value_or(0),
+          "All scale values must be the same");
       }
     }
-
-    // XXX: Need to talk with Vukasin about the best way to compare this schema ....
-    // Comparing types is likely the best thing to do here.
-    // // Verify that the input files have matching schemas
-    // for (auto const &pfm : per_file_metadata) {
-    //   CUDF_EXPECTS(per_file_metadata[0].schema == pfm.schema,
-    //                "All sources must have the same schemas");
-    // }
   }
 
   auto const &get_schema(int schema_idx) const { return per_file_metadata[0].ff.types[schema_idx]; }
 
-  auto get_metadata_at_idx(int metadata_idx) const { return &per_file_metadata[metadata_idx]; };
-
   auto get_col_type(int col_idx) const { return per_file_metadata[0].ff.types[col_idx]; }
 
-  size_type get_num_rows() const { return num_rows; }
+  auto get_num_rows() const { return num_rows; }
 
-  size_type get_num_cols() const { return per_file_metadata[0].get_num_columns(); }
+  auto get_num_cols() const { return per_file_metadata[0].get_num_columns(); }
 
   auto get_num_stripes() const { return num_stripes; }
 
   auto get_num_source_files() const { return per_file_metadata.size(); }
 
-  auto get_types() const { return per_file_metadata[0].ff.types; }
+  auto const &get_types() const { return per_file_metadata[0].ff.types; }
 
   int get_row_index_stride() const { return per_file_metadata[0].ff.rowIndexStride; }
 
   auto get_column_name(const int source_idx, const int column_idx) const
   {
+    CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
+                 "Out of range source_idx provided");
+    CUDF_EXPECTS(column_idx <= per_file_metadata[source_idx].get_num_columns(),
+                 "Out of range column_idx provided");
     return per_file_metadata[source_idx].get_column_name(column_idx);
   }
 
@@ -346,22 +352,18 @@ class aggregate_orc_metadata {
       // Each vector entry represents a source file; each nested vector represents the
       // user_defined_stripes to get from that source file
       for (size_t src_file_idx = 0; src_file_idx < user_specified_stripes.size(); ++src_file_idx) {
-        std::vector<int> stripe_idxs;
         std::vector<OrcStripeInfo> stripe_infos;
 
         // Coalesce stripe info at the source file later since that makes downstream processing much
         // easier in impl::read
         for (const size_t &stripe_idx : user_specified_stripes[src_file_idx]) {
-          CUDF_EXPECTS(
-            stripe_idx >= 0 && stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size(),
-            "Invalid stripe index");
-          stripe_idxs.push_back(stripe_idx);
+          CUDF_EXPECTS(stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size(),
+                       "Invalid stripe index");
           stripe_infos.push_back(
             std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
           row_count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
         }
-        selected_stripes_mapping.push_back(
-          {static_cast<int>(src_file_idx), stripe_idxs, stripe_infos});
+        selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
       }
     } else {
       row_start = std::max(row_start, 0);
@@ -375,23 +377,23 @@ class aggregate_orc_metadata {
 
       size_type count = 0;
       // Iterate all source files, each source file has corelating metadata
-      for (size_t src_file_idx = 0; src_file_idx < per_file_metadata.size(); ++src_file_idx) {
-        std::vector<int> stripe_idxs;
+      for (size_t src_file_idx = 0;
+           src_file_idx < per_file_metadata.size() && count < row_start + row_count;
+           ++src_file_idx) {
         std::vector<OrcStripeInfo> stripe_infos;
 
-        for (size_t stripe_idx = 0; stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size();
+        for (size_t stripe_idx = 0;
+             stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size() &&
+             count < row_start + row_count;
              ++stripe_idx) {
           count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
           if (count > row_start || count == 0) {
-            stripe_idxs.push_back(stripe_idx);
             stripe_infos.push_back(
               std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
           }
-          if (count >= row_start + row_count) { break; }
         }
 
-        selected_stripes_mapping.push_back(
-          {static_cast<int>(src_file_idx), stripe_idxs, stripe_infos});
+        selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
       }
     }
 
@@ -399,16 +401,9 @@ class aggregate_orc_metadata {
     if (not selected_stripes_mapping.empty()) {
       for (auto &mapping : selected_stripes_mapping) {
         // Resize to all stripe_info for the source level
+        per_file_metadata[mapping.source_idx].stripefooters.resize(mapping.stripe_info.size());
 
-        // Get the number of unique stripes since the same stripes could be specified more than once
-        // by the user
-        // size_t uniqueCount = std::unique(mapping.stripe_idx_in_source.begin(),
-        // mapping.stripe_idx_in_source.end()) - mapping.stripe_idx_in_source.begin();
-        per_file_metadata[mapping.source_idx].stripefooters.resize(
-          mapping.stripe_idx_in_source.size());
-
-        for (size_t i = 0; i < mapping.stripe_idx_in_source.size(); i++) {
-          // int stripe_idx            = mapping.stripe_idx_in_source[i];
+        for (size_t i = 0; i < mapping.stripe_info.size(); i++) {
           const auto stripe         = mapping.stripe_info[i].first;
           const auto sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
           const auto sf_comp_length = stripe->footerLength;
@@ -896,13 +891,13 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
       // Remove this once we support Decimal128 data type
       CUDF_EXPECTS(
-        (col_type != type_id::DECIMAL64) or (_metadata->get_types()[col.id].precision <= 18),
+        (col_type != type_id::DECIMAL64) or (_metadata->get_col_type(col.id).precision <= 18),
         "Decimal data has precision > 18, Decimal64 data type doesn't support it.");
       if (col_type == type_id::DECIMAL64) {
         // sign of the scale is changed since cuDF follows c++ libraries like CNL
         // which uses negative scaling, but liborc and other libraries
         // follow positive scaling.
-        auto const scale = -static_cast<int32_t>(_metadata->get_types()[col.id].scale.value_or(0));
+        auto const scale = -static_cast<int32_t>(_metadata->get_col_type(col.id).scale.value_or(0));
         column_types.emplace_back(col_type, scale);
       } else {
         column_types.emplace_back(col_type);
@@ -927,10 +922,14 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       break;
     } else {
       // Get the total number of stripes across all input files.
-      size_t total_num_stripes = 0;
-      for (const auto &stripe_source_mapping : selected_stripes) {
-        total_num_stripes += stripe_source_mapping.stripe_idx_in_source.size();
-      }
+      size_t total_num_stripes =
+        std::accumulate(selected_stripes.begin(),
+                        selected_stripes.end(),
+                        0,
+                        [](size_t sum, auto &stripe_source_mapping) {
+                          return sum + stripe_source_mapping.stripe_info.size();
+                        });
+      ;
       const auto num_columns = selected_columns.size();
       const auto num_chunks  = total_num_stripes * num_columns;
       hostdevice_vector<gpu::ColumnDesc> chunks(num_chunks, stream);
@@ -1032,7 +1031,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                     .scale.value_or(0);
             chunk.rowgroup_id = num_rowgroups;
             chunk.dtype_len   = (column_types[col_idx].id() == type_id::STRING)
-                                ? sizeof(std::pair<const char *, size_t>)
+                                ? sizeof(string_index_pair)
                                 : ((column_types[col_idx].id() == type_id::LIST) or
                                    (column_types[col_idx].id() == type_id::STRUCT))
                                     ? sizeof(int32_t)
@@ -1151,8 +1150,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   }
   out_metadata.schema_info = std::move(schema_info);
 
-  // XXX: Review question. Should metadata from all input files be included here as I am doing
-  // or just a single input file? Return user metadata
   for (const auto &meta : _metadata->per_file_metadata) {
     for (const auto &kv : meta.ff.metadata) { out_metadata.user_data.insert({kv.name, kv.value}); }
   }

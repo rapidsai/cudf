@@ -573,39 +573,11 @@ class metadata {
  public:
   struct stripe_source_mapping {
     int source_idx;
-    std::vector<int> stripe_idx_in_source;  // Maps to stripe_info and will be same size
     std::vector<OrcStripeInfo> stripe_info;
   };
 
  public:
   explicit metadata(datasource *const src);
-
-  /**
-   * @brief Filters and reads the info of only a selection of stripes
-   *
-   * @param[in] stripes Lists of stripes to read, one per source
-   * @param[in] row_start Starting row of the selection
-   * @param[in,out] row_count Total number of rows selected
-   *
-   * @return List of stripe info and total number of selected rows
-   */
-  std::vector<stripe_source_mapping> select_stripes(const std::vector<size_type> &stripes,
-                                                    size_type &row_start,
-                                                    size_type &row_count);
-
-  /**
-   * @brief Filters and reduces down to a selection of columns
-   *
-   * @param[in] use_names List of column names to select
-   * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
-   * @param[out] has_list_column Whether there is a orc::LIST column
-   *
-   * @return Vector of list of ORC column meta
-   */
-  std::vector<std::vector<orc_column_meta>> select_columns(
-    std::vector<std::string> const &use_names,
-    bool &has_timestamp_column,
-    bool &has_list_column) const;
 
   size_t get_total_rows() const { return ff.numberOfRows; }
   int get_num_stripes() const { return ff.stripes.size(); }

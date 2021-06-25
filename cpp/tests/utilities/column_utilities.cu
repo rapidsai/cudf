@@ -150,7 +150,7 @@ class corresponding_rows_not_equivalent {
     }
 
     template <typename T, typename... Args>
-    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool> operator()(Args... args)
+    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool> operator()(Args...)
     {
       // Non-floating point inequality is checked already
       return true;
@@ -548,9 +548,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
 
 struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto h_data = cudf::test::to_host<Element>(col);
 
@@ -589,9 +587,7 @@ struct column_view_printer {
   }
 
   template <typename Element, typename std::enable_if_t<cudf::is_fixed_point<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto const h_data = cudf::test::to_host<Element>(col);
     if (col.nullable()) {
@@ -613,9 +609,7 @@ struct column_view_printer {
 
   template <typename Element,
             typename std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     //
     //  Implementation for strings, call special to_host variant
@@ -636,9 +630,7 @@ struct column_view_printer {
 
   template <typename Element,
             typename std::enable_if_t<std::is_same<Element, cudf::dictionary32>::value>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     cudf::dictionary_column_view dictionary(col);
     if (col.is_empty()) return;
@@ -659,9 +651,7 @@ struct column_view_printer {
 
   // Print the tick counts with the units
   template <typename Element, typename std::enable_if_t<is_duration<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto h_data = cudf::test::to_host<Element>(col);
 
