@@ -435,7 +435,7 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
 
 // todo
 /**
- * @brief Internal API to merge grouped variances into one variance value.
+ * @brief Internal API to merge grouped m2 values corresponding to the same key.
  *
  * @code{.pseudo}
  * values        = [[2, 1], [], [4, -1, -2], [], [<NA>, 4, <NA>]]
@@ -451,11 +451,11 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-std::unique_ptr<column> group_merge_variances(column_view const& values,
-                                              cudf::device_span<size_type const> group_offsets,
-                                              size_type num_groups,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> group_merge_m2(column_view const& values,
+                                       cudf::device_span<size_type const> group_offsets,
+                                       size_type num_groups,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr);
 
 /** @endinternal
  *

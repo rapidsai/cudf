@@ -85,10 +85,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
                                                           class merge_lists_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class merge_sets_aggregation const& agg);
-  virtual std::vector<std::unique_ptr<aggregation>> visit(
-    data_type col_type, class merge_variances_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                          class merge_stds_aggregation const& agg);
+                                                          class merge_m2_aggregation const& agg);
 };
 
 class aggregation_finalizer {  // Declares the interface for the finalizer
@@ -120,8 +118,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class udf_aggregation const& agg);
   virtual void visit(class merge_lists_aggregation const& agg);
   virtual void visit(class merge_sets_aggregation const& agg);
-  virtual void visit(class merge_variances_aggregation const& agg);
-  virtual void visit(class merge_stds_aggregation const& agg);
+  virtual void visit(class merge_m2_aggregation const& agg);
 };
 
 /**
@@ -333,9 +330,8 @@ class std_var_aggregation : public aggregation {
  protected:
   std_var_aggregation(aggregation::Kind k, size_type ddof) : aggregation(k), _ddof{ddof}
   {
-    CUDF_EXPECTS(k == aggregation::STD or k == aggregation::VARIANCE or
-                   k == aggregation::MERGE_STDS or k == aggregation::MERGE_VARIANCES,
-                 "std_var_aggregation can accept only STD, VARIANCE, MERGE_STDS, MERGE_VARIANCES");
+    CUDF_EXPECTS(k == aggregation::STD or k == aggregation::VARIANCE,
+                 "std_var_aggregation can accept only STD, VARIANCE");
   }
 
   size_type hash_impl() const { return std::hash<size_type>{}(_ddof); }
@@ -813,40 +809,15 @@ class merge_sets_aggregation final : public aggregation {
 };
 
 /**
- * @brief Derived aggregation class for specifying MERGE_VARIANCES aggregation
+ * @brief Derived aggregation class for specifying MERGE_M2 aggregation
  */
-class merge_variances_aggregation final : public std_var_aggregation {
+class merge_m2_aggregation final : public aggregation {
  public:
-  explicit merge_variances_aggregation(size_type ddof)
-    : std_var_aggregation{aggregation::MERGE_VARIANCES, ddof}
-  {
-  }
+  explicit merge_m2_aggregation() : aggregation{MERGE_M2} {}
 
   std::unique_ptr<aggregation> clone() const override
   {
-    return std::make_unique<merge_variances_aggregation>(*this);
-  }
-  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
-    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
-  {
-    return collector.visit(col_type, *this);
-  }
-  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
-};
-
-/**
- * @brief Derived aggregation class for specifying MERGE_STDS aggregation
- */
-class merge_stds_aggregation final : public std_var_aggregation {
- public:
-  explicit merge_stds_aggregation(size_type ddof)
-    : std_var_aggregation{aggregation::MERGE_STDS, ddof}
-  {
-  }
-
-  std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<merge_stds_aggregation>(*this);
+    return std::make_unique<merge_m2_aggregation>(*this);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
@@ -1073,15 +1044,9 @@ struct target_type_impl<Source, aggregation::MERGE_SETS> {
   using type = cudf::list_view;
 };
 
-// Always use `double` for MERGE_VARIANCES
+// Always use `double` for MERGE_M2
 template <typename SourceType>
-struct target_type_impl<SourceType, aggregation::MERGE_VARIANCES> {
-  using type = double;
-};
-
-// Always use `double` for MERGE_STDS
-template <typename SourceType>
-struct target_type_impl<SourceType, aggregation::MERGE_STDS> {
+struct target_type_impl<SourceType, aggregation::MERGE_M2> {
   using type = double;
 };
 
@@ -1182,10 +1147,8 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::MERGE_LISTS>(std::forward<Ts>(args)...);
     case aggregation::MERGE_SETS:
       return f.template operator()<aggregation::MERGE_SETS>(std::forward<Ts>(args)...);
-    case aggregation::MERGE_VARIANCES:
-      return f.template operator()<aggregation::MERGE_VARIANCES>(std::forward<Ts>(args)...);
-    case aggregation::MERGE_STDS:
-      return f.template operator()<aggregation::MERGE_STDS>(std::forward<Ts>(args)...);
+    case aggregation::MERGE_M2:
+      return f.template operator()<aggregation::MERGE_M2>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");

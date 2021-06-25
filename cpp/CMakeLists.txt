@@ -199,7 +199,7 @@ add_library(cudf
     src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_collect.cu
     src/groupby/sort/group_merge_lists.cu
-    src/groupby/sort/group_merge_variances.cu
+    src/groupby/sort/group_merge_m2.cu
     src/groupby/sort/group_count.cu
     src/groupby/sort/group_max.cu
     src/groupby/sort/group_min.cu
@@ -273,7 +273,7 @@ add_library(cudf
     src/join/join.cu
     src/join/semi_join.cu
     src/lists/contains.cu
-    src/lists/combine/concatenate_list_elements.cu		
+    src/lists/combine/concatenate_list_elements.cu
     src/lists/combine/concatenate_rows.cu
     src/lists/copying/concatenate.cu
     src/lists/copying/copying.cu

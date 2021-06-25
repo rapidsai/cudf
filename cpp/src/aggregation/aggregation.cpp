@@ -185,13 +185,7 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 }
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, merge_variances_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, merge_stds_aggregation const& agg)
+  data_type col_type, merge_m2_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
 }
@@ -325,12 +319,7 @@ void aggregation_finalizer::visit(merge_sets_aggregation const& agg)
   visit(static_cast<aggregation const&>(agg));
 }
 
-void aggregation_finalizer::visit(merge_variances_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(merge_stds_aggregation const& agg)
+void aggregation_finalizer::visit(merge_m2_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -589,21 +578,13 @@ std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal,
 template std::unique_ptr<aggregation> make_merge_sets_aggregation<aggregation>(null_equality,
                                                                                nan_equality);
 
-/// Factory to create a MERGE_VARIANCES aggregation
+/// Factory to create a MERGE_M2 aggregation
 template <typename Base>
-std::unique_ptr<Base> make_merge_variances_aggregation(size_type ddof)
+std::unique_ptr<Base> make_merge_m2_aggregation()
 {
-  return std::make_unique<detail::merge_variances_aggregation>(ddof);
+  return std::make_unique<detail::merge_m2_aggregation>();
 }
-template std::unique_ptr<aggregation> make_merge_variances_aggregation<aggregation>(size_type);
-
-/// Factory to create a MERGE__STD aggregation
-template <typename Base>
-std::unique_ptr<Base> make_merge_stds_aggregation(size_type ddof)
-{
-  return std::make_unique<detail::merge_stds_aggregation>(ddof);
-}
-template std::unique_ptr<aggregation> make_merge_stds_aggregation<aggregation>(size_type);
+template std::unique_ptr<aggregation> make_merge_m2_aggregation<aggregation>();
 
 namespace detail {
 namespace {
