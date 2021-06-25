@@ -50,10 +50,12 @@ std::unique_ptr<column> capitalize(
 /**
  * @brief Modifies first character of each word to upper-case and lower-cases the rest.
  *
- * Returns a column of strings where, for each string row in the input,
+ * A word here is a sequence of characters of `sequence_type` delimited by
+ * any characters not part of the `sequence_type` character set.
+ *
+ * This function returns a column of strings where, for each string row in the input,
  * the first character of each word is converted to upper-case,
  * while all the remaining characters in a word are converted to lower-case.
- * The `sequence_type` is used to determine which characters represent a word.
  *
  * @code{.pseudo}
  * Example:
@@ -67,7 +69,7 @@ std::unique_ptr<column> capitalize(
  * Any null string entries return corresponding null output column entries.
  *
  * @param input String column.
- * @param sequence_type The character type that is used when transitioning case.
+ * @param sequence_type The character type that is used when identifying words.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Column of titled strings.
  */
