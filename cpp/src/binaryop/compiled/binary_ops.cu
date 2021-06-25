@@ -16,12 +16,9 @@
 
 #include "binary_ops.hpp"
 
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/table/table_view.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
