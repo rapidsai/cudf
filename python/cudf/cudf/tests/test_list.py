@@ -379,7 +379,6 @@ def test_list_scalar_host_construction(data):
     assert slr.value == data
     assert slr.device_value.value == data
 
-
 @pytest.mark.parametrize(
     "elem_type", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["str"]
 )
