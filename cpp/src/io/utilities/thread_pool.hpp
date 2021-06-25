@@ -276,7 +276,14 @@ class thread_pool {
   {
     std::shared_ptr<std::promise<R>> promise(new std::promise<R>);
     std::future<R> future = promise->get_future();
-    push_task([task, args..., promise] { promise->set_value(task(args...)); });
+    push_task([task, args..., promise] {
+      try {
+        auto result = task(args...);
+        promise->set_value(result);
+      } catch (...) {
+        promise->set_exception(std::current_exception());
+      };
+    });
     return future;
   }
 

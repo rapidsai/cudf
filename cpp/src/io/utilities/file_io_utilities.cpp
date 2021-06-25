@@ -192,6 +192,7 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
   cudaGetDevice(&device);
 
   auto read_slice = [=](void *dst, size_t size, size_t offset) -> int {
+    // TODO: we can now throw exceptions inside future functions.
     cudaSetDevice(device);
     return shim->read(cf_file.handle(), dst, size, offset, 0);
   };
