@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "binops_custom.cuh"
+#include "binary_ops.cuh"
 
 namespace cudf::binops::compiled {
 void dispatch_equality_op(mutable_column_device_view& outd,

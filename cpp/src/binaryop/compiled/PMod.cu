@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "binops_custom.cuh"
+#include "binary_ops.cuh"
 
 namespace cudf::binops::compiled {
 template void apply_binary_op<ops::PMod>(mutable_column_device_view&,
