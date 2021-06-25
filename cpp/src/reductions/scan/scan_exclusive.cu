@@ -90,6 +90,9 @@ std::unique_ptr<column> scan_exclusive(const column_view& input,
 
   if (null_handling == null_policy::EXCLUDE) {
     output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
+  } else if (input.nullable()) {
+    output->set_null_mask(mask_scan(input, scan_type::EXCLUSIVE, stream, mr),
+                          cudf::UNKNOWN_NULL_COUNT);
   }
 
   return output;

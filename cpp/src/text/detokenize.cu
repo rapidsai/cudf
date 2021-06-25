@@ -174,9 +174,8 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
   // build the chars column - append each source token to the appropriate output row
   cudf::size_type const total_bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), output_count, stream);
-  auto chars_column =
-    cudf::strings::detail::create_chars_child_column(output_count, total_bytes, stream, mr);
-  auto d_chars = chars_column->mutable_view().data<char>();
+  auto chars_column = cudf::strings::detail::create_chars_child_column(total_bytes, stream, mr);
+  auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),

@@ -455,10 +455,11 @@ class NumericalColumn(NumericalBaseColumn):
             else:
                 # Kinds are the same but to_dtype is smaller
                 if "float" in to_dtype.name:
-                    info = np.finfo(to_dtype)
+                    finfo = np.finfo(to_dtype)
+                    lower_, upper_ = finfo.min, finfo.max
                 elif "int" in to_dtype.name:
-                    info = np.iinfo(to_dtype)
-                lower_, upper_ = info.min, info.max
+                    iinfo = np.iinfo(to_dtype)
+                    lower_, upper_ = iinfo.min, iinfo.max
 
                 if self.dtype.kind == "f":
                     # Exclude 'np.inf', '-np.inf'
@@ -529,8 +530,8 @@ class NumericalColumn(NumericalBaseColumn):
 
         # want to cast float to int:
         elif self.dtype.kind == "f" and to_dtype.kind in {"i", "u"}:
-            info = np.iinfo(to_dtype)
-            min_, max_ = info.min, info.max
+            iinfo = np.iinfo(to_dtype)
+            min_, max_ = iinfo.min, iinfo.max
 
             # best we can do is hope to catch it here and avoid compare
             if (self.min() >= min_) and (self.max() <= max_):

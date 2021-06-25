@@ -73,7 +73,7 @@ auto generate_empty_output(strings_column_view const& input,
                            rmm::cuda_stream_view stream,
                            rmm::mr::device_memory_resource* mr)
 {
-  auto chars_column = create_chars_child_column(strings_count, 0, stream, mr);
+  auto chars_column = create_chars_child_column(0, stream, mr);
 
   auto offsets_column = make_numeric_column(
     data_type{type_to_id<offset_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
