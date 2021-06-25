@@ -26,6 +26,7 @@
 #include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>
 
+#include <future>
 #include <memory>
 
 namespace cudf {
@@ -203,6 +204,14 @@ class datasource {
   virtual size_t device_read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream)
   {
     CUDF_FAIL("datasource classes that support device_read must override it.");
+  }
+
+  virtual std::future<size_t> device_read_async(size_t offset,
+                                                size_t size,
+                                                uint8_t* dst,
+                                                rmm::cuda_stream_view stream)
+  {
+    CUDF_FAIL("datasource classes that support device_read_async must override it.");
   }
 
   /**

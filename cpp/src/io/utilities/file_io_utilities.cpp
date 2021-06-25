@@ -183,10 +183,10 @@ std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
   return datasource::buffer::create(std::move(out_data));
 }
 
-size_t cufile_input_impl::read(size_t offset,
-                               size_t size,
-                               uint8_t *dst,
-                               rmm::cuda_stream_view stream)
+std::future<size_t> cufile_input_impl::read_async(size_t offset,
+                                                  size_t size,
+                                                  uint8_t *dst,
+                                                  rmm::cuda_stream_view stream)
 {
   int device;
   cudaGetDevice(&device);
@@ -210,11 +210,25 @@ size_t cufile_input_impl::read(size_t offset,
 
     slice_offset += slice_size;
   }
-  for (auto &thread : slice_tasks) {
-    thread.wait();
-    CUDF_EXPECTS(thread.get() != -1, "cuFile error reading from a file");
-  }
-  // read_slice(dst, size, offset);
+  auto waiter = [=](decltype(slice_tasks) slice_tasks) {
+    for (auto &thread : slice_tasks) {
+      thread.wait();
+      CUDF_EXPECTS(thread.get() != -1, "cuFile error reading from a file");
+    }
+    return size;
+  };
+  return std::async(waiter, std::move(slice_tasks));
+}
+
+size_t cufile_input_impl::read(size_t offset,
+                               size_t size,
+                               uint8_t *dst,
+                               rmm::cuda_stream_view stream)
+{
+  // TODO: Figure out what to do. Perhaps this would suit avro where you want the multithreading but
+  // also sync
+  auto result = read_async(offset, size, dst, stream);
+  result.get();
 
   // always read the requested size for now
   return size;

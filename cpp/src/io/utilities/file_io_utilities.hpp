@@ -108,6 +108,11 @@ class cufile_input : public cufile_io_base {
    * @return The number of bytes read
    */
   virtual size_t read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream) = 0;
+
+  virtual std::future<size_t> read_async(size_t offset,
+                                         size_t size,
+                                         uint8_t *dst,
+                                         rmm::cuda_stream_view stream) = 0;
 };
 
 /**
@@ -203,6 +208,11 @@ class cufile_input_impl final : public cufile_input {
                                            rmm::cuda_stream_view stream) override;
 
   size_t read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream) override;
+
+  std::future<size_t> read_async(size_t offset,
+                                 size_t size,
+                                 uint8_t *dst,
+                                 rmm::cuda_stream_view stream) override;
 
  private:
   cufile_shim const *shim = nullptr;
