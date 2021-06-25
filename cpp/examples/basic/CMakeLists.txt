@@ -1,23 +1,12 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(basic_example VERSION 0.0.1 LANGUAGES C CXX CUDA)
+project(basic_example VERSION 0.0.1 LANGUAGES CXX CUDA)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CUDA_ARCHITECTURES "")
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CPM_DOWNLOAD_VERSION v0.32.2)
+file(DOWNLOAD https://github.com/cpm-cmake/CPM.cmake/releases/download/${CPM_DOWNLOAD_VERSION}/get_cpm.cmake ${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)
+include(${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)
 
-set(CPM_DOWNLOAD_VERSION 0.27.2) 
-set(CPM_DOWNLOAD_LOCATION "${CMAKE_BINARY_DIR}/cmake/CPM_${CPM_DOWNLOAD_VERSION}.cmake")
-
-set(CUDF_TAG "branch-21.08")
-
-if(NOT (EXISTS ${CPM_DOWNLOAD_LOCATION}))
-    message(STATUS "Downloading CPM.cmake")
-    file(DOWNLOAD https://github.com/TheLartians/CPM.cmake/releases/download/v${CPM_DOWNLOAD_VERSION}/CPM.cmake ${CPM_DOWNLOAD_LOCATION})
-endif()
-
-include(${CPM_DOWNLOAD_LOCATION})
-
+set(CUDF_TAG branch-21.08)
 CPMFindPackage(NAME  cudf
     GIT_REPOSITORY  https://github.com/rapidsai/cudf
     GIT_TAG         ${CUDF_TAG}
@@ -25,6 +14,8 @@ CPMFindPackage(NAME  cudf
     SOURCE_SUBDIR   cpp
 )
 
+
 # Configure your project here
-add_executable(${PROJECT_NAME} "src/process_csv.cpp")
-target_link_libraries(${PROJECT_NAME} cudf::cudf)
+add_executable(basic_example src/process_csv.cpp)
+target_link_libraries(basic_example PRIVATE cudf::cudf)
+target_compile_features(basic_example PRIVATE cxx_std_17)

@@ -460,108 +460,12 @@ metadata::metadata(datasource *const src) : source(src)
   size_t md_length = 0;
   auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
   orc::ProtobufReader(md_data, md_length).read(md);
+
+  // Initilize the column names
+  init_column_names();
 }
 
-std::vector<metadata::OrcStripeInfo> metadata::select_stripes(const std::vector<size_type> &stripes,
-                                                              size_type &row_start,
-                                                              size_type &row_count)
-{
-  std::vector<OrcStripeInfo> selection;
-
-  if (!stripes.empty()) {
-    size_t stripe_rows = 0;
-    for (const auto &stripe_idx : stripes) {
-      CUDF_EXPECTS(stripe_idx >= 0 && stripe_idx < get_num_stripes(), "Invalid stripe index");
-      selection.emplace_back(&ff.stripes[stripe_idx], nullptr);
-      stripe_rows += ff.stripes[stripe_idx].numberOfRows;
-    }
-    // row_start is 0 if stripes are set. If this is not true anymore, then
-    // row_start needs to be subtracted to get the correct row_count
-    CUDF_EXPECTS(row_start == 0, "Start row index should be 0");
-    row_count = static_cast<size_type>(stripe_rows);
-  } else {
-    row_start = std::max(row_start, 0);
-    if (row_count < 0) {
-      row_count = static_cast<size_type>(
-        std::min<size_t>(get_total_rows() - row_start, std::numeric_limits<size_type>::max()));
-    } else {
-      row_count = static_cast<size_type>(std::min<size_t>(get_total_rows() - row_start, row_count));
-    }
-    CUDF_EXPECTS(row_count >= 0 && row_start >= 0, "Negative row count or starting row");
-    CUDF_EXPECTS(
-      !(row_start > 0 && (row_count > (std::numeric_limits<size_type>::max() - row_start))),
-      "Summation of starting row index and number of rows would cause overflow");
-
-    size_type stripe_skip_rows = 0;
-    for (size_t i = 0, count = 0; i < ff.stripes.size(); ++i) {
-      count += ff.stripes[i].numberOfRows;
-      if (count > static_cast<size_t>(row_start)) {
-        if (selection.empty()) {
-          stripe_skip_rows =
-            static_cast<size_type>(row_start - (count - ff.stripes[i].numberOfRows));
-        }
-        selection.emplace_back(&ff.stripes[i], nullptr);
-      }
-      if (count >= static_cast<size_t>(row_start) + static_cast<size_t>(row_count)) { break; }
-    }
-    row_start = stripe_skip_rows;
-  }
-
-  // Read each stripe's stripefooter metadata
-  if (not selection.empty()) {
-    stripefooters.resize(selection.size());
-    for (size_t i = 0; i < selection.size(); ++i) {
-      const auto stripe         = selection[i].first;
-      const auto sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
-      const auto sf_comp_length = stripe->footerLength;
-      CUDF_EXPECTS(sf_comp_offset + sf_comp_length < source->size(), "Invalid stripe information");
-
-      const auto buffer = source->host_read(sf_comp_offset, sf_comp_length);
-      size_t sf_length  = 0;
-      auto sf_data      = decompressor->Decompress(buffer->data(), sf_comp_length, &sf_length);
-      ProtobufReader(sf_data, sf_length).read(stripefooters[i]);
-      selection[i].second = &stripefooters[i];
-    }
-  }
-
-  return selection;
-}
-
-std::vector<int> metadata::select_columns(std::vector<std::string> use_names,
-                                          bool &has_timestamp_column)
-{
-  std::vector<int> selection;
-
-  if (not use_names.empty()) {
-    int index = 0;
-    for (const auto &use_name : use_names) {
-      bool name_found = false;
-      for (int i = 0; i < get_num_columns(); ++i, ++index) {
-        if (index >= get_num_columns()) { index = 0; }
-        if (get_column_name(index) == use_name) {
-          name_found = true;
-          selection.emplace_back(index);
-          if (ff.types[index].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
-          index++;
-          break;
-        }
-      }
-      CUDF_EXPECTS(name_found, "Unknown column name : " + std::string(use_name));
-    }
-  } else {
-    // For now, only select all leaf nodes
-    for (int i = 1; i < get_num_columns(); ++i) {
-      if (ff.types[i].subtypes.empty()) {
-        selection.emplace_back(i);
-        if (ff.types[i].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
-      }
-    }
-  }
-
-  return selection;
-}
-
-void metadata::init_column_names()
+void metadata::init_column_names() const
 {
   auto const schema_idxs = get_schema_indexes();
   auto const &types      = ff.types;

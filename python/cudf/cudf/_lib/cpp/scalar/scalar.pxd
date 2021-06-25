@@ -65,6 +65,7 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         # TODO: Figure out how to add an int32 overload of value()
 
     cdef cppclass list_scalar(scalar):
+        list_scalar(column_view col) except +
         column_view view() except +
 
     cdef cppclass struct_scalar(scalar):

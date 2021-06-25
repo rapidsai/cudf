@@ -11,9 +11,7 @@ import pyarrow as pa
 from pandas.core.dtypes.common import infer_dtype_from_object
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120
-
-from ..api.types import (  # noqa: F401
+from cudf.api.types import (  # noqa: F401
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
     is_categorical_dtype,
@@ -30,6 +28,7 @@ from ..api.types import (  # noqa: F401
     is_struct_dtype,
     is_timedelta_dtype,
 )
+from cudf.core._compat import PANDAS_GE_120
 
 _NA_REP = "<NA>"
 _np_pa_dtypes = {

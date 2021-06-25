@@ -254,7 +254,7 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
 
   // Allocate chars array and output null mask
   std::unique_ptr<cudf::column> output_chars =
-    cudf::strings::detail::create_chars_child_column(input.size(), bytes, stream, mr);
+    cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
 
   auto output_chars_view = output_chars->mutable_view();
 
