@@ -145,8 +145,8 @@ class reader::impl {
    */
   void aggregate_child_meta(hostdevice_vector<gpu::ColumnDesc>& chunks,
                             std::vector<orc_column_meta> const& list_col,
-                            size_t number_of_stripes,
-                            int32_t level);
+                            const size_t number_of_stripes,
+                            const int32_t level);
 
   /**
    * @brief Assemble the buffer with child columns.
@@ -155,9 +155,9 @@ class reader::impl {
    * @param col_buffers Column buffers for columns and children.
    * @param level Current nesting level.
    */
-  column_buffer&& assemble_buffer(int32_t orc_col_id,
+  column_buffer&& assemble_buffer(const int32_t orc_col_id,
                                   std::vector<std::vector<column_buffer>>& col_buffers,
-                                  int level);
+                                  const size_t level);
 
   /**
    * @brief Create columns and respective schema information from the buffer.

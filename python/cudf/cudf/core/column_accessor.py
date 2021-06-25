@@ -128,7 +128,6 @@ class ColumnAccessor(MutableMapping):
                     if not isinstance(v, column.ColumnBase):
                         v = column.as_column(v)
                     if len(v) != column_length:
-                        breakpoint()
                         raise ValueError("All columns must be of equal length")
                     self._data[k] = v
 

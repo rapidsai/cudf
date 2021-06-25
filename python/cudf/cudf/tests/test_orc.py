@@ -852,7 +852,9 @@ def generate_list_struct_buff(size=28000):
         "lvl2_struct": po.Struct(
             **{
                 "a": po.BigInt(),
-                "b": po.Struct(**{"c": po.BigInt(), "d": po.BigInt()}),
+                "lvl1_struct": po.Struct(
+                    **{"c": po.BigInt(), "d": po.BigInt()}
+                ),
             }
         ),
         "list_nests_struct": po.Array(
@@ -942,7 +944,7 @@ list_struct_buff = generate_list_struct_buff()
     [
         None,
         ["lvl3_list", "list_nests_struct", "lvl2_struct", "struct_nests_list"],
-        ["lvl1_struct", "lvl2_struct"],
+        ["lvl2_struct", "lvl1_struct"],
     ],
 )
 @pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 28000])

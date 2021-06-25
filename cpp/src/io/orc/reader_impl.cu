@@ -436,18 +436,15 @@ class aggregate_orc_metadata {
    * @param id current column id that needs to be added.
    * @param num_lvl_child_columns number of child columns which are at the same level.
    * @param has_timestamp_column True if timestamp column present and false otherwise.
-   *
-   * @return number of columns added.
    */
-  uint32_t add_column(std::vector<std::vector<orc_column_meta>> &selection,
-                      std::vector<SchemaType> const &types,
-                      size_t level,
-                      uint32_t id,
-                      uint32_t &num_lvl_child_columns,
-                      bool &has_timestamp_column,
-                      bool &has_list_column)
+  void add_column(std::vector<std::vector<orc_column_meta>> &selection,
+                  std::vector<SchemaType> const &types,
+                  const size_t level,
+                  const uint32_t id,
+                  uint32_t &num_lvl_child_columns,
+                  bool &has_timestamp_column,
+                  bool &has_list_column)
   {
-    int num_cols_added = 1;
     if (level == selection.size()) { selection.push_back(std::vector<orc_column_meta>()); }
     selection[level].emplace_back(id, 0);
     int col_id = selection[level].size() - 1;
@@ -461,7 +458,7 @@ class aggregate_orc_metadata {
           lvl_cols += 1;
           // Since list column needs to be processed before its child can be processed,
           // child column is being added to next level
-          num_cols_added += add_column(
+          add_column(
             selection, types, level + 1, id + 1, lvl_cols, has_timestamp_column, has_list_column);
         }
         // The list child column may be a struct in which case lvl_cols will be > 1
@@ -469,23 +466,21 @@ class aggregate_orc_metadata {
         break;
 
       case orc::STRUCT:
-        for (auto child_id : types[id].subtypes) {
+        for (const auto child_id : types[id].subtypes) {
           num_lvl_child_columns += 1;
-          num_cols_added += add_column(selection,
-                                       types,
-                                       level,
-                                       child_id,
-                                       num_lvl_child_columns,
-                                       has_timestamp_column,
-                                       has_list_column);
+          add_column(selection,
+                     types,
+                     level,
+                     child_id,
+                     num_lvl_child_columns,
+                     has_timestamp_column,
+                     has_list_column);
         }
         selection[level][col_id].num_children = num_lvl_child_columns;
         break;
 
       default: break;
     }
-
-    return num_cols_added;
   }
 
   /**
@@ -502,29 +497,34 @@ class aggregate_orc_metadata {
   {
     auto const &pfm = per_file_metadata[0];
     std::vector<std::vector<orc_column_meta>> selection;
-    auto const num_columns = pfm.ff.types.size();
 
     if (not use_names.empty()) {
       uint32_t index = 0;
+      // Have to check only parent columns
+      auto const num_columns = pfm.ff.types[0].subtypes.size();
+
       for (const auto &use_name : use_names) {
         bool name_found = false;
         for (uint32_t i = 0; i < num_columns; ++i, ++index) {
           if (index >= num_columns) { index = 0; }
-          if (pfm.get_column_name(index) == use_name) {
+          auto col_id = pfm.ff.types[0].subtypes[index];
+          if (pfm.get_column_name(col_id) == use_name) {
             uint32_t tmp = 0;
             name_found   = true;
-            index += add_column(
-              selection, pfm.ff.types, 0, index, tmp, has_timestamp_column, has_list_column);
+            add_column(
+              selection, pfm.ff.types, 0, col_id, tmp, has_timestamp_column, has_list_column);
             tmp = 0;
+            // Should start with next index
+            index = i + 1;
             break;
           }
         }
         CUDF_EXPECTS(name_found, "Unknown column name : " + std::string(use_name));
       }
     } else {
-      for (uint32_t i = 1; i < num_columns;) {
+      for (auto const &col_id : pfm.ff.types[0].subtypes) {
         uint32_t tmp = 0;
-        i += add_column(selection, pfm.ff.types, 0, i, tmp, has_timestamp_column, has_list_column);
+        add_column(selection, pfm.ff.types, 0, col_id, tmp, has_timestamp_column, has_list_column);
       }
     }
 
@@ -700,15 +700,15 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
 // Aggregate child column metadata per stripe and per column
 void reader::impl::aggregate_child_meta(hostdevice_vector<gpu::ColumnDesc> &chunks,
                                         std::vector<orc_column_meta> const &list_col,
-                                        size_t number_of_stripes,
-                                        int32_t level)
+                                        const size_t number_of_stripes,
+                                        const int32_t level)
 {
-  auto num_parent_cols            = _selected_columns[level].size();
-  auto num_child_cols             = _selected_columns[level + 1].size();
-  auto number_of_child_chunks     = num_child_cols * number_of_stripes;
-  auto &num_child_rows            = _col_meta.num_child_rows;
-  auto &child_start_row           = _col_meta.child_start_row;
-  auto &num_child_rows_per_stripe = _col_meta.num_child_rows_per_stripe;
+  const auto num_parent_cols        = _selected_columns[level].size();
+  const auto num_child_cols         = _selected_columns[level + 1].size();
+  const auto number_of_child_chunks = num_child_cols * number_of_stripes;
+  auto &num_child_rows              = _col_meta.num_child_rows;
+  auto &child_start_row             = _col_meta.child_start_row;
+  auto &num_child_rows_per_stripe   = _col_meta.num_child_rows_per_stripe;
 
   // Reset the meta to store child column details.
   num_child_rows.resize(_selected_columns[level + 1].size());
@@ -720,14 +720,14 @@ void reader::impl::aggregate_child_meta(hostdevice_vector<gpu::ColumnDesc> &chun
 
   // For each parent column, update its child column meta for each stripe.
   std::for_each(list_col.cbegin(), list_col.cend(), [&](auto p_col) {
-    auto parent_col_idx = _col_meta.orc_col_map[level][p_col.id];
-    auto start_row      = 0;
+    const auto parent_col_idx = _col_meta.orc_col_map[level][p_col.id];
+    auto start_row            = 0;
 
     for (size_t stripe_id = 0; stripe_id < number_of_stripes; stripe_id++) {
-      auto child_rows = chunks[(stripe_id * num_parent_cols) + parent_col_idx].num_child_rows;
+      const auto child_rows = chunks[(stripe_id * num_parent_cols) + parent_col_idx].num_child_rows;
 
       for (uint32_t id = 0; id < p_col.num_children; id++) {
-        auto child_col_idx = index + id;
+        const auto child_col_idx = index + id;
 
         num_child_rows[child_col_idx] += child_rows;
         num_child_rows_per_stripe[(stripe_id * num_child_cols) + child_col_idx] = child_rows;
@@ -785,9 +785,9 @@ std::unique_ptr<column> reader::impl::create_empty_column(int32_t orc_col_id,
 }
 
 // Adds child column buffers to parent column
-column_buffer &&reader::impl::assemble_buffer(int32_t orc_col_id,
+column_buffer &&reader::impl::assemble_buffer(const int32_t orc_col_id,
                                               std::vector<std::vector<column_buffer>> &col_buffers,
-                                              int level)
+                                              const size_t level)
 {
   auto const col_id = _col_meta.orc_col_map[level][orc_col_id];
   auto &col_buffer  = col_buffers[level][col_id];
@@ -800,7 +800,7 @@ column_buffer &&reader::impl::assemble_buffer(int32_t orc_col_id,
       break;
 
     case type_id::STRUCT:
-      for (auto col : _metadata->get_col_type(orc_col_id).subtypes) {
+      for (auto const &col : _metadata->get_col_type(orc_col_id).subtypes) {
         col_buffer.children.emplace_back(assemble_buffer(col, col_buffers, level));
       }
 
@@ -863,12 +863,13 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                "skip_rows is not supported by list column");
 
   std::vector<std::unique_ptr<column>> out_columns;
+  // buffer and stripe data are stored as per nesting level
   std::vector<std::vector<column_buffer>> out_buffers(_selected_columns.size());
   std::vector<column_name_info> schema_info;
   std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data(_selected_columns.size());
   table_metadata out_metadata;
 
-  // There are no columns in table
+  // There are no columns in the table
   if (_selected_columns.size() == 0) return {std::make_unique<table>(), std::move(out_metadata)};
 
   // Select only stripes required (aka row groups)
