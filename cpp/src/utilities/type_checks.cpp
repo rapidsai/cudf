@@ -16,6 +16,7 @@
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -23,7 +24,6 @@
 #include <algorithm>
 
 namespace cudf {
-bool column_types_equal(column_view const& lhs, column_view const& rhs);
 namespace {
 
 struct columns_equal_fn {
