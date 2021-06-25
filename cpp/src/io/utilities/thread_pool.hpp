@@ -17,27 +17,9 @@
 #pragma once
 
 /**
- * @file thread_pool.hpp
- * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 1.7
- * @date 2021-06-02
- * @copyright Copyright (c) 2021 Barak Shoshany. Licensed under the MIT license. If you use this
- * library in published research, please cite it as follows:
- *  - Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing",
- * doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
- *
- * @brief A C++17 thread pool for high-performance scientific computing.
- * @details A modern C++17-compatible thread pool implementation, built from scratch with
- * high-performance scientific computing in mind. The thread pool is implemented as a single
- * lightweight and self-contained class, and does not have any dependencies other than the C++17
- * standard library, thus allowing a great degree of portability. In particular, this implementation
- * does not utilize OpenMP or any other high-level multithreading APIs, and thus gives the
- * programmer precise low-level control over the details of the parallelization, which permits more
- * robust optimizations. The thread pool was extensively tested on both AMD and Intel CPUs with up
- * to 40 cores and 80 threads. Other features include automatic generation of futures and easy
- * parallelization of loops. Two helper classes enable synchronizing printing to an output stream by
- * different threads and measuring execution time for benchmarking purposes. Please visit the GitHub
- * repository for documentation and updates, or to submit feature requests and bug reports.
+ * Modified from https://github.com/bshoshany/thread-pool
+ * @copyright Copyright (c) 2021 Barak Shoshany. Licensed under the MIT license.
+ *            See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
  */
 
 #include <atomic>       // std::atomic
@@ -45,7 +27,6 @@
 #include <cstdint>      // std::int_fast64_t, std::uint_fast32_t
 #include <functional>   // std::function
 #include <future>       // std::future, std::promise
-#include <iostream>     // std::cout, std::ostream
 #include <memory>       // std::shared_ptr, std::unique_ptr
 #include <mutex>        // std::mutex, std::scoped_lock
 #include <queue>        // std::queue
@@ -53,8 +34,8 @@
 #include <type_traits>  // std::decay_t, std::enable_if_t, std::is_void_v, std::invoke_result_t
 #include <utility>      // std::move, std::swap
 
-// ============================================================================================= //
-//                                    Begin class thread_pool                                    //
+namespace cudf {
+namespace detail {
 
 /**
  * @brief A C++17 thread pool class. The user submits tasks to be executed into a queue. Whenever a
@@ -66,10 +47,6 @@ class thread_pool {
   typedef std::uint_fast32_t ui32;
 
  public:
-  // ============================
-  // Constructors and destructors
-  // ============================
-
   /**
    * @brief Construct a new thread pool.
    *
@@ -96,10 +73,6 @@ class thread_pool {
     running = false;
     destroy_threads();
   }
-
-  // =======================
-  // Public member functions
-  // =======================
 
   /**
    * @brief Get the number of tasks currently waiting in the queue to be executed by the threads.
@@ -250,8 +223,12 @@ class thread_pool {
     std::shared_ptr<std::promise<bool>> promise(new std::promise<bool>);
     std::future<bool> future = promise->get_future();
     push_task([task, args..., promise] {
-      task(args...);
-      promise->set_value(true);
+      try {
+        task(args...);
+        promise->set_value(true);
+      } catch (...) {
+        promise->set_exception(std::current_exception());
+      };
     });
     return future;
   }
@@ -278,8 +255,7 @@ class thread_pool {
     std::future<R> future = promise->get_future();
     push_task([task, args..., promise] {
       try {
-        auto result = task(args...);
-        promise->set_value(result);
+        promise->set_value(task(args...));
       } catch (...) {
         promise->set_exception(std::current_exception());
       };
@@ -306,10 +282,6 @@ class thread_pool {
     }
   }
 
-  // ===========
-  // Public data
-  // ===========
-
   /**
    * @brief An atomic variable indicating to the workers to pause. When set to true, the workers
    * temporarily stop popping new tasks out of the queue, although any tasks already executed will
@@ -326,10 +298,6 @@ class thread_pool {
   ui32 sleep_duration = 1000;
 
  private:
-  // ========================
-  // Private member functions
-  // ========================
-
   /**
    * @brief Create the threads in the pool and assign a worker to each thread.
    */
@@ -396,10 +364,6 @@ class thread_pool {
     }
   }
 
-  // ============
-  // Private data
-  // ============
-
   /**
    * @brief A mutex to synchronize access to the task queue by different threads.
    */
@@ -433,109 +397,5 @@ class thread_pool {
   std::atomic<ui32> tasks_total = 0;
 };
 
-//                                     End class thread_pool                                     //
-// ============================================================================================= //
-
-// ============================================================================================= //
-//                                   Begin class synced_stream                                   //
-
-/**
- * @brief A helper class to synchronize printing to an output stream by different threads.
- */
-class synced_stream {
- public:
-  /**
-   * @brief Construct a new synced stream.
-   *
-   * @param _out_stream The output stream to print to. The default value is std::cout.
-   */
-  synced_stream(std::ostream &_out_stream = std::cout) : out_stream(_out_stream){};
-
-  /**
-   * @brief Print any number of items into the output stream. Ensures that no other threads print to
-   * this stream simultaneously, as long as they all exclusively use this synced_stream object to
-   * print.
-   *
-   * @tparam T The types of the items
-   * @param items The items to print.
-   */
-  template <typename... T>
-  void print(const T &... items)
-  {
-    const std::scoped_lock lock(stream_mutex);
-    (out_stream << ... << items);
-  }
-
-  /**
-   * @brief Print any number of items into the output stream, followed by a newline character.
-   * Ensures that no other threads print to this stream simultaneously, as long as they all
-   * exclusively use this synced_stream object to print.
-   *
-   * @tparam T The types of the items
-   * @param items The items to print.
-   */
-  template <typename... T>
-  void println(const T &... items)
-  {
-    print(items..., '\n');
-  }
-
- private:
-  /**
-   * @brief A mutex to synchronize printing.
-   */
-  mutable std::mutex stream_mutex;
-
-  /**
-   * @brief The output stream to print to.
-   */
-  std::ostream &out_stream;
-};
-
-//                                    End class synced_stream                                    //
-// ============================================================================================= //
-
-// ============================================================================================= //
-//                                       Begin class timer                                       //
-
-/**
- * @brief A helper class to measure execution time for benchmarking purposes.
- */
-class timer {
-  typedef std::int_fast64_t i64;
-
- public:
-  /**
-   * @brief Start (or restart) measuring time.
-   */
-  void start() { start_time = std::chrono::steady_clock::now(); }
-
-  /**
-   * @brief Stop measuring time and store the elapsed time since start().
-   */
-  void stop() { elapsed_time = std::chrono::steady_clock::now() - start_time; }
-
-  /**
-   * @brief Get the number of milliseconds that have elapsed between start() and stop().
-   *
-   * @return The number of milliseconds.
-   */
-  i64 ms() const
-  {
-    return (std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_time)).count();
-  }
-
- private:
-  /**
-   * @brief The time point when measuring started.
-   */
-  std::chrono::time_point<std::chrono::steady_clock> start_time = std::chrono::steady_clock::now();
-
-  /**
-   * @brief The duration that has elapsed between start() and stop().
-   */
-  std::chrono::duration<double> elapsed_time = std::chrono::duration<double>::zero();
-};
-
-//                                        End class timer                                        //
-// ============================================================================================= //
+}  // namespace detail
+}  // namespace cudf

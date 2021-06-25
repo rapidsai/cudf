@@ -217,7 +217,7 @@ class cufile_input_impl final : public cufile_input {
  private:
   cufile_shim const *shim = nullptr;
   cufile_registered_file const cf_file;
-  thread_pool pool;
+  cudf::detail::thread_pool pool;
 };
 
 /**
