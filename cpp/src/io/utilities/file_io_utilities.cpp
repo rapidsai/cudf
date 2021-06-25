@@ -15,6 +15,7 @@
  */
 #include "file_io_utilities.hpp"
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <future>
 #include <rmm/device_buffer.hpp>
@@ -198,13 +199,14 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
   };
 
   std::vector<std::future<int>> slice_tasks;
-  constexpr size_t n_slices = 8;
-  size_t slice_size         = size / n_slices;
-  size_t slice_offset       = 0;
+  constexpr size_t four_MB = 1 << 22;
+  size_t n_slices          = util::div_rounding_up_safe(size, four_MB);
+  size_t slice_size        = four_MB;
+  size_t slice_offset      = 0;
   for (size_t t = 0; t < n_slices; ++t) {
     void *dst_slice = dst + slice_offset;
 
-    if (t == n_slices - 1) { slice_size += size % n_slices; }
+    if (t == n_slices - 1) { slice_size = size % four_MB; }
     // threads.push_back(
     //   std::async(std::launch::async, read_slice, dst_slice, slice_size, offset + slice_offset));
     slice_tasks.push_back(pool.submit(read_slice, dst_slice, slice_size, offset + slice_offset));
@@ -218,7 +220,7 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
     }
     return size;
   };
-  return std::async(waiter, std::move(slice_tasks));
+  return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
 
 size_t cufile_input_impl::read(size_t offset,
