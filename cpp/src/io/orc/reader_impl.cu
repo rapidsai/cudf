@@ -822,10 +822,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           chunk.type_kind     = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
                               .ff.types[_selected_columns[col_idx]]
                               .kind;
-          auto const decimal_as_float64 =
-            should_convert_decimal_column_to_float(_decimal_cols_as_float,
-                                                   _metadata->per_file_metadata[col_idx],
-                                                   _selected_columns[col_idx]);
+          auto const decimal_as_float64 = should_convert_decimal_column_to_float(
+            _decimal_cols_as_float, _metadata->per_file_metadata[0], _selected_columns[col_idx]);
           chunk.decimal_scale = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
                                   .ff.types[_selected_columns[col_idx]]
                                   .scale.value_or(0) |
