@@ -16,16 +16,14 @@
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/traits.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 
 namespace cudf {
-
 bool column_types_equal(column_view const& lhs, column_view const& rhs);
+namespace {
 
 struct columns_equal_fn {
   template <typename T>
@@ -59,6 +57,8 @@ bool columns_equal_fn::operator()<struct_view>(column_view const& lhs, column_vi
                      thrust::make_counting_iterator(lhs.num_children()),
                      [&](auto i) { return column_types_equal(lhs.child(i), rhs.child(i)); });
 }
+
+};  // namespace
 
 // Implementation note: avoid using double dispatch for this function
 // as it increases code paths to NxN for N types.
