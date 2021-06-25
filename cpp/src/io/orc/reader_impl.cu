@@ -127,6 +127,26 @@ constexpr std::pair<gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
 
 namespace {
 /**
+ * @brief struct to store buffer data and size of list buffer
+ */
+struct list_buffer_data {
+  size_type *data;
+  size_type size;
+};
+
+// Generates offsets for list buffer from number of elements in a row.
+void generate_offsets_for_list(rmm::device_uvector<list_buffer_data> const &buff_data,
+                               rmm::cuda_stream_view stream)
+{
+  auto transformer = [] __device__(list_buffer_data list_data) {
+    thrust::exclusive_scan(
+      thrust::seq, list_data.data, list_data.data + list_data.size, list_data.data);
+  };
+  thrust::for_each(rmm::exec_policy(stream), buff_data.begin(), buff_data.end(), transformer);
+  stream.synchronize();
+}
+
+/**
  * @brief Struct that maps ORC streams to columns
  */
 struct orc_stream_info {
@@ -467,14 +487,15 @@ class aggregate_orc_metadata {
 
       case orc::STRUCT:
         for (const auto child_id : types[id].subtypes) {
-          num_lvl_child_columns += 1;
+          uint32_t lvl_child_columns = 1;
           add_column(selection,
                      types,
                      level,
                      child_id,
-                     num_lvl_child_columns,
+                     lvl_child_columns,
                      has_timestamp_column,
                      has_list_column);
+          num_lvl_child_columns += lvl_child_columns;
         }
         selection[level][col_id].num_children = num_lvl_child_columns;
         break;
@@ -1126,17 +1147,19 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         if (list_col.size()) { aggregate_child_meta(chunks, list_col, total_num_stripes, level); }
       }
 
-      // TO-DO: Replace this with exclusive scan that will work on all list columns for that level
-
       // ORC stores number of elements at each row, so we need to generate offsets from that
       if (list_col.size()) {
+        std::vector<list_buffer_data> buff_data;
         std::for_each(
-          out_buffers[level].begin(), out_buffers[level].end(), [stream](auto &out_buffer) {
+          out_buffers[level].begin(), out_buffers[level].end(), [&buff_data](auto &out_buffer) {
             if (out_buffer.type.id() == type_id::LIST) {
               auto data = static_cast<size_type *>(out_buffer.data());
-              thrust::exclusive_scan(rmm::exec_policy(stream), data, data + out_buffer.size, data);
+              buff_data.emplace_back(list_buffer_data{data, out_buffer.size});
             }
           });
+
+        auto const dev_buff_data = cudf::detail::make_device_uvector_async(buff_data, stream);
+        generate_offsets_for_list(dev_buff_data, stream);
       }
     }
   }
