@@ -885,7 +885,6 @@ TYPED_TEST(StructGetValueTestTyped, mixed_types_invalid)
   EXPECT_FALSE(typed_s->is_valid());
 
   // expect to preserve types along column hierarchy.
-  // TODO: use `column_types_equal` after GH 8505 merged
   EXPECT_EQ(typed_s->view().column(0).type().id(), type_to_id<TypeParam>());
   EXPECT_EQ(typed_s->view().column(1).type().id(), type_id::STRING);
   EXPECT_EQ(typed_s->view().column(2).type().id(), type_id::DICTIONARY32);

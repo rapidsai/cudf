@@ -26,7 +26,6 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 
-#include <memory>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
