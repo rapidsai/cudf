@@ -221,12 +221,12 @@ size_t gather_stream_info(const size_t stripe_index,
  * @brief Determines if a column should be converted from decimal to float
  */
 bool should_convert_decimal_column_to_float(const std::vector<std::string> &columns_to_convert,
-                                            std::unique_ptr<cudf::io::orc::metadata> &metadata,
+                                            cudf::io::orc::metadata &metadata,
                                             int column_index)
 {
   return (std::find(columns_to_convert.begin(),
                     columns_to_convert.end(),
-                    metadata->get_column_name(column_index)) != columns_to_convert.end());
+                    metadata.get_column_name(column_index)) != columns_to_convert.end());
 }
 
 }  // namespace
@@ -694,8 +694,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   for (const auto &col : _selected_columns) {
     // If the column type is orc::DECIMAL see if the user
     // desires it to be converted to float64 or not
-    auto const decimal_as_float64 =
-      should_convert_decimal_column_to_float(_decimal_cols_as_float, _metadata, col);
+    auto const decimal_as_float64 = should_convert_decimal_column_to_float(
+      _decimal_cols_as_float, _metadata->per_file_metadata[0], col);
 
     auto col_type = to_type_id(
       _metadata->get_col_type(col), _use_np_dtypes, _timestamp_type.id(), decimal_as_float64);
@@ -813,25 +813,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           }
         }
 
-<<<<<<< HEAD
-        // Update chunks to reference streams pointers
-        for (size_t j = 0; j < num_columns; j++) {
-          auto &chunk                   = chunks[i * num_columns + j];
-          chunk.start_row               = stripe_start_row;
-          chunk.num_rows                = stripe_info->numberOfRows;
-          chunk.encoding_kind           = stripe_footer->columns[_selected_columns[j]].kind;
-          chunk.type_kind               = _metadata->ff.types[_selected_columns[j]].kind;
-          auto const decimal_as_float64 = should_convert_decimal_column_to_float(
-            _decimal_cols_as_float, _metadata, _selected_columns[j]);
-          chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale.value_or(0) |
-                                (decimal_as_float64 ? orc::gpu::orc_decimal2float64_scale : 0);
-          chunk.rowgroup_id = num_rowgroups;
-          chunk.dtype_len   = (column_types[j].id() == type_id::STRING)
-                              ? sizeof(std::pair<const char *, size_t>)
-                              : cudf::size_of(column_types[j]);
-          if (chunk.type_kind == orc::TIMESTAMP) {
-            chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
-=======
         // Update chunks to reference streams pointers
         for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
           auto &chunk         = chunks[stripe_chunk_index * num_columns + col_idx];
@@ -841,8 +822,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           chunk.type_kind     = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
                               .ff.types[_selected_columns[col_idx]]
                               .kind;
-          auto const decimal_as_float64 = should_convert_decimal_column_to_float(
-            _decimal_cols_as_float, _metadata, _selected_columns[j]);
+          auto const decimal_as_float64 =
+            should_convert_decimal_column_to_float(_decimal_cols_as_float,
+                                                   _metadata->per_file_metadata[col_idx],
+                                                   _selected_columns[col_idx]);
           chunk.decimal_scale = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
                                   .ff.types[_selected_columns[col_idx]]
                                   .scale.value_or(0) |
@@ -857,126 +840,122 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
             chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
           }
->>>>>>> upstream/branch-21.08
-          }
-
-          stripe_start_row += stripe_info->numberOfRows;
-          if (use_index) {
-            num_rowgroups += (stripe_info->numberOfRows + _metadata->get_row_index_stride() - 1) /
-                             _metadata->get_row_index_stride();
-          }
-          stripe_chunk_index++;
-        }
-      }
-
-      // Process dataset chunk pages into output columns
-      if (stripe_data.size() != 0) {
-        // Setup row group descriptors if using indexes
-        rmm::device_uvector<gpu::RowGroup> row_groups(num_rowgroups * num_columns, stream);
-        if (_metadata->per_file_metadata[0].ps.compression != orc::NONE) {
-          auto decomp_data =
-            decompress_stripe_data(chunks,
-                                   stripe_data,
-                                   _metadata->per_file_metadata[0].decompressor.get(),
-                                   stream_info,
-                                   total_num_stripes,
-                                   row_groups,
-                                   _metadata->get_row_index_stride(),
-                                   stream);
-          stripe_data.clear();
-          stripe_data.push_back(std::move(decomp_data));
-        } else {
-          if (not row_groups.is_empty()) {
-            chunks.host_to_device(stream);
-            gpu::ParseRowGroupIndex(row_groups.data(),
-                                    nullptr,
-                                    chunks.device_ptr(),
-                                    num_columns,
-                                    total_num_stripes,
-                                    num_rowgroups,
-                                    _metadata->get_row_index_stride(),
-                                    stream);
-          }
         }
 
-        // Setup table for converting timestamp columns from local to UTC time
-        auto const tz_table =
-          _has_timestamp_column
-            ? build_timezone_transition_table(
-                selected_stripes[0].stripe_info[0].second->writerTimezone, stream)
-            : timezone_table{};
-
-        std::vector<column_buffer> out_buffers;
-        for (size_t i = 0; i < column_types.size(); ++i) {
-          bool is_nullable = false;
-          for (size_t j = 0; j < total_num_stripes; ++j) {
-            if (chunks[j * num_columns + i].strm_len[gpu::CI_PRESENT] != 0) {
-              is_nullable = true;
-              break;
-            }
-          }
-          out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
+        stripe_start_row += stripe_info->numberOfRows;
+        if (use_index) {
+          num_rowgroups += (stripe_info->numberOfRows + _metadata->get_row_index_stride() - 1) /
+                           _metadata->get_row_index_stride();
         }
-
-        decode_stream_data(chunks,
-                           num_dict_entries,
-                           skip_rows,
-                           num_rows,
-                           tz_table.view(),
-                           row_groups,
-                           _metadata->get_row_index_stride(),
-                           out_buffers,
-                           stream);
-
-        for (size_t i = 0; i < column_types.size(); ++i) {
-          out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, _mr));
-        }
+        stripe_chunk_index++;
       }
     }
 
-    // Return column names (must match order of returned columns)
-    out_metadata.column_names.resize(_selected_columns.size());
-    for (size_t i = 0; i < _selected_columns.size(); i++) {
-      out_metadata.column_names[i] = _metadata->get_column_name(0, _selected_columns[i]);
-    }
+    // Process dataset chunk pages into output columns
+    if (stripe_data.size() != 0) {
+      // Setup row group descriptors if using indexes
+      rmm::device_uvector<gpu::RowGroup> row_groups(num_rowgroups * num_columns, stream);
+      if (_metadata->per_file_metadata[0].ps.compression != orc::NONE) {
+        auto decomp_data =
+          decompress_stripe_data(chunks,
+                                 stripe_data,
+                                 _metadata->per_file_metadata[0].decompressor.get(),
+                                 stream_info,
+                                 total_num_stripes,
+                                 row_groups,
+                                 _metadata->get_row_index_stride(),
+                                 stream);
+        stripe_data.clear();
+        stripe_data.push_back(std::move(decomp_data));
+      } else {
+        if (not row_groups.is_empty()) {
+          chunks.host_to_device(stream);
+          gpu::ParseRowGroupIndex(row_groups.data(),
+                                  nullptr,
+                                  chunks.device_ptr(),
+                                  num_columns,
+                                  total_num_stripes,
+                                  num_rowgroups,
+                                  _metadata->get_row_index_stride(),
+                                  stream);
+        }
+      }
 
-    for (const auto &meta : _metadata->per_file_metadata) {
-      for (const auto &kv : meta.ff.metadata) {
-        out_metadata.user_data.insert({kv.name, kv.value});
+      // Setup table for converting timestamp columns from local to UTC time
+      auto const tz_table = _has_timestamp_column
+                              ? build_timezone_transition_table(
+                                  selected_stripes[0].stripe_info[0].second->writerTimezone, stream)
+                              : timezone_table{};
+
+      std::vector<column_buffer> out_buffers;
+      for (size_t i = 0; i < column_types.size(); ++i) {
+        bool is_nullable = false;
+        for (size_t j = 0; j < total_num_stripes; ++j) {
+          if (chunks[j * num_columns + i].strm_len[gpu::CI_PRESENT] != 0) {
+            is_nullable = true;
+            break;
+          }
+        }
+        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
+      }
+
+      decode_stream_data(chunks,
+                         num_dict_entries,
+                         skip_rows,
+                         num_rows,
+                         tz_table.view(),
+                         row_groups,
+                         _metadata->get_row_index_stride(),
+                         out_buffers,
+                         stream);
+
+      for (size_t i = 0; i < column_types.size(); ++i) {
+        out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, _mr));
       }
     }
-
-    return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
   }
 
-  // Forward to implementation
-  reader::reader(std::vector<std::string> const &filepaths,
-                 orc_reader_options const &options,
-                 rmm::cuda_stream_view stream,
-                 rmm::mr::device_memory_resource *mr)
-  {
-    _impl = std::make_unique<impl>(datasource::create(filepaths), options, mr);
+  // Return column names (must match order of returned columns)
+  out_metadata.column_names.resize(_selected_columns.size());
+  for (size_t i = 0; i < _selected_columns.size(); i++) {
+    out_metadata.column_names[i] = _metadata->get_column_name(0, _selected_columns[i]);
   }
 
-  // Forward to implementation
-  reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> && sources,
-                 orc_reader_options const &options,
-                 rmm::cuda_stream_view stream,
-                 rmm::mr::device_memory_resource *mr)
-  {
-    _impl = std::make_unique<impl>(std::move(sources), options, mr);
+  for (const auto &meta : _metadata->per_file_metadata) {
+    for (const auto &kv : meta.ff.metadata) { out_metadata.user_data.insert({kv.name, kv.value}); }
   }
 
-  // Destructor within this translation unit
-  reader::~reader() = default;
+  return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
+}
 
-  // Forward to implementation
-  table_with_metadata reader::read(orc_reader_options const &options, rmm::cuda_stream_view stream)
-  {
-    return _impl->read(
-      options.get_skip_rows(), options.get_num_rows(), options.get_stripes(), stream);
-  }
-}  // namespace orc
+// Forward to implementation
+reader::reader(std::vector<std::string> const &filepaths,
+               orc_reader_options const &options,
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource *mr)
+{
+  _impl = std::make_unique<impl>(datasource::create(filepaths), options, mr);
+}
+
+// Forward to implementation
+reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
+               orc_reader_options const &options,
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource *mr)
+{
+  _impl = std::make_unique<impl>(std::move(sources), options, mr);
+}
+
+// Destructor within this translation unit
+reader::~reader() = default;
+
+// Forward to implementation
+table_with_metadata reader::read(orc_reader_options const &options, rmm::cuda_stream_view stream)
+{
+  return _impl->read(
+    options.get_skip_rows(), options.get_num_rows(), options.get_stripes(), stream);
+}
 }  // namespace orc
 }  // namespace detail
 }  // namespace io
+}  // namespace cudf

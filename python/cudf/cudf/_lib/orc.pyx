@@ -180,12 +180,11 @@ cdef orc_reader_options make_orc_reader_options(
     for col in column_names:
         c_column_names.push_back(str(col).encode())
     cdef orc_reader_options opts
-    cdef source_info src = make_source_info([filepath_or_buffer])
+    cdef source_info src = make_source_info([filepaths_or_buffers])
     cdef vector[string] c_decimal_cols_as_float
     c_decimal_cols_as_float.reserve(len(decimal_cols_as_float))
     for decimal_col in decimal_cols_as_float:
         c_decimal_cols_as_float.push_back(str(decimal_col).encode())
-    cdef source_info src = make_source_info(filepaths_or_buffers)
     opts = move(
         orc_reader_options.builder(src)
         .columns(c_column_names)
