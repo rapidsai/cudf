@@ -4,7 +4,6 @@ import datetime
 import warnings
 
 import pyarrow as pa
-from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 from pyarrow import orc as orc
 
@@ -222,14 +221,6 @@ def _filter_stripes(
     return file_stripe_map
 
 
-def _ensure_filesystem(passed_filesystem, path):
-    if passed_filesystem is None:
-        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
-            0
-        ]
-    return passed_filesystem
-
-
 @ioutils.doc_read_orc()
 def read_orc(
     filepath_or_buffer,
@@ -260,7 +251,7 @@ def read_orc(
             stripes = [stripes]
 
         # Must ensure a stripe for each source is specified, unless None
-        if len(stripes) is not len(filepath_or_buffer):
+        if not len(stripes) == len(filepath_or_buffer):
             raise ValueError(
                 "A list of stripes must be provided for each input source"
             )
@@ -268,7 +259,9 @@ def read_orc(
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
         if ioutils.is_directory(source, **kwargs):
-            fs = _ensure_filesystem(passed_filesystem=None, path=source)
+            fs = ioutils._ensure_filesystem(
+                passed_filesystem=None, path=source
+            )
             source = stringify_path(source)
             source = fs.sep.join([source, "*.orc"])
 
@@ -316,6 +309,12 @@ def read_orc(
             return pa_table
 
         warnings.warn("Using CPU via PyArrow to read ORC dataset.")
+        if len(filepath_or_buffer) > 1:
+            raise NotImplementedError(
+                "Using CPU via PyArrow only supports a single a "
+                "single input source"
+            )
+
         orc_file = orc.ORCFile(filepath_or_buffer[0])
         if stripes is not None and len(stripes) > 0:
             for stripe_source_file in stripes:
