@@ -2652,7 +2652,6 @@ class Frame(libcudf.table.Table):
 
         return libcudf.sort.order_by(to_sort, ascending, na_position)
 
-    
     def abs(self):
         """Absolute value of each element of the DataFrame.
         Returns
@@ -2675,7 +2674,6 @@ class Frame(libcudf.table.Table):
         dtype: float64
         """
         return self._unaryop("abs")
-
 
     def sin(self):
         """

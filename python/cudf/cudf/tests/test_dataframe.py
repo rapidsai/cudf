@@ -724,11 +724,20 @@ def test_dataframe_pop():
     assert len(pb) == len(gb)
     assert empty_pdf.empty and empty_gdf.empty
 
-@pytest.mark.parametrize("arr", [[[1, 2, 3],[4, 5, 6]], [[1, -2, 3],[-4, 5, -6]], [[1, -2.0, 3.5],[-4.0, 5.2, -6], [-7, -8.94, -9.1]]])
+
+@pytest.mark.parametrize(
+    "arr",
+    [
+        [[1, 2, 3], [4, 5, 6]],
+        [[1, -2, 3], [-4, 5, -6]],
+        [[1, -2.0, 3.5], [-4.0, 5.2, -6], [-7, -8.94, -9.1]],
+    ],
+)
 def test_dataframe_abs(arr):
     df = pd.DataFrame(arr)
     cudf_test = cudf.DataFrame(arr)
-    assert_eq(df.abs(), cudf_test.abs()) 
+    assert_eq(df.abs(), cudf_test.abs())
+
 
 @pytest.mark.parametrize("nelem", [0, 3, 100, 1000])
 def test_dataframe_astype(nelem):
