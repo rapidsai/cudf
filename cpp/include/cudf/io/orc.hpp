@@ -134,7 +134,10 @@ class orc_reader_options {
   /**
    * @brief Columns that should be converted from Decimal to Float64.
    */
-  std::vector<std::string> get_decimal_cols_as_float() const { return _decimal_cols_as_float; }
+  std::vector<std::string> const& get_decimal_cols_as_float() const
+  {
+    return _decimal_cols_as_float;
+  }
 
   // Setters
 
