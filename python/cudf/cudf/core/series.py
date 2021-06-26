@@ -268,25 +268,32 @@ class Series(SingleColumnFrame, Serializable):
 
     @classmethod
     def _from_table(cls, table, index=None):
-        name, data = next(iter(table._data.items()))
-        if index is None:
-            if table._index is not None:
-                index = Index._from_table(table._index)
-        return cls(data=data, index=index, name=name)
+        if index is None and table._index is not None:
+            # TODO: We should be able to just copy here, but unfortunately
+            # there are currently many situations in cudf where table._index
+            # can be a non-Index type Table that does not currently support
+            # copy. We could implement copy as a stopgap, but the correct
+            # long-term solution is to ensure that _index is always an index.
+            index = Index._from_table(table._index)
+        return cls._from_data(table._data, index)
 
     @classmethod
     def _from_data(
         cls,
         data: ColumnAccessor,
         index: Optional[Index] = None,
+        # TODO: Remove this, callers should always just change the name of the
+        # column in data.
         name: Any = None,
     ) -> Series:
         """
         Construct the Series from a ColumnAccessor
         """
         out = cls.__new__(cls)
-        out._data = data
-        out._index = index if index is not None else RangeIndex(data.nrows)
+        super(Series, out).__init__(
+            data, index if index is not None else RangeIndex(data.nrows)
+        )
+
         if name is not None:
             out.name = name
         return out

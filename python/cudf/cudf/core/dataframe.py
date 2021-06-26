@@ -506,6 +506,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         cls,
         data: ColumnAccessor,
         index: Optional[Index] = None,
+        # TODO: Remove this, callers should always just change the name of the
+        # columns in data.
         columns: Any = None,
     ) -> DataFrame:
         out = cls.__new__(cls)
