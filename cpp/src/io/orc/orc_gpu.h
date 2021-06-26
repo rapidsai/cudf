@@ -299,7 +299,7 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void EncodeStripeDictionaries(StripeDictionary *stripes,
+void EncodeStripeDictionaries(StripeDictionary const *stripes,
                               device_2dspan<EncChunk const> chunks,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,

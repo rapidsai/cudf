@@ -129,6 +129,13 @@ class orc_streams {
   std::vector<int32_t> ids;
 };
 
+struct file_segmentation {
+  hostdevice_2dvector<rows_range> rowgroups;
+  std::vector<stripe_rowgroups> stripes;
+  auto num_rowgroups() const { return rowgroups.size().first; }
+  auto num_stripes() const { return stripes.size(); }
+};
+
 /**
  * @brief ORC per-chunk streams of encoded data.
  */
@@ -212,21 +219,6 @@ class writer::impl {
 
  private:
   /**
-   * @brief Builds up column dictionaries indices
-   *
-   * @param orc_table TODO
-   * @param rowgroup_ranges TODO
-   * @param dict_data Dictionary data memory
-   * @param dict_index Dictionary index memory
-   * @param dict List of dictionary chunks
-   */
-  void init_dictionaries(orc_table_view& orc_table,
-                         device_2dspan<rows_range const> rowgroup_ranges,
-                         device_span<device_span<uint32_t>> dict_data,
-                         device_span<device_span<uint32_t>> dict_index,
-                         hostdevice_vector<gpu::DictionaryChunk>* dict);
-
-  /**
    * @brief Builds up per-stripe dictionaries for string columns.
    *
    * @param orc_table TODO
@@ -245,25 +237,13 @@ class writer::impl {
    * @brief Builds up per-column streams.
    *
    * @param[in,out] columns List of columns
-   * @param[in] rowgroup_bounds TODO
-   * @param[in] stripe_bounds List of stripe boundaries
+   * @param[in] file_segmentation TODO
    * @param[in] decimal_column_sizes Sizes of encoded decimal columns
    * @return List of stream descriptors
    */
   orc_streams create_streams(host_span<orc_column_view> columns,
-                             host_2dspan<rows_range const> rowgroup_bounds,
-                             host_span<stripe_rowgroups const> stripe_bounds,
+                             file_segmentation const& segmentation,
                              std::map<uint32_t, size_t> const& decimal_column_sizes);
-
-  /**
-   * @brief Gathers stripe information.
-   *
-   * @param columns List of columns
-   * @param rowgroup_ranges TODO
-   * @return List of stripe descriptors
-   */
-  std::vector<stripe_rowgroups> gather_stripe_info(host_span<orc_column_view const> columns,
-                                                   host_2dspan<rows_range const> rowgroup_ranges);
 
   /**
    * @brief Encodes the input columns into streams.
@@ -272,15 +252,14 @@ class writer::impl {
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
    * @param dec_chunk_sizes Information about size of encoded decimal columns
-   * @param stripe_bounds List of stripe boundaries
+   * @param segmentation TODO
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Encoded data and per-chunk stream descriptors
    */
   encoded_data encode_columns(orc_table_view const& orc_table,
                               string_dictionaries&& dictionaries,
                               encoder_decimal_info&& dec_chunk_sizes,
-                              host_2dspan<rows_range const> rowgroup_bounds,
-                              host_span<stripe_rowgroups const> stripe_bounds,
+                              file_segmentation const& segmentation,
                               orc_streams const& streams);
 
   /**
@@ -288,8 +267,7 @@ class writer::impl {
    * chunks into contiguous data streams.
    *
    * @param[in] num_index_streams Total number of index streams
-   * @param[in] rowgroup_bounds List of rowgroup boundaries
-   * @param[in] stripe_bounds List of stripe boundaries
+   * @param[in] segmentation TODO
    * @param[in,out] enc_streams List of encoder chunk streams [column][rowgroup]
    * @param[in,out] strm_desc List of stream descriptors [stripe][data_stream]
    *
@@ -297,8 +275,7 @@ class writer::impl {
    */
   std::vector<StripeInformation> gather_stripes(
     size_t num_index_streams,
-    host_2dspan<rows_range const> rowgroup_bounds,
-    host_span<stripe_rowgroups const> stripe_bounds,
+    file_segmentation const& segmentation,
     hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
     hostdevice_2dvector<gpu::StripeStream>* strm_desc);
 
@@ -308,15 +285,12 @@ class writer::impl {
    *
    * @param orc_table Table information to be written
    * @param columns List of columns
-   * @param rowgroup_bounds List of rowgroup boundaries
-   * @param stripe_bounds List of stripe boundaries
+   * @param segmentation TODO
    *
    * @return The statistic blobs
    */
-  std::vector<std::vector<uint8_t>> gather_statistic_blobs(
-    orc_table_view const& orc_table,
-    device_2dspan<rows_range const> rowgroup_bounds,
-    host_span<stripe_rowgroups const> stripe_bounds);
+  std::vector<std::vector<uint8_t>> gather_statistic_blobs(orc_table_view const& orc_table,
+                                                           file_segmentation const& segmentation);
 
   /**
    * @brief Writes the specified column's row index stream.

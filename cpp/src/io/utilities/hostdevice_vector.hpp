@@ -174,6 +174,7 @@ class hostdevice_2dvector {
   }
 
   auto size() const noexcept { return _size; }
+  auto count() const noexcept { return _size.first * _size.second; }
 
   void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
   {

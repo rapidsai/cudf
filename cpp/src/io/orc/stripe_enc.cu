@@ -929,7 +929,7 @@ __global__ void __launch_bounds__(block_size)
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuEncodeStringDictionaries(StripeDictionary *stripes,
+  gpuEncodeStringDictionaries(StripeDictionary const *stripes,
                               device_2dspan<EncChunk const> chunks,
                               device_2dspan<encoder_chunk_streams> streams)
 {
@@ -1208,7 +1208,7 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
   gpuEncodeOrcColumnData<512><<<dim_grid, dim_block, 0, stream.value()>>>(chunks, streams);
 }
 
-void EncodeStripeDictionaries(StripeDictionary *stripes,
+void EncodeStripeDictionaries(StripeDictionary const *stripes,
                               device_2dspan<EncChunk const> chunks,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,
