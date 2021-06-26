@@ -253,7 +253,7 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
   }
 
   // Bail out for unsupported types.
-  CUDF_FAIL("Scalars of nested types are not currently supported!");
+  CUDF_FAIL("Unexpected types for copy");
   (void)lhs;
   (void)rhs;
   (void)size;
@@ -301,6 +301,7 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
   CUDF_EXPECTS(lhs.type() == rhs.type(), "Both inputs must be of the same type");
   CUDF_EXPECTS(boolean_mask.type() == data_type(type_id::BOOL8),
                "Boolean mask column must be of type type_id::BOOL8");
+
   if (boolean_mask.is_empty()) { return cudf::empty_like(lhs); }
 
   auto bool_mask_device_p             = column_device_view::create(boolean_mask);
