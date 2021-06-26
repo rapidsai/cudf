@@ -76,6 +76,8 @@ class aggregation {
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
+    RANK,            ///< get rank of current index (relative to rolling window)
+    DENSE_RANK,      ///< get dense rank of current index (relative to rolling window)
     COLLECT_LIST,    ///< collect values into a list
     COLLECT_SET,     ///< collect values into a list without duplicate entries
     MERGE_LISTS,     ///< merge multiple lists values into one list
@@ -237,6 +239,14 @@ std::unique_ptr<Base> make_nth_element_aggregation(
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_row_number_aggregation();
 
+/// Factory to create a RANK aggregation
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_rank_aggregation(table_view order_by);
+
+/// Factory to create a DENSE_RANK aggregation
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_dense_rank_aggregation(table_view order_by);
+
 /**
  * @brief Factory to create a COLLECT_LIST aggregation
  *
@@ -252,7 +262,7 @@ std::unique_ptr<Base> make_collect_list_aggregation(
   null_policy null_handling = null_policy::INCLUDE);
 
 /**
- * @brief Factory to create a COLLECT_SET aggregation.
+ * @brief Factory to create a COLLECT_SET aggregation
  *
  * `COLLECT_SET` returns a lists column of all included elements in the group/series. Within each
  * list, the duplicated entries are dropped out such that each entry appears only once.

@@ -106,6 +106,42 @@ void scan_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const& 
 
   cache.add_result(col_idx, agg, detail::count_scan(helper.group_labels(stream), stream, mr));
 }
+
+template <>
+void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) return;
+  auto const& rank_agg = dynamic_cast<::cudf::detail::rank_aggregation const&>(agg);
+
+  CUDF_EXPECTS(helper.is_presorted(),
+               "Rank aggregate in groupby scan requires the keys to be presorted");
+  CUDF_EXPECTS(
+    static_cast<std::size_t>(rank_agg._order_by.num_rows()) == helper.group_labels(stream).size(),
+    "Number of rows in the key and order tables do not match");
+  cache.add_result(
+    col_idx,
+    agg,
+    detail::rank_scan(
+      rank_agg._order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
+}
+
+template <>
+void scan_result_functor::operator()<aggregation::DENSE_RANK>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) return;
+  auto const& dense_agg = dynamic_cast<::cudf::detail::dense_rank_aggregation const&>(agg);
+
+  CUDF_EXPECTS(helper.is_presorted(),
+               "Dense rank aggregate in groupby scan requires the keys to be presorted");
+  CUDF_EXPECTS(
+    static_cast<std::size_t>(dense_agg._order_by.num_rows()) == helper.group_labels(stream).size(),
+    "Number of rows in the key and order tables do not match");
+  cache.add_result(
+    col_idx,
+    agg,
+    detail::dense_rank_scan(
+      dense_agg._order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
+}
 }  // namespace detail
 
 // Sort-based groupby
