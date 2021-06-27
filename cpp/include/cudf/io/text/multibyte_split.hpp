@@ -1,3 +1,5 @@
+#include <cudf/io/text/input_stream.hpp>
+
 #include <cudf/column/column.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -11,7 +13,7 @@ namespace io {
 namespace text {
 
 std::unique_ptr<cudf::column> multibyte_split(
-  std::istream& input,
+  cudf::io::text::input_stream& input,
   std::string delimeter,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

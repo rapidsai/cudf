@@ -19,6 +19,8 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
+#include <cudf/io/text/host_input_stream.hpp>
+
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -74,9 +76,10 @@ TEST_F(MultibyteSplitTest, Simple)
                                          "as",
                                          "delimeters."};
 
-  auto input_stream = std::basic_istringstream(input);
+  auto input_stream    = std::basic_istringstream(input);
+  auto input_stream_io = cudf::io::text::host_input_stream(input_stream);
 
-  auto out = cudf::io::text::multibyte_split(input_stream, separator);
+  auto out = cudf::io::text::multibyte_split(input_stream_io, separator);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
 }
