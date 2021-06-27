@@ -221,8 +221,8 @@ add_library(cudf
     src/interop/dlpack.cpp
     src/interop/from_arrow.cu
     src/interop/to_arrow.cu
-    src/io/avro/avro.cpp
     src/io/avro/avro_gpu.cu
+    src/io/avro/avro.cpp
     src/io/avro/reader_impl.cu
     src/io/comp/brotli_dict.cpp
     src/io/comp/cpu_unbz2.cpp
@@ -257,6 +257,7 @@ add_library(cudf
     src/io/parquet/writer_impl.cu
     src/io/statistics/orc_column_statistics.cu
     src/io/statistics/parquet_column_statistics.cu
+    src/io/text/multibyte_split.cu
     src/io/utilities/column_buffer.cpp
     src/io/utilities/data_sink.cpp
     src/io/utilities/datasource.cpp
