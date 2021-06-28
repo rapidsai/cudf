@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 #include "file_io_utilities.hpp"
-#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>  // TODO: remove
 #include <cudf/detail/utilities/integer_utils.hpp>
 
-#include <future>
+#include <future>  // TODO: Move to appropriate location. try removing
 #include <rmm/device_buffer.hpp>
 
 #include <dlfcn.h>
@@ -178,9 +178,10 @@ std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
                                                             size_t size,
                                                             rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_FUNC_RANGE();  // TODO: remove
   rmm::device_buffer out_data(size, stream);
   read(offset, size, reinterpret_cast<uint8_t *>(out_data.data()), stream);
+  // TODO: make use of the returned size to shrink out_data
   return datasource::buffer::create(std::move(out_data));
 }
 
@@ -207,8 +208,6 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
     void *dst_slice = dst + slice_offset;
 
     if (t == n_slices - 1) { slice_size = size % four_MB; }
-    // threads.push_back(
-    //   std::async(std::launch::async, read_slice, dst_slice, slice_size, offset + slice_offset));
     slice_tasks.push_back(pool.submit(read_slice, dst_slice, slice_size, offset + slice_offset));
 
     slice_offset += slice_size;
@@ -217,6 +216,7 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
     for (auto &thread : slice_tasks) {
       thread.wait();
       CUDF_EXPECTS(thread.get() != -1, "cuFile error reading from a file");
+      // TODO: calculate size inside this loop and move exception to inside read_slice
     }
     return size;
   };

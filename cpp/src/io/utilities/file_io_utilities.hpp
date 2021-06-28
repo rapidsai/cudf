@@ -109,6 +109,7 @@ class cufile_input : public cufile_io_base {
    */
   virtual size_t read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream) = 0;
 
+  // TODO: docs
   virtual std::future<size_t> read_async(size_t offset,
                                          size_t size,
                                          uint8_t *dst,
