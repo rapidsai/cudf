@@ -12,13 +12,15 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
-from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast
 from cudf._lib.column import Column
-from cudf._lib.nvtext.edit_distance import edit_distance as cpp_edit_distance
+from cudf._lib.nvtext.edit_distance import (
+    edit_distance as cpp_edit_distance,
+    edit_distance_matrix as cpp_edit_distance_matrix,
+)
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams as cpp_generate_character_ngrams,
     generate_ngrams as cpp_generate_ngrams,
@@ -168,6 +170,8 @@ from cudf.utils.dtypes import (
     is_string_dtype,
 )
 
+from ...api.types import is_integer
+
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
     np.dtype("int16"): str_cast.stoi16,
@@ -213,7 +217,7 @@ _timedelta_to_str_typecast_functions = {
 }
 
 
-ParentType = Union["cudf.Series", "cudf.Index"]
+ParentType = Union["cudf.Series", "cudf.core.index.BaseIndex"]
 
 
 class StringMethods(ColumnMethodsMixin):
@@ -260,6 +264,8 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(out, inplace=False)
 
+    hex_to_int = htoi
+
     def ip2int(self) -> ParentType:
         """
         This converts ip strings to integers
@@ -290,6 +296,8 @@ class StringMethods(ColumnMethodsMixin):
         out = str_cast.ip2int(self._column)
 
         return self._return_or_inplace(out, inplace=False)
+
+    ip_to_int = ip2int
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -478,6 +486,8 @@ class StringMethods(ColumnMethodsMixin):
         If the elements of a Series are lists themselves, join the content of
         these lists using the delimiter passed to the function.
         This function is an equivalent to :meth:`str.join`.
+        In the special case that the lists in the Series contain only ``None``,
+        a `<NA>`/`None` value will always be returned.
 
         Parameters
         ----------
@@ -486,10 +496,11 @@ class StringMethods(ColumnMethodsMixin):
             If array-like, the string at a position is used as a
             delimiter for corresponding row of the list entries.
         string_na_rep : str, default None
-            This character will take the place of any null strings
-            (not empty strings) in the Series.
-            If ``string_na_rep`` is ``None``, it defaults to empty
-            space "".
+            This character will take the place of null strings
+            (not empty strings) in the Series but will be considered
+            only if the Series contains list elements and those lists have
+            at least one non-null string. If ``string_na_rep`` is ``None``,
+            it defaults to empty space "".
         sep_na_rep : str, default None
             This character will take the place of any null strings
             (not empty strings) in `sep`. This parameter can be used
@@ -553,27 +564,31 @@ class StringMethods(ColumnMethodsMixin):
         dtype: object
 
         We can replace `<NA>`/`None` values present in lists using
-        ``string_na_rep``:
+        ``string_na_rep`` if the lists contain at least one valid string
+        (lists containing all `None` will result in a `<NA>`/`None` value):
 
-        >>> ser = cudf.Series([['a', 'b', None], None, ['c', 'd']])
+        >>> ser = cudf.Series([['a', 'b', None], [None, None, None], None, ['c', 'd']])
         >>> ser
-        0    [a, b, None]
-        1            None
-        2          [c, d]
+        0          [a, b, None]
+        1    [None, None, None]
+        2                  None
+        3                [c, d]
         dtype: list
         >>> ser.str.join(sep='_', string_na_rep='k')
         0    a_b_k
         1     <NA>
-        2      c_d
+        2     <NA>
+        3      c_d
         dtype: object
 
         We can replace `<NA>`/`None` values present in lists of ``sep``
         using ``sep_na_rep``:
 
-        >>> ser.str.join(sep=[None, '.', '-'], sep_na_rep='+')
+        >>> ser.str.join(sep=[None, '^', '.', '-'], sep_na_rep='+')
         0    a+b+
         1    <NA>
-        2     c-d
+        2    <NA>
+        3     c-d
         dtype: object
         """  # noqa E501
         if sep is None:
@@ -2750,7 +2765,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -2832,7 +2847,7 @@ class StringMethods(ColumnMethodsMixin):
         3    <NA>
         dtype: object
         """
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -2902,7 +2917,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -2956,7 +2971,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -3010,7 +3025,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -3225,7 +3240,7 @@ class StringMethods(ColumnMethodsMixin):
         1    another line\\nto be\\nwrapped
         dtype: object
         """
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -3970,7 +3985,7 @@ class StringMethods(ColumnMethodsMixin):
         new_col = cpp_code_points(self._column)
         if isinstance(self._parent, cudf.Series):
             return cudf.Series(new_col, name=self._parent.name)
-        elif isinstance(self._parent, cudf.Index):
+        elif isinstance(self._parent, cudf.BaseIndex):
             return cudf.core.index.as_index(new_col, name=self._parent.name)
         else:
             return new_col
@@ -4274,7 +4289,7 @@ class StringMethods(ColumnMethodsMixin):
         result_col = cpp_character_tokenize(self._column)
         if isinstance(self._parent, cudf.Series):
             return cudf.Series(result_col, name=self._parent.name)
-        elif isinstance(self._parent, cudf.Index):
+        elif isinstance(self._parent, cudf.BaseIndex):
             return cudf.core.index.as_index(result_col, name=self._parent.name)
         else:
             return result_col
@@ -4849,6 +4864,47 @@ class StringMethods(ColumnMethodsMixin):
             cpp_edit_distance(self._column, targets_column)
         )
 
+    def edit_distance_matrix(self) -> ParentType:
+        """Computes the edit distance between strings in the series.
+
+        The series to compute the matrix should have more than 2 strings and
+        should not contain nulls.
+
+        Edit distance is measured based on the `Levenshtein edit distance
+        algorithm
+        <https://www.cuelogic.com/blog/the-levenshtein-algorithm>`_.
+
+
+        Returns
+        -------
+        Series of ListDtype(int64)
+            Assume `N` is the length of this series. The return series contains
+            `N` lists of size `N`, where the `j`th number in the `i`th row of
+            the series tells the edit distance between the `i`th string and the
+            `j`th string of this series.
+            The matrix is symmetric. Diagonal elements are 0.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['abc', 'bc', 'cba'])
+        >>> s.str.edit_distance_matrix()
+        0    [0, 1, 2]
+        1    [1, 0, 2]
+        2    [2, 2, 0]
+        dtype: list
+        """
+        if self._column.size < 2:
+            raise ValueError(
+                "Require size >= 2 to compute edit distance matrix."
+            )
+        if self._column.has_nulls:
+            raise ValueError(
+                "Cannot compute edit distance between null strings. "
+                "Consider removing them using `dropna` or fill with `fillna`."
+            )
+        return self._return_or_inplace(cpp_edit_distance_matrix(self._column))
+
 
 def _massage_string_arg(value, name, allow_col=False):
     if isinstance(value, str):
@@ -5034,7 +5090,7 @@ class StringColumn(column.ColumnBase):
         result_col = self._process_for_reduction(
             skipna=skipna, min_count=min_count
         )
-        if isinstance(result_col, cudf.core.column.ColumnBase):
+        if isinstance(result_col, type(self)):
             return result_col.str().cat()
         else:
             return result_col
@@ -5060,13 +5116,6 @@ class StringColumn(column.ColumnBase):
 
     def str(self, parent: ParentType = None) -> StringMethods:
         return StringMethods(self, parent=parent)
-
-    @property
-    def _nbytes(self) -> int:
-        if self.size == 0:
-            return 0
-        else:
-            return self.children[1].size
 
     def as_numerical_column(
         self, dtype: Dtype
@@ -5184,7 +5233,7 @@ class StringColumn(column.ColumnBase):
         return self.to_arrow().to_pandas().values
 
     def to_pandas(
-        self, index: ColumnLike = None, nullable: bool = False, **kwargs
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "pd.Series":
         if nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
@@ -5197,7 +5246,7 @@ class StringColumn(column.ColumnBase):
         return pd_series
 
     def serialize(self) -> Tuple[dict, list]:
-        header = {"null_count": self.null_count}  # type: Dict[Any, Any]
+        header: Dict[Any, Any] = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
         header["size"] = self.size
 
@@ -5359,7 +5408,9 @@ class StringColumn(column.ColumnBase):
             if op == "add":
                 return cast("column.ColumnBase", lhs.str().cat(others=rhs))
             elif op in ("eq", "ne", "gt", "lt", "ge", "le", "NULL_EQUALS"):
-                return _string_column_binop(self, rhs, op=op, out_dtype="bool")
+                return libcudf.binaryop.binaryop(
+                    lhs=self, rhs=rhs, op=op, dtype="bool"
+                )
 
         raise TypeError(
             f"{op} operator not supported between {type(self)} and {type(rhs)}"
@@ -5390,17 +5441,6 @@ class StringColumn(column.ColumnBase):
         )
 
         return to_view.view(dtype)
-
-
-@annotate("BINARY_OP", color="orange", domain="cudf_python")
-def _string_column_binop(
-    lhs: "column.ColumnBase",
-    rhs: "column.ColumnBase",
-    op: str,
-    out_dtype: Dtype,
-) -> "column.ColumnBase":
-    out = libcudf.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
-    return out
 
 
 def _get_cols_list(parent_obj, others):

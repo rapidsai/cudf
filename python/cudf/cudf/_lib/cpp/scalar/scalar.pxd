@@ -9,12 +9,15 @@ from libcpp.string cimport string
 from cudf._lib.cpp.types cimport data_type
 from cudf._lib.cpp.wrappers.decimals cimport scale_type
 
+from cudf._lib.cpp.column.column_view cimport column_view
+
+
 cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
     cdef cppclass scalar:
         scalar() except +
         scalar(scalar other) except +
         data_type type() except +
-        void set_valid(bool is_valid) except +
+        void set_valid_async(bool is_valid) except +
         bool is_valid() except +
 
     cdef cppclass numeric_scalar[T](scalar):
@@ -60,3 +63,7 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
                            bool is_valid) except +
         int64_t value() except +
         # TODO: Figure out how to add an int32 overload of value()
+
+    cdef cppclass list_scalar(scalar):
+        list_scalar(column_view col) except +
+        column_view view() except +

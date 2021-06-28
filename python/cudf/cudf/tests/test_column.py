@@ -368,6 +368,32 @@ def test_as_column_buffer(data, expected):
 
 
 @pytest.mark.parametrize(
+    "data,expected",
+    [
+        (
+            pa.array([100, 200, 300], type=pa.decimal128(3)),
+            cudf.core.column.as_column(
+                [100, 200, 300], dtype=cudf.core.dtypes.Decimal64Dtype(3, 0)
+            ),
+        ),
+        (
+            pa.array([{"a": 1, "b": 3}, {"c": 2, "d": 4}]),
+            cudf.core.column.as_column([{"a": 1, "b": 3}, {"c": 2, "d": 4}]),
+        ),
+        (
+            pa.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]),
+            cudf.core.column.as_column(
+                [[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]
+            ),
+        ),
+    ],
+)
+def test_as_column_arrow_array(data, expected):
+    actual_column = cudf.core.column.as_column(data)
+    assert_eq(cudf.Series(actual_column), cudf.Series(expected))
+
+
+@pytest.mark.parametrize(
     "pd_dtype,expect_dtype",
     [
         # TODO: Nullable float is coming
@@ -441,3 +467,17 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
     ).to_array()
 
     np.testing.assert_array_equal(expect_mask, got_mask)
+
+
+def test_concatenate_large_column_strings():
+    num_strings = 1_000_000
+    string_scale_f = 100
+
+    s_1 = cudf.Series(["very long string " * string_scale_f] * num_strings)
+    s_2 = cudf.Series(["very long string " * string_scale_f] * num_strings)
+
+    with pytest.raises(
+        OverflowError,
+        match="total size of output is too large for a cudf column",
+    ):
+        cudf.concat([s_1, s_2])

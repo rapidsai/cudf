@@ -30,7 +30,7 @@ constexpr T divCeil(T dividend, T divisor) noexcept
  * @brief Sets the specified element of the array to the passed value
  */
 template <class T, class V>
-__device__ __forceinline__ void setElement(T* array, cudf::size_type idx, const T& t, const V& v)
+__device__ __forceinline__ void setElement(T* array, cudf::size_type idx, const T& t, const V&)
 {
   array[idx] = t;
 }
@@ -53,7 +53,7 @@ __device__ __forceinline__ void setElement(thrust::pair<T, V>* array,
  * Does not do anything, indexing is not allowed with void* arrays.
  */
 template <class T, class V>
-__device__ __forceinline__ void setElement(void* array, cudf::size_type idx, const T& t, const V& v)
+__device__ __forceinline__ void setElement(void*, cudf::size_type, const T&, const V&)
 {
 }
 

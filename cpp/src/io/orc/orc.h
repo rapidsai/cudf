@@ -23,12 +23,11 @@
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/optional.h>
-
 #include <stddef.h>
 #include <stdint.h>
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -56,10 +55,10 @@ struct SchemaType {
   TypeKind kind = INVALID_TYPE_KIND;  // the kind of this type
   std::vector<uint32_t> subtypes;  // the type ids of any subcolumns for list, map, struct, or union
   std::vector<std::string> fieldNames;  // the list of field names for struct
-  uint32_t maximumLength =
-    0;  // optional: the maximum length of the type for varchar or char in UTF-8 characters
-  uint32_t precision = 0;  // optional: the precision and scale for decimal
-  uint32_t scale     = 0;
+  std::optional<uint32_t>
+    maximumLength;  // the maximum length of the type for varchar or char in UTF-8 characters
+  std::optional<uint32_t> precision;  // the precision for decimal
+  std::optional<uint32_t> scale;      // the scale for decimal
 };
 
 struct UserMetadataItem {
@@ -87,9 +86,10 @@ struct Stream {
 
   // Returns index of the column in the table, if any
   // Stream of the 'column 0' does not have a corresponding column in the table
-  thrust::optional<uint32_t> column_index() const noexcept
+  std::optional<uint32_t> column_index() const noexcept
   {
-    return column_id.value_or(0) > 0 ? thrust::optional<uint32_t>{*column_id - 1} : thrust::nullopt;
+    return column_id.value_or(0) > 0 ? std::optional<uint32_t>{*column_id - 1}
+                                     : std::optional<uint32_t>{};
   }
 };
 
@@ -107,18 +107,18 @@ struct StripeFooter {
 /**
  * @brief Contains per-column ORC statistics.
  *
- * At most one of the `***_statistics` members has a non-null value.
+ * At most one of the `***_statistics` members has a value.
  */
 struct column_statistics {
-  std::unique_ptr<uint64_t> number_of_values;
-  std::unique_ptr<integer_statistics> int_stats;
-  std::unique_ptr<double_statistics> double_stats;
-  std::unique_ptr<string_statistics> string_stats;
-  std::unique_ptr<bucket_statistics> bucket_stats;
-  std::unique_ptr<decimal_statistics> decimal_stats;
-  std::unique_ptr<date_statistics> date_stats;
-  std::unique_ptr<binary_statistics> binary_stats;
-  std::unique_ptr<timestamp_statistics> timestamp_stats;
+  std::optional<uint64_t> number_of_values;
+  std::optional<integer_statistics> int_stats;
+  std::optional<double_statistics> double_stats;
+  std::optional<string_statistics> string_stats;
+  std::optional<bucket_statistics> bucket_stats;
+  std::optional<decimal_statistics> decimal_stats;
+  std::optional<date_statistics> date_stats;
+  std::optional<binary_statistics> binary_stats;
+  std::optional<timestamp_statistics> timestamp_stats;
   // TODO: hasNull (issue #7087)
 };
 
@@ -229,15 +229,6 @@ class ProtobufReader {
 
   // optional fields don't change the field number encoding
   template <typename T,
-            typename std::enable_if_t<
-              std::is_same<T, std::unique_ptr<typename T::element_type>>::value> * = nullptr>
-  int static constexpr encode_field_number(int field_number) noexcept
-  {
-    return encode_field_number_base<typename T::element_type>(field_number);
-  }
-
-  // optional fields don't change the field number encoding
-  template <typename T,
             typename std::enable_if_t<std::is_same<T, std::optional<typename T::value_type>>::value>
               * = nullptr>
   int static constexpr encode_field_number(int field_number) noexcept
@@ -285,16 +276,6 @@ class ProtobufReader {
     auto const size = read_field_size(end);
     value.emplace_back();
     read(value.back(), size);
-  }
-
-  template <typename T,
-            typename std::enable_if_t<
-              std::is_same<T, std::unique_ptr<typename T::element_type>>::value> * = nullptr>
-  void read_field(T &value, const uint8_t *end)
-  {
-    typename T::element_type contained_value;
-    read_field(contained_value, end);
-    value = std::make_unique<typename T::element_type>(std::move(contained_value));
   }
 
   template <typename T,
@@ -564,35 +545,18 @@ class metadata {
   using OrcStripeInfo = std::pair<const StripeInformation *, const StripeFooter *>;
 
  public:
+  struct stripe_source_mapping {
+    int source_idx;
+    std::vector<OrcStripeInfo> stripe_info;
+  };
+
+ public:
   explicit metadata(datasource *const src);
-
-  /**
-   * @brief Filters and reads the info of only a selection of stripes
-   *
-   * @param[in] stripes Indices of individual stripes
-   * @param[in] row_start Starting row of the selection
-   * @param[in,out] row_count Total number of rows selected
-   *
-   * @return List of stripe info and total number of selected rows
-   */
-  std::vector<OrcStripeInfo> select_stripes(const std::vector<size_type> &stripes,
-                                            size_type &row_start,
-                                            size_type &row_count);
-
-  /**
-   * @brief Filters and reduces down to a selection of columns
-   *
-   * @param[in] use_names List of column names to select
-   * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
-   *
-   * @return List of ORC column indexes
-   */
-  std::vector<int> select_columns(std::vector<std::string> use_names, bool &has_timestamp_column);
 
   size_t get_total_rows() const { return ff.numberOfRows; }
   int get_num_stripes() const { return ff.stripes.size(); }
   int get_num_columns() const { return ff.types.size(); }
-  std::string const &get_column_name(int32_t column_id)
+  std::string const &get_column_name(int32_t column_id) const
   {
     if (column_names.empty() && get_num_columns() != 0) { init_column_names(); }
     return column_names[column_id];
@@ -605,6 +569,7 @@ class metadata {
   Metadata md;
   std::vector<StripeFooter> stripefooters;
   std::unique_ptr<OrcDecompressor> decompressor;
+  datasource *const source;
 
  private:
   struct schema_indexes {
@@ -612,10 +577,9 @@ class metadata {
     int32_t field  = -1;
   };
   std::vector<schema_indexes> get_schema_indexes() const;
-  void init_column_names();
+  void init_column_names() const;
 
-  std::vector<std::string> column_names;
-  datasource *const source;
+  mutable std::vector<std::string> column_names;
 };
 
 }  // namespace orc

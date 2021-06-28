@@ -153,34 +153,47 @@ struct dispatch_compute_indices {
         }));
 
     auto new_keys_view = column_device_view::create(new_keys, stream);
+
+    auto begin = new_keys_view->begin<Element>();
+    auto end   = new_keys_view->end<Element>();
+
     // create the indices output column
     auto result = make_numeric_column(
       all_indices.type(), all_indices.size(), mask_state::UNALLOCATED, stream, mr);
     auto result_itr =
       cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
     // new indices values are computed by matching the concatenated keys to the new key set
+
+#ifdef NDEBUG
     thrust::lower_bound(rmm::exec_policy(stream),
-                        new_keys_view->begin<Element>(),
-                        new_keys_view->end<Element>(),
+                        begin,
+                        end,
                         all_itr,
                         all_itr + all_indices.size(),
                         result_itr,
                         thrust::less<Element>());
+#else
+    // There is a problem with thrust::lower_bound and the output_indexalator.
+    // https://github.com/NVIDIA/thrust/issues/1452; thrust team created nvbug 3322776
+    // This is a workaround.
+    thrust::transform(rmm::exec_policy(stream),
+                      all_itr,
+                      all_itr + all_indices.size(),
+                      result_itr,
+                      [begin, end] __device__(auto key) {
+                        auto itr = thrust::lower_bound(thrust::seq, begin, end, key);
+                        return static_cast<size_type>(thrust::distance(begin, itr));
+                      });
+#endif
     return result;
   }
 
-  template <typename Element>
+  template <typename Element, typename... Args>
   typename std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(),
                             std::unique_ptr<column>>
-  operator()(column_view const&,
-             column_view const&,
-             column_view const&,
-             offsets_pair const*,
-             size_type const*,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource*)
+  operator()(Args&&...)
   {
-    CUDF_FAIL("list_view as keys for dictionary not supported");
+    CUDF_FAIL("dictionary concatenate not supported for this column type");
   }
 };
 

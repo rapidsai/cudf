@@ -4,8 +4,10 @@ from __future__ import annotations
 import pyarrow as pa
 
 import cudf
-from cudf.core.column import ColumnBase
+from cudf._typing import Dtype
+from cudf.core.column import ColumnBase, build_struct_column
 from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.dtypes import StructDtype
 from cudf.utils.dtypes import is_struct_dtype
 
 
@@ -97,7 +99,7 @@ class StructColumn(ColumnBase):
         )
         return StructColumn(
             data=None,
-            size=self.base_size,
+            size=self.size,
             dtype=dtype,
             mask=self.base_mask,
             offset=self.offset,
@@ -110,6 +112,22 @@ class StructColumn(ColumnBase):
         raise NotImplementedError(
             "Structs are not yet supported via `__cuda_array_interface__`"
         )
+
+    def _with_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
+        if isinstance(dtype, StructDtype):
+            return build_struct_column(
+                names=dtype.fields.keys(),
+                children=tuple(
+                    self.base_children[i]._with_type_metadata(dtype.fields[f])
+                    for i, f in enumerate(dtype.fields.keys())
+                ),
+                mask=self.base_mask,
+                size=self.size,
+                offset=self.offset,
+                null_count=self.null_count,
+            )
+
+        return self
 
 
 class StructMethods(ColumnMethodsMixin):

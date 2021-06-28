@@ -145,6 +145,7 @@ void check_float_column(cudf::column_view const& col,
 struct JsonReaderTest : public cudf::test::BaseFixture {
 };
 
+/*
 TEST_F(JsonReaderTest, BasicJsonLines)
 {
   std::string data = "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n";
@@ -614,7 +615,7 @@ TEST_F(JsonReaderTest, JsonLinesObjectsOutOfOrder)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                  cudf::test::strings_column_wrapper({"aaa", "bbb"}));
 }
-
+*/
 /*
 // currently, the json reader is strict about having non-empty input.
 TEST_F(JsonReaderTest, EmptyFile) {
@@ -648,7 +649,7 @@ TEST_F(JsonReaderTest, NoDataFile) {
   EXPECT_EQ(0, view.num_columns());
 }
 */
-
+/*
 TEST_F(JsonReaderTest, ArrowFileSource)
 {
   const std::string fname = temp_env->get_temp_dir() + "ArrowFileSource.csv";
@@ -859,6 +860,40 @@ TEST_F(JsonReaderTest, ParseOutOfRangeIntegers)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_greater_uint64_max_append, view.column(7));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_less_int64_min_append, view.column(8));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_mixed_range_append, view.column(9));
+}
+*/
+TEST_F(JsonReaderTest, JsonLinesMultipleFileInputs)
+{
+  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
+  std::ofstream outfile(file1, std::ofstream::out);
+  outfile << "[11, 1.1]\n[22, 2.2]\n";
+  outfile.close();
+
+  const std::string file2 = temp_env->get_temp_dir() + "JsonLinesFileTest2.json";
+  std::ofstream outfile2(file2, std::ofstream::out);
+  outfile2 << "[33, 3.3]\n[44, 4.4]";
+  outfile2.close();
+
+  cudf_io::json_reader_options in_options =
+    cudf_io::json_reader_options::builder(cudf_io::source_info{{file1, file2}}).lines(true);
+
+  cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 2);
+  EXPECT_EQ(result.tbl->num_rows(), 4);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+
+  EXPECT_EQ(std::string(result.metadata.column_names[0]), "0");
+  EXPECT_EQ(std::string(result.metadata.column_names[1]), "1");
+
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{11, 22, 33, 44}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                 float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
 }
 
 CUDF_TEST_PROGRAM_MAIN()

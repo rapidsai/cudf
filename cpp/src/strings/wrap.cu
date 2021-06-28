@@ -23,7 +23,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -99,7 +98,7 @@ std::unique_ptr<column> wrap(
   CUDF_EXPECTS(width > 0, "Positive wrap width required");
 
   auto strings_count = strings.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   auto strings_column  = column_device_view::create(strings.parent(), stream);
   auto d_column        = *strings_column;
