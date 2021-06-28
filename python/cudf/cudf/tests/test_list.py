@@ -379,6 +379,7 @@ def test_list_scalar_host_construction(data):
     assert slr.value == data
     assert slr.device_value.value == data
 
+
 @pytest.mark.parametrize(
     "elem_type", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["str"]
 )
@@ -457,44 +458,40 @@ def test_serialize_list_columns(data):
     recreated = df.__class__.deserialize(*df.serialize())
     assert_eq(recreated, df)
 
-@pytest.mark.parametrize('data,item', [
-    (
-        # basic list into a list column
-        [
-            [1,2,3],
-            [4,5,6],
-            [7,8,9]
-        ],
-        [0,0,0]
-    ),
-    (
-        # nested list into nested list column
-        [
-            [[1,2,3], [4,5,6]],
-            [[1,2,3], [4,5,6]],
-            [[1,2,3], [4,5,6]]
-        ],
-        [[0,0,0], [0,0,0]]
-    ),
-    (
-        # NA into a list column
-        [
-            [1,2,3],
-            [4,5,6],
-            [7,8,9]
-        ],
-        NA
-    ),
-    (
-        # NA into nested list column
-        [
-            [[1,2,3], [4,5,6]],
-            [[1,2,3], [4,5,6]],
-            [[1,2,3], [4,5,6]]
-        ],
-        NA
-    ),
-])
+
+@pytest.mark.parametrize(
+    "data,item",
+    [
+        (
+            # basic list into a list column
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            [0, 0, 0],
+        ),
+        (
+            # nested list into nested list column
+            [
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+            ],
+            [[0, 0, 0], [0, 0, 0]],
+        ),
+        (
+            # NA into a list column
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            NA,
+        ),
+        (
+            # NA into nested list column
+            [
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+            ],
+            NA,
+        ),
+    ],
+)
 def test_listcol_setitem(data, item):
     sr = cudf.Series(data)
 
@@ -504,26 +501,22 @@ def test_listcol_setitem(data, item):
 
     assert_eq(expect, sr)
 
-@pytest.mark.parametrize('data,item,error', [
-    (
-        [
-            [1,2,3],
-            [4,5,6],
-            [7,8,9]
-        ],
-        [[1,2,3],[4,5,6]],
-        'list nesting level mismatch'
-    ),
-    (
-        [
-            [1,2,3],
-            [4,5,6],
-            [7,8,9]
-        ],
-        0,
-        'Can not set 0 into ListColumn'
-    ),
-])
+
+@pytest.mark.parametrize(
+    "data,item,error",
+    [
+        (
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            [[1, 2, 3], [4, 5, 6]],
+            "list nesting level mismatch",
+        ),
+        (
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            0,
+            "Can not set 0 into ListColumn",
+        ),
+    ],
+)
 def test_listcol_setitem_error_cases(data, item, error):
     sr = cudf.Series(data)
     with pytest.raises(BaseException, match=error):

@@ -86,7 +86,6 @@ class ListColumn(ColumnBase):
             raise ValueError(f"Can not set {value} into ListColumn")
         super().__setitem__(key, value)
 
-
     @property
     def base_size(self):
         # in some cases, libcudf will return an empty ListColumn with no
