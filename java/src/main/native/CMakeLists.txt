@@ -270,7 +270,6 @@ set(SOURCE_FILES
     "src/RmmJni.cpp"
     "src/ScalarJni.cpp"
     "src/TableJni.cpp"
-    "src/prefix_sum.cu"
     "src/map_lookup.cu")
 add_library(cudfjni SHARED ${SOURCE_FILES})
 
