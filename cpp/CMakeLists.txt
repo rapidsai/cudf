@@ -41,6 +41,7 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+option(BUILD_NVBENCH "Configure CMake to build NVBench" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
@@ -55,6 +56,7 @@ option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF: Configure CMake to build (google) benchmarks: ${BUILD_BENCHMARKS}")
+message(VERBOSE "CUDF: Configure CMake to build NVBench: ${BUILD_NVBENCH}")
 message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
@@ -68,6 +70,7 @@ message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}"
 set(DEFAULT_BUILD_TYPE "Release")
 set(CUDF_BUILD_TESTS ${BUILD_TESTS})
 set(CUDF_BUILD_BENCHMARKS ${BUILD_BENCHMARKS})
+set(CUDF_BUILD_NVBENCH ${BUILD_NVBENCH})
 
 set(CUDF_CXX_FLAGS "")
 set(CUDF_CUDA_FLAGS "")
@@ -576,6 +579,17 @@ if(CUDF_BUILD_BENCHMARKS)
         OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
                         "BENCHMARK_ENABLE_INSTALL OFF")
     add_subdirectory(benchmarks)
+endif()
+
+if(CUDF_BUILD_NVBENCH)
+    # Find or install NVBench
+    CPMFindPackage(NAME nvbench
+        GIT_REPOSITORY  https://github.com/NVIDIA/nvbench.git
+        GIT_TAG         main
+        GIT_SHALLOW     TRUE
+        OPTIONS         "NVBench_ENABLE_EXAMPLES OFF"
+                        "NVBench_ENABLE_TESTING OFF")
+    add_subdirectory(nvbench)
 endif()
 
 ###################################################################################################
