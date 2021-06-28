@@ -193,16 +193,18 @@ bool OpenZipArchive(zip_archive_s *dst, const uint8_t *raw, size_t len)
   memset(dst, 0, sizeof(zip_archive_s));
   // Find the end of central directory
   if (len >= sizeof(zip_eocd_s) + 2) {
-    for (size_t i = len - sizeof(zip_eocd_s) - 2; i + sizeof(zip_eocd_s) + 2 + 0xffff >= len; i--) {
+    for (ptrdiff_t i = len - sizeof(zip_eocd_s) - 2;
+         i + sizeof(zip_eocd_s) + 2 + 0xffff >= len && i >= 0;
+         i--) {
       const zip_eocd_s *eocd = reinterpret_cast<zip_eocd_s const *>(raw + i);
       if (eocd->sig == 0x06054b50 &&
           eocd->disk_id == eocd->start_disk  // multi-file archives not supported
           && eocd->num_entries == eocd->total_entries &&
           eocd->cdir_size >= sizeof(zip_cdfh_s) * eocd->num_entries && eocd->cdir_offset < len &&
-          i + *reinterpret_cast<const uint16_t *>(eocd + 1) <= len) {
+          i + *reinterpret_cast<const uint16_t *>(eocd + 1) <= static_cast<ptrdiff_t>(len)) {
         const zip_cdfh_s *cdfh = reinterpret_cast<const zip_cdfh_s *>(raw + eocd->cdir_offset);
         dst->eocd              = eocd;
-        if (i >= sizeof(zip64_eocdl)) {
+        if (i >= static_cast<ptrdiff_t>(sizeof(zip64_eocdl))) {
           const zip64_eocdl *eocdl =
             reinterpret_cast<const zip64_eocdl *>(raw + i - sizeof(zip64_eocdl));
           if (eocdl->sig == 0x07064b50) { dst->eocdl = eocdl; }

@@ -1,13 +1,12 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 from decimal import Decimal
-from numbers import Number
 from typing import Any, Sequence, Tuple, Union, cast
+from warnings import warn
 
 import cupy as cp
 import numpy as np
 import pyarrow as pa
-from pandas.api.types import is_integer_dtype
 
 import cudf
 from cudf import _lib as libcudf
@@ -22,11 +21,17 @@ from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
+from .numerical_base import NumericalBaseColumn
+from ...api.types import is_integer_dtype
 
-class DecimalColumn(ColumnBase):
+
+class DecimalColumn(NumericalBaseColumn):
     dtype: Decimal64Dtype
 
     def __truediv__(self, other):
+        # TODO: This override is not sufficient. While it will change the
+        # behavior of x / y for two decimal columns, it will not affect
+        # col1.binary_operator(col2), which is how Series/Index will call this.
         return self.binary_operator("div", other)
 
     def __setitem__(self, key, value):
@@ -123,39 +128,6 @@ class DecimalColumn(ColumnBase):
         else:
             raise TypeError(f"cannot normalize {type(other)}")
 
-    def _apply_scan_op(self, op: str) -> ColumnBase:
-        result = libcudf.reduce.scan(op, self, True)
-        return self._copy_type_metadata(result)
-
-    def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
-    ) -> ColumnBase:
-        if isinstance(q, Number) or cudf.utils.dtypes.is_list_like(q):
-            np_array_q = np.asarray(q)
-            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
-                raise ValueError(
-                    "percentiles should all be in the interval [0, 1]"
-                )
-        # Beyond this point, q either being scalar or list-like
-        # will only have values in range [0, 1]
-        result = self._decimal_quantile(q, interpolation, exact)
-        if isinstance(q, Number):
-            return (
-                cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-                if result[0] is cudf.NA
-                else result[0]
-            )
-        return result
-
-    def median(self, skipna: bool = None) -> ColumnBase:
-        skipna = True if skipna is None else skipna
-
-        if not skipna and self.has_nulls:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-        # enforce linear in case the default ever changes
-        return self.quantile(0.5, interpolation="linear", exact=True)
-
     def _decimal_quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> ColumnBase:
@@ -170,11 +142,20 @@ class DecimalColumn(ColumnBase):
             self, quant, interpolation, sorted_indices, exact
         )
 
-        return self._copy_type_metadata(result)
+        return result._with_type_metadata(self.dtype)
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DecimalColumn":
+        if (
+            isinstance(dtype, Decimal64Dtype)
+            and dtype.scale < self.dtype.scale
+        ):
+            warn(
+                "cuDF truncates when downcasting decimals to a lower scale. "
+                "To round, use Series.round() or DataFrame.round()."
+            )
+
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
@@ -193,37 +174,6 @@ class DecimalColumn(ColumnBase):
             return cast(
                 "cudf.core.column.StringColumn", as_column([], dtype="object")
             )
-
-    def reduce(self, op: str, skipna: bool = None, **kwargs) -> Decimal:
-        min_count = kwargs.pop("min_count", 0)
-        preprocessed = self._process_for_reduction(
-            skipna=skipna, min_count=min_count
-        )
-        if isinstance(preprocessed, ColumnBase):
-            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
-        else:
-            return preprocessed
-
-    def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ) -> Decimal:
-        return self.reduce(
-            "sum", skipna=skipna, dtype=dtype, min_count=min_count
-        )
-
-    def product(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ) -> Decimal:
-        return self.reduce(
-            "product", skipna=skipna, dtype=dtype, min_count=min_count
-        )
-
-    def sum_of_squares(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ) -> Decimal:
-        return self.reduce(
-            "sum_of_squares", skipna=skipna, dtype=dtype, min_count=min_count
-        )
 
     def fillna(
         self, value: Any = None, method: str = None, dtype: Dtype = None
@@ -249,7 +199,7 @@ class DecimalColumn(ColumnBase):
         result = libcudf.replace.replace_nulls(
             input_col=self, replacement=value, method=method, dtype=dtype
         )
-        return self._copy_type_metadata(result)
+        return result._with_type_metadata(self.dtype)
 
     def serialize(self) -> Tuple[dict, list]:
         header, frames = super().serialize()
@@ -268,6 +218,14 @@ class DecimalColumn(ColumnBase):
         raise NotImplementedError(
             "Decimals are not yet supported via `__cuda_array_interface__`"
         )
+
+    def _with_type_metadata(
+        self: "cudf.core.column.DecimalColumn", dtype: Dtype
+    ) -> "cudf.core.column.DecimalColumn":
+        if isinstance(dtype, Decimal64Dtype):
+            self.dtype.precision = dtype.precision
+
+        return self
 
 
 def _binop_scale(l_dtype, r_dtype, op):
@@ -294,8 +252,10 @@ def _binop_precision(l_dtype, r_dtype, op):
     p1, p2 = l_dtype.precision, r_dtype.precision
     s1, s2 = l_dtype.scale, r_dtype.scale
     if op in ("add", "sub"):
-        return max(s1, s2) + max(p1 - s1, p2 - s2) + 1
+        result = max(s1, s2) + max(p1 - s1, p2 - s2) + 1
     elif op in ("mul", "div"):
-        return p1 + p2 + 1
+        result = p1 + p2 + 1
     else:
         raise NotImplementedError()
+
+    return min(result, cudf.Decimal64Dtype.MAX_PRECISION)

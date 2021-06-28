@@ -61,7 +61,7 @@ std::unique_ptr<column> pad(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
   CUDF_EXPECTS(!fill_char.empty(), "fill_char parameter must not be empty");
   char_utf8 d_fill_char    = 0;
   size_type fill_char_size = to_char_utf8(fill_char.c_str(), d_fill_char);
@@ -82,7 +82,7 @@ std::unique_ptr<column> pad(
   // build chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
 
   if (side == pad_side::LEFT) {
@@ -151,7 +151,7 @@ std::unique_ptr<column> zfill(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
@@ -170,7 +170,7 @@ std::unique_ptr<column> zfill(
   // build chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
 
   thrust::for_each_n(rmm::exec_policy(stream),

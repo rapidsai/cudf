@@ -195,21 +195,6 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
 {
   if constexpr (std::is_same<Left, cudf::column_view>::value &&
                 std::is_same<Right, cudf::column_view>::value) {
-    auto const null_map_entry = size + 1;  // Out of bounds index, for gather() to nullify.
-
-    auto const gather_lhs = make_counting_transform_iterator(
-      size_type{0}, lhs_gather_map_functor<Filter>{is_left, null_map_entry});
-
-    auto const lhs_gathered_columns =
-      cudf::detail::gather(table_view{std::vector<cudf::column_view>{lhs}},
-                           gather_lhs,
-                           gather_lhs + size,
-                           out_of_bounds_policy::NULLIFY,
-                           stream,
-                           mr)
-        ->release();
-    auto& lhs_partial_output = lhs_gathered_columns[0];
-
     auto scatter_map_rhs = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
     auto const scatter_map_end = thrust::copy_if(rmm::exec_policy(stream),
                                                  thrust::make_counting_iterator(size_type{0}),
@@ -227,7 +212,7 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
       table_view{std::vector<column_view>{scatter_src_rhs->get_column(0).view()}},
       scatter_map_rhs.begin(),
       scatter_map_end,
-      table_view{std::vector<column_view>{lhs_partial_output->view()}},
+      table_view{std::vector<column_view>{lhs}},
       false,
       stream,
       mr);
@@ -241,42 +226,13 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
   //   1. Struct scalars are not yet available.
   //   2. List scalars do not yet support explosion to a full column.
   CUDF_FAIL("Scalars of nested types are not currently supported!");
+  (void)lhs;
+  (void)rhs;
+  (void)size;
+  (void)is_left;
+  (void)stream;
+  (void)mr;
 }
-
-/**
- * @brief Specialization of copy_if_else_functor for list_views.
- */
-template <>
-struct copy_if_else_functor_impl<list_view> {
-  template <typename Left, typename Right, typename Filter>
-  std::unique_ptr<column> operator()(Left const& lhs,
-                                     Right const& rhs,
-                                     size_type size,
-                                     bool left_nullable,
-                                     bool right_nullable,
-                                     Filter filter,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, mr);
-  }
-};
-
-template <>
-struct copy_if_else_functor_impl<struct_view> {
-  template <typename Left, typename Right, typename Filter>
-  std::unique_ptr<column> operator()(Left const& lhs,
-                                     Right const& rhs,
-                                     size_type size,
-                                     bool left_nullable,
-                                     bool right_nullable,
-                                     Filter filter,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, mr);
-  }
-};
 
 /**
  * @brief Functor called by the `type_dispatcher` to invoke copy_if_else on combinations
@@ -293,6 +249,12 @@ struct copy_if_else_functor {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
+    if constexpr (std::is_same_v<T, cudf::list_view> or std::is_same_v<T, cudf::struct_view>) {
+      (void)left_nullable;
+      (void)right_nullable;
+      return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, mr);
+    }
+
     copy_if_else_functor_impl<T> copier{};
     return copier(lhs, rhs, size, left_nullable, right_nullable, filter, stream, mr);
   }
@@ -312,7 +274,7 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
   CUDF_EXPECTS(boolean_mask.type() == data_type(type_id::BOOL8),
                "Boolean mask column must be of type type_id::BOOL8");
 
-  if (boolean_mask.is_empty()) { return cudf::make_empty_column(lhs.type()); }
+  if (boolean_mask.is_empty()) { return cudf::empty_like(lhs); }
 
   auto bool_mask_device_p             = column_device_view::create(boolean_mask);
   column_device_view bool_mask_device = *bool_mask_device_p;

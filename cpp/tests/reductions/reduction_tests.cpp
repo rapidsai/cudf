@@ -402,7 +402,13 @@ TYPED_TEST(MultiStepReductionTest, Mean)
                        cudf::data_type(cudf::type_id::FLOAT64));
 }
 
+// This test is disabled for only a Debug build because a compiler error
+// documented in cpp/src/reductions/std.cu and cpp/src/reductions/var.cu
+#ifdef NDEBUG
 TYPED_TEST(MultiStepReductionTest, var_std)
+#else
+TYPED_TEST(MultiStepReductionTest, DISABLED_var_std)
+#endif
 {
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
@@ -471,7 +477,13 @@ struct ReductionMultiStepErrorCheck : public ReductionTest<T> {
 
 TYPED_TEST_CASE(ReductionMultiStepErrorCheck, cudf::test::AllTypes);
 
+// This test is disabled for only a Debug build because a compiler error
+// documented in cpp/src/reductions/std.cu and cpp/src/reductions/var.cu
+#ifdef NDEBUG
 TYPED_TEST(ReductionMultiStepErrorCheck, ErrorHandling)
+#else
+TYPED_TEST(ReductionMultiStepErrorCheck, DISABLED_ErrorHandling)
+#endif
 {
   using T = TypeParam;
   std::vector<int> int_values({-3, 2});
@@ -700,7 +712,13 @@ struct ReductionParamTest : public ReductionTest<double>,
 
 INSTANTIATE_TEST_CASE_P(ddofParam, ReductionParamTest, ::testing::Range(1, 5));
 
+// This test is disabled for only a Debug build because a compiler error
+// documented in cpp/src/reductions/std.cu and cpp/src/reductions/var.cu
+#ifdef NDEBUG
 TEST_P(ReductionParamTest, std_var)
+#else
+TEST_P(ReductionParamTest, DISABLED_std_var)
+#endif
 {
   int ddof = GetParam();
   std::vector<double> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
@@ -1681,7 +1699,11 @@ TYPED_TEST(DictionaryReductionTest, Mean)
                        output_type);
 }
 
+#ifdef NDEBUG
 TYPED_TEST(DictionaryReductionTest, VarStd)
+#else
+TYPED_TEST(DictionaryReductionTest, DISABLED_VarStd)
+#endif
 {
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});

@@ -384,8 +384,12 @@ void cleanEndWord(rmm::device_buffer &mask, int begin_bit, int end_bit)
   auto number_of_mask_words = cudf::num_bitmask_words(static_cast<size_t>(end_bit - begin_bit));
   auto number_of_bits       = end_bit - begin_bit;
   if (number_of_bits % 32 != 0) {
-    auto end_mask = ptr[number_of_mask_words - 1];
-    end_mask      = end_mask & ((1 << (number_of_bits % 32)) - 1);
+    cudf::bitmask_type end_mask = 0;
+    CUDA_TRY(cudaMemcpy(
+      &end_mask, ptr + number_of_mask_words - 1, sizeof(end_mask), cudaMemcpyDeviceToHost));
+    end_mask = end_mask & ((1 << (number_of_bits % 32)) - 1);
+    CUDA_TRY(cudaMemcpy(
+      ptr + number_of_mask_words - 1, &end_mask, sizeof(end_mask), cudaMemcpyHostToDevice));
   }
 }
 
@@ -462,8 +466,11 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorContiguous)
   for (auto &m : validity_bit) { m = this->generate(); }
   auto gold_mask = cudf::test::detail::make_null_mask(validity_bit.begin(), validity_bit.end());
 
-  auto copy_mask = gold_mask;
-  cudf::column original{t, num_elements, rmm::device_buffer{num_elements * sizeof(int)}, copy_mask};
+  rmm::device_buffer copy_mask{gold_mask, rmm::cuda_stream_default};
+  cudf::column original{t,
+                        num_elements,
+                        rmm::device_buffer{num_elements * sizeof(int), rmm::cuda_stream_default},
+                        std::move(copy_mask)};
   std::vector<cudf::size_type> indices{0,
                                        104,
                                        104,
@@ -501,11 +508,12 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorDiscontiguous)
   std::vector<cudf::column> cols;
   std::vector<cudf::column_view> views;
   for (unsigned i = 0; i < split.size() - 1; i++) {
-    cols.emplace_back(t,
-                      split[i + 1] - split[i],
-                      rmm::device_buffer{sizeof(int) * (split[i + 1] - split[i])},
-                      cudf::test::detail::make_null_mask(validity_bit.begin() + split[i],
-                                                         validity_bit.begin() + split[i + 1]));
+    cols.emplace_back(
+      t,
+      split[i + 1] - split[i],
+      rmm::device_buffer{sizeof(int) * (split[i + 1] - split[i]), rmm::cuda_stream_default},
+      cudf::test::detail::make_null_mask(validity_bit.begin() + split[i],
+                                         validity_bit.begin() + split[i + 1]));
     views.push_back(cols.back());
   }
   rmm::device_buffer concatenated_bitmask = cudf::concatenate_masks(views);

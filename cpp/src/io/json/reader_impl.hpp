@@ -56,9 +56,9 @@ class reader::impl {
 
   rmm::mr::device_memory_resource *mr_ = nullptr;
 
-  std::unique_ptr<datasource> source_;
-  std::string filepath_;
-  std::unique_ptr<datasource::buffer> buffer_;
+  std::vector<std::unique_ptr<datasource>> sources_;
+  std::vector<std::string> filepaths_;
+  std::vector<uint8_t> buffer_;
 
   const char *uncomp_data_ = nullptr;
   size_t uncomp_size_      = 0;
@@ -87,10 +87,11 @@ class reader::impl {
    * @brief Sets the column map data member and makes a device copy to be used as a kernel
    * parameter.
    */
-  void set_column_map(col_map_ptr_type &&map)
+  void set_column_map(col_map_ptr_type &&map, rmm::cuda_stream_view stream)
   {
     key_to_col_idx_map_ = std::move(map);
-    d_key_col_map_      = std::make_unique<rmm::device_scalar<col_map_type>>(*key_to_col_idx_map_);
+    d_key_col_map_ =
+      std::make_unique<rmm::device_scalar<col_map_type>>(*key_to_col_idx_map_, stream);
   }
   /**
    * @brief Gets the pointer to the column hash map in the device memory.
@@ -182,8 +183,8 @@ class reader::impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    */
-  explicit impl(std::unique_ptr<datasource> source,
-                std::string filepath,
+  explicit impl(std::vector<std::unique_ptr<datasource>> &&sources,
+                std::vector<std::string> const &filepaths,
                 json_reader_options const &options,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource *mr);
