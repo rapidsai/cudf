@@ -200,11 +200,14 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_
   auto const row_bitmask = (compare_nulls == null_equality::EQUAL)
                              ? rmm::device_buffer{0, stream}
                              : cudf::detail::bitmask_and(build, stream);
-  build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-    hash_table_view,
-    hash_build,
-    build_table_num_rows,
-    static_cast<bitmask_type const *>(row_bitmask.data()));
+  auto const cg_size     = multimap_type::cg_size();
+
+  build_hash_table<cg_size, hash_value_type, size_type>
+    <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
+      hash_table_view,
+      hash_build,
+      build_table_num_rows,
+      static_cast<bitmask_type const *>(row_bitmask.data()));
 
   return hash_table;
 }

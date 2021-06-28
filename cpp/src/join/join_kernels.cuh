@@ -26,6 +26,8 @@
 
 namespace cudf {
 namespace detail {
+namespace cg = cooperative_groups;
+
 /**
  * @brief Adds a pair of indices to the shared memory cache
  *
@@ -70,38 +72,38 @@ constexpr auto remap_sentinel_hash(H hash, S sentinel)
  *
  * @tparam multimap_view_type The type of the hash table view
  *
- * @param[in,out] multi_map The hash table to be built to insert rows into
+ * @param[in,out] multimap_view The hash table to be built to insert rows into
  * @param[in] hash_build Row hasher for the build table
  * @param[in] build_table_num_rows The number of rows in the build table
  * @param[in] row_bitmask Bitmask where bit `i` indicates the presence of a null
  * value in row `i` of input keys. This is nullptr if nulls are equal.
  */
-template <typename multimap_view_type>
-__global__ void build_hash_table(multimap_view_type multi_map,
+template <cudf::size_type cg_size,
+          typename key_type,
+          typename payload_type,
+          typename multimap_view_type>
+__global__ void build_hash_table(multimap_view_type multimap_view,
                                  row_hash hash_build,
                                  const cudf::size_type build_table_num_rows,
                                  bitmask_type const* row_bitmask)
 {
-  cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+  auto g   = cg::tiled_partition<cg_size>(cg::this_thread_block());
+  auto tid = blockDim.x * blockIdx.x + threadIdx.x;
+  auto i   = tid / cg_size;
 
-  /*
   while (i < build_table_num_rows) {
     if (!row_bitmask || cudf::bit_is_set(row_bitmask, i)) {
       // Compute the hash value of this row
-      auto const row_hash_value = remap_sentinel_hash(hash_build(i), multi_map.get_unused_key());
+      auto const row_hash_value =
+        remap_sentinel_hash(hash_build(i), multimap_view.get_empty_key_sentinel());
 
-      // Insert the (row hash value, row index) into the map
-      // using the row hash value to determine the location in the
-      // hash map where the new pair should be inserted
-      auto const insert_location =
-        multi_map.insert(thrust::make_pair(row_hash_value, i), true, row_hash_value);
+      auto insert_pair =
+        cuco::make_pair<key_type, payload_type>(std::move(row_hash_value), std::move(i));
 
-      // If the insert failed, set the error code accordingly
-      if (multi_map.end() == insert_location) { *error = 1; }
+      multimap_view.insert(g, insert_pair);
     }
-    i += blockDim.x * gridDim.x;
+    i += (blockDim.x * gridDim.x) / cg_size;
   }
-  */
 }
 
 /**
