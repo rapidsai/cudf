@@ -189,6 +189,21 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 
 }  // namespace detail
 
+string_character_types operator|(string_character_types lhs, string_character_types rhs)
+{
+  return static_cast<string_character_types>(
+    static_cast<std::underlying_type_t<string_character_types>>(lhs) |
+    static_cast<std::underlying_type_t<string_character_types>>(rhs));
+}
+
+string_character_types& operator|=(string_character_types& lhs, string_character_types rhs)
+{
+  lhs = static_cast<string_character_types>(
+    static_cast<std::underlying_type_t<string_character_types>>(lhs) |
+    static_cast<std::underlying_type_t<string_character_types>>(rhs));
+  return lhs;
+}
+
 // external API
 
 std::unique_ptr<column> all_characters_of_type(strings_column_view const& strings,
