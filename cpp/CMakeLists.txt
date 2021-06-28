@@ -576,6 +576,8 @@ if(CUDF_BUILD_BENCHMARKS)
         GIT_SHALLOW     TRUE
         OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
                         "BENCHMARK_ENABLE_INSTALL OFF")
+    # Find or install NVBench
+    include(cmake/thirdparty/CUDF_GetNVBench.cmake)
     add_subdirectory(benchmarks)
 endif()
 
