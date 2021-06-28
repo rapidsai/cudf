@@ -412,6 +412,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(replaceNullsColumn(getNativeView(), replacements.getNativeView()));
   }
 
+  public final ColumnVector replaceNulls(ReplacePolicy policy) {
+    return new ColumnVector(replaceNullsPolicy(getNativeView(), policy.isPreceding));
+  }
+
   /**
    * For a BOOL8 vector, computes a vector whose rows are selected from two other vectors
    * based on the boolean value of this vector in the corresponding row.
@@ -1384,16 +1388,49 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Compute the cumulative sum/prefix sum of the values in this column.
-   * This is similar to a rolling window SUM with unbounded preceding and none following.
-   * Input values 1, 2, 3
-   * Output values 1, 3, 6
-   * This currently only works for long values that are not nullable as this is currently a
-   * very simple implementation. It may be expanded in the future if needed.
+   * Compute the prefix sum (aka cumulative sum) of the values in this column.
+   * This is just a convenience method for an inclusive scan with a SUM aggregation.
    */
   public final ColumnVector prefixSum() {
-    return new ColumnVector(prefixSum(getNativeView()));
+    return scan(Aggregation.sum());
   }
+
+  /**
+   * Computes a scan for a column. This is very similar to a running window on the column.
+   * @param aggregation the aggregation to perform
+   * @param scanType should the scan be inclusive, include the current row, or exclusive.
+   * @param nullPolicy how should nulls be treated. Note that some aggregations also include a
+   *                   null policy too. Currently none of those aggregations are supported so
+   *                   it is undefined how they would interact with each other.
+   */
+  public final ColumnVector scan(Aggregation aggregation, ScanType scanType, NullPolicy nullPolicy) {
+    long nativeId = aggregation.createNativeInstance();
+    try {
+      return new ColumnVector(scan(getNativeView(), nativeId,
+          scanType.isInclusive, nullPolicy.includeNulls));
+    } finally {
+      Aggregation.close(nativeId);
+    }
+  }
+
+  /**
+   * Computes a scan for a column that excludes nulls.
+   * @param aggregation the aggregation to perform
+   * @param scanType should the scan be inclusive, include the current row, or exclusive.
+   */
+  public final ColumnVector scan(Aggregation aggregation, ScanType scanType) {
+    return scan(aggregation, scanType, NullPolicy.EXCLUDE);
+  }
+
+  /**
+   * Computes an inclusive scan for a column that excludes nulls.
+   * @param aggregation the aggregation to perform
+   */
+  public final ColumnVector scan(Aggregation aggregation) {
+    return scan(aggregation, ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+  }
+
+
 
   /////////////////////////////////////////////////////////////////////////////
   // LOGICAL
@@ -3217,7 +3254,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       long preceding_col,
       long following_col);
 
-  private static native long prefixSum(long viewHandle) throws CudfException;
+  private static native long scan(long viewHandle, long aggregation,
+      boolean isInclusive, boolean includeNulls) throws CudfException;
 
   private static native long nansToNulls(long viewHandle) throws CudfException;
 
@@ -3226,6 +3264,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long replaceNullsScalar(long viewHandle, long scalarHandle) throws CudfException;
 
   private static native long replaceNullsColumn(long viewHandle, long replaceViewHandle) throws CudfException;
+
+  private static native long replaceNullsPolicy(long nativeView, boolean isPreceding) throws CudfException;
 
   private static native long ifElseVV(long predVec, long trueVec, long falseVec) throws CudfException;
 
