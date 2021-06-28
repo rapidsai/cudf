@@ -959,6 +959,15 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs,
   return rle->num_vals;
 }
 
+/**
+ * @brief Powers of 10
+ */
+static const __device__ __constant__ double kPow10[40] = {
+  1.0,   1.e1,  1.e2,  1.e3,  1.e4,  1.e5,  1.e6,  1.e7,  1.e8,  1.e9,  1.e10, 1.e11, 1.e12, 1.e13,
+  1.e14, 1.e15, 1.e16, 1.e17, 1.e18, 1.e19, 1.e20, 1.e21, 1.e22, 1.e23, 1.e24, 1.e25, 1.e26, 1.e27,
+  1.e28, 1.e29, 1.e30, 1.e31, 1.e32, 1.e33, 1.e34, 1.e35, 1.e36, 1.e37, 1.e38, 1.e39,
+};
+
 static const __device__ __constant__ int64_t kPow5i[28] = {1,
                                                            5,
                                                            25,
@@ -1031,32 +1040,42 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
     if (t >= num_vals_read and t < num_vals_to_read) {
       auto const pos = static_cast<int>(vals.i64[t]);
       int128_s v     = decode_varint128(bs, pos);
-      // Since cuDF column stores just one scale, value needs to
-      // be adjusted to col_scale from val_scale. So the difference
-      // of them will be used to add 0s or remove digits.
-      int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
-      if (scale >= 0) {
-        scale       = min(scale, 27);
-        vals.i64[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
-      } else  // if (scale < 0)
-      {
-        bool is_negative = (v.hi < 0);
-        uint64_t hi = v.hi, lo = v.lo;
-        scale = min(-scale, 27);
-        if (is_negative) {
-          hi = (~hi) + (lo == 0);
-          lo = (~lo) + 1;
+
+      if (col_scale & orc_decimal2float64_scale) {
+        double f      = Int128ToDouble_rn(v.lo, v.hi);
+        int32_t scale = (t < numvals) ? val_scale : 0;
+        if (scale >= 0)
+          vals.f64[t] = f / kPow10[min(scale, 39)];
+        else
+          vals.f64[t] = f * kPow10[min(-scale, 39)];
+      } else {
+        // Since cuDF column stores just one scale, value needs to
+        // be adjusted to col_scale from val_scale. So the difference
+        // of them will be used to add 0s or remove digits.
+        int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
+        if (scale >= 0) {
+          scale       = min(scale, 27);
+          vals.i64[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
+        } else  // if (scale < 0)
+        {
+          bool is_negative = (v.hi < 0);
+          uint64_t hi = v.hi, lo = v.lo;
+          scale = min(-scale, 27);
+          if (is_negative) {
+            hi = (~hi) + (lo == 0);
+            lo = (~lo) + 1;
+          }
+          lo = (lo >> (uint32_t)scale) | ((uint64_t)hi << (64 - scale));
+          hi >>= (int32_t)scale;
+          if (hi != 0) {
+            // Use intermediate float
+            lo = __double2ull_rn(Int128ToDouble_rn(lo, hi) / __ll2double_rn(kPow5i[scale]));
+            hi = 0;
+          } else {
+            lo /= kPow5i[scale];
+          }
+          vals.i64[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
         }
-        lo = (lo >> (uint32_t)scale) | ((uint64_t)hi << (64 - scale));
-        hi >>= (int32_t)scale;
-        if (hi != 0) {
-          // Use intermediate float
-          lo = __double2ull_rn(Int128ToDouble_rn(lo, hi) / __ll2double_rn(kPow5i[scale]));
-          hi = 0;
-        } else {
-          lo /= kPow5i[scale];
-        }
-        vals.i64[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
       }
     }
     // There is nothing to read, so break
