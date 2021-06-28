@@ -83,10 +83,10 @@ class StructColumn(ColumnBase):
     def __getitem__(self, args):
         result = super().__getitem__(args)
         if isinstance(result, dict):
-            return dict(
-                (field, value)
+            return {
+                field: value
                 for field, value in zip(self.dtype.fields, result.values())
-            )
+            }
         return result
 
     def copy(self, deep=True):
