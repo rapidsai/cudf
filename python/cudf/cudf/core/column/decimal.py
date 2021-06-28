@@ -150,7 +150,7 @@ class DecimalColumn(NumericalBaseColumn):
             return self
         return libcudf.unary.cast(self, dtype)
 
-    def yas_numerical_column(
+    def as_numerical_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         return libcudf.unary.cast(self, dtype)
