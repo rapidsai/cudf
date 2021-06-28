@@ -468,7 +468,7 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
 
 def as_device_scalar(val, dtype=None):
     if isinstance(val, (cudf.Scalar, DeviceScalar)):
-        if dtype == val.dtype:
+        if dtype == val.dtype or dtype is None:
             if isinstance(val, DeviceScalar):
                 return val
             else:
