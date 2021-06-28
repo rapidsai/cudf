@@ -22,22 +22,21 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <thrust/fill.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
 
 namespace {
+
+using string_index_pair = thrust::pair<const char*, size_type>;
+
 /**
  * @brief This functor handles extracting strings by applying the compiled regex pattern
  * and creating string_index_pairs for all the substrings.
@@ -49,23 +48,25 @@ template <int stack_size>
 struct extract_fn {
   reprog_device prog;
   column_device_view d_strings;
-  cudf::detail::device_2dspan<string_index_pair> d_indices;
+  size_type column_index;
 
-  __device__ void operator()(size_type idx)
+  __device__ string_index_pair operator()(size_type idx)
   {
-    auto groups   = prog.group_counts();
-    auto d_output = d_indices[idx];
-    if (d_strings.is_valid(idx)) {
-      string_view d_str = d_strings.element<string_view>(idx);
-      int32_t begin     = 0;
-      int32_t end       = -1;  // handles empty strings automatically
-      if ((prog.find<stack_size>(idx, d_str, begin, end) > 0) &&
-          prog.extract<stack_size>(idx, d_str, begin, end, d_output)) {
-        return;
+    if (d_strings.is_null(idx)) return string_index_pair{nullptr, 0};
+    string_view d_str = d_strings.element<string_view>(idx);
+    string_index_pair result{nullptr, 0};
+    int32_t begin = 0;
+    int32_t end   = -1;  // handles empty strings automatically
+    if (prog.find<stack_size>(idx, d_str, begin, end) > 0) {
+      auto extracted = prog.extract<stack_size>(idx, d_str, begin, end, column_index);
+      if (extracted) {
+        auto const offset = d_str.byte_offset(extracted.value().first);
+        // build index-pair
+        result = string_index_pair{d_str.data() + offset,
+                                   d_str.byte_offset(extracted.value().second) - offset};
       }
     }
-    // fill output with null entries
-    thrust::fill(thrust::seq, d_output.begin(), d_output.end(), string_index_pair{nullptr, 0});
+    return result;
   }
 };
 
@@ -93,41 +94,37 @@ std::unique_ptr<table> extract(
   std::vector<std::unique_ptr<column>> results;
   auto regex_insts = d_prog.insts_counts();
 
-  rmm::device_uvector<string_index_pair> indices(strings_count * groups, stream);
-  cudf::detail::device_2dspan<string_index_pair> d_indices(indices.data(), strings_count, groups);
-
-  if (regex_insts <= RX_SMALL_INSTS) {
-    thrust::for_each(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     thrust::make_counting_iterator<size_type>(strings_count),
-                     extract_fn<RX_STACK_SMALL>{d_prog, d_strings, d_indices});
-  } else if (regex_insts <= RX_MEDIUM_INSTS) {
-    thrust::for_each(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     thrust::make_counting_iterator<size_type>(strings_count),
-                     extract_fn<RX_STACK_MEDIUM>{d_prog, d_strings, d_indices});
-  } else if (regex_insts <= RX_LARGE_INSTS) {
-    thrust::for_each(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     thrust::make_counting_iterator<size_type>(strings_count),
-                     extract_fn<RX_STACK_LARGE>{d_prog, d_strings, d_indices});
-  } else {  // supports any number of instructions
-    thrust::for_each(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     thrust::make_counting_iterator<size_type>(strings_count),
-                     extract_fn<RX_STACK_ANY>{d_prog, d_strings, d_indices});
-  }
-
   for (int32_t column_index = 0; column_index < groups; ++column_index) {
-    auto indices_itr = thrust::make_permutation_iterator(
-      indices.begin(),
-      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                      [column_index, groups] __device__(size_type idx) {
-                                        return (idx * groups) + column_index;
-                                      }));
-    results.emplace_back(make_strings_column(indices_itr, indices_itr + strings_count, stream, mr));
-  }
+    rmm::device_uvector<string_index_pair> indices(strings_count, stream);
 
+    if (regex_insts <= RX_SMALL_INSTS) {
+      thrust::transform(rmm::exec_policy(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(strings_count),
+                        indices.begin(),
+                        extract_fn<RX_STACK_SMALL>{d_prog, d_strings, column_index});
+    } else if (regex_insts <= RX_MEDIUM_INSTS) {
+      thrust::transform(rmm::exec_policy(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(strings_count),
+                        indices.begin(),
+                        extract_fn<RX_STACK_MEDIUM>{d_prog, d_strings, column_index});
+    } else if (regex_insts <= RX_LARGE_INSTS) {
+      thrust::transform(rmm::exec_policy(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(strings_count),
+                        indices.begin(),
+                        extract_fn<RX_STACK_LARGE>{d_prog, d_strings, column_index});
+    } else {
+      thrust::transform(rmm::exec_policy(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(strings_count),
+                        indices.begin(),
+                        extract_fn<RX_STACK_ANY>{d_prog, d_strings, column_index});
+    }
+
+    results.emplace_back(make_strings_column(indices, stream, mr));
+  }
   return std::make_unique<table>(std::move(results));
 }
 
