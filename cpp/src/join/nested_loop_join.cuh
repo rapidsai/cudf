@@ -85,10 +85,10 @@ get_conditional_join_indices(table_view const& left,
   // If none of the input columns actually contain nulls, we can still use the
   // non-nullable version of the expression evaluation code path for
   // performance, so we capture that information as well.
-  auto nullable =
+  auto const nullable =
     std::any_of(left.begin(), left.end(), [](column_view c) { return c.nullable(); }) ||
-    std::any_of(left.begin(), left.end(), [](column_view c) { return c.nullable(); });
-  auto has_nulls =
+    std::any_of(right.begin(), right.end(), [](column_view c) { return c.nullable(); });
+  auto const has_nulls =
     nullable &&
     (std::any_of(
        left.begin(), left.end(), [](column_view c) { return c.nullable() && c.has_nulls(); }) ||
@@ -123,7 +123,7 @@ get_conditional_join_indices(table_view const& left,
   }
   CHECK_CUDA(stream.value());
 
-  size_type join_size = size.value(stream);
+  size_type const join_size = size.value(stream);
 
   // If the output size will be zero, we can return immediately.
   if (join_size == 0) {

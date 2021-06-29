@@ -49,8 +49,8 @@ namespace detail {
  * This evaluates an expression over a table to produce a new column. Also called an n-ary
  * transform.
  *
- * @tparam block_size The size of the thread block, used to set launch bounds and minimize register
- * usage.
+ * @tparam max_block_size The size of the thread block, used to set launch
+ * bounds and minimize register usage.
  * @tparam has_nulls whether or not the output column may contain nulls.
  *
  * @param table The table device view used for evaluation.
@@ -60,7 +60,7 @@ namespace detail {
 template <cudf::size_type max_block_size, bool has_nulls>
 __launch_bounds__(max_block_size) __global__
   void compute_column_kernel(table_device_view const table,
-                             dev_ast_plan plan,
+                             device_ast_plan plan,
                              mutable_column_device_view output_column)
 {
   // The (required) extern storage of the shared memory array leads to
@@ -93,15 +93,15 @@ std::unique_ptr<column> compute_column(table_view const table,
   // If none of the input columns actually contain nulls, we can still use the
   // non-nullable version of the expression evaluation code path for
   // performance, so we capture that information as well.
-  auto nullable =
+  auto const nullable =
     std::any_of(table.begin(), table.end(), [](column_view c) { return c.nullable(); });
-  auto has_nulls = nullable && std::any_of(table.begin(), table.end(), [](column_view c) {
+  auto const has_nulls = nullable && std::any_of(table.begin(), table.end(), [](column_view c) {
                      return c.nullable() && c.has_nulls();
                    });
 
   auto const plan = ast_plan{expr, table, has_nulls, stream, mr};
 
-  auto output_column_mask_state =
+  auto const output_column_mask_state =
     nullable ? (has_nulls ? mask_state::UNINITIALIZED : mask_state::ALL_VALID)
              : mask_state::UNALLOCATED;
 

@@ -226,7 +226,7 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
                                                      table_device_view right_table,
                                                      join_kind JoinKind,
                                                      null_equality compare_nulls,
-                                                     ast::detail::dev_ast_plan plan,
+                                                     ast::detail::device_ast_plan plan,
                                                      cudf::size_type* output_size)
 {
   // The (required) extern storage of the shared memory array leads to
@@ -486,7 +486,7 @@ __global__ void conditional_join(table_device_view left_table,
                                  cudf::size_type* join_output_l,
                                  cudf::size_type* join_output_r,
                                  cudf::size_type* current_idx,
-                                 cudf::ast::detail::dev_ast_plan plan,
+                                 cudf::ast::detail::device_ast_plan plan,
                                  const cudf::size_type max_size)
 {
   constexpr int num_warps = block_size / detail::warp_size;
