@@ -29,8 +29,6 @@ function(find_and_configure_nvbench)
         OPTIONS         "NVBench_ENABLE_EXAMPLES OFF"
                         "NVBench_ENABLE_TESTING OFF")
 
-    # Make sure consumers of cudf can see nvbench::main
-    fix_cmake_global_defaults(nvbench::main)
 endfunction()
 
 find_and_configure_nvbench()
