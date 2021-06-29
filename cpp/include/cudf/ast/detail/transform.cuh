@@ -741,8 +741,8 @@ struct expression_evaluator {
       using Out             = cuda::std::invoke_result_t<OperatorFunctor, Input>;
       if constexpr (has_nulls) {
         auto const result = input.has_value()
-                        ? possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*input))
-                        : possibly_null_value_t<Out, has_nulls>();
+                              ? possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*input))
+                              : possibly_null_value_t<Out, has_nulls>();
         this->template resolve_output<Out>(output_object, output, output_row_index, result);
       } else {
         this->template resolve_output<Out>(

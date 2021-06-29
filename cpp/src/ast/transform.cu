@@ -96,8 +96,8 @@ std::unique_ptr<column> compute_column(table_view const table,
   auto const nullable =
     std::any_of(table.begin(), table.end(), [](column_view c) { return c.nullable(); });
   auto const has_nulls = nullable && std::any_of(table.begin(), table.end(), [](column_view c) {
-                     return c.nullable() && c.has_nulls();
-                   });
+                           return c.nullable() && c.has_nulls();
+                         });
 
   auto const plan = ast_plan{expr, table, has_nulls, stream, mr};
 
