@@ -8,6 +8,7 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from pandas.core.dtypes.common import infer_dtype_from_object
 
 import cudf
 from cudf.api.types import (  # noqa: F401
@@ -184,10 +185,8 @@ def cudf_dtype_from_pydata_dtype(dtype):
         return cudf.core.dtypes.Decimal64Dtype
     elif dtype in cudf._lib.types.np_to_cudf_types:
         return dtype.type
-    elif isinstance(pandas_dtype(dtype), np.dtype):
-        return dtype
 
-    return infer_dtype(dtype)
+    return infer_dtype_from_object(dtype)
 
 
 def cudf_dtype_to_pa_type(dtype):
