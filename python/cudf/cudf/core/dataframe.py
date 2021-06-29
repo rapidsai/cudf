@@ -1421,7 +1421,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         return out
 
     def _binaryop(
-        self, other, fn, fill_value=None, reflect=False,
+        self,
+        other: Any,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        *args,
+        **kwargs,
     ):
         lhs, rhs = self, other
 
@@ -1475,9 +1481,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # binop methods (e.g. DataFrame.add) ever support axis=0/rows.
             right_dict = dict(zip(rhs.index.values_host, rhs.values_host))
             left_cols = lhs._column_names
+            # mypy thinks lhs._column_names is a List rather than a Tuple, so
+            # we have to ignore the type check.
             result_cols = left_cols + tuple(
                 col for col in right_dict if col not in left_cols
-            )
+            )  # type: ignore
             operands = {}
             for col in result_cols:
                 if col in left_cols:
@@ -1485,7 +1493,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     right = right_dict[col] if col in right_dict else None
                 else:
                     # We match pandas semantics here by performing binops
-                    # between a nan (not NULL!) column and the actual values,
+                    # between a NaN (not NULL!) column and the actual values,
                     # which results in nans, the pandas output.
                     left = as_column(np.nan, length=lhs._num_rows)
                     right = right_dict[col]

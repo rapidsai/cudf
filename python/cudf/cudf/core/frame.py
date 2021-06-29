@@ -18,7 +18,12 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.api.types import is_dict_like, is_dtype_equal
-from cudf.core.column import as_column, build_categorical_column, column_empty
+from cudf.core.column import (
+    ColumnBase,
+    as_column,
+    build_categorical_column,
+    column_empty,
+)
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
@@ -2046,9 +2051,7 @@ class Frame(libcudf.table.Table):
             )
             # as dictionary size can vary, it can't be a single table
             cudf_dictionaries_columns = {
-                name: cudf.core.column.ColumnBase.from_arrow(
-                    dict_dictionaries[name]
-                )
+                name: ColumnBase.from_arrow(dict_dictionaries[name])
                 for name in dict_dictionaries.keys()
             }
 
@@ -3331,11 +3334,23 @@ class Frame(libcudf.table.Table):
         data = zip(self._column_names, data_columns)
         return self.__class__._from_table(Frame(data, self._index))
 
-    def _binaryop(self, *args, **kwargs):
+    def _binaryop(
+        self,
+        other: T,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        *args,
+        **kwargs,
+    ) -> Frame:
         raise NotImplementedError
 
     @classmethod
-    def _colwise_binop(cls, operands, fn):
+    def _colwise_binop(
+        cls,
+        operands: Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+        fn: str,
+    ):
         """Implement binary ops between two frame-like objects.
 
         Binary operations for Frames can be reduced to a sequence of binary
@@ -3345,12 +3360,12 @@ class Frame(libcudf.table.Table):
 
         Parameters
         ----------
-        operands : Dict[str, Tuple[ColumnBase, Any, bool, Any]]
+        operands : Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]]
             A mapping from column names to a tuple containing left and right
             operands as well as a boolean indicating whether or not to reflect
             an operation and fill value for nulls.
         fn : str
-            The operation to perform
+            The operation to perform.
 
         Returns
         -------
@@ -3369,7 +3384,7 @@ class Frame(libcudf.table.Table):
                 right_column = cudf.Scalar(
                     right_column, dtype=left_column.dtype
                 )
-            elif not isinstance(right_column, cudf.core.column.ColumnBase):
+            elif not isinstance(right_column, ColumnBase):
                 right_column = left_column.normalize_binop_value(right_column)
 
             fn_apply = fn
@@ -3726,7 +3741,7 @@ class SingleColumnFrame(Frame):
         2    <NA>
         dtype: object
         """
-        return cls(cudf.core.column.column.ColumnBase.from_arrow(array))
+        return cls(ColumnBase.from_arrow(array))
 
     def to_arrow(self):
         """
@@ -3842,8 +3857,14 @@ class SingleColumnFrame(Frame):
         return self.__class__(**{**self._copy_construct_defaults, **kwargs})
 
     def _binaryop(
-        self, other, fn, fill_value=None, reflect=False, *args, **kwargs,
-    ):
+        self,
+        other: T,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        *args,
+        **kwargs,
+    ) -> SingleColumnFrame:
         """Perform a binary operation between two single column frames.
 
         Parameters
@@ -3889,7 +3910,9 @@ class SingleColumnFrame(Frame):
             except Exception:
                 return NotImplemented
 
-        operands = {result_name: (self._column, other, reflect, fill_value)}
+        operands: Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]] = {
+            result_name: (self._column, other, reflect, fill_value)
+        }
 
         return self._copy_construct(
             data=type(self)._colwise_binop(operands, fn)[result_name],
@@ -3932,7 +3955,7 @@ def _get_replacement_values_for_columns(
         to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
         values_columns = {col: [value] for col in columns_dtype_map}
     elif cudf.utils.dtypes.is_list_like(to_replace) or isinstance(
-        to_replace, cudf.core.column.ColumnBase
+        to_replace, ColumnBase
     ):
         if is_scalar(value):
             to_replace_columns = {col: to_replace for col in columns_dtype_map}
