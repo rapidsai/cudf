@@ -32,10 +32,10 @@ from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_interval_dtype,
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
-    is_interval_dtype,
 )
 
 if TYPE_CHECKING:
@@ -1388,10 +1388,10 @@ class CategoricalColumn(column.ColumnBase):
             new_categories=dtype.categories, ordered=dtype.ordered
         )
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
+    def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
-    def as_string_column(self, dtype, format=None) -> StringColumn:
+    def as_string_column(self, dtype, format=None, **kwargs) -> StringColumn:
         return self._get_decategorized_column().as_string_column(
             dtype, format=format
         )

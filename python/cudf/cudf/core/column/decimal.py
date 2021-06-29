@@ -21,8 +21,8 @@ from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
-from .numerical_base import NumericalBaseColumn
 from ...api.types import is_integer_dtype
+from .numerical_base import NumericalBaseColumn
 
 
 class DecimalColumn(NumericalBaseColumn):
@@ -161,12 +161,12 @@ class DecimalColumn(NumericalBaseColumn):
         return libcudf.unary.cast(self, dtype)
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         return libcudf.unary.cast(self, dtype)
 
     def as_string_column(
-        self, dtype: Dtype, format=None
+        self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return cpp_from_decimal(self)
