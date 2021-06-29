@@ -1483,9 +1483,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             left_cols = lhs._column_names
             # mypy thinks lhs._column_names is a List rather than a Tuple, so
             # we have to ignore the type check.
-            result_cols = left_cols + tuple(
+            result_cols = left_cols + tuple(  # type: ignore
                 col for col in right_dict if col not in left_cols
-            )  # type: ignore
+            )
             operands = {}
             for col in result_cols:
                 if col in left_cols:
