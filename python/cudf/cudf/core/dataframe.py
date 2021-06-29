@@ -239,12 +239,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 self._index = as_index(index)
             if columns is not None:
                 self._data = ColumnAccessor(
-                    dict.fromkeys(
-                        columns,
-                        column.column_empty(
+                    {
+                        k: column.column_empty(
                             len(self), dtype="object", masked=True
-                        ),
-                    )
+                        )
+                        for k in columns
+                    }
                 )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__

@@ -8153,6 +8153,16 @@ def test_dataframe_constructor_columns(df, columns, index):
     assert_local_eq(actual, df, expected, host_columns)
 
 
+def test_dataframe_constructor_column_index_only():
+    columns = ["a", "b", "c"]
+    index = ["r1", "r2", "r3"]
+
+    gdf = cudf.DataFrame(index=index, columns=columns)
+    assert not id(gdf["a"]._column) == id(gdf["b"]._column) and not id(
+        gdf["b"]._column
+    ) == id(gdf["c"]._column)
+
+
 @pytest.mark.parametrize(
     "data",
     [
