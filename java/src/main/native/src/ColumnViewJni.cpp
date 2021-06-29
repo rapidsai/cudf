@@ -1793,6 +1793,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_title(JNIEnv *env, jobjec
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_capitalize(JNIEnv *env, jobject j_object,
+                                                                  jlong handle,
+                                                                  jlong delimiters) {
+
+  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+  JNI_NULL_CHECK(env, delimiters, "delimiters scalar handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::string_scalar *deli = reinterpret_cast<cudf::string_scalar *>(delimiters);
+    std::unique_ptr<cudf::column> result = cudf::strings::capitalize(*view, *deli);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeStructView(JNIEnv *env, jobject j_object,
                                                                       jlongArray handles,
                                                                       jlong row_count) {
