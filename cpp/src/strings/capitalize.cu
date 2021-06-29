@@ -159,10 +159,10 @@ struct title_fn : base_fn<title_fn> {
  * @param mr Device memory resource used for allocating the new device_buffer
  */
 template <typename CapitalFn>
-std::unique_ptr<column> capitalize_utility(CapitalFn cfn,
-                                           strings_column_view const& input,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> capitalizer(CapitalFn cfn,
+                                    strings_column_view const& input,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   auto children = cudf::strings::detail::make_strings_children(cfn, input.size(), stream, mr);
 
@@ -186,7 +186,7 @@ std::unique_ptr<column> capitalize(strings_column_view const& input,
   if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
   auto const d_column     = column_device_view::create(input.parent(), stream);
   auto const d_delimiters = delimiters.value(stream);
-  return capitalize_utility(capitalize_fn{*d_column, d_delimiters}, input, stream, mr);
+  return capitalizer(capitalize_fn{*d_column, d_delimiters}, input, stream, mr);
 }
 
 std::unique_ptr<column> title(strings_column_view const& input,
@@ -196,7 +196,7 @@ std::unique_ptr<column> title(strings_column_view const& input,
 {
   if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
   auto d_column = column_device_view::create(input.parent(), stream);
-  return capitalize_utility(title_fn{*d_column, sequence_type}, input, stream, mr);
+  return capitalizer(title_fn{*d_column, sequence_type}, input, stream, mr);
 }
 
 }  // namespace detail
