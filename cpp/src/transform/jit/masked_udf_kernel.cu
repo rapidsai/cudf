@@ -22,13 +22,12 @@
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
-#include <limits>
+#include <cstdint>
 
 #include <transform/jit/operation-udf.hpp>
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/std/tuple>
 #include <tuple>
