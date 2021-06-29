@@ -545,35 +545,18 @@ class metadata {
   using OrcStripeInfo = std::pair<const StripeInformation *, const StripeFooter *>;
 
  public:
+  struct stripe_source_mapping {
+    int source_idx;
+    std::vector<OrcStripeInfo> stripe_info;
+  };
+
+ public:
   explicit metadata(datasource *const src);
-
-  /**
-   * @brief Filters and reads the info of only a selection of stripes
-   *
-   * @param[in] stripes Indices of individual stripes
-   * @param[in] row_start Starting row of the selection
-   * @param[in,out] row_count Total number of rows selected
-   *
-   * @return List of stripe info and total number of selected rows
-   */
-  std::vector<OrcStripeInfo> select_stripes(const std::vector<size_type> &stripes,
-                                            size_type &row_start,
-                                            size_type &row_count);
-
-  /**
-   * @brief Filters and reduces down to a selection of columns
-   *
-   * @param[in] use_names List of column names to select
-   * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
-   *
-   * @return List of ORC column indexes
-   */
-  std::vector<int> select_columns(std::vector<std::string> use_names, bool &has_timestamp_column);
 
   size_t get_total_rows() const { return ff.numberOfRows; }
   int get_num_stripes() const { return ff.stripes.size(); }
   int get_num_columns() const { return ff.types.size(); }
-  std::string const &get_column_name(int32_t column_id)
+  std::string const &get_column_name(int32_t column_id) const
   {
     if (column_names.empty() && get_num_columns() != 0) { init_column_names(); }
     return column_names[column_id];
@@ -586,6 +569,7 @@ class metadata {
   Metadata md;
   std::vector<StripeFooter> stripefooters;
   std::unique_ptr<OrcDecompressor> decompressor;
+  datasource *const source;
 
  private:
   struct schema_indexes {
@@ -593,10 +577,9 @@ class metadata {
     int32_t field  = -1;
   };
   std::vector<schema_indexes> get_schema_indexes() const;
-  void init_column_names();
+  void init_column_names() const;
 
-  std::vector<std::string> column_names;
-  datasource *const source;
+  mutable std::vector<std::string> column_names;
 };
 
 }  // namespace orc
