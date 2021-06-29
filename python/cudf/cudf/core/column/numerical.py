@@ -208,7 +208,7 @@ class NumericalColumn(NumericalBaseColumn):
         return libcudf.string_casting.int2ip(self)
 
     def as_string_column(
-        self, dtype: Dtype, format=None
+        self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
@@ -252,7 +252,7 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> "cudf.core.column.Decimal64Column":
         return libcudf.unary.cast(self, dtype)
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
+    def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self

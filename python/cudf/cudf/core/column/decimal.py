@@ -221,12 +221,12 @@ class Decimal64Column(NumericalBaseColumn):
         return libcudf.unary.cast(self, dtype)
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         return libcudf.unary.cast(self, dtype)
 
     def as_string_column(
-        self, dtype: Dtype, format=None
+        self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return cpp_from_decimal(self)
