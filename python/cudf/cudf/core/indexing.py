@@ -93,7 +93,7 @@ class _SeriesIlocIndexer(object):
         data = self._sr._column[arg]
 
         if (
-            isinstance(data, list)
+            isinstance(data, (dict, list))
             or _is_scalar_or_zero_d_array(data)
             or _is_null_host_scalar(data)
         ):
