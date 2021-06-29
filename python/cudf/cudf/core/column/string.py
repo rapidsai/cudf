@@ -5118,7 +5118,7 @@ class StringColumn(column.ColumnBase):
         return StringMethods(self, parent=parent)
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         out_dtype = np.dtype(dtype)
 
@@ -5192,10 +5192,12 @@ class StringColumn(column.ColumnBase):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DecimalColumn":
+    ) -> "cudf.core.column.Decimal64Column":
         return cpp_to_decimal(self, dtype)
 
-    def as_string_column(self, dtype: Dtype, format=None) -> StringColumn:
+    def as_string_column(
+        self, dtype: Dtype, format=None, **kwargs
+    ) -> StringColumn:
         return self
 
     @property

@@ -23,4 +23,7 @@ from cudf.core.column.string import StringColumn  # noqa: F401
 from cudf.core.column.struct import StructColumn  # noqa: F401
 from cudf.core.column.timedelta import TimeDeltaColumn  # noqa: F401
 from cudf.core.column.interval import IntervalColumn  # noqa: F401
-from cudf.core.column.decimal import DecimalColumn  # noqa: F401
+from cudf.core.column.decimal import (  # noqa: F401
+    Decimal32Column,
+    Decimal64Column,
+)
