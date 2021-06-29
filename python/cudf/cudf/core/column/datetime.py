@@ -134,11 +134,11 @@ class DatetimeColumn(column.ColumnBase):
         return self.get_dt_field("weekday")
 
     @property
-    def dayofyear(self):
+    def dayofyear(self) -> ColumnBase:
         return self.get_dt_field("day_of_year")
 
     @property
-    def day_of_year(self):
+    def day_of_year(self) -> ColumnBase:
         return self.get_dt_field("day_of_year")
 
     def to_pandas(
