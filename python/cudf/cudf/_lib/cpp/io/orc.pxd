@@ -34,6 +34,7 @@ cdef extern from "cudf/io/orc.hpp" \
         void enable_use_index(bool val) except+
         void enable_use_np_dtypes(bool val) except+
         void set_timestamp_type(data_type type) except+
+        void set_decimal_cols_as_float(vector[string] val) except+
 
         @staticmethod
         orc_reader_options_builder builder(
@@ -52,6 +53,9 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options_builder& use_index(bool val) except+
         orc_reader_options_builder& use_np_dtypes(bool val) except+
         orc_reader_options_builder& timestamp_type(data_type type) except+
+        orc_reader_options_builder& decimal_cols_as_float(
+            vector[string] val
+        ) except+
 
         orc_reader_options build() except+
 

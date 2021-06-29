@@ -14,8 +14,11 @@ import cudf
 from cudf.api.types import (  # noqa: F401
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
+    infer_dtype,
     is_categorical_dtype,
     is_datetime_dtype as is_datetime_dtype,
+    is_decimal32_dtype,
+    is_decimal64_dtype,
     is_decimal_dtype,
     is_integer,
     is_integer_dtype,
@@ -27,6 +30,7 @@ from cudf.api.types import (  # noqa: F401
     is_string_dtype,
     is_struct_dtype,
     is_timedelta_dtype,
+    pandas_dtype,
 )
 from cudf.core._compat import PANDAS_GE_120
 
@@ -175,7 +179,9 @@ def cudf_dtype_from_pydata_dtype(dtype):
 
     if is_categorical_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
-    elif is_decimal_dtype(dtype):
+    elif is_decimal32_dtype(dtype):
+        return cudf.core.dtypes.Decimal32Dtype
+    elif is_decimal64_dtype(dtype):
         return cudf.core.dtypes.Decimal64Dtype
     elif dtype in cudf._lib.types.np_to_cudf_types:
         return dtype.type
@@ -210,7 +216,7 @@ def cudf_dtype_from_pa_type(typ):
     elif pa.types.is_decimal(typ):
         return cudf.core.dtypes.Decimal64Dtype.from_arrow(typ)
     else:
-        return pd.api.types.pandas_dtype(typ.to_pandas_dtype())
+        return pandas_dtype(typ.to_pandas_dtype())
 
 
 def to_cudf_compatible_scalar(val, dtype=None):
@@ -250,7 +256,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
     elif isinstance(val, pd.Timedelta):
         val = val.to_timedelta64()
 
-    val = pd.api.types.pandas_dtype(type(val)).type(val)
+    val = pandas_dtype(type(val)).type(val)
 
     if dtype is not None:
         val = val.astype(dtype)
