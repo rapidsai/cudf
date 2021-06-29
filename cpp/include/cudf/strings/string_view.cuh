@@ -17,11 +17,16 @@
 #pragma once
 
 #include <cudf/strings/string_view.hpp>
-#include <cudf/utilities/error.hpp>
 
+#ifndef __CUDA_ARCH__
+#include <cudf/utilities/error.hpp>
+#endif
+
+// This is defined when including this header in a https://github.com/NVIDIA/jitify
+// or jitify2 source file. The jitify cannot include thrust headers at this time.
+#ifndef CUDF_JIT_UDF
 #include <thrust/count.h>
-#include <thrust/find.h>
-#include <cstdlib>
+#endif
 
 // This file should only include device code logic.
 // Host-only or host/device code should be defined in the string_view.hpp header file.
@@ -41,8 +46,15 @@ __device__ inline size_type characters_in_string(const char* str, size_type byte
 {
   if ((str == 0) || (bytes == 0)) return 0;
   auto ptr = reinterpret_cast<uint8_t const*>(str);
+#ifndef CUDF_JIT_UDF
   return thrust::count_if(
     thrust::seq, ptr, ptr + bytes, [](uint8_t chr) { return is_begin_utf8_char(chr); });
+#else
+  size_type chars = 0;
+  auto const end  = ptr + bytes;
+  while (ptr < end) { chars += is_begin_utf8_char(*ptr++); }
+  return chars;
+#endif
 }
 
 /**
