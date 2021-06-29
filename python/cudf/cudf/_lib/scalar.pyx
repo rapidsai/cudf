@@ -30,7 +30,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.table cimport Table
-from cudf._lib.interop import to_arrow
+from cudf._lib.interop import to_arrow, from_arrow
 
 from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_s,
@@ -87,6 +87,8 @@ cdef class DeviceScalar:
         elif isinstance(dtype, cudf.ListDtype):
             _set_list_from_pylist(
                 self.c_value, value, dtype, valid)
+        elif isinstance(dtype, cudf.StructDtype):
+            _set_struct_from_pydict(self.c_value, value, dtype, valid)
         elif pd.api.types.is_string_dtype(dtype):
             _set_string_from_np_string(self.c_value, value, valid)
         elif pd.api.types.is_numeric_dtype(dtype):
@@ -306,6 +308,19 @@ cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
         new fixed_point_scalar[decimal64](
             <int64_t>np.int64(value), scale_type(-dtype.scale), valid
         )
+    )
+
+cdef _set_struct_from_pydict(unique_ptr[scalar]& s, object value,
+                             object dtype, bool valid=True):
+    value = value if valid else cudf.NA
+    pyarrow_table = pa.Table.from_pydict({k: [v] for k, v in value.items()})
+    columns = list(value.keys())
+
+    cdef Table table = from_arrow(pyarrow_table, column_names=columns)
+    cdef table_view struct_view = table.view()
+
+    s.reset(
+        new struct_scalar(struct_view)
     )
 
 cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
