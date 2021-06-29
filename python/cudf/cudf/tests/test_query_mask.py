@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 _data = [
     {"a": [0, 1.0, 2.0, None, np.nan, None, 3, 5]},
