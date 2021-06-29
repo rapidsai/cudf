@@ -22,6 +22,8 @@
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
+#include <limits>
+
 #include <transform/jit/operation-udf.hpp>
 
 #include <cudf/types.hpp>
