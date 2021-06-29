@@ -206,6 +206,7 @@ class orc_column_view {
   auto flat_index() const noexcept { return _index; }
   // Id in the ORC file
   auto id() const noexcept { return _index + 1; }
+  auto str_id() const noexcept { return _str_id; }
   auto is_child() const noexcept { return _is_child; }
   auto type_width() const noexcept { return _type_width; }
   auto size() const noexcept { return cudf_column.size(); }
@@ -262,6 +263,7 @@ size_type orc_table_view::num_rows() const { return columns.empty() ? 0 : column
  */
 std::vector<stripe_rowgroups> gather_stripe_info(host_span<orc_column_view const> columns,
                                                  host_2dspan<rows_range const> rowgroup_ranges,
+                                                 host_2dspan<size_t const> str_rg_sizes,
                                                  uint32_t max_stripe_size)
 {
   auto const is_any_column_string =
@@ -275,21 +277,21 @@ std::vector<stripe_rowgroups> gather_stripe_info(host_span<orc_column_view const
   size_t stripe_size       = 0;
   size_t stripe_rows       = 0;
   for (size_t rowgroup = 0; rowgroup < num_rowgroups; ++rowgroup) {
+    auto const rowgroup_size =
+      std::accumulate(columns.begin(), columns.end(), 0ul, [&](size_t total_size, auto const &col) {
+        auto const rows = rowgroup_ranges[rowgroup][col.flat_index()].size();
+        if (col.is_string()) {
+          return total_size + rows + str_rg_sizes[rowgroup][col.str_id()];
+        } else {
+          return total_size + col.type_width() * rows;
+        }
+      });
+
     auto const rowgroup_rows =
       std::max_element(rowgroup_ranges[rowgroup].begin(),
                        rowgroup_ranges[rowgroup].end(),
                        [](auto &l, auto &r) { return l.size() < r.size(); })
         ->size();
-    auto const rowgroup_size =
-      std::accumulate(columns.begin(), columns.end(), 0ul, [&](size_t total_size, auto const &col) {
-        if (col.is_string()) {
-          const auto dt = col.host_dict_chunk(rowgroup);
-          return total_size + rowgroup_rows + dt->string_char_count;
-        } else {
-          return total_size + col.type_width() * rowgroup_rows;
-        }
-      });
-
     if ((rowgroup > stripe_start) && (stripe_size + rowgroup_size > max_stripe_size ||
                                       stripe_rows + rowgroup_rows > max_stripe_rows)) {
       infos.emplace_back(infos.size(), stripe_start, rowgroup - stripe_start);
@@ -332,14 +334,13 @@ void init_dictionaries(orc_table_view &orc_table,
     str_column.attach_dict_chunk(dict->host_ptr(), dict->device_ptr());
   }
 
-  gpu::InitDictionaryIndices(
-    orc_table.d_columns,
-    dict->device_ptr(),
-    dict_data,
-    dict_index,
-    rowgroup_ranges,
-    cudf::detail::make_device_uvector_async(orc_table.string_column_indices, stream),
-    stream);
+  gpu::InitDictionaryIndices(orc_table.d_columns,
+                             dict->device_ptr(),
+                             dict_data,
+                             dict_index,
+                             rowgroup_ranges,
+                             orc_table.d_string_column_indices,
+                             stream);
   dict->device_to_host(stream, true);
 }
 
@@ -1154,7 +1155,10 @@ orc_table_view get_columns_info(table_view const &table,
     },
     stream);
 
-  return {std::move(orc_columns), std::move(d_orc_columns), std::move(str_col_flat_indexes)};
+  return {std::move(orc_columns),
+          std::move(d_orc_columns),
+          str_col_flat_indexes,
+          cudf::detail::make_device_uvector_sync(str_col_flat_indexes, stream)};
 }
 
 hostdevice_2dvector<rows_range> calculate_rowgroup_sizes(orc_table_view const &orc_table,
@@ -1326,21 +1330,38 @@ file_segmentation calculate_segmentation(orc_table_view &orc_table,
 {
   auto rowgroup_bounds = calculate_rowgroup_sizes(orc_table, row_index_stride, stream);
 
-  // Build per-column dictionary indices
-  auto dictionaries          = allocate_dictionaries(orc_table, stream);
-  auto const num_dict_chunks = rowgroup_bounds.size().first * orc_table.num_string_columns();
-  hostdevice_vector<gpu::DictionaryChunk> dict(num_dict_chunks, stream);
-  if (orc_table.num_string_columns() != 0) {
-    init_dictionaries(orc_table,
-                      rowgroup_bounds,
-                      dictionaries.d_data_view,
-                      dictionaries.d_index_view,
-                      &dict,
-                      stream);
-  }
+  auto const num_str_size_chunks = rowgroup_bounds.size().first * orc_table.num_string_columns();
+  rmm::device_uvector<size_t> d_str_rg_sizes(num_str_size_chunks, stream);
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    d_str_rg_sizes.begin(),
+    d_str_rg_sizes.end(),
+    [cols          = device_span<orc_column_device_view const>{orc_table.d_columns},
+     str_cols_idxs = device_span<int const>{orc_table.d_string_column_indices},
+     rg_bounds     = device_2dspan<rows_range const>{rowgroup_bounds}] __device__(auto idx) {
+      auto const rg_idx    = idx / str_cols_idxs.size();
+      auto const col_idx   = str_cols_idxs[idx - rg_idx * str_cols_idxs.size()];
+      auto const &rg_range = rg_bounds[rg_idx][col_idx];
+      return thrust::reduce(thrust::seq,
+                            thrust::make_counting_iterator(rg_range.begin),
+                            thrust::make_counting_iterator(rg_range.end),
+                            0ul,
+                            [&](auto sum, auto elem_idx) {
+                              column_device_view const &col = cols[col_idx].cudf_column;
+                              return sum + (col.is_valid(elem_idx)
+                                              ? col.element<string_view>(elem_idx).size_bytes()
+                                              : 0);
+                            });
+    });
+  auto const str_rg_sizes      = cudf::detail::make_std_vector_sync(d_str_rg_sizes, stream);
+  auto const str_rg_sizes_view = host_2dspan<size_t const>{
+    str_rg_sizes.data(), rowgroup_bounds.size().first, orc_table.num_string_columns()};
 
   // Decide stripe boundaries
-  auto stripe_bounds = gather_stripe_info(orc_table.columns, rowgroup_bounds, max_stripe_size);
+  auto stripe_bounds =
+    gather_stripe_info(orc_table.columns, rowgroup_bounds, str_rg_sizes_view, max_stripe_size);
+
+  // TODO: recalc rowgroups
 
   return {std::move(rowgroup_bounds), std::move(stripe_bounds)};
 }
