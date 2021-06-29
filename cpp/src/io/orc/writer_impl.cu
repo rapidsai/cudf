@@ -1323,7 +1323,7 @@ string_dictionaries allocate_dictionaries(orc_table_view const &orc_table,
           cudf::detail::make_device_uvector_sync(index_ptrs, stream)};
 }
 
-std::vector<size_t> string_chunk_sizes(orc_table_view &orc_table,
+std::vector<size_t> string_chunk_sizes(orc_table_view const &orc_table,
                                        device_2dspan<rows_range const> rowgroup_bounds,
                                        rmm::cuda_stream_view stream)
 {
@@ -1353,11 +1353,59 @@ std::vector<size_t> string_chunk_sizes(orc_table_view &orc_table,
   return cudf::detail::make_std_vector_sync(d_str_rg_sizes, stream);
 }
 
-file_segmentation calculate_segmentation(orc_table_view &orc_table,  // const
+hostdevice_2dvector<rows_range> restrict_segmentation(
+  host_2dspan<rows_range const> unbound_rowgroups,
+  host_span<stripe_rowgroups const> unbound_stripes,
+  size_type row_index_stride,
+  rmm::cuda_stream_view stream)
+{
+  auto const num_columns = unbound_rowgroups.size().second;
+  std::vector<std::vector<rows_range>> t_rowgroups(num_columns);
+  std::vector<std::vector<stripe_rowgroups>> stripes(unbound_stripes.size());
+  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    for (auto &stripe : unbound_stripes) {
+      auto rows_to_distribute =
+        std::accumulate(stripe.cbegin(), stripe.cend(), 0, [&](auto total_rows, auto rg_idx) {
+          return total_rows + unbound_rowgroups[rg_idx][col_idx].size();
+        });
+      auto current_first_row  = unbound_rowgroups[stripe.first][col_idx].begin;
+      uint32_t const first_rg = t_rowgroups[col_idx].size();
+      while (rows_to_distribute) {
+        auto const next_rg_rows = min(rows_to_distribute, row_index_stride);
+        t_rowgroups[col_idx].push_back({current_first_row, current_first_row + next_rg_rows});
+        rows_to_distribute -= next_rg_rows;
+        current_first_row += next_rg_rows;
+      }
+      stripes[stripe.id].push_back(
+        {stripe.id, first_rg, static_cast<uint32_t>(t_rowgroups[col_idx].size()) - first_rg});
+    }
+  }
+
+  auto const num_rowgroups =
+    std::max_element(t_rowgroups.cbegin(), t_rowgroups.cend(), [](auto &l, auto &r) {
+      return l.size() < r.size();
+    })->size();
+
+  // transpose rowgroup ranges
+  hostdevice_2dvector<rows_range> rowgroups(num_rowgroups, num_columns, stream);
+  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    for (size_t rg_idx = 0; rg_idx < num_rowgroups; ++rg_idx) {
+      rowgroups[rg_idx][col_idx] =
+        (t_rowgroups[col_idx].size() > rg_idx) ? t_rowgroups[col_idx][rg_idx] : rows_range{};
+    }
+  }
+  rowgroups.host_to_device(stream);
+
+  return rowgroups;
+}
+
+file_segmentation calculate_segmentation(orc_table_view const &orc_table,
                                          size_type row_index_stride,
                                          size_t max_stripe_size,
                                          rmm::cuda_stream_view stream)
 {
+  if (orc_table.num_columns() == 0) return {{0, 0, stream}, {}};
+
   auto unbound_rowgroups = unbound_rowgroup_sizes(orc_table, row_index_stride, stream);
 
   auto const str_rg_sizes = string_chunk_sizes(orc_table, unbound_rowgroups, stream);
@@ -1365,28 +1413,12 @@ file_segmentation calculate_segmentation(orc_table_view &orc_table,  // const
   // Decide stripe boundaries based on unbound rowgroups
   auto const str_rg_sizes_view = host_2dspan<size_t const>{
     str_rg_sizes.data(), unbound_rowgroups.size().first, orc_table.num_string_columns()};
-  auto stripe_bounds =
+  auto unbound_stripes =
     gather_stripe_info(orc_table.columns, unbound_rowgroups, str_rg_sizes_view, max_stripe_size);
 
-  // Calculate actual rowgroups (size limited to `row_index_stride`)
-  std::vector<std::vector<rows_range>> brg(orc_table.num_columns());
-  for (size_t col_idx = 0; col_idx < brg.size(); ++col_idx) {
-    for (auto &stripe : stripe_bounds) {
-      auto rows_to_distribute =
-        std::accumulate(stripe.cbegin(), stripe.cend(), 0, [&](auto total_rows, auto rg_idx) {
-          return total_rows + unbound_rowgroups[rg_idx][col_idx].size();
-        });
-      auto current_first_row = unbound_rowgroups[stripe.first][col_idx].begin;
-      while (rows_to_distribute) {
-        brg[col_idx].push_back(
-          {current_first_row, current_first_row + min(rows_to_distribute, row_index_stride)});
-        rows_to_distribute -= brg[col_idx].back().size();
-        current_first_row += brg[col_idx].back().size();
-      }
-    }
-  }
+  auto tmp = restrict_segmentation(unbound_rowgroups, unbound_stripes, row_index_stride, stream);
 
-  return {std::move(unbound_rowgroups), std::move(stripe_bounds)};
+  return {std::move(tmp), unbound_stripes};
 }
 
 void writer::impl::write(table_view const &table)
