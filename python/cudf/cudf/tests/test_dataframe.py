@@ -736,6 +736,17 @@ def test_dataframe_astype(nelem):
     np.testing.assert_equal(df["a"].to_array(), df["b"].to_array())
 
 
+def test_astype_dict():
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": ["1", "2", "3"]})
+    pdf = gdf.to_pandas()
+
+    assert_eq(pdf.astype({"a": "str"}), gdf.astype({"a": "str"}))
+    assert_eq(
+        pdf.astype({"a": "str", "b": np.int64}),
+        gdf.astype({"a": "str", "b": np.int64}),
+    )
+
+
 @pytest.mark.parametrize("nelem", [0, 100])
 def test_index_astype(nelem):
     df = cudf.DataFrame()
