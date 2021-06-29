@@ -72,9 +72,10 @@ class IntervalColumn(StructColumn):
         return pa.ExtensionArray.from_storage(typ, struct_arrow)
 
     def from_struct_column(self, closed="right"):
+        first_field_name = list(self.dtype.fields.keys())[0]
         return IntervalColumn(
             size=self.size,
-            dtype=IntervalDtype(self.dtype.fields["left"], closed),
+            dtype=IntervalDtype(self.dtype.fields[first_field_name], closed),
             mask=self.base_mask,
             offset=self.offset,
             null_count=self.null_count,

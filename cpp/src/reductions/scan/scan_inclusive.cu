@@ -22,6 +22,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/reduction.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -31,27 +32,39 @@
 
 namespace cudf {
 namespace detail {
-namespace {
 
-rmm::device_buffer mask_inclusive_scan(const column_view& input_view,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+// logical-and scan of the null mask of the input view
+rmm::device_buffer mask_scan(const column_view& input_view,
+                             cudf::scan_type inclusive,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   rmm::device_buffer mask =
     detail::create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
   auto d_input   = column_device_view::create(input_view, stream);
   auto valid_itr = detail::make_validity_iterator(*d_input);
 
-  auto first_null_position = thrust::find_if_not(rmm::exec_policy(stream),
-                                                 valid_itr,
-                                                 valid_itr + input_view.size(),
-                                                 thrust::identity<bool>{}) -
-                             valid_itr;
-  cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), 0, first_null_position, true);
-  cudf::set_null_mask(
-    static_cast<cudf::bitmask_type*>(mask.data()), first_null_position, input_view.size(), false);
+  auto first_null_position = [&] {
+    size_type const first_null = thrust::find_if_not(rmm::exec_policy(stream),
+                                                     valid_itr,
+                                                     valid_itr + input_view.size(),
+                                                     thrust::identity<bool>{}) -
+                                 valid_itr;
+    size_type const exclusive_offset = (inclusive == scan_type::EXCLUSIVE) ? 1 : 0;
+    return std::min(input_view.size(), first_null + exclusive_offset);
+  }();
+
+  cudf::detail::set_null_mask(
+    static_cast<cudf::bitmask_type*>(mask.data()), 0, first_null_position, true, stream);
+  cudf::detail::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()),
+                              first_null_position,
+                              input_view.size(),
+                              false,
+                              stream);
   return mask;
 }
+
+namespace {
 
 /**
  * @brief Dispatcher for running Scan operation on input column
@@ -75,9 +88,9 @@ struct scan_dispatcher {
   }
 
   // for arithmetic types
-  template <typename T, std::enable_if_t<std::is_arithmetic<T>::value, T>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
   auto inclusive_scan(const column_view& input_view,
-                      null_policy null_handling,
+                      null_policy,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource* mr)
   {
@@ -96,9 +109,9 @@ struct scan_dispatcher {
   }
 
   // for string type: only MIN and MAX are supported
-  template <typename T, std::enable_if_t<is_string_supported<T>(), T>* = nullptr>
+  template <typename T, std::enable_if_t<is_string_supported<T>()>* = nullptr>
   std::unique_ptr<column> inclusive_scan(const column_view& input_view,
-                                         null_policy null_handling,
+                                         null_policy,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
@@ -126,7 +139,7 @@ struct scan_dispatcher {
    *
    * @tparam T type of input column
    */
-  template <typename T, typename std::enable_if_t<is_supported<T>(), T>* = nullptr>
+  template <typename T, typename std::enable_if_t<is_supported<T>()>* = nullptr>
   std::unique_ptr<column> operator()(const column_view& input,
                                      null_policy null_handling,
                                      rmm::cuda_stream_view stream,
@@ -135,11 +148,8 @@ struct scan_dispatcher {
     return inclusive_scan<T>(input, null_handling, stream, mr);
   }
 
-  template <typename T, typename std::enable_if_t<!is_supported<T>(), T>* = nullptr>
-  std::unique_ptr<column> operator()(const column_view& input,
-                                     null_policy null_handling,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+  template <typename T, typename... Args>
+  std::enable_if_t<!is_supported<T>(), std::unique_ptr<column>> operator()(Args&&...)
   {
     CUDF_FAIL("Non-arithmetic types not supported for inclusive scan");
   }
@@ -159,7 +169,8 @@ std::unique_ptr<column> scan_inclusive(
   if (null_handling == null_policy::EXCLUDE) {
     output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
   } else if (input.nullable()) {
-    output->set_null_mask(mask_inclusive_scan(input, stream, mr), cudf::UNKNOWN_NULL_COUNT);
+    output->set_null_mask(mask_scan(input, scan_type::INCLUSIVE, stream, mr),
+                          cudf::UNKNOWN_NULL_COUNT);
   }
 
   return output;

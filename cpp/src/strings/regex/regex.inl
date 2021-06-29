@@ -229,7 +229,6 @@ __device__ inline int32_t reprog_device::regexec(
     }
 
     if (((eos < 0) || (pos < eos)) && match == 0) {
-      // jnk.list1->activate(startinst_id, pos, 0);
       int32_t i = 0;
       auto ids  = startinst_ids();
       while (ids[i] >= 0) jnk.list1->activate(ids[i++], (group_id == 0 ? pos : -1), -1);
@@ -318,8 +317,9 @@ __device__ inline int32_t reprog_device::regexec(
     } while (expanded);
 
     // execute
+    bool continue_execute = true;
     jnk.list2->reset();
-    for (int16_t i = 0; i < jnk.list1->size; i++) {
+    for (int16_t i = 0; continue_execute && i < jnk.list1->size; i++) {
       int32_t inst_id     = static_cast<int32_t>(jnk.list1->inst_ids[i]);
       int2& range         = jnk.list1->ranges[i];
       const reinst* inst  = get_inst(inst_id);
@@ -347,17 +347,20 @@ __device__ inline int32_t reprog_device::regexec(
           match = 1;
           begin = range.x;
           end   = group_id == 0 ? pos : range.y;
-          goto BreakFor;
+
+          continue_execute = false;
+          break;
       }
-      if (id_activate >= 0) jnk.list2->activate(id_activate, range.x, range.y);
+      if (continue_execute && (id_activate >= 0))
+        jnk.list2->activate(id_activate, range.x, range.y);
     }
 
-  BreakFor:
     ++pos;
     ++itr;
     swaplist(jnk.list1, jnk.list2);
     checkstart = jnk.list1->size > 0 ? 0 : 1;
   } while (c && (jnk.list1->size > 0 || match == 0));
+
   return match;
 }
 
@@ -373,11 +376,16 @@ __device__ inline int32_t reprog_device::find(int32_t idx,
 }
 
 template <int stack_size>
-__device__ inline int32_t reprog_device::extract(
-  int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id)
+__device__ inline match_result reprog_device::extract(cudf::size_type idx,
+                                                      string_view const& dstr,
+                                                      cudf::size_type begin,
+                                                      cudf::size_type end,
+                                                      cudf::size_type group_id)
 {
   end = begin + 1;
-  return call_regexec<stack_size>(idx, dstr, begin, end, group_id + 1);
+  return call_regexec<stack_size>(idx, dstr, begin, end, group_id + 1) > 0
+           ? match_result({begin, end})
+           : thrust::nullopt;
 }
 
 template <int stack_size>
@@ -407,7 +415,6 @@ __device__ inline int32_t reprog_device::call_regexec<RX_STACK_ANY>(
   u_char* listmem         = reinterpret_cast<u_char*>(_relists_mem);  // beginning of relist buffer;
   listmem += (idx * relists_size * 2);                                // two relist ptrs in reljunk:
 
-  // run ctor on assigned memory buffer
   relist* list1 = new (listmem) relist(static_cast<int16_t>(_insts_count));
   relist* list2 = new (listmem + relists_size) relist(static_cast<int16_t>(_insts_count));
 

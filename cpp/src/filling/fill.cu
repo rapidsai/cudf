@@ -81,10 +81,8 @@ struct in_place_fill_range_dispatch {
     in_place_fill<RepType>(view, begin, end, s, stream);
   }
 
-  template <typename T>
-  std::enable_if_t<not cudf::is_fixed_width<T>(), void> operator()(cudf::size_type begin,
-                                                                   cudf::size_type end,
-                                                                   rmm::cuda_stream_view stream)
+  template <typename T, typename... Args>
+  std::enable_if_t<not cudf::is_fixed_width<T>(), void> operator()(Args&&...)
   {
     CUDF_FAIL("in-place fill does not work for variable width types.");
   }
@@ -94,12 +92,9 @@ struct out_of_place_fill_range_dispatch {
   cudf::scalar const& value;
   cudf::column_view const& input;
 
-  template <typename T, CUDF_ENABLE_IF(not cudf::is_rep_layout_compatible<T>())>
-  std::unique_ptr<cudf::column> operator()(
-    cudf::size_type begin,
-    cudf::size_type end,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  template <typename T, typename... Args>
+  std::enable_if_t<not cudf::is_rep_layout_compatible<T>(), std::unique_ptr<cudf::column>>
+  operator()(Args...)
   {
     CUDF_FAIL("Unsupported type in fill.");
   }
@@ -128,26 +123,6 @@ struct out_of_place_fill_range_dispatch {
     return p_ret;
   }
 };
-
-template <>
-std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf::list_view>(
-  cudf::size_type begin,
-  cudf::size_type end,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FAIL("list_view not supported yet");
-}
-
-template <>
-std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf::struct_view>(
-  cudf::size_type begin,
-  cudf::size_type end,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FAIL("struct_view not supported yet");
-}
 
 template <>
 std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf::string_view>(

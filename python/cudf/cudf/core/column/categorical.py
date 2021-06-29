@@ -35,6 +35,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
+    is_interval_dtype,
 )
 
 if TYPE_CHECKING:
@@ -1092,7 +1093,13 @@ class CategoricalColumn(column.ColumnBase):
 
         signed_dtype = min_signed_type(len(col.categories))
         codes = col.cat().codes.astype(signed_dtype).fillna(-1).to_array()
-        categories = col.categories.dropna(drop_nan=True).to_pandas()
+        if is_interval_dtype(col.categories.dtype):
+            # leaving out dropna because it temporarily changes an interval
+            # index into a struct and throws off results.
+            # TODO: work on interval index dropna
+            categories = col.categories.to_pandas()
+        else:
+            categories = col.categories.dropna(drop_nan=True).to_pandas()
         data = pd.Categorical.from_codes(
             codes, categories=categories, ordered=col.ordered
         )
@@ -1506,27 +1513,23 @@ class CategoricalColumn(column.ColumnBase):
             offset=codes_col.offset,
         )
 
-    def _copy_type_metadata(
-        self: CategoricalColumn, other: ColumnBase
-    ) -> ColumnBase:
-        """Copies type metadata from self onto other, returning a new column.
-
-        In addition to the default behavior, if `other` is not a
-        CategoricalColumn, we assume other is a column of codes, and return a
-        CategoricalColumn composed of `other`  and the categories of `self`.
-        """
-        if not isinstance(other, cudf.core.column.CategoricalColumn):
-            other = column.build_categorical_column(
-                categories=self.categories,
-                codes=column.as_column(other.base_data, dtype=other.dtype),
-                mask=other.base_mask,
-                ordered=self.ordered,
-                size=other.size,
-                offset=other.offset,
-                null_count=other.null_count,
+    def _with_type_metadata(
+        self: CategoricalColumn, dtype: Dtype
+    ) -> CategoricalColumn:
+        if isinstance(dtype, CategoricalDtype):
+            return column.build_categorical_column(
+                categories=dtype.categories._values,
+                codes=column.as_column(
+                    self.codes.base_data, dtype=self.codes.dtype
+                ),
+                mask=self.codes.base_mask,
+                ordered=dtype.ordered,
+                size=self.codes.size,
+                offset=self.codes.offset,
+                null_count=self.codes.null_count,
             )
-        # Have to ignore typing here because it misdiagnoses super().
-        return super()._copy_type_metadata(other)  # type: ignore
+
+        return self
 
 
 def _create_empty_categorical_column(

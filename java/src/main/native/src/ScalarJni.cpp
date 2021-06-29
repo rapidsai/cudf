@@ -17,6 +17,7 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/strings/repeat_strings.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
@@ -508,6 +509,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeStructScalar(JNIEnv *env,
     auto s = std::make_unique<cudf::struct_scalar>(
       cudf::host_span<cudf::column_view const>{columns}, is_valid);
     return reinterpret_cast<jlong>(s.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_repeatString(JNIEnv *env, jclass, jlong handle,
+                                                                jint repeat_times) {
+  JNI_NULL_CHECK(env, handle, "scalar handle is null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const str = *reinterpret_cast<cudf::string_scalar *>(handle);
+    return reinterpret_cast<jlong>(cudf::strings::repeat_strings(str, repeat_times).release());
   }
   CATCH_STD(env, 0);
 }

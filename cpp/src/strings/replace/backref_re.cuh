@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
+
 #include <strings/regex/regex.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -33,14 +34,6 @@ using backref_type = thrust::pair<size_type, size_type>;
  * and inserting the at the backref position indicated in the replacement template.
  *
  * The logic includes computing the size of each string and also writing the output.
- *
- * The stack is used to keep progress on evaluating the regex instructions on each string.
- * So the size of the stack is in proportion to the number of instructions in the given regex
- * pattern.
- *
- * There are three call types based on the number of regex instructions in the given pattern.
- * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
- * Longer patterns require global memory. Shorter patterns are common in data cleaning.
  */
 template <typename Iterator, int stack_size>
 struct backrefs_fn {
@@ -59,22 +52,26 @@ struct backrefs_fn {
       return;
     }
     auto const d_str  = d_strings.element<string_view>(idx);
+    auto const in_ptr = d_str.data();
     auto const nchars = d_str.length();      // number of characters in input string
-    auto nbytes       = d_str.size_bytes();  // number of bytes in input string
-    auto in_ptr       = d_str.data();
+    auto nbytes       = d_str.size_bytes();  // number of bytes for the output string
     auto out_ptr      = d_chars ? (d_chars + d_offsets[idx]) : nullptr;
     size_type lpos    = 0;       // last byte position processed in d_str
     size_type begin   = 0;       // first character position matching regex
     size_type end     = nchars;  // last character position (exclusive)
+
     // copy input to output replacing strings as we go
     while (prog.find<stack_size>(idx, d_str, begin, end) > 0)  // inits the begin/end vars
     {
-      auto spos = d_str.byte_offset(begin);           // get offset for these
-      auto epos = d_str.byte_offset(end);             // character position values
-      nbytes += d_repl.size_bytes() - (epos - spos);  // compute new size
-      if (out_ptr) out_ptr = copy_and_increment(out_ptr, in_ptr + lpos, spos - lpos);
+      auto spos = d_str.byte_offset(begin);           // get offset for the
+      auto epos = d_str.byte_offset(end);             // character position values;
+      nbytes += d_repl.size_bytes() - (epos - spos);  // compute the output size
+
+      // copy the string data before the matched section
+      if (out_ptr) { out_ptr = copy_and_increment(out_ptr, in_ptr + lpos, spos - lpos); }
       size_type lpos_template = 0;              // last end pos of replace template
       auto const repl_ptr     = d_repl.data();  // replace template pattern
+
       thrust::for_each(
         thrust::seq, backrefs_begin, backrefs_end, [&] __device__(backref_type backref) {
           if (out_ptr) {
@@ -83,48 +80,39 @@ struct backrefs_fn {
             lpos_template += copy_length;
           }
           // extract the specific group's string for this backref's index
-          int32_t spos_extract = begin;  // these are modified
-          int32_t epos_extract = end;    // by extract()
-          if ((prog.extract<stack_size>(
-                 idx, d_str, spos_extract, epos_extract, backref.first - 1) <= 0) ||
-              (epos_extract <= spos_extract))
+          auto extracted = prog.extract<stack_size>(idx, d_str, begin, end, backref.first - 1);
+          if (!extracted || (extracted.value().second <= extracted.value().first)) {
             return;  // no value for this backref number; that is ok
-          spos_extract = d_str.byte_offset(spos_extract);  // convert
-          epos_extract = d_str.byte_offset(epos_extract);  // to bytes
+          }
+          auto spos_extract = d_str.byte_offset(extracted.value().first);   // convert
+          auto epos_extract = d_str.byte_offset(extracted.value().second);  // to bytes
           nbytes += epos_extract - spos_extract;
-          if (out_ptr)
+          if (out_ptr) {
             out_ptr =
               copy_and_increment(out_ptr, in_ptr + spos_extract, (epos_extract - spos_extract));
+          }
         });
-      if (out_ptr && (lpos_template < d_repl.size_bytes()))  // copy remainder of template
+
+      // copy remainder of template
+      if (out_ptr && (lpos_template < d_repl.size_bytes())) {
         out_ptr = copy_and_increment(
           out_ptr, repl_ptr + lpos_template, d_repl.size_bytes() - lpos_template);
+      }
+
+      // setup to match the next section
       lpos  = epos;
       begin = end;
       end   = nchars;
     }
-    if (out_ptr && (lpos < d_str.size_bytes()))  // copy remainder of input string
+
+    // finally, copy remainder of input string
+    if (out_ptr && (lpos < d_str.size_bytes())) {
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
-    else if (!out_ptr)
+    } else if (!out_ptr) {
       d_offsets[idx] = static_cast<int32_t>(nbytes);
+    }
   }
 };
-
-using children_pair = std::pair<std::unique_ptr<column>, std::unique_ptr<column>>;
-
-children_pair replace_with_backrefs_medium(column_device_view const& d_strings,
-                                           reprog_device& d_prog,
-                                           string_view const& d_repl_template,
-                                           device_span<backref_type> backrefs,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr);
-
-children_pair replace_with_backrefs_large(column_device_view const& d_strings,
-                                          reprog_device& d_prog,
-                                          string_view const& d_repl_template,
-                                          device_span<backref_type> backrefs,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace strings

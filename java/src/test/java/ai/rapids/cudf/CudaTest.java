@@ -14,23 +14,19 @@
  * limitations under the License.
  */
 
-#pragma once
+package ai.rapids.cudf;
 
-#include <cudf/column/column.hpp>
-#include <rmm/cuda_stream_view.hpp>
+import org.junit.jupiter.api.Test;
 
-namespace cudf {
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-namespace jni {
+public class CudaTest {
 
-/**
- * @brief compute the prefix sum of a column of longs
- */
-std::unique_ptr<column>
-prefix_sum(column_view const &value_column,
-           rmm::cuda_stream_view stream = rmm::cuda_stream_default,
-           rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+  @Test
+  public void testGetCudaRuntimeInfo() {
+    assert Cuda.getDriverVersion() >= Cuda.getRuntimeVersion();
+    assert Cuda.getRuntimeVersion() > 1000;
+    assertEquals(Cuda.getNativeComputeMode(), Cuda.getComputeMode().nativeId);
+  }
 
-} // namespace jni
-
-} // namespace cudf
+}
