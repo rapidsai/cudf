@@ -2299,6 +2299,18 @@ class DatetimeIndex(GenericIndex):
         """
         return self._get_dt_field("weekday")
 
+    @property
+    def dayofyear(self):
+        """
+        """
+        return self._get_dt_field("day_of_year")
+
+    @property
+    def day_of_year(self):
+        """
+        """
+        return self._get_dt_field("day_of_year")
+
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)

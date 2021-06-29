@@ -6292,6 +6292,14 @@ class DatetimeProperties(object):
         """
         return self._get_dt_field("weekday")
 
+    @property
+    def dayofyear(self):
+        return self._get_dt_field("day_of_year")
+
+    @property
+    def day_of_year(self):
+        return self._get_dt_field("day_of_year")
+
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(
