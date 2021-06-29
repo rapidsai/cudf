@@ -38,9 +38,11 @@ namespace strings {
  * Example:
  * input = ["tesT1", "a Test", "Another Test", "a\tb"];
  * output = capitalize(input)
- * output is ["Test1", "A test", "Another test", "A\tB"]
+ * output is ["Test1", "A test", "Another test", "A\tb"]
  * output = capitalize(input, " ")
  * output is ["Test1", "A Test", "Another Test", "A\tb"]
+ * output = capitalize(input, " \t")
+ * output is ["Test1", "A Test", "Another Test", "A\tB"]
  * @endcode
  *
  * Any null string entries return corresponding null output column entries.
