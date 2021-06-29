@@ -310,8 +310,10 @@ cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
         )
     )
 
-cdef _set_struct_from_pydict(unique_ptr[scalar]& s, object value,
-                             object dtype, bool valid=True):
+cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
+                             object value,
+                             object dtype,
+                             bool valid=True):
     value = value if valid else cudf.NA
     pyarrow_table = pa.Table.from_pydict({k: [v] for k, v in value.items()})
     columns = list(value.keys())
