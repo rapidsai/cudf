@@ -80,6 +80,15 @@ class StructColumn(ColumnBase):
             pa_type, len(self), buffers, children=children
         )
 
+    def __getitem__(self, args):
+        result = super().__getitem__(args)
+        if isinstance(result, dict):
+            return {
+                field: value
+                for field, value in zip(self.dtype.fields, result.values())
+            }
+        return result
+
     def copy(self, deep=True):
         result = super().copy(deep=deep)
         if deep:
