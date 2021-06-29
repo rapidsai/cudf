@@ -254,12 +254,6 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
 
   // Bail out for unsupported types.
   CUDF_FAIL("Unexpected types for copy");
-  (void)lhs;
-  (void)rhs;
-  (void)size;
-  (void)is_left;
-  (void)stream;
-  (void)mr;
 }
 
 /**
