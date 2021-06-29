@@ -3347,7 +3347,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   protected static native long title(long handle);
 
-  protected static native long capitalize(long handle, long delimiters);
+  private static native long capitalize(long handle, long delimiters);
 
   private static native long makeStructView(long[] handles, long rowCount);
 
