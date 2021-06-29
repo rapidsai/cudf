@@ -275,6 +275,8 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
     auto string_length    = in_offsets[row_idx + 1] - in_offsets[row_idx];
     int nblocks           = (string_length + block_size - 1) / block_size;
 
+    if (warp_lane == cudf::detail::warp_size - 1) { out_idx[local_warp_id] = 0; }
+
     for (int iblock = 0; iblock < nblocks; iblock++) {
       int string_length_iblock = std::min(block_size, string_length - block_size * iblock);
 
@@ -286,8 +288,6 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
         if (in_idx >= 0 && in_idx < string_length) ch = in_chars_string[in_idx];
         in_chars_shared[ichar] = ch;
       }
-
-      if (warp_lane == cudf::detail::warp_size - 1) { out_idx[local_warp_id] = 0; }
 
       __syncwarp();
 
@@ -336,34 +336,31 @@ std::unique_ptr<column> url_decode(
   if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   auto offset_count = strings_count + 1;
-  auto d_offsets    = strings.offsets().data<int32_t>() + strings.offset();
+  auto d_in_offsets = strings.offsets().data<int32_t>() + strings.offset();
   auto d_in_chars   = strings.chars().data<char>();
-
-  /*
-  if (esc_count == 0) {
-    // nothing to replace, so just copy the input column
-    return std::make_unique<cudf::column>(strings.parent(), stream, mr);
-  }
-  */
 
   // build offsets column
   auto offsets_column = make_numeric_column(
     data_type{type_id::INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
 
-  // count number of bytes in each row after decoding
+  // count number of bytes in each string after decoding
   auto offsets_view         = offsets_column->view();
   auto offsets_mutable_view = offsets_column->mutable_view();
   url_decode_char_counter<4, 286><<<65536, 128, 0, stream.value()>>>(
-    d_in_chars, d_offsets, offsets_mutable_view.begin<int32_t>() + 1, strings_count);
+    d_in_chars, d_in_offsets, offsets_mutable_view.begin<int32_t>() + 1, strings_count);
 
+  // use inclusive_scan to transform number of bytes into offsets
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          offsets_view.begin<int32_t>() + 1,
                          offsets_view.begin<int32_t>() + offset_count,
                          offsets_mutable_view.begin<int32_t>() + 1);
 
+  // set the first element of the offset column to 0
   CUDA_TRY(
     cudaMemsetAsync(offsets_mutable_view.begin<int32_t>(), 0, sizeof(int32_t), stream.value()));
 
+  // copy the total number of characters of all strings (last element of the offset column) to the
+  // host memory
   int32_t out_chars_bytes;
   CUDA_TRY(cudaMemcpyAsync(&out_chars_bytes,
                            offsets_view.begin<int32_t>() + offset_count - 1,
@@ -377,7 +374,7 @@ std::unique_ptr<column> url_decode(
   auto d_out_chars  = chars_column->mutable_view().data<char>();
 
   url_decode_char_replacer<4, 284><<<65536, 128, 0, stream.value()>>>(
-    d_in_chars, d_offsets, d_out_chars, offsets_column->view().begin<int32_t>(), strings_count);
+    d_in_chars, d_in_offsets, d_out_chars, offsets_column->view().begin<int32_t>(), strings_count);
 
   // copy null mask
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
