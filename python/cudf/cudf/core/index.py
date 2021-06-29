@@ -2118,6 +2118,15 @@ class DatetimeIndex(GenericIndex):
         if yearfirst is not False:
             raise NotImplementedError("yearfirst == True is not yet supported")
 
+        valid_dtypes = tuple(
+            f"datetime64[{res}]" for res in ("s", "ms", "us", "ns")
+        )
+        if dtype is None:
+            # nanosecond default matches pandas
+            dtype = "datetime64[ns]"
+        elif dtype not in valid_dtypes:
+            raise TypeError("Invalid dtype")
+
         if copy:
             data = column.as_column(data).copy()
         kwargs = _setdefault_name(data, name=name)
@@ -2126,7 +2135,7 @@ class DatetimeIndex(GenericIndex):
         elif isinstance(data, pd.DatetimeIndex):
             data = column.as_column(data.values)
         elif isinstance(data, (list, tuple)):
-            data = column.as_column(np.array(data, dtype="datetime64[ms]"))
+            data = column.as_column(np.array(data, dtype=dtype))
         super().__init__(data, **kwargs)
 
     @property
