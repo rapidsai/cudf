@@ -476,11 +476,6 @@ void reader::impl::set_data_types(device_span<uint64_t const> rec_starts,
         return std::find(std::cbegin(s), std::cend(s), ':') != std::cend(s);
       });
 
-    auto split_on_colon = [](std::string_view s) {
-      auto const i = s.find(":");
-      return std::pair{s.substr(0, i), s.substr(i + 1)};
-    };
-
     if (is_dict) {
       std::map<std::string, data_type> col_type_map;
       std::transform(
@@ -488,8 +483,10 @@ void reader::impl::set_data_types(device_span<uint64_t const> rec_starts,
         std::cend(dtype),
         std::inserter(col_type_map, col_type_map.end()),
         [&](auto const &ts) {
-          auto const [col_name, type_str] = split_on_colon(ts);
-          return std::pair{std::string{col_name}, convert_string_to_dtype(std::string{type_str})};
+          auto const i = ts.find(":");
+          std::string col_name = ts.substr(0, 1);
+          std::string type_str = ts.substr(i + 1);
+          return std::make_pair(col_name, convert_string_to_dtype(type_str));
         });
 
       // Using the map here allows O(n log n) complexity
