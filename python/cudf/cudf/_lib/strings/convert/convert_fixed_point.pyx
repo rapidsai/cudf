@@ -27,7 +27,7 @@ from cudf._lib.cpp.types cimport data_type, type_id
 
 def from_decimal(Column input_col):
     """
-    Converts a `DecimalColumn` to a `StringColumn`.
+    Converts a `Decimal64Column` to a `StringColumn`.
 
     Parameters
     ----------
@@ -49,7 +49,7 @@ def from_decimal(Column input_col):
 
 def to_decimal(Column input_col, object out_type):
     """
-    Returns a `DecimalColumn` from the provided `StringColumn`
+    Returns a `Decimal64Column` from the provided `StringColumn`
     using the scale in the `out_type`.
 
     Parameters

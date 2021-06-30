@@ -9,7 +9,7 @@ import pandas as pd
 import pyorc
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 from cudf.utils.dtypes import (
     pandas_dtypes_to_cudf_dtypes,
     pyarrow_dtypes_to_pandas_dtypes,

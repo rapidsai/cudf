@@ -9,7 +9,7 @@ import pytest
 
 import cudf
 from cudf.core.dtypes import Decimal64Dtype
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
     assert_eq,

@@ -6,7 +6,7 @@ import pytest
 
 import cudf
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 simple_test_data = [
     {},

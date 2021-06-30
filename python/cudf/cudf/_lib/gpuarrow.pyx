@@ -19,6 +19,7 @@ from pyarrow.includes.libarrow cimport (
 )
 from pyarrow.lib cimport (
     Buffer,
+    RecordBatchReader,
     Schema,
     _CRecordBatchReader,
     pyarrow_wrap_schema,
@@ -27,7 +28,7 @@ from pyarrow.lib cimport (
 import pyarrow as pa
 
 
-cdef class CudaRecordBatchStreamReader(_CRecordBatchReader):
+cdef class CudaRecordBatchStreamReader(RecordBatchReader):
     cdef:
         CIpcReadOptions options
 

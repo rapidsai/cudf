@@ -67,6 +67,7 @@ cpdef read_orc(object filepaths_or_buffers,
                object skip_rows=None,
                object num_rows=None,
                bool use_index=True,
+               object decimal_cols_as_float=None,
                object timestamp_type=None):
     """
     Cython function to call into libcudf API, see `read_orc`.
@@ -90,7 +91,8 @@ cpdef read_orc(object filepaths_or_buffers,
                 )
             )
         ),
-        use_index
+        use_index,
+        decimal_cols_as_float or [],
     )
 
     cdef table_with_metadata c_result
@@ -165,6 +167,7 @@ cdef orc_reader_options make_orc_reader_options(
     size_type num_rows,
     type_id timestamp_type,
     bool use_index,
+    object decimal_cols_as_float
 ) except*:
 
     cdef vector[string] c_column_names
@@ -174,6 +177,10 @@ cdef orc_reader_options make_orc_reader_options(
         c_column_names.push_back(str(col).encode())
     cdef orc_reader_options opts
     cdef source_info src = make_source_info(filepaths_or_buffers)
+    cdef vector[string] c_decimal_cols_as_float
+    c_decimal_cols_as_float.reserve(len(decimal_cols_as_float))
+    for decimal_col in decimal_cols_as_float:
+        c_decimal_cols_as_float.push_back(str(decimal_col).encode())
     opts = move(
         orc_reader_options.builder(src)
         .columns(c_column_names)
@@ -182,6 +189,7 @@ cdef orc_reader_options make_orc_reader_options(
         .num_rows(num_rows)
         .timestamp_type(data_type(timestamp_type))
         .use_index(use_index)
+        .decimal_cols_as_float(c_decimal_cols_as_float)
         .build()
     )
 

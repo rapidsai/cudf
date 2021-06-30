@@ -239,12 +239,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 self._index = as_index(index)
             if columns is not None:
                 self._data = ColumnAccessor(
-                    dict.fromkeys(
-                        columns,
-                        column.column_empty(
+                    {
+                        k: column.column_empty(
                             len(self), dtype="object", masked=True
-                        ),
-                    )
+                        )
+                        for k in columns
+                    }
                 )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
@@ -5652,11 +5652,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         out = super(DataFrame, data).to_arrow()
         metadata = pa.pandas_compat.construct_metadata(
-            self,
-            out.schema.names,
-            [self.index],
-            index_descr,
-            preserve_index,
+            columns_to_convert=[self[col] for col in self._data.names],
+            df=self,
+            column_names=out.schema.names,
+            index_levels=[self.index],
+            index_descriptors=index_descr,
+            preserve_index=preserve_index,
             types=out.schema.types,
         )
 

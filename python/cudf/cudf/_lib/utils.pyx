@@ -138,12 +138,16 @@ cpdef generate_pandas_metadata(Table table, index):
             index_descriptors.append(descr)
 
     metadata = pa.pandas_compat.construct_metadata(
-        table,
-        col_names,
-        index_levels,
-        index_descriptors,
-        index,
-        types,
+        columns_to_convert=[
+            col
+            for col in table._columns
+        ],
+        df=table,
+        column_names=col_names,
+        index_levels=index_levels,
+        index_descriptors=index_descriptors,
+        preserve_index=index,
+        types=types,
     )
 
     md_dict = json.loads(metadata[b"pandas"])

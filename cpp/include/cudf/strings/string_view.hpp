@@ -15,9 +15,8 @@
  */
 #pragma once
 
-#include <cuda_runtime.h>
-#include <cstddef>
 #include <cudf/types.hpp>
+
 #include <iterator>
 
 /**
@@ -35,12 +34,6 @@ using char_utf8 = uint32_t;  ///< UTF-8 characters are 1-4 bytes
  * The number of characters in a string computed on-demand.
  */
 constexpr cudf::size_type UNKNOWN_STRING_LENGTH{-1};
-
-/**
- * @brief This value is assigned to the _char_width member if the string
- * contains characters of different widths.
- */
-constexpr int8_t VARIABLE_CHAR_WIDTH{0};
 
 /**
  * @brief A non-owning, immutable view of device data that is a variable length
