@@ -161,7 +161,7 @@ from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import is_integer
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethodsMixin, ParentType
 from cudf.utils import utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -214,9 +214,6 @@ _timedelta_to_str_typecast_functions = {
     np.dtype("timedelta64[us]"): str_cast.int2timedelta,
     np.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
-
-
-ParentType = Union["cudf.Series", "cudf.core.index.BaseIndex"]
 
 
 class StringMethods(ColumnMethodsMixin):
