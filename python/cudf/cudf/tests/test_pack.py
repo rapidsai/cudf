@@ -20,7 +20,7 @@ import pandas as pd
 
 from cudf._lib.copying import pack, unpack
 from cudf.core import DataFrame, GenericIndex, Series
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 def test_sizeof_packed_dataframe():
