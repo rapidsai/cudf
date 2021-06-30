@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -50,7 +51,7 @@ namespace strings {
  * @throw cudf::logic_error if `delimiter.is_valid()` is  `false`.
  *
  * @param input String column.
- * @param delimiters Used if identifying words to capitalize.
+ * @param delimiters Characters for identifying words to capitalize.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Column of strings capitalized from the input column.
  */
