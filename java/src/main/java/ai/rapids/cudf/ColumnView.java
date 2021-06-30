@@ -1518,9 +1518,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return a column of capitalized strings. Users should close the returned column.
    */
   public final ColumnVector capitalize(Scalar delimiters) {
-    assert type.equals(DType.STRING);
-    assert delimiters != null;
-    return new ColumnVector(capitalize(getNativeView(), delimiters.getScalarHandle()));
+    if (DType.STRING.equals(type) && DType.STRING.equals(delimiters.getType())) {
+      return new ColumnVector(capitalize(getNativeView(), delimiters.getScalarHandle()));
+    }
+    throw new IllegalArgumentException("Both input column and delimiters scalar should be" +
+        " string type. But got column: " + type + ", scalar: " + delimiters.getType());
   }
   /////////////////////////////////////////////////////////////////////////////
   // TYPE CAST
@@ -3347,7 +3349,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   protected static native long title(long handle);
 
-  private static native long capitalize(long handle, long delimiters);
+  private static native long capitalize(long strsColHandle, long delimitersHandle);
 
   private static native long makeStructView(long[] handles, long rowCount);
 

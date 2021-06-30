@@ -1794,16 +1794,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_title(JNIEnv *env, jobjec
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_capitalize(JNIEnv *env, jobject j_object,
-                                                                  jlong handle,
-                                                                  jlong delimiters) {
+                                                                  jlong strs_handle,
+                                                                  jlong delimiters_handle) {
 
-  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
-  JNI_NULL_CHECK(env, delimiters, "delimiters scalar handle is null", 0)
+  JNI_NULL_CHECK(env, strs_handle, "native view handle is null", 0)
+  JNI_NULL_CHECK(env, delimiters_handle, "delimiters scalar handle is null", 0)
 
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
-    cudf::string_scalar *deli = reinterpret_cast<cudf::string_scalar *>(delimiters);
+    cudf::column_view *view = reinterpret_cast<cudf::column_view *>(strs_handle);
+    cudf::string_scalar *deli = reinterpret_cast<cudf::string_scalar *>(delimiters_handle);
     std::unique_ptr<cudf::column> result = cudf::strings::capitalize(*view, *deli);
     return reinterpret_cast<jlong>(result.release());
   }
