@@ -31,12 +31,17 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/detail/copy.hpp>
+#include <cudf/detail/transform.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
+
+#include <cudf/debug_printers.hpp>
 
 namespace cudf {
 namespace detail {
@@ -155,15 +160,6 @@ struct column_scalar_scatterer_impl<list_view, MapIterator> {
 };
 
 template <typename MapIterator>
-struct column_scalar_scatterer_impl<struct_view, MapIterator> {
-  template <typename... Args>
-  std::unique_ptr<column> operator()(Args&&...) const
-  {
-    CUDF_FAIL("scatter scalar to struct_view not implemented");
-  }
-};
-
-template <typename MapIterator>
 struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
   std::unique_ptr<column> operator()(std::reference_wrapper<const scalar> const& source,
                                      MapIterator scatter_iter,
@@ -219,6 +215,69 @@ struct column_scalar_scatterer {
   {
     column_scalar_scatterer_impl<Element, MapIterator> scatterer{};
     return scatterer(source, scatter_iter, scatter_rows, target, stream, mr);
+  }
+};
+
+
+template <typename MapIterator>
+struct column_scalar_scatterer_impl<struct_view, MapIterator> {
+  std::unique_ptr<column> operator()(std::reference_wrapper<const scalar> const& source,
+                                      MapIterator scatter_iter,
+                                      size_type scatter_rows,
+                                      column_view const& target,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr) const
+  {
+    // For each field of `source`, copy construct a scalar from the field
+    // and dispatch the correct scalar scatterer
+   
+    auto typed_s = static_cast<struct_scalar const*>(&source.get());
+    size_type n_fields = typed_s->view().num_columns();
+    CUDF_EXPECTS(n_fields == target.num_children(), "Mismatched number of fields.");
+
+    auto scatter_functor = column_scalar_scatterer<decltype(scatter_iter)>{};
+    std::vector<std::unique_ptr<column>> fields;
+    std::transform(thrust::make_counting_iterator(0), 
+                   thrust::make_counting_iterator(n_fields),
+                    std::back_inserter(fields),
+                    [&](auto const &i){
+      auto row_slr = get_element(typed_s->view().column(i), 0, stream);
+      return type_dispatcher<dispatch_storage_type>(row_slr->type(),
+                                                    scatter_functor,
+                                                    *row_slr,
+                                                    scatter_iter,
+                                                    scatter_rows,
+                                                    target.child(i),
+                                                    stream,
+                                                    mr
+                                                  );
+    });
+
+    // Compute nullmask
+    bool is_valid = typed_s->is_valid(stream);
+    bool nullable = not is_valid or target.nullable();
+    auto null_mask = create_null_mask(target.size(), mask_state::UNALLOCATED, stream, mr);
+    size_type null_count = nullable ? UNKNOWN_NULL_COUNT : 0;
+
+    if (nullable) {
+        auto null_mask_v = [&] {
+          if (target.nullable()) {
+            return mask_to_bools(target.null_mask(), 0, target.size(), stream);
+          } else {
+            auto slr = make_fixed_width_scalar(true, stream);
+            return make_column_from_scalar(*slr, target.size(), stream);
+          }
+        }();
+        auto valid_iter = thrust::make_constant_iterator(is_valid);
+        auto null_mask_v_view = null_mask_v->mutable_view();
+        thrust::scatter(rmm::exec_policy(stream), valid_iter, valid_iter + scatter_rows, scatter_iter, null_mask_v_view.template begin<bool>());
+
+        cudf::debug::print<bool>(*null_mask_v, std::cout, ",", stream.value());
+        std::unique_ptr<rmm::device_buffer> null_mask_p;
+        std::tie(null_mask_p, null_count) = bools_to_mask(*null_mask_v, stream, mr);
+        return  make_structs_column(target.size(), std::move(fields), null_count, std::move(*null_mask_p));
+    }
+    return make_structs_column(target.size(), std::move(fields), null_count, std::move(null_mask));
   }
 };
 
