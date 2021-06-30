@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cstdint>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
@@ -24,16 +25,15 @@
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/lists/list_view.cuh>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/detail/copy.hpp>
-#include <cudf/detail/transform.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -42,6 +42,7 @@
 #include <thrust/sequence.h>
 
 #include <cudf/debug_printers.hpp>
+#include "cudf/types.hpp"
 
 namespace cudf {
 namespace detail {
@@ -68,32 +69,32 @@ __global__ void marking_bitmask_kernel(mutable_column_device_view destination,
 }
 
 template <typename MapIterator>
-void scatter_scalar_bitmask(std::vector<std::reference_wrapper<const scalar>> const& source,
-                            MapIterator scatter_map,
-                            size_type num_scatter_rows,
-                            std::vector<std::unique_ptr<column>>& target,
-                            rmm::cuda_stream_view stream,
-                            rmm::mr::device_memory_resource* mr)
+void scatter_scalar_bitmask_inplace(std::reference_wrapper<const scalar> const& source,
+                                    MapIterator scatter_map,
+                                    size_type num_scatter_rows,
+                                    column& target,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   constexpr size_type block_size = 256;
   size_type const grid_size      = grid_1d(num_scatter_rows, block_size).num_blocks;
 
-  for (size_t i = 0; i < target.size(); ++i) {
-    auto const source_is_valid = source[i].get().is_valid(stream);
-    if (target[i]->nullable() or not source_is_valid) {
-      if (not target[i]->nullable()) {
-        // Target must have a null mask if the source is not valid
-        auto mask = detail::create_null_mask(target[i]->size(), mask_state::ALL_VALID, stream, mr);
-        target[i]->set_null_mask(std::move(mask), 0);
-      }
-
-      auto target_view = mutable_column_device_view::create(target[i]->mutable_view(), stream);
-
-      auto bitmask_kernel = source_is_valid ? marking_bitmask_kernel<true, decltype(scatter_map)>
-                                            : marking_bitmask_kernel<false, decltype(scatter_map)>;
-      bitmask_kernel<<<grid_size, block_size, 0, stream.value()>>>(
-        *target_view, scatter_map, num_scatter_rows);
+  auto const source_is_valid = source.get().is_valid(stream);
+  if (target.nullable() or not source_is_valid) {
+    if (not target.nullable()) {
+      // Target must have a null mask if the source is not valid
+      auto mask = detail::create_null_mask(target.size(), mask_state::ALL_VALID, stream, mr);
+      target.set_null_mask(std::move(mask), 0);
     }
+
+    auto target_view = mutable_column_device_view::create(target, stream);
+
+    auto bitmask_kernel = source_is_valid ? marking_bitmask_kernel<true, decltype(scatter_map)>
+                                          : marking_bitmask_kernel<false, decltype(scatter_map)>;
+    bitmask_kernel<<<grid_size, block_size, 0, stream.value()>>>(
+      *target_view, scatter_map, num_scatter_rows);
+
+    target.set_null_count(count_unset_bits(target.view().null_mask(), 0, target.size(), stream));
   }
 }
 
@@ -108,6 +109,7 @@ struct column_scalar_scatterer_impl {
   {
     CUDF_EXPECTS(source.get().type() == target.type(), "scalar and column types must match");
 
+    // make a copy of data and nullmask from source
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
@@ -122,6 +124,7 @@ struct column_scalar_scatterer_impl {
                     scatter_iter,
                     result_view.begin<Element>());
 
+    scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, *result, stream, mr);
     return result;
   }
 };
@@ -141,7 +144,10 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
     auto const source_view = string_view(scalar_impl->data(), scalar_impl->size());
     auto const begin       = thrust::make_constant_iterator(source_view);
     auto const end         = begin + scatter_rows;
-    return strings::detail::scatter(begin, end, scatter_iter, target, stream, mr);
+    auto result            = strings::detail::scatter(begin, end, scatter_iter, target, stream, mr);
+
+    scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, *result, stream, mr);
+    return result;
   }
 };
 
@@ -154,8 +160,11 @@ struct column_scalar_scatterer_impl<list_view, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    return lists::detail::scatter(
-      source, scatter_iter, scatter_iter + scatter_rows, target, stream, mr);
+    auto result =
+      lists::detail::scatter(source, scatter_iter, scatter_iter + scatter_rows, target, stream, mr);
+
+    scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, *result, stream, mr);
+    return result;
   }
 };
 
@@ -196,10 +205,13 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
     // use the keys from the matched column
     std::unique_ptr<column> keys_column(std::move(dict_target->release().children.back()));
     // create the output column
-    return make_dictionary_column(std::move(keys_column),
-                                  std::move(indices_column),
-                                  std::move(*(contents.null_mask.release())),
-                                  null_count);
+    auto result = make_dictionary_column(std::move(keys_column),
+                                         std::move(indices_column),
+                                         std::move(*(contents.null_mask.release())),
+                                         null_count);
+
+    scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, *result, stream, mr);
+    return result;
   }
 };
 
@@ -218,66 +230,52 @@ struct column_scalar_scatterer {
   }
 };
 
-
 template <typename MapIterator>
 struct column_scalar_scatterer_impl<struct_view, MapIterator> {
   std::unique_ptr<column> operator()(std::reference_wrapper<const scalar> const& source,
-                                      MapIterator scatter_iter,
-                                      size_type scatter_rows,
-                                      column_view const& target,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr) const
+                                     MapIterator scatter_iter,
+                                     size_type scatter_rows,
+                                     column_view const& target,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     // For each field of `source`, copy construct a scalar from the field
     // and dispatch the correct scalar scatterer
-   
-    auto typed_s = static_cast<struct_scalar const*>(&source.get());
+
+    auto typed_s       = static_cast<struct_scalar const*>(&source.get());
     size_type n_fields = typed_s->view().num_columns();
     CUDF_EXPECTS(n_fields == target.num_children(), "Mismatched number of fields.");
 
     auto scatter_functor = column_scalar_scatterer<decltype(scatter_iter)>{};
     std::vector<std::unique_ptr<column>> fields;
-    std::transform(thrust::make_counting_iterator(0), 
+    std::transform(thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(n_fields),
-                    std::back_inserter(fields),
-                    [&](auto const &i){
-      auto row_slr = get_element(typed_s->view().column(i), 0, stream);
-      return type_dispatcher<dispatch_storage_type>(row_slr->type(),
-                                                    scatter_functor,
-                                                    *row_slr,
-                                                    scatter_iter,
-                                                    scatter_rows,
-                                                    target.child(i),
-                                                    stream,
-                                                    mr
-                                                  );
-    });
+                   std::back_inserter(fields),
+                   [&](auto const& i) {
+                     auto row_slr = get_element(typed_s->view().column(i), 0, stream);
+                     return type_dispatcher<dispatch_storage_type>(row_slr->type(),
+                                                                   scatter_functor,
+                                                                   *row_slr,
+                                                                   scatter_iter,
+                                                                   scatter_rows,
+                                                                   target.child(i),
+                                                                   stream,
+                                                                   mr);
+                   });
 
     // Compute nullmask
-    bool is_valid = typed_s->is_valid(stream);
-    bool nullable = not is_valid or target.nullable();
-    auto null_mask = create_null_mask(target.size(), mask_state::UNALLOCATED, stream, mr);
-    size_type null_count = nullable ? UNKNOWN_NULL_COUNT : 0;
+    rmm::device_buffer null_mask =
+      target.nullable() ? copy_bitmask(target, stream, mr)
+                        : create_null_mask(target.size(), mask_state::UNALLOCATED, stream, mr);
+    column null_mask_stub(data_type{type_id::STRUCT}, target.size(), rmm::device_buffer{});
+    null_mask_stub.set_null_mask(std::move(null_mask), target.null_count());
+    scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, null_mask_stub, stream, mr);
+    size_type null_count = null_mask_stub.null_count();
+    auto contents        = null_mask_stub.release();
 
-    if (nullable) {
-        auto null_mask_v = [&] {
-          if (target.nullable()) {
-            return mask_to_bools(target.null_mask(), 0, target.size(), stream);
-          } else {
-            auto slr = make_fixed_width_scalar(true, stream);
-            return make_column_from_scalar(*slr, target.size(), stream);
-          }
-        }();
-        auto valid_iter = thrust::make_constant_iterator(is_valid);
-        auto null_mask_v_view = null_mask_v->mutable_view();
-        thrust::scatter(rmm::exec_policy(stream), valid_iter, valid_iter + scatter_rows, scatter_iter, null_mask_v_view.template begin<bool>());
-
-        cudf::debug::print<bool>(*null_mask_v, std::cout, ",", stream.value());
-        std::unique_ptr<rmm::device_buffer> null_mask_p;
-        std::tie(null_mask_p, null_count) = bools_to_mask(*null_mask_v, stream, mr);
-        return  make_structs_column(target.size(), std::move(fields), null_count, std::move(*null_mask_p));
-    }
-    return make_structs_column(target.size(), std::move(fields), null_count, std::move(null_mask));
+    // Nullmask pushdown inside factory method
+    return make_structs_column(
+      target.size(), std::move(fields), null_count, std::move(*contents.null_mask));
   }
 };
 
@@ -363,8 +361,6 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>>
                                                                  stream,
                                                                  mr);
                  });
-
-  scatter_scalar_bitmask(source, scatter_iter, scatter_rows, result, stream, mr);
 
   return std::make_unique<table>(std::move(result));
 }
