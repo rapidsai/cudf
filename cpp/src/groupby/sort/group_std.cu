@@ -49,22 +49,16 @@ struct var_transform {
   {
     if (d_values.is_null(i)) return 0.0;
 
-    auto const x         = static_cast<ResultType>(values_iter[i]);
-    auto const group_idx = d_group_labels[i];
+    ResultType x = static_cast<ResultType>(values_iter[i]);
 
-    if (d_group_sizes) {  // for variance/std
-      auto const group_size = d_group_sizes[group_idx];
+    size_type group_idx  = d_group_labels[i];
+    size_type group_size = d_group_sizes[group_idx];
 
-      // prevent divide by zero error
-      if (group_size == 0 or group_size - ddof <= 0) return 0.0;
+    // prevent divide by zero error
+    if (group_size == 0 or group_size - ddof <= 0) return 0.0;
 
-      auto const mean = d_means[group_idx];
-      return (x - mean) * (x - mean) / (group_size - ddof);
-    } else {  // for m2
-      auto const mean = d_means[group_idx];
-      auto const diff = x - mean;
-      return diff * diff;
-    }
+    ResultType mean = d_means[group_idx];
+    return (x - mean) * (x - mean) / (group_size - ddof);
   }
 };
 
@@ -90,50 +84,6 @@ void reduce_by_key_fn(column_device_view const& values,
                         thrust::make_discard_iterator(),
                         d_result);
 }
-
-struct m2_functor {
-  template <typename T>
-  std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
-    column_view const& values,
-    column_view const& group_means,
-    cudf::device_span<size_type const> group_labels,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
-  {
-// Running this in debug build causes a runtime error:
-// `reduce_by_key failed on 2nd step: invalid device function`
-#if !defined(__CUDACC_DEBUG__)
-    using ResultType = cudf::detail::target_type_t<T, aggregation::Kind::M2>;
-
-    auto result = make_numeric_column(
-      data_type(type_to_id<ResultType>()), values.size(), mask_state::UNINITIALIZED, stream, mr);
-
-    auto const values_dv_ptr = column_device_view::create(values, stream);
-    auto const values_dv     = *values_dv_ptr;
-
-    auto d_means  = group_means.data<ResultType>();
-    auto d_result = result->mutable_view().data<ResultType>();
-
-    if (!cudf::is_dictionary(values.type())) {
-      auto const values_iter = values_dv.begin<T>();
-      reduce_by_key_fn(values_dv, values_iter, group_labels, d_means, nullptr, 0, d_result, stream);
-    } else {
-      auto values_iter = cudf::dictionary::detail::make_dictionary_iterator<T>(*values_dv_ptr);
-      reduce_by_key_fn(values_dv, values_iter, group_labels, d_means, nullptr, 0, d_result, stream);
-    }
-
-    return result;
-#else
-    CUDF_FAIL("Groupby m2 aggregation is not supported in debug build");
-#endif
-  }
-
-  template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(Args&&...)
-  {
-    CUDF_FAIL("Only numeric types are supported in groupby m2 aggregation");
-  }
-};
 
 struct var_functor {
   template <typename T>
@@ -201,30 +151,6 @@ struct var_functor {
 };
 
 }  // namespace
-
-std::unique_ptr<column> group_m2(column_view const& values,
-                                 column_view const& group_means,
-                                 cudf::device_span<size_type const> group_labels,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
-{
-  auto values_type = cudf::is_dictionary(values.type())
-                       ? dictionary_column_view(values).keys().type()
-                       : values.type();
-
-  return type_dispatcher(values_type, m2_functor{}, values, group_means, group_labels, stream, mr);
-}
-
-std::unique_ptr<column> group_var_from_m2(column_view const& group_m2,
-                                          column_view const& group_sizes,
-                                          cudf::device_span<size_type const> group_labels,
-                                          size_type ddof,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
-{
-  // TODO
-  return std::make_unique<column>();
-}
 
 std::unique_ptr<column> group_var(column_view const& values,
                                   column_view const& group_means,
