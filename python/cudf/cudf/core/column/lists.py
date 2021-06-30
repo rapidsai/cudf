@@ -74,6 +74,18 @@ class ListColumn(ColumnBase):
 
         return self._cached_sizeof
 
+    def __setitem__(self, key, value):
+        if isinstance(value, list):
+            value = cudf.Scalar(value)
+        if isinstance(value, cudf.Scalar):
+            if value.dtype != self.dtype:
+                raise TypeError("list nesting level mismatch")
+        elif value is cudf.NA:
+            value = cudf.Scalar(value, dtype=self.dtype)
+        else:
+            raise ValueError(f"Can not set {value} into ListColumn")
+        super().__setitem__(key, value)
+
     @property
     def base_size(self):
         # in some cases, libcudf will return an empty ListColumn with no
