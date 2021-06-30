@@ -59,6 +59,7 @@ dependencies:
   - nvtx>=0.2.1
   - cachetools
   - transformers
+  - pydata_sphinx_theme
   - pip:
       - git+https://github.com/dask/dask.git@main
       - git+https://github.com/dask/distributed.git@main

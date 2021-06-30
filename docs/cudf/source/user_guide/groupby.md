@@ -1,5 +1,5 @@
-GroupBy
-=======
+Using GroupBy
+=============
 
 cuDF supports a small (but important) subset of
 Pandas' [groupby API](https://pandas.pydata.org/pandas-docs/stable/user_guide/groupby.html).
@@ -18,7 +18,7 @@ Pandas' [groupby API](https://pandas.pydata.org/pandas-docs/stable/user_guide/gr
    See the section on [apply](#groupby-apply) for more details.
 1. `GroupBy.pipe` similar to [Pandas](https://pandas.pydata.org/pandas-docs/stable/user_guide/groupby.html#piping-function-calls).
 
-## Grouping
+## How to do Grouping
 
 A GroupBy object is created by grouping the values of a `Series` or `DataFrame`
 by one or more columns:
