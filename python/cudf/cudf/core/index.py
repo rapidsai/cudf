@@ -17,6 +17,12 @@ from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.table import Table
 from cudf._typing import DtypeObj
+from cudf.api.types import (
+    _is_scalar_or_zero_d_array,
+    is_dtype_equal,
+    is_integer,
+    is_string_dtype,
+)
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
@@ -46,13 +52,6 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import cached_property, search_range
-
-from ..api.types import (
-    _is_scalar_or_zero_d_array,
-    is_dtype_equal,
-    is_integer,
-    is_string_dtype,
-)
 
 
 class BaseIndex(SingleColumnFrame, Serializable):
@@ -2124,6 +2123,15 @@ class DatetimeIndex(GenericIndex):
         if yearfirst is not False:
             raise NotImplementedError("yearfirst == True is not yet supported")
 
+        valid_dtypes = tuple(
+            f"datetime64[{res}]" for res in ("s", "ms", "us", "ns")
+        )
+        if dtype is None:
+            # nanosecond default matches pandas
+            dtype = "datetime64[ns]"
+        elif dtype not in valid_dtypes:
+            raise TypeError("Invalid dtype")
+
         if copy:
             data = column.as_column(data).copy()
         kwargs = _setdefault_name(data, name=name)
@@ -2132,7 +2140,7 @@ class DatetimeIndex(GenericIndex):
         elif isinstance(data, pd.DatetimeIndex):
             data = column.as_column(data.values)
         elif isinstance(data, (list, tuple)):
-            data = column.as_column(np.array(data, dtype="datetime64[ms]"))
+            data = column.as_column(np.array(data, dtype=dtype))
         super().__init__(data, **kwargs)
 
     @property

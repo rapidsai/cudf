@@ -18,6 +18,7 @@ from pandas._config import get_option
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
+from cudf.api.types import is_bool_dtype, is_dict_like, is_dtype_equal
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     DatetimeColumn,
@@ -60,8 +61,6 @@ from cudf.utils.utils import (
     get_appropriate_dispatched_func,
     get_relevant_submodule,
 )
-
-from ..api.types import is_bool_dtype, is_dict_like, is_dtype_equal
 
 
 class Series(SingleColumnFrame, Serializable):
@@ -2415,7 +2414,7 @@ class Series(SingleColumnFrame, Serializable):
 
         col = _concat_columns([o._column for o in objs])
 
-        if isinstance(col, cudf.core.column.DecimalColumn):
+        if isinstance(col, cudf.core.column.Decimal64Column):
             col = col._with_type_metadata(objs[0]._column.dtype)
 
         return cls(data=col, index=index, name=name)
