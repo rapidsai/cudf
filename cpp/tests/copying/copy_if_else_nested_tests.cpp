@@ -387,25 +387,24 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ScalarListBoth)
   using bools = fixed_width_column_wrapper<bool, int32_t>;
   using lcw   = lists_column_wrapper<T, int32_t>;
 
-  auto lhs_scalar = cudf::make_list_scalar(ints{{33, 33, 33}});
-  auto rhs_scalar = cudf::make_list_scalar(ints{{22, 22}});
+  auto lhs_scalar = cudf::make_list_scalar(ints{{33, 33, 33}, null_at(1)});
+  auto rhs_scalar = cudf::make_list_scalar(ints{{22, 22}, null_at(0)});
 
   auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
 
   auto expected =
     lcw{
-      {33, 33, 33},
-      {33, 33, 33},
-      {22, 22},
-      {33, 33, 33},
-      {33, 33, 33},
-      {22, 22},
-      {33, 33, 33},
+      lcw{{33, 33, 33}, null_at(1)},
+      lcw{{33, 33, 33}, null_at(1)},
+      lcw{{22, 22}, null_at(0)},
+      lcw{{33, 33, 33}, null_at(1)},
+      lcw{{33, 33, 33}, null_at(1)},
+      lcw{{22, 22}, null_at(0)},
+      lcw{{33, 33, 33}, null_at(1)},
     }
       .release();
 
   auto result = copy_if_else(*lhs_scalar, *rhs_scalar, selector_column->view());
-
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), result->view());
 }
 
@@ -420,29 +419,28 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ScalarListLeft)
   using bools = fixed_width_column_wrapper<bool, int32_t>;
   using lcw   = lists_column_wrapper<T, int32_t>;
 
-  auto lhs_scalar = cudf::make_list_scalar(ints{{33, 33, 33}});
-  auto rhs_column = lcw{
-    {-2, -1},
-    {-2, -1, 0},
-    {21, 22},
-    {-20, -10, 0},
-    {-200, -100, 0, 100},
-    {23, 24, 25, 26, 27, 28},
-    {-400}}.release();
+  auto lhs_scalar = cudf::make_list_scalar(ints{{33, 33, 33}, null_at(1)});
+  auto rhs_column = lcw{{{-2, -1},
+                         {-2, -1, 0},
+                         {21, 22},
+                         {-20, -10, 0},
+                         {-200, -100, 0, 100},
+                         lcw{{23, 24, 25, 26, 27, 28}, null_at(1)},
+                         {-400}},
+                        null_at(2)}
+                      .release();
 
   auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
 
-  auto expected =
-    lcw{
-      {33, 33, 33},
-      {33, 33, 33},
-      {21, 22},
-      {33, 33, 33},
-      {33, 33, 33},
-      {23, 24, 25, 26, 27, 28},
-      {33, 33, 33},
-    }
-      .release();
+  auto expected = lcw{{lcw{{33, 33, 33}, null_at(1)},
+                       lcw{{33, 33, 33}, null_at(1)},
+                       {21, 22},
+                       lcw{{33, 33, 33}, null_at(1)},
+                       lcw{{33, 33, 33}, null_at(1)},
+                       lcw{{23, 24, 25, 26, 27, 28}, null_at(1)},
+                       lcw{{33, 33, 33}, null_at(1)}},
+                      null_at(2)}
+                    .release();
 
   auto result = copy_if_else(*lhs_scalar, rhs_column->view(), selector_column->view());
 
