@@ -5652,11 +5652,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         out = super(DataFrame, data).to_arrow()
         metadata = pa.pandas_compat.construct_metadata(
-            self,
-            out.schema.names,
-            [self.index],
-            index_descr,
-            preserve_index,
+            columns_to_convert=[self[col] for col in self._data.names],
+            df=self,
+            column_names=out.schema.names,
+            index_levels=[self.index],
+            index_descriptors=index_descr,
+            preserve_index=preserve_index,
             types=out.schema.types,
         )
 
