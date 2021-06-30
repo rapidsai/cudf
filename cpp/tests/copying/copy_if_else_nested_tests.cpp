@@ -433,12 +433,12 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ScalarListLeft)
   auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
 
   auto expected = lcw{{lcw{{33, 33, 33}, null_at(1)},
-                       lcw{{33, 33, 33}, null_at(1)},
-                       {21, 22},
-                       lcw{{33, 33, 33}, null_at(1)},
-                       lcw{{33, 33, 33}, null_at(1)},
-                       lcw{{23, 24, 25, 26, 27, 28}, null_at(1)},
-                       lcw{{33, 33, 33}, null_at(1)}},
+                       lcw{{33, -33, 33}, null_at(1)},
+                       {-21, -22},
+                       lcw{{33, -33, 33}, null_at(1)},
+                       lcw{{33, -33, 33}, null_at(1)},
+                       lcw{{23, -24, 25, 26, 27, 28}, null_at(1)},
+                       lcw{{33, -33, 33}, null_at(1)}},
                       null_at(2)}
                     .release();
 
