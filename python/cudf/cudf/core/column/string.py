@@ -158,6 +158,7 @@ from cudf._lib.strings.translate import (
 )
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf._typing import ColumnLike, Dtype, ScalarLike
+from cudf.api.types import is_integer
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -169,8 +170,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
-
-from ...api.types import is_integer
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -5118,7 +5117,7 @@ class StringColumn(column.ColumnBase):
         return StringMethods(self, parent=parent)
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         out_dtype = np.dtype(dtype)
 
@@ -5192,10 +5191,12 @@ class StringColumn(column.ColumnBase):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DecimalColumn":
+    ) -> "cudf.core.column.Decimal64Column":
         return cpp_to_decimal(self, dtype)
 
-    def as_string_column(self, dtype: Dtype, format=None) -> StringColumn:
+    def as_string_column(
+        self, dtype: Dtype, format=None, **kwargs
+    ) -> StringColumn:
         return self
 
     @property
