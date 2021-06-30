@@ -2299,6 +2299,50 @@ class DatetimeIndex(GenericIndex):
         """
         return self._get_dt_field("weekday")
 
+    @property
+    def dayofyear(self):
+        """
+        The day of the year, from 1-365 in non-leap years and
+        from 1-366 in leap years.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2016-12-31",
+        ...     "2017-01-08", freq="D"))
+        >>> datetime_index
+        DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
+                    '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                    '2017-01-08'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.dayofyear
+        Int16Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
+        """
+        return self._get_dt_field("day_of_year")
+
+    @property
+    def day_of_year(self):
+        """
+        The day of the year, from 1-365 in non-leap years and
+        from 1-366 in leap years.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2016-12-31",
+        ...     "2017-01-08", freq="D"))
+        >>> datetime_index
+        DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
+                    '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                    '2017-01-08'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.day_of_year
+        Int16Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
+        """
+        return self._get_dt_field("day_of_year")
+
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
