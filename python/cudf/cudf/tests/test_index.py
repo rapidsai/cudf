@@ -21,7 +21,7 @@ from cudf.core.index import (
     RangeIndex,
     as_index,
 )
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     FLOAT_TYPES,
     NUMERIC_TYPES,
     OTHER_TYPES,

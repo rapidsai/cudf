@@ -1,7 +1,7 @@
 import numpy as np
 
 import cudf as gd
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 def test_dataset_timeseries():

@@ -158,6 +158,7 @@ from cudf._lib.strings.translate import (
 )
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf._typing import ColumnLike, Dtype, ScalarLike
+from cudf.api.types import is_integer
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -169,8 +170,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
-
-from ...api.types import is_integer
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,

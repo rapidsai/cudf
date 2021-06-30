@@ -10,7 +10,7 @@ import pytest
 import cudf
 from cudf.core.column import Decimal32Column, Decimal64Column, NumericalColumn
 from cudf.core.dtypes import Decimal64Dtype
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     FLOAT_TYPES,
     INTEGER_TYPES,
     NUMERIC_TYPES,
