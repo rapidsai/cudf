@@ -134,7 +134,43 @@ TYPED_TEST(TypedCopyIfElseNestedTest, LongerStructsWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column->view(), lhs_structs_column->view());
 }
 
-TYPED_TEST(TypedCopyIfElseNestedTest, ScalarStructBoth)
+TYPED_TEST(TypedCopyIfElseNestedTest, ScalarStructBothInvalid)
+{
+  using T = TypeParam;
+
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using ints    = fixed_width_column_wrapper<T, int32_t>;
+  using strings = strings_column_wrapper;
+  using structs = structs_column_wrapper;
+  using bools   = fixed_width_column_wrapper<bool, int32_t>;
+
+  auto lhs_child_ints    = ints{11};
+  auto lhs_child_strings = strings{"11"};
+  auto lhs_children      = std::vector<column_view>{{lhs_child_ints, lhs_child_strings}};
+  auto lhs_scalar        = struct_scalar{lhs_children, false};
+
+  auto rhs_child_ints    = ints{{22}, null_at(0)};
+  auto rhs_child_strings = strings{"22"};
+  auto rhs_children      = std::vector<column_view>{{rhs_child_ints, rhs_child_strings}};
+  auto rhs_scalar        = struct_scalar{rhs_children, false};
+
+  auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
+
+  auto expected_ints    = ints{-11, -11, -22, -11, -11, -22, -11};
+  auto expected_strings = strings{"-11", "-11", "-22", "-11", "-22", "-11", "-11"};
+  auto expected_nulls   = std::vector<size_type>(selector_column->size());
+  std::iota(expected_nulls.begin(), expected_nulls.end(), 0);
+  auto expected_result =
+    structs{{expected_ints, expected_strings}, nulls_at(expected_nulls)}.release();
+
+  auto result_column = copy_if_else(lhs_scalar, rhs_scalar, selector_column->view());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column->view());
+}
+
+TYPED_TEST(TypedCopyIfElseNestedTest, ScalarStructBothValid)
 {
   using T = TypeParam;
 
@@ -376,7 +412,45 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ListsWithStructs)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column->view(), expected->view());
 }
 
-TYPED_TEST(TypedCopyIfElseNestedTest, ScalarListBoth)
+TYPED_TEST(TypedCopyIfElseNestedTest, ScalarListBothInvalid)
+{
+  using T = TypeParam;
+
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using ints  = fixed_width_column_wrapper<T, int32_t>;
+  using bools = fixed_width_column_wrapper<bool, int32_t>;
+  using lcw   = lists_column_wrapper<T, int32_t>;
+
+  auto lhs_scalar = list_scalar{ints{33, 33, 33}, false};
+  auto rhs_scalar = list_scalar{ints{22, 22}, false};
+
+  auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
+
+  auto expected_nulls = std::vector<size_type>(selector_column->size());
+  std::iota(expected_nulls.begin(), expected_nulls.end(), 0);
+  auto expected = lcw{{
+                        {-33, -33, -33},
+                        {-33, -33, -33},
+                        {-22, -22},
+                        {-33, -33, -33},
+                        {-33, -33, -33},
+                        {-22, -22},
+                        {-33, -33, -33},
+                      },
+                      nulls_at(expected_nulls)}
+                    .release();
+
+  auto result = copy_if_else(lhs_scalar, rhs_scalar, selector_column->view());
+  cudf::test::print(*result);
+
+  cudf::test::print(expected->view());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), result->view());
+}
+
+TYPED_TEST(TypedCopyIfElseNestedTest, ScalarListBothValid)
 {
   using T = TypeParam;
 
