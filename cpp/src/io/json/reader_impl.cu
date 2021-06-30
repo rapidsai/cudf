@@ -484,7 +484,7 @@ void reader::impl::set_data_types(device_span<uint64_t const> rec_starts,
         std::inserter(col_type_map, col_type_map.end()),
         [&](auto const &ts) {
           auto const i = ts.find(":");
-          std::string col_name = ts.substr(0, 1);
+          std::string col_name = ts.substr(0, i);
           std::string type_str = ts.substr(i + 1);
           return std::make_pair(col_name, convert_string_to_dtype(type_str));
         });
