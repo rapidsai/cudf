@@ -314,9 +314,25 @@ cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
                              object value,
                              object dtype,
                              bool valid=True):
-    value = value if valid else cudf.NA
-    pyarrow_table = pa.Table.from_pydict({k: [v] for k, v in value.items()})
-    columns = list(value.keys())
+    arrow_schema = dtype.to_arrow()
+    columns = [str(i) for i in range(len(arrow_schema))]
+    if valid:
+        pyarrow_table = pa.Table.from_arrays(
+            [
+                pa.array([value[f.name]], from_pandas=True, type=f.type)
+                for f in arrow_schema
+            ],
+            names=columns
+        )
+    else:
+        # print("hello world")
+        pyarrow_table = pa.Table.from_arrays(
+            [
+                pa.array([], from_pandas=True, type=f.type)
+                for f in arrow_schema
+            ],
+            names=columns
+        )
 
     cdef Table table = from_arrow(pyarrow_table, column_names=columns)
     cdef table_view struct_view = table.view()
