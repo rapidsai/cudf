@@ -1,18 +1,24 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+import pickle
+
 import pandas as pd
 
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr, shared_ptr, make_shared
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
-from libc.stdint cimport int32_t, int64_t
+from libc.stdint cimport int32_t, int64_t, uint8_t, uintptr_t
+
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
 from cudf._lib.reduce import minmax
+
+from cudf.core.abc import Serializable
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport (
@@ -776,3 +782,164 @@ def segmented_gather(Column source_column, Column gather_map):
 
     result = Column.from_unique_ptr(move(c_result))
     return result
+
+
+cdef class _CPackedColumns:
+
+    @staticmethod
+    cdef _CPackedColumns from_py_table(Table input_table, keep_index=True):
+        """
+        Construct a ``PackedColumns`` object from a ``cudf.DataFrame``.
+        """
+        from cudf.core import RangeIndex, dtypes
+
+        cdef _CPackedColumns p = _CPackedColumns.__new__(_CPackedColumns)
+
+        if keep_index and not input_table.index.equals(
+            RangeIndex(start=0, stop=len(input_table), step=1)
+        ):
+            input_table_view = input_table.view()
+            p.index_names = input_table._index_names
+        else:
+            input_table_view = input_table.data_view()
+
+        p.column_names = input_table._column_names
+        p.column_dtypes = {}
+        for name, col in input_table._data.items():
+            if isinstance(col.dtype, dtypes._BaseDtype):
+                p.column_dtypes[name] = col.dtype
+
+        p.c_obj = move(cpp_copying.pack(input_table_view))
+
+        return p
+
+    @property
+    def gpu_data_ptr(self):
+        return int(<uintptr_t>self.c_obj.gpu_data.get()[0].data())
+
+    @property
+    def gpu_data_size(self):
+        return int(<size_t>self.c_obj.gpu_data.get()[0].size())
+
+    def serialize(self):
+        header = {}
+        frames = []
+
+        header["column-names"] = self.column_names
+        header["index-names"] = self.index_names
+        header["gpu-data-ptr"] = self.gpu_data_ptr
+        header["gpu-data-size"] = self.gpu_data_size
+        header["metadata"] = list(
+            <uint8_t[:self.c_obj.metadata_.get()[0].size()]>
+            self.c_obj.metadata_.get()[0].data()
+        )
+
+        column_dtypes = {}
+        for name, dtype in self.column_dtypes.items():
+            dtype_header, dtype_frames = dtype.serialize()
+            column_dtypes[name] = (
+                dtype_header,
+                (len(frames), len(frames) + len(dtype_frames)),
+            )
+            frames.extend(dtype_frames)
+        header["column-dtypes"] = column_dtypes
+
+        return header, frames
+
+    @staticmethod
+    def deserialize(header, frames):
+        cdef _CPackedColumns p = _CPackedColumns.__new__(_CPackedColumns)
+
+        dbuf = DeviceBuffer(
+            ptr=header["gpu-data-ptr"],
+            size=header["gpu-data-size"]
+        )
+
+        cdef cpp_copying.packed_columns data
+        data.metadata_ = move(
+            make_unique[cpp_copying.metadata](
+                move(<vector[uint8_t]>header["metadata"])
+            )
+        )
+        data.gpu_data = move(dbuf.c_obj)
+
+        p.c_obj = move(data)
+        p.column_names = header["column-names"]
+        p.index_names = header["index-names"]
+
+        column_dtypes = {}
+        for name, dtype in header["column-dtypes"].items():
+            dtype_header, (start, stop) = dtype
+            column_dtypes[name] = pickle.loads(
+                dtype_header["type-serialized"]
+            ).deserialize(dtype_header, frames[start:stop])
+        p.column_dtypes = column_dtypes
+
+        return p
+
+    def unpack(self):
+        output_table = Table.from_table_view(
+            cpp_copying.unpack(self.c_obj),
+            self,
+            self.column_names,
+            self.index_names
+        )
+
+        for name, dtype in self.column_dtypes.items():
+            output_table._data[name] = (
+                output_table._data[name]._with_type_metadata(dtype)
+            )
+
+        return output_table
+
+
+class PackedColumns(Serializable):
+    """
+    A packed representation of a ``cudf.Table``, with all columns residing
+    in a single GPU memory buffer.
+    """
+
+    def __init__(self, data):
+        self._data = data
+
+    def __reduce__(self):
+        return self.deserialize, self.serialize()
+
+    @property
+    def __cuda_array_interface__(self):
+        return {
+            "data": (self._data.gpu_data_ptr, False),
+            "shape": (self._data.gpu_data_size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 0
+        }
+
+    def serialize(self):
+        return self._data.serialize()
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        return cls(_CPackedColumns.deserialize(header, frames))
+
+    @classmethod
+    def from_py_table(cls, input_table, keep_index=True):
+        return cls(_CPackedColumns.from_py_table(input_table, keep_index))
+
+    def unpack(self):
+        return self._data.unpack()
+
+
+def pack(input_table, keep_index=True):
+    """
+    Pack the columns of a ``cudf.Table`` into a single GPU memory buffer.
+    """
+    return PackedColumns.from_py_table(input_table, keep_index)
+
+
+def unpack(packed):
+    """
+    Unpack the results of packing a ``cudf.Table``, returning a new
+    ``Table`` in the process.
+    """
+    return packed.unpack()
