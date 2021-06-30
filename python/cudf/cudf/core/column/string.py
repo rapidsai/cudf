@@ -171,6 +171,12 @@ from cudf.utils.dtypes import (
     is_string_dtype,
 )
 
+
+def str_to_boolean(column: StringColumn):
+    """Takes in string column and returns boolean column """
+    return (column.str().len() > cudf.Scalar(0, dtype="int8")).fillna(False)
+
+
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
     np.dtype("int16"): str_cast.stoi16,
@@ -217,11 +223,6 @@ _timedelta_to_str_typecast_functions = {
 
 
 ParentType = Union["cudf.Series", "cudf.core.index.BaseIndex"]
-
-
-def str_to_boolean(column):
-    """Takes in string column and returns boolean column """
-    return (column.str.len() > 0).fillna(False)
 
 
 class StringMethods(ColumnMethodsMixin):
