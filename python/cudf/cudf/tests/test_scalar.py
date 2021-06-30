@@ -11,7 +11,7 @@ import pytest
 import cudf
 from cudf import Scalar as pycudf_scalar
 from cudf._lib.copying import get_element
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
