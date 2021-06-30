@@ -12,6 +12,7 @@ import pandas as pd
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, DtypeObj, ScalarLike
+from cudf.api.types import is_integer_dtype, is_number
 from cudf.core.buffer import Buffer
 from cudf.core.column import (
     ColumnBase,
@@ -31,7 +32,6 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 
-from ...api.types import is_integer_dtype, is_number
 from .numerical_base import NumericalBaseColumn
 
 

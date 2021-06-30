@@ -629,7 +629,7 @@ packed_columns pack(cudf::table_view const& input,
  * guaranteeing that that all of the columns in the table point into `contiguous_buffer`.
  *
  * @param input View of the table to pack
- * @param contgiuous_buffer A contiguous buffer of device memory which contains the data referenced
+ * @param contiguous_buffer A contiguous buffer of device memory which contains the data referenced
  * by the columns in `table`
  * @param buffer_size The size of `contiguous_buffer`.
  * @return Vector of bytes representing the metadata used to `unpack` a packed_columns struct.
