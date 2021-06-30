@@ -82,6 +82,8 @@ fields = [
     "second",
     "weekday",
     "dayofweek",
+    "dayofyear",
+    "day_of_year",
 ]
 
 
