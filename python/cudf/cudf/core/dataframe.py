@@ -4730,7 +4730,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         ...             return 0
         ...     else:
         ...             return x + 1
-        ... 
+        ...
         >>> df = cudf.DataFrame({'a': [1, cudf.NA, 3]})
         >>> df.apply(lambda row: f(row['a']))
         0    2
@@ -4738,13 +4738,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2    4
         dtype: int64
 
-        Function of multiple variables will operate in 
+        Function of multiple variables will operate in
         a null aware manner
 
         >>> @nulludf
         ... def f(x, y):
         ...     return x - y
-        ... 
+        ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, cudf.NA, 3, cudf.NA],
         ...     'b': [5, 6, cudf.NA, cudf.NA]
@@ -4773,7 +4773,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         0       3
         1       3
         2    <NA>
-        dtype: int64        
+        dtype: int64
 
         Mixed types are allowed, but will return the common
         type, rather than object as in pandas
@@ -4781,7 +4781,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         >>> @nulludf
         ... def f(x, y):
         ...     return x + y
-        ... 
+        ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, 2, 3],
         ...     'b': [0.5, cudf.NA, 3.14]
@@ -4792,7 +4792,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2    6.14
         dtype: float64
 
-        Functions may also return scalar values, however the 
+        Functions may also return scalar values, however the
         result will be promoted to a safe type regardless of
         the data
 
@@ -4802,7 +4802,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         ...             return x
         ...     else:
         ...             return 1.5
-        ... 
+        ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, 3, 5]
         ... })
@@ -4817,7 +4817,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         >>> @nulludf
         ... def f(v, w, x, y, z):
         ...     return x + (y - (z / w)) % v
-        ... 
+        ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, 2, 3],
         ...     'b': [4, 5, 6],
@@ -4841,6 +4841,15 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         """
 
+        for dtype in self.dtypes:
+            if (
+                isinstance(dtype, cudf.core.dtypes._BaseDtype)
+                or dtype == "object"
+            ):
+                raise TypeError(
+                    "DataFrame.apply currently only "
+                    "supports non decimal numeric types"
+                )
 
         if axis != 1:
             raise ValueError(
