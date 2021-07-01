@@ -691,9 +691,8 @@ __global__ void __launch_bounds__(block_size)
       present_rows += nrows;
       if (!t) { s->present_rows = present_rows; }
       // RLE encode the present stream
-      nrows_out =
-        present_rows -
-        s->present_out;  // Should always be a multiple of 8 except at the end of the last row group
+      nrows_out = present_rows - s->present_out;  // Should always be a multiple of 8 except at
+                                                  // the end of the last row group
       if (nrows_out > ((present_rows < s->chunk.num_rows) ? 130 * 8 : 0)) {
         uint32_t present_out = s->present_out;
         if (s->stream.ids[CI_PRESENT] >= 0) {
@@ -710,7 +709,7 @@ __global__ void __launch_bounds__(block_size)
       __syncthreads();
     }
     // Fetch non-null values
-    if (!s->stream.data_ptrs[CI_DATA]) {
+    if (s->chunk.type_kind != LIST && !s->stream.data_ptrs[CI_DATA]) {
       // Pass-through
       __syncthreads();
       if (!t) {
@@ -746,11 +745,11 @@ __global__ void __launch_bounds__(block_size)
             int64_t seconds  = ts / ts_scale;
             int64_t nanos    = (ts - seconds * ts_scale);
             // There is a bug in the ORC spec such that for negative timestamps, it is understood
-            // between the writer and reader that nanos will be adjusted to their positive component
-            // but the negative seconds will be left alone. This means that -2.6 is encoded as
-            // seconds = -2 and nanos = 1+(-0.6) = 0.4
-            // This leads to an error in decoding time where -1 < time (s) < 0
-            // Details: https://github.com/rapidsai/cudf/pull/5529#issuecomment-648768925
+            // between the writer and reader that nanos will be adjusted to their positive
+            // component but the negative seconds will be left alone. This means that -2.6 is
+            // encoded as seconds = -2 and nanos = 1+(-0.6) = 0.4 This leads to an error in
+            // decoding time where -1 < time (s) < 0 Details:
+            // https://github.com/rapidsai/cudf/pull/5529#issuecomment-648768925
             if (nanos < 0) { nanos += ts_scale; }
             s->vals.i64[nz_idx] = seconds - kORCTimeToUTC;
             if (nanos != 0) {
@@ -784,6 +783,10 @@ __global__ void __launch_bounds__(block_size)
             // Reusing the lengths array for the scale stream
             // Note: can be written in a faster manner, given that all values are equal
           case DECIMAL: s->lengths.u32[nz_idx] = zigzag(s->chunk.scale); break;
+          case LIST:
+            s->lengths.u32[nz_idx] = s->chunk.leaf_column->child(0).element<size_type>(row + 1) -
+                                     s->chunk.leaf_column->child(0).element<size_type>(row);
+            break;
           default: break;
         }
       }
@@ -818,6 +821,7 @@ __global__ void __launch_bounds__(block_size)
         s->nnz += nz;
         s->numvals += nz;
         s->numlengths += (s->chunk.type_kind == TIMESTAMP || s->chunk.type_kind == DECIMAL ||
+                          s->chunk.type_kind == LIST ||
                           (s->chunk.type_kind == STRING && s->chunk.encoding_kind != DICTIONARY_V2))
                            ? nz
                            : 0;
@@ -893,6 +897,7 @@ __global__ void __launch_bounds__(block_size)
               s, s->lengths.u64, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u64);
             break;
           case DECIMAL:
+          case LIST:
           case STRING:
             n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
               s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u32);

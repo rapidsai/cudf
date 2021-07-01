@@ -556,7 +556,8 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         column.set_orc_encoding(DIRECT_V2);
         break;
       case TypeKind::LIST:
-        // no data streams, only present
+        // no data stream, only lengths
+        add_RLE_stream(gpu::CI_DATA2, LENGTH, TypeKind::INT);
         column.set_orc_encoding(DIRECT_V2);
         break;
       default: CUDF_FAIL("Unsupported ORC type kind");
@@ -1416,9 +1417,9 @@ file_segmentation calculate_segmentation(orc_table_view const &orc_table,
   auto unbound_stripes =
     gather_stripe_info(orc_table.columns, unbound_rowgroups, str_rg_sizes_view, max_stripe_size);
 
-  auto tmp = restrict_segmentation(unbound_rowgroups, unbound_stripes, row_index_stride, stream);
+  // auto tmp = restrict_segmentation(unbound_rowgroups, unbound_stripes, row_index_stride, stream);
 
-  return {std::move(tmp), unbound_stripes};
+  return {std::move(unbound_rowgroups), unbound_stripes};
 }
 
 void writer::impl::write(table_view const &table)
