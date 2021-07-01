@@ -5,7 +5,6 @@ from numba.core import cgutils
 from numba.core.typing import signature as nb_signature
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
-    registry as cuda_impl_registry,
     registry as cuda_lowering_registry,
 )
 from numba.extending import lower_builtin, types
@@ -120,7 +119,7 @@ def make_const_op(op):
         Implement `MaskedType` + constant
         """
         masked_type, const_type = sig.args
-        masked_value, numeric_value = args
+        masked_value, const_value = args
 
         return_type = sig.return_type
         masked_input_type = MaskedType(masked_type.value_type)
@@ -139,7 +138,7 @@ def make_const_op(op):
                 nb_signature(
                     return_type.value_type, masked_type.value_type, const_type
                 ),
-                (indata.value, numeric_value),
+                (indata.value, const_value),
             )
             result.valid = context.get_constant(types.boolean, 1)
 
@@ -151,7 +150,7 @@ def make_const_op(op):
 def make_reflected_const_op(op):
     def masked_scalar_reflected_const_op_impl(context, builder, sig, args):
         const_type, masked_type = sig.args
-        numeric_value, masked_value = args
+        const_value, masked_value = args
 
         return_type = sig.return_type
         masked_input_type = MaskedType(masked_type.value_type)
@@ -170,7 +169,7 @@ def make_reflected_const_op(op):
                 nb_signature(
                     return_type.value_type, const_type, masked_type.value_type
                 ),
-                (numeric_value, indata.value),
+                (const_value, indata.value),
             )
             result.valid = context.get_constant(types.boolean, 1)
 
@@ -241,7 +240,7 @@ def masked_scalar_bool_impl(context, builder, sig, args):
 # To handle the unification, we need to support casting from any type to an
 # extension type. The cast implementation takes the value passed in and returns
 # an extension struct wrapping that value.
-@cuda_impl_registry.lower_cast(types.Any, MaskedType)
+@cuda_lowering_registry.lower_cast(types.Any, MaskedType)
 def cast_primitive_to_masked(context, builder, fromty, toty, val):
     casted = context.cast(builder, val, fromty, toty.value_type)
     ext = cgutils.create_struct_proxy(toty)(context, builder)
@@ -250,7 +249,7 @@ def cast_primitive_to_masked(context, builder, fromty, toty, val):
     return ext._getvalue()
 
 
-@cuda_impl_registry.lower_cast(NAType, MaskedType)
+@cuda_lowering_registry.lower_cast(NAType, MaskedType)
 def cast_na_to_masked(context, builder, fromty, toty, val):
     result = cgutils.create_struct_proxy(toty)(context, builder)
     result.valid = context.get_constant(types.boolean, 0)
@@ -258,8 +257,18 @@ def cast_na_to_masked(context, builder, fromty, toty, val):
     return result._getvalue()
 
 
-@cuda_impl_registry.lower_cast(MaskedType, MaskedType)
+@cuda_lowering_registry.lower_cast(MaskedType, MaskedType)
 def cast_masked_to_masked(context, builder, fromty, toty, val):
+    """
+    When numba encounters an op that expects a certain type and
+    the input to the op is not of the expected type it will try
+    to cast the input to the appropriate type. But, in our case
+    the input may be a MaskedType, which numba doesn't natively
+    know how to cast to a different MaskedType with a different
+    `value_type`. This implements and registers that cast.
+    """
+
+    # We will 
     operand = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
     casted = context.cast(
         builder, operand.value, fromty.value_type, toty.value_type
@@ -281,7 +290,7 @@ def masked_constructor(context, builder, sig, args):
     return masked._getvalue()
 
 
-@cuda_impl_registry.lower_constant(MaskedType)
+@cuda_lowering_registry.lower_constant(MaskedType)
 def lower_constant_masked(context, builder, ty, val):
     masked = cgutils.create_struct_proxy(ty)(context, builder)
     masked.value = context.get_constant(ty.value_type, val.value)

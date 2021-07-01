@@ -30,13 +30,12 @@ class MaskedType(types.Type):
     def __init__(self, value):
         # MaskedType in Numba shall be parameterized
         # with a value type
-        super().__init__(name="Masked")
-        if isinstance(value, MaskedType):
-            breakpoint()
+        if not isinstance(value, (types.Number, types.Boolean)):
+            raise TypeError(
+                "value_type must be a numeric scalar type"
+            )
         self.value_type = value
-
-    def __repr__(self):
-        return f"MaskedType({self.value_type})"
+        super().__init__(name=f"Masked{self.value_type}")
 
     def __hash__(self):
         """
