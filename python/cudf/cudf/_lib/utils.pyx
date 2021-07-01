@@ -4,13 +4,17 @@ import cudf
 
 import pyarrow as pa
 
+from cython.operator cimport dereference
+
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
-from cudf._lib.cpp.column.column cimport column_view
+from cudf._lib.cpp.column.column cimport column, column_view
 from cudf._lib.cpp.table.table cimport table_view
 
 from libc.stdint cimport uint8_t
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 try:
@@ -178,3 +182,34 @@ def _index_level_name(index_name, level, column_names):
         return index_name
     else:
         return f"__index_level_{level}__"
+
+
+cdef columns_from_unique_ptr(unique_ptr[table] c_tbl):
+    """Get a list of columns from a libcudf table.
+
+    Since cuDF Python has an independent representation of a table as a
+    collection of columns, this function simply returns a list of columns
+    suitable for conversion into data to be passed to cuDF constructors.
+    This method returns the columns of the table in the order they are
+    stored in libcudf, but calling code is responsible for partitioning and
+    labeling them as needed.
+
+    Parameters
+    ----------
+    c_tbl : unique_ptr[cudf::table]
+    index_names : iterable
+    column_names : iterable
+
+    Returns
+    -------
+    List[Column]
+        A list of the columns in the output table.
+    """
+    cdef vector[unique_ptr[column]] columns = move(c_tbl.get().release())
+    cdef vector[unique_ptr[column]].iterator it = columns.begin()
+
+    # First construct the index, if any
+    cdef int i
+
+    return [Column.from_unique_ptr(move(dereference(it+i)))
+            for i in range(columns.size())]
