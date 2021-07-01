@@ -4718,13 +4718,136 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
               Note: axis=0 is not yet supported.
             * 1 or 'columns': apply function to each row.
 
+        Examples
+        ----------
+
+        Simple function of a single variable which could be NA
+
+        >>> from cudf.core.udf.pipeline import nulludf
+        >>> @nulludf
+        ... def f(x):
+        ...     if x is cudf.NA:
+        ...             return 0
+        ...     else:
+        ...             return x + 1
+        ... 
+        >>> df = cudf.DataFrame({'a': [1, cudf.NA, 3]})
+        >>> df.apply(lambda row: f(row['a']))
+        0    2
+        1    0
+        2    4
+        dtype: int64
+
+        Function of multiple variables will operate in 
+        a null aware manner
+
+        >>> @nulludf
+        ... def f(x, y):
+        ...     return x - y
+        ... 
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, cudf.NA, 3, cudf.NA],
+        ...     'b': [5, 6, cudf.NA, cudf.NA]
+        ... })
+        >>> df.apply(lambda row: f(row['a'], row['b']))
+        0      -4
+        1    <NA>
+        2    <NA>
+        3    <NA>
+        dtype: int64
+
+        Functions may conditionally return NA as in pandas
+
+        >>> @nulludf
+        ... def f(x, y):
+        ...     if x + y > 3:
+        ...             return cudf.NA
+        ...     else:
+        ...             return x + y
+        ... 
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [2, 1, 1]
+        ... })
+        >>> df.apply(lambda row: f(row['a'], row['b']))
+        0       3
+        1       3
+        2    <NA>
+        dtype: int64        
+
+        Mixed types are allowed, but will return the common
+        type, rather than object as in pandas
+
+        >>> @nulludf
+        ... def f(x, y):
+        ...     return x + y
+        ... 
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [0.5, cudf.NA, 3.14]
+        ... })
+        >>> df.apply(lambda row: f(row['a'], row['b']))
+        0     1.5
+        1    <NA>
+        2    6.14
+        dtype: float64
+
+        Functions may also return scalar values, however the 
+        result will be promoted to a safe type regardless of
+        the data
+
+        >>> @nulludf
+        ... def f(x):
+        ...     if x > 3:
+        ...             return x
+        ...     else:
+        ...             return 1.5
+        ... 
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, 3, 5]
+        ... })
+        >>> df.apply(lambda row: f(row['a']))
+        0    1.5
+        1    1.5
+        2    5.0
+        dtype: float64
+
+        Ops against N columns are supported generally
+
+        >>> @nulludf
+        ... def f(v, w, x, y, z):
+        ...     return x + (y - (z / w)) % v
+        ... 
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [cudf.NA, 4, 4],
+        ...     'd': [8, 7, 8],
+        ...     'e': [7, 1, 6]
+        ... })
+        >>> df.apply(
+        ...     lambda row: f(
+        ...             row['a'],
+        ...             row['b'],
+        ...             row['c'],
+        ...             row['d'],
+        ...             row['e']
+        ...     )
+        ... )
+        0    <NA>
+        1     4.8
+        2     5.0
+        dtype: float64
+
         """
+
+
         if axis != 1:
             raise ValueError(
                 "DataFrame.apply currently only supports row wise ops"
             )
 
-        return func(self)
+        return cudf.Series(func(self))
 
     @applyutils.doc_apply()
     def apply_rows(
