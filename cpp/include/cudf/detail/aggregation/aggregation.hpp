@@ -1117,6 +1117,7 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::SUM_OF_SQUARES>(std::forward<Ts>(args)...);
     case aggregation::MEAN:
       return f.template operator()<aggregation::MEAN>(std::forward<Ts>(args)...);
+    case aggregation::M2: return f.template operator()<aggregation::M2>(std::forward<Ts>(args)...);
     case aggregation::VARIANCE:
       return f.template operator()<aggregation::VARIANCE>(std::forward<Ts>(args)...);
     case aggregation::STD:

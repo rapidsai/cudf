@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "group_reductions.hpp"
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>

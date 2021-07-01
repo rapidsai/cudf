@@ -500,7 +500,6 @@ void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation c
  *
  * The values of M2 are merged following the parallel algorithm described here:
  * https://www.wikiwand.com/en/Algorithms_for_calculating_variance#/Parallel_algorithm
- *
  */
 template <>
 void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation const& agg)
