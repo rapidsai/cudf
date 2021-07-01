@@ -250,22 +250,20 @@ class MaskedScalarScalarOp(AbstractTemplate):
         Typing for `Masked` <op> a scalar (and vice-versa).
         handles situations like `x + 1`
         """
+        # In the case of op(Masked, scalar), we resolve the type between
+        # the Masked value_type and the scalar's type directly
         if isinstance(args[0], MaskedType) and isinstance(
             args[1], types.Number
         ):
-            # In the case of op(Masked, scalar), we resolve the type between
-            # the Masked value_type and the scalar's type directly
-            return_type = self.context.resolve_function_type(
-                self.key, (args[0].value_type, args[1]), kws
-            ).return_type
-            return nb_signature(MaskedType(return_type), args[0], args[1],)
+            to_resolve_types = (args[0].value_type, args[1])
         elif isinstance(args[0], types.Number) and isinstance(
             args[1], MaskedType
         ):
-            return_type = self.context.resolve_function_type(
-                self.key, (args[1].value_type, args[0]), kws
-            ).return_type
-            return nb_signature(MaskedType(return_type), args[0], args[1],)
+            to_resolve_types = (args[1].value_type, args[0])
+        return_type = self.context.resolve_function_type(
+            self.key, to_resolve_types, kws
+        ).return_type
+        return nb_signature(MaskedType(return_type), args[0], args[1],)
 
 
 @cuda_decl_registry.register_global(operator.is_)
