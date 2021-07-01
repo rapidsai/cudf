@@ -116,14 +116,15 @@ struct value_expression_result
   /**
    * @brief Returns the underlying data.
    *
-   * @throws thrust::bad_optional_access if the underlying data is not valid.
+   * If the underlying data is not valid, behavior is undefined. Callers should
+   * use is_valid to check for validity before accessing the value.
    */
   __device__ T value() const
   {
     // Using two separate constexprs silences compiler warnings, whereas an
     // if/else does not. An unconditional return is not ignored by the compiler
     // when has_nulls is true and therefore raises a compiler error.
-    if constexpr (has_nulls) { return _obj.value(); }
+    if constexpr (has_nulls) { return *_obj; }
     if constexpr (!has_nulls) { return _obj; }
   }
 
