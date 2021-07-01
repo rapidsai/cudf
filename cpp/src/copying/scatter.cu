@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cstdint>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
@@ -25,7 +24,6 @@
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/stream_compaction.hpp>
-#include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/lists/list_view.cuh>
