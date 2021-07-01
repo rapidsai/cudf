@@ -28,6 +28,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <limits>
+
 namespace cudf {
 namespace detail {
 
@@ -109,6 +111,7 @@ conditional_join(table_view const& left,
   CHECK_CUDA(stream.value());
 
   size_type const join_size = size.value(stream);
+  CUDF_EXPECTS(join_size < std::numeric_limits<size_type>::max(), "The result of this join is too large for a cudf column.");
 
   // If the output size will be zero, we can return immediately.
   if (join_size == 0) {
