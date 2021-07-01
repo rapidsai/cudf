@@ -139,6 +139,6 @@ nvidia-smi
 
 gpuci_logger "Running Java Tests"
 cd ${WORKSPACE}/java
-mvn test
+mvn test -DCUDF_JNI_ARROW_STATIC=OFF
 
 return ${EXITCODE}
