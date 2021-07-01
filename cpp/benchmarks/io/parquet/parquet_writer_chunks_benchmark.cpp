@@ -29,6 +29,8 @@
 
 #include <cudf/io/parquet.hpp>
 
+#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
 constexpr int64_t data_size = 512 << 20;
@@ -47,14 +49,20 @@ void PQ_write(benchmark::State& state)
   auto tbl = create_random_table({cudf::type_id::INT32}, num_cols, table_size_bytes{data_size});
   cudf::table_view view = tbl->view();
 
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
+  auto statistics_mr                  = rmm::mr::make_statistics_adaptor(mr);
+
+  rmm::mr::set_current_device_resource(&statistics_mr);
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::parquet_writer_options opts =
       cudf_io::parquet_writer_options::builder(cudf_io::sink_info(), view);
     cudf_io::write_parquet(opts);
   }
+  rmm::mr::set_current_device_resource(mr);
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0));
+  state.counters["peak_memory_usage"] = statistics_mr.get_bytes_counter().peak;
 }
 
 void PQ_write_chunked(benchmark::State& state)
@@ -68,6 +76,10 @@ void PQ_write_chunked(benchmark::State& state)
       {cudf::type_id::INT32}, num_cols, table_size_bytes{size_t(data_size / num_tables)}));
   }
 
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
+  auto statistics_mr                  = rmm::mr::make_statistics_adaptor(mr);
+
+  rmm::mr::set_current_device_resource(&statistics_mr);
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::chunked_parquet_writer_options opts =
@@ -78,8 +90,10 @@ void PQ_write_chunked(benchmark::State& state)
     });
     writer.close();
   }
+  rmm::mr::set_current_device_resource(mr);
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0));
+  state.counters["peak_memory_usage"] = statistics_mr.get_bytes_counter().peak;
 }
 
 #define PWBM_BENCHMARK_DEFINE(name, size, num_columns)                                    \
