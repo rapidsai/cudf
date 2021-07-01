@@ -18,8 +18,12 @@ from pyarrow import parquet as pq
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
-from cudf.tests import dataset_generator as dg
-from cudf.tests.utils import assert_eq
+from cudf.testing import dataset_generator as dg
+from cudf.testing._utils import (
+    TIMEDELTA_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 
 @pytest.fixture(scope="module")
@@ -1782,6 +1786,9 @@ def test_parquet_writer_statistics(tmpdir, pdf):
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category", "col_bool"])
 
+    for t in TIMEDELTA_TYPES:
+        pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
+
     gdf = cudf.from_pandas(pdf)
     gdf.to_parquet(file_path, index=False)
 
@@ -1937,3 +1944,15 @@ def test_parquet_writer_decimal(tmpdir):
 
     got = pd.read_parquet(fname)
     assert_eq(gdf, got)
+
+
+def test_parquet_writer_column_validation():
+    df = cudf.DataFrame({1: [1, 2, 3], "1": ["a", "b", "c"]})
+    pdf = df.to_pandas()
+
+    assert_exceptions_equal(
+        lfunc=df.to_parquet,
+        rfunc=pdf.to_parquet,
+        lfunc_args_and_kwargs=(["cudf.parquet"],),
+        rfunc_args_and_kwargs=(["pandas.parquet"],),
+    )

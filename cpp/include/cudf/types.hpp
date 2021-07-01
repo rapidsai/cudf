@@ -61,6 +61,7 @@ class scalar;
 
 // clang-format off
 class list_scalar;
+class struct_scalar;
 class string_scalar;
 template <typename T> class numeric_scalar;
 template <typename T> class fixed_point_scalar;
@@ -73,8 +74,6 @@ template <typename T> class fixed_point_scalar_device_view;
 template <typename T> class timestamp_scalar_device_view;
 template <typename T> class duration_scalar_device_view;
 // clang-format on
-
-class struct_scalar;
 
 class table;
 class table_view;
@@ -338,6 +337,11 @@ enum class hash_id {
   HASH_SERIAL_MURMUR3,  ///< Serial Murmur3 hash function
   HASH_SPARK_MURMUR3    ///< Spark Murmur3 hash function
 };
+
+/**
+ * @brief The default seed value for hash functions
+ */
+static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
 /** @} */
 }  // namespace cudf

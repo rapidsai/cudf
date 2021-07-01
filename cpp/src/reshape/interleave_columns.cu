@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <strings/utilities.cuh>
-
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/lists/detail/interleave_columns.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
@@ -30,11 +30,23 @@ namespace detail {
 namespace {
 struct interleave_columns_functor {
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_fixed_width<T>() and not std::is_same<T, cudf::string_view>::value,
+  std::enable_if_t<not cudf::is_fixed_width<T>() and
+                     not std::is_same<T, cudf::string_view>::value and
+                     not std::is_same<T, cudf::list_view>::value,
                    std::unique_ptr<cudf::column>>
-  operator()(Args&&... args)
+  operator()(Args&&...)
   {
-    CUDF_FAIL("interleave_columns not supported for dictionary and list types.");
+    CUDF_FAIL("Called `interleave_columns` on none-supported data type.");
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::list_view>::value, std::unique_ptr<cudf::column>>
+  operator()(table_view const& lists_columns,
+             bool create_mask,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
+  {
+    return lists::detail::interleave_columns(lists_columns, create_mask, stream, mr);
   }
 
   template <typename T>
@@ -50,14 +62,14 @@ struct interleave_columns_functor {
 
     auto strings_count = strings_columns.num_rows();
     if (strings_count == 0)  // All columns have 0 rows
-      return strings::detail::make_empty_strings_column(stream, mr);
+      return make_empty_column(data_type{type_id::STRING});
 
     // Create device views from the strings columns.
     auto table       = table_device_view::create(strings_columns, stream);
     auto d_table     = *table;
     auto num_strings = num_columns * strings_count;
 
-    std::pair<rmm::device_buffer, size_type> valid_mask{{}, 0};
+    std::pair<rmm::device_buffer, size_type> valid_mask{};
     if (create_mask) {
       // Create resulting null mask
       valid_mask = cudf::detail::valid_if(
@@ -90,9 +102,9 @@ struct interleave_columns_functor {
     auto d_results_offsets = offsets_column->view().template data<int32_t>();
 
     // Create the chars column
-    size_type bytes = thrust::device_pointer_cast(d_results_offsets)[num_strings];
-    auto chars_column =
-      strings::detail::create_chars_child_column(num_strings, null_count, bytes, stream, mr);
+    auto const bytes =
+      cudf::detail::get_value<int32_t>(offsets_column->view(), num_strings, stream);
+    auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
     // Fill the chars column
     auto d_results_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(

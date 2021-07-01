@@ -58,11 +58,11 @@ struct reduce_dispatch_functor {
         break;
       case aggregation::MEAN: return reduction::mean(col, output_dtype, stream, mr); break;
       case aggregation::VARIANCE: {
-        auto var_agg = static_cast<var_aggregation const *>(agg.get());
+        auto var_agg = dynamic_cast<var_aggregation const *>(agg.get());
         return reduction::variance(col, output_dtype, var_agg->_ddof, stream, mr);
       } break;
       case aggregation::STD: {
-        auto var_agg = static_cast<std_aggregation const *>(agg.get());
+        auto var_agg = dynamic_cast<std_aggregation const *>(agg.get());
         return reduction::standard_deviation(col, output_dtype, var_agg->_ddof, stream, mr);
       } break;
       case aggregation::MEDIAN: {
@@ -73,7 +73,7 @@ struct reduce_dispatch_functor {
         return get_element(*col_ptr, 0, stream, mr);
       } break;
       case aggregation::QUANTILE: {
-        auto quantile_agg = static_cast<quantile_aggregation const *>(agg.get());
+        auto quantile_agg = dynamic_cast<quantile_aggregation const *>(agg.get());
         CUDF_EXPECTS(quantile_agg->_quantiles.size() == 1,
                      "Reduction quantile accepts only one quantile value");
         auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, mr);
@@ -89,7 +89,7 @@ struct reduce_dispatch_functor {
         return get_element(*col_ptr, 0, stream, mr);
       } break;
       case aggregation::NUNIQUE: {
-        auto nunique_agg = static_cast<nunique_aggregation const *>(agg.get());
+        auto nunique_agg = dynamic_cast<nunique_aggregation const *>(agg.get());
         return make_fixed_width_scalar(
           detail::distinct_count(
             col, nunique_agg->_null_handling, nan_policy::NAN_IS_VALID, stream),
@@ -97,7 +97,7 @@ struct reduce_dispatch_functor {
           mr);
       } break;
       case aggregation::NTH_ELEMENT: {
-        auto nth_agg = static_cast<nth_element_aggregation const *>(agg.get());
+        auto nth_agg = dynamic_cast<nth_element_aggregation const *>(agg.get());
         return reduction::nth_element(col, nth_agg->_n, nth_agg->_null_handling, stream, mr);
       } break;
       default: CUDF_FAIL("Unsupported reduction operator");
@@ -113,7 +113,7 @@ std::unique_ptr<scalar> reduce(
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
 {
   std::unique_ptr<scalar> result = make_default_constructed_scalar(output_dtype, stream, mr);
-  result->set_valid(false, stream);
+  result->set_valid_async(false, stream);
 
   // check if input column is empty
   if (col.size() <= col.null_count()) return result;

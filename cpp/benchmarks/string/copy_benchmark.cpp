@@ -54,7 +54,7 @@ static void BM_copy(benchmark::State& state, copy_type ct)
                                                                     host_map_data.end());
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     switch (ct) {
       case gather: cudf::gather(source->view(), index_map); break;
       case scatter: cudf::scatter(source->view(), index_map, target->view()); break;
@@ -74,6 +74,9 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   int const max_rowlen = 1 << 13;
   int const len_mult   = 4;
   generate_string_bench_args(b, min_rows, max_rows, row_mult, min_rowlen, max_rowlen, len_mult);
+
+  // Benchmark for very small strings
+  b->Args({67108864, 2});
 }
 
 #define COPY_BENCHMARK_DEFINE(name)                           \

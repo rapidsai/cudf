@@ -10,14 +10,17 @@ from typing import Any, Dict, Optional, Sequence, Tuple, Union, cast, overload
 import cupy
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from numba import cuda
-from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast
 from cudf._lib.column import Column
-from cudf._lib.nvtext.edit_distance import edit_distance as cpp_edit_distance
+from cudf._lib.nvtext.edit_distance import (
+    edit_distance as cpp_edit_distance,
+    edit_distance_matrix as cpp_edit_distance_matrix,
+)
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams as cpp_generate_character_ngrams,
     generate_ngrams as cpp_generate_ngrams,
@@ -40,7 +43,7 @@ from cudf._lib.nvtext.stemmer import (
     porter_stemmer_measure as cpp_porter_stemmer_measure,
 )
 from cudf._lib.nvtext.subword_tokenize import (
-    subword_tokenize as cpp_subword_tokenize,
+    subword_tokenize_vocab_file as cpp_subword_tokenize_vocab_file,
 )
 from cudf._lib.nvtext.tokenize import (
     _count_tokens_column as cpp_count_tokens_column,
@@ -78,6 +81,8 @@ from cudf._lib.strings.char_types import (
 from cudf._lib.strings.combine import (
     concatenate as cpp_concatenate,
     join as cpp_join,
+    join_lists_with_column as cpp_join_lists_with_column,
+    join_lists_with_scalar as cpp_join_lists_with_scalar,
 )
 from cudf._lib.strings.contains import (
     contains_re as cpp_contains_re,
@@ -107,6 +112,7 @@ from cudf._lib.strings.find import (
     startswith_multiple as cpp_startswith_multiple,
 )
 from cudf._lib.strings.findall import findall as cpp_findall
+from cudf._lib.strings.json import get_json_object as cpp_get_json_object
 from cudf._lib.strings.padding import (
     PadSide,
     center as cpp_center,
@@ -152,9 +158,10 @@ from cudf._lib.strings.translate import (
 )
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf._typing import ColumnLike, Dtype, ScalarLike
+from cudf.api.types import is_integer
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethodsMixin, ParentType
 from cudf.utils import utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -163,6 +170,12 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
+
+
+def str_to_boolean(column: StringColumn):
+    """Takes in string column and returns boolean column """
+    return (column.str().len() > cudf.Scalar(0, dtype="int8")).fillna(False)
+
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -175,7 +188,7 @@ _str_to_numeric_typecast_functions = {
     np.dtype("uint64"): str_cast.stoul,
     np.dtype("float32"): str_cast.stof,
     np.dtype("float64"): str_cast.stod,
-    np.dtype("bool"): str_cast.to_booleans,
+    np.dtype("bool"): str_to_boolean,
 }
 
 _numeric_to_str_typecast_functions = {
@@ -207,9 +220,6 @@ _timedelta_to_str_typecast_functions = {
     np.dtype("timedelta64[us]"): str_cast.int2timedelta,
     np.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
-
-
-ParentType = Union["cudf.Series", "cudf.Index"]
 
 
 class StringMethods(ColumnMethodsMixin):
@@ -256,6 +266,8 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(out, inplace=False)
 
+    hex_to_int = htoi
+
     def ip2int(self) -> ParentType:
         """
         This converts ip strings to integers
@@ -286,6 +298,8 @@ class StringMethods(ColumnMethodsMixin):
         out = str_cast.ip2int(self._column)
 
         return self._return_or_inplace(out, inplace=False)
+
+    ip_to_int = ip2int
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -464,17 +478,193 @@ class StringMethods(ColumnMethodsMixin):
                 out = out[0]
         return out
 
-    def join(self, sep) -> ParentType:
+    def join(
+        self, sep=None, string_na_rep=None, sep_na_rep=None
+    ) -> ParentType:
         """
         Join lists contained as elements in the Series/Index with passed
         delimiter.
 
-        Raises : NotImplementedError
-            Columns of arrays / lists are not yet supported.
-        """
-        raise NotImplementedError(
-            "Columns of arrays / lists are not yet " "supported"
+        If the elements of a Series are lists themselves, join the content of
+        these lists using the delimiter passed to the function.
+        This function is an equivalent to :meth:`str.join`.
+        In the special case that the lists in the Series contain only ``None``,
+        a `<NA>`/`None` value will always be returned.
+
+        Parameters
+        ----------
+        sep : str or array-like
+            If str, the delimiter is used between list entries.
+            If array-like, the string at a position is used as a
+            delimiter for corresponding row of the list entries.
+        string_na_rep : str, default None
+            This character will take the place of null strings
+            (not empty strings) in the Series but will be considered
+            only if the Series contains list elements and those lists have
+            at least one non-null string. If ``string_na_rep`` is ``None``,
+            it defaults to empty space "".
+        sep_na_rep : str, default None
+            This character will take the place of any null strings
+            (not empty strings) in `sep`. This parameter can be used
+            only if `sep` is array-like. If ``sep_na_rep`` is ``None``,
+            it defaults to empty space "".
+
+        Returns
+        -------
+        Series/Index: object
+            The list entries concatenated by intervening occurrences of
+            the delimiter.
+
+        Raises
+        ------
+        ValueError
+            - If ``sep_na_rep`` is supplied when ``sep`` is str.
+            - If ``sep`` is array-like and not of equal length with Series/Index.
+        TypeError
+            - If ``string_na_rep`` or ``sep_na_rep`` are not scalar values.
+            - If ``sep`` is not of following types: str or array-like.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([['a', 'b', 'c'], ['d', 'e'], ['f'], ['g', ' ', 'h']])
+        >>> ser
+        0    [a, b, c]
+        1       [d, e]
+        2          [f]
+        3    [g,  , h]
+        dtype: list
+        >>> ser.str.join(sep='-')
+        0    a-b-c
+        1      d-e
+        2        f
+        3    g- -h
+        dtype: object
+
+        ``sep`` can an array-like input:
+
+        >>> ser.str.join(sep=['-', '+', '.', '='])
+        0    a-b-c
+        1      d+e
+        2        f
+        3    g= =h
+        dtype: object
+
+        If the actual series doesn't have lists, each character is joined
+        by `sep`:
+
+        >>> ser = cudf.Series(['abc', 'def', 'ghi'])
+        >>> ser
+        0    abc
+        1    def
+        2    ghi
+        dtype: object
+        >>> ser.str.join(sep='_')
+        0    a_b_c
+        1    d_e_f
+        2    g_h_i
+        dtype: object
+
+        We can replace `<NA>`/`None` values present in lists using
+        ``string_na_rep`` if the lists contain at least one valid string
+        (lists containing all `None` will result in a `<NA>`/`None` value):
+
+        >>> ser = cudf.Series([['a', 'b', None], [None, None, None], None, ['c', 'd']])
+        >>> ser
+        0          [a, b, None]
+        1    [None, None, None]
+        2                  None
+        3                [c, d]
+        dtype: list
+        >>> ser.str.join(sep='_', string_na_rep='k')
+        0    a_b_k
+        1     <NA>
+        2     <NA>
+        3      c_d
+        dtype: object
+
+        We can replace `<NA>`/`None` values present in lists of ``sep``
+        using ``sep_na_rep``:
+
+        >>> ser.str.join(sep=[None, '^', '.', '-'], sep_na_rep='+')
+        0    a+b+
+        1    <NA>
+        2    <NA>
+        3     c-d
+        dtype: object
+        """  # noqa E501
+        if sep is None:
+            sep = ""
+
+        if string_na_rep is None:
+            string_na_rep = ""
+
+        if is_scalar(sep) and sep_na_rep:
+            raise ValueError(
+                "sep_na_rep cannot be defined when `sep` is scalar."
+            )
+
+        if sep_na_rep is None:
+            sep_na_rep = ""
+
+        if not is_scalar(string_na_rep):
+            raise TypeError(
+                f"string_na_rep should be a string scalar, got {string_na_rep}"
+                f" of type : {type(string_na_rep)}"
+            )
+
+        if isinstance(self._column, cudf.core.column.ListColumn):
+            strings_column = self._column
+        else:
+            # If self._column is not a ListColumn, we will have to
+            # split each row by character and create a ListColumn out of it.
+            strings_column = self._split_by_character()
+
+        if is_scalar(sep):
+            data = cpp_join_lists_with_scalar(
+                strings_column, cudf.Scalar(sep), cudf.Scalar(string_na_rep)
+            )
+        elif can_convert_to_column(sep):
+            sep_column = column.as_column(sep)
+            if len(sep_column) != len(strings_column):
+                raise ValueError(
+                    f"sep should be of similar size to the series, "
+                    f"got: {len(sep_column)}, expected: {len(strings_column)}"
+                )
+            if not is_scalar(sep_na_rep):
+                raise TypeError(
+                    f"sep_na_rep should be a string scalar, got {sep_na_rep} "
+                    f"of type: {type(sep_na_rep)}"
+                )
+
+            data = cpp_join_lists_with_column(
+                strings_column,
+                sep_column,
+                cudf.Scalar(string_na_rep),
+                cudf.Scalar(sep_na_rep),
+            )
+        else:
+            raise TypeError(
+                f"sep should be an str, array-like or Series object, "
+                f"found {type(sep)}"
+            )
+
+        return self._return_or_inplace(data)
+
+    def _split_by_character(self):
+        result_col = cpp_character_tokenize(self._column)
+
+        offset_col = self._column.children[0]
+
+        res = cudf.core.column.ListColumn(
+            size=len(self._column),
+            dtype=cudf.ListDtype(self._column.dtype),
+            mask=self._column.mask,
+            offset=0,
+            null_count=self._column.null_count,
+            children=(offset_col, result_col),
         )
+        return res
 
     def extract(
         self, pat: str, flags: int = 0, expand: bool = True
@@ -510,7 +700,7 @@ class StringMethods(ColumnMethodsMixin):
         --------
         >>> import cudf
         >>> s = cudf.Series(['a1', 'b2', 'c3'])
-        >>> s.str.extract(r'([ab])(\d)')                                # noqa W605
+        >>> s.str.extract(r'([ab])(\d)')
               0     1
         0     a     1
         1     b     2
@@ -519,7 +709,7 @@ class StringMethods(ColumnMethodsMixin):
         A pattern with one group will return a DataFrame with one
         column if expand=True.
 
-        >>> s.str.extract(r'[ab](\d)', expand=True)                     # noqa W605
+        >>> s.str.extract(r'[ab](\d)', expand=True)
               0
         0     1
         1     2
@@ -527,12 +717,12 @@ class StringMethods(ColumnMethodsMixin):
 
         A pattern with one group will return a Series if expand=False.
 
-        >>> s.str.extract(r'[ab](\d)', expand=False)                    # noqa W605
+        >>> s.str.extract(r'[ab](\d)', expand=False)
         0       1
         1       2
         2    <NA>
         dtype: object
-        """
+        """  # noqa W605
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
@@ -620,7 +810,7 @@ class StringMethods(ColumnMethodsMixin):
 
         Returning any digit using regular expression.
 
-        >>> s1.str.contains('\d', regex=True)                               # noqa W605
+        >>> s1.str.contains('\d', regex=True)
         0    False
         1    False
         2    False
@@ -653,7 +843,7 @@ class StringMethods(ColumnMethodsMixin):
         3     True
         4     <NA>
         dtype: bool
-        """
+        """  # noqa W605
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
         elif flags != 0:
@@ -1998,6 +2188,72 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(cpp_string_get(self._column, i))
 
+    def get_json_object(self, json_path):
+        """
+        Applies a JSONPath string to an input strings column
+        where each row in the column is a valid json string
+
+        Parameters
+        ----------
+        json_path: str
+            The JSONPath string to be applied to each row
+            of the input column
+
+        Returns
+        -------
+        Column: New strings column containing the retrieved json object strings
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(
+            [
+                \\"\\"\\"
+                {
+                    "store":{
+                        "book":[
+                            {
+                                "category":"reference",
+                                "author":"Nigel Rees",
+                                "title":"Sayings of the Century",
+                                "price":8.95
+                            },
+                            {
+                                "category":"fiction",
+                                "author":"Evelyn Waugh",
+                                "title":"Sword of Honour",
+                                "price":12.99
+                            }
+                        ]
+                    }
+                }
+                \\"\\"\\"
+            ])
+        >>> s
+            0    {"store": {\\n        "book": [\\n        { "cat...
+            dtype: object
+        >>> s.str.get_json_object("$.store.book")
+            0    [\\n        { "category": "reference",\\n       ...
+            dtype: object
+        """
+
+        try:
+            res = self._return_or_inplace(
+                cpp_get_json_object(
+                    self._column, cudf.Scalar(json_path, "str")
+                )
+            )
+        except RuntimeError as e:
+            matches = (
+                "Unrecognized JSONPath operator",
+                "Invalid empty name in JSONPath query string",
+            )
+            if any(match in str(e) for match in matches):
+                raise ValueError("JSONPath value not found") from e
+            raise
+        else:
+            return res
+
     def split(
         self, pat: str = None, n: int = -1, expand: bool = None
     ) -> ParentType:
@@ -2511,7 +2767,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -2593,7 +2849,7 @@ class StringMethods(ColumnMethodsMixin):
         3    <NA>
         dtype: object
         """
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -2663,7 +2919,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -2717,7 +2973,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -2771,7 +3027,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -2986,7 +3242,7 @@ class StringMethods(ColumnMethodsMixin):
         1    another line\\nto be\\nwrapped
         dtype: object
         """
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -3074,7 +3330,7 @@ class StringMethods(ColumnMethodsMixin):
         Escape ``'$'`` to find the literal dollar sign.
 
         >>> s = cudf.Series(['$', 'B', 'Aab$', '$$ca', 'C$B$', 'cat'])
-        >>> s.str.count('\$')                                       # noqa W605
+        >>> s.str.count('\$')
         0    1
         1    0
         2    1
@@ -3088,7 +3344,7 @@ class StringMethods(ColumnMethodsMixin):
         >>> index = cudf.core.index.StringIndex(['A', 'A', 'Aaba', 'cat'])
         >>> index.str.count('a')
         Int64Index([0, 0, 2, 1], dtype='int64')
-        """
+        """  # noqa W605
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
@@ -3731,7 +3987,7 @@ class StringMethods(ColumnMethodsMixin):
         new_col = cpp_code_points(self._column)
         if isinstance(self._parent, cudf.Series):
             return cudf.Series(new_col, name=self._parent.name)
-        elif isinstance(self._parent, cudf.Index):
+        elif isinstance(self._parent, cudf.BaseIndex):
             return cudf.core.index.as_index(new_col, name=self._parent.name)
         else:
             return new_col
@@ -4035,7 +4291,7 @@ class StringMethods(ColumnMethodsMixin):
         result_col = cpp_character_tokenize(self._column)
         if isinstance(self._parent, cudf.Series):
             return cudf.Series(result_col, name=self._parent.name)
-        elif isinstance(self._parent, cudf.Index):
+        elif isinstance(self._parent, cudf.BaseIndex):
             return cudf.core.index.as_index(result_col, name=self._parent.name)
         else:
             return result_col
@@ -4435,7 +4691,7 @@ class StringMethods(ColumnMethodsMixin):
         array([[0, 0, 2],
                [1, 0, 1]], dtype=uint32)
         """
-        tokens, masks, metadata = cpp_subword_tokenize(
+        tokens, masks, metadata = cpp_subword_tokenize_vocab_file(
             self._column,
             hash_file,
             max_length,
@@ -4610,6 +4866,47 @@ class StringMethods(ColumnMethodsMixin):
             cpp_edit_distance(self._column, targets_column)
         )
 
+    def edit_distance_matrix(self) -> ParentType:
+        """Computes the edit distance between strings in the series.
+
+        The series to compute the matrix should have more than 2 strings and
+        should not contain nulls.
+
+        Edit distance is measured based on the `Levenshtein edit distance
+        algorithm
+        <https://www.cuelogic.com/blog/the-levenshtein-algorithm>`_.
+
+
+        Returns
+        -------
+        Series of ListDtype(int64)
+            Assume `N` is the length of this series. The return series contains
+            `N` lists of size `N`, where the `j`th number in the `i`th row of
+            the series tells the edit distance between the `i`th string and the
+            `j`th string of this series.
+            The matrix is symmetric. Diagonal elements are 0.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['abc', 'bc', 'cba'])
+        >>> s.str.edit_distance_matrix()
+        0    [0, 1, 2]
+        1    [1, 0, 2]
+        2    [2, 2, 0]
+        dtype: list
+        """
+        if self._column.size < 2:
+            raise ValueError(
+                "Require size >= 2 to compute edit distance matrix."
+            )
+        if self._column.has_nulls:
+            raise ValueError(
+                "Cannot compute edit distance between null strings. "
+                "Consider removing them using `dropna` or fill with `fillna`."
+            )
+        return self._return_or_inplace(cpp_edit_distance_matrix(self._column))
+
 
 def _massage_string_arg(value, name, allow_col=False):
     if isinstance(value, str):
@@ -4766,13 +5063,36 @@ class StringColumn(column.ColumnBase):
     def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
         raise ValueError("Cannot get an array view of a StringColumn")
 
+    def to_arrow(self) -> pa.Array:
+        """Convert to PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> col = cudf.core.column.as_column([1, 2, 3, 4])
+        >>> col.to_arrow()
+        <pyarrow.lib.Int64Array object at 0x7f886547f830>
+        [
+          1,
+          2,
+          3,
+          4
+        ]
+        """
+        if self.null_count == len(self):
+            return pa.NullArray.from_buffers(
+                pa.null(), len(self), [pa.py_buffer((b""))]
+            )
+        else:
+            return super().to_arrow()
+
     def sum(
         self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
     ):
         result_col = self._process_for_reduction(
             skipna=skipna, min_count=min_count
         )
-        if isinstance(result_col, cudf.core.column.ColumnBase):
+        if isinstance(result_col, type(self)):
             return result_col.str().cat()
         else:
             return result_col
@@ -4799,24 +5119,8 @@ class StringColumn(column.ColumnBase):
     def str(self, parent: ParentType = None) -> StringMethods:
         return StringMethods(self, parent=parent)
 
-    def unary_operator(self, unaryop: builtins.str):
-        raise TypeError(
-            f"Series of dtype `str` cannot perform the operation: "
-            f"{unaryop}"
-        )
-
-    def __len__(self) -> int:
-        return self.size
-
-    @property
-    def _nbytes(self) -> int:
-        if self.size == 0:
-            return 0
-        else:
-            return self.children[1].size
-
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         out_dtype = np.dtype(dtype)
 
@@ -4890,10 +5194,12 @@ class StringColumn(column.ColumnBase):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DecimalColumn":
+    ) -> "cudf.core.column.Decimal64Column":
         return cpp_to_decimal(self, dtype)
 
-    def as_string_column(self, dtype: Dtype, format=None) -> StringColumn:
+    def as_string_column(
+        self, dtype: Dtype, format=None, **kwargs
+    ) -> StringColumn:
         return self
 
     @property
@@ -4930,23 +5236,21 @@ class StringColumn(column.ColumnBase):
 
         return self.to_arrow().to_pandas().values
 
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed, Conversion to GPU array in strings is not yet "
-            "supported.\nTo explicitly construct a host array, "
-            "consider using .to_array()"
-        )
+    def to_pandas(
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
+    ) -> "pd.Series":
+        if nullable:
+            pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
+            pd_series = pd.Series(pandas_array, copy=False)
+        else:
+            pd_series = self.to_arrow().to_pandas(**kwargs)
 
-    def __arrow_array__(self, type=None):
-        raise TypeError(
-            "Implicit conversion to a host PyArrow Array via __arrow_array__ "
-            "is not allowed, To explicitly construct a PyArrow Array, "
-            "consider using .to_arrow()"
-        )
+        if index is not None:
+            pd_series.index = index
+        return pd_series
 
     def serialize(self) -> Tuple[dict, list]:
-        header = {"null_count": self.null_count}  # type: Dict[Any, Any]
+        header: Dict[Any, Any] = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
         header["size"] = self.size
 
@@ -5108,20 +5412,12 @@ class StringColumn(column.ColumnBase):
             if op == "add":
                 return cast("column.ColumnBase", lhs.str().cat(others=rhs))
             elif op in ("eq", "ne", "gt", "lt", "ge", "le", "NULL_EQUALS"):
-                return _string_column_binop(self, rhs, op=op, out_dtype="bool")
+                return libcudf.binaryop.binaryop(
+                    lhs=self, rhs=rhs, op=op, dtype="bool"
+                )
 
         raise TypeError(
             f"{op} operator not supported between {type(self)} and {type(rhs)}"
-        )
-
-    @property
-    def is_unique(self) -> bool:
-        return len(self.unique()) == len(self)
-
-    @property
-    def __cuda_array_interface__(self):
-        raise NotImplementedError(
-            "Strings are not yet supported via `__cuda_array_interface__`"
         )
 
     @copy_docstring(column.ColumnBase.view)
@@ -5149,17 +5445,6 @@ class StringColumn(column.ColumnBase):
         )
 
         return to_view.view(dtype)
-
-
-@annotate("BINARY_OP", color="orange", domain="cudf_python")
-def _string_column_binop(
-    lhs: "column.ColumnBase",
-    rhs: "column.ColumnBase",
-    op: str,
-    out_dtype: Dtype,
-) -> "column.ColumnBase":
-    out = libcudf.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
-    return out
 
 
 def _get_cols_list(parent_obj, others):

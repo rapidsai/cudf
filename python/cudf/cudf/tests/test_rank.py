@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from cudf.core import DataFrame
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
 @pytest.fixture

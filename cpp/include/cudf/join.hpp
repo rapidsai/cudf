@@ -22,6 +22,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <optional>
 #include <vector>
 
 namespace cudf {
@@ -41,13 +42,14 @@ namespace cudf {
  * the matched row indices from the right table.
  *
  * @code{.pseudo}
- *     Left: {{0, 1, 2}}
- *     Right: {{1, 2, 3}}
- *     Result: {{1, 2}, {0, 1}}
+ * Left: {{0, 1, 2}}
+ * Right: {{1, 2, 3}}
+ * Result: {{1, 2}, {0, 1}}
  *
- *     Left: {{0, 1, 2}, {3, 4, 5}}
- *     Right: {{1, 2, 3}, {4, 6, 7}}
- *     Result: {{1}, {0}}
+ * Left: {{0, 1, 2}, {3, 4, 5}}
+ * Right: {{1, 2, 3}, {4, 6, 7}}
+ * Result: {{1}, {0}}
+ * @endcode
  *
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
@@ -77,10 +79,10 @@ inner_join(cudf::table_view const& left_keys,
  * in the columns being joined on match.
  *
  * @code{.pseudo}
- *          Left: {{0, 1, 2}}
- *          Right: {{4, 9, 3}, {1, 2, 5}}
- *          left_on: {0}
- *          right_on: {1}
+ * Left: {{0, 1, 2}}
+ * Right: {{4, 9, 3}, {1, 2, 5}}
+ * left_on: {0}
+ * right_on: {1}
  * Result: {{1, 2}, {4, 9}, {1, 2}}
  * @endcode
  *
@@ -125,13 +127,14 @@ std::unique_ptr<cudf::table> inner_join(
  * out-of-bounds value.
  *
  * @code{.pseudo}
- *     Left: {{0, 1, 2}}
- *     Right: {{1, 2, 3}}
- *     Result: {{0, 1, 2}, {None, 0, 1}}
+ * Left: {{0, 1, 2}}
+ * Right: {{1, 2, 3}}
+ * Result: {{0, 1, 2}, {None, 0, 1}}
  *
- *     Left: {{0, 1, 2}, {3, 4, 5}}
- *     Right: {{1, 2, 3}, {4, 6, 7}}
- *     Result: {{0, 1, 2}, {None, 0, None}}
+ * Left: {{0, 1, 2}, {3, 4, 5}}
+ * Right: {{1, 2, 3}, {4, 6, 7}}
+ * Result: {{0, 1, 2}, {None, 0, None}}
+ * @endcode
  *
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
@@ -163,16 +166,16 @@ left_join(cudf::table_view const& left_keys,
  * values in the left columns will be null.
  *
  * @code{.pseudo}
- *          Left: {{0, 1, 2}}
- *          Right: {{1, 2, 3}, {1, 2 ,5}}
- *          left_on: {0}
- *          right_on: {1}
+ * Left: {{0, 1, 2}}
+ * Right: {{1, 2, 3}, {1, 2 ,5}}
+ * left_on: {0}
+ * right_on: {1}
  * Result: { {0, 1, 2}, {NULL, 1, 2}, {NULL, 1, 2} }
  *
- *          Left: {{0, 1, 2}}
- *          Right {{1, 2, 3}, {1, 2, 5}}
- *          left_on: {0}
- *          right_on: {0}
+ * Left: {{0, 1, 2}}
+ * Right {{1, 2, 3}, {1, 2, 5}}
+ * left_on: {0}
+ * right_on: {0}
  * Result: { {0, 1, 2}, {NULL, 1, 2}, {NULL, 1, 2} }
  * @endcode
  *
@@ -216,13 +219,14 @@ std::unique_ptr<cudf::table> left_join(
  * representing a row from one table without a match in the other.
  *
  * @code{.pseudo}
- *     Left: {{0, 1, 2}}
- *     Right: {{1, 2, 3}}
- *     Result: {{0, 1, 2, None}, {None, 0, 1, 2}}
+ * Left: {{0, 1, 2}}
+ * Right: {{1, 2, 3}}
+ * Result: {{0, 1, 2, None}, {None, 0, 1, 2}}
  *
- *     Left: {{0, 1, 2}, {3, 4, 5}}
- *     Right: {{1, 2, 3}, {4, 6, 7}}
- *     Result: {{0, 1, 2, None, None}, {None, 0, None, 1, 2}}
+ * Left: {{0, 1, 2}, {3, 4, 5}}
+ * Right: {{1, 2, 3}, {4, 6, 7}}
+ * Result: {{0, 1, 2, None, None}, {None, 0, None, 1, 2}}
+ * @endcode
  *
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
@@ -254,16 +258,16 @@ full_join(cudf::table_view const& left_keys,
  * values in the left columns will be null.
  *
  * @code{.pseudo}
- *          Left: {{0, 1, 2}}
- *          Right: {{1, 2, 3}, {1, 2, 5}}
- *          left_on: {0}
- *          right_on: {1}
+ * Left: {{0, 1, 2}}
+ * Right: {{1, 2, 3}, {1, 2, 5}}
+ * left_on: {0}
+ * right_on: {1}
  * Result: { {0, 1, 2, NULL}, {NULL, 1, 2, 3}, {NULL, 1, 2, 5} }
  *
- *          Left: {{0, 1, 2}}
- *          Right: {{1, 2, 3}, {1, 2, 5}}
- *          left_on: {0}
- *          right_on: {0}
+ * Left: {{0, 1, 2}}
+ * Right: {{1, 2, 3}, {1, 2, 5}}
+ * left_on: {0}
+ * right_on: {0}
  * Result: { {0, 1, 2, NULL}, {NULL, 1, 2, 3}, {NULL, 1, 2, 5} }
  * @endcode
  *
@@ -305,9 +309,9 @@ std::unique_ptr<cudf::table> full_join(
  * for which there is a matching row in the right table.
  *
  * @code{.pseudo}
- *          TableA: {{0, 1, 2}}
- *          TableB: {{1, 2, 3}}
- *          right_on: {1}
+ * TableA: {{0, 1, 2}}
+ * TableB: {{1, 2, 3}}
+ * right_on: {1}
  * Result: {1, 2}
  * @endcode
  *
@@ -338,16 +342,16 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
  * returns rows that exist in the right table.
  *
  * @code{.pseudo}
- *          TableA: {{0, 1, 2}}
- *          TableB: {{1, 2, 3}, {1, 2, 5}}
- *          left_on: {0}
- *          right_on: {1}
+ * TableA: {{0, 1, 2}}
+ * TableB: {{1, 2, 3}, {1, 2, 5}}
+ * left_on: {0}
+ * right_on: {1}
  * Result: { {1, 2} }
  *
- *          TableA {{0, 1, 2}, {1, 2, 5}}
- *          TableB {{1, 2, 3}}
- *          left_on: {0}
- *          right_on: {0}
+ * TableA {{0, 1, 2}, {1, 2, 5}}
+ * TableB {{1, 2, 3}}
+ * left_on: {0}
+ * right_on: {0}
  * Result: { {1, 2}, {2, 5} }
  * @endcode
  *
@@ -386,8 +390,8 @@ std::unique_ptr<cudf::table> left_semi_join(
  * for which there is no matching row in the right table.
  *
  * @code{.pseudo}
- *          TableA: {{0, 1, 2}}
- *          TableB: {{1, 2, 3}}
+ * TableA: {{0, 1, 2}}
+ * TableB: {{1, 2, 3}}
  * Result: {0}
  * @endcode
  *
@@ -417,17 +421,17 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
  * returns rows that do not exist in the right table.
  *
  * @code{.pseudo}
- *          TableA: {{0, 1, 2}}
- *          TableB: {{1, 2, 3},  {1, 2, 5}}
- *          left_on: {0}
- *          right_on: {1}
- * Result: {{0}, {1}}
+ * TableA: {{0, 1, 2}}
+ * TableB: {{1, 2, 3},  {1, 2, 5}}
+ * left_on: {0}
+ * right_on: {1}
+ * Result: {{0}}
  *
- *          TableA: {{0, 1, 2}, {1, 2, 5}}
- *          TableB: {{1, 2, 3}}
- *          left_on: {0}
- *          right_on: {0}
- * Result: { {0} {1} }
+ * TableA: {{0, 1, 2}, {1, 2, 5}}
+ * TableB: {{1, 2, 3}}
+ * left_on: {0}
+ * right_on: {0}
+ * Result: { {0}, {1} }
  * @endcode
  *
  * @throw cudf::logic_error if number of elements in `left_on` or `right_on`
@@ -469,8 +473,8 @@ std::unique_ptr<cudf::table> left_anti_join(
  * equal to `left.num_rows() * right.num_rows()`. Use with caution.
  *
  * @code{.pseudo}
- *          Left a: {0, 1, 2}
- *          Right b: {3, 4, 5}
+ * Left a: {0, 1, 2}
+ * Right b: {3, 4, 5}
  * Result: { a: {0, 0, 0, 1, 1, 1, 2, 2, 2}, b: {3, 4, 5, 3, 4, 5, 3, 4, 5} }
  * @endcode
 
@@ -519,13 +523,15 @@ class hash_join {
 
   /**
    * Returns the row indices that can be used to construct the result of performing
-   * an inner join between two tables. @see cudf::inner_join().
+   * an inner join between two tables. @see cudf::inner_join(). Behavior is undefined if the
+   * provided `output_size` is smaller than the actual output size.
    *
    * @param probe The probe table, from which the tuples are probed.
    * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param output_size Optional value which allows users to specify the exact output size.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
-   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing an inner join between two tables with `build` and `probe`
@@ -534,19 +540,22 @@ class hash_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
-             null_equality compare_nulls         = null_equality::EQUAL,
-             rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+             null_equality compare_nulls            = null_equality::EQUAL,
+             std::optional<std::size_t> output_size = {},
+             rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
+             rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
 
   /**
    * Returns the row indices that can be used to construct the result of performing
-   * a left join between two tables. @see cudf::left_join().
+   * a left join between two tables. @see cudf::left_join(). Behavior is undefined if the
+   * provided `output_size` is smaller than the actual output size.
    *
    * @param probe The probe table, from which the tuples are probed.
    * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param output_size Optional value which allows users to specify the exact output size.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
-   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a left join between two tables with `build` and `probe`
@@ -555,19 +564,22 @@ class hash_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(cudf::table_view const& probe,
-            null_equality compare_nulls         = null_equality::EQUAL,
-            rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+            null_equality compare_nulls            = null_equality::EQUAL,
+            std::optional<std::size_t> output_size = {},
+            rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
+            rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
 
   /**
    * Returns the row indices that can be used to construct the result of performing
-   * a full join between two tables. @see cudf::full_join().
+   * a full join between two tables. @see cudf::full_join(). Behavior is undefined if the
+   * provided `output_size` is smaller than the actual output size.
    *
    * @param probe The probe table, from which the tuples are probed.
    * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param output_size Optional value which allows users to specify the exact output size.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
-   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a full join between two tables with `build` and `probe`
@@ -576,9 +588,59 @@ class hash_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   full_join(cudf::table_view const& probe,
-            null_equality compare_nulls         = null_equality::EQUAL,
-            rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+            null_equality compare_nulls            = null_equality::EQUAL,
+            std::optional<std::size_t> output_size = {},
+            rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
+            rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
+
+  /**
+   * Returns the exact number of matches (rows) when performing an inner join with the specified
+   * probe table.
+   *
+   * @param probe The probe table, from which the tuples are probed.
+   * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return The exact number of output when performing an inner join between two tables with
+   * `build` and `probe` as the the join keys .
+   */
+  std::size_t inner_join_size(cudf::table_view const& probe,
+                              null_equality compare_nulls  = null_equality::EQUAL,
+                              rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+
+  /**
+   * Returns the exact number of matches (rows) when performing a left join with the specified probe
+   * table.
+   *
+   * @param probe The probe table, from which the tuples are probed.
+   * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return The exact number of output when performing a left join between two tables with `build`
+   * and `probe` as the the join keys .
+   */
+  std::size_t left_join_size(cudf::table_view const& probe,
+                             null_equality compare_nulls  = null_equality::EQUAL,
+                             rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+
+  /**
+   * Returns the exact number of matches (rows) when performing a full join with the specified probe
+   * table.
+   *
+   * @param probe The probe table, from which the tuples are probed.
+   * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the intermediate table and columns' device
+   * memory.
+   *
+   * @return The exact number of output when performing a full join between two tables with `build`
+   * and `probe` as the the join keys .
+   */
+  std::size_t full_join_size(
+    cudf::table_view const& probe,
+    null_equality compare_nulls         = null_equality::EQUAL,
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
   struct hash_join_impl;

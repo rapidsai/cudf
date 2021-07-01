@@ -21,7 +21,7 @@
 #include <unistd.h>
 
 #include <cudf/utilities/error.hpp>
-#include <io/utilities/file_io_utilities.hpp>
+#include "file_io_utilities.hpp"
 
 namespace cudf {
 namespace io {

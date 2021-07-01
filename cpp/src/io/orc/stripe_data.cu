@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
+
+using cudf::io::detail::string_index_pair;
 
 // Must be able to handle 512x 8-byte values. These values are base 128 encoded
 // so 8 byte value is expanded to 10 bytes.
@@ -147,9 +149,9 @@ static __device__ void bytestream_init(volatile orc_bytestream_s *bs,
                                        const uint8_t *base,
                                        uint32_t len)
 {
-  uint32_t pos   = static_cast<uint32_t>(7 & reinterpret_cast<size_t>(base));
+  uint32_t pos   = (len > 0) ? static_cast<uint32_t>(7 & reinterpret_cast<size_t>(base)) : 0;
   bs->base       = base - pos;
-  bs->pos        = (len > 0) ? pos : 0;
+  bs->pos        = pos;
   bs->len        = (len + pos + 7) & ~7;
   bs->fill_pos   = 0;
   bs->fill_count = min(bs->len, bytestream_buffer_size) >> 3;
@@ -1000,6 +1002,8 @@ static const __device__ __constant__ int64_t kPow5i[28] = {1,
  *
  * @param[in] bs Input byte stream
  * @param[in,out] vals on input: scale from secondary stream, on output: value
+ * @param[in] val_scale Scale of each value
+ * @param[in] col_scale Scale from schema to which value will be adjusted
  * @param[in] numvals Number of values to decode
  * @param[in] t thread id
  *
@@ -1045,7 +1049,10 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
         else
           vals.f64[t] = f * kPow10[min(-scale, 39)];
       } else {
-        int32_t scale = (t < numvals) ? (col_scale & ~orc_decimal2float64_scale) - val_scale : 0;
+        // Since cuDF column stores just one scale, value needs to
+        // be adjusted to col_scale from val_scale. So the difference
+        // of them will be used to add 0s or remove digits.
+        int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
         if (scale >= 0) {
           scale       = min(scale, 27);
           vals.i64[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
@@ -1683,9 +1690,9 @@ __global__ void __launch_bounds__(block_size)
             case BINARY:
             case VARCHAR:
             case CHAR: {
-              nvstrdesc_s *strdesc = &static_cast<nvstrdesc_s *>(data_out)[row];
-              void const *ptr      = nullptr;
-              uint32_t count       = 0;
+              string_index_pair *strdesc = &static_cast<string_index_pair *>(data_out)[row];
+              void const *ptr            = nullptr;
+              uint32_t count             = 0;
               if (is_dictionary(s->chunk.encoding_kind)) {
                 auto const dict_idx = s->vals.u32[t + vals_skipped];
                 if (dict_idx < s->chunk.dict_len) {
@@ -1703,8 +1710,8 @@ __global__ void __launch_bounds__(block_size)
                   count = secondary_val;
                 }
               }
-              strdesc->ptr   = static_cast<char const *>(ptr);
-              strdesc->count = count;
+              strdesc->first  = static_cast<char const *>(ptr);
+              strdesc->second = count;
               break;
             }
             case TIMESTAMP: {

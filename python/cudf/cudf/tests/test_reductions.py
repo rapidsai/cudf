@@ -2,17 +2,19 @@
 
 from __future__ import division, print_function
 
-import random
 import re
+from decimal import Decimal
 from itertools import product
 
 import numpy as np
+import pandas as pd
 import pytest
 
 import cudf
 from cudf.core import Series
-from cudf.tests import utils
-from cudf.tests.utils import NUMERIC_TYPES, gen_rand
+from cudf.core.dtypes import Decimal64Dtype
+from cudf.testing import _utils as utils
+from cudf.testing._utils import NUMERIC_TYPES, assert_eq, gen_rand
 
 params_dtype = NUMERIC_TYPES
 
@@ -50,14 +52,31 @@ def test_sum_string():
     assert got == expected
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(6, 3), Decimal64Dtype(10, 6), Decimal64Dtype(16, 7)],
+)
+@pytest.mark.parametrize("nelem", params_sizes)
+def test_sum_decimal(dtype, nelem):
+    data = [str(x) for x in gen_rand("int64", nelem) / 100]
+
+    expected = pd.Series([Decimal(x) for x in data]).sum()
+    got = cudf.Series(data).astype(dtype).sum()
+
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_product(dtype, nelem):
+    np.random.seed(0)
     dtype = np.dtype(dtype).type
     if np.dtype(dtype).kind in {"u", "i"}:
         data = np.ones(nelem, dtype=dtype)
         # Set at most 30 items to [0..2) to keep the value within 2^32
         for _ in range(30):
-            data[random.randrange(nelem)] = random.random() * 2
+            data[np.random.randint(low=0, high=nelem, size=1)] = (
+                np.random.uniform() * 2
+            )
     else:
         data = gen_rand(dtype, nelem)
 
@@ -68,6 +87,19 @@ def test_product(dtype, nelem):
 
     significant = 4 if dtype == np.float32 else 6
     np.testing.assert_approx_equal(expect, got, significant=significant)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(6, 2), Decimal64Dtype(8, 4), Decimal64Dtype(10, 5)],
+)
+def test_product_decimal(dtype):
+    data = [str(x) for x in gen_rand("int8", 3) / 10]
+
+    expected = pd.Series([Decimal(x) for x in data]).product()
+    got = cudf.Series(data).astype(dtype).product()
+
+    assert_eq(expected, got)
 
 
 accuracy_for_dtype = {np.float64: 6, np.float32: 5}
@@ -94,6 +126,19 @@ def test_sum_of_squares(dtype, nelem):
         )
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(6, 2), Decimal64Dtype(8, 4), Decimal64Dtype(10, 5)],
+)
+def test_sum_of_squares_decimal(dtype):
+    data = [str(x) for x in gen_rand("int8", 3) / 10]
+
+    expected = pd.Series([Decimal(x) for x in data]).pow(2).sum()
+    got = cudf.Series(data).astype(dtype).sum_of_squares()
+
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_min(dtype, nelem):
     dtype = np.dtype(dtype).type
@@ -106,6 +151,20 @@ def test_min(dtype, nelem):
     assert expect == got
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(6, 3), Decimal64Dtype(10, 6), Decimal64Dtype(16, 7)],
+)
+@pytest.mark.parametrize("nelem", params_sizes)
+def test_min_decimal(dtype, nelem):
+    data = [str(x) for x in gen_rand("int64", nelem) / 100]
+
+    expected = pd.Series([Decimal(x) for x in data]).min()
+    got = cudf.Series(data).astype(dtype).min()
+
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_max(dtype, nelem):
     dtype = np.dtype(dtype).type
@@ -116,6 +175,20 @@ def test_max(dtype, nelem):
     expect = dtype(data.max())
 
     assert expect == got
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(6, 3), Decimal64Dtype(10, 6), Decimal64Dtype(16, 7)],
+)
+@pytest.mark.parametrize("nelem", params_sizes)
+def test_max_decimal(dtype, nelem):
+    data = [str(x) for x in gen_rand("int64", nelem) / 100]
+
+    expected = pd.Series([Decimal(x) for x in data]).max()
+    got = cudf.Series(data).astype(dtype).max()
+
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("nelem", params_sizes)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,8 +104,7 @@ struct replace_nans_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_floating_point<T>::value, std::unique_ptr<column>> operator()(
-    Args&&... args)
+  std::enable_if_t<!std::is_floating_point<T>::value, std::unique_ptr<column>> operator()(Args&&...)
   {
     CUDF_FAIL("NAN is not supported in a Non-floating point type column");
   }
@@ -146,7 +145,7 @@ std::unique_ptr<column> replace_nans(column_view const& input,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nans(input, replacement, 0, mr);
+  return detail::replace_nans(input, replacement, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> replace_nans(column_view const& input,
@@ -192,10 +191,8 @@ struct normalize_nans_and_zeros_kernel_forwarder {
   }
 
   // if we get in here for anything but a float or double, that's a problem.
-  template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
-  void operator()(cudf::column_device_view in,
-                  cudf::mutable_column_device_view out,
-                  rmm::cuda_stream_view stream)
+  template <typename T, typename... Args>
+  std::enable_if_t<not std::is_floating_point<T>::value, void> operator()(Args&&...)
   {
     CUDF_FAIL("Unexpected non floating-point type.");
   }

@@ -17,10 +17,11 @@ from cudf.core.index import (
     DatetimeIndex,
     GenericIndex,
     Int64Index,
+    IntervalIndex,
     RangeIndex,
     as_index,
 )
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     FLOAT_TYPES,
     NUMERIC_TYPES,
     OTHER_TYPES,
@@ -316,9 +317,6 @@ def test_index_copy_datetime(name, dtype, deep=True):
     pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
     cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
-    # By default, cudf.DatetimeIndex uses [ms] as base unit, pandas uses [ns]
-    if dtype == "int64":
-        cidx_copy = cidx_copy * 1000000
     assert_eq(pidx_copy, cidx_copy)
 
 
@@ -1360,6 +1358,256 @@ def test_categorical_index_basic(data, categories, dtype, ordered, name):
     assert_eq(pindex, gindex)
 
 
+INTERVAL_BOUNDARY_TYPES = [
+    int,
+    np.int8,
+    np.int16,
+    np.int32,
+    np.int64,
+    np.float32,
+    np.float64,
+    cudf.Scalar,
+]
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("start", [0, 1, 2, 3])
+@pytest.mark.parametrize("end", [4, 5, 6, 7])
+def test_interval_range_basic(start, end, closed):
+    pindex = pd.interval_range(start=start, end=end, closed=closed)
+    gindex = cudf.interval_range(start=start, end=end, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("start_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("end_t", INTERVAL_BOUNDARY_TYPES)
+def test_interval_range_dtype_basic(start_t, end_t):
+    start, end = start_t(24), end_t(42)
+    start_val = start.value if isinstance(start, cudf.Scalar) else start
+    end_val = end.value if isinstance(end, cudf.Scalar) else end
+    pindex = pd.interval_range(start=start_val, end=end_val, closed="left")
+    gindex = cudf.interval_range(start=start, end=end, closed="left")
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("start", [0])
+@pytest.mark.parametrize("end", [0])
+def test_interval_range_empty(start, end, closed):
+    pindex = pd.interval_range(start=start, end=end, closed=closed)
+    gindex = cudf.interval_range(start=start, end=end, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("freq", [1, 2, 3])
+@pytest.mark.parametrize("start", [0, 1, 2, 3, 5])
+@pytest.mark.parametrize("end", [6, 8, 10, 43, 70])
+def test_interval_range_freq_basic(start, end, freq, closed):
+    pindex = pd.interval_range(start=start, end=end, freq=freq, closed=closed)
+    gindex = cudf.interval_range(
+        start=start, end=end, freq=freq, closed=closed
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("start_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("end_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("freq_t", INTERVAL_BOUNDARY_TYPES)
+def test_interval_range_freq_basic_dtype(start_t, end_t, freq_t):
+    start, end, freq = start_t(5), end_t(70), freq_t(3)
+    start_val = start.value if isinstance(start, cudf.Scalar) else start
+    end_val = end.value if isinstance(end, cudf.Scalar) else end
+    freq_val = freq.value if isinstance(freq, cudf.Scalar) else freq
+    pindex = pd.interval_range(
+        start=start_val, end=end_val, freq=freq_val, closed="left"
+    )
+    gindex = cudf.interval_range(
+        start=start, end=end, freq=freq, closed="left"
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("periods", [1, 1.0, 2, 2.0, 3.0, 3])
+@pytest.mark.parametrize("start", [0, 0.0, 1.0, 1, 2, 2.0, 3.0, 3])
+@pytest.mark.parametrize("end", [4, 4.0, 5.0, 5, 6, 6.0, 7.0, 7])
+def test_interval_range_periods_basic(start, end, periods, closed):
+    pindex = pd.interval_range(
+        start=start, end=end, periods=periods, closed=closed
+    )
+    gindex = cudf.interval_range(
+        start=start, end=end, periods=periods, closed=closed
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("start_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("end_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("periods_t", INTERVAL_BOUNDARY_TYPES)
+def test_interval_range_periods_basic_dtype(start_t, end_t, periods_t):
+    start, end, periods = start_t(0), end_t(4), periods_t(1.0)
+    start_val = start.value if isinstance(start, cudf.Scalar) else start
+    end_val = end.value if isinstance(end, cudf.Scalar) else end
+    periods_val = (
+        periods.value if isinstance(periods, cudf.Scalar) else periods
+    )
+    pindex = pd.interval_range(
+        start=start_val, end=end_val, periods=periods_val, closed="left"
+    )
+    gindex = cudf.interval_range(
+        start=start, end=end, periods=periods, closed="left"
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("periods", [1, 2, 3])
+@pytest.mark.parametrize("freq", [1, 2, 3, 4])
+@pytest.mark.parametrize("end", [4, 8, 9, 10])
+def test_interval_range_periods_freq_end(end, freq, periods, closed):
+    pindex = pd.interval_range(
+        end=end, freq=freq, periods=periods, closed=closed
+    )
+    gindex = cudf.interval_range(
+        end=end, freq=freq, periods=periods, closed=closed
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("periods_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("freq_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("end_t", INTERVAL_BOUNDARY_TYPES)
+def test_interval_range_periods_freq_end_dtype(periods_t, freq_t, end_t):
+    periods, freq, end = periods_t(2), freq_t(3), end_t(10)
+    freq_val = freq.value if isinstance(freq, cudf.Scalar) else freq
+    end_val = end.value if isinstance(end, cudf.Scalar) else end
+    periods_val = (
+        periods.value if isinstance(periods, cudf.Scalar) else periods
+    )
+    pindex = pd.interval_range(
+        end=end_val, freq=freq_val, periods=periods_val, closed="left"
+    )
+    gindex = cudf.interval_range(
+        end=end, freq=freq, periods=periods, closed="left"
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("periods", [1, 2, 3])
+@pytest.mark.parametrize("freq", [1, 2, 3, 4])
+@pytest.mark.parametrize("start", [1, 4, 9, 12])
+def test_interval_range_periods_freq_start(start, freq, periods, closed):
+    pindex = pd.interval_range(
+        start=start, freq=freq, periods=periods, closed=closed
+    )
+    gindex = cudf.interval_range(
+        start=start, freq=freq, periods=periods, closed=closed
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("periods_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("freq_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("start_t", INTERVAL_BOUNDARY_TYPES)
+def test_interval_range_periods_freq_start_dtype(periods_t, freq_t, start_t):
+    periods, freq, start = periods_t(2), freq_t(3), start_t(9)
+    freq_val = freq.value if isinstance(freq, cudf.Scalar) else freq
+    start_val = start.value if isinstance(start, cudf.Scalar) else start
+    periods_val = (
+        periods.value if isinstance(periods, cudf.Scalar) else periods
+    )
+    pindex = pd.interval_range(
+        start=start_val, freq=freq_val, periods=periods_val, closed="left"
+    )
+    gindex = cudf.interval_range(
+        start=start, freq=freq, periods=periods, closed="left"
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        ([pd.Interval(30, 50)]),
+        ([pd.Interval(0, 3), pd.Interval(1, 7)]),
+        ([pd.Interval(0.2, 60.3), pd.Interval(1, 7), pd.Interval(0, 0)]),
+        ([]),
+    ],
+)
+def test_interval_index_basic(data, closed):
+    pindex = pd.IntervalIndex(data, closed=closed)
+    gindex = IntervalIndex(data, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])
+def test_interval_index_empty(closed):
+    pindex = pd.IntervalIndex([], closed=closed)
+    gindex = IntervalIndex([], closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        ([pd.Interval(1, 6), pd.Interval(1, 10), pd.Interval(1, 3)]),
+        (
+            [
+                pd.Interval(3.5, 6.0),
+                pd.Interval(1.0, 7.0),
+                pd.Interval(0.0, 10.0),
+            ]
+        ),
+        (
+            [
+                pd.Interval(50, 100, closed="left"),
+                pd.Interval(1.0, 7.0, closed="left"),
+                pd.Interval(16, 322, closed="left"),
+            ]
+        ),
+        (
+            [
+                pd.Interval(50, 100, closed="right"),
+                pd.Interval(1.0, 7.0, closed="right"),
+                pd.Interval(16, 322, closed="right"),
+            ]
+        ),
+    ],
+)
+def test_interval_index_many_params(data, closed):
+
+    pindex = pd.IntervalIndex(data, closed=closed)
+    gindex = IntervalIndex(data, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+def test_interval_index_from_breaks(closed):
+    breaks = [0, 3, 6, 10]
+    pindex = pd.IntervalIndex.from_breaks(breaks, closed=closed)
+    gindex = IntervalIndex.from_breaks(breaks, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
 @pytest.mark.parametrize("n", [0, 2, 5, 10, None])
 @pytest.mark.parametrize("frac", [0.1, 0.5, 1, 2, None])
 @pytest.mark.parametrize("replace", [True, False])
@@ -1548,7 +1796,7 @@ def test_index_tolist(data, dtype):
         TypeError,
         match=re.escape(
             r"cuDF does not support conversion to host memory "
-            r"via `tolist()` method. Consider using "
+            r"via the `tolist()` method. Consider using "
             r"`.to_arrow().to_pylist()` to construct a Python list."
         ),
     ):
@@ -1807,3 +2055,264 @@ def test_index_set_names_error(idx, level, names):
         lfunc_args_and_kwargs=([], {"names": names, "level": level}),
         rfunc_args_and_kwargs=([], {"names": names, "level": level}),
     )
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [pd.Index([1, 3, 6]), pd.Index([6, 1, 3])],  # monotonic  # non-monotonic
+)
+@pytest.mark.parametrize("key", list(range(0, 8)))
+@pytest.mark.parametrize("method", [None, "ffill", "bfill", "nearest"])
+def test_get_loc_single_unique_numeric(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if (
+        (key not in pi and method is None)
+        # `method` only applicable to monotonic index
+        or (not pi.is_monotonic and method is not None)
+        # Get key before the first element is KeyError
+        or (key == 0 and method in "ffill")
+        # Get key after the last element is KeyError
+        or (key == 7 and method in "bfill")
+    ):
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.Index([1, 3, 3, 6]),  # monotonic
+        pd.Index([6, 1, 3, 3]),  # non-monotonic
+    ],
+)
+@pytest.mark.parametrize("key", [0, 3, 6, 7])
+@pytest.mark.parametrize("method", [None])
+def test_get_loc_single_duplicate_numeric(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx", [pd.Index(["b", "f", "m", "q"]), pd.Index(["m", "f", "b", "q"])]
+)
+@pytest.mark.parametrize("key", ["a", "f", "n", "z"])
+@pytest.mark.parametrize("method", [None, "ffill", "bfill"])
+def test_get_loc_single_unique_string(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if (
+        (key not in pi and method is None)
+        # `method` only applicable to monotonic index
+        or (not pi.is_monotonic and method is not None)
+        # Get key before the first element is KeyError
+        or (key == "a" and method == "ffill")
+        # Get key after the last element is KeyError
+        or (key == "z" and method == "bfill")
+    ):
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx", [pd.Index(["b", "m", "m", "q"]), pd.Index(["m", "f", "m", "q"])]
+)
+@pytest.mark.parametrize("key", ["a", "f", "n", "z"])
+@pytest.mark.parametrize("method", [None])
+def test_get_loc_single_duplicate_string(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.MultiIndex.from_tuples(
+            [(1, 1, 1), (1, 1, 2), (1, 2, 1), (1, 2, 3), (2, 1, 1), (2, 2, 1)]
+        ),
+        pd.MultiIndex.from_tuples(
+            [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 2), (2, 2, 1), (1, 1, 1)]
+        ),
+        pd.MultiIndex.from_tuples(
+            [(1, 1, 1), (1, 1, 2), (1, 1, 2), (1, 2, 3), (2, 1, 1), (2, 2, 1)]
+        ),
+    ],
+)
+@pytest.mark.parametrize("key", [1, (1, 2), (1, 2, 3), (2, 1, 1), (9, 9, 9)])
+@pytest.mark.parametrize("method", [None])
+def test_get_loc_multi_numeric(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.MultiIndex.from_tuples(
+            [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 1), (1, 1, 1), (2, 2, 1)]
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "key, result",
+    [
+        (1, slice(1, 5, 1)),  # deviates
+        ((1, 2), slice(1, 3, 1)),
+        ((1, 2, 3), slice(1, 2, None)),
+        ((2, 1, 1), slice(0, 1, None)),
+        ((9, 9, 9), None),
+    ],
+)
+@pytest.mark.parametrize("method", [None])
+def test_get_loc_multi_numeric_deviate(idx, key, result, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = result
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "a"),
+                ("a", "a", "b"),
+                ("a", "b", "a"),
+                ("a", "b", "c"),
+                ("b", "a", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "b"),
+                ("a", "b", "c"),
+                ("b", "a", "a"),
+                ("a", "a", "a"),
+                ("a", "b", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "a"),
+                ("a", "b", "c"),
+                ("b", "a", "a"),
+                ("a", "a", "b"),
+                ("a", "b", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "a"),
+                ("a", "a", "b"),
+                ("a", "a", "b"),
+                ("a", "b", "c"),
+                ("b", "a", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "b"),
+                ("b", "a", "a"),
+                ("b", "a", "a"),
+                ("a", "a", "a"),
+                ("a", "b", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "key", ["a", ("a", "a"), ("a", "b", "c"), ("b", "c", "a"), ("z", "z", "z")]
+)
+@pytest.mark.parametrize("method", [None])
+def test_get_loc_multi_string(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)

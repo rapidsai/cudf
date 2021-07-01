@@ -20,11 +20,13 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <strings/utilities.cuh>
+
+#include <strings/utf8.cuh>
 #include <strings/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -173,8 +175,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // this utility calls filterer to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(
-    filterer, strings_count, strings.null_count(), stream, mr);
+  auto children = cudf::strings::detail::make_strings_children(filterer, strings_count, stream, mr);
 
   // return new strings column
   return make_strings_column(strings_count,
@@ -187,6 +188,21 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 }
 
 }  // namespace detail
+
+string_character_types operator|(string_character_types lhs, string_character_types rhs)
+{
+  return static_cast<string_character_types>(
+    static_cast<std::underlying_type_t<string_character_types>>(lhs) |
+    static_cast<std::underlying_type_t<string_character_types>>(rhs));
+}
+
+string_character_types& operator|=(string_character_types& lhs, string_character_types rhs)
+{
+  lhs = static_cast<string_character_types>(
+    static_cast<std::underlying_type_t<string_character_types>>(lhs) |
+    static_cast<std::underlying_type_t<string_character_types>>(rhs));
+  return lhs;
+}
 
 // external API
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -404,7 +404,7 @@ static std::unique_ptr<cudf::column> fixed_width_convert_to_rows(
       input_data->data(), input_nm->data(), data->mutable_view().data<int8_t>());
 
   return cudf::make_lists_column(num_rows, std::move(offsets), std::move(data), 0,
-                                 rmm::device_buffer{0, 0, mr}, stream, mr);
+                                 rmm::device_buffer{}, stream, mr);
 }
 
 static cudf::data_type get_data_type(const cudf::column_view &v) {
@@ -494,11 +494,11 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
 
     using ScalarType = cudf::scalar_type_t<cudf::size_type>;
     auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32), stream.value());
-    zero->set_valid(true, stream);
+    zero->set_valid_async(true, stream);
     static_cast<ScalarType *>(zero.get())->set_value(0, stream);
 
     auto step = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32), stream.value());
-    step->set_valid(true, stream);
+    step->set_valid_async(true, stream);
     static_cast<ScalarType *>(step.get())
         ->set_value(static_cast<cudf::size_type>(size_per_row), stream);
 

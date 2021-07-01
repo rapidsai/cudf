@@ -17,11 +17,15 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
+#include <cudf/detail/valid_if.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 
 #include <mutex>
@@ -85,6 +89,195 @@ std::unique_ptr<cudf::column> child_offsets_from_string_iterator(
   auto transformer = [] __device__(string_view v) { return v.size_bytes(); };
   auto begin       = thrust::make_transform_iterator(strings_begin, transformer);
   return make_offsets_child_column(begin, begin + num_strings, stream, mr);
+}
+
+/**
+ * @brief Copies input string data into a buffer and increments the pointer by the number of bytes
+ * copied.
+ *
+ * @param buffer Device buffer to copy to.
+ * @param input Data to copy from.
+ * @param bytes Number of bytes to copy.
+ * @return Pointer to the end of the output buffer after the copy.
+ */
+__device__ inline char* copy_and_increment(char* buffer, const char* input, size_type bytes)
+{
+  memcpy(buffer, input, bytes);
+  return buffer + bytes;
+}
+
+/**
+ * @brief Copies input string data into a buffer and increments the pointer by the number of bytes
+ * copied.
+ *
+ * @param buffer Device buffer to copy to.
+ * @param d_string String to copy.
+ * @return Pointer to the end of the output buffer after the copy.
+ */
+__device__ inline char* copy_string(char* buffer, const string_view& d_string)
+{
+  return copy_and_increment(buffer, d_string.data(), d_string.size_bytes());
+}
+
+/**
+ * @brief Creates child offsets and chars columns by applying the template function that
+ * can be used for computing the output size of each string as well as create the output.
+ *
+ * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
+ *         It must also have members d_offsets and d_chars which are set to
+ *         memory containing the offsets and chars columns during write.
+ *
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string.
+ *        After that, the d_offsets and d_chars are set and this is called again to fill in the
+ *        chars memory.
+ * @param exec_size Number of rows for executing the `size_and_exec_fn` function.
+ * @param strings_count Number of strings.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return offsets child column and chars child column for a strings column
+ */
+template <typename SizeAndExecuteFunction>
+auto make_strings_children(
+  SizeAndExecuteFunction size_and_exec_fn,
+  size_type exec_size,
+  size_type strings_count,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  auto offsets_column = make_numeric_column(
+    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_view          = offsets_column->mutable_view();
+  auto d_offsets             = offsets_view.template data<int32_t>();
+  size_and_exec_fn.d_offsets = d_offsets;
+
+  // This is called twice -- once for offsets and once for chars.
+  // Reducing the number of places size_and_exec_fn is inlined speeds up compile time.
+  auto for_each_fn = [exec_size, stream](SizeAndExecuteFunction& size_and_exec_fn) {
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       exec_size,
+                       size_and_exec_fn);
+  };
+
+  // Compute the offsets values
+  for_each_fn(size_and_exec_fn);
+  thrust::exclusive_scan(
+    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+
+  // Now build the chars column
+  auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
+  std::unique_ptr<column> chars_column = create_chars_child_column(bytes, stream, mr);
+
+  // Execute the function fn again to fill the chars column.
+  // Note that if the output chars column has zero size, the function fn should not be called to
+  // avoid accidentally overwriting the offsets.
+  if (bytes > 0) {
+    size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>();
+    for_each_fn(size_and_exec_fn);
+  }
+
+  return std::make_pair(std::move(offsets_column), std::move(chars_column));
+}
+
+/**
+ * @brief Creates child offsets and chars columns by applying the template function that
+ * can be used for computing the output size of each string as well as create the output.
+ *
+ * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
+ *         It must also have members d_offsets and d_chars which are set to
+ *         memory containing the offsets and chars columns during write.
+ *
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string.
+ *        After that, the d_offsets and d_chars are set and this is called again to fill in the
+ *        chars memory.
+ * @param strings_count Number of strings.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return offsets child column and chars child column for a strings column
+ */
+template <typename SizeAndExecuteFunction>
+auto make_strings_children(
+  SizeAndExecuteFunction size_and_exec_fn,
+  size_type strings_count,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  return make_strings_children(size_and_exec_fn, strings_count, strings_count, stream, mr);
+}
+
+/**
+ * @brief Creates child offsets, chars columns and null mask, null count of a strings column by
+ * applying the template function that can be used for computing the output size of each string as
+ * well as create the output.
+ *
+ * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
+ *         It must have members `d_offsets`, `d_chars`, and `d_validities` which are set to memory
+ *         containing the offsets column, chars column and string validities during write.
+ *
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string, which is
+ *                         written into the `d_offsets` array. After that, `d_chars` is set and this
+ *                         is called again to fill in the chars memory. The `d_validities` array may
+ *                         be modified to set the value `0` for the corresponding rows that contain
+ *                         null string elements.
+ * @param exec_size Range for executing the function `size_and_exec_fn`.
+ * @param strings_count Number of strings.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return offsets child column, chars child column, null_mask, and null_count for a strings column.
+ */
+template <typename SizeAndExecuteFunction>
+std::tuple<std::unique_ptr<column>, std::unique_ptr<column>, rmm::device_buffer, size_type>
+make_strings_children_with_null_mask(
+  SizeAndExecuteFunction size_and_exec_fn,
+  size_type exec_size,
+  size_type strings_count,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  auto offsets_column = make_numeric_column(
+    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_view          = offsets_column->mutable_view();
+  auto d_offsets             = offsets_view.template data<int32_t>();
+  size_and_exec_fn.d_offsets = d_offsets;
+
+  auto validities               = rmm::device_uvector<int8_t>(strings_count, stream);
+  size_and_exec_fn.d_validities = validities.begin();
+
+  // This is called twice: once for offsets and validities, and once for chars
+  auto for_each_fn = [exec_size, stream](SizeAndExecuteFunction& size_and_exec_fn) {
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       exec_size,
+                       size_and_exec_fn);
+  };
+
+  // Compute the string sizes (storing in `d_offsets`) and string validities
+  for_each_fn(size_and_exec_fn);
+
+  // Compute the offsets from string sizes
+  thrust::exclusive_scan(
+    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+
+  // Now build the chars column
+  auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
+
+  // Execute the function fn again to fill the chars column.
+  // Note that if the output chars column has zero size, the function fn should not be called to
+  // avoid accidentally overwriting the offsets.
+  if (bytes > 0) {
+    size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>();
+    for_each_fn(size_and_exec_fn);
+  }
+
+  // Finally compute null mask and null count from the validities array
+  auto [null_mask, null_count] = cudf::detail::valid_if(
+    validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr);
+
+  return std::make_tuple(std::move(offsets_column),
+                         std::move(chars_column),
+                         null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
+                         null_count);
 }
 
 // This template is a thin wrapper around per-context singleton objects.

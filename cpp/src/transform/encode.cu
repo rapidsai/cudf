@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@
 #include <cudf/utilities/bit.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <numeric>
@@ -44,44 +44,13 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
   // side effects of this function we are now dependent on:
   // - resulting column elements are sorted ascending
   // - nulls are sorted to the beginning
-  auto keys_table = cudf::detail::drop_duplicates(
-    input_table, drop_keys, duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL, stream, mr);
-
-  if (cudf::has_nulls(keys_table->view())) {
-    // Rows with nulls appear at the top of `keys_table`, but we want them to appear at
-    // the bottom. Below, we rearrange the rows so that nulls appear at the bottom:
-    // TODO: we should be able to get rid of this logic once
-    // https://github.com/rapidsai/cudf/issues/6144 is resolved
-
-    auto num_rows = keys_table->num_rows();
-    auto mask     = cudf::detail::bitmask_and(keys_table->view(), stream);
-    auto num_rows_with_nulls =
-      cudf::count_unset_bits(reinterpret_cast<bitmask_type*>(mask.data()), 0, num_rows);
-
-    rmm::device_vector<cudf::size_type> gather_map(num_rows);
-
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<cudf::size_type>(0),
-                      thrust::make_counting_iterator<cudf::size_type>(num_rows),
-                      gather_map.begin(),
-                      [num_rows, num_rows_with_nulls] __device__(cudf::size_type i) {
-                        if (i < (num_rows - num_rows_with_nulls)) {
-                          return num_rows_with_nulls + i;
-                        } else {
-                          return num_rows - i - 1;
-                        }
-                      });
-
-    cudf::column_view gather_map_column(
-      cudf::data_type{type_id::INT32}, num_rows, thrust::raw_pointer_cast(gather_map.data()));
-
-    keys_table = cudf::detail::gather(keys_table->view(),
-                                      gather_map_column,
-                                      cudf::out_of_bounds_policy::DONT_CHECK,
-                                      cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                      stream,
-                                      mr);
-  }
+  auto keys_table = cudf::detail::drop_duplicates(input_table,
+                                                  drop_keys,
+                                                  duplicate_keep_option::KEEP_FIRST,
+                                                  null_equality::EQUAL,
+                                                  null_order::AFTER,
+                                                  stream,
+                                                  mr);
 
   auto indices_column =
     cudf::detail::lower_bound(keys_table->view(),

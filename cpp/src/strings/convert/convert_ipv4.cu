@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_ipv4.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -163,7 +163,7 @@ std::unique_ptr<column> integers_to_ipv4(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = integers.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   CUDF_EXPECTS(integers.type().id() == type_id::INT64, "Input column must be type_id::INT64 type");
 
@@ -190,10 +190,10 @@ std::unique_ptr<column> integers_to_ipv4(
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
-  size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-  auto chars_column =
-    create_chars_child_column(strings_count, integers.null_count(), bytes, stream, mr);
-  auto d_chars = chars_column->mutable_view().data<char>();
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
+  auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,

@@ -20,6 +20,7 @@
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/types.hpp>
 #include <hash/hash_constants.hpp>
 
 using hash_value_type = uint32_t;
@@ -90,21 +91,21 @@ void CUDA_DEVICE_CALLABLE md5_process(TKey const& key, md5_intermediate_data* ha
   // 64 bytes for the number of byt es processed in a given step
   constexpr int md5_chunk_size = 64;
   if (hash_state->buffer_length + len < md5_chunk_size) {
-    thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
+    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
     hash_state->buffer_length += len;
   } else {
     uint32_t copylen = md5_chunk_size - hash_state->buffer_length;
 
-    thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
+    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
     md5_hash_step(hash_state);
 
     while (len > md5_chunk_size + copylen) {
-      thrust::copy_n(thrust::seq, data + copylen, md5_chunk_size, hash_state->buffer);
+      std::memcpy(hash_state->buffer, data + copylen, md5_chunk_size);
       md5_hash_step(hash_state);
       copylen += md5_chunk_size;
     }
 
-    thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
+    std::memcpy(hash_state->buffer, data + copylen, len - copylen);
     hash_state->buffer_length = len - copylen;
   }
 }
@@ -145,7 +146,7 @@ void CUDA_DEVICE_CALLABLE uint32ToLowercaseHexString(uint32_t num, char* destina
 
   x |= 0x3030303030303030;
   x += offsets;
-  thrust::copy_n(thrust::seq, reinterpret_cast<uint8_t*>(&x), 8, destination);
+  std::memcpy(destination, reinterpret_cast<uint8_t*>(&x), 8);
 }
 
 struct MD5ListHasher {
@@ -210,20 +211,20 @@ MD5ListHasher::operator()<string_view>(column_device_view data_col,
       hash_state->message_length += len;
 
       if (hash_state->buffer_length + len < 64) {
-        thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
+        std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
         hash_state->buffer_length += len;
       } else {
         uint32_t copylen = 64 - hash_state->buffer_length;
-        thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
+        std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
         md5_hash_step(hash_state);
 
         while (len > 64 + copylen) {
-          thrust::copy_n(thrust::seq, data + copylen, 64, hash_state->buffer);
+          std::memcpy(hash_state->buffer, data + copylen, 64);
           md5_hash_step(hash_state);
           copylen += 64;
         }
 
-        thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
+        std::memcpy(hash_state->buffer, data + copylen, len - copylen);
         hash_state->buffer_length = len - copylen;
       }
     }
@@ -231,6 +232,9 @@ MD5ListHasher::operator()<string_view>(column_device_view data_col,
 }
 
 struct MD5Hash {
+  MD5Hash() = default;
+  constexpr MD5Hash(uint32_t seed) : m_seed(seed) {}
+
   void __device__ finalize(md5_intermediate_data* hash_state, char* result_location) const
   {
     auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
@@ -258,10 +262,9 @@ struct MD5Hash {
       thrust::fill_n(thrust::seq, hash_state->buffer, md5_chunk_size - message_length_size, 0x00);
     }
 
-    thrust::copy_n(thrust::seq,
-                   reinterpret_cast<uint8_t const*>(&full_length),
-                   message_length_size,
-                   hash_state->buffer + md5_chunk_size - message_length_size);
+    std::memcpy(hash_state->buffer + md5_chunk_size - message_length_size,
+                reinterpret_cast<uint8_t const*>(&full_length),
+                message_length_size);
     md5_hash_step(hash_state);
 
 #pragma unroll
@@ -302,6 +305,9 @@ struct MD5Hash {
   {
     md5_process(col.element<T>(row_index), hash_state);
   }
+
+ private:
+  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
 template <>
@@ -316,20 +322,20 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<string_view>(column_device_view co
   hash_state->message_length += len;
 
   if (hash_state->buffer_length + len < 64) {
-    thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
+    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
     hash_state->buffer_length += len;
   } else {
     uint32_t copylen = 64 - hash_state->buffer_length;
-    thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
+    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
     md5_hash_step(hash_state);
 
     while (len > 64 + copylen) {
-      thrust::copy_n(thrust::seq, data + copylen, 64, hash_state->buffer);
+      std::memcpy(hash_state->buffer, data + copylen, 64);
       md5_hash_step(hash_state);
       copylen += 64;
     }
 
-    thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
+    std::memcpy(hash_state->buffer, data + copylen, len - copylen);
     hash_state->buffer_length = len - copylen;
   }
 }
@@ -372,7 +378,7 @@ struct MurmurHash3_32 {
   using result_type   = hash_value_type;
 
   MurmurHash3_32() = default;
-  CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
+  constexpr MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
   CUDA_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
   {
@@ -469,7 +475,7 @@ struct MurmurHash3_32 {
   }
 
  private:
-  uint32_t m_seed{0};
+  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
 template <>
@@ -542,13 +548,43 @@ hash_value_type CUDA_DEVICE_CALLABLE MurmurHash3_32<double>::operator()(double c
   return this->compute_floating_point(key);
 }
 
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+MurmurHash3_32<numeric::decimal32>::operator()(numeric::decimal32 const& key) const
+{
+  return this->compute(key.value());
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+MurmurHash3_32<numeric::decimal64>::operator()(numeric::decimal64 const& key) const
+{
+  return this->compute(key.value());
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+MurmurHash3_32<cudf::list_view>::operator()(cudf::list_view const& key) const
+{
+  cudf_assert(false && "List column hashing is not supported");
+  return 0;
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+MurmurHash3_32<cudf::struct_view>::operator()(cudf::struct_view const& key) const
+{
+  cudf_assert(false && "Direct hashing of struct_view is not supported");
+  return 0;
+}
+
 template <typename Key>
 struct SparkMurmurHash3_32 {
   using argument_type = Key;
   using result_type   = hash_value_type;
 
   SparkMurmurHash3_32() = default;
-  CUDA_HOST_DEVICE_CALLABLE SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
+  constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
   CUDA_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
   {
@@ -620,7 +656,7 @@ struct SparkMurmurHash3_32 {
   }
 
  private:
-  uint32_t m_seed{0};
+  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
 template <>
@@ -669,6 +705,22 @@ hash_value_type CUDA_DEVICE_CALLABLE
 SparkMurmurHash3_32<numeric::decimal64>::operator()(numeric::decimal64 const& key) const
 {
   return this->compute<uint64_t>(key.value());
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<cudf::list_view>::operator()(cudf::list_view const& key) const
+{
+  cudf_assert(false && "List column hashing is not supported");
+  return 0;
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<cudf::struct_view>::operator()(cudf::struct_view const& key) const
+{
+  cudf_assert(false && "Direct hashing of struct_view is not supported");
+  return 0;
 }
 
 /**
@@ -740,6 +792,8 @@ SparkMurmurHash3_32<double>::operator()(double const& key) const
 template <typename Key>
 struct IdentityHash {
   using result_type = hash_value_type;
+  IdentityHash()    = default;
+  constexpr IdentityHash(uint32_t seed) : m_seed(seed) {}
 
   /**
    * @brief  Combines two hash values into a new single hash value. Called
@@ -752,7 +806,7 @@ struct IdentityHash {
    *
    * @returns A hash value that intelligently combines the lhs and rhs hash values
    */
-  CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs) const
+  constexpr result_type hash_combine(result_type lhs, result_type rhs) const
   {
     result_type combined{lhs};
 
@@ -762,19 +816,22 @@ struct IdentityHash {
   }
 
   template <typename return_type = result_type>
-  CUDA_HOST_DEVICE_CALLABLE std::enable_if_t<!std::is_arithmetic<Key>::value, return_type>
-  operator()(Key const& key) const
+  constexpr std::enable_if_t<!std::is_arithmetic<Key>::value, return_type> operator()(
+    Key const& key) const
   {
     cudf_assert(false && "IdentityHash does not support this data type");
     return 0;
   }
 
   template <typename return_type = result_type>
-  CUDA_HOST_DEVICE_CALLABLE std::enable_if_t<std::is_arithmetic<Key>::value, return_type>
-  operator()(Key const& key) const
+  constexpr std::enable_if_t<std::is_arithmetic<Key>::value, return_type> operator()(
+    Key const& key) const
   {
     return static_cast<result_type>(key);
   }
+
+ private:
+  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
 template <typename Key>

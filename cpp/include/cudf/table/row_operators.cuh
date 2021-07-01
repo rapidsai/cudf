@@ -428,6 +428,7 @@ template <template <typename> class hash_function, bool has_nulls = true>
 class element_hasher_with_seed {
  public:
   element_hasher_with_seed() = default;
+  __device__ element_hasher_with_seed(uint32_t seed) : _seed{seed} {}
   __device__ element_hasher_with_seed(uint32_t seed, hash_value_type null_hash)
     : _seed{seed}, _null_hash(null_hash)
   {
@@ -448,7 +449,7 @@ class element_hasher_with_seed {
   }
 
  private:
-  uint32_t _seed{0};
+  uint32_t _seed{DEFAULT_HASH_SEED};
   hash_value_type _null_hash{std::numeric_limits<hash_value_type>::max()};
 };
 
@@ -463,6 +464,7 @@ class row_hasher {
  public:
   row_hasher() = delete;
   row_hasher(table_device_view t) : _table{t} {}
+  row_hasher(table_device_view t, uint32_t seed) : _table{t}, _seed(seed) {}
 
   __device__ auto operator()(size_type row_index) const
   {
@@ -470,25 +472,38 @@ class row_hasher {
       return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
     };
 
+    // Hash the first column w/ the seed
+    auto const initial_hash =
+      hash_combiner(hash_value_type{0},
+                    type_dispatcher<dispatch_storage_type>(
+                      _table.column(0).type(),
+                      element_hasher_with_seed<hash_function, has_nulls>{_seed},
+                      _table.column(0),
+                      row_index));
+
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
-      return cudf::type_dispatcher(_table.column(column_index).type(),
-                                   element_hasher<hash_function, has_nulls>{},
-                                   _table.column(column_index),
-                                   row_index);
+      return cudf::type_dispatcher<dispatch_storage_type>(
+        _table.column(column_index).type(),
+        element_hasher<hash_function, has_nulls>{},
+        _table.column(column_index),
+        row_index);
     };
 
     // Hash each element and combine all the hash values together
-    return thrust::transform_reduce(thrust::seq,
-                                    thrust::make_counting_iterator(0),
-                                    thrust::make_counting_iterator(_table.num_columns()),
-                                    hasher,
-                                    hash_value_type{0},
-                                    hash_combiner);
+    return thrust::transform_reduce(
+      thrust::seq,
+      // note that this starts at 1 and not 0 now since we already hashed the first column
+      thrust::make_counting_iterator(1),
+      thrust::make_counting_iterator(_table.num_columns()),
+      hasher,
+      initial_hash,
+      hash_combiner);
   }
 
  private:
   table_device_view _table;
+  uint32_t _seed{DEFAULT_HASH_SEED};
 };
 
 /**
@@ -515,10 +530,11 @@ class row_hasher_initial_values {
 
     // Hashes an element in a column and combines with an initial value
     auto hasher = [=](size_type column_index) {
-      auto hash_value = cudf::type_dispatcher(_table.column(column_index).type(),
-                                              element_hasher<hash_function, has_nulls>{},
-                                              _table.column(column_index),
-                                              row_index);
+      auto hash_value =
+        cudf::type_dispatcher<dispatch_storage_type>(_table.column(column_index).type(),
+                                                     element_hasher<hash_function, has_nulls>{},
+                                                     _table.column(column_index),
+                                                     row_index);
 
       return hash_combiner(_initial_hash[column_index], hash_value);
     };

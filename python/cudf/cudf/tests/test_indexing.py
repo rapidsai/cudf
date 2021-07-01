@@ -9,8 +9,12 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
-from cudf.tests import utils
-from cudf.tests.utils import INTEGER_TYPES, assert_eq, assert_exceptions_equal
+from cudf.testing import _utils as utils
+from cudf.testing._utils import (
+    INTEGER_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 index_dtypes = INTEGER_TYPES
 
@@ -102,13 +106,16 @@ def pdf_gdf_multi():
 def test_series_indexing(i1, i2, i3):
     a1 = np.arange(20)
     series = cudf.Series(a1)
+
     # Indexing
     sr1 = series.iloc[i1]
     assert sr1.null_count == 0
     np.testing.assert_equal(sr1.to_array(), a1[:12])
+
     sr2 = sr1.iloc[i2]
     assert sr2.null_count == 0
     np.testing.assert_equal(sr2.to_array(), a1[3:12])
+
     # Index with stride
     sr3 = sr2.iloc[i3]
     assert sr3.null_count == 0
@@ -121,6 +128,44 @@ def test_series_indexing(i1, i2, i3):
     if isinstance(i1, np.ndarray) and i1.dtype in index_dtypes:
         for i in i1:  # numpy integers
             assert series[i] == a1[i]
+
+
+@pytest.mark.parametrize(
+    "arg",
+    [
+        1,
+        -1,
+        "b",
+        np.int32(1),
+        np.uint32(1),
+        np.int8(1),
+        np.uint8(1),
+        np.int16(1),
+        np.uint16(1),
+        np.int64(1),
+        np.uint64(1),
+    ],
+)
+def test_series_get_item_iloc_defer(arg):
+    # Indexing for non-numeric dtype Index
+    ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
+    gs = cudf.from_pandas(ps)
+
+    expect = ps[arg]
+    got = gs[arg]
+
+    assert_eq(expect, got)
+
+
+def test_series_iloc_defer_cudf_scalar():
+    ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
+    gs = cudf.from_pandas(ps)
+
+    for t in index_dtypes:
+        arg = cudf.Scalar(1, dtype=t)
+        got = gs[arg]
+        expect = 2
+        assert_eq(expect, got)
 
 
 def test_series_indexing_large_size():
@@ -620,7 +665,6 @@ def test_dataframe_iloc(nelem):
     assert_eq(gdf.iloc[np.array([0])], pdf.loc[np.array([0])])
 
 
-@pytest.mark.xfail(raises=AssertionError, reason="Series.index are different")
 def test_dataframe_iloc_tuple():
     gdf = cudf.DataFrame()
     nelem = 123
@@ -633,11 +677,8 @@ def test_dataframe_iloc_tuple():
     pdf["a"] = ha
     pdf["b"] = hb
 
-    # We don't support passing the column names into the index quite yet
-    got = gdf.iloc[1, [1]]
-    expect = pdf.iloc[1, [1]]
-
-    assert_eq(got, expect)
+    assert_eq(gdf.iloc[1, [1]], pdf.iloc[1, [1]], check_dtype=False)
+    assert_eq(gdf.iloc[:, -1], pdf.iloc[:, -1])
 
 
 @pytest.mark.xfail(
@@ -1095,8 +1136,17 @@ def test_dataframe_setitem_iloc(key, value, pdf_gdf):
         (("one", "a"), 5),
         ((slice(None), "a"), 5),
         ((slice(None), "a"), range(3)),
+        ((slice(None), "a"), [3, 2, 1]),
         ((slice(None, "two"), "a"), range(2)),
+        ((slice(None, "two"), "a"), [4, 5]),
         ((["one", "two"], "a"), 5),
+        (("one", "c"), 5),
+        ((["one", "two"], "c"), 5),
+        ((slice(None), "c"), 5),
+        ((slice(None), "c"), range(3)),
+        ((slice(None), "c"), [3, 2, 1]),
+        ((slice(None, "two"), "c"), range(2)),
+        ((slice(None, "two"), "c"), [4, 5]),
     ],
 )
 def test_dataframe_setitem_loc(key, value, pdf_gdf):
@@ -1104,6 +1154,21 @@ def test_dataframe_setitem_loc(key, value, pdf_gdf):
     pdf.loc[key] = value
     gdf.loc[key] = value
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        (("one", "a"), 5),
+        ((slice(None), "a"), range(3)),
+        ((slice(None), "a"), [3, 2, 1]),
+    ],
+)
+def test_dataframe_setitem_loc_empty_df(key, value):
+    pdf, gdf = pd.DataFrame(), cudf.DataFrame()
+    pdf.loc[key] = value
+    gdf.loc[key] = value
+    assert_eq(pdf, gdf, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -1340,6 +1405,10 @@ def test_iloc_with_lists(data, key):
     gsr = cudf.Series(data)
     assert_eq(psr.iloc[key], gsr.iloc[key])
 
+    pdf = pd.DataFrame({"a": data, "b": data})
+    gdf = cudf.DataFrame({"a": data, "b": data})
+    assert_eq(pdf.iloc[key], gdf.iloc[key])
+
 
 @pytest.mark.parametrize("key", [5, -10, "0", "a", np.array(5), np.array("a")])
 def test_loc_bad_key_type(key):
@@ -1401,3 +1470,14 @@ def test_iloc_before_zero_terminate(arg, pobj):
     gobj = cudf.from_pandas(pobj)
 
     assert_eq(pobj.iloc[arg], gobj.iloc[arg])
+
+
+def test_iloc_decimal():
+    sr = cudf.Series(["1.00", "2.00", "3.00", "4.00"]).astype(
+        cudf.Decimal64Dtype(scale=2, precision=3)
+    )
+    got = sr.iloc[[3, 2, 1, 0]]
+    expect = cudf.Series(["4.00", "3.00", "2.00", "1.00"],).astype(
+        cudf.Decimal64Dtype(scale=2, precision=3)
+    )
+    assert_eq(expect.reset_index(drop=True), got.reset_index(drop=True))

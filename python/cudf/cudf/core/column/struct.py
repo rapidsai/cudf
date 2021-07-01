@@ -4,10 +4,22 @@ from __future__ import annotations
 import pyarrow as pa
 
 import cudf
-from cudf.core.column import ColumnBase
+from cudf._typing import Dtype
+from cudf.core.column import ColumnBase, build_struct_column
+from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.dtypes import StructDtype
+from cudf.utils.dtypes import is_struct_dtype
 
 
 class StructColumn(ColumnBase):
+    """
+    Column that stores fields of values.
+
+    Every column has n children, where n is
+    the number of fields in the Struct Dtype.
+
+    """
+
     dtype: cudf.core.dtypes.StructDtype
 
     @property
@@ -68,11 +80,23 @@ class StructColumn(ColumnBase):
             pa_type, len(self), buffers, children=children
         )
 
+    def __getitem__(self, args):
+        result = super().__getitem__(args)
+        if isinstance(result, dict):
+            return {
+                field: value
+                for field, value in zip(self.dtype.fields, result.values())
+            }
+        return result
+
     def copy(self, deep=True):
         result = super().copy(deep=deep)
         if deep:
             result = result._rename_fields(self.dtype.fields.keys())
         return result
+
+    def struct(self, parent=None):
+        return StructMethods(self, parent=parent)
 
     def _rename_fields(self, names):
         """
@@ -84,10 +108,79 @@ class StructColumn(ColumnBase):
         )
         return StructColumn(
             data=None,
-            size=self.base_size,
+            size=self.size,
             dtype=dtype,
             mask=self.base_mask,
             offset=self.offset,
             null_count=self.null_count,
             children=self.base_children,
         )
+
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Structs are not yet supported via `__cuda_array_interface__`"
+        )
+
+    def _with_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
+        if isinstance(dtype, StructDtype):
+            return build_struct_column(
+                names=dtype.fields.keys(),
+                children=tuple(
+                    self.base_children[i]._with_type_metadata(dtype.fields[f])
+                    for i, f in enumerate(dtype.fields.keys())
+                ),
+                mask=self.base_mask,
+                size=self.size,
+                offset=self.offset,
+                null_count=self.null_count,
+            )
+
+        return self
+
+
+class StructMethods(ColumnMethodsMixin):
+    """
+    Struct methods for Series
+    """
+
+    def __init__(self, column, parent=None):
+        if not is_struct_dtype(column.dtype):
+            raise AttributeError(
+                "Can only use .struct accessor with a 'struct' dtype"
+            )
+        super().__init__(column=column, parent=parent)
+
+    def field(self, key):
+        """
+        Extract children of the specified struct column
+        in the Series
+
+        Parameters
+        ----------
+        key: int or str
+            index/position or field name of the respective
+            struct column
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> s = cudf.Series([{'a': 1, 'b': 2}, {'a': 3, 'b': 4}])
+        >>> s.struct.field(0)
+        0    1
+        1    3
+        dtype: int64
+        >>> s.struct.field('a')
+        0    1
+        1    3
+        dtype: int64
+        """
+        fields = list(self._column.dtype.fields.keys())
+        if key in fields:
+            pos = fields.index(key)
+            return self._return_or_inplace(self._column.children[pos])
+        else:
+            return self._return_or_inplace(self._column.children[key])

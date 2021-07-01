@@ -2,6 +2,7 @@
 
 from typing import Any, Union
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 from nvtx import annotate
@@ -10,8 +11,16 @@ import cudf
 from cudf._lib.concat import concat_columns
 from cudf._lib.scalar import _is_null_host_scalar
 from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
+from cudf.api.types import (
+    is_bool_dtype,
+    is_integer,
+    is_integer_dtype,
+    is_numeric_dtype,
+)
 from cudf.core.column.column import as_column
 from cudf.utils.dtypes import (
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
     find_common_type,
     is_categorical_dtype,
     is_column_like,
@@ -57,7 +66,9 @@ def get_label_range_or_mask(index, start, stop, step):
         if start is not None and stop is not None:
             if start > stop:
                 return slice(0, 0, None)
-            boolean_mask = (index >= start) and (index <= stop)
+            # TODO: Once Index binary ops are updated to support logical_and,
+            # can use that instead of using cupy.
+            boolean_mask = cp.logical_and((index >= start), (index <= stop))
         elif start is not None:
             boolean_mask = index >= start
         else:
@@ -81,7 +92,11 @@ class _SeriesIlocIndexer(object):
             arg = list(arg)
         data = self._sr._column[arg]
 
-        if is_scalar(data) or _is_null_host_scalar(data):
+        if (
+            isinstance(data, (dict, list))
+            or _is_scalar_or_zero_d_array(data)
+            or _is_null_host_scalar(data)
+        ):
             return data
         index = self._sr.index.take(arg)
         return self._sr._copy_construct(data=data, index=index)
@@ -95,16 +110,21 @@ class _SeriesIlocIndexer(object):
         # coerce value into a scalar or column
         if is_scalar(value):
             value = to_cudf_compatible_scalar(value)
-        else:
+        elif not (
+            isinstance(value, list)
+            and isinstance(self._sr._column.dtype, cudf.ListDtype)
+        ):
             value = column.as_column(value)
-
         if (
-            not is_categorical_dtype(self._sr._column.dtype)
+            not isinstance(
+                self._sr._column.dtype,
+                (cudf.Decimal64Dtype, cudf.CategoricalDtype),
+            )
             and hasattr(value, "dtype")
-            and pd.api.types.is_numeric_dtype(value.dtype)
+            and _is_non_decimal_numeric_dtype(value.dtype)
         ):
             # normalize types if necessary:
-            if not pd.api.types.is_integer(key):
+            if not is_integer(key):
                 to_dtype = np.result_type(value.dtype, self._sr._column.dtype)
                 value = value.astype(to_dtype)
                 self._sr._column._mimic_inplace(
@@ -164,10 +184,17 @@ class _SeriesLocIndexer(object):
         self._sr.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
-        from cudf.core.column import column
-        from cudf.core.series import Series
-
-        if is_scalar(arg):
+        if _is_scalar_or_zero_d_array(arg):
+            if not _is_non_decimal_numeric_dtype(self._sr.index.dtype):
+                # TODO: switch to cudf.utils.dtypes.is_integer(arg)
+                if isinstance(arg, cudf.Scalar) and is_integer_dtype(
+                    arg.dtype
+                ):
+                    found_index = arg.value
+                    return found_index
+                elif is_integer(arg):
+                    found_index = arg
+                    return found_index
             try:
                 found_index = self._sr.index._values.find_first_value(
                     arg, closest=False
@@ -187,7 +214,7 @@ class _SeriesLocIndexer(object):
             return indices_from_labels(self._sr, arg)
 
         else:
-            arg = Series(column.as_column(arg))
+            arg = cudf.core.series.Series(cudf.core.column.as_column(arg))
             if arg.dtype in (bool, np.bool_):
                 return arg
             else:
@@ -243,14 +270,12 @@ class _DataFrameIndexer(object):
             ):
                 return False
             else:
-                if pd.api.types.is_bool_dtype(
-                    as_column(arg[0]).dtype
-                ) and not isinstance(arg[1], slice):
+                if is_bool_dtype(as_column(arg[0]).dtype) and not isinstance(
+                    arg[1], slice
+                ):
                     return True
             dtypes = df.dtypes.values.tolist()
-            all_numeric = all(
-                [pd.api.types.is_numeric_dtype(t) for t in dtypes]
-            )
+            all_numeric = all([is_numeric_dtype(t) for t in dtypes])
             if all_numeric:
                 return True
         if ncols == 1:
@@ -356,7 +381,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     return columns_df._empty_like(keep_index=True)
                 tmp_arg = (column.as_column(tmp_arg[0]), tmp_arg[1])
 
-                if pd.api.types.is_bool_dtype(tmp_arg[0]):
+                if is_bool_dtype(tmp_arg[0]):
                     df = columns_df._apply_boolean_mask(tmp_arg[0])
                 else:
                     tmp_col_name = str(uuid4())
@@ -383,7 +408,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 df.index = as_index(start)
             else:
                 row_selection = column.as_column(arg[0])
-                if pd.api.types.is_bool_dtype(row_selection.dtype):
+                if is_bool_dtype(row_selection.dtype):
                     df.index = self._df.index.take(row_selection)
                 else:
                     df.index = as_index(row_selection)
@@ -402,10 +427,34 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 "DataFrames with a MultiIndex"
             )
 
-        columns = self._get_column_selection(key[1])
+        try:
+            columns = self._get_column_selection(key[1])
+        except KeyError:
+            if not self._df.empty and isinstance(key[0], slice):
+                pos_range = get_label_range_or_mask(
+                    self._df.index, key[0].start, key[0].stop, key[0].step
+                )
+                idx = self._df.index[pos_range]
+            elif self._df.empty and isinstance(key[0], slice):
+                idx = None
+            else:
+                idx = cudf.Index(key[0])
+            if is_scalar(value):
+                length = len(idx) if idx is not None else 1
+                value = as_column(value, length=length)
 
-        for col in columns:
-            self._df[col].loc[key[0]] = value
+            new_col = cudf.Series(value, index=idx)
+            if not self._df.empty:
+                new_col = new_col._align_to_index(self._df.index, how="right")
+
+            if self._df.empty:
+                self._df.index = (
+                    idx if idx is not None else cudf.RangeIndex(len(new_col))
+                )
+            self._df._data.insert(key[1], new_col)
+        else:
+            for col in columns:
+                self._df[col].loc[key[0]] = value
 
     def _get_column_selection(self, arg):
         return self._df._get_columns_by_label(arg)
@@ -455,7 +504,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 df = columns_df._slice(slice(index, index + 1, 1))
             else:
                 arg = (column.as_column(arg[0]), arg[1])
-                if pd.api.types.is_bool_dtype(arg[0]):
+                if is_bool_dtype(arg[0]):
                     df = columns_df._apply_boolean_mask(arg[0])
                 else:
                     df = columns_df._gather(arg[0])

@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
@@ -372,7 +372,7 @@ def test_series_tolist(data):
         TypeError,
         match=re.escape(
             r"cuDF does not support conversion to host memory "
-            r"via `tolist()` method. Consider using "
+            r"via the `tolist()` method. Consider using "
             r"`.to_arrow().to_pylist()` to construct a Python list."
         ),
     ):
@@ -692,6 +692,13 @@ def test_series_round(arr, decimals):
     np.array_equal(ser.nullmask.to_array(), result.to_array())
 
 
+def test_series_round_half_up():
+    s = cudf.Series([0.0, 1.0, 1.2, 1.7, 0.5, 1.5, 2.5, None])
+    expect = cudf.Series([0.0, 1.0, 1.0, 2.0, 1.0, 2.0, 3.0, None])
+    got = s.round(how="half_up")
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "series",
     [
@@ -923,6 +930,42 @@ def test_series_pipe_error():
 
 @pytest.mark.parametrize(
     "data",
+    [cudf.Series([1, 2, 3]), cudf.Series([10, 11, 12], index=[1, 2, 3])],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        cudf.Series([4, 5, 6]),
+        cudf.Series([4, 5, 6, 7, 8]),
+        cudf.Series([4, np.nan, 6], nan_as_null=False),
+        [4, np.nan, 6],
+        {1: 9},
+    ],
+)
+def test_series_update(data, other):
+    gs = data.copy(deep=True)
+    if isinstance(other, cudf.Series):
+        g_other = other.copy(deep=True)
+        p_other = g_other.to_pandas()
+    else:
+        g_other = other
+        p_other = other
+
+    ps = gs.to_pandas()
+
+    gs_column_before = gs._column
+    gs.update(g_other)
+    gs_column_after = gs._column
+
+    assert_eq(gs_column_before.to_array(), gs_column_after.to_array())
+
+    ps.update(p_other)
+
+    assert_eq(gs, ps)
+
+
+@pytest.mark.parametrize(
+    "data",
     [
         [1, None, 11, 2.0, np.nan],
         [np.nan],
@@ -940,6 +983,19 @@ def test_fillna_with_nan(data, nan_as_null, fill_value):
     actual = gs.fillna(fill_value)
 
     assert_eq(expected, actual)
+
+
+def test_series_mask_mixed_dtypes_error():
+    s = cudf.Series(["a", "b", "c"])
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "cudf does not support mixed types, please type-cast "
+            "the column of dataframe/series and other "
+            "to same dtypes."
+        ),
+    ):
+        s.where([True, False, True], [1, 2, 3])
 
 
 @pytest.mark.parametrize(

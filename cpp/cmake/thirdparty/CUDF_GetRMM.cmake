@@ -14,49 +14,37 @@
 # limitations under the License.
 #=============================================================================
 
-function(cudf_save_if_enabled var)
-    if(CUDF_${var})
-        unset(${var} PARENT_SCOPE)
-        unset(${var} CACHE)
-    endif()
-endfunction()
-
-function(cudf_restore_if_enabled var)
-    if(CUDF_${var})
-        set(${var} ON CACHE INTERNAL "" FORCE)
-    endif()
-endfunction()
-
 function(find_and_configure_rmm VERSION)
 
     if(TARGET rmm::rmm)
         return()
     endif()
 
+    if(${VERSION} MATCHES [=[([0-9]+)\.([0-9]+)\.([0-9]+)]=])
+        set(MAJOR_AND_MINOR "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}")
+    else()
+        set(MAJOR_AND_MINOR "${VERSION}")
+    endif()
+
     # Consumers have two options for local source builds:
     # 1. Pass `-D CPM_rmm_SOURCE=/path/to/rmm` to build a local RMM source tree
     # 2. Pass `-D CMAKE_PREFIX_PATH=/path/to/rmm/build` to use an existing local
     #    RMM build directory as the install location for find_package(rmm)
-    cudf_save_if_enabled(BUILD_TESTS)
-    cudf_save_if_enabled(BUILD_BENCHMARKS)
-
     CPMFindPackage(NAME rmm
         VERSION         ${VERSION}
         GIT_REPOSITORY  https://github.com/rapidsai/rmm.git
-        GIT_TAG         branch-${VERSION}
+        GIT_TAG         branch-${MAJOR_AND_MINOR}
         GIT_SHALLOW     TRUE
         OPTIONS         "BUILD_TESTS OFF"
                         "BUILD_BENCHMARKS OFF"
                         "CUDA_STATIC_RUNTIME ${CUDA_STATIC_RUNTIME}"
                         "DISABLE_DEPRECATION_WARNING ${DISABLE_DEPRECATION_WARNING}"
     )
-    cudf_restore_if_enabled(BUILD_TESTS)
-    cudf_restore_if_enabled(BUILD_BENCHMARKS)
 
     # Make sure consumers of cudf can also see rmm::rmm
     fix_cmake_global_defaults(rmm::rmm)
 endfunction()
 
-set(CUDF_MIN_VERSION_rmm "${CUDF_VERSION_MAJOR}.${CUDF_VERSION_MINOR}")
+set(CUDF_MIN_VERSION_rmm "${CUDF_VERSION_MAJOR}.${CUDF_VERSION_MINOR}.00")
 
 find_and_configure_rmm(${CUDF_MIN_VERSION_rmm})

@@ -1,14 +1,15 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import re
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import DataFrame, Series
-from cudf.tests.utils import (
+from cudf.core.dtypes import Decimal64Dtype
+from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
     assert_eq,
@@ -36,6 +37,7 @@ from cudf.tests.utils import (
         ([1, 2, 3], cudf.Series([10, 11, 12])),
         (cudf.Series([1, 2, 3]), None),
         ({1: 10, 2: 22}, None),
+        (np.inf, 4),
     ],
 )
 def test_series_replace_all(gsr, to_replace, value):
@@ -64,14 +66,14 @@ def test_series_replace():
 
     # Numerical
     a2 = np.array([5, 1, 2, 3, 4])
-    sr1 = Series(a1)
+    sr1 = cudf.Series(a1)
     sr2 = sr1.replace(0, 5)
     assert_eq(a2, sr2.to_array())
 
     # Categorical
     psr3 = pd.Series(["one", "two", "three"], dtype="category")
     psr4 = psr3.replace("one", "two")
-    sr3 = Series.from_pandas(psr3)
+    sr3 = cudf.from_pandas(psr3)
     sr4 = sr3.replace("one", "two")
     assert_eq(psr4, sr4)
 
@@ -94,7 +96,7 @@ def test_series_replace():
     assert_eq(a8, sr8.to_array())
 
     # large input containing null
-    sr9 = Series(list(range(400)) + [None])
+    sr9 = cudf.Series(list(range(400)) + [None])
     sr10 = sr9.replace([22, 323, 27, 0], None)
     assert sr10.null_count == 5
     assert len(sr10.to_array()) == (401 - 5)
@@ -119,7 +121,7 @@ def test_series_replace_with_nulls():
 
     # Numerical
     a2 = np.array([-10, 1, 2, 3, 4])
-    sr1 = Series(a1)
+    sr1 = cudf.Series(a1)
     sr2 = sr1.replace(0, None).fillna(-10)
     assert_eq(a2, sr2.to_array())
 
@@ -128,7 +130,7 @@ def test_series_replace_with_nulls():
     sr6 = sr1.replace([0, 1], [None, 6]).fillna(-10)
     assert_eq(a6, sr6.to_array())
 
-    sr1 = Series([0, 1, 2, 3, 4, None])
+    sr1 = cudf.Series([0, 1, 2, 3, 4, None])
     with pytest.raises(TypeError):
         sr1.replace([0, 1], [5.5, 6.5]).fillna(-10)
 
@@ -230,7 +232,7 @@ def test_dataframe_replace(df, to_replace, value):
 def test_dataframe_replace_with_nulls():
     # numerical
     pdf1 = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, 3]})
-    gdf1 = DataFrame.from_pandas(pdf1)
+    gdf1 = cudf.from_pandas(pdf1)
     pdf2 = pdf1.replace(0, 4)
     gdf2 = gdf1.replace(0, None).fillna(4)
     assert_eq(gdf2, pdf2)
@@ -249,7 +251,7 @@ def test_dataframe_replace_with_nulls():
     gdf8 = gdf1.replace({"a": 0, "b": 0}, {"a": None, "b": 5}).fillna(4)
     assert_eq(gdf8, pdf8)
 
-    gdf1 = DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, None]})
+    gdf1 = cudf.DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, None]})
     gdf9 = gdf1.replace([0, 1], [4, 5]).fillna(3)
     assert_eq(gdf9, pdf6)
 
@@ -333,6 +335,58 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
 
 
 @pytest.mark.parametrize(
+    "gsr_data",
+    [
+        cudf.Series(["2.34", "5.2", "7.47", None, "92.29", None]).astype(
+            Decimal64Dtype(7, 2)
+        ),
+        cudf.Series(["-74.56", None, "-23.73", "34.55", "2.89", None]).astype(
+            Decimal64Dtype(7, 2)
+        ),
+        cudf.Series(
+            ["85.955", np.nan, "-3.243", np.nan, "29.492", np.nan]
+        ).astype(Decimal64Dtype(8, 3)),
+        cudf.Series(
+            ["2.964", None, "57.432", "-989.330", None, "56.444"]
+        ).astype(Decimal64Dtype(8, 3)),
+        cudf.Series(
+            [np.nan, "55.2498", np.nan, "-5.2965", "-28.9423", np.nan]
+        ).astype(Decimal64Dtype(10, 4)),
+    ],
+)
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        42,
+        -123,
+        Decimal("8.2"),
+        Decimal("-12.87"),
+        cudf.Series([None, -854, 9533, -274, -845, 7924], dtype="int32"),
+        cudf.Series(["-53.5", "13.4", "-64.3", None, "42.42", None]).astype(
+            Decimal64Dtype(7, 2)
+        ),
+        cudf.Series(
+            ["57.45", np.nan, np.nan, "686.49", "-55.5", "73.24"],
+        ).astype(Decimal64Dtype(7, 2)),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_fillna_decimal(gsr_data, fill_value, inplace):
+    gsr = gsr_data.copy(deep=True)
+    psr = gsr.to_pandas()
+
+    if isinstance(fill_value, cudf.Series):
+        p_fill_value = fill_value.to_pandas()
+    else:
+        p_fill_value = fill_value
+
+    expected = psr.fillna(p_fill_value, inplace=inplace)
+    got = gsr.fillna(fill_value, inplace=inplace)
+
+    assert_eq(expected, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
     "psr_data",
     [
         pd.Series(["a", "b", "a", None, "c", None], dtype="category"),
@@ -375,7 +429,7 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
 @pytest.mark.parametrize("inplace", [True, False])
 def test_fillna_categorical(psr_data, fill_value, inplace):
     psr = psr_data.copy(deep=True)
-    gsr = Series.from_pandas(psr)
+    gsr = cudf.from_pandas(psr)
 
     if isinstance(fill_value, pd.Series):
         fill_value_cudf = cudf.from_pandas(fill_value)
@@ -620,7 +674,7 @@ def test_fillna_method_fixed_width_non_num(data, container, method, inplace):
 @pytest.mark.parametrize("inplace", [True, False])
 def test_fillna_dataframe(df, value, inplace):
     pdf = df.copy(deep=True)
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     fill_value_pd = value
     if isinstance(fill_value_pd, (pd.Series, pd.DataFrame)):
@@ -688,7 +742,7 @@ def test_fillna_string(ps_data, fill_value, inplace):
 
 @pytest.mark.parametrize("data_dtype", INTEGER_TYPES)
 def test_series_fillna_invalid_dtype(data_dtype):
-    gdf = Series([1, 2, None, 3], dtype=data_dtype)
+    gdf = cudf.Series([1, 2, None, 3], dtype=data_dtype)
     fill_value = 2.5
     with pytest.raises(TypeError) as raises:
         gdf.fillna(fill_value)
@@ -702,38 +756,53 @@ def test_series_fillna_invalid_dtype(data_dtype):
 @pytest.mark.parametrize("fill_value", [100, 100.0, 128.5])
 def test_series_where(data_dtype, fill_value):
     psr = pd.Series(list(range(10)), dtype=data_dtype)
-    sr = Series.from_pandas(psr)
+    sr = cudf.from_pandas(psr)
 
     if sr.dtype.type(fill_value) != fill_value:
         with pytest.raises(TypeError):
             sr.where(sr > 0, fill_value)
     else:
         # Cast back to original dtype as pandas automatically upcasts
-        expect = psr.where(psr > 0, fill_value).astype(psr.dtype)
+        expect = psr.where(psr > 0, fill_value)
         got = sr.where(sr > 0, fill_value)
-        assert_eq(expect, got)
+        # pandas returns 'float16' dtype, which is not supported in cudf
+        assert_eq(
+            expect,
+            got,
+            check_dtype=False if expect.dtype.kind in ("f") else True,
+        )
 
     if sr.dtype.type(fill_value) != fill_value:
         with pytest.raises(TypeError):
             sr.where(sr < 0, fill_value)
     else:
-        expect = psr.where(psr < 0, fill_value).astype(psr.dtype)
+        expect = psr.where(psr < 0, fill_value)
         got = sr.where(sr < 0, fill_value)
-        assert_eq(expect, got)
+        # pandas returns 'float16' dtype, which is not supported in cudf
+        assert_eq(
+            expect,
+            got,
+            check_dtype=False if expect.dtype.kind in ("f") else True,
+        )
 
     if sr.dtype.type(fill_value) != fill_value:
         with pytest.raises(TypeError):
             sr.where(sr == 0, fill_value)
     else:
-        expect = psr.where(psr == 0, fill_value).astype(psr.dtype)
+        expect = psr.where(psr == 0, fill_value)
         got = sr.where(sr == 0, fill_value)
-        assert_eq(expect, got)
+        # pandas returns 'float16' dtype, which is not supported in cudf
+        assert_eq(
+            expect,
+            got,
+            check_dtype=False if expect.dtype.kind in ("f") else True,
+        )
 
 
 @pytest.mark.parametrize("fill_value", [100, 100.0, 100.5])
 def test_series_with_nulls_where(fill_value):
     psr = pd.Series([None] * 3 + list(range(5)))
-    sr = Series.from_pandas(psr)
+    sr = cudf.from_pandas(psr)
 
     expect = psr.where(psr > 0, fill_value)
     got = sr.where(sr > 0, fill_value)
@@ -756,7 +825,7 @@ def test_dataframe_with_nulls_where_with_scalars(fill_value):
             "B": [4, -2, 3, None, 7, 6, 8, 0],
         }
     )
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     expect = pdf.where(pdf % 3 == 0, fill_value)
     got = gdf.where(gdf % 3 == 0, fill_value)
@@ -770,7 +839,7 @@ def test_dataframe_with_different_types():
     pdf = pd.DataFrame(
         {"A": [111, 22, 31, 410, 56], "B": [-10.12, 121.2, 45.7, 98.4, 87.6]}
     )
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
     expect = pdf.where(pdf > 50, -pdf)
     got = gdf.where(gdf > 50, -gdf)
 
@@ -778,9 +847,9 @@ def test_dataframe_with_different_types():
 
     # Testing for string
     pdf = pd.DataFrame({"A": ["a", "bc", "cde", "fghi"]})
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
     pdf_mask = pd.DataFrame({"A": [True, False, True, False]})
-    gdf_mask = DataFrame.from_pandas(pdf_mask)
+    gdf_mask = cudf.from_pandas(pdf_mask)
     expect = pdf.where(pdf_mask, ["cudf"])
     got = gdf.where(gdf_mask, ["cudf"])
 
@@ -789,7 +858,7 @@ def test_dataframe_with_different_types():
     # Testing for categoriacal
     pdf = pd.DataFrame({"A": ["a", "b", "b", "c"]})
     pdf["A"] = pdf["A"].astype("category")
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
     expect = pdf.where(pdf_mask, "c")
     got = gdf.where(gdf_mask, ["c"])
 
@@ -798,7 +867,7 @@ def test_dataframe_with_different_types():
 
 def test_dataframe_where_with_different_options():
     pdf = pd.DataFrame({"A": [1, 2, 3], "B": [3, 4, 5]})
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     # numpy array
     boolean_mask = np.array([[False, True], [True, False], [False, True]])
@@ -822,8 +891,8 @@ def test_dataframe_where_with_different_options():
 
 
 def test_series_multiple_times_with_nulls():
-    sr = Series([1, 2, 3, None])
-    expected = Series([None, None, None, None], dtype=np.int64)
+    sr = cudf.Series([1, 2, 3, None])
+    expected = cudf.Series([None, None, None, None], dtype=np.int64)
 
     for i in range(3):
         got = sr.replace([1, 2, 3], None)
@@ -835,7 +904,7 @@ def test_series_multiple_times_with_nulls():
         # subsequent calls and the memory used for mask may have junk values.
         # So, if it is not updated properly, the result would be wrong.
         # So, this will help verify that scenario.
-        Series([1, 1, 1, None])
+        cudf.Series([1, 1, 1, None])
 
 
 @pytest.mark.parametrize("series_dtype", NUMERIC_TYPES)
@@ -844,7 +913,7 @@ def test_series_multiple_times_with_nulls():
 )
 def test_numeric_series_replace_dtype(series_dtype, replacement):
     psr = pd.Series([0, 1, 2, 3, 4, 5], dtype=series_dtype)
-    sr = Series.from_pandas(psr)
+    sr = cudf.from_pandas(psr)
 
     # Both Scalar
     if sr.dtype.type(replacement) != replacement:
@@ -889,7 +958,7 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
 
 def test_replace_inplace():
     data = np.array([5, 1, 2, 3, 4])
-    sr = Series(data)
+    sr = cudf.Series(data)
     psr = pd.Series(data)
 
     sr_copy = sr.copy()
@@ -902,7 +971,7 @@ def test_replace_inplace():
     assert_eq(sr, psr)
     assert_eq(sr_copy, psr_copy)
 
-    sr = Series(data)
+    sr = cudf.Series(data)
     psr = pd.Series(data)
 
     sr_copy = sr.copy()
@@ -919,7 +988,7 @@ def test_replace_inplace():
     assert_eq(srr, psrr)
 
     psr = pd.Series(["one", "two", "three"], dtype="category")
-    sr = Series.from_pandas(psr)
+    sr = cudf.from_pandas(psr)
 
     sr_copy = sr.copy()
     psr_copy = psr.copy()
@@ -932,7 +1001,7 @@ def test_replace_inplace():
     assert_eq(sr_copy, psr_copy)
 
     pdf = pd.DataFrame({"A": [0, 1, 2, 3, 4], "B": [5, 6, 7, 8, 9]})
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     pdf_copy = pdf.copy()
     gdf_copy = gdf.copy()
@@ -944,7 +1013,7 @@ def test_replace_inplace():
     assert_eq(pdf_copy, gdf_copy)
 
     pds = pd.Series([1, 2, 3, 45])
-    gds = Series.from_pandas(pds)
+    gds = cudf.from_pandas(pds)
     vals = np.array([]).astype(int)
 
     assert_eq(pds.replace(vals, -1), gds.replace(vals, -1))
@@ -954,7 +1023,7 @@ def test_replace_inplace():
     assert_eq(pds, gds)
 
     pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5, 666]})
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     assert_eq(
         pdf.replace({"a": 2}, {"a": -33}), gdf.replace({"a": 2}, {"a": -33})
@@ -987,7 +1056,7 @@ def test_dataframe_clip(lower, upper, inplace):
     pdf = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5], "b": [7.1, 7.24, 7.5, 7.8, 8.11]}
     )
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     got = gdf.clip(lower=lower, upper=upper, inplace=inplace)
     expect = pdf.clip(lower=lower, upper=upper, axis=1)
@@ -1005,7 +1074,7 @@ def test_dataframe_clip(lower, upper, inplace):
 def test_dataframe_category_clip(lower, upper, inplace):
     data = ["a", "b", "c", "d", "e"]
     pdf = pd.DataFrame({"a": data})
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
     gdf["a"] = gdf["a"].astype("category")
 
     expect = pdf.clip(lower=lower, upper=upper)
@@ -1022,7 +1091,9 @@ def test_dataframe_category_clip(lower, upper, inplace):
     [([2, 7.4], [4, 7.9, "d"]), ([2, 7.4, "a"], [4, 7.9, "d"])],
 )
 def test_dataframe_exceptions_for_clip(lower, upper):
-    gdf = DataFrame({"a": [1, 2, 3, 4, 5], "b": [7.1, 7.24, 7.5, 7.8, 8.11]})
+    gdf = cudf.DataFrame(
+        {"a": [1, 2, 3, 4, 5], "b": [7.1, 7.24, 7.5, 7.8, 8.11]}
+    )
 
     with pytest.raises(ValueError):
         gdf.clip(lower=lower, upper=upper)
@@ -1045,7 +1116,7 @@ def test_dataframe_exceptions_for_clip(lower, upper):
 @pytest.mark.parametrize("inplace", [True, False])
 def test_series_clip(data, lower, upper, inplace):
     psr = pd.Series(data)
-    gsr = Series.from_pandas(data)
+    gsr = cudf.Series.from_pandas(data)
 
     expect = psr.clip(lower=lower, upper=upper)
     got = gsr.clip(lower=lower, upper=upper, inplace=inplace)
@@ -1059,10 +1130,10 @@ def test_series_clip(data, lower, upper, inplace):
 def test_series_exceptions_for_clip():
 
     with pytest.raises(ValueError):
-        Series([1, 2, 3, 4]).clip([1, 2], [2, 3])
+        cudf.Series([1, 2, 3, 4]).clip([1, 2], [2, 3])
 
     with pytest.raises(NotImplementedError):
-        Series([1, 2, 3, 4]).clip(1, 2, axis=0)
+        cudf.Series([1, 2, 3, 4]).clip(1, 2, axis=0)
 
 
 @pytest.mark.parametrize(
@@ -1080,7 +1151,7 @@ def test_series_exceptions_for_clip():
 @pytest.mark.parametrize("inplace", [True, False])
 def test_index_clip(data, lower, upper, inplace):
     pdf = pd.DataFrame({"a": data})
-    index = DataFrame.from_pandas(pdf).set_index("a").index
+    index = cudf.from_pandas(pdf).set_index("a").index
 
     expect = pdf.clip(lower=lower, upper=upper)
     got = index.clip(lower=lower, upper=upper, inplace=inplace)
@@ -1097,7 +1168,7 @@ def test_index_clip(data, lower, upper, inplace):
 @pytest.mark.parametrize("inplace", [True, False])
 def test_multiindex_clip(lower, upper, inplace):
     df = pd.DataFrame({"a": [1, 2, 3, 4, 5], "b": [1, 2, 3, 4, 5]})
-    gdf = DataFrame.from_pandas(df)
+    gdf = cudf.from_pandas(df)
 
     index = gdf.set_index(["a", "b"]).index
 
@@ -1128,13 +1199,13 @@ def test_series_fillna(data, index, value):
         data,
         index=index if index is not None and len(index) == len(data) else None,
     )
-    gsr = Series(
+    gsr = cudf.Series(
         data,
         index=index if index is not None and len(index) == len(data) else None,
     )
 
     expect = psr.fillna(pd.Series(value))
-    got = gsr.fillna(Series(value))
+    got = gsr.fillna(cudf.Series(value))
     assert_eq(expect, got)
 
 

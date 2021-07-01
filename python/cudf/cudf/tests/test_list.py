@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 import functools
+import operator
 
 import numpy as np
 import pandas as pd
@@ -7,7 +8,14 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf import NA
+from cudf._lib.copying import get_element
+from cudf.testing._utils import (
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    TIMEDELTA_TYPES,
+    assert_eq,
+)
 
 
 @pytest.mark.parametrize(
@@ -315,3 +323,239 @@ def test_contains_null_search_key(data, expect):
     expect = cudf.Series(expect, dtype="bool")
     got = sr.list.contains(cudf.Scalar(cudf.NA, sr.dtype.element_type))
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        [[]],
+        [[1]],
+        [[1, 2]],
+        [[1, 2], [3, 4, 5]],
+        [[1, 2], [], [3, 4, 5]],
+        [[1, 2, None], [3, 4, 5]],
+        [[1, 2, None], None, [3, 4, 5]],
+        [[1, 2, None], None, [], [3, 4, 5]],
+        [[[1, 2], [3, 4]], [[5, 6, 7], [8, 9]]],
+        [[["a", "c", "de", None], None, ["fg"]], [["abc", "de"], None]],
+    ],
+)
+@pytest.mark.parametrize("dropna", [True, False])
+def test_concat_elements(row, dropna):
+    if any(x is None for x in row):
+        if dropna:
+            row = [x for x in row if x is not None]
+            result = functools.reduce(operator.add, row)
+        else:
+            result = None
+    else:
+        result = functools.reduce(operator.add, row)
+
+    expect = pd.Series([result])
+    got = cudf.Series([row]).list.concat(dropna=dropna)
+    assert_eq(expect, got)
+
+
+def test_concat_elements_raise():
+    s = cudf.Series([[1, 2, 3]])  # no nesting
+    with pytest.raises(ValueError):
+        s.list.concat()
+
+
+def test_concatenate_rows_of_lists():
+    pdf = pd.DataFrame({"val": [["a", "a"], ["b"], ["c"]]})
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf["val"] + pdf["val"]
+    got = gdf["val"] + gdf["val"]
+
+    assert_eq(expect, got)
+
+
+def test_concatenate_list_with_nonlist():
+    with pytest.raises(TypeError, match="can only concatenate list to list"):
+        gdf1 = cudf.DataFrame({"A": [["a", "c"], ["b", "d"], ["c", "d"]]})
+        gdf2 = cudf.DataFrame({"A": ["a", "b", "c"]})
+        gdf1["A"] + gdf2["A"]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1],
+        [1, 2, 3],
+        [[1, 2, 3], [4, 5, 6]],
+        [NA],
+        [1, NA, 3],
+        [[1, NA, 3], [NA, 5, 6]],
+    ],
+)
+def test_list_getitem(data):
+    list_sr = cudf.Series([data])
+    assert list_sr[0] == data
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3],
+        [[1, 2, 3], [4, 5, 6]],
+        ["a", "b", "c"],
+        [["a", "b", "c"], ["d", "e", "f"]],
+        [1.1, 2.2, 3.3],
+        [[1.1, 2.2, 3.3], [4.4, 5.5, 6.6]],
+        [1, NA, 3],
+        [[1, NA, 3], [4, 5, NA]],
+        ["a", NA, "c"],
+        [["a", NA, "c"], ["d", "e", NA]],
+        [1.1, NA, 3.3],
+        [[1.1, NA, 3.3], [4.4, 5.5, NA]],
+    ],
+)
+def test_list_scalar_host_construction(data):
+    slr = cudf.Scalar(data)
+    assert slr.value == data
+    assert slr.device_value.value == data
+
+
+@pytest.mark.parametrize(
+    "elem_type", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["str"]
+)
+@pytest.mark.parametrize("nesting_level", [1, 2, 3])
+def test_list_scalar_host_construction_null(elem_type, nesting_level):
+    dtype = cudf.ListDtype(elem_type)
+    for level in range(nesting_level - 1):
+        dtype = cudf.ListDtype(dtype)
+
+    slr = cudf.Scalar(None, dtype=dtype)
+    assert slr.value is cudf.NA
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3],
+        [[1, 2, 3], [4, 5, 6]],
+        ["a", "b", "c"],
+        [["a", "b", "c"], ["d", "e", "f"]],
+        [1.1, 2.2, 3.3],
+        [[1.1, 2.2, 3.3], [4.4, 5.5, 6.6]],
+        [1, NA, 3],
+        [[1, NA, 3], [4, 5, NA]],
+        ["a", NA, "c"],
+        [["a", NA, "c"], ["d", "e", NA]],
+        [1.1, NA, 3.3],
+        [[1.1, NA, 3.3], [4.4, 5.5, NA]],
+    ],
+)
+def test_list_scalar_device_construction(data):
+    col = cudf.Series([data])._column
+    slr = get_element(col, 0)
+    assert slr.value == data
+
+
+@pytest.mark.parametrize("nesting_level", [1, 2, 3])
+def test_list_scalar_device_construction_null(nesting_level):
+    data = [[]]
+    for i in range(nesting_level - 1):
+        data = [data]
+
+    arrow_type = pa.infer_type(data)
+    arrow_arr = pa.array([None], type=arrow_type)
+
+    col = cudf.Series(arrow_arr)._column
+    slr = get_element(col, 0)
+
+    assert slr.value is cudf.NA
+
+
+@pytest.mark.parametrize("input_obj", [[[1, NA, 3]], [[1, NA, 3], [4, 5, NA]]])
+def test_construction_series_with_nulls(input_obj):
+    expect = pa.array(input_obj, from_pandas=True)
+    got = cudf.Series(input_obj).to_arrow()
+
+    assert expect == got
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [[]]},
+        {"a": [[1, 2, None, 4]]},
+        {"a": [["cat", None, "dog"]]},
+        {
+            "a": [[1, 2, 3, None], [4, None, 5]],
+            "b": [None, ["fish", "bird"]],
+            "c": [[], []],
+        },
+        {"a": [[1, 2, 3, None], [4, None, 5], None, [6, 7]]},
+    ],
+)
+def test_serialize_list_columns(data):
+    df = cudf.DataFrame(data)
+    recreated = df.__class__.deserialize(*df.serialize())
+    assert_eq(recreated, df)
+
+
+@pytest.mark.parametrize(
+    "data,item",
+    [
+        (
+            # basic list into a list column
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            [0, 0, 0],
+        ),
+        (
+            # nested list into nested list column
+            [
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+            ],
+            [[0, 0, 0], [0, 0, 0]],
+        ),
+        (
+            # NA into a list column
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            NA,
+        ),
+        (
+            # NA into nested list column
+            [
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+            ],
+            NA,
+        ),
+    ],
+)
+def test_listcol_setitem(data, item):
+    sr = cudf.Series(data)
+
+    sr[1] = item
+    data[1] = item
+    expect = cudf.Series(data)
+
+    assert_eq(expect, sr)
+
+
+@pytest.mark.parametrize(
+    "data,item,error",
+    [
+        (
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            [[1, 2, 3], [4, 5, 6]],
+            "list nesting level mismatch",
+        ),
+        (
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            0,
+            "Can not set 0 into ListColumn",
+        ),
+    ],
+)
+def test_listcol_setitem_error_cases(data, item, error):
+    sr = cudf.Series(data)
+    with pytest.raises(BaseException, match=error):
+        sr[1] = item

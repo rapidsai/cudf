@@ -8,12 +8,11 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-from cudf._lib.aggregation cimport make_aggregation
+from cudf._lib.aggregation cimport RollingAggregation, make_rolling_aggregation
 
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.aggregation cimport aggregation
 from cudf._lib.cpp.rolling cimport (
     rolling_window as cpp_rolling_window
 )
@@ -47,14 +46,13 @@ def rolling(Column source_column, Column pre_column_window,
     cdef column_view source_column_view = source_column.view()
     cdef column_view pre_column_window_view
     cdef column_view fwd_column_window_view
-    cdef unique_ptr[aggregation] agg
+    cdef RollingAggregation cython_agg
 
     if callable(op):
-        agg = move(
-            make_aggregation(op, {'dtype': source_column.dtype})
-        )
+        cython_agg = make_rolling_aggregation(
+            op, {'dtype': source_column.dtype})
     else:
-        agg = move(make_aggregation(op))
+        cython_agg = make_rolling_aggregation(op)
 
     if window is None:
         if center:
@@ -71,7 +69,7 @@ def rolling(Column source_column, Column pre_column_window,
                     pre_column_window_view,
                     fwd_column_window_view,
                     c_min_periods,
-                    agg)
+                    cython_agg.c_obj.get()[0])
             )
     else:
         c_min_periods = min_periods
@@ -89,7 +87,7 @@ def rolling(Column source_column, Column pre_column_window,
                     c_window,
                     c_forward_window,
                     c_min_periods,
-                    agg)
+                    cython_agg.c_obj.get()[0])
             )
 
     return Column.from_unique_ptr(move(c_result))

@@ -1,7 +1,7 @@
 # Unit Testing in libcudf
 
 Unit tests in libcudf are written using 
-[Google Test](https://github.com/google/googletest/blob/master/googletest/docs/primer.md).
+[Google Test](https://github.com/google/googletest/blob/master/docs/primer.md).
 
 **Important:** Instead of including `gtest/gtest.h` directly, use 
 `#include <cudf_test/cudf_gtest.hpp>`.
@@ -59,7 +59,7 @@ files, and are therefore preferred in test code over `thrust::device_vector`.
 
 ## Base Fixture
 
-All libcudf unit tests should make use of a GTest ["Test Fixture"](https://github.com/google/googletest/blob/master/googletest/docs/primer.md#test-fixtures-using-the-same-data-configuration-for-multiple-tests-same-data-multiple-tests).
+All libcudf unit tests should make use of a GTest ["Test Fixture"](https://github.com/google/googletest/blob/master/docs/primer.md#test-fixtures-using-the-same-data-configuration-for-multiple-tests-same-data-multiple-tests).
 Even if the fixture is empty, it should inherit from the base fixture `cudf::test::BaseFixture` 
 found in `include/cudf_test/base_fixture.hpp`. This ensures that RMM is properly initialized and 
 finalized. `cudf::test::BaseFixture` already inherits from `::testing::Test` and therefore it is 
@@ -75,7 +75,7 @@ class MyTestFiture : public cudf::test::BaseFixture {...};
 In general, libcudf features must work across all of the supported types (there are exceptions e.g.
 not all binary operations are supported for all types). In order to automate the process of running
 the same tests across multiple types, we use GTest's 
-[Typed Tests](https://github.com/google/googletest/blob/master/googletest/docs/advanced.md#typed-tests).
+[Typed Tests](https://github.com/google/googletest/blob/master/docs/advanced.md#typed-tests).
 Typed tests allow you to write a test once and run it across a list of types.
 
 For example:
