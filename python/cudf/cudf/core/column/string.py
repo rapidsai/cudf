@@ -171,6 +171,12 @@ from cudf.utils.dtypes import (
     is_string_dtype,
 )
 
+
+def str_to_boolean(column: StringColumn):
+    """Takes in string column and returns boolean column """
+    return (column.str().len() > cudf.Scalar(0, dtype="int8")).fillna(False)
+
+
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
     np.dtype("int16"): str_cast.stoi16,
@@ -182,7 +188,7 @@ _str_to_numeric_typecast_functions = {
     np.dtype("uint64"): str_cast.stoul,
     np.dtype("float32"): str_cast.stof,
     np.dtype("float64"): str_cast.stod,
-    np.dtype("bool"): str_cast.to_booleans,
+    np.dtype("bool"): str_to_boolean,
 }
 
 _numeric_to_str_typecast_functions = {
