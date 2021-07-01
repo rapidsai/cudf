@@ -290,7 +290,8 @@ def masked_constructor(context, builder, sig, args):
     masked.valid = valid
     return masked._getvalue()
 
-
+# Allows us to make an instance of MaskedType a global variable
+# and properly use it inside functions we will later compile
 @cuda_lowering_registry.lower_constant(MaskedType)
 def lower_constant_masked(context, builder, ty, val):
     masked = cgutils.create_struct_proxy(ty)(context, builder)
