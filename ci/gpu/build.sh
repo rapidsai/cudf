@@ -201,8 +201,8 @@ fi
 ################################################################################
 
 # If examples grows too large to build, should move to cpu side
-gpuci_logger "Building libcudf examples"
-$WORKSPACE/cpp/examples/build.sh
+# gpuci_logger "Building libcudf examples"
+# $WORKSPACE/cpp/examples/build.sh
 
 # set environment variable for numpy 1.16
 # will be enabled for later versions by default
