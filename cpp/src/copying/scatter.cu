@@ -41,9 +41,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
 
-#include <cudf/debug_printers.hpp>
-#include "cudf/types.hpp"
-
 namespace cudf {
 namespace detail {
 namespace {
