@@ -173,7 +173,7 @@ class NAType(types.Type):
 
     def unify(self, context, other):
         """
-        Masked  <-> NA works from above
+        Masked  <-> NA is deferred to MaskedType.unify()
         Literal <-> NA -> Masked
         """
         if isinstance(other, MaskedType):
@@ -202,30 +202,32 @@ def typeof_na(val, c):
 register_model(NAType)(models.OpaqueModel)
 
 
-# Ultimately, we want numba to produce PTX code that specifies how to add
-# two singular `Masked` structs together, which is defined as producing a
+# Ultimately, we want numba to produce PTX code that specifies how to implement
+# an operation on two singular `Masked` structs together, which is defined as producing a
 # new `Masked` with the right validity and if valid, the correct value.
 # This happens in two phases:
-#   1. Specify that `Masked` + `Masked` exists and what it should return
+#   1. Specify that `Masked` <op> `Masked` exists and what it should return
 #   2. Implement how to actually do (1) at the LLVM level
 # The following code accomplishes (1) - it is really just a way of specifying
-# that the `+` operation has a CUDA overload that accepts two `Masked` that
+# that the <op> has a CUDA overload that accepts two `Masked` that
 # are parameterized with `value_type` and what flavor of `Masked` to return.
 class MaskedScalarArithOp(AbstractTemplate):
     def generic(self, args, kws):
         """
-        Typing for `Masked` + `Masked`
+        Typing for `Masked` <op> `Masked`
         Numba expects a valid numba type to be returned if typing is successful
-        else `None` signifies the error state (this is common across numba)
+        else `None` signifies the error state (this pattern is commonly used
+        in Numba)
         """
         if isinstance(args[0], MaskedType) and isinstance(args[1], MaskedType):
             # In the case of op(Masked, Masked), the return type is a Masked
             # such that Masked.value is the primitive type that would have
-            # been resolved if we were just adding the `value_type`s.
+            # been resolved if we were just operating on the
+            # `value_type`s.
             return_type = self.context.resolve_function_type(
                 self.key, (args[0].value_type, args[1].value_type), kws
             ).return_type
-            return nb_signature(MaskedType(return_type), args[0], args[1],)
+            return nb_signature(MaskedType(return_type), args[0], args[1])
 
 
 class MaskedScalarNullOp(AbstractTemplate):
@@ -245,7 +247,7 @@ class MaskedScalarNullOp(AbstractTemplate):
 class MaskedScalarScalarOp(AbstractTemplate):
     def generic(self, args, kws):
         """
-        Typing for `Masked` + a scalar.
+        Typing for `Masked` <op> a scalar (and vice-versa).
         handles situations like `x + 1`
         """
         if isinstance(args[0], MaskedType) and isinstance(

@@ -36,7 +36,7 @@ def make_arithmetic_op(op):
 
     def masked_scalar_op_impl(context, builder, sig, args):
         """
-        Implement `MaskedType` + `MaskedType`
+        Implement `MaskedType` <op> `MaskedType`
         """
         # MaskedType(...), MaskedType(...)
         masked_type_1, masked_type_2 = sig.args
@@ -61,7 +61,7 @@ def make_arithmetic_op(op):
         valid = builder.and_(m1.valid, m2.valid)
         result.valid = valid
         with builder.if_then(valid):
-            # Let numba handle generating the extra LLVM needed to perform
+            # Let numba handle generating the extra IR needed to perform
             # operations on mixed types, by compiling the final core op between
             # the two primitive values as a separate function and calling it
             result.value = context.compile_internal(
@@ -98,8 +98,9 @@ def register_arithmetic_op(op):
 
 def masked_scalar_null_op_impl(context, builder, sig, args):
     """
-    Implement `MaskedType` + `NAType`
-    The answer to this is known up front so no actual addition
+    Implement `MaskedType` <op> `NAType`
+    or `NAType` <op> `MaskedType`
+    The answer to this is known up front so no actual operation
     needs to take place
     """
 
@@ -116,7 +117,7 @@ def masked_scalar_null_op_impl(context, builder, sig, args):
 def make_const_op(op):
     def masked_scalar_const_op_impl(context, builder, sig, args):
         """
-        Implement `MaskedType` + constant
+        Implement `MaskedType` <op> constant
         """
         masked_type, const_type = sig.args
         masked_value, const_value = args
@@ -237,9 +238,9 @@ def masked_scalar_bool_impl(context, builder, sig, args):
     return indata.value
 
 
-# To handle the unification, we need to support casting from any type to an
-# extension type. The cast implementation takes the value passed in and returns
-# an extension struct wrapping that value.
+# To handle the unification, we need to support casting from any type to a
+# masked type. The cast implementation takes the value passed in and returns
+# a masked type struct wrapping that value.
 @cuda_lowering_registry.lower_cast(types.Any, MaskedType)
 def cast_primitive_to_masked(context, builder, fromty, toty, val):
     casted = context.cast(builder, val, fromty, toty.value_type)
