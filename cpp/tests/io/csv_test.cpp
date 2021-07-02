@@ -527,6 +527,42 @@ TEST_F(CsvReaderTest, MultiColumn)
   expect_column_data_equal(float64_values, view.column(14));
 }
 
+TEST_F(CsvReaderTest, RepeatColumn)
+{
+  constexpr auto num_rows = 10;
+  auto int16_values       = random_values<int16_t>(num_rows);
+  auto int64_values       = random_values<int64_t>(num_rows);
+  auto uint64_values      = random_values<uint64_t>(num_rows);
+  auto float32_values     = random_values<float>(num_rows);
+
+  auto filepath = temp_env->get_temp_dir() + "RepeatColumn.csv";
+  {
+    std::ostringstream line;
+    for (int i = 0; i < num_rows; ++i) {
+      line << int16_values[i] << "," << int64_values[i] << "," << uint64_values[i] << ","
+           << float32_values[i] << "\n";
+    }
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << line.str();
+  }
+
+  // repeats column in indexes, and names, misses 1 column.
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+      .dtypes(std::vector<std::string>{"int16", "int64", "uint64", "float"})
+      .names({"A", "B", "C", "D"})
+      .use_cols_indexes({1, 0, 0})
+      .use_cols_names({"D", "B", "B"})
+      .header(-1);
+  auto result = cudf_io::read_csv(in_opts);
+
+  const auto view = result.tbl->view();
+  EXPECT_EQ(3, view.num_columns());
+  expect_column_data_equal(int16_values, view.column(0));
+  expect_column_data_equal(int64_values, view.column(1));
+  expect_column_data_equal(float32_values, view.column(2));
+}
+
 TEST_F(CsvReaderTest, Booleans)
 {
   auto filepath = temp_env->get_temp_dir() + "Booleans.csv";
