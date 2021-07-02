@@ -126,7 +126,7 @@ struct calculate_group_statistics_functor {
       uint32_t r          = i + t;
       uint32_t row        = r + s.group.start_row;
       auto const is_valid = (r < s.group.num_rows) ? s.col.leaf_column->is_valid(row) : 0;
-      if (is_valid) { chunk.non_nulls++; }
+      chunk.non_nulls += is_valid;
     }
     chunk = block_reduce(chunk, storage);
 

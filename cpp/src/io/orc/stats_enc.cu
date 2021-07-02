@@ -113,6 +113,8 @@ __global__ void __launch_bounds__(block_size, 1)
           stats_len = pb_fldlen_common + pb_fld_hdrlen32 + 3 * (pb_fld_hdrlen + pb_fldlen_int64) +
                       chunks[idx].min_value.str_val.length + chunks[idx].max_value.str_val.length;
           break;
+          case dtype_none:
+            stats_len = pb_fldlen_common;
         default: break;
       }
     }
