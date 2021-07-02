@@ -424,9 +424,13 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
  *
  * Merging M2 values require accessing to partial M2 values and also groupwise means and group valid
  * counts. Thus, the input to this aggregation need to be a structs column containing tuples of
- * groupwise `(M2_value, mean, valid_count)`.
+ * groupwise `(valid_count, mean, M2_value)`.
  *
- * @param values Grouped values (tuples of groupwise `(M2_value, mean, valid_count)`) to merge M2.
+ * This aggregation not only merges the partial results of `M2` but also merged all the partial
+ * results of input aggregations (`COUNT_VALID`, `MEAN`, and `M2`). As such, the output will be a
+ * structs column containing children columns of merged `COUNT_VALID`, `MEAN`, and `M2` values.
+ *
+ * @param values Grouped values (tuples of groupwise `(valid_count, mean, M2_value)`) to merge.
  * @param group_offsets Offsets of groups' starting points within @p values.
  * @param num_groups Number of groups.
  * @param mr Device memory resource used to allocate the returned column's device memory
