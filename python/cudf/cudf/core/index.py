@@ -1428,6 +1428,10 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
     @classmethod
     def _from_data(cls, data, index=None):
+        if len(data) > 1:
+            return cudf.MultiIndex._from_data(
+                cudf.core.column_accessor.ColumnAccessor(data)
+            )
         return cls._from_table(SingleColumnFrame(data=data))
 
     @property
