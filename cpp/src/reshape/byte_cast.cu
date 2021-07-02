@@ -34,10 +34,10 @@ struct byte_list_conversion {
    */
   template <typename T>
   std::enable_if_t<!std::is_integral<T>::value and !is_floating_point<T>(), std::unique_ptr<column>>
-  operator()(column_view const& input_column,
-             flip_endianness configuration,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr) const
+  operator()(column_view const&,
+             flip_endianness,
+             rmm::cuda_stream_view,
+             rmm::mr::device_memory_resource*) const
   {
     CUDF_FAIL("Unsupported non-numeric and non-string column");
   }
@@ -87,7 +87,7 @@ struct byte_list_conversion {
 template <>
 std::unique_ptr<cudf::column> byte_list_conversion::operator()<string_view>(
   column_view const& input_column,
-  flip_endianness configuration,
+  flip_endianness,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr) const
 {

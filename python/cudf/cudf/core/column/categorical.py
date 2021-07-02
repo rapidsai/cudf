@@ -12,7 +12,6 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    Union,
     cast,
 )
 
@@ -28,14 +27,14 @@ from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethodsMixin, ParentType
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_interval_dtype,
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
-    is_interval_dtype,
 )
 
 if TYPE_CHECKING:
@@ -46,9 +45,6 @@ if TYPE_CHECKING:
         StringColumn,
         TimeDeltaColumn,
     )
-
-
-ParentType = Union["cudf.Series", "cudf.Index"]
 
 
 class CategoricalAccessor(ColumnMethodsMixin):
@@ -1388,10 +1384,10 @@ class CategoricalColumn(column.ColumnBase):
             new_categories=dtype.categories, ordered=dtype.ordered
         )
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
+    def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
-    def as_string_column(self, dtype, format=None) -> StringColumn:
+    def as_string_column(self, dtype, format=None, **kwargs) -> StringColumn:
         return self._get_decategorized_column().as_string_column(
             dtype, format=format
         )
@@ -1513,27 +1509,23 @@ class CategoricalColumn(column.ColumnBase):
             offset=codes_col.offset,
         )
 
-    def _copy_type_metadata(
-        self: CategoricalColumn, other: ColumnBase
-    ) -> ColumnBase:
-        """Copies type metadata from self onto other, returning a new column.
-
-        In addition to the default behavior, if `other` is not a
-        CategoricalColumn, we assume other is a column of codes, and return a
-        CategoricalColumn composed of `other`  and the categories of `self`.
-        """
-        if not isinstance(other, cudf.core.column.CategoricalColumn):
-            other = column.build_categorical_column(
-                categories=self.categories,
-                codes=column.as_column(other.base_data, dtype=other.dtype),
-                mask=other.base_mask,
-                ordered=self.ordered,
-                size=other.size,
-                offset=other.offset,
-                null_count=other.null_count,
+    def _with_type_metadata(
+        self: CategoricalColumn, dtype: Dtype
+    ) -> CategoricalColumn:
+        if isinstance(dtype, CategoricalDtype):
+            return column.build_categorical_column(
+                categories=dtype.categories._values,
+                codes=column.as_column(
+                    self.codes.base_data, dtype=self.codes.dtype
+                ),
+                mask=self.codes.base_mask,
+                ordered=dtype.ordered,
+                size=self.codes.size,
+                offset=self.codes.offset,
+                null_count=self.codes.null_count,
             )
-        # Have to ignore typing here because it misdiagnoses super().
-        return super()._copy_type_metadata(other)  # type: ignore
+
+        return self
 
 
 def _create_empty_categorical_column(

@@ -477,8 +477,8 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
                     offsets_update_fn);
 
   // build the characters column
-  auto chars_column = create_chars_child_column(
-    strings_count, chars_bytes + (delta_per_target * target_count), stream, mr);
+  auto chars_column =
+    create_chars_child_column(chars_bytes + (delta_per_target * target_count), stream, mr);
   auto d_out_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
     rmm::exec_policy(stream),
@@ -819,7 +819,7 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
   // build chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),

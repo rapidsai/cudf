@@ -9,7 +9,11 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.utils import NUMERIC_TYPES, assert_eq, assert_exceptions_equal
+from cudf.testing._utils import (
+    NUMERIC_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 
 @pytest.fixture
@@ -804,3 +808,25 @@ def test_series_construction_with_nulls(input_obj, dtype):
     got = cudf.Series(input_obj, dtype="category").to_pandas()
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": cudf.Series(["a", "b", "c", "a", "c", "b"]).astype("category")},
+        {
+            "a": cudf.Series(["a", "a", "b", "b"]).astype("category"),
+            "b": cudf.Series(["b", "b", "c", "c"]).astype("category"),
+            "c": cudf.Series(["c", "c", "a", "a"]).astype("category"),
+        },
+        {
+            "a": cudf.Series(["a", None, "b", "b"]).astype("category"),
+            "b": cudf.Series(["b", "b", None, "c"]).astype("category"),
+            "c": cudf.Series(["c", "c", "a", None]).astype("category"),
+        },
+    ],
+)
+def test_serialize_categorical_columns(data):
+    df = cudf.DataFrame(data)
+    recreated = df.__class__.deserialize(*df.serialize())
+    assert_eq(recreated, df)

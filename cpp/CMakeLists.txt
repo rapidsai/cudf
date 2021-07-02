@@ -40,10 +40,11 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
-option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
+option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
@@ -53,10 +54,11 @@ option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
-message(VERBOSE "CUDF: Configure CMake to build (google) benchmarks: ${BUILD_BENCHMARKS}")
+message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
 message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
+message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_ENABLE_ARROW_S3}")
 message(VERBOSE "CUDF: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
 message(VERBOSE "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}")
 message(VERBOSE "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler: ${CUDA_ENABLE_LINEINFO}")
@@ -168,6 +170,7 @@ add_library(cudf
     src/copying/gather.cu
     src/copying/get_element.cu
     src/copying/pack.cpp
+    src/copying/reverse.cu
     src/copying/sample.cu
     src/copying/scatter.cu
     src/copying/shift.cu
@@ -195,6 +198,7 @@ add_library(cudf
     src/groupby/sort/group_argmin.cu
     src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_collect.cu
+    src/groupby/sort/group_merge_lists.cu
     src/groupby/sort/group_count.cu
     src/groupby/sort/group_max.cu
     src/groupby/sort/group_min.cu
@@ -362,8 +366,6 @@ add_library(cudf
     src/strings/regex/regexec.cu
     src/strings/repeat_strings.cu
     src/strings/replace/backref_re.cu
-    src/strings/replace/backref_re_large.cu
-    src/strings/replace/backref_re_medium.cu
     src/strings/replace/multi_re.cu
     src/strings/replace/replace.cu
     src/strings/replace/replace_re.cu
@@ -409,6 +411,7 @@ add_library(cudf
     src/unary/nan_ops.cu
     src/unary/null_ops.cu
     src/utilities/default_stream.cpp
+    src/utilities/type_checks.cpp
 )
 
 set_target_properties(cudf
@@ -573,6 +576,8 @@ if(CUDF_BUILD_BENCHMARKS)
         GIT_SHALLOW     TRUE
         OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
                         "BENCHMARK_ENABLE_INSTALL OFF")
+    # Find or install NVBench
+    include(cmake/thirdparty/CUDF_GetNVBench.cmake)
     add_subdirectory(benchmarks)
 endif()
 

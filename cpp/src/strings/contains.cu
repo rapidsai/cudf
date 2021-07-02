@@ -45,7 +45,7 @@ namespace {
  * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
  * Longer patterns require global memory.
  */
-template <size_t stack_size>
+template <int stack_size>
 struct contains_fn {
   reprog_device prog;
   column_device_view d_strings;
@@ -163,7 +163,7 @@ namespace {
 /**
  * @brief This counts the number of times the regex pattern matches in each string.
  */
-template <size_t stack_size>
+template <int stack_size>
 struct count_fn {
   reprog_device prog;
   column_device_view d_strings;

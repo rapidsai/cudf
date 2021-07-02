@@ -158,9 +158,10 @@ from cudf._lib.strings.translate import (
 )
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf._typing import ColumnLike, Dtype, ScalarLike
+from cudf.api.types import is_integer
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethodsMixin, ParentType
 from cudf.utils import utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -169,6 +170,12 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
+
+
+def str_to_boolean(column: StringColumn):
+    """Takes in string column and returns boolean column """
+    return (column.str().len() > cudf.Scalar(0, dtype="int8")).fillna(False)
+
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -181,7 +188,7 @@ _str_to_numeric_typecast_functions = {
     np.dtype("uint64"): str_cast.stoul,
     np.dtype("float32"): str_cast.stof,
     np.dtype("float64"): str_cast.stod,
-    np.dtype("bool"): str_cast.to_booleans,
+    np.dtype("bool"): str_to_boolean,
 }
 
 _numeric_to_str_typecast_functions = {
@@ -213,9 +220,6 @@ _timedelta_to_str_typecast_functions = {
     np.dtype("timedelta64[us]"): str_cast.int2timedelta,
     np.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
-
-
-ParentType = Union["cudf.Series", "cudf.core.index.BaseIndex"]
 
 
 class StringMethods(ColumnMethodsMixin):
@@ -483,7 +487,7 @@ class StringMethods(ColumnMethodsMixin):
 
         If the elements of a Series are lists themselves, join the content of
         these lists using the delimiter passed to the function.
-        This function is an equivalent to :meth:`str.join`. 
+        This function is an equivalent to :meth:`str.join`.
         In the special case that the lists in the Series contain only ``None``,
         a `<NA>`/`None` value will always be returned.
 
@@ -497,7 +501,7 @@ class StringMethods(ColumnMethodsMixin):
             This character will take the place of null strings
             (not empty strings) in the Series but will be considered
             only if the Series contains list elements and those lists have
-            at least one non-null string. If ``string_na_rep`` is ``None``, 
+            at least one non-null string. If ``string_na_rep`` is ``None``,
             it defaults to empty space "".
         sep_na_rep : str, default None
             This character will take the place of any null strings
@@ -2763,7 +2767,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -2845,7 +2849,7 @@ class StringMethods(ColumnMethodsMixin):
         3    <NA>
         dtype: object
         """
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -2915,7 +2919,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -2969,7 +2973,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -3023,7 +3027,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -3238,7 +3242,7 @@ class StringMethods(ColumnMethodsMixin):
         1    another line\\nto be\\nwrapped
         dtype: object
         """
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -5116,7 +5120,7 @@ class StringColumn(column.ColumnBase):
         return StringMethods(self, parent=parent)
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         out_dtype = np.dtype(dtype)
 
@@ -5190,10 +5194,12 @@ class StringColumn(column.ColumnBase):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DecimalColumn":
+    ) -> "cudf.core.column.Decimal64Column":
         return cpp_to_decimal(self, dtype)
 
-    def as_string_column(self, dtype: Dtype, format=None) -> StringColumn:
+    def as_string_column(
+        self, dtype: Dtype, format=None, **kwargs
+    ) -> StringColumn:
         return self
 
     @property
