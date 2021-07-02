@@ -315,7 +315,9 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
         if (opts_.is_enabled_mangle_dupe_cols()) {
           // Rename duplicates of column X as X.1, X.2, ...; First appearance
           // stays as X
-          col_name += "." + std::to_string(col_names_histogram[col_name] - 1);
+          do {
+            col_name += "." + std::to_string(col_names_histogram[col_name] - 1);
+          } while (col_names_histogram[col_name]++);
         } else {
           // All duplicate columns will be ignored; First appearance is parsed
           const auto idx     = &col_name - col_names_.data();
