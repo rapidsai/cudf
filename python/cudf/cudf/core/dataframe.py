@@ -4764,7 +4764,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         ...             return cudf.NA
         ...     else:
         ...             return x + y
-        ... 
+        ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, 2, 3],
         ...     'b': [2, 1, 1]

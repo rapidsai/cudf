@@ -269,7 +269,7 @@ def cast_masked_to_masked(context, builder, fromty, toty, val):
     `value_type`. This implements and registers that cast.
     """
 
-    # We will 
+    # We will
     operand = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
     casted = context.cast(
         builder, operand.value, fromty.value_type, toty.value_type
@@ -289,6 +289,7 @@ def masked_constructor(context, builder, sig, args):
     masked.value = value
     masked.valid = valid
     return masked._getvalue()
+
 
 # Allows us to make an instance of MaskedType a global variable
 # and properly use it inside functions we will later compile

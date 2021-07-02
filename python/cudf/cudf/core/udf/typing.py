@@ -31,9 +31,7 @@ class MaskedType(types.Type):
         # MaskedType in Numba shall be parameterized
         # with a value type
         if not isinstance(value, (types.Number, types.Boolean)):
-            raise TypeError(
-                "value_type must be a numeric scalar type"
-            )
+            raise TypeError("value_type must be a numeric scalar type")
         self.value_type = value
         super().__init__(name=f"Masked{self.value_type}")
 
@@ -203,9 +201,9 @@ register_model(NAType)(models.OpaqueModel)
 
 
 # Ultimately, we want numba to produce PTX code that specifies how to implement
-# an operation on two singular `Masked` structs together, which is defined as producing a
-# new `Masked` with the right validity and if valid, the correct value.
-# This happens in two phases:
+# an operation on two singular `Masked` structs together, which is defined
+# as producing a new `Masked` with the right validity and if valid,
+# the correct value. This happens in two phases:
 #   1. Specify that `Masked` <op> `Masked` exists and what it should return
 #   2. Implement how to actually do (1) at the LLVM level
 # The following code accomplishes (1) - it is really just a way of specifying
