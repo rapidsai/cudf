@@ -476,26 +476,13 @@ class Frame(libcudf.table.Table):
             )
 
         # Concatenate the Tables
-        out_column_names = tables[0]._column_names
-        out_index_names = tables[0]._index_names
-        out_columns = libcudf.concat.concat_tables(tables, ignore_index)
-        index = (
-            cudf.Index._from_data(
-                {
-                    name: out_columns[i]
-                    for i, name in enumerate(out_index_names)
-                }
-            )
-            if not ignore_index
-            else None
+        data_out, index_out = libcudf.utils.table_inputs_from_list(
+            libcudf.concat.concat_tables(tables, ignore_index),
+            column_names=tables[0]._column_names,
+            index_names=None if ignore_index else tables[0]._index_names,
         )
-        n_index_columns = 0 if ignore_index else len(out_index_names)
-        data = {
-            name: out_columns[i + n_index_columns]
-            for i, name in enumerate(out_column_names)
-        }
         out = cls._from_data(
-            cudf.core.column_accessor.ColumnAccessor(data), index=index
+            cudf.core.column_accessor.ColumnAccessor(data_out), index=index_out
         )
 
         # If ignore_index is True, all input frames are empty, and at

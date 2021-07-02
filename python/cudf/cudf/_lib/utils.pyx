@@ -213,3 +213,39 @@ cdef columns_from_unique_ptr(unique_ptr[table] c_tbl):
 
     return [Column.from_unique_ptr(move(dereference(it+i)))
             for i in range(columns.size())]
+
+
+def table_inputs_from_list(columns, column_names, index_names=None):
+    """Convert a list of columns into a dict with an index.
+
+    This method is intended to provide the bridge between the columns returned
+    from calls to libcudf APIs and the cuDF Python Table objects, which require
+    named columns and a separate index.
+
+    Parameters
+    ----------
+    c_tbl : unique_ptr[cudf::table]
+    index_names : iterable
+    column_names : iterable
+
+    Returns
+    -------
+    List[Column]
+        A list of the columns in the output table.
+    """
+    index = (
+        cudf.Index._from_data(
+            {
+                name: columns[i]
+                for i, name in enumerate(index_names)
+            }
+        )
+        if index_names is not None
+        else None
+    )
+    n_index_columns = len(index_names) if index_names is not None else 0
+    data = {
+        name: columns[i + n_index_columns]
+        for i, name in enumerate(column_names)
+    }
+    return data, index
