@@ -10,6 +10,7 @@ class Masked:
     have an actual python class we can tie to MaskedType
     This is that class
     """
+
     def __init__(self, value, valid):
         self.value = value
         self.valid = valid
