@@ -20,11 +20,9 @@ from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
 
 from cudf._lib.reduce import minmax
-
-cimport cudf._lib.cpp.copying as cpp_copying
-
 from cudf.core.abc import Serializable
 
+cimport cudf._lib.cpp.copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.libcpp.functional cimport reference_wrapper

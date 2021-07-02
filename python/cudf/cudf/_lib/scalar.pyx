@@ -39,7 +39,24 @@ from cudf._lib.cpp.scalar.scalar cimport (
     duration_scalar,
     fixed_point_scalar,
     list_scalar,
+    numeric_scalar,
+    scalar,
+    string_scalar,
     struct_scalar,
+    timestamp_scalar,
+)
+from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type
+from cudf._lib.cpp.wrappers.durations cimport (
+    duration_ms,
+    duration_ns,
+    duration_s,
+    duration_us,
+)
+from cudf._lib.cpp.wrappers.timestamps cimport (
+    timestamp_ms,
+    timestamp_ns,
+    timestamp_s,
+    timestamp_us,
 )
 
 from cudf.utils.dtypes import _decimal_to_int64, is_list_dtype, is_struct_dtype
@@ -322,19 +339,17 @@ cdef _set_list_from_pylist(unique_ptr[scalar]& s,
     value = value if valid else [cudf.NA]
     cdef Column col
     if isinstance(dtype.element_type, ListDtype):
-        col = cudf.core.column.as_column(
-            pa.array(
-                value, from_pandas=True, type=dtype.element_type.to_arrow()
-            )
-        )
+        pa_type = dtype.element_type.to_arrow()
     else:
-        col = cudf.core.column.as_column(
-            pa.array(value, from_pandas=True)
-        )
+        pa_type = dtype.to_arrow().value_type
+    col = cudf.core.column.as_column(
+        pa.array(value, from_pandas=True, type=pa_type)
+    )
     cdef column_view col_view = col.view()
     s.reset(
-        new list_scalar(col_view)
+        new list_scalar(col_view, valid)
     )
+
 
 cdef _get_py_list_from_list(unique_ptr[scalar]& s):
 
@@ -486,18 +501,16 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
 
 
 def as_device_scalar(val, dtype=None):
-    if dtype:
-        if isinstance(val, (cudf.Scalar, DeviceScalar)) and dtype != val.dtype:
+    if isinstance(val, (cudf.Scalar, DeviceScalar)):
+        if dtype == val.dtype or dtype is None:
+            if isinstance(val, DeviceScalar):
+                return val
+            else:
+                return val.device_value
+        else:
             raise TypeError("Can't update dtype of existing GPU scalar")
-        else:
-            return cudf.Scalar(value=val, dtype=dtype).device_value
     else:
-        if isinstance(val, DeviceScalar):
-            return val
-        if isinstance(val, cudf.Scalar):
-            return val.device_value
-        else:
-            return cudf.Scalar(val).device_value
+        return cudf.Scalar(val, dtype=dtype).device_value
 
 
 def _is_null_host_scalar(slr):

@@ -17,13 +17,7 @@ from pyarrow.includes.libarrow cimport (
     CMessageReader,
     CRecordBatchStreamReader,
 )
-from pyarrow.lib cimport (
-    Buffer,
-    RecordBatchReader,
-    Schema,
-    _CRecordBatchReader,
-    pyarrow_wrap_schema,
-)
+from pyarrow.lib cimport Buffer, RecordBatchReader, Schema, pyarrow_wrap_schema
 
 import pyarrow as pa
 

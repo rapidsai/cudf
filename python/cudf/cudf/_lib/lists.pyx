@@ -8,6 +8,8 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.combine cimport (
+    concatenate_list_elements as cpp_concatenate_list_elements,
+    concatenate_null_policy,
     concatenate_rows as cpp_concatenate_rows,
 )
 from cudf._lib.cpp.lists.count_elements cimport (
@@ -174,3 +176,20 @@ def concatenate_rows(Table tbl):
 
     result = Column.from_unique_ptr(move(c_result))
     return result
+
+
+def concatenate_list_elements(Column input_column, dropna=False):
+    cdef concatenate_null_policy policy = (
+        concatenate_null_policy.IGNORE if dropna
+        else concatenate_null_policy.NULLIFY_OUTPUT_ROW
+    )
+    cdef column_view c_input = input_column.view()
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(cpp_concatenate_list_elements(
+            c_input,
+            policy
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
