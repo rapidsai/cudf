@@ -61,8 +61,6 @@ class PandasCompatDirective(SphinxDirective):
 
 
 def purge_PandasCompats(app, env, docname):
-    """On Sphinx hook: 
-    """
     if not hasattr(env, "PandasCompat_all_pandas_compat"):
         return
 
@@ -87,8 +85,9 @@ def process_PandasCompat_nodes(app, doctree, fromdocname):
         for node in doctree.traverse(PandasCompat):
             node.parent.remove(node)
 
-    # Replace all PandasCompatList nodes with a list of the collected PandasCompats.
-    # Augment each PandasCompat with a backlink to the original location.
+    # Replace all PandasCompatList nodes with a list of the collected
+    # PandasCompats. Augment each PandasCompat with a backlink to the
+    # original location.
     env = app.builder.env
 
     if not hasattr(env, "PandasCompat_all_pandas_compat"):
@@ -105,7 +104,8 @@ def process_PandasCompat_nodes(app, doctree, fromdocname):
             para = nodes.paragraph()
             filename = env.doc2path(PandasCompat_info["docname"], base=None)
             description = _(
-                "(The original entry is located in %s, line %d and can be found "
+                "(The original entry is located in %s, line %d and can be "
+                "found "
             ) % (filename, PandasCompat_info["lineno"])
             para += nodes.Text(description, description)
 
@@ -139,8 +139,9 @@ def setup(app):
         text=(visit_PandasCompat_node, depart_PandasCompat_node),
     )
 
-    app.add_directive("PandasCompat", PandasCompatDirective)
-    app.add_directive("PandasCompatList", PandasCompatListDirective)
+    # Sphinx directives are lower-cased
+    app.add_directive("pandas-compat", PandasCompatDirective)
+    app.add_directive("pandas-compat-list", PandasCompatListDirective)
     app.connect("doctree-resolved", process_PandasCompat_nodes)
     app.connect("env-purge-doc", purge_PandasCompats)
     app.connect("env-merge-info", merge_PandasCompats)

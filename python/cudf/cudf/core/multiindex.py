@@ -1642,25 +1642,26 @@ class MultiIndex(BaseIndex):
         >>> non_monotonic_non_unique_idx.get_loc('b') # differ from pandas
         slice(1, 4, 2)
 
-        .. PandasCompat::
-            The return types of this function may deviates a little from the
+        .. pandas-compat::
+            **MultiIndex.get_loc**
+
+            The return types of this function may deviates from the
             method provided by Pandas. If the index is neither
             lexicographically sorted nor unique, a best effort attempt is made
             to coerce the found indices into a slice. For example:
 
-            ```python
-            >>> import pandas as pd
-            >>> import cudf
-            >>> x = pd.MultiIndex.from_tuples(
-                        [(2, 1, 1), (1, 2, 3), (1, 2, 1),
-                         (1, 1, 1), (1, 1, 1), (2, 2, 1)]
-                    )
-            >>> x.get_loc(1)
-            array([False,  True,  True,  True,  True, False])
-            >>> cudf.from_pandas(x).get_loc(1)
-            slice(1, 5, 1)
-            ```
+            .. code-block::
 
+                >>> import pandas as pd
+                >>> import cudf
+                >>> x = pd.MultiIndex.from_tuples(
+                            [(2, 1, 1), (1, 2, 3), (1, 2, 1),
+                                (1, 1, 1), (1, 1, 1), (2, 2, 1)]
+                        )
+                >>> x.get_loc(1)
+                array([False,  True,  True,  True,  True, False])
+                >>> cudf.from_pandas(x).get_loc(1)
+                slice(1, 5, 1)
         """
         if tolerance is not None:
             raise NotImplementedError(
