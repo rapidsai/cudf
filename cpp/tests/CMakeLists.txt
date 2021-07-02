@@ -198,6 +198,9 @@ endif()
 ConfigureTest(MULTIBYTE_SPLIT_TEST
     io/text/multibyte_split_test.cpp)
 
+ConfigureTest(TRIE_TEST
+    io/text/trie_test.cpp)
+
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
 ConfigureTest(SORT_TEST
