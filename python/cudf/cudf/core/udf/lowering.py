@@ -116,75 +116,47 @@ def masked_scalar_null_op_impl(context, builder, sig, args):
 
 def make_const_op(op):
     def masked_scalar_const_op_impl(context, builder, sig, args):
-        """
-        Implement `MaskedType` <op> constant
-        """
-        masked_type, const_type = sig.args
-        masked_value, const_value = args
-
         return_type = sig.return_type
-        masked_input_type = MaskedType(masked_type.value_type)
-        indata = cgutils.create_struct_proxy(masked_input_type)(
-            context, builder, value=masked_value
-        )
-        masked_return_type = MaskedType(return_type.value_type)
-        result = cgutils.create_struct_proxy(masked_return_type)(
-            context, builder
-        )
+        result = cgutils.create_struct_proxy(return_type)(context, builder)
         result.valid = context.get_constant(types.boolean, 0)
+        if isinstance(sig.args[0], MaskedType):
+            masked_type, const_type = sig.args
+            masked_value, const_value = args
+
+            indata = cgutils.create_struct_proxy(masked_type)(
+                context, builder, value=masked_value
+            )
+            nb_sig = nb_signature(
+                return_type.value_type, masked_type.value_type, const_type
+            )
+            compile_args = (indata.value, const_value)
+        else:
+            const_type, masked_type = sig.args
+            const_value, masked_value = args
+            indata = cgutils.create_struct_proxy(masked_type)(
+                context, builder, value=masked_value
+            )
+            nb_sig = nb_signature(
+                return_type.value_type, const_type, masked_type.value_type
+            )
+            compile_args = (const_value, indata.value)
         with builder.if_then(indata.valid):
             result.value = context.compile_internal(
-                builder,
-                lambda x, y: op(x, y),
-                nb_signature(
-                    return_type.value_type, masked_type.value_type, const_type
-                ),
-                (indata.value, const_value),
+                builder, lambda x, y: op(x, y), nb_sig, compile_args
             )
             result.valid = context.get_constant(types.boolean, 1)
-
         return result._getvalue()
 
     return masked_scalar_const_op_impl
 
 
-def make_reflected_const_op(op):
-    def masked_scalar_reflected_const_op_impl(context, builder, sig, args):
-        const_type, masked_type = sig.args
-        const_value, masked_value = args
-
-        return_type = sig.return_type
-        masked_input_type = MaskedType(masked_type.value_type)
-        indata = cgutils.create_struct_proxy(masked_input_type)(
-            context, builder, value=masked_value
-        )
-        masked_return_type = MaskedType(return_type.value_type)
-        result = cgutils.create_struct_proxy(masked_return_type)(
-            context, builder
-        )
-        result.valid = context.get_constant(types.boolean, 0)
-        with builder.if_then(indata.valid):
-            result.value = context.compile_internal(
-                builder,
-                lambda x, y: op(x, y),
-                nb_signature(
-                    return_type.value_type, const_type, masked_type.value_type
-                ),
-                (const_value, indata.value),
-            )
-            result.valid = context.get_constant(types.boolean, 1)
-
-        return result._getvalue()
-
-    return masked_scalar_reflected_const_op_impl
-
-
 def register_const_op(op):
     to_lower_op = make_const_op(op)
     cuda_lower(op, MaskedType, types.Number)(to_lower_op)
+    cuda_lower(op, types.Number, MaskedType)(to_lower_op)
 
-    to_lower_op_reflected = make_reflected_const_op(op)
-    cuda_lower(op, types.Number, MaskedType)(to_lower_op_reflected)
+    # to_lower_op_reflected = make_reflected_const_op(op)
+    # cuda_lower(op, types.Number, MaskedType)(to_lower_op_reflected)
 
 
 # register all lowering at init
