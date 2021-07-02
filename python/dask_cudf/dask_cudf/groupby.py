@@ -513,6 +513,9 @@ def _finalize_gb_agg(
                 gb.drop(columns=[sum_name], inplace=True)
             if "count" not in agg_list:
                 gb.drop(columns=[count_name], inplace=True)
+        if "collect" in agg_list:
+            collect_name = _make_name(col, "collect", sep=sep)
+            gb[collect_name] = gb[collect_name].list.concat()
 
     # Ensure sorted keys if `sort=True`
     if sort:
