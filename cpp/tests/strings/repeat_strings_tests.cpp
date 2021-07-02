@@ -22,20 +22,12 @@
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
+using namespace cudf::test::iterators;
+
 namespace {
 using STR_COL = cudf::test::strings_column_wrapper;
 
 constexpr bool print_all{false};
-
-auto all_nulls() { return cudf::test::iterator_all_nulls(); }
-
-auto null_at(cudf::size_type idx) { return cudf::test::iterator_with_null_at(idx); }
-
-auto null_at(std::vector<cudf::size_type> const& indices)
-{
-  return cudf::test::iterator_with_null_at(cudf::host_span<cudf::size_type const>{indices});
-}
-
 }  // namespace
 
 struct RepeatJoinStringTest : public cudf::test::BaseFixture {
@@ -117,7 +109,7 @@ TEST_F(RepeatJoinStringTest, AllNullStringsColumn)
 TEST_F(RepeatJoinStringTest, ZeroSizeAndNullStringsColumn)
 {
   auto const strs =
-    STR_COL{{"" /*NULL*/, "", "" /*NULL*/, "", "", "" /*NULL*/}, null_at({0, 2, 5})};
+    STR_COL{{"" /*NULL*/, "", "" /*NULL*/, "", "", "" /*NULL*/}, nulls_at({0, 2, 5})};
   auto const results = cudf::strings::repeat_strings(cudf::strings_column_view(strs), 10);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(strs, *results, print_all);
 }
@@ -186,7 +178,7 @@ TEST_F(RepeatJoinStringTest, StringsColumnWithNulls)
                              "íí",
                              "",
                              "Hello World"},
-                            null_at({1, 3, 5})};
+                            nulls_at({1, 3, 5})};
 
   {
     auto const results  = cudf::strings::repeat_strings(cudf::strings_column_view(strs), 2);
@@ -200,7 +192,7 @@ TEST_F(RepeatJoinStringTest, StringsColumnWithNulls)
                                    "íííí",
                                    "",
                                    "Hello WorldHello World"},
-                                  null_at({1, 3, 5})};
+                                  nulls_at({1, 3, 5})};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 
@@ -213,7 +205,7 @@ TEST_F(RepeatJoinStringTest, StringsColumnWithNulls)
   // Non-positive repeat times.
   {
     auto const expected = STR_COL{
-      {"", "" /*NULL*/, "", "" /*NULL*/, "", "" /*NULL*/, "", "", "", ""}, null_at({1, 3, 5})};
+      {"", "" /*NULL*/, "", "" /*NULL*/, "", "" /*NULL*/, "", "", "", ""}, nulls_at({1, 3, 5})};
 
     auto results = cudf::strings::repeat_strings(cudf::strings_column_view(strs), 0);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
@@ -235,7 +227,7 @@ TEST_F(RepeatJoinStringTest, StringsColumnWithNulls)
     auto const sliced_strs = cudf::slice(strs, {2, 7})[0];
     auto const results  = cudf::strings::repeat_strings(cudf::strings_column_view(sliced_strs), 2);
     auto const expected = STR_COL{
-      {"abcxyzabcxyz", "" /*NULL*/, "xyzéééxyzééé", "" /*NULL*/, "áááááá"}, null_at({1, 3})};
+      {"abcxyzabcxyz", "" /*NULL*/, "xyzéééxyzééé", "" /*NULL*/, "áááááá"}, nulls_at({1, 3})};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 

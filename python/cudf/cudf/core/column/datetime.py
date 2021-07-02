@@ -133,6 +133,14 @@ class DatetimeColumn(column.ColumnBase):
     def weekday(self) -> ColumnBase:
         return self.get_dt_field("weekday")
 
+    @property
+    def dayofyear(self) -> ColumnBase:
+        return self.get_dt_field("day_of_year")
+
+    @property
+    def day_of_year(self) -> ColumnBase:
+        return self.get_dt_field("day_of_year")
+
     def to_pandas(
         self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "cudf.Series":
@@ -241,14 +249,14 @@ class DatetimeColumn(column.ColumnBase):
         )
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         return cast(
             "cudf.core.column.NumericalColumn", self.as_numerical.astype(dtype)
         )
 
     def as_string_column(
-        self, dtype: Dtype, format=None
+        self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
         if format is None:
             format = _dtype_to_format_conversion.get(

@@ -8,7 +8,7 @@ import pytest
 import cudf
 from cudf._lib.transform import mask_to_bools
 from cudf.core.column.column import as_column
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 from cudf.utils import dtypes as dtypeutils
 
 dtypes = sorted(
@@ -140,8 +140,8 @@ def test_column_series_multi_dim(data):
 @pytest.mark.parametrize(
     ("data", "error"),
     [
-        ([1, "1.0", "2", -3], TypeError),
-        ([np.nan, 0, "null", cp.nan], TypeError),
+        ([1, "1.0", "2", -3], pa.lib.ArrowInvalid),
+        ([np.nan, 0, "null", cp.nan], pa.lib.ArrowInvalid),
         (
             [np.int32(4), np.float64(1.5), np.float32(1.290994), np.int8(0)],
             None,
@@ -152,7 +152,7 @@ def test_column_mixed_dtype(data, error):
     if error is None:
         cudf.Series(data)
     else:
-        with pytest.raises(TypeError):
+        with pytest.raises(error):
             cudf.Series(data)
 
 
@@ -364,6 +364,32 @@ def test_as_column_buffer(data, expected):
     actual_column = cudf.core.column.as_column(
         cudf.core.Buffer(data), dtype=data.dtype
     )
+    assert_eq(cudf.Series(actual_column), cudf.Series(expected))
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        (
+            pa.array([100, 200, 300], type=pa.decimal128(3)),
+            cudf.core.column.as_column(
+                [100, 200, 300], dtype=cudf.core.dtypes.Decimal64Dtype(3, 0)
+            ),
+        ),
+        (
+            pa.array([{"a": 1, "b": 3}, {"c": 2, "d": 4}]),
+            cudf.core.column.as_column([{"a": 1, "b": 3}, {"c": 2, "d": 4}]),
+        ),
+        (
+            pa.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]),
+            cudf.core.column.as_column(
+                [[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]
+            ),
+        ),
+    ],
+)
+def test_as_column_arrow_array(data, expected):
+    actual_column = cudf.core.column.as_column(data)
     assert_eq(cudf.Series(actual_column), cudf.Series(expected))
 
 

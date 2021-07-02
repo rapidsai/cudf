@@ -103,8 +103,8 @@ struct dispatch_hex_to_integers_fn {
                       hex_to_integer_fn<IntegerType>{strings_column});
   }
   // non-integral types throw an exception
-  template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
-  void operator()(column_device_view const&, mutable_column_view&, rmm::cuda_stream_view) const
+  template <typename T, typename... Args>
+  std::enable_if_t<not std::is_integral<T>::value, void> operator()(Args&&...) const
   {
     CUDF_FAIL("Output for hex_to_integers must be an integral type.");
   }
@@ -117,6 +117,86 @@ void dispatch_hex_to_integers_fn::operator()<bool>(column_device_view const&,
 {
   CUDF_FAIL("Output for hex_to_integers must not be a boolean type.");
 }
+
+/**
+ * @brief Functor to convert integers to hexadecimal strings
+ *
+ * @tparam IntegerType The specific integer type to convert from.
+ */
+template <typename IntegerType>
+struct integer_to_hex_fn {
+  column_device_view const d_column;
+  offset_type* d_offsets{};
+  char* d_chars{};
+
+  __device__ void byte_to_hex(uint8_t byte, char* hex)
+  {
+    hex[0] = [&] {
+      if (byte < 16) { return '0'; }
+      uint8_t const nibble = byte / 16;
+
+      byte = byte - (nibble * 16);
+      return static_cast<char>(nibble < 10 ? '0' + nibble : 'A' + (nibble - 10));
+    }();
+    hex[1] = byte < 10 ? '0' + byte : 'A' + (byte - 10);
+  }
+
+  __device__ void operator()(size_type idx)
+  {
+    if (d_column.is_null(idx)) {
+      if (!d_chars) { d_offsets[idx] = 0; }
+      return;
+    }
+
+    auto const value = d_column.element<IntegerType>(idx);        // ex. 123456
+    auto value_bytes = reinterpret_cast<uint8_t const*>(&value);  // 0x40E20100
+
+    // compute the number of output bytes
+    int bytes      = sizeof(IntegerType);
+    int byte_index = sizeof(IntegerType);
+    while ((--byte_index > 0) && (value_bytes[byte_index] & 0xFF) == 0) { --bytes; }
+
+    // create output
+    byte_index = bytes - 1;
+    if (d_chars) {
+      auto d_buffer = d_chars + d_offsets[idx];
+      while (byte_index >= 0) {
+        byte_to_hex(value_bytes[byte_index], d_buffer);
+        d_buffer += 2;
+        --byte_index;
+      }
+    } else {
+      d_offsets[idx] = static_cast<offset_type>(bytes) * 2;  // 2 hex characters per byte
+    }
+  }
+};
+
+struct dispatch_integers_to_hex_fn {
+  template <typename IntegerType, std::enable_if_t<std::is_integral_v<IntegerType>>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
+  {
+    auto const d_column = column_device_view::create(input, stream);
+
+    auto children = cudf::strings::detail::make_strings_children(
+      integer_to_hex_fn<IntegerType>{*d_column}, input.size(), stream, mr);
+
+    return make_strings_column(input.size(),
+                               std::move(children.first),
+                               std::move(children.second),
+                               input.null_count(),
+                               cudf::detail::copy_bitmask(input, stream, mr),
+                               stream,
+                               mr);
+  }
+  // non-integral types throw an exception
+  template <typename T, typename... Args>
+  std::enable_if_t<not std::is_integral_v<T>, std::unique_ptr<column>> operator()(Args...) const
+  {
+    CUDF_FAIL("integers_to_hex only supports integral type columns");
+  }
+};
 
 }  // namespace
 
@@ -183,6 +263,14 @@ std::unique_ptr<column> is_hex(strings_column_view const& strings,
   return results;
 }
 
+std::unique_ptr<column> integers_to_hex(column_view const& input,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  if (input.is_empty()) { return cudf::make_empty_column(data_type{type_id::STRING}); }
+  return type_dispatcher(input.type(), dispatch_integers_to_hex_fn{}, input, stream, mr);
+}
+
 }  // namespace detail
 
 // external API
@@ -199,6 +287,13 @@ std::unique_ptr<column> is_hex(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::is_hex(strings, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> integers_to_hex(column_view const& input,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::integers_to_hex(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

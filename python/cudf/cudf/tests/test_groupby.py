@@ -15,14 +15,14 @@ import rmm
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.dataset_generator import rand_dataframe
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
 )
+from cudf.testing.dataset_generator import rand_dataframe
 
 _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")
@@ -1493,6 +1493,27 @@ def test_groupby_list_of_lists(list_agg):
         gdf.groupby("a").agg({"b": list_agg}),
         check_dtype=False,
     )
+
+
+@pytest.mark.parametrize("list_agg", [list, "collect"])
+def test_groupby_list_of_structs(list_agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 1, 2, 2, 2],
+            "b": [
+                {"c": "1", "d": 1},
+                {"c": "2", "d": 2},
+                {"c": "3", "d": 3},
+                {"c": "4", "d": 4},
+                {"c": "5", "d": 5},
+                {"c": "6", "d": 6},
+            ],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    with pytest.raises(pd.core.base.DataError):
+        gdf.groupby("a").agg({"b": list_agg}),
 
 
 @pytest.mark.parametrize("list_agg", [list, "collect"])

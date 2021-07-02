@@ -18,8 +18,8 @@ from pyarrow import parquet as pq
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
-from cudf.tests import dataset_generator as dg
-from cudf.tests.utils import (
+from cudf.testing import dataset_generator as dg
+from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,

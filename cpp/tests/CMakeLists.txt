@@ -1,4 +1,4 @@
-﻿#=============================================================================
+#=============================================================================
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,6 +67,8 @@ ConfigureTest(GROUPBY_TEST
     groupby/max_tests.cpp
     groupby/mean_tests.cpp
     groupby/median_tests.cpp
+    groupby/merge_lists_tests.cpp
+    groupby/merge_sets_tests.cpp
     groupby/min_scan_tests.cpp
     groupby/nth_element_tests.cpp
     groupby/nunique_tests.cpp
@@ -186,6 +188,10 @@ ConfigureTest(CSV_TEST io/csv_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
+ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
+if(CUDF_ENABLE_ARROW_S3)
+  target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
+endif()
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
@@ -197,17 +203,17 @@ ConfigureTest(SORT_TEST
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
 ConfigureTest(COPYING_TEST
-    copying/concatenate_tests.cu
+    copying/concatenate_tests.cpp
     copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
     copying/copy_tests.cu
     copying/detail_gather_tests.cu
-    copying/gather_struct_tests.cu
-    copying/gather_tests.cu
-    copying/gather_str_tests.cu
-    copying/gather_list_tests.cu
+    copying/gather_list_tests.cpp
+    copying/gather_str_tests.cpp
+    copying/gather_struct_tests.cpp
+    copying/gather_tests.cpp
     copying/get_value_tests.cpp
-    copying/pack_tests.cu
+    copying/pack_tests.cpp
     copying/sample_tests.cpp
     copying/scatter_tests.cpp
     copying/scatter_list_tests.cpp
@@ -217,7 +223,8 @@ ConfigureTest(COPYING_TEST
     copying/shift_tests.cpp
     copying/slice_tests.cpp
     copying/split_tests.cpp
-    copying/utility_tests.cpp)
+    copying/utility_tests.cpp
+    copying/reverse_tests.cpp)
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
@@ -226,7 +233,8 @@ ConfigureTest(UTILITIES_TEST
     utilities_tests/column_utilities_tests.cpp
     utilities_tests/column_wrapper_tests.cpp
     utilities_tests/lists_column_wrapper_tests.cpp
-    utilities_tests/default_stream_tests.cpp)
+    utilities_tests/default_stream_tests.cpp
+    utilities_tests/type_check_tests.cpp)
 
 ###################################################################################################
 # - span tests -------------------------------------------------------------------------------

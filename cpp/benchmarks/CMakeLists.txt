@@ -29,6 +29,7 @@ target_link_libraries(cudf_datagen
                       GTest::gmock_main
                       GTest::gtest_main
                       benchmark::benchmark
+                      nvbench::main
                       Threads::Threads
                       cudf)
 

@@ -14,7 +14,7 @@ import pytest
 
 import cudf
 from cudf import read_csv
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -977,6 +977,22 @@ def test_csv_reader_filepath_or_buffer(tmpdir, path_or_buf, src):
     got = cudf.read_csv(path_or_buf(src))
 
     assert_eq(expect, got)
+
+
+def test_small_zip(tmpdir):
+    df = pd.DataFrame(
+        {
+            "a": [1997] * 2,
+            "b": ["Ford"] * 2,
+            "c": ["Super, luxurious truck"] * 2,
+        }
+    )
+
+    fname = tmpdir.join("small_zip_file.zip")
+    df.to_csv(fname, index=False)
+
+    got = cudf.read_csv(fname)
+    assert_eq(df, got)
 
 
 def test_csv_reader_carriage_return(tmpdir):

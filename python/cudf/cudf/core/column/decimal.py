@@ -2,11 +2,11 @@
 
 from decimal import Decimal
 from typing import Any, Sequence, Tuple, Union, cast
+from warnings import warn
 
 import cupy as cp
 import numpy as np
 import pyarrow as pa
-from pandas.api.types import is_integer_dtype
 
 import cudf
 from cudf import _lib as libcudf
@@ -15,16 +15,70 @@ from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
 from cudf._typing import Dtype
+from cudf.api.types import is_integer_dtype
 from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, NumericalColumn, as_column
-from cudf.core.dtypes import Decimal64Dtype
+from cudf.core.column import ColumnBase, as_column
+from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 from .numerical_base import NumericalBaseColumn
 
 
-class DecimalColumn(NumericalBaseColumn):
+class Decimal32Column(NumericalBaseColumn):
+    dtype: Decimal32Dtype
+
+    @classmethod
+    def from_arrow(cls, data: pa.Array):
+        dtype = Decimal32Dtype.from_arrow(data.type)
+        mask_buf = data.buffers()[0]
+        mask = (
+            mask_buf
+            if mask_buf is None
+            else pa_mask_buffer_to_mask(mask_buf, len(data))
+        )
+        data_128 = cp.array(np.frombuffer(data.buffers()[1]).view("int32"))
+        data_32 = data_128[::4].copy()
+        return cls(
+            data=Buffer(data_32.view("uint8")),
+            size=len(data),
+            dtype=dtype,
+            offset=data.offset,
+            mask=mask,
+        )
+
+    def to_arrow(self):
+        data_buf_32 = self.base_data.to_host_array().view("int32")
+        data_buf_128 = np.empty(len(data_buf_32) * 4, dtype="int32")
+
+        # use striding to set the first 32 bits of each 128-bit chunk:
+        data_buf_128[::4] = data_buf_32
+        # use striding again to set the remaining bits of each 128-bit chunk:
+        # 0 for non-negative values, -1 for negative values:
+        data_buf_128[1::4] = np.piecewise(
+            data_buf_32, [data_buf_32 < 0], [-1, 0]
+        )
+        data_buf_128[2::4] = np.piecewise(
+            data_buf_32, [data_buf_32 < 0], [-1, 0]
+        )
+        data_buf_128[3::4] = np.piecewise(
+            data_buf_32, [data_buf_32 < 0], [-1, 0]
+        )
+        data_buf = pa.py_buffer(data_buf_128)
+        mask_buf = (
+            self.base_mask
+            if self.base_mask is None
+            else pa.py_buffer(self.base_mask.to_host_array())
+        )
+        return pa.Array.from_buffers(
+            type=self.dtype.to_arrow(),
+            offset=self._offset,
+            length=self.size,
+            buffers=[mask_buf, data_buf],
+        )
+
+
+class Decimal64Column(NumericalBaseColumn):
     dtype: Decimal64Dtype
 
     def __truediv__(self, other):
@@ -60,6 +114,7 @@ class DecimalColumn(NumericalBaseColumn):
     def to_arrow(self):
         data_buf_64 = self.base_data.to_host_array().view("int64")
         data_buf_128 = np.empty(len(data_buf_64) * 2, dtype="int64")
+
         # use striding to set the first 64 bits of each 128-bit chunk:
         data_buf_128[::2] = data_buf_64
         # use striding again to set the remaining bits of each 128-bit chunk:
@@ -98,7 +153,11 @@ class DecimalColumn(NumericalBaseColumn):
         elif op in ("eq", "ne", "lt", "gt", "le", "ge"):
             if not isinstance(
                 other,
-                (DecimalColumn, cudf.core.column.NumericalColumn, cudf.Scalar),
+                (
+                    Decimal64Column,
+                    cudf.core.column.NumericalColumn,
+                    cudf.Scalar,
+                ),
             ):
                 raise TypeError(
                     f"Operator {op} not supported between"
@@ -141,22 +200,33 @@ class DecimalColumn(NumericalBaseColumn):
             self, quant, interpolation, sorted_indices, exact
         )
 
-        return self._copy_type_metadata(result)
+        return result._with_type_metadata(self.dtype)
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DecimalColumn":
+    ) -> Union[
+        "cudf.core.column.Decimal32Column", "cudf.core.column.Decimal64Column"
+    ]:
+        if (
+            isinstance(dtype, Decimal64Dtype)
+            and dtype.scale < self.dtype.scale
+        ):
+            warn(
+                "cuDF truncates when downcasting decimals to a lower scale. "
+                "To round, use Series.round() or DataFrame.round()."
+            )
+
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         return libcudf.unary.cast(self, dtype)
 
     def as_string_column(
-        self, dtype: Dtype, format=None
+        self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return cpp_from_decimal(self)
@@ -175,8 +245,8 @@ class DecimalColumn(NumericalBaseColumn):
         if isinstance(value, (int, Decimal)):
             value = cudf.Scalar(value, dtype=self.dtype)
         elif (
-            isinstance(value, DecimalColumn)
-            or isinstance(value, NumericalColumn)
+            isinstance(value, Decimal64Column)
+            or isinstance(value, cudf.core.column.NumericalColumn)
             and is_integer_dtype(value.dtype)
         ):
             value = value.astype(self.dtype)
@@ -189,7 +259,7 @@ class DecimalColumn(NumericalBaseColumn):
         result = libcudf.replace.replace_nulls(
             input_col=self, replacement=value, method=method, dtype=dtype
         )
-        return self._copy_type_metadata(result)
+        return result._with_type_metadata(self.dtype)
 
     def serialize(self) -> Tuple[dict, list]:
         header, frames = super().serialize()
@@ -209,16 +279,13 @@ class DecimalColumn(NumericalBaseColumn):
             "Decimals are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _copy_type_metadata(self: ColumnBase, other: ColumnBase) -> ColumnBase:
-        """Copies type metadata from self onto other, returning a new column.
+    def _with_type_metadata(
+        self: "cudf.core.column.Decimal64Column", dtype: Dtype
+    ) -> "cudf.core.column.Decimal64Column":
+        if isinstance(dtype, Decimal64Dtype):
+            self.dtype.precision = dtype.precision
 
-        In addition to the default behavior, if `other` is also a decimal
-        column the precision is copied over.
-        """
-        if isinstance(other, DecimalColumn):
-            other.dtype.precision = self.dtype.precision  # type: ignore
-        # Have to ignore typing here because it misdiagnoses super().
-        return super()._copy_type_metadata(other)  # type: ignore
+        return self
 
 
 def _binop_scale(l_dtype, r_dtype, op):
