@@ -12,7 +12,6 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    Union,
     cast,
 )
 
@@ -28,10 +27,11 @@ from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethodsMixin, ParentType
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_interval_dtype,
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
@@ -45,9 +45,6 @@ if TYPE_CHECKING:
         StringColumn,
         TimeDeltaColumn,
     )
-
-
-ParentType = Union["cudf.Series", "cudf.Index"]
 
 
 class CategoricalAccessor(ColumnMethodsMixin):
@@ -114,7 +111,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         super().__init__(column=column, parent=parent)
 
     @property
-    def categories(self) -> "cudf.Index":
+    def categories(self) -> "cudf.core.index.BaseIndex":
         """
         The categories of this categorical.
         """
@@ -1092,7 +1089,13 @@ class CategoricalColumn(column.ColumnBase):
 
         signed_dtype = min_signed_type(len(col.categories))
         codes = col.cat().codes.astype(signed_dtype).fillna(-1).to_array()
-        categories = col.categories.dropna(drop_nan=True).to_pandas()
+        if is_interval_dtype(col.categories.dtype):
+            # leaving out dropna because it temporarily changes an interval
+            # index into a struct and throws off results.
+            # TODO: work on interval index dropna
+            categories = col.categories.to_pandas()
+        else:
+            categories = col.categories.dropna(drop_nan=True).to_pandas()
         data = pd.Categorical.from_codes(
             codes, categories=categories, ordered=col.ordered
         )
@@ -1381,10 +1384,10 @@ class CategoricalColumn(column.ColumnBase):
             new_categories=dtype.categories, ordered=dtype.ordered
         )
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
+    def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
-    def as_string_column(self, dtype, format=None) -> StringColumn:
+    def as_string_column(self, dtype, format=None, **kwargs) -> StringColumn:
         return self._get_decategorized_column().as_string_column(
             dtype, format=format
         )
@@ -1505,6 +1508,24 @@ class CategoricalColumn(column.ColumnBase):
             size=codes_col.size,
             offset=codes_col.offset,
         )
+
+    def _with_type_metadata(
+        self: CategoricalColumn, dtype: Dtype
+    ) -> CategoricalColumn:
+        if isinstance(dtype, CategoricalDtype):
+            return column.build_categorical_column(
+                categories=dtype.categories._values,
+                codes=column.as_column(
+                    self.codes.base_data, dtype=self.codes.dtype
+                ),
+                mask=self.codes.base_mask,
+                ordered=dtype.ordered,
+                size=self.codes.size,
+                offset=self.codes.offset,
+                null_count=self.codes.null_count,
+            )
+
+        return self
 
 
 def _create_empty_categorical_column(

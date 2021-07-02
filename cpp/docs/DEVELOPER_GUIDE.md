@@ -342,6 +342,7 @@ namespace detail{
 } // namespace detail
 
 void external_function(...){
+    CUDF_FUNC_RANGE(); // Auto generates NVTX range for lifetime of this function
     detail::external_function(...);
 }
 ```
@@ -354,6 +355,12 @@ asynchrony if and when we add an asynchronous API to libcudf.
 
 **Note:** `cudaDeviceSynchronize()` should *never* be used.
  This limits the ability to do any multi-stream/multi-threaded work with libcudf APIs.
+
+ ### NVTX Ranges
+
+ In order to aid in performance optimization and debugging, all compute intensive libcudf functions should have a corresponding NVTX range.
+ In libcudf, we have a convenience macro `CUDF_FUNC_RANGE()` that will automatically annotate the lifetime of the enclosing function and use the functions name as the name of the NVTX range. 
+ For more information about NVTX, see [here](https://github.com/NVIDIA/NVTX/tree/dev/cpp).
 
  ### Stream Creation
 
@@ -414,9 +421,9 @@ Allocates a specified number of bytes of untyped, uninitialized device memory us
 `device_memory_resource`. If no resource is explicitly provided, uses 
 `rmm::mr::get_current_device_resource()`. 
 
-`rmm::device_buffer` is copyable and movable. A copy performs a deep copy of the `device_buffer`'s 
-device memory, whereas a move moves ownership of the device memory from one `device_buffer` to 
-another.
+`rmm::device_buffer` is movable and copyable on a stream. A copy performs a deep copy of the 
+`device_buffer`'s device memory on the specified stream, whereas a move moves ownership of the 
+device memory from one `device_buffer` to another.
 
 ```c++
 // Allocates at least 100 bytes of uninitialized device memory 
@@ -424,11 +431,15 @@ another.
 rmm::device_buffer buff(100, stream, mr); 
 void * raw_data = buff.data(); // Raw pointer to underlying device memory
 
-rmm::device_buffer copy(buff); // Deep copies `buff` into `copy`
-rmm::device_buffer moved_to(std::move(buff)); // Moves contents of `buff` into `moved_to`
+// Deep copies `buff` into `copy` on `stream`
+rmm::device_buffer copy(buff, stream); 
+
+// Moves contents of `buff` into `moved_to`
+rmm::device_buffer moved_to(std::move(buff)); 
 
 custom_memory_resource *mr...;
-rmm::device_buffer custom_buff(100, mr); // Allocates 100 bytes from the custom_memory_resource
+// Allocates 100 bytes from the custom_memory_resource
+rmm::device_buffer custom_buff(100, mr, stream); 
 ```
 
 #### `rmm::device_scalar<T>`
@@ -454,8 +465,12 @@ int host_value = int_scalar.value();
 Allocates a specified number of elements of the specified type. If no initialization value is 
 provided, all elements are default initialized (this incurs a kernel launch).
 
-**Note**: `rmm::device_vector<T>` is not yet updated to use `device_memory_resource`s, but support 
-is forthcoming. Likewise, `device_vector` operations cannot be stream ordered.
+**Note**: We have removed all usage of `rmm::device_vector` and `thrust::device_vector` from
+libcudf, and you should not use it in new code in libcudf without careful consideration. Instead, 
+use `rmm::device_uvector` along with the utility factories in `device_factories.hpp`. These 
+utilities enable creation of `uvector`s from host-side vectors, or creating zero-initialized
+`uvector`s, so that they are as convenient to use as `device_vector`. Avoiding `device_vector` has
+a number of benefits, as described in the folling section on `rmm::device_uvector`.
 
 #### `rmm::device_uvector<T>`
 
@@ -464,7 +479,9 @@ differences:
 - As an optimization, elements are uninitialized and no synchronization occurs at construction.
 This limits the types `T` to trivially copyable types.
 - All operations are stream ordered (i.e., they accept a `cuda_stream_view` specifying the stream 
-on which the operation is performed).
+on which the operation is performed). This improves safety when using non-default streams.
+- `device_uvector.hpp` does not include any `__device__` code, unlike `thrust/device_vector.hpp`, 
+  which means `device_uvector`s can be used in `.cpp` files, rather than just in `.cu` files.
 
 ```c++
 cuda_stream s;

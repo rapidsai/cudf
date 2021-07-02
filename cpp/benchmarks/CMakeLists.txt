@@ -29,6 +29,7 @@ target_link_libraries(cudf_datagen
                       GTest::gmock_main
                       GTest::gtest_main
                       benchmark::benchmark
+                      nvbench::main
                       Threads::Threads
                       cudf)
 
@@ -66,6 +67,10 @@ ConfigureBench(GATHER_BENCH copying/gather_benchmark.cu)
 ###################################################################################################
 # - scatter benchmark -----------------------------------------------------------------------------
 ConfigureBench(SCATTER_BENCH copying/scatter_benchmark.cu)
+
+###################################################################################################
+# - lists scatter benchmark -----------------------------------------------------------------------
+ConfigureBench(SCATTER_LISTS_BENCH lists/copying/scatter_lists_benchmark.cu)
 
 ###################################################################################################
 # - contiguous_split benchmark  -------------------------------------------------------------------
@@ -211,7 +216,8 @@ ConfigureBench(STRINGS_BENCH
   string/contains_benchmark.cpp
   string/convert_datetime_benchmark.cpp
   string/convert_durations_benchmark.cpp
-  string/convert_floats_benchmark.cpp
+  string/convert_fixed_point_benchmark.cpp
+  string/convert_numerics_benchmark.cpp
   string/copy_benchmark.cpp
   string/extract_benchmark.cpp
   string/factory_benchmark.cu

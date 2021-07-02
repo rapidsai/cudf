@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/reduction.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -25,6 +26,12 @@
 
 namespace cudf {
 namespace detail {
+
+// logical-and scan of the null mask of the input view
+rmm::device_buffer mask_scan(const column_view& input_view,
+                             cudf::scan_type inclusive,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr);
 
 template <template <typename> typename DispatchFn>
 std::unique_ptr<column> scan_agg_dispatch(const column_view& input,

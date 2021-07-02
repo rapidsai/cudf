@@ -56,7 +56,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
 
   if (!value.is_valid())
     return std::make_unique<column>(
-      value.type(), size, rmm::device_buffer{0, stream, mr}, null_mask, size);
+      value.type(), size, rmm::device_buffer{}, std::move(null_mask), size);
 
   // Create a strings column_view with all nulls and no children.
   // Since we are setting every row to the scalar, the fill() never needs to access
@@ -66,16 +66,13 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   auto sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
   // fill the column with the scalar
   auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, stream, mr);
-  output->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // should be no nulls
+  output->set_null_mask(rmm::device_buffer{}, 0);  // should be no nulls
   return output;
 }
 
 template <>
 std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::dictionary32>(
-  scalar const& value,
-  size_type size,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
+  scalar const&, size_type, rmm::cuda_stream_view, rmm::mr::device_memory_resource*) const
 {
   CUDF_FAIL("dictionary not supported when creating from scalar");
 }

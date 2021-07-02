@@ -19,10 +19,10 @@
 #include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
-#include <io/statistics/column_stats.h>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
+#include <io/statistics/statistics.cuh>
 #include <io/utilities/column_buffer.hpp>
 #include "orc_common.h"
 
@@ -79,6 +79,11 @@ struct DictionaryEntry {
   uint32_t pos;  // Position in data stream
   uint32_t len;  // Length in data stream
 };
+
+/**
+ * @brief Mask to indicate conversion from decimals to float64
+ */
+constexpr int orc_decimal2float64_scale = 0x80;
 
 /**
  * @brief Struct to describe per stripe's column information

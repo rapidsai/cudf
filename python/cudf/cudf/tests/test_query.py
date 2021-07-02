@@ -12,7 +12,7 @@ import pytest
 
 import cudf
 from cudf.core import DataFrame
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 from cudf.utils import queryutils
 
 _params_query_parser = []

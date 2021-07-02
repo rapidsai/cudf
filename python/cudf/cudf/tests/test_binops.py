@@ -14,7 +14,7 @@ import pytest
 import cudf
 from cudf.core import Series
 from cudf.core.index import as_index
-from cudf.tests import utils
+from cudf.testing import _utils as utils
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
@@ -1697,7 +1697,7 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     got = val == data
 
     # In case of index, expected would be a numpy array
-    if isinstance(data, cudf.Index):
+    if isinstance(data, cudf.BaseIndex):
         expected = pd.Index(expected)
 
     utils.assert_eq(expected, got)
@@ -1742,12 +1742,6 @@ def test_binops_with_NA_consistent(dtype, op):
         assert result._column.null_count == len(data)
 
 
-def _decimal_series(input, dtype):
-    return cudf.Series(
-        [x if x is None else decimal.Decimal(x) for x in input], dtype=dtype,
-    )
-
-
 @pytest.mark.parametrize(
     "args",
     [
@@ -1772,11 +1766,11 @@ def _decimal_series(input, dtype):
         (
             operator.add,
             ["100", "200"],
-            cudf.Decimal64Dtype(scale=-2, precision=3),
+            cudf.Decimal64Dtype(scale=-2, precision=17),
             ["0.1", "0.2"],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["100.1", "200.2"],
-            cudf.Decimal64Dtype(scale=3, precision=9),
+            cudf.Decimal64Dtype(scale=3, precision=18),
         ),
         (
             operator.sub,
@@ -1799,11 +1793,11 @@ def _decimal_series(input, dtype):
         (
             operator.sub,
             ["100", "200"],
-            cudf.Decimal64Dtype(scale=-2, precision=3),
+            cudf.Decimal64Dtype(scale=-2, precision=10),
             ["0.1", "0.2"],
-            cudf.Decimal64Dtype(scale=3, precision=4),
+            cudf.Decimal64Dtype(scale=6, precision=10),
             ["99.9", "199.8"],
-            cudf.Decimal64Dtype(scale=3, precision=9),
+            cudf.Decimal64Dtype(scale=6, precision=18),
         ),
         (
             operator.mul,
@@ -1853,11 +1847,11 @@ def _decimal_series(input, dtype):
         (
             operator.truediv,
             ["132.86", "15.25"],
-            cudf.Decimal64Dtype(scale=4, precision=6),
+            cudf.Decimal64Dtype(scale=4, precision=14),
             ["2.34", "8.50"],
-            cudf.Decimal64Dtype(scale=2, precision=4),
+            cudf.Decimal64Dtype(scale=2, precision=8),
             ["56.77", "1.79"],
-            cudf.Decimal64Dtype(scale=2, precision=11),
+            cudf.Decimal64Dtype(scale=2, precision=18),
         ),
         (
             operator.add,
@@ -1907,11 +1901,11 @@ def _decimal_series(input, dtype):
         (
             operator.mul,
             ["100", "200"],
-            cudf.Decimal64Dtype(scale=-2, precision=3),
+            cudf.Decimal64Dtype(scale=-2, precision=10),
             ["0.1", None],
-            cudf.Decimal64Dtype(scale=3, precision=4),
+            cudf.Decimal64Dtype(scale=3, precision=12),
             ["10.0", None],
-            cudf.Decimal64Dtype(scale=1, precision=8),
+            cudf.Decimal64Dtype(scale=1, precision=18),
         ),
         (
             operator.eq,
@@ -2080,10 +2074,10 @@ def _decimal_series(input, dtype):
 def test_binops_decimal(args):
     op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype = args
 
-    a = _decimal_series(lhs, l_dtype)
-    b = _decimal_series(rhs, r_dtype)
+    a = utils._decimal_series(lhs, l_dtype)
+    b = utils._decimal_series(rhs, r_dtype)
     expect = (
-        _decimal_series(expect, expect_dtype)
+        utils._decimal_series(expect, expect_dtype)
         if isinstance(expect_dtype, cudf.Decimal64Dtype)
         else cudf.Series(expect, dtype=expect_dtype)
     )
@@ -2242,7 +2236,7 @@ def test_binops_decimal(args):
         ),
     ],
 )
-@pytest.mark.parametrize("integer_dtype", cudf.tests.utils.INTEGER_TYPES)
+@pytest.mark.parametrize("integer_dtype", utils.INTEGER_TYPES)
 @pytest.mark.parametrize("reflected", [True, False])
 def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
     """
@@ -2258,7 +2252,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
     else:
         op, ldata, ldtype, rdata, _, expected = args
 
-    lhs = _decimal_series(ldata, ldtype)
+    lhs = utils._decimal_series(ldata, ldtype)
     rhs = cudf.Series(rdata, dtype=integer_dtype)
 
     if reflected:
@@ -2746,7 +2740,7 @@ def test_binops_decimal_scalar_compare(args, reflected):
     else:
         op, ldata, ldtype, rdata, _, expected = args
 
-    lhs = _decimal_series(ldata, ldtype)
+    lhs = utils._decimal_series(ldata, ldtype)
     rhs = rdata
 
     if reflected:
