@@ -40,6 +40,7 @@
 #include <numeric>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 
 using std::string;
 using std::vector;
@@ -336,7 +337,9 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
     for (const auto index : opts_.get_use_cols_indexes()) {
       column_flags_[index] = column_parse::enabled;
     }
-    num_active_cols_ = opts_.get_use_cols_indexes().size();
+    num_active_cols_ = std::unordered_set<int>(opts_.get_use_cols_indexes().begin(),
+                                               opts_.get_use_cols_indexes().end())
+                         .size();
 
     for (const auto &name : opts_.get_use_cols_names()) {
       const auto it = std::find(col_names_.begin(), col_names_.end(), name);
