@@ -1044,10 +1044,10 @@ struct target_type_impl<Source, aggregation::MERGE_SETS> {
   using type = cudf::list_view;
 };
 
-// Always use `double` for MERGE_M2
+// Always use struct for MERGE_M2
 template <typename SourceType>
 struct target_type_impl<SourceType, aggregation::MERGE_M2> {
-  using type = double;
+  using type = cudf::struct_view;
 };
 
 /**
