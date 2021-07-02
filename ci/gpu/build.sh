@@ -201,8 +201,8 @@ fi
 ################################################################################
 
 # If examples grows too large to build, should move to cpu side
-gpuci_logger "Building libcudf examples"
-$WORKSPACE/cpp/examples/build.sh
+# gpuci_logger "Building libcudf examples"
+# $WORKSPACE/cpp/examples/build.sh
 
 # set environment variable for numpy 1.16
 # will be enabled for later versions by default
@@ -217,7 +217,7 @@ fi
 
 cd "$WORKSPACE/python/cudf"
 gpuci_logger "Python py.test for cuDF"
-py.test -n 6 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term
+py.test -n 6 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term
 
 cd "$WORKSPACE/python/dask_cudf"
 gpuci_logger "Python py.test for dask-cudf"

@@ -21,7 +21,7 @@ from cudf.core.index import (
     RangeIndex,
     as_index,
 )
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     FLOAT_TYPES,
     NUMERIC_TYPES,
     OTHER_TYPES,
@@ -317,9 +317,6 @@ def test_index_copy_datetime(name, dtype, deep=True):
     pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
     cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
-    # By default, cudf.DatetimeIndex uses [ms] as base unit, pandas uses [ns]
-    if dtype == "int64":
-        cidx_copy = cidx_copy * 1000000
     assert_eq(pidx_copy, cidx_copy)
 
 

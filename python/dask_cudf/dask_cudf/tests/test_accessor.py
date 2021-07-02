@@ -5,10 +5,10 @@ from pandas.testing import assert_series_equal
 
 from dask import dataframe as dd
 
-from cudf import DataFrame, Series
-from cudf.tests.utils import assert_eq, does_not_raise
-
 import dask_cudf as dgd
+
+from cudf import DataFrame, Series
+from cudf.testing._utils import assert_eq, does_not_raise
 
 #############################################################################
 #                        Datetime Accessor                                  #

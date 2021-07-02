@@ -44,7 +44,9 @@ using namespace cudf::io;
 class metadata;
 namespace {
 struct orc_stream_info;
-}
+struct stripe_source_mapping;
+}  // namespace
+class aggregate_orc_metadata;
 
 /**
  * @brief Implementation for ORC reader
@@ -58,7 +60,7 @@ class reader::impl {
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<datasource> source,
+  explicit impl(std::vector<std::unique_ptr<datasource>> &&sources,
                 orc_reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 
@@ -74,7 +76,7 @@ class reader::impl {
    */
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
-                           const std::vector<size_type> &stripes,
+                           const std::vector<std::vector<size_type>> &stripes,
                            rmm::cuda_stream_view stream);
 
  private:
@@ -126,13 +128,15 @@ class reader::impl {
 
  private:
   rmm::mr::device_memory_resource *_mr = nullptr;
-  std::unique_ptr<datasource> _source;
-  std::unique_ptr<cudf::io::orc::metadata> _metadata;
-
+  std::vector<std::unique_ptr<datasource>> _sources;
+  std::unique_ptr<aggregate_orc_metadata> _metadata;
+  // _output_columns associated schema indices
   std::vector<int> _selected_columns;
+
   bool _use_index            = true;
   bool _use_np_dtypes        = true;
   bool _has_timestamp_column = false;
+  std::vector<std::string> _decimal_cols_as_float;
   data_type _timestamp_type{type_id::EMPTY};
 };
 
