@@ -454,47 +454,41 @@ class aggregate_orc_metadata {
    * @param types A vector of schema types of columns.
    * @param level current level of nesting.
    * @param id current column id that needs to be added.
-   * @param num_lvl_child_columns number of child columns which are at the same level.
    * @param has_timestamp_column True if timestamp column present and false otherwise.
+   *
+   * @return returns number of child columns
    */
-  void add_column(std::vector<std::vector<orc_column_meta>> &selection,
-                  std::vector<SchemaType> const &types,
-                  const size_t level,
-                  const uint32_t id,
-                  uint32_t &num_lvl_child_columns,
-                  bool &has_timestamp_column,
-                  bool &has_list_column)
+  uint32_t add_column(std::vector<std::vector<orc_column_meta>> &selection,
+                      std::vector<SchemaType> const &types,
+                      const size_t level,
+                      const uint32_t id,
+                      bool &has_timestamp_column,
+                      bool &has_list_column)
   {
-    if (level == selection.size()) { selection.push_back(std::vector<orc_column_meta>()); }
-    selection[level].emplace_back(id, 0);
+    uint32_t num_lvl_child_columns = 0;
+    if (level == selection.size()) { selection.emplace_back(); }
+    selection[level].push_back({id, 0});
     int col_id = selection[level].size() - 1;
     if (types[id].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
-    uint32_t lvl_cols = 0;
 
     switch (types[id].kind) {
-      case orc::LIST:
+      case orc::LIST: {
+        uint32_t lvl_cols = 0;
         if (not types[id].subtypes.empty()) {
           has_list_column = true;
-          lvl_cols += 1;
           // Since list column needs to be processed before its child can be processed,
           // child column is being added to next level
-          add_column(
-            selection, types, level + 1, id + 1, lvl_cols, has_timestamp_column, has_list_column);
+          lvl_cols =
+            add_column(selection, types, level + 1, id + 1, has_timestamp_column, has_list_column);
         }
         // The list child column may be a struct in which case lvl_cols will be > 1
         selection[level][col_id].num_children = lvl_cols;
-        break;
+      } break;
 
       case orc::STRUCT:
         for (const auto child_id : types[id].subtypes) {
-          uint32_t lvl_child_columns = 1;
-          add_column(selection,
-                     types,
-                     level,
-                     child_id,
-                     lvl_child_columns,
-                     has_timestamp_column,
-                     has_list_column);
+          uint32_t lvl_child_columns =
+            add_column(selection, types, level, child_id, has_timestamp_column, has_list_column);
           num_lvl_child_columns += lvl_child_columns;
         }
         selection[level][col_id].num_children = num_lvl_child_columns;
@@ -502,6 +496,8 @@ class aggregate_orc_metadata {
 
       default: break;
     }
+
+    return num_lvl_child_columns + 1;
   }
 
   /**
@@ -530,11 +526,8 @@ class aggregate_orc_metadata {
           if (index >= num_columns) { index = 0; }
           auto col_id = pfm.ff.types[0].subtypes[index];
           if (pfm.get_column_name(col_id) == use_name) {
-            uint32_t tmp = 0;
-            name_found   = true;
-            add_column(
-              selection, pfm.ff.types, 0, col_id, tmp, has_timestamp_column, has_list_column);
-            tmp = 0;
+            name_found = true;
+            add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column, has_list_column);
             // Should start with next index
             index = i + 1;
             break;
@@ -544,8 +537,7 @@ class aggregate_orc_metadata {
       }
     } else {
       for (auto const &col_id : pfm.ff.types[0].subtypes) {
-        uint32_t tmp = 0;
-        add_column(selection, pfm.ff.types, 0, col_id, tmp, has_timestamp_column, has_list_column);
+        add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column, has_list_column);
       }
     }
 
@@ -866,7 +858,7 @@ column_buffer &&reader::impl::assemble_buffer(const int32_t orc_col_id,
 }
 
 // creates columns along with schema information for each column
-void reader::impl::create_columns(std::vector<std::vector<column_buffer>> &col_buffers,
+void reader::impl::create_columns(std::vector<std::vector<column_buffer>> &&col_buffers,
                                   std::vector<std::unique_ptr<column>> &out_columns,
                                   std::vector<column_name_info> &schema_info,
                                   rmm::cuda_stream_view stream)
@@ -983,7 +975,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                         [](size_t sum, auto &stripe_source_mapping) {
                           return sum + stripe_source_mapping.stripe_info.size();
                         });
-      ;
       const auto num_columns = selected_columns.size();
       const auto num_chunks  = total_num_stripes * num_columns;
       hostdevice_vector<gpu::ColumnDesc> chunks(num_chunks, stream);
@@ -1010,9 +1001,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       size_t num_rowgroups    = 0;
       int stripe_idx          = 0;
 
-      for (auto &stripe_source_mapping : selected_stripes) {
+      for (auto const &stripe_source_mapping : selected_stripes) {
         // Iterate through the source files selected stripes
-        for (auto &stripe : stripe_source_mapping.stripe_info) {
+        for (auto const &stripe : stripe_source_mapping.stripe_info) {
           const auto stripe_info   = stripe.first;
           const auto stripe_footer = stripe.second;
 
@@ -1177,7 +1168,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           auto is_list_type = (column_types[i].id() == type_id::LIST);
           auto n_rows       = (level == 0) ? num_rows : _col_meta.num_child_rows[i];
           // For list column, offset column will be always size + 1
-          n_rows += is_list_type;
+          if (is_list_type) n_rows++;
           out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, stream, _mr);
         }
 
@@ -1196,33 +1187,37 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           aggregate_child_meta(
             chunks, row_groups, list_col, total_num_stripes, num_rowgroups, level, stream);
         }
-      }
 
-      // ORC stores number of elements at each row, so we need to generate offsets from that
-      if (list_col.size()) {
-        std::vector<list_buffer_data> buff_data;
-        std::for_each(
-          out_buffers[level].begin(), out_buffers[level].end(), [&buff_data](auto &out_buffer) {
-            if (out_buffer.type.id() == type_id::LIST) {
-              auto data = static_cast<size_type *>(out_buffer.data());
-              buff_data.emplace_back(list_buffer_data{data, out_buffer.size});
-            }
-          });
+        // ORC stores number of elements at each row, so we need to generate offsets from that
+        if (list_col.size()) {
+          std::vector<list_buffer_data> buff_data;
+          std::for_each(
+            out_buffers[level].begin(), out_buffers[level].end(), [&buff_data](auto &out_buffer) {
+              if (out_buffer.type.id() == type_id::LIST) {
+                auto data = static_cast<size_type *>(out_buffer.data());
+                buff_data.emplace_back(list_buffer_data{data, out_buffer.size});
+              }
+            });
 
-        auto const dev_buff_data = cudf::detail::make_device_uvector_async(buff_data, stream);
-        generate_offsets_for_list(dev_buff_data, stream);
+          auto const dev_buff_data = cudf::detail::make_device_uvector_async(buff_data, stream);
+          generate_offsets_for_list(dev_buff_data, stream);
+        }
       }
     }
   }
 
   // If out_columns is empty, then create columns from buffer.
-  if (!out_columns.size()) { create_columns(out_buffers, out_columns, schema_info, stream); }
+  if (out_columns.empty()) {
+    create_columns(std::move(out_buffers), out_columns, schema_info, stream);
+  }
 
   // Return column names (must match order of returned columns)
-  out_metadata.column_names.resize(schema_info.size());
-  for (size_t i = 0; i < schema_info.size(); i++) {
-    out_metadata.column_names[i] = schema_info[i].name;
-  }
+  out_metadata.column_names.reserve(schema_info.size());
+  std::transform(schema_info.cbegin(),
+                 schema_info.cend(),
+                 std::back_inserter(out_metadata.column_names),
+                 [](auto info) { return info.name; });
+
   out_metadata.schema_info = std::move(schema_info);
 
   for (const auto &meta : _metadata->per_file_metadata) {

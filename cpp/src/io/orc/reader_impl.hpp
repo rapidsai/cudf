@@ -177,7 +177,7 @@ class reader::impl {
    * @param schema_info Vector of schema information formed from column buffers.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void create_columns(std::vector<std::vector<column_buffer>>& col_buffers,
+  void create_columns(std::vector<std::vector<column_buffer>>&& col_buffers,
                       std::vector<std::unique_ptr<column>>& out_columns,
                       std::vector<column_name_info>& schema_info,
                       rmm::cuda_stream_view stream);

@@ -92,7 +92,7 @@ struct ColumnDesc {
   uint32_t start_row;                      // starting row of the stripe
   uint32_t num_rows;                       // number of rows in stripe
   uint32_t column_num_rows;                // number of rows in whole column
-  uint32_t num_child_rows;                 // store number of child rows if its list column
+  uint32_t num_child_rows;                 // store number of child rows if it's list column
   uint32_t num_rowgroups;                  // number of rowgroups in the chunk
   uint32_t dictionary_start;               // start position in global dictionary
   uint32_t dict_len;                       // length of local dictionary
