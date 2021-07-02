@@ -1,0 +1,4 @@
+Pandas Compatibility Notes
+==========================
+
+.. PandasCompatList::
