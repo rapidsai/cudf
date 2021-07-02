@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Union
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 
@@ -203,7 +204,11 @@ def assert_column_equal(
 
     columns_equal = False
     try:
-        columns_equal = left.equals(right)
+        columns_equal = (
+            left.equals(right)
+            if check_exact
+            else cp.isclose(left.values, right.values, rtol=rtol, atol=atol)
+        )
     except TypeError as e:
         if str(e) != "Categoricals can only compare with the same type":
             raise e
