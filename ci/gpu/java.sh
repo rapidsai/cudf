@@ -116,6 +116,7 @@ function install_dask {
 ################################################################################
 
 export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
+export CUDF_ROOT=${LIB_BUILD_DIR}
 export LD_LIBRARY_PATH="$LIB_BUILD_DIR:$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 
 CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
@@ -139,6 +140,6 @@ nvidia-smi
 
 gpuci_logger "Running Java Tests"
 cd ${WORKSPACE}/java
-mvn test -DCUDF_JNI_ARROW_STATIC=OFF
+mvn test -B -DCUDF_JNI_ARROW_STATIC=OFF
 
 return ${EXITCODE}
