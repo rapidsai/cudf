@@ -401,7 +401,8 @@ extern "C" __global__ void __launch_bounds__(128, 8)
                         uint32_t num_columns,
                         uint32_t num_stripes,
                         uint32_t num_rowgroups,
-                        uint32_t rowidx_stride)
+                        uint32_t rowidx_stride,
+                        bool use_base_stride)
 {
   __shared__ __align__(16) rowindex_state_s state_g;
   rowindex_state_s *const s = &state_g;
@@ -415,19 +416,17 @@ extern "C" __global__ void __launch_bounds__(128, 8)
       if (s->chunk.strm_len[1] > 0) s->strm_info[1] = strm_info[s->chunk.strm_id[1]];
     }
 
-    uint32_t rowgroups_in_chunk =
-      (rowidx_stride > 0) ? (s->chunk.num_rows + rowidx_stride - 1) / rowidx_stride : 1;
-    s->rowgroup_start = s->chunk.rowgroup_id;
-    s->rowgroup_end   = s->rowgroup_start + rowgroups_in_chunk;
-    s->is_compressed  = (strm_info != NULL);
+    uint32_t rowgroups_in_chunk = s->chunk.num_rowgroups;
+    s->rowgroup_start           = s->chunk.rowgroup_id;
+    s->rowgroup_end             = s->rowgroup_start + rowgroups_in_chunk;
+    s->is_compressed            = (strm_info != NULL);
   }
   __syncthreads();
   while (s->rowgroup_start < s->rowgroup_end) {
     int num_rowgroups = min(s->rowgroup_end - s->rowgroup_start, 128);
     int rowgroup_size4, t4, t32;
 
-    s->rowgroups[t].chunk_id        = chunk_id;
-    s->rowgroups[t].valid_row_group = true;
+    s->rowgroups[t].chunk_id = chunk_id;
     if (t == 0) { gpuReadRowGroupIndexEntries(s, num_rowgroups); }
     __syncthreads();
     if (s->is_compressed) {
@@ -444,10 +443,18 @@ extern "C" __global__ void __launch_bounds__(128, 8)
     t4             = t & 3;
     t32            = t >> 2;
     for (int i = t32; i < num_rowgroups; i += 32) {
+      auto num_rows = (use_base_stride)
+                        ? rowidx_stride
+                        : row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_rows;
+      auto start_row = (use_base_stride)
+                         ? rowidx_stride
+                         : row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].start_row;
       for (int j = t4; j < rowgroup_size4; j += 4) {
         ((uint32_t *)&row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x])[j] =
           ((volatile uint32_t *)&s->rowgroups[i])[j];
       }
+      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_rows  = num_rows;
+      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].start_row = start_row;
     }
     __syncthreads();
     if (t == 0) { s->rowgroup_start += num_rowgroups; }
@@ -495,12 +502,19 @@ void __host__ ParseRowGroupIndex(RowGroup *row_groups,
                                  uint32_t num_stripes,
                                  uint32_t num_rowgroups,
                                  uint32_t rowidx_stride,
+                                 bool use_base_stride,
                                  rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid(num_columns, num_stripes);  // 1 column chunk per block
-  gpuParseRowGroupIndex<<<dim_grid, dim_block, 0, stream.value()>>>(
-    row_groups, strm_info, chunks, num_columns, num_stripes, num_rowgroups, rowidx_stride);
+  gpuParseRowGroupIndex<<<dim_grid, dim_block, 0, stream.value()>>>(row_groups,
+                                                                    strm_info,
+                                                                    chunks,
+                                                                    num_columns,
+                                                                    num_stripes,
+                                                                    num_rowgroups,
+                                                                    rowidx_stride,
+                                                                    use_base_stride);
 }
 
 }  // namespace gpu

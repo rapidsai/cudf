@@ -1367,11 +1367,12 @@ __global__ void __launch_bounds__(block_size)
   gpuDecodeOrcColumnData(ColumnDesc *chunks,
                          DictionaryEntry *global_dictionary,
                          timezone_table_view tz_table,
-                         const RowGroup *row_groups,
+                         RowGroup *row_groups,
                          size_t first_row,
                          uint32_t num_columns,
                          uint32_t num_rowgroups,
-                         uint32_t rowidx_stride)
+                         uint32_t rowidx_stride,
+                         size_t level)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
   using block_reduce = cub::BlockReduce<uint64_t, block_size>;
@@ -1382,37 +1383,37 @@ __global__ void __launch_bounds__(block_size)
 
   orcdec_state_s *const s = &state_g;
   uint32_t chunk_id;
-  int t         = threadIdx.x;
-  bool is_valid = true;
+  int t = threadIdx.x;
 
   if (num_rowgroups > 0) {
     if (t == 0) { s->top.data.index = row_groups[blockIdx.y * num_columns + blockIdx.x]; }
     __syncthreads();
-    is_valid = s->top.data.index.valid_row_group;
     chunk_id = s->top.data.index.chunk_id;
   } else {
     chunk_id = blockIdx.x;
   }
-  if (t == 0 and is_valid) {
+  if (t == 0) {
     s->chunk          = chunks[chunk_id];
     s->num_child_rows = 0;
   }
   __syncthreads();
   // Struct doesn't have any data in itself, so skip
-  is_valid            = is_valid && (s->chunk.type_kind != STRUCT);
+  bool is_valid       = s->chunk.type_kind != STRUCT;
   size_t max_num_rows = s->chunk.column_num_rows;
   if (t == 0 and is_valid) {
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {
       uint32_t ofs0 = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
       uint32_t ofs1 = min(s->top.data.index.strm_offset[1], s->chunk.strm_len[CI_DATA2]);
-      uint32_t rowgroup_rowofs;
+      uint32_t rowgroup_rowofs =
+        (level == 0) ? (blockIdx.y - min(s->chunk.rowgroup_id, blockIdx.y)) * rowidx_stride
+                     : s->top.data.index.start_row;
+      ;
       s->chunk.streams[CI_DATA] += ofs0;
       s->chunk.strm_len[CI_DATA] -= ofs0;
       s->chunk.streams[CI_DATA2] += ofs1;
       s->chunk.strm_len[CI_DATA2] -= ofs1;
-      rowgroup_rowofs = min((blockIdx.y - min(s->chunk.rowgroup_id, blockIdx.y)) * rowidx_stride,
-                            s->chunk.num_rows);
+      rowgroup_rowofs = min(rowgroup_rowofs, s->chunk.num_rows);
       s->chunk.start_row += rowgroup_rowofs;
       s->chunk.num_rows -= rowgroup_rowofs;
     }
@@ -1426,7 +1427,8 @@ __global__ void __launch_bounds__(block_size)
       s->top.data.end_row = static_cast<uint32_t>(first_row + max_num_rows);
     }
     if (num_rowgroups > 0) {
-      s->top.data.end_row = min(s->top.data.end_row, s->chunk.start_row + rowidx_stride);
+      s->top.data.end_row =
+        min(s->top.data.end_row, s->chunk.start_row + s->top.data.index.num_rows);
     }
     if (!is_dictionary(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
 
@@ -1789,6 +1791,9 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
   }
   if (t == 0 and s->chunk.type_kind == LIST) {
+    if (num_rowgroups > 0) {
+      row_groups[blockIdx.y * num_columns + blockIdx.x].num_child_rows = s->num_child_rows;
+    }
     atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows);
   }
 }
@@ -1836,9 +1841,10 @@ void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
                                   uint32_t num_stripes,
                                   size_t first_row,
                                   timezone_table_view tz_table,
-                                  const RowGroup *row_groups,
+                                  RowGroup *row_groups,
                                   uint32_t num_rowgroups,
                                   uint32_t rowidx_stride,
+                                  size_t level,
                                   rmm::cuda_stream_view stream)
 {
   uint32_t num_chunks = num_columns * num_stripes;
@@ -1852,7 +1858,8 @@ void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
                                                                                  first_row,
                                                                                  num_columns,
                                                                                  num_rowgroups,
-                                                                                 rowidx_stride);
+                                                                                 rowidx_stride,
+                                                                                 level);
 }
 
 }  // namespace gpu

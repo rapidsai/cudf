@@ -57,6 +57,11 @@ struct reader_column_meta {
   std::vector<int32_t> num_child_rows;   // number of child rows of a list column
   std::vector<int32_t> child_start_row;  // start row of a child column in a stripe
   std::vector<int32_t> num_child_rows_per_stripe;
+  struct row_group_meta {
+    int32_t num_rows;
+    int32_t start_row;
+  };
+  std::vector<row_group_meta> rwgrp_meta;
 };
 
 /**
@@ -110,8 +115,9 @@ class reader::impl {
                                             const OrcDecompressor* decompressor,
                                             std::vector<orc_stream_info>& stream_info,
                                             size_t num_stripes,
-                                            device_span<gpu::RowGroup> row_groups,
+                                            hostdevice_vector<gpu::RowGroup>& row_groups,
                                             size_t row_index_stride,
+                                            bool use_base_stride,
                                             rmm::cuda_stream_view stream);
 
   /**
@@ -130,9 +136,10 @@ class reader::impl {
                           size_t num_dicts,
                           size_t skip_rows,
                           timezone_table_view tz_table,
-                          device_span<gpu::RowGroup const> row_groups,
+                          hostdevice_vector<gpu::RowGroup>& row_groups,
                           size_t row_index_stride,
                           std::vector<column_buffer>& out_buffers,
+                          size_t level,
                           rmm::cuda_stream_view stream);
 
   /**
@@ -144,9 +151,12 @@ class reader::impl {
    * @param level Current nesting level being processed.
    */
   void aggregate_child_meta(hostdevice_vector<gpu::ColumnDesc>& chunks,
+                            hostdevice_vector<gpu::RowGroup>& row_groups,
                             std::vector<orc_column_meta> const& list_col,
                             const size_t number_of_stripes,
-                            const int32_t level);
+                            const size_t num_of_rowgroups,
+                            const int32_t level,
+                            rmm::cuda_stream_view stream);
 
   /**
    * @brief Assemble the buffer with child columns.

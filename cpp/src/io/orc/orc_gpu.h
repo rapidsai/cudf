@@ -93,6 +93,7 @@ struct ColumnDesc {
   uint32_t num_rows;                       // number of rows in stripe
   uint32_t column_num_rows;                // number of rows in whole column
   uint32_t num_child_rows;                 // store number of child rows if its list column
+  uint32_t num_rowgroups;                  // number of rowgroups in the chunk
   uint32_t dictionary_start;               // start position in global dictionary
   uint32_t dict_len;                       // length of local dictionary
   uint32_t null_count;                     // number of null values in this stripe's column
@@ -112,7 +113,9 @@ struct RowGroup {
   uint32_t chunk_id;        // Column chunk this entry belongs to
   uint32_t strm_offset[2];  // Index offset for CI_DATA and CI_DATA2 streams
   uint16_t run_pos[2];      // Run position for CI_DATA and CI_DATA2
-  bool valid_row_group;     // To check if it is a valid rowgroup
+  uint32_t num_rows;        // number of rows in rowgroup
+  uint32_t start_row;       // starting row of the rowgroup
+  uint32_t num_child_rows;  // number of rows of children in rowgroup in case of list type
 };
 
 /**
@@ -231,6 +234,7 @@ void ParseRowGroupIndex(RowGroup *row_groups,
                         uint32_t num_stripes,
                         uint32_t num_rowgroups,
                         uint32_t rowidx_stride,
+                        bool use_base_stride,
                         rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
@@ -271,9 +275,10 @@ void DecodeOrcColumnData(ColumnDesc *chunks,
                          uint32_t num_stripes,
                          size_t first_row             = 0,
                          timezone_table_view tz_table = {},
-                         const RowGroup *row_groups   = 0,
+                         RowGroup *row_groups         = 0,
                          uint32_t num_rowgroups       = 0,
                          uint32_t rowidx_stride       = 0,
+                         size_t level                 = 0,
                          rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
