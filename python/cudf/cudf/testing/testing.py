@@ -207,7 +207,7 @@ def assert_column_equal(
         columns_equal = (
             left.equals(right)
             if check_exact
-            else cp.isclose(left.values, right.values, rtol=rtol, atol=atol)
+            else cp.allclose(left.values, right.values, rtol=rtol, atol=atol)
         )
     except TypeError as e:
         if str(e) != "Categoricals can only compare with the same type":
