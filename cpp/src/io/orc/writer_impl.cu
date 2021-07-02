@@ -259,12 +259,12 @@ size_type orc_table_view::num_rows() const { return columns.empty() ? 0 : column
  *
  * @param columns List of columns
  * @param rowgroup_ranges TODO
+ * @param max_stripe_size TODO
  * @return List of stripe descriptors
  */
-std::vector<stripe_rowgroups> gather_stripe_info(host_span<orc_column_view const> columns,
-                                                 host_2dspan<rows_range const> rowgroup_ranges,
-                                                 host_2dspan<size_t const> str_rg_sizes,
-                                                 uint32_t max_stripe_size)
+file_segmentation calculate_segmentation(host_span<orc_column_view const> columns,
+                                         hostdevice_2dvector<rows_range> &&rowgroup_ranges,
+                                         uint32_t max_stripe_size)
 {
   auto const is_any_column_string =
     std::any_of(columns.begin(), columns.end(), [](auto const &col) { return col.is_string(); });
@@ -281,7 +281,8 @@ std::vector<stripe_rowgroups> gather_stripe_info(host_span<orc_column_view const
       std::accumulate(columns.begin(), columns.end(), 0ul, [&](size_t total_size, auto const &col) {
         auto const rows = rowgroup_ranges[rowgroup][col.flat_index()].size();
         if (col.is_string()) {
-          return total_size + rows + str_rg_sizes[rowgroup][col.str_id()];
+          const auto dt = col.host_dict_chunk(rowgroup);
+          return total_size + rows + dt->string_char_count;
         } else {
           return total_size + col.type_width() * rows;
         }
@@ -307,7 +308,7 @@ std::vector<stripe_rowgroups> gather_stripe_info(host_span<orc_column_view const
     }
   }
 
-  return infos;
+  return {std::move(rowgroup_ranges), std::move(infos)};
 }
 
 /**
@@ -1162,9 +1163,9 @@ orc_table_view get_columns_info(table_view const &table,
           cudf::detail::make_device_uvector_sync(str_col_flat_indexes, stream)};
 }
 
-hostdevice_2dvector<rows_range> unbound_rowgroup_sizes(orc_table_view const &orc_table,
-                                                       size_type rowgroup_size,
-                                                       rmm::cuda_stream_view stream)
+hostdevice_2dvector<rows_range> calculate_rowgroup_ranges(orc_table_view const &orc_table,
+                                                          size_type rowgroup_size,
+                                                          rmm::cuda_stream_view stream)
 {
   auto const num_rowgroups =
     cudf::util::div_rounding_up_unsafe<size_t, size_t>(orc_table.num_rows(), rowgroup_size);
@@ -1324,104 +1325,6 @@ string_dictionaries allocate_dictionaries(orc_table_view const &orc_table,
           cudf::detail::make_device_uvector_sync(index_ptrs, stream)};
 }
 
-std::vector<size_t> string_chunk_sizes(orc_table_view const &orc_table,
-                                       device_2dspan<rows_range const> rowgroup_bounds,
-                                       rmm::cuda_stream_view stream)
-{
-  auto const num_str_size_chunks = rowgroup_bounds.size().first * orc_table.num_string_columns();
-  rmm::device_uvector<size_t> d_str_rg_sizes(num_str_size_chunks, stream);
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    d_str_rg_sizes.begin(),
-    d_str_rg_sizes.end(),
-    [cols          = device_span<orc_column_device_view const>{orc_table.d_columns},
-     str_cols_idxs = device_span<int const>{orc_table.d_string_column_indices},
-     rg_bounds     = device_2dspan<rows_range const>{rowgroup_bounds}] __device__(auto idx) {
-      auto const rg_idx    = idx / str_cols_idxs.size();
-      auto const col_idx   = str_cols_idxs[idx - rg_idx * str_cols_idxs.size()];
-      auto const &rg_range = rg_bounds[rg_idx][col_idx];
-      return thrust::reduce(thrust::seq,
-                            thrust::make_counting_iterator(rg_range.begin),
-                            thrust::make_counting_iterator(rg_range.end),
-                            0ul,
-                            [&](auto sum, auto elem_idx) {
-                              column_device_view const &col = cols[col_idx].cudf_column;
-                              return sum + (col.is_valid(elem_idx)
-                                              ? col.element<string_view>(elem_idx).size_bytes()
-                                              : 0);
-                            });
-    });
-  return cudf::detail::make_std_vector_sync(d_str_rg_sizes, stream);
-}
-
-hostdevice_2dvector<rows_range> restrict_segmentation(
-  host_2dspan<rows_range const> unbound_rowgroups,
-  host_span<stripe_rowgroups const> unbound_stripes,
-  size_type row_index_stride,
-  rmm::cuda_stream_view stream)
-{
-  auto const num_columns = unbound_rowgroups.size().second;
-  std::vector<std::vector<rows_range>> t_rowgroups(num_columns);
-  std::vector<std::vector<stripe_rowgroups>> stripes(unbound_stripes.size());
-  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
-    for (auto &stripe : unbound_stripes) {
-      auto rows_to_distribute =
-        std::accumulate(stripe.cbegin(), stripe.cend(), 0, [&](auto total_rows, auto rg_idx) {
-          return total_rows + unbound_rowgroups[rg_idx][col_idx].size();
-        });
-      auto current_first_row  = unbound_rowgroups[stripe.first][col_idx].begin;
-      uint32_t const first_rg = t_rowgroups[col_idx].size();
-      while (rows_to_distribute) {
-        auto const next_rg_rows = min(rows_to_distribute, row_index_stride);
-        t_rowgroups[col_idx].push_back({current_first_row, current_first_row + next_rg_rows});
-        rows_to_distribute -= next_rg_rows;
-        current_first_row += next_rg_rows;
-      }
-      stripes[stripe.id].push_back(
-        {stripe.id, first_rg, static_cast<uint32_t>(t_rowgroups[col_idx].size()) - first_rg});
-    }
-  }
-
-  auto const num_rowgroups =
-    std::max_element(t_rowgroups.cbegin(), t_rowgroups.cend(), [](auto &l, auto &r) {
-      return l.size() < r.size();
-    })->size();
-
-  // transpose rowgroup ranges
-  hostdevice_2dvector<rows_range> rowgroups(num_rowgroups, num_columns, stream);
-  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
-    for (size_t rg_idx = 0; rg_idx < num_rowgroups; ++rg_idx) {
-      rowgroups[rg_idx][col_idx] =
-        (t_rowgroups[col_idx].size() > rg_idx) ? t_rowgroups[col_idx][rg_idx] : rows_range{};
-    }
-  }
-  rowgroups.host_to_device(stream);
-
-  return rowgroups;
-}
-
-file_segmentation calculate_segmentation(orc_table_view const &orc_table,
-                                         size_type row_index_stride,
-                                         size_t max_stripe_size,
-                                         rmm::cuda_stream_view stream)
-{
-  if (orc_table.num_columns() == 0) return {{0, 0, stream}, {}};
-
-  auto unbound_rowgroups = unbound_rowgroup_sizes(orc_table, row_index_stride, stream);
-
-  auto const str_rg_sizes = string_chunk_sizes(orc_table, unbound_rowgroups, stream);
-
-  // Decide stripe boundaries based on unbound rowgroups
-  auto const str_rg_sizes_view = host_2dspan<size_t const>{
-    str_rg_sizes.data(), unbound_rowgroups.size().first, orc_table.num_string_columns()};
-  auto unbound_stripes =
-    gather_stripe_info(orc_table.columns, unbound_rowgroups, str_rg_sizes_view, max_stripe_size);
-
-  // auto tmp = restrict_segmentation(unbound_rowgroups, unbound_stripes, row_index_stride, stream);
-
-  return {std::move(unbound_rowgroups), unbound_stripes};
-}
-
 void writer::impl::write(table_view const &table)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
@@ -1431,21 +1334,24 @@ void writer::impl::write(table_view const &table)
 
   auto orc_table = get_columns_info(table, *d_table, user_metadata, stream);
 
-  auto const segmentation =
-    calculate_segmentation(orc_table, row_index_stride_, max_stripe_size_, stream);
+  auto rowgroup_ranges = calculate_rowgroup_ranges(orc_table, row_index_stride_, stream);
 
   // Build per-column dictionary indices
   auto dictionaries          = allocate_dictionaries(orc_table, stream);
-  const auto num_dict_chunks = segmentation.num_rowgroups() * orc_table.num_string_columns();
+  const auto num_dict_chunks = rowgroup_ranges.size().first * orc_table.num_string_columns();
   hostdevice_vector<gpu::DictionaryChunk> dict(num_dict_chunks, stream);
   if (orc_table.num_string_columns() != 0) {
     init_dictionaries(orc_table,
-                      segmentation.rowgroups,
+                      rowgroup_ranges,
                       dictionaries.d_data_view,
                       dictionaries.d_index_view,
                       &dict,
                       stream);
   }
+
+  // Decide stripe boundaries based on rowgroups and dict chunks
+  auto const segmentation =
+    calculate_segmentation(orc_table.columns, std::move(rowgroup_ranges), max_stripe_size_);
 
   // Build stripe-level dictionaries
   const auto num_stripe_dict = segmentation.num_stripes() * orc_table.num_string_columns();
