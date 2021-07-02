@@ -102,16 +102,10 @@ def process_PandasCompat_nodes(app, doctree, fromdocname):
 
         for PandasCompat_info in env.PandasCompat_all_pandas_compat:
             para = nodes.paragraph()
-            filename = env.doc2path(PandasCompat_info["docname"], base=None)
-            description = _(
-                "(The original entry is located in %s, line %d and can be "
-                "found "
-            ) % (filename, PandasCompat_info["lineno"])
-            para += nodes.Text(description, description)
 
-            # Create a reference
+            # Create a reference back to the original docstring
             newnode = nodes.reference("", "")
-            innernode = nodes.emphasis(_("here"), _("here"))
+            innernode = nodes.emphasis(_("[source]"), _("[source]"))
             newnode["refdocname"] = PandasCompat_info["docname"]
             newnode["refuri"] = app.builder.get_relative_uri(
                 fromdocname, PandasCompat_info["docname"]
@@ -119,11 +113,15 @@ def process_PandasCompat_nodes(app, doctree, fromdocname):
             newnode["refuri"] += "#" + PandasCompat_info["target"]["refid"]
             newnode.append(innernode)
             para += newnode
-            para += nodes.Text(".)", ".)")
 
-            # Insert into the PandasCompatList
+            # Insert the reference node into PandasCompat node
+            # Note that this node is a deepcopy from the original copy
+            # in the docstring, so changing this does not affect that in the
+            # doc.
+            PandasCompat_info["PandasCompat"].append(para)
+
+            # Insert the PandasCompand node into the PandasCompatList Node
             content.append(PandasCompat_info["PandasCompat"])
-            content.append(para)
 
         node.replace_self(content)
 
