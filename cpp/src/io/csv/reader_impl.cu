@@ -327,8 +327,9 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
     for (const auto &name : opts_.get_use_cols_names()) {
       const auto it = std::find(col_names_.begin(), col_names_.end(), name);
       if (it != col_names_.end()) {
-        if (column_flags_[it - col_names_.begin()] == column_parse::disabled) {
-          column_flags_[it - col_names_.begin()] = column_parse::enabled;
+        auto curr_it = it - col_names_.begin();
+        if (column_flags_[curr_it] == column_parse::disabled) {
+          column_flags_[curr_it] = column_parse::enabled;
           num_active_cols_++;
         }
       }
