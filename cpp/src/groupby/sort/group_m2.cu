@@ -55,12 +55,12 @@ struct m2_transform {
 };
 
 template <typename ResultType, typename Iterator>
-void reduce_by_key_fn(column_device_view const& values,
-                      Iterator values_iter,
-                      cudf::device_span<size_type const> group_labels,
-                      ResultType const* d_means,
-                      ResultType* d_result,
-                      rmm::cuda_stream_view stream)
+void compute_m2_fn(column_device_view const& values,
+                   Iterator values_iter,
+                   cudf::device_span<size_type const> group_labels,
+                   ResultType const* d_means,
+                   ResultType* d_result,
+                   rmm::cuda_stream_view stream)
 {
   auto const var_iter = cudf::detail::make_counting_transform_iterator(
     size_type{0},
@@ -95,11 +95,11 @@ struct m2_functor {
 
     if (!cudf::is_dictionary(values.type())) {
       auto const values_iter = d_values.begin<T>();
-      reduce_by_key_fn(d_values, values_iter, group_labels, d_means, d_result, stream);
+      compute_m2_fn(d_values, values_iter, group_labels, d_means, d_result, stream);
     } else {
       auto const values_iter =
         cudf::dictionary::detail::make_dictionary_iterator<T>(*values_dv_ptr);
-      reduce_by_key_fn(d_values, values_iter, group_labels, d_means, d_result, stream);
+      compute_m2_fn(d_values, values_iter, group_labels, d_means, d_result, stream);
     }
 
     // M2 column values should have the same bitmask as means's.
