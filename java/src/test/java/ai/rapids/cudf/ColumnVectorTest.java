@@ -2927,6 +2927,57 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testScanRank() {
+    try (ColumnVector v1 = ColumnVector.fromBoxedInts(1, 4, 8, 6, 10, 9, 7, 9, 5, 0, 7, 7);
+         Table orderBy = new Table.TestBuilder()
+                                  .column(-97, -97, -97, null, -16, 5, null, null, 6, 6, 34, null)
+                                  .column(3, 3, 4, 7, 7, 7, 7, 7, 8, 8, 8, 9)
+                                  .build()) {
+      try (ColumnVector result = v1.scan(Aggregation.rank(orderBy),
+              ScanType.INCLUSIVE, NullPolicy.INCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(
+              1, 1, 3, 4, 5, 6, 7, 7, 9, 9, 11, 12)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector result = v1.scan(Aggregation.rank(orderBy),
+              ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(
+              1, 1, 3, 4, 5, 6, 7, 7, 9, 9, 11, 12)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      // Rank aggregations do not support ScanType.EXCLUSIVE
+    }
+  }
+
+  @Test
+  void testScanDenseRank() {
+    try (ColumnVector v1 = ColumnVector.fromBoxedInts(1, 4, 8, 6, 10, 9, 7, 9, 5, 0, 7, 7);
+         Table orderBy = new Table.TestBuilder()
+                                  .column(-97, -97, -97, null, -16, 5, null, null, 6, 6, 34, null)
+                                  .column(3, 3, 4, 7, 7, 7, 7, 7, 8, 8, 8, 9)
+                                  .build()) {
+      try (ColumnVector result = v1.scan(Aggregation.denseRank(orderBy),
+              ScanType.INCLUSIVE, NullPolicy.INCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(
+              1, 1, 2, 3, 4, 5, 6, 6, 7, 7, 8, 9)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      // Exclude should have identical results
+      try (ColumnVector result = v1.scan(Aggregation.denseRank(orderBy),
+              ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(
+            1, 1, 2, 3, 4, 5, 6, 6, 7, 7, 8, 9)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      // Dense rank aggregations do not support ScanType.EXCLUSIVE
+    }
+  }
+
+  @Test
   void testWindowStatic() {
     try (Scalar one = Scalar.fromInt(1);
          Scalar two = Scalar.fromInt(2);

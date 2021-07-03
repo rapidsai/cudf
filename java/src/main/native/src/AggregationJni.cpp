@@ -81,20 +81,48 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
       case 17: // ROW_NUMBER
         ret = cudf::make_row_number_aggregation();
         break;
-      // case 18: COLLECT_LIST
-      // case 19: COLLECT_SET
-      // case 20: MERGE_LISTS
-      case 20:
+      // case 18: RANK
+      // case 19: DENSE_RANK
+      // case 20: COLLECT_LIST
+      // case 21: COLLECT_SET
+      // case 22: MERGE_LISTS
+      case 22:
         ret = cudf::make_merge_lists_aggregation();
         break;
-      // case 21: MERGE_SETS
-      // case 22: LEAD
-      // case 23: LAG
-      // case 24: PTX
-      // case 25: CUDA
+      // case 23: MERGE_SETS
+      // case 24: LEAD
+      // case 25: LAG
+      // case 26: PTX
+      // case 27: CUDA
       default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
     }
 
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createRankAgg(JNIEnv *env,
+                                                                     jclass class_object,
+                                                                     jlong order_by_table) {
+  JNI_NULL_CHECK(env, order_by_table, "order_by_table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto order_by = reinterpret_cast<cudf::table_view const *>(order_by_table);
+    std::unique_ptr<cudf::aggregation> ret = cudf::make_rank_aggregation(*order_by);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createDenseRankAgg(JNIEnv *env,
+                                                                     jclass class_object,
+                                                                     jlong order_by_table) {
+  JNI_NULL_CHECK(env, order_by_table, "order_by_table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto order_by = reinterpret_cast<cudf::table_view const *>(order_by_table);
+    std::unique_ptr<cudf::aggregation> ret = cudf::make_dense_rank_aggregation(*order_by);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);

@@ -22,7 +22,7 @@ import java.util.Arrays;
 
 /**
  * Represents an aggregation operation.  Please note that not all aggregations work, or even make
- * since in all types of aggregation operations.
+ * sense in all types of aggregation operations.
  */
 public abstract class Aggregation {
     static {
@@ -54,14 +54,16 @@ public abstract class Aggregation {
         NUNIQUE(15),
         NTH_ELEMENT(16),
         ROW_NUMBER(17),
-        COLLECT_LIST(18),
-        COLLECT_SET(19),
-        MERGE_LISTS(20),
-        MERGE_SETS(21),
-        LEAD(22),
-        LAG(23),
-        PTX(24),
-        CUDA(25);
+        RANK(18),
+        DENSE_RANK(19),
+        COLLECT_LIST(20),
+        COLLECT_SET(21),
+        MERGE_LISTS(22),
+        MERGE_SETS(23),
+        LEAD(24),
+        LAG(25),
+        PTX(26),
+        CUDA(27);
 
         final int nativeId;
 
@@ -373,6 +375,66 @@ public abstract class Aggregation {
             } else if (other instanceof MergeSetsAggregation) {
                 MergeSetsAggregation o = (MergeSetsAggregation) other;
                 return o.nullEquality == this.nullEquality && o.nanEquality == this.nanEquality;
+            }
+            return false;
+        }
+    }
+
+    public static final class RankAggregation extends Aggregation {
+        private final Table orderBy;
+
+        private RankAggregation(Table orderBy) {
+            super(Kind.RANK);
+            this.orderBy = orderBy;
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + (int)orderBy.getNativeView() + (int)(orderBy.getNativeView()>>32);
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createRankAgg(orderBy.getNativeView());
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof RankAggregation) {
+                RankAggregation o = (RankAggregation) other;
+                return o.orderBy == this.orderBy;
+            }
+            return false;
+        }
+    }
+
+    public static final class DenseRankAggregation extends Aggregation {
+        private final Table orderBy;
+
+        private DenseRankAggregation(Table orderBy) {
+            super(Kind.DENSE_RANK);
+            this.orderBy = orderBy;
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + (int)orderBy.getNativeView() + (int)(orderBy.getNativeView()>>32);
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createDenseRankAgg(orderBy.getNativeView());
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof DenseRankAggregation) {
+                DenseRankAggregation o = (DenseRankAggregation) other;
+                return o.orderBy == this.orderBy;
             }
             return false;
         }
@@ -722,10 +784,24 @@ public abstract class Aggregation {
     }
 
     /**
-     * Get the row number, only makes since for a window operations.
+     * Get the row number, only makes sense for a window operations.
      */
     public static RowNumberAggregation rowNumber() {
         return new RowNumberAggregation();
+    }
+
+    /**
+     * Get the row's ranking.
+     */
+    public static RankAggregation rank(Table orderBy) {
+        return new RankAggregation(orderBy);
+    }
+
+    /**
+     * Get the row's dense ranking.
+     */
+    public static DenseRankAggregation denseRank(Table orderBy) {
+        return new DenseRankAggregation(orderBy);
     }
 
     /**
@@ -891,4 +967,14 @@ public abstract class Aggregation {
      * Create a merge sets aggregation.
      */
     private static native long createMergeSetsAgg(boolean nullsEqual, boolean nansEqual);
+
+    /**
+     * Create a rank aggregation.
+     */
+    private static native long createRankAgg(long orderBy);
+
+    /**
+     * Create a dense rank aggregation.
+     */
+    private static native long createDenseRankAgg(long orderBy);
 }
