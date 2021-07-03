@@ -140,13 +140,13 @@ class orc_column_view {
    */
   explicit orc_column_view(uint32_t index,
                            uint32_t str_id,
-                           bool is_child,
+                           int root_index,
                            column_view const &col,
                            const table_metadata *metadata)
     : cudf_column{col},
       _index{index},
       _str_id{str_id},
-      _is_child{is_child},
+      _is_child{root_index == -1},
       _type_width{cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : 0},
       _scale{(to_orc_type(col.type().id()) == TypeKind::DECIMAL) ? -col.type().scale()
                                                                  : to_clockscale(col.type().id())},
@@ -154,10 +154,10 @@ class orc_column_view {
       _type_kind{to_orc_type(col.type().id())}
   {
     // Generating default name if name isn't present in metadata
-    if (metadata && _index < metadata->column_names.size()) {
-      _name = metadata->column_names[_index];
+    if (metadata && !_is_child && root_index < static_cast<int>(metadata->column_names.size())) {
+      _name = metadata->column_names[root_index];
     } else {
-      _name = "_col" + std::to_string(_index);
+      _name = "_col" + std::to_string(root_index);
     }
   }
 
@@ -1132,20 +1132,22 @@ orc_table_view get_columns_info(table_view const &table,
   std::vector<orc_column_view> orc_columns;
   std::vector<int> str_col_flat_indexes;
 
-  std::function<void(column_view const &, bool)> append_orc_column = [&](column_view const &col,
-                                                                         bool is_child) {
+  std::function<void(column_view const &, int)> append_orc_column = [&](column_view const &col,
+                                                                        int root_index) {
     orc_columns.emplace_back(
-      orc_columns.size(), str_col_flat_indexes.size(), is_child, col, user_metadata);
+      orc_columns.size(), str_col_flat_indexes.size(), root_index, col, user_metadata);
     if (orc_columns.back().is_string()) {
       str_col_flat_indexes.push_back(orc_columns.back().flat_index());
     }
-    if (col.type().id() == type_id::LIST) append_orc_column(col.child(1), true);
+    if (col.type().id() == type_id::LIST) append_orc_column(col.child(1), -1);
     if (col.type().id() == type_id::STRUCT)
       for (auto child = col.child_begin(); child != col.child_end(); ++child)
-        append_orc_column(*child, true);
+        append_orc_column(*child, -1);
   };
 
-  for (auto const &column : table) { append_orc_column(column, false); }
+  for (auto col_idx = 0; col_idx < table.num_columns(); ++col_idx) {
+    append_orc_column(table.column(col_idx), col_idx);
+  }
 
   rmm::device_uvector<orc_column_device_view> d_orc_columns(orc_columns.size(), stream);
 
