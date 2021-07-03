@@ -10,7 +10,7 @@ from hypothesis import given, settings, strategies as st
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests import utils
+from cudf.testing import _utils as utils
 from cudf.utils.dtypes import cudf_dtypes_to_pandas_dtypes
 
 repr_categories = utils.NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
