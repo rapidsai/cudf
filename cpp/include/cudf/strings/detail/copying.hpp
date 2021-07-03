@@ -64,7 +64,7 @@ std::unique_ptr<cudf::column> copy_slice(
  * r1 = shift(s, 2, "_")
  * r1 is now ["_", "_", "a", "b", "c", "d"]
  * r2 = shift(s, -2, "_")
- * r2 is now ["a", "b", "c", "d", "_", "_"]
+ * r2 is now ["c", "d", "e", "f", "_", "_"]
  * @endcode
  *
  * The caller should set the validity mask in the output column.
