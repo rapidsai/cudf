@@ -138,19 +138,20 @@ __global__ void __launch_bounds__(block_size, 2)
   } temp_storage;
 
   dictinit_state_s *const s = &state_g;
-  uint32_t col_id           = blockIdx.x;
+  uint32_t const str_col_id = blockIdx.x;
+  uint32_t const col_idx    = str_col_flat_indexes[str_col_id];
   uint32_t group_id         = blockIdx.y;
   auto const num_str_cols   = str_col_flat_indexes.size();
   uint32_t nnz, start_row, dict_char_count;
   int t = threadIdx.x;
 
   if (t == 0) {
-    s->chunk             = chunks[group_id * num_str_cols + col_id];
-    s->chunk.leaf_column = &d_orc_columns[str_col_flat_indexes[col_id]].cudf_column;
-    s->chunk.dict_data   = dict_data[col_id].data() + rowgroup_ranges[group_id][col_id].begin;
-    s->chunk.dict_index  = dict_index[col_id].data();
-    s->chunk.start_row   = rowgroup_ranges[group_id][col_id].begin;
-    s->chunk.num_rows    = rowgroup_ranges[group_id][col_id].size();
+    s->chunk             = chunks[group_id * num_str_cols + str_col_id];
+    s->chunk.leaf_column = &d_orc_columns[col_idx].cudf_column;
+    s->chunk.dict_data   = dict_data[str_col_id].data() + rowgroup_ranges[group_id][col_idx].begin;
+    s->chunk.dict_index  = dict_index[str_col_id].data();
+    s->chunk.start_row   = rowgroup_ranges[group_id][col_idx].begin;
+    s->chunk.num_rows    = rowgroup_ranges[group_id][col_idx].size();
   }
   for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
@@ -279,16 +280,16 @@ __global__ void __launch_bounds__(block_size, 2)
   // while making any future changes.
   dict_char_count = block_reduce(temp_storage.reduce_storage).Sum(dict_char_count);
   if (!t) {
-    chunks[group_id * num_str_cols + col_id].num_strings       = nnz;
-    chunks[group_id * num_str_cols + col_id].string_char_count = s->chunk.string_char_count;
-    chunks[group_id * num_str_cols + col_id].num_dict_strings  = nnz - s->total_dupes;
-    chunks[group_id * num_str_cols + col_id].dict_char_count   = dict_char_count;
-    chunks[group_id * num_str_cols + col_id].leaf_column       = s->chunk.leaf_column;
+    chunks[group_id * num_str_cols + str_col_id].num_strings       = nnz;
+    chunks[group_id * num_str_cols + str_col_id].string_char_count = s->chunk.string_char_count;
+    chunks[group_id * num_str_cols + str_col_id].num_dict_strings  = nnz - s->total_dupes;
+    chunks[group_id * num_str_cols + str_col_id].dict_char_count   = dict_char_count;
+    chunks[group_id * num_str_cols + str_col_id].leaf_column       = s->chunk.leaf_column;
 
-    chunks[group_id * num_str_cols + col_id].dict_data  = s->chunk.dict_data;
-    chunks[group_id * num_str_cols + col_id].dict_index = s->chunk.dict_index;
-    chunks[group_id * num_str_cols + col_id].start_row  = s->chunk.start_row;
-    chunks[group_id * num_str_cols + col_id].num_rows   = s->chunk.num_rows;
+    chunks[group_id * num_str_cols + str_col_id].dict_data  = s->chunk.dict_data;
+    chunks[group_id * num_str_cols + str_col_id].dict_index = s->chunk.dict_index;
+    chunks[group_id * num_str_cols + str_col_id].start_row  = s->chunk.start_row;
+    chunks[group_id * num_str_cols + str_col_id].num_rows   = s->chunk.num_rows;
   }
 }
 
