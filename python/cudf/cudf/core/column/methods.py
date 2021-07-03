@@ -11,15 +11,17 @@ import cudf
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
 
+ParentType = Union["cudf.Series", "cudf.BaseIndex"]
+
 
 class ColumnMethodsMixin:
     _column: ColumnBase
-    _parent: Optional[Union["cudf.Series", "cudf.Index"]]
+    _parent: Optional[Union["cudf.Series", "cudf.BaseIndex"]]
 
     def __init__(
         self,
         column: ColumnBase,
-        parent: Union["cudf.Series", "cudf.Index"] = None,
+        parent: Union["cudf.Series", "cudf.BaseIndex"] = None,
     ):
         self._column = column
         self._parent = parent
@@ -27,13 +29,13 @@ class ColumnMethodsMixin:
     @overload
     def _return_or_inplace(
         self, new_col, inplace: Literal[False], expand=False, retain_index=True
-    ) -> Union["cudf.Series", "cudf.Index"]:
+    ) -> Union["cudf.Series", "cudf.BaseIndex"]:
         ...
 
     @overload
     def _return_or_inplace(
         self, new_col, expand: bool = False, retain_index: bool = True
-    ) -> Union["cudf.Series", "cudf.Index"]:
+    ) -> Union["cudf.Series", "cudf.BaseIndex"]:
         ...
 
     @overload
@@ -49,7 +51,7 @@ class ColumnMethodsMixin:
         inplace: bool = False,
         expand: bool = False,
         retain_index: bool = True,
-    ) -> Optional[Union["cudf.Series", "cudf.Index"]]:
+    ) -> Optional[Union["cudf.Series", "cudf.BaseIndex"]]:
         ...
 
     def _return_or_inplace(

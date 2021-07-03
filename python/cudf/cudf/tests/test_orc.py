@@ -16,7 +16,11 @@ import pytest
 import cudf
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.io.orc import ORCWriter
-from cudf.tests.utils import assert_eq, gen_rand_series, supported_numpy_dtypes
+from cudf.testing._utils import (
+    assert_eq,
+    gen_rand_series,
+    supported_numpy_dtypes,
+)
 
 
 @pytest.fixture(scope="module")
@@ -990,3 +994,43 @@ def test_lists_struct_nests(
             assert_eq(True, pyarrow_tbl.equals(gdf.to_arrow()))
         else:
             assert_eq(pyarrow_tbl.to_pandas(), gdf)
+
+
+@pytest.mark.parametrize(
+    "data", [["_col0"], ["FakeName", "_col0", "TerriblyFakeColumnName"]]
+)
+def test_orc_reader_decimal(datadir, data):
+    path = datadir / "TestOrcFile.decimal.orc"
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    pdf = orcfile.read().to_pandas()
+    gdf = cudf.read_orc(
+        path, engine="cudf", decimal_cols_as_float=data
+    ).to_pandas()
+
+    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
+    # This is because cuDF returns as float64
+    pdf = pdf.apply(pd.to_numeric)
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("data", [["InvalidColumnName"]])
+def test_orc_reader_decimal_invalid_column(datadir, data):
+    path = datadir / "TestOrcFile.decimal.orc"
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    pdf = orcfile.read().to_pandas()
+    gdf = cudf.read_orc(
+        path, engine="cudf", decimal_cols_as_float=data
+    ).to_pandas()
+
+    # Since the `decimal_cols_as_float` column name
+    # is invalid, this should be a decimal
+    assert_eq(pdf, gdf)
