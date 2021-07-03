@@ -52,13 +52,20 @@ TYPED_TEST(typed_groupby_rank_scan_test, empty_cols)
 
   fixed_width_column_wrapper<size_type> expected_dense_vals{};
   fixed_width_column_wrapper<size_type> expected_rank_vals{};
-
-  auto dense_agg = make_dense_rank_aggregation(order_table);
-  auto rank_agg  = make_rank_aggregation(order_table);
-  test_single_scan(
-    keys, vals, keys, expected_dense_vals, std::move(dense_agg), null_policy::INCLUDE, sorted::YES);
-  test_single_scan(
-    keys, vals, keys, expected_rank_vals, std::move(rank_agg), null_policy::INCLUDE, sorted::YES);
+  test_single_scan(keys,
+                   vals,
+                   keys,
+                   expected_dense_vals,
+                   make_dense_rank_aggregation(order_table),
+                   null_policy::INCLUDE,
+                   sorted::YES);
+  test_single_scan(keys,
+                   vals,
+                   keys,
+                   expected_rank_vals,
+                   make_rank_aggregation(order_table),
+                   null_policy::INCLUDE,
+                   sorted::YES);
 }
 
 TYPED_TEST(typed_groupby_rank_scan_test, zero_valid_keys)
@@ -73,12 +80,20 @@ TYPED_TEST(typed_groupby_rank_scan_test, zero_valid_keys)
   fixed_width_column_wrapper<size_type> expected_dense_vals{1, 1, 2};
   fixed_width_column_wrapper<size_type> expected_rank_vals{1, 1, 3};
 
-  auto dense_agg = make_dense_rank_aggregation(order_table);
-  auto rank_agg  = make_rank_aggregation(order_table);
-  test_single_scan(
-    keys, vals, keys, expected_dense_vals, std::move(dense_agg), null_policy::INCLUDE, sorted::YES);
-  test_single_scan(
-    keys, vals, keys, expected_rank_vals, std::move(rank_agg), null_policy::INCLUDE, sorted::YES);
+  test_single_scan(keys,
+                   vals,
+                   keys,
+                   expected_dense_vals,
+                   make_dense_rank_aggregation(order_table),
+                   null_policy::INCLUDE,
+                   sorted::YES);
+  test_single_scan(keys,
+                   vals,
+                   keys,
+                   expected_rank_vals,
+                   make_rank_aggregation(order_table),
+                   null_policy::INCLUDE,
+                   sorted::YES);
 }
 
 TYPED_TEST(typed_groupby_rank_scan_test, zero_valid_orders)
@@ -93,12 +108,20 @@ TYPED_TEST(typed_groupby_rank_scan_test, zero_valid_orders)
   fixed_width_column_wrapper<size_type> expected_dense_vals{1, 1, 1, 1};
   fixed_width_column_wrapper<size_type> expected_rank_vals{1, 1, 1, 1};
 
-  auto dense_agg = make_dense_rank_aggregation(order_table);
-  auto rank_agg  = make_rank_aggregation(order_table);
-  test_single_scan(
-    keys, vals, keys, expected_dense_vals, std::move(dense_agg), null_policy::INCLUDE, sorted::YES);
-  test_single_scan(
-    keys, vals, keys, expected_rank_vals, std::move(rank_agg), null_policy::INCLUDE, sorted::YES);
+  test_single_scan(keys,
+                   vals,
+                   keys,
+                   expected_dense_vals,
+                   make_dense_rank_aggregation(order_table),
+                   null_policy::INCLUDE,
+                   sorted::YES);
+  test_single_scan(keys,
+                   vals,
+                   keys,
+                   expected_rank_vals,
+                   make_rank_aggregation(order_table),
+                   null_policy::INCLUDE,
+                   sorted::YES);
 }
 
 TYPED_TEST(typed_groupby_rank_scan_test, basic)
@@ -115,12 +138,20 @@ TYPED_TEST(typed_groupby_rank_scan_test, basic)
   fixed_width_column_wrapper<size_type> expected_rank_vals =
     fixed_width_column_wrapper<size_type>{{1, 1, 1, 4, 4, 4, 7, 1, 2, 2, 4, 4}};
 
-  auto dense_agg = make_dense_rank_aggregation(order_table);
-  auto rank_agg  = make_rank_aggregation(order_table);
-  test_single_scan(
-    keys, vals, keys, expected_dense_vals, std::move(dense_agg), null_policy::INCLUDE, sorted::YES);
-  test_single_scan(
-    keys, vals, keys, expected_rank_vals, std::move(rank_agg), null_policy::INCLUDE, sorted::YES);
+  test_single_scan(keys,
+                   vals,
+                   keys,
+                   expected_dense_vals,
+                   make_dense_rank_aggregation(order_table),
+                   null_policy::INCLUDE,
+                   sorted::YES);
+  test_single_scan(keys,
+                   vals,
+                   keys,
+                   expected_rank_vals,
+                   make_rank_aggregation(order_table),
+                   null_policy::INCLUDE,
+                   sorted::YES);
 }
 
 TYPED_TEST(typed_groupby_rank_scan_test, null_values_and_orders)
@@ -137,12 +168,20 @@ TYPED_TEST(typed_groupby_rank_scan_test, null_values_and_orders)
   fixed_width_column_wrapper<size_type> expected_dense_vals{{1, 2, 3, 4, 5, 5, 1, 1, 2, 3, 3, 3}};
   fixed_width_column_wrapper<size_type> expected_rank_vals{{1, 2, 3, 4, 5, 5, 1, 1, 3, 4, 4, 4}};
 
-  auto dense_agg = make_dense_rank_aggregation(order_table);
-  auto rank_agg  = make_rank_aggregation(order_table);
-  test_single_scan(
-    keys, vals, keys, expected_dense_vals, std::move(dense_agg), null_policy::INCLUDE, sorted::YES);
-  test_single_scan(
-    keys, vals, keys, expected_rank_vals, std::move(rank_agg), null_policy::INCLUDE, sorted::YES);
+  test_single_scan(keys,
+                   vals,
+                   keys,
+                   expected_dense_vals,
+                   make_dense_rank_aggregation(order_table),
+                   null_policy::INCLUDE,
+                   sorted::YES);
+  test_single_scan(keys,
+                   vals,
+                   keys,
+                   expected_rank_vals,
+                   make_rank_aggregation(order_table),
+                   null_policy::INCLUDE,
+                   sorted::YES);
 }
 
 TYPED_TEST(typed_groupby_rank_scan_test, null_values_orders_and_keys)
@@ -159,12 +198,20 @@ TYPED_TEST(typed_groupby_rank_scan_test, null_values_orders_and_keys)
   fixed_width_column_wrapper<size_type> expected_dense_vals{{1, 2, 3, 4, 5, 5, 1, 1, 2, 1, 1, 2}};
   fixed_width_column_wrapper<size_type> expected_rank_vals{{1, 2, 3, 4, 5, 5, 1, 1, 3, 1, 1, 3}};
 
-  auto dense_agg = make_dense_rank_aggregation(order_table);
-  auto rank_agg  = make_rank_aggregation(order_table);
-  test_single_scan(
-    keys, vals, keys, expected_dense_vals, std::move(dense_agg), null_policy::INCLUDE, sorted::YES);
-  test_single_scan(
-    keys, vals, keys, expected_rank_vals, std::move(rank_agg), null_policy::INCLUDE, sorted::YES);
+  test_single_scan(keys,
+                   vals,
+                   keys,
+                   expected_dense_vals,
+                   make_dense_rank_aggregation(order_table),
+                   null_policy::INCLUDE,
+                   sorted::YES);
+  test_single_scan(keys,
+                   vals,
+                   keys,
+                   expected_rank_vals,
+                   make_rank_aggregation(order_table),
+                   null_policy::INCLUDE,
+                   sorted::YES);
 }
 
 TEST_F(groupby_rank_scan_test, test_exception_triggers)

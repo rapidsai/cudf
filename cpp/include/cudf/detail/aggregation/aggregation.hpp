@@ -25,7 +25,6 @@
 
 #include <functional>
 #include <numeric>
-#include "thrust/iterator/counting_iterator.h"
 
 namespace cudf {
 namespace detail {
@@ -583,6 +582,8 @@ class rank_aggregation final : public rolling_aggregation {
     return true;
   }
 
+  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<rank_aggregation>(*this);
@@ -593,6 +594,19 @@ class rank_aggregation final : public rolling_aggregation {
     return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+
+ private:
+  size_t hash_impl() const
+  {
+    size_t result = std::hash<int>{}(_order_by.num_rows());
+    for_each(_order_by.begin(), _order_by.end(), [&](column_view col) {
+      result ^= std::hash<int32_t>{}(static_cast<int32_t>(col.type().id())) ^
+                std::hash<size_type>{}(static_cast<size_type>(col.offset())) ^
+                std::hash<long int>{}(reinterpret_cast<long int>(col.data<size_type>())) ^
+                std::hash<long int>{}(reinterpret_cast<long int>(col.null_mask()));
+    });
+    return result;
+  }
 };
 
 /**
@@ -622,6 +636,8 @@ class dense_rank_aggregation final : public rolling_aggregation {
     return true;
   }
 
+  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<dense_rank_aggregation>(*this);
@@ -632,6 +648,19 @@ class dense_rank_aggregation final : public rolling_aggregation {
     return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+
+ private:
+  size_t hash_impl() const
+  {
+    size_t result = std::hash<int>{}(_order_by.num_rows());
+    for_each(_order_by.begin(), _order_by.end(), [&](column_view col) {
+      result ^= std::hash<int32_t>{}(static_cast<int32_t>(col.type().id())) ^
+                std::hash<size_type>{}(static_cast<size_type>(col.offset())) ^
+                std::hash<long int>{}(reinterpret_cast<long int>(col.data<size_type>())) ^
+                std::hash<long int>{}(reinterpret_cast<long int>(col.null_mask()));
+    });
+    return result;
+  }
 };
 
 /**

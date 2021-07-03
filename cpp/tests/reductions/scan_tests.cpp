@@ -144,17 +144,20 @@ struct ScanTest : public cudf::test::BaseFixture {
   {
     if constexpr (std::is_same_v<T, cudf::string_view>) {
       bool supported_agg =
-        (agg->kind == cudf::aggregation::MIN || agg->kind == cudf::aggregation::MAX);
+        (agg->kind == cudf::aggregation::MIN || agg->kind == cudf::aggregation::MAX ||
+         agg->kind == cudf::aggregation::RANK || agg->kind == cudf::aggregation::DENSE_RANK);
       return supported_agg && (inclusive == scan_type::INCLUSIVE);
     } else if constexpr (cudf::is_fixed_point<T>()) {
       bool supported_agg =
         (agg->kind == cudf::aggregation::MIN || agg->kind == cudf::aggregation::MAX ||
-         agg->kind == cudf::aggregation::SUM);
+         agg->kind == cudf::aggregation::SUM || agg->kind == cudf::aggregation::RANK ||
+         agg->kind == cudf::aggregation::DENSE_RANK);
       return supported_agg;
     } else if constexpr (std::is_arithmetic<T>()) {
       bool supported_agg =
         (agg->kind == cudf::aggregation::MIN || agg->kind == cudf::aggregation::MAX ||
-         agg->kind == cudf::aggregation::SUM || agg->kind == cudf::aggregation::PRODUCT);
+         agg->kind == cudf::aggregation::SUM || agg->kind == cudf::aggregation::PRODUCT ||
+         agg->kind == cudf::aggregation::RANK || agg->kind == cudf::aggregation::DENSE_RANK);
       return supported_agg;
     } else {
       return false;
@@ -393,4 +396,124 @@ TYPED_TEST(ScanTest, LeadingNulls)
   // skipna = false
   this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
   this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE);
+}
+
+template <typename T>
+struct TypedRankScanTest : ScanTest<T> {
+  inline void test_ungrouped_rank_scan(column_view const& input,
+                                       column_view const& expect_vals,
+                                       std::unique_ptr<aggregation> const& agg,
+                                       null_policy null_handling)
+  {
+    auto col_out = cudf::scan(input, agg, scan_type::INCLUSIVE, null_handling);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, col_out->view(), true);
+  }
+};
+
+using RankTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
+                                     cudf::test::FloatingPointTypes,
+                                     cudf::test::FixedPointTypes,
+                                     cudf::test::StringTypes>;
+
+TYPED_TEST_CASE(TypedRankScanTest, RankTypes);
+
+TYPED_TEST(TypedRankScanTest, Rank)
+{
+  auto const v = [] {
+    if (std::is_signed<TypeParam>::value)
+      return make_vector<TypeParam>({-120, -120, -120, -16, -16, 5, 6, 6, 6, 6, 34, 113});
+    return make_vector<TypeParam>({5, 5, 5, 6, 6, 9, 11, 11, 11, 11, 14, 34});
+  }();
+  auto col = this->make_column(v);
+  cudf::table_view order_table{std::vector<cudf::column_view>{col->view()}};
+
+  auto const expected_dense_vals =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 1, 2, 2, 3, 4, 4, 4, 4, 5, 6};
+  auto const expected_rank_vals =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 1, 4, 4, 6, 7, 7, 7, 7, 11, 12};
+  this->test_ungrouped_rank_scan(*col,
+                                 expected_dense_vals,
+                                 cudf::make_dense_rank_aggregation(order_table),
+                                 null_policy::INCLUDE);
+  this->test_ungrouped_rank_scan(
+    *col, expected_rank_vals, cudf::make_rank_aggregation(order_table), null_policy::INCLUDE);
+}
+
+TYPED_TEST(TypedRankScanTest, RankWithNulls)
+{
+  auto const v = [] {
+    if (std::is_signed<TypeParam>::value)
+      return make_vector<TypeParam>({-120, -120, -120, -16, -16, 5, 6, 6, 6, 6, 34, 113});
+    return make_vector<TypeParam>({5, 5, 5, 6, 6, 9, 11, 11, 11, 11, 14, 34});
+  }();
+  auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0});
+  auto col     = this->make_column(v, b);
+  cudf::table_view order_table{std::vector<cudf::column_view>{col->view()}};
+
+  auto const expected_dense_vals =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 1, 2, 3, 4, 5, 5, 6, 6, 7, 8};
+  auto const expected_rank_vals =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 1, 4, 5, 6, 7, 7, 9, 9, 11, 12};
+  this->test_ungrouped_rank_scan(*col,
+                                 expected_dense_vals,
+                                 cudf::make_dense_rank_aggregation(order_table),
+                                 null_policy::INCLUDE);
+  this->test_ungrouped_rank_scan(
+    *col, expected_rank_vals, cudf::make_rank_aggregation(order_table), null_policy::INCLUDE);
+}
+
+struct RankScanTest : public cudf::test::BaseFixture {
+};
+TEST(RankScanTest, BoolRank)
+{
+  cudf::test::fixed_width_column_wrapper<bool> vals{5, 5, 5, 6, 6, 9, 11, 11, 11, 11, 14, 34};
+  cudf::table_view order_table{std::vector<cudf::column_view>{vals}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expect_vals{
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+
+  auto dense_out = cudf::scan(vals,
+                              cudf::make_dense_rank_aggregation(order_table),
+                              scan_type::INCLUSIVE,
+                              null_policy::INCLUDE);
+  auto rank_out  = cudf::scan(
+    vals, cudf::make_rank_aggregation(order_table), scan_type::INCLUSIVE, null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, dense_out->view(), true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, rank_out->view(), true);
+}
+
+TEST(RankScanTest, BoolRankWithNull)
+{
+  cudf::test::fixed_width_column_wrapper<bool> vals{{5, 5, 5, 6, 6, 9, 11, 11, 11, 11, 0, 34},
+                                                    {1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0}};
+  cudf::table_view order_table{std::vector<cudf::column_view>{vals}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_dense_vals{
+    1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_rank_vals{
+    1, 1, 1, 1, 1, 1, 1, 1, 9, 9, 9, 9};
+
+  auto nullable_dense_out = cudf::scan(vals,
+                                       cudf::make_dense_rank_aggregation(order_table),
+                                       scan_type::INCLUSIVE,
+                                       null_policy::INCLUDE);
+  auto nullable_rank_out  = cudf::scan(
+    vals, cudf::make_rank_aggregation(order_table), scan_type::INCLUSIVE, null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_dense_vals, nullable_dense_out->view(), true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_rank_vals, nullable_rank_out->view(), true);
+}
+
+TEST(RankScanTest, ExclusiveScan)
+{
+  cudf::test::fixed_width_column_wrapper<uint32_t> vals{3, 4, 5};
+  cudf::test::fixed_width_column_wrapper<uint32_t> order_col{3, 3, 1};
+  cudf::table_view order_table{std::vector<cudf::column_view>{order_col}};
+
+  CUDF_EXPECT_THROW_MESSAGE(cudf::scan(vals,
+                                       cudf::make_dense_rank_aggregation(order_table),
+                                       scan_type::EXCLUSIVE,
+                                       null_policy::INCLUDE),
+                            "Unsupported rank aggregation operator for exclusive scan");
+  CUDF_EXPECT_THROW_MESSAGE(
+    cudf::scan(
+      vals, cudf::make_rank_aggregation(order_table), scan_type::EXCLUSIVE, null_policy::INCLUDE),
+    "Unsupported rank aggregation operator for exclusive scan");
 }

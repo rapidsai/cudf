@@ -28,10 +28,18 @@ namespace cudf {
 namespace detail {
 
 // logical-and scan of the null mask of the input view
-rmm::device_buffer mask_scan(const column_view& input_view,
+rmm::device_buffer mask_scan(column_view const& input_view,
                              cudf::scan_type inclusive,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr);
+
+std::unique_ptr<column> inclusive_rank_scan(aggregation const& agg,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr);
+
+std::unique_ptr<column> inclusive_dense_rank_scan(aggregation const& agg,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr);
 
 template <template <typename> typename DispatchFn>
 std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
@@ -60,6 +68,9 @@ std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
       if (is_fixed_point(input.type())) CUDF_FAIL("decimal32/64 cannot support product scan");
       return cudf::type_dispatcher<dispatch_storage_type>(
         input.type(), DispatchFn<cudf::DeviceProduct>(), input, null_handling, stream, mr);
+    case aggregation::RANK: return inclusive_rank_scan(*agg, stream, mr);
+    case aggregation::DENSE_RANK: return inclusive_dense_rank_scan(*agg, stream, mr);
+
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
 }
