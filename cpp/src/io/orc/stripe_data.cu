@@ -1357,9 +1357,8 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] = {
  * @param[in] tz_table Timezone translation table
  * @param[in] row_groups Optional row index data
  * @param[in] first_row Crop all rows below first_row
- * @param[in] num_chunks Number of column chunks (num_columns * num_stripes)
- * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
+ * @param[in] level nesting level being processed
  */
 // blockDim {block_size,1,1}
 template <int block_size>
@@ -1367,10 +1366,8 @@ __global__ void __launch_bounds__(block_size)
   gpuDecodeOrcColumnData(ColumnDesc *chunks,
                          DictionaryEntry *global_dictionary,
                          timezone_table_view tz_table,
-                         RowGroup *row_groups,
+                         device_2dspan<RowGroup> row_groups,
                          size_t first_row,
-                         uint32_t num_columns,
-                         uint32_t num_rowgroups,
                          uint32_t rowidx_stride,
                          size_t level)
 {
@@ -1383,10 +1380,11 @@ __global__ void __launch_bounds__(block_size)
 
   orcdec_state_s *const s = &state_g;
   uint32_t chunk_id;
-  int t = threadIdx.x;
+  int t              = threadIdx.x;
+  auto num_rowgroups = row_groups.size().first;
 
   if (num_rowgroups > 0) {
-    if (t == 0) { s->top.data.index = row_groups[blockIdx.y * num_columns + blockIdx.x]; }
+    if (t == 0) { s->top.data.index = row_groups[blockIdx.y][blockIdx.x]; }
     __syncthreads();
     chunk_id = s->top.data.index.chunk_id;
   } else {
@@ -1792,7 +1790,7 @@ __global__ void __launch_bounds__(block_size)
   }
   if (t == 0 and s->chunk.type_kind == LIST) {
     if (num_rowgroups > 0) {
-      row_groups[blockIdx.y * num_columns + blockIdx.x].num_child_rows = s->num_child_rows;
+      row_groups[blockIdx.y][blockIdx.x].num_child_rows = s->num_child_rows;
     }
     atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows);
   }
@@ -1830,18 +1828,19 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] num_stripes Number of stripes
  * @param[in] first_row Crop all rows below first_row
  * @param[in] tz_table Timezone translation table
- * @param[in] row_groups Optional row index data
+ * @param[in] row_groups Optional row index data [row_group][column]
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
+ * @param[in] level nesting level being processed
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
                                   DictionaryEntry *global_dictionary,
+                                  device_2dspan<RowGroup> row_groups,
                                   uint32_t num_columns,
                                   uint32_t num_stripes,
                                   size_t first_row,
                                   timezone_table_view tz_table,
-                                  RowGroup *row_groups,
                                   uint32_t num_rowgroups,
                                   uint32_t rowidx_stride,
                                   size_t level,
@@ -1851,15 +1850,8 @@ void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
   dim3 dim_block(block_size, 1);  // 1024 threads per chunk
   dim3 dim_grid((num_rowgroups > 0) ? num_columns : num_chunks,
                 (num_rowgroups > 0) ? num_rowgroups : 1);
-  gpuDecodeOrcColumnData<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(chunks,
-                                                                                 global_dictionary,
-                                                                                 tz_table,
-                                                                                 row_groups,
-                                                                                 first_row,
-                                                                                 num_columns,
-                                                                                 num_rowgroups,
-                                                                                 rowidx_stride,
-                                                                                 level);
+  gpuDecodeOrcColumnData<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
+    chunks, global_dictionary, tz_table, row_groups, first_row, rowidx_stride, level);
 }
 
 }  // namespace gpu

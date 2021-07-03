@@ -225,6 +225,9 @@ void PostDecompressionReassemble(CompressedStreamInfo *strm_info,
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
+ * @param[in] rowidx_stride Row index stride
+ * @param[in] use_base_stride Whether to use base stride obtained from meta or use the computed
+ * value
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void ParseRowGroupIndex(RowGroup *row_groups,
@@ -264,18 +267,19 @@ void DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] first_row Crop all rows below first_row
  * @param[in] tz_table Timezone translation table
  * @param[in] tz_len Length of timezone translation table
- * @param[in] row_groups Optional row index data
+ * @param[in] row_groups Optional row index data [rowgroup][column]
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
+ * @param[in] level Current nesting level being processed
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void DecodeOrcColumnData(ColumnDesc *chunks,
                          DictionaryEntry *global_dictionary,
+                         device_2dspan<RowGroup> row_groups,
                          uint32_t num_columns,
                          uint32_t num_stripes,
                          size_t first_row             = 0,
                          timezone_table_view tz_table = {},
-                         RowGroup *row_groups         = 0,
                          uint32_t num_rowgroups       = 0,
                          uint32_t rowidx_stride       = 0,
                          size_t level                 = 0,

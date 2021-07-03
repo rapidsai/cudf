@@ -53,15 +53,17 @@ class aggregate_orc_metadata;
  */
 struct reader_column_meta {
   std::vector<std::vector<int32_t>>
-    orc_col_map;                         // Mapping between column id in orc to processing order.
-  std::vector<int32_t> num_child_rows;   // number of child rows of a list column
-  std::vector<int32_t> child_start_row;  // start row of a child column in a stripe
-  std::vector<int32_t> num_child_rows_per_stripe;
+    orc_col_map;                          // Mapping between column id in orc to processing order.
+  std::vector<uint32_t> num_child_rows;   // number of rows in child columns
+  std::vector<uint32_t> child_start_row;  // start row of child columns [stripe][column]
+  std::vector<uint32_t>
+    num_child_rows_per_stripe;  // number of rows of child columns [stripe][column]
   struct row_group_meta {
-    int32_t num_rows;
-    int32_t start_row;
+    uint32_t num_rows;   // number of rows in a column in a row group
+    uint32_t start_row;  // start row in a column in a row group
   };
-  std::vector<row_group_meta> rwgrp_meta;
+  // num_rowgroups * num_columns
+  std::vector<row_group_meta> rwgrp_meta;  // rowgroup metadata [rowgroup][column]
 };
 
 /**
@@ -99,44 +101,47 @@ class reader::impl {
   /**
    * @brief Decompresses the stripe data, at stream granularity
    *
-   * @param chunks List of column chunk descriptors
+   * @param chunks Vector of list of column chunk descriptors
    * @param stripe_data List of source stripe column data
    * @param decompressor Originally host decompressor
    * @param stream_info List of stream to column mappings
    * @param num_stripes Number of stripes making up column chunks
-   * @param row_groups List of row index descriptors
+   * @param row_groups Vector of list of row index descriptors
    * @param row_index_stride Distance between each row index
+   * @param use_base_stride Whether to use base stride obtained from meta or use the computed value
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Device buffer to decompressed page data
    */
-  rmm::device_buffer decompress_stripe_data(hostdevice_vector<gpu::ColumnDesc>& chunks,
-                                            const std::vector<rmm::device_buffer>& stripe_data,
-                                            const OrcDecompressor* decompressor,
-                                            std::vector<orc_stream_info>& stream_info,
-                                            size_t num_stripes,
-                                            hostdevice_vector<gpu::RowGroup>& row_groups,
-                                            size_t row_index_stride,
-                                            bool use_base_stride,
-                                            rmm::cuda_stream_view stream);
+  rmm::device_buffer decompress_stripe_data(
+    cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
+    const std::vector<rmm::device_buffer>& stripe_data,
+    const OrcDecompressor* decompressor,
+    std::vector<orc_stream_info>& stream_info,
+    size_t num_stripes,
+    cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
+    size_t row_index_stride,
+    bool use_base_stride,
+    rmm::cuda_stream_view stream);
 
   /**
    * @brief Converts the stripe column data and outputs to columns
    *
-   * @param chunks List of column chunk descriptors
+   * @param chunks Vector of list of column chunk descriptors
    * @param num_dicts Number of dictionary entries required
    * @param skip_rows Number of rows to offset from start
    * @param tz_table Local time to UTC conversion table
-   * @param row_groups List of row index descriptors
+   * @param row_groups Vector of list of row index descriptors
    * @param row_index_stride Distance between each row index
    * @param out_buffers Output columns' device buffers
+   * @param level Current nesting level being processed
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void decode_stream_data(hostdevice_vector<gpu::ColumnDesc>& chunks,
+  void decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
                           size_t num_dicts,
                           size_t skip_rows,
                           timezone_table_view tz_table,
-                          hostdevice_vector<gpu::RowGroup>& row_groups,
+                          cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
                           size_t row_index_stride,
                           std::vector<column_buffer>& out_buffers,
                           size_t level,
@@ -145,18 +150,15 @@ class reader::impl {
   /**
    * @brief Aggregate child metadata from parent column chunks.
    *
-   * @param chunks Vector of parent column chunks.
+   * @param chunks Vector of list of parent column chunks.
+   * @param chunks Vector of list of parent column row groups.
    * @param list_col Vector of column metadata of list type parent columns.
-   * @param number_of_stripes number of stripes being processed.
    * @param level Current nesting level being processed.
    */
-  void aggregate_child_meta(hostdevice_vector<gpu::ColumnDesc>& chunks,
-                            hostdevice_vector<gpu::RowGroup>& row_groups,
+  void aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDesc> chunks,
+                            cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
                             std::vector<orc_column_meta> const& list_col,
-                            const size_t number_of_stripes,
-                            const size_t num_of_rowgroups,
-                            const int32_t level,
-                            rmm::cuda_stream_view stream);
+                            const int32_t level);
 
   /**
    * @brief Assemble the buffer with child columns.
