@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 import functools
+import operator
 
 import numpy as np
 import pandas as pd
@@ -9,7 +10,7 @@ import pytest
 import cudf
 from cudf import NA
 from cudf._lib.copying import get_element
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
@@ -324,6 +325,43 @@ def test_contains_null_search_key(data, expect):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize(
+    "row",
+    [
+        [[]],
+        [[1]],
+        [[1, 2]],
+        [[1, 2], [3, 4, 5]],
+        [[1, 2], [], [3, 4, 5]],
+        [[1, 2, None], [3, 4, 5]],
+        [[1, 2, None], None, [3, 4, 5]],
+        [[1, 2, None], None, [], [3, 4, 5]],
+        [[[1, 2], [3, 4]], [[5, 6, 7], [8, 9]]],
+        [[["a", "c", "de", None], None, ["fg"]], [["abc", "de"], None]],
+    ],
+)
+@pytest.mark.parametrize("dropna", [True, False])
+def test_concat_elements(row, dropna):
+    if any(x is None for x in row):
+        if dropna:
+            row = [x for x in row if x is not None]
+            result = functools.reduce(operator.add, row)
+        else:
+            result = None
+    else:
+        result = functools.reduce(operator.add, row)
+
+    expect = pd.Series([result])
+    got = cudf.Series([row]).list.concat(dropna=dropna)
+    assert_eq(expect, got)
+
+
+def test_concat_elements_raise():
+    s = cudf.Series([[1, 2, 3]])  # no nesting
+    with pytest.raises(ValueError):
+        s.list.concat()
+
+
 def test_concatenate_rows_of_lists():
     pdf = pd.DataFrame({"val": [["a", "a"], ["b"], ["c"]]})
     gdf = cudf.from_pandas(pdf)
@@ -457,3 +495,67 @@ def test_serialize_list_columns(data):
     df = cudf.DataFrame(data)
     recreated = df.__class__.deserialize(*df.serialize())
     assert_eq(recreated, df)
+
+
+@pytest.mark.parametrize(
+    "data,item",
+    [
+        (
+            # basic list into a list column
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            [0, 0, 0],
+        ),
+        (
+            # nested list into nested list column
+            [
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+            ],
+            [[0, 0, 0], [0, 0, 0]],
+        ),
+        (
+            # NA into a list column
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            NA,
+        ),
+        (
+            # NA into nested list column
+            [
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+            ],
+            NA,
+        ),
+    ],
+)
+def test_listcol_setitem(data, item):
+    sr = cudf.Series(data)
+
+    sr[1] = item
+    data[1] = item
+    expect = cudf.Series(data)
+
+    assert_eq(expect, sr)
+
+
+@pytest.mark.parametrize(
+    "data,item,error",
+    [
+        (
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            [[1, 2, 3], [4, 5, 6]],
+            "list nesting level mismatch",
+        ),
+        (
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            0,
+            "Can not set 0 into ListColumn",
+        ),
+    ],
+)
+def test_listcol_setitem_error_cases(data, item, error):
+    sr = cudf.Series(data)
+    with pytest.raises(BaseException, match=error):
+        sr[1] = item
