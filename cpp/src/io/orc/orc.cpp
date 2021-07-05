@@ -470,8 +470,8 @@ void metadata::init_column_names() const
   for (int32_t col_id = 0; col_id < get_num_columns(); ++col_id) {
     std::string col_name;
     if (schema_idxs[col_id].parent >= 0 and schema_idxs[col_id].field >= 0) {
-      uint32_t parent_idx = static_cast<uint32_t>(schema_idxs[col_id].parent);
-      uint32_t field_idx  = static_cast<uint32_t>(schema_idxs[col_id].field);
+      auto const parent_idx = static_cast<uint32_t>(schema_idxs[col_id].parent);
+      auto const field_idx  = static_cast<uint32_t>(schema_idxs[col_id].field);
       if (field_idx < types[parent_idx].fieldNames.size()) {
         col_name = types[parent_idx].fieldNames[field_idx];
       }

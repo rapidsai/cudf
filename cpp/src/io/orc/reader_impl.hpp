@@ -193,7 +193,7 @@ class reader::impl {
    *
    * @return An empty column equivalent to orc column type.
    */
-  std::unique_ptr<column> create_empty_column(int32_t orc_col_id,
+  std::unique_ptr<column> create_empty_column(const int32_t orc_col_id,
                                               column_name_info& schema_info,
                                               rmm::cuda_stream_view stream);
 

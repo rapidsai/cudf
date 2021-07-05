@@ -481,7 +481,7 @@ class aggregate_orc_metadata {
     uint32_t num_lvl_child_columns = 0;
     if (level == selection.size()) { selection.emplace_back(); }
     selection[level].push_back({id, 0});
-    int col_id = selection[level].size() - 1;
+    const int col_id = selection[level].size() - 1;
     if (types[id].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
 
     switch (types[id].kind) {
@@ -756,7 +756,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
   int index = 0;  // number of child column processed
 
   // For each parent column, update its child column meta for each stripe.
-  std::for_each(list_col.cbegin(), list_col.cend(), [&](auto p_col) {
+  std::for_each(list_col.cbegin(), list_col.cend(), [&](const auto p_col) {
     const auto parent_col_idx = _col_meta.orc_col_map[level][p_col.id];
     auto start_row            = 0;
     auto processed_row_groups = 0;
@@ -779,6 +779,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
         }
       }
 
+      // Aggregate start row, number of rows per chunk and total number of rows in a column
       const auto child_rows = chunks[stripe_id][parent_col_idx].num_child_rows;
       for (uint32_t id = 0; id < p_col.num_children; id++) {
         const auto child_col_idx = index + id;
@@ -794,7 +795,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
   });
 }
 
-std::unique_ptr<column> reader::impl::create_empty_column(int32_t orc_col_id,
+std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_id,
                                                           column_name_info &schema_info,
                                                           rmm::cuda_stream_view stream)
 {
@@ -825,7 +826,7 @@ std::unique_ptr<column> reader::impl::create_empty_column(int32_t orc_col_id,
       break;
 
     case type_id::STRUCT:
-      for (auto col : _metadata->get_col_type(orc_col_id).subtypes) {
+      for (const auto col : _metadata->get_col_type(orc_col_id).subtypes) {
         schema_info.children.emplace_back("");
         child_columns.push_back(create_empty_column(col, schema_info.children.back(), stream));
       }
@@ -1072,9 +1073,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             }
           }
 
-          auto num_rows_per_stripe  = stripe_info->numberOfRows;
-          auto rowgroup_id          = num_rowgroups;
-          auto stripe_num_rowgroups = 0;
+          const auto num_rows_per_stripe = stripe_info->numberOfRows;
+          const auto rowgroup_id         = num_rowgroups;
+          auto stripe_num_rowgroups      = 0;
           if (use_index) {
             stripe_num_rowgroups = (num_rows_per_stripe + _metadata->get_row_index_stride() - 1) /
                                    _metadata->get_row_index_stride();

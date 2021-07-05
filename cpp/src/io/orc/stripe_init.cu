@@ -446,12 +446,13 @@ extern "C" __global__ void __launch_bounds__(128, 8)
     t4             = t & 3;
     t32            = t >> 2;
     for (int i = t32; i < num_rowgroups; i += 32) {
-      auto num_rows = (use_base_stride)
-                        ? rowidx_stride
-                        : row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_rows;
-      auto start_row = (use_base_stride)
-                         ? rowidx_stride
-                         : row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].start_row;
+      auto const num_rows =
+        (use_base_stride) ? rowidx_stride
+                          : row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_rows;
+      auto const start_row =
+        (use_base_stride)
+          ? rowidx_stride
+          : row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].start_row;
       for (int j = t4; j < rowgroup_size4; j += 4) {
         ((uint32_t *)&row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x])[j] =
           ((volatile uint32_t *)&s->rowgroups[i])[j];
