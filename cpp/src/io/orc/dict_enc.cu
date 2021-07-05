@@ -31,15 +31,14 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-constexpr uint32_t max_dict_entries = default_row_index_stride;
-constexpr int init_hash_bits        = 12;
+constexpr int init_hash_bits = 12;
 
 struct dictinit_state_s {
   uint32_t nnz;
   uint32_t total_dupes;
   DictionaryChunk chunk;
   volatile uint32_t scratch_red[32];
-  uint32_t dict[max_dict_entries];
+  uint32_t *dict;
   union {
     uint16_t u16[1 << (init_hash_bits)];
     uint32_t u32[1 << (init_hash_bits - 1)];
@@ -124,6 +123,7 @@ __global__ void __launch_bounds__(block_size, 2)
                            device_span<orc_column_device_view const> d_orc_columns,
                            device_span<device_span<uint32_t>> dict_data,
                            device_span<device_span<uint32_t>> dict_index,
+                           device_span<device_span<uint32_t>> dict_indices,
                            device_2dspan<rows_range const> rowgroup_ranges,
                            device_span<int const> str_col_flat_indexes)
 {
@@ -152,6 +152,7 @@ __global__ void __launch_bounds__(block_size, 2)
     s->chunk.dict_index  = dict_index[str_col_id].data();
     s->chunk.start_row   = rowgroup_ranges[group_id][col_idx].begin;
     s->chunk.num_rows    = rowgroup_ranges[group_id][col_idx].size();
+    s->dict              = dict_indices[str_col_id].data() + s->chunk.start_row;
   }
   for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
@@ -428,6 +429,7 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> d_orc_colum
                            DictionaryChunk *chunks,
                            device_span<device_span<uint32_t>> dict_data,
                            device_span<device_span<uint32_t>> dict_index,
+                           device_span<device_span<uint32_t>> dict_indices,
                            device_2dspan<rows_range const> rowgroup_ranges,
                            device_span<int const> str_col_flat_indexes,
                            rmm::cuda_stream_view stream)
@@ -435,8 +437,14 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> d_orc_colum
   static constexpr int block_size = 512;
   dim3 dim_block(block_size, 1);
   dim3 dim_grid(str_col_flat_indexes.size(), rowgroup_ranges.size().first);
-  gpuInitDictionaryIndices<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
-    chunks, d_orc_columns, dict_data, dict_index, rowgroup_ranges, str_col_flat_indexes);
+  gpuInitDictionaryIndices<block_size>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(chunks,
+                                                 d_orc_columns,
+                                                 dict_data,
+                                                 dict_index,
+                                                 dict_indices,
+                                                 rowgroup_ranges,
+                                                 str_col_flat_indexes);
 }
 
 /**

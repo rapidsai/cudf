@@ -335,10 +335,21 @@ void init_dictionaries(orc_table_view &orc_table,
     str_column.attach_dict_chunk(dict->host_ptr(), dict->device_ptr());
   }
 
+  // temporary memory for dictionary indices
+  std::vector<rmm::device_uvector<uint32_t>> dict_indices;
+  for (size_t i = 0; i < orc_table.num_string_columns(); ++i) {
+    auto &str_column = orc_table.string_column(i);
+    dict_indices.emplace_back(str_column.size(), stream);
+  }
+  std::vector<device_span<uint32_t>> dict_indices_views;
+  for (auto &di : dict_indices) { dict_indices_views.emplace_back(di); }
+  auto d_dict_indices_views = cudf::detail::make_device_uvector_async(dict_indices_views, stream);
+
   gpu::InitDictionaryIndices(orc_table.d_columns,
                              dict->device_ptr(),
                              dict_data,
                              dict_index,
+                             d_dict_indices_views,
                              rowgroup_ranges,
                              orc_table.d_string_column_indices,
                              stream);
