@@ -133,6 +133,14 @@ class DatetimeColumn(column.ColumnBase):
     def weekday(self) -> ColumnBase:
         return self.get_dt_field("weekday")
 
+    @property
+    def dayofyear(self) -> ColumnBase:
+        return self.get_dt_field("day_of_year")
+
+    @property
+    def day_of_year(self) -> ColumnBase:
+        return self.get_dt_field("day_of_year")
+
     def to_pandas(
         self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "cudf.Series":

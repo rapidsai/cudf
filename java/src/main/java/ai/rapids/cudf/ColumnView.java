@@ -1497,6 +1497,33 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert type.equals(DType.STRING);
     return new ColumnVector(title(getNativeView()));
   }
+
+  /**
+   * Returns a column of capitalized strings.
+   *
+   * If the `delimiters` is an empty string, then only the first character of each
+   * row is capitalized. Otherwise, a non-delimiter character is capitalized after
+   * any delimiter character is found.
+   *
+   * Example:
+   *     input = ["tesT1", "a Test", "Another Test", "a\tb"];
+   *     delimiters = ""
+   *     output is ["Test1", "A test", "Another test", "A\tb"]
+   *     delimiters = " "
+   *     output is ["Test1", "A Test", "Another Test", "A\tb"]
+   *
+   * Any null string entries return corresponding null output column entries.
+   *
+   * @param delimiters Used if identifying words to capitalize. Should not be null.
+   * @return a column of capitalized strings. Users should close the returned column.
+   */
+  public final ColumnVector capitalize(Scalar delimiters) {
+    if (DType.STRING.equals(type) && DType.STRING.equals(delimiters.getType())) {
+      return new ColumnVector(capitalize(getNativeView(), delimiters.getScalarHandle()));
+    }
+    throw new IllegalArgumentException("Both input column and delimiters scalar should be" +
+        " string type. But got column: " + type + ", scalar: " + delimiters.getType());
+  }
   /////////////////////////////////////////////////////////////////////////////
   // TYPE CAST
   /////////////////////////////////////////////////////////////////////////////
@@ -3321,6 +3348,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
                                      long hiScalarHandle, long hiScalarReplaceHandle);
 
   protected static native long title(long handle);
+
+  private static native long capitalize(long strsColHandle, long delimitersHandle);
 
   private static native long makeStructView(long[] handles, long rowCount);
 

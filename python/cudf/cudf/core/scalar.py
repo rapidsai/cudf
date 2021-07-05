@@ -127,7 +127,7 @@ class Scalar(object):
                 )
                 return value, dtype
         elif isinstance(dtype, ListDtype):
-            if value is not None:
+            if value not in {None, NA}:
                 raise ValueError(f"Can not coerce {value} to ListDtype")
             else:
                 return NA, dtype
