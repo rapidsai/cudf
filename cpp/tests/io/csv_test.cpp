@@ -546,7 +546,7 @@ TEST_F(CsvReaderTest, RepeatColumn)
     outfile << line.str();
   }
 
-  // repeats column in indexes, and names, misses 1 column.
+  // repeats column in indexes and names, misses 1 column.
   cudf_io::csv_reader_options in_opts =
     cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
       .dtypes(std::vector<std::string>{"int16", "int64", "uint64", "float"})
