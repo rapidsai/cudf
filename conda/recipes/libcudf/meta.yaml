@@ -42,6 +42,7 @@ requirements:
     - dlpack>=0.5,<0.6.0a0
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
+    - arrow-cpp * *cuda
     - arrow-cpp-proc * cuda
     - {{ pin_compatible('dlpack', max_pin='x.x') }}
 
