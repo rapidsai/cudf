@@ -468,7 +468,8 @@ class aggregate_orc_metadata {
    * @param id current column id that needs to be added.
    * @param has_timestamp_column True if timestamp column present and false otherwise.
    *
-   * @return returns number of child columns
+   * @return returns number of child columns at same level in case of struct and next level in case
+   * of list
    */
   uint32_t add_column(std::vector<std::vector<orc_column_meta>> &selection,
                       std::vector<SchemaType> const &types,
@@ -499,9 +500,8 @@ class aggregate_orc_metadata {
 
       case orc::STRUCT:
         for (const auto child_id : types[id].subtypes) {
-          uint32_t lvl_child_columns =
+          num_lvl_child_columns +=
             add_column(selection, types, level, child_id, has_timestamp_column, has_list_column);
-          num_lvl_child_columns += lvl_child_columns;
         }
         selection[level][col_id].num_children = num_lvl_child_columns;
         break;

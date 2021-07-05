@@ -469,10 +469,12 @@ void metadata::init_column_names() const
   auto const &types      = ff.types;
   for (int32_t col_id = 0; col_id < get_num_columns(); ++col_id) {
     std::string col_name;
-    uint32_t parent_idx = static_cast<uint32_t>(schema_idxs[col_id].parent);
-    uint32_t field_idx  = static_cast<uint32_t>(schema_idxs[col_id].field);
-    if (field_idx < types[parent_idx].fieldNames.size()) {
-      col_name = types[parent_idx].fieldNames[field_idx];
+    if (schema_idxs[col_id].parent >= 0 and schema_idxs[col_id].field >= 0) {
+      uint32_t parent_idx = static_cast<uint32_t>(schema_idxs[col_id].parent);
+      uint32_t field_idx  = static_cast<uint32_t>(schema_idxs[col_id].field);
+      if (field_idx < types[parent_idx].fieldNames.size()) {
+        col_name = types[parent_idx].fieldNames[field_idx];
+      }
     }
     // If we have no name (root column), generate a name
     column_names.push_back(col_name.empty() ? "col" + std::to_string(col_id) : col_name);
