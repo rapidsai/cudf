@@ -37,9 +37,7 @@ void ProtobufReader::skip_struct_field(int t)
     case PB_TYPE_FIXED64: skip_bytes(8); break;
     case PB_TYPE_FIXEDLEN: skip_bytes(get<uint32_t>()); break;
     case PB_TYPE_FIXED32: skip_bytes(4); break;
-    default:
-      // printf("invalid type (%d)\n", t);
-      break;
+    default: break;
   }
 }
 
@@ -471,20 +469,13 @@ void metadata::init_column_names() const
   auto const& types      = ff.types;
   for (int32_t col_id = 0; col_id < get_num_columns(); ++col_id) {
     std::string col_name;
-    uint32_t parent_idx = col_id;
-    uint32_t idx        = col_id;
-    do {
-      idx        = parent_idx;
-      parent_idx = (idx < types.size()) ? static_cast<uint32_t>(schema_idxs[idx].parent) : ~0;
-      if (parent_idx >= types.size()) break;
-
-      auto const field_idx =
-        (parent_idx < types.size()) ? static_cast<uint32_t>(schema_idxs[idx].field) : ~0;
+    if (schema_idxs[col_id].parent >= 0 and schema_idxs[col_id].field >= 0) {
+      auto const parent_idx = static_cast<uint32_t>(schema_idxs[col_id].parent);
+      auto const field_idx  = static_cast<uint32_t>(schema_idxs[col_id].field);
       if (field_idx < types[parent_idx].fieldNames.size()) {
-        col_name =
-          types[parent_idx].fieldNames[field_idx] + (col_name.empty() ? "" : ("." + col_name));
+        col_name = types[parent_idx].fieldNames[field_idx];
       }
-    } while (parent_idx != idx);
+    }
     // If we have no name (root column), generate a name
     column_names.push_back(col_name.empty() ? "col" + std::to_string(col_id) : col_name);
   }
