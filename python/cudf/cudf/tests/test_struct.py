@@ -98,3 +98,16 @@ def test_serialize_struct_dtype(fields):
 def test_struct_getitem(series, expected):
     sr = cudf.Series(series)
     assert sr[0] == expected
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": 1, "b": "rapids", "c": [1, 2, 3, 4]},
+        {"a": 1, "b": "rapids", "c": [1, 2, 3, 4], "d": cudf.NA},
+    ],
+)
+def test_struct_scalar_host_construction(data):
+    slr = cudf.Scalar(data)
+    assert slr.value == data
+    assert list(slr.device_value.value.values()) == list(data.values())
