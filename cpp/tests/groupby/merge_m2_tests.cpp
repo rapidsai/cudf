@@ -361,17 +361,18 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SlicedColumnsInput)
   // key = 3: vals = [null, 2, 8]
   // key = 4: vals = [null, 10, NaN]
 
-  auto const keys_original = keys_col<T>{{
-                                           1, 2, 3, 4, 5, 1, 2, 3, 4, 5,  // discarded, don't care
-                                           4, 3, 1, 2, 3, 1, 2, 2, 1, null, 3, 2, 4, 4,  // used
-                                           1, 2, 3, 4, 5, 1, 2, 3, 4, 5  // discarded, don't care
-                                         },
-                                         null_at(19)};
+  auto const keys_original =
+    keys_col<T>{{
+                  1, 2, 3, 4, 5, 1, 2, 3, 4, 5,                 // will not use, don't care
+                  4, 3, 1, 2, 3, 1, 2, 2, 1, null, 3, 2, 4, 4,  // use this
+                  1, 2, 3, 4, 5, 1, 2, 3, 4, 5                  // will not use, don't care
+                },
+                null_at(19)};
   auto const vals_original = vals_col<double>{
     {
-      3.0, 2.0,  5.0,  4.0,  6.0, 9.0, 1.0, 0.0,  1.0,  7.0,  // discarded, don't care
-      0.0, 0.0,  0.0,  1.0,  2.0, 3.0, 4.0, NaN,  6.0,  7.0, 8.0, 9.0, 10.0, NaN,  // used
-      9.0, 10.0, 11.0, 12.0, 0.0, 5.0, 1.0, 20.0, 19.0, 15.0  // discarded, don't care
+      3.0, 2.0,  5.0,  4.0,  6.0, 9.0, 1.0, 0.0,  1.0,  7.0,  // will not use, don't care
+      0.0, 0.0,  0.0,  1.0,  2.0, 3.0, 4.0, NaN,  6.0,  7.0, 8.0, 9.0, 10.0, NaN,  // use this
+      9.0, 10.0, 11.0, 12.0, 0.0, 5.0, 1.0, 20.0, 19.0, 15.0  // will not use, don't care
     },
     nulls_at({10, 11})};
 
