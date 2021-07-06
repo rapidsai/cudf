@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <strings/char_types/char_cases.h>
 #include <strings/char_types/is_flags.h>
 #include <strings/utf8.cuh>
 #include <strings/utilities.hpp>
@@ -46,6 +47,7 @@ template <typename Derived>
 struct base_fn {
   character_flags_table_type const* d_flags;
   character_cases_table_type const* d_case_table;
+  special_case_mapping const* d_special_case_mapping;
   column_device_view const d_column;
   offset_type* d_offsets{};
   char* d_chars{};
@@ -53,6 +55,7 @@ struct base_fn {
   base_fn(column_device_view const& d_column)
     : d_flags(get_character_flags_table()),
       d_case_table(get_character_cases_table()),
+      d_special_case_mapping(get_special_case_mapping_table()),
       d_column(d_column)
   {
   }
@@ -66,9 +69,28 @@ struct base_fn {
     return char_info{code_point, flag};
   }
 
-  __device__ char_utf8 convert_char(char_info const& info) const
+  __device__ int32_t convert_char(char_info const& info, char* d_buffer) const
   {
-    return codepoint_to_utf8(d_case_table[info.first]);
+    auto const code_point = info.first;
+    auto const flag       = info.second;
+
+    if (!IS_SPECIAL(flag)) {
+      auto const new_char = codepoint_to_utf8(d_case_table[code_point]);
+      return d_buffer ? detail::from_char_utf8(new_char, d_buffer)
+                      : detail::bytes_in_char_utf8(new_char);
+    }
+
+    special_case_mapping m = d_special_case_mapping[get_special_case_hash_index(code_point)];
+
+    auto const count  = IS_LOWER(flag) ? m.num_upper_chars : m.num_lower_chars;
+    auto const* chars = IS_LOWER(flag) ? m.upper : m.lower;
+    size_type bytes   = 0;
+    for (uint16_t idx = 0; idx < count; idx++) {
+      bytes += d_buffer
+                 ? detail::from_char_utf8(detail::codepoint_to_utf8(chars[idx]), d_buffer + bytes)
+                 : detail::bytes_in_char_utf8(detail::codepoint_to_utf8(chars[idx]));
+    }
+    return bytes;
   }
 
   /**
@@ -88,18 +110,25 @@ struct base_fn {
     offset_type bytes = 0;
     auto d_buffer     = d_chars ? d_chars + d_offsets[idx] : nullptr;
     bool capitalize   = true;
-    for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
-      auto const info        = get_char_info(*itr);
+    for (auto const chr : d_str) {
+      auto const info        = get_char_info(chr);
       auto const flag        = info.second;
       auto const change_case = capitalize ? IS_LOWER(flag) : IS_UPPER(flag);
-      auto const new_char    = change_case ? convert_char(info) : *itr;
-      // capitalize the next char if this one is a delimiter
-      capitalize = derived.capitalize_next(*itr, flag);
 
-      if (d_buffer)
-        d_buffer += detail::from_char_utf8(new_char, d_buffer);
-      else
-        bytes += detail::bytes_in_char_utf8(new_char);
+      if (change_case) {
+        auto const char_bytes = convert_char(info, d_buffer);
+        bytes += char_bytes;
+        d_buffer += d_buffer ? char_bytes : 0;
+      } else {
+        if (d_buffer) {
+          d_buffer += detail::from_char_utf8(chr, d_buffer);
+        } else {
+          bytes += detail::bytes_in_char_utf8(chr);
+        }
+      }
+
+      // capitalize the next char if this one is a delimiter
+      capitalize = derived.capitalize_next(chr, flag);
     }
     if (!d_chars) d_offsets[idx] = bytes;
   }
