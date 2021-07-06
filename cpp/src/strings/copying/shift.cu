@@ -27,9 +27,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
-namespace cudf {
-namespace strings {
-namespace detail {
+namespace cudf::strings::detail {
 
 namespace {
 
@@ -143,7 +141,4 @@ std::unique_ptr<column> shift(strings_column_view const& input,
                              mr);
 }
 
-}  // namespace detail
-
-}  // namespace strings
-}  // namespace cudf
+}  // namespace cudf::strings::detail
