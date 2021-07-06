@@ -1,4 +1,5 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
+import cudf
 from cudf import _lib as libcudf
 from cudf.utils import ioutils
 
@@ -13,8 +14,6 @@ def read_avro(
     **kwargs,
 ):
     """{docstring}"""
-
-    from cudf import DataFrame
 
     is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
         path_or_data=filepath_or_buffer, **kwargs,
@@ -31,10 +30,11 @@ def read_avro(
         ValueError("URL content-encoding decompression is not supported")
 
     if engine == "cudf":
-        return DataFrame._from_table(
-            libcudf.avro.read_avro(
-                filepath_or_buffer, columns, skiprows, num_rows
-            )
+        data, index = libcudf.avro.read_avro(
+            filepath_or_buffer, columns, skiprows, num_rows
+        )
+        return cudf.DataFrame._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), index=index
         )
     else:
         raise NotImplementedError("read_avro currently only supports cudf")

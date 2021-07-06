@@ -640,7 +640,7 @@ def _boolean_mask_scatter_table(Table input_table, Table target_table,
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=target_table._column_names,
         index_names=target_table._index._column_names
@@ -670,13 +670,15 @@ def _boolean_mask_scatter_scalar(list input_scalars, Table target_table,
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=target_table._column_names,
         index_names=target_table._index._column_names
     )
 
 
+# TODO: Should we remove this API (and the two functions above)? I don't see it
+# exposed anywhere in cudf.
 def boolean_mask_scatter(object input, Table target_table,
                          Column boolean_mask):
 

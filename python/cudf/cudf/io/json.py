@@ -53,10 +53,11 @@ def read_json(
             else:
                 filepaths_or_buffers.append(tmp_source)
 
-        return cudf.DataFrame._from_table(
-            libjson.read_json(
-                filepaths_or_buffers, dtype, lines, compression, byte_range
-            )
+        data, index = libjson.read_json(
+            filepaths_or_buffers, dtype, lines, compression, byte_range
+        )
+        return cudf.DataFrame._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), index=index
         )
     else:
         warnings.warn(
