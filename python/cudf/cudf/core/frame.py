@@ -1390,10 +1390,11 @@ class Frame(libcudf.table.Table):
                 else:
                     frame._data[name] = col
 
-        result = frame.__class__._from_table(
-            libcudf.stream_compaction.drop_nulls(
-                frame, how=how, keys=subset, thresh=thresh
-            )
+        data, index = libcudf.stream_compaction.drop_nulls(
+            frame, how=how, keys=subset, thresh=thresh
+        )
+        result = self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), index=index
         )
         result._copy_type_metadata(frame)
         return result
@@ -1432,10 +1433,11 @@ class Frame(libcudf.table.Table):
         """
         boolean_mask = as_column(boolean_mask)
 
-        result = self.__class__._from_table(
-            libcudf.stream_compaction.apply_boolean_mask(
-                self, as_column(boolean_mask)
-            )
+        data, index = libcudf.stream_compaction.apply_boolean_mask(
+            self, as_column(boolean_mask)
+        )
+        result = self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), index=index
         )
         result._copy_type_metadata(self)
         return result
@@ -1458,15 +1460,11 @@ class Frame(libcudf.table.Table):
             libcudf.types.NullOrder[key] for key in null_precedence
         ]
 
-        result = self.__class__._from_table(
-            libcudf.quantiles.quantiles(
-                self,
-                q,
-                interpolation,
-                is_sorted,
-                column_order,
-                null_precedence,
-            )
+        data, index = libcudf.quantiles.quantiles(
+            self, q, interpolation, is_sorted, column_order, null_precedence,
+        )
+        result = self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), index=index
         )
 
         result._copy_type_metadata(self)
@@ -1542,11 +1540,11 @@ class Frame(libcudf.table.Table):
             if source.empty:
                 return source.astype("float64")
 
-        out_rank_table = libcudf.sort.rank_columns(
+        data, index = libcudf.sort.rank_columns(
             source, method_enum, na_option, ascending, pct
         )
 
-        return self._from_table(out_rank_table).astype(np.float64)
+        return self._from_data(data, index).astype(np.float64)
 
     def repeat(self, repeats, axis=None):
         """Repeats elements consecutively.
@@ -1633,16 +1631,19 @@ class Frame(libcudf.table.Table):
         if not is_scalar(count):
             count = as_column(count)
 
-        result = self.__class__._from_table(
-            libcudf.filling.repeat(self, count)
+        data, index = libcudf.filling.repeat(self, count)
+        result = self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), index=index
         )
 
         result._copy_type_metadata(self)
         return result
 
     def _reverse(self):
-        result = self.__class__._from_table(libcudf.copying.reverse(self))
-        return result
+        data, index = libcudf.copying.reverse(self)
+        return self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), index=index
+        )
 
     def _fill(self, fill_values, begin, end, inplace):
         col_and_fill = zip(self._columns, fill_values)
@@ -1917,14 +1918,11 @@ class Frame(libcudf.table.Table):
             else:
                 seed = np.int64(random_state)
 
-            result = self._from_table(
-                libcudf.copying.sample(
-                    self,
-                    n=n,
-                    replace=replace,
-                    seed=seed,
-                    keep_index=keep_index,
-                )
+            data, index = libcudf.copying.sample(
+                self, n=n, replace=replace, seed=seed, keep_index=keep_index,
+            )
+            result = self.__class__._from_data(
+                cudf.core.column_accessor.ColumnAccessor(data), index=index
             )
             result._copy_type_metadata(self)
 
@@ -2205,14 +2203,15 @@ class Frame(libcudf.table.Table):
         if len(subset_cols) == 0:
             return self.copy(deep=True)
 
-        result = self._from_table(
-            libcudf.stream_compaction.drop_duplicates(
-                self,
-                keys=subset,
-                keep=keep,
-                nulls_are_equal=nulls_are_equal,
-                ignore_index=ignore_index,
-            )
+        data, index = libcudf.stream_compaction.drop_duplicates(
+            self,
+            keys=subset,
+            keep=keep,
+            nulls_are_equal=nulls_are_equal,
+            ignore_index=ignore_index,
+        )
+        result = self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), index=index
         )
 
         result._copy_type_metadata(self)
@@ -2527,7 +2526,10 @@ class Frame(libcudf.table.Table):
         -------
         The table containing the tiled "rows".
         """
-        result = self.__class__._from_table(libcudf.reshape.tile(self, count))
+        data, index = libcudf.reshape.tile(self, count)
+        result = self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), index=index
+        )
         result._copy_type_metadata(self)
         return result
 

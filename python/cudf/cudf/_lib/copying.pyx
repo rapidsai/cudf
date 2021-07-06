@@ -304,7 +304,7 @@ def _reverse_table(Table source_table):
             reverse_table_view
         ))
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=source_table._index_names
@@ -753,7 +753,7 @@ def sample(Table input, size_type n,
             cpp_copying.sample(tbl_view, n, replacement, seed)
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_output),
         column_names=input._column_names,
         index_names=(
