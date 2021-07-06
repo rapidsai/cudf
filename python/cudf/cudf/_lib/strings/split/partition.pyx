@@ -18,6 +18,7 @@ from cudf._lib.cpp.strings.split.partition cimport (
     partition as cpp_partition,
     rpartition as cpp_rpartition,
 )
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def partition(Column source_strings,
@@ -41,7 +42,7 @@ def partition(Column source_strings,
             scalar_str[0]
         ))
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=range(0, c_result.get()[0].num_columns())
     )
@@ -68,7 +69,7 @@ def rpartition(Column source_strings,
             scalar_str[0]
         ))
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=range(0, c_result.get()[0].num_columns())
     )

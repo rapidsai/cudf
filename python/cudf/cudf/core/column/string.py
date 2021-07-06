@@ -2628,7 +2628,10 @@ class StringMethods(ColumnMethodsMixin):
             sep = " "
 
         return self._return_or_inplace(
-            cpp_partition(self._column, cudf.Scalar(sep)), expand=expand
+            libcudf.table.Table(
+                *cpp_partition(self._column, cudf.Scalar(sep))
+            ),
+            expand=expand,
         )
 
     def rpartition(self, sep: str = " ", expand: bool = True) -> ParentType:
@@ -2692,7 +2695,10 @@ class StringMethods(ColumnMethodsMixin):
             sep = " "
 
         return self._return_or_inplace(
-            cpp_rpartition(self._column, cudf.Scalar(sep)), expand=expand
+            libcudf.table.Table(
+                *cpp_rpartition(self._column, cudf.Scalar(sep))
+            ),
+            expand=expand,
         )
 
     def pad(
