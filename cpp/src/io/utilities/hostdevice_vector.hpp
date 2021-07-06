@@ -176,6 +176,15 @@ class hostdevice_2dvector {
   auto size() const noexcept { return _size; }
   auto count() const noexcept { return _size.first * _size.second; }
 
+  T *base_host_ptr(size_t offset = 0) { return _data.host_ptr(offset); }
+  T *base_device_ptr(size_t offset = 0) { return _data.device_ptr(offset); }
+
+  T const *base_host_ptr(size_t offset = 0) const { return _data.host_ptr(offset); }
+
+  T const *base_device_ptr(size_t offset = 0) const { return _data.device_ptr(offset); }
+
+  size_t memory_size() const noexcept { return _data.memory_size(); }
+
   void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
   {
     _data.host_to_device(stream, synchronize);
