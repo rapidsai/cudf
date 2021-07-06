@@ -125,6 +125,33 @@ def test_groupby_std(func):
     dd.assert_eq(a, b)
 
 
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df: df.groupby("x").agg({"y": "collect"}),
+        pytest.param(
+            lambda df: df.groupby("x").y.agg("collect"), marks=pytest.mark.skip
+        ),
+    ],
+)
+def test_groupby_collect(func):
+    pdf = pd.DataFrame(
+        {
+            "x": np.random.randint(0, 5, size=10000),
+            "y": np.random.normal(size=10000),
+        }
+    )
+
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
+
+    a = func(gdf).to_pandas()
+    b = func(ddf).compute().to_pandas()
+
+    dd.assert_eq(a, b)
+
+
 # reason gotattr in cudf
 @pytest.mark.parametrize(
     "func",
