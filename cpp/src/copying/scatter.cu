@@ -236,7 +236,7 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
                                      rmm::mr::device_memory_resource* mr) const
   {
     // For each field of `source`, copy construct a scalar from the field
-    // and dispatch the correct scalar scatterer
+    // and dispatch to the corresponding scalar scatterer
 
     auto typed_s             = static_cast<struct_scalar const*>(&source.get());
     size_type const n_fields = typed_s->view().num_columns();
