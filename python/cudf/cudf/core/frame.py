@@ -670,10 +670,13 @@ class Frame(libcudf.table.Table):
     def _hash_partition(
         self, columns_to_hash, num_partitions, keep_index=True
     ):
-        output, offsets = libcudf.hash.hash_partition(
+        output_data, output_index, offsets = libcudf.hash.hash_partition(
             self, columns_to_hash, num_partitions, keep_index
         )
-        output = self.__class__._from_table(output)
+        output = self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(output_data),
+            index=output_index,
+        )
         output._copy_type_metadata(self, include_index=keep_index)
         return output, offsets
 
