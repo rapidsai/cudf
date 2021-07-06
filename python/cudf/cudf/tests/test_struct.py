@@ -105,6 +105,8 @@ def test_struct_getitem(series, expected):
     [
         {"a": 1, "b": "rapids", "c": [1, 2, 3, 4]},
         {"a": 1, "b": "rapids", "c": [1, 2, 3, 4], "d": cudf.NA},
+        {"a": "Hello"},
+        {"b": [], "c": [1, 2, 3]},
     ],
 )
 def test_struct_scalar_host_construction(data):

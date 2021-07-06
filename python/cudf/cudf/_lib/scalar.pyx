@@ -174,7 +174,6 @@ cdef class DeviceScalar:
 
         s.c_value = move(ptr)
         cdtype = s.get_raw_ptr()[0].type()
-
         if cdtype.id() == libcudf_types.DECIMAL64 and dtype is None:
             raise TypeError(
                 "Must pass a dtype when constructing from a fixed-point scalar"
