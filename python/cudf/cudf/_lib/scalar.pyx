@@ -324,7 +324,6 @@ cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
             names=columns
         )
     else:
-        # print("hello world")
         pyarrow_table = pa.Table.from_arrays(
             [
                 pa.array([], from_pandas=True, type=f.type)
