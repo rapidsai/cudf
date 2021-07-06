@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 import functools
+import operator
 
 import numpy as np
 import pandas as pd
@@ -322,6 +323,43 @@ def test_contains_null_search_key(data, expect):
     expect = cudf.Series(expect, dtype="bool")
     got = sr.list.contains(cudf.Scalar(cudf.NA, sr.dtype.element_type))
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        [[]],
+        [[1]],
+        [[1, 2]],
+        [[1, 2], [3, 4, 5]],
+        [[1, 2], [], [3, 4, 5]],
+        [[1, 2, None], [3, 4, 5]],
+        [[1, 2, None], None, [3, 4, 5]],
+        [[1, 2, None], None, [], [3, 4, 5]],
+        [[[1, 2], [3, 4]], [[5, 6, 7], [8, 9]]],
+        [[["a", "c", "de", None], None, ["fg"]], [["abc", "de"], None]],
+    ],
+)
+@pytest.mark.parametrize("dropna", [True, False])
+def test_concat_elements(row, dropna):
+    if any(x is None for x in row):
+        if dropna:
+            row = [x for x in row if x is not None]
+            result = functools.reduce(operator.add, row)
+        else:
+            result = None
+    else:
+        result = functools.reduce(operator.add, row)
+
+    expect = pd.Series([result])
+    got = cudf.Series([row]).list.concat(dropna=dropna)
+    assert_eq(expect, got)
+
+
+def test_concat_elements_raise():
+    s = cudf.Series([[1, 2, 3]])  # no nesting
+    with pytest.raises(ValueError):
+        s.list.concat()
 
 
 def test_concatenate_rows_of_lists():
