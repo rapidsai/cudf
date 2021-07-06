@@ -369,7 +369,7 @@ def table_empty_like(Table input_table, bool keep_index=True):
     with nogil:
         c_result = move(cpp_copying.empty_like(input_table_view))
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=input_table._column_names,
         index_names=(

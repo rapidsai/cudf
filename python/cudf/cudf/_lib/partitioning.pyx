@@ -17,6 +17,7 @@ from cudf._lib.cpp.partitioning cimport (
     partition as cpp_partition,
 )
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
+from cudf._lib.utils cimport data_from_unique_ptr
 cimport cudf._lib.cpp.types as libcudf_types
 
 
@@ -46,7 +47,7 @@ def partition(Table source_table, Column partition_map,
         )
 
     return (
-        Table.from_unique_ptr(
+        *data_from_unique_ptr(
             move(c_result.first),
             column_names=source_table._column_names,
             index_names=source_table._index_names if(

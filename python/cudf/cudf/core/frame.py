@@ -703,8 +703,9 @@ class Frame(libcudf.table.Table):
         return result
 
     def _empty_like(self, keep_index=True):
-        result = self._from_table(
-            libcudf.copying.table_empty_like(self, keep_index)
+        data, index = libcudf.copying.table_empty_like(self, keep_index)
+        result = self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), index=index
         )
 
         result._copy_type_metadata(self, include_index=keep_index)
@@ -957,10 +958,12 @@ class Frame(libcudf.table.Table):
 
     def _partition(self, scatter_map, npartitions, keep_index=True):
 
-        output_table, output_offsets = libcudf.partitioning.partition(
+        data, index, output_offsets = libcudf.partitioning.partition(
             self, scatter_map, npartitions, keep_index
         )
-        partitioned = self.__class__._from_table(output_table)
+        partitioned = self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), index=index,
+        )
 
         # due to the split limitation mentioned
         # here: https://github.com/rapidsai/cudf/issues/4607
