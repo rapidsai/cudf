@@ -781,15 +781,16 @@ def merge_sorted(
     if by_index and ignore_index:
         raise ValueError("`by_index` and `ignore_index` cannot both be True")
 
-    result = objs[0].__class__._from_table(
-        cudf._lib.merge.merge_sorted(
-            objs,
-            keys=keys,
-            by_index=by_index,
-            ignore_index=ignore_index,
-            ascending=ascending,
-            na_position=na_position,
-        )
+    data, index = cudf._lib.merge.merge_sorted(
+        objs,
+        keys=keys,
+        by_index=by_index,
+        ignore_index=ignore_index,
+        ascending=ascending,
+        na_position=na_position,
+    )
+    result = objs[0].__class__._from_data(
+        cudf.core.column_accessor.ColumnAccessor(data), index=index
     )
     result._copy_type_metadata(objs[0])
     return result

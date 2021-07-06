@@ -67,6 +67,12 @@ class Frame(libcudf.table.Table):
     def _from_table(cls, table: Frame):
         return cls(table._data, index=table._index)
 
+    @classmethod
+    def _from_data(
+        cls, data: ColumnAccessor, index: Optional[cudf.Index] = None,
+    ):
+        return cls(data, index)
+
     def _mimic_inplace(
         self: T, result: Frame, inplace: bool = False
     ) -> Optional[Frame]:
