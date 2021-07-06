@@ -44,7 +44,7 @@ struct m2_transform {
 
   __device__ ResultType operator()(size_type const idx) const noexcept
   {
-    if (d_values.is_null(idx)) return 0.0;
+    if (d_values.is_null(idx)) { return 0.0; }
 
     auto const x         = static_cast<ResultType>(values_iter[idx]);
     auto const group_idx = d_group_labels[idx];
@@ -84,14 +84,17 @@ struct m2_functor {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
-    using ResultType = cudf::detail::target_type_t<T, aggregation::Kind::M2>;
-    auto result      = make_numeric_column(
-      data_type(type_to_id<ResultType>()), group_means.size(), mask_state::UNALLOCATED, stream, mr);
+    using result_type = cudf::detail::target_type_t<T, aggregation::Kind::M2>;
+    auto result       = make_numeric_column(data_type(type_to_id<result_type>()),
+                                      group_means.size(),
+                                      mask_state::UNALLOCATED,
+                                      stream,
+                                      mr);
 
     auto const values_dv_ptr = column_device_view::create(values, stream);
     auto const d_values      = *values_dv_ptr;
-    auto const d_means       = group_means.data<ResultType>();
-    auto const d_result      = result->mutable_view().data<ResultType>();
+    auto const d_means       = group_means.data<result_type>();
+    auto const d_result      = result->mutable_view().data<result_type>();
 
     if (!cudf::is_dictionary(values.type())) {
       auto const values_iter = d_values.begin<T>();

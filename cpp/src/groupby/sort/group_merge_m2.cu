@@ -131,42 +131,42 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
   CUDF_EXPECTS(values.num_children() == 3,
                "Input to `group_merge_m2` must be a structs column having 3 children columns.");
 
-  using ResultType = id_to_type<type_id::FLOAT64>;
+  using result_type = id_to_type<type_id::FLOAT64>;
   static_assert(
-    std::is_same_v<cudf::detail::target_type_t<ResultType, aggregation::Kind::M2>, ResultType>);
+    std::is_same_v<cudf::detail::target_type_t<result_type, aggregation::Kind::M2>, result_type>);
   CUDF_EXPECTS(values.child(0).type().id() == type_id::INT32 &&
-                 values.child(1).type().id() == type_to_id<ResultType>() &&
-                 values.child(2).type().id() == type_to_id<ResultType>(),
+                 values.child(1).type().id() == type_to_id<result_type>() &&
+                 values.child(2).type().id() == type_to_id<result_type>(),
                "Input to `group_merge_m2` must be a structs column having children columns "
                "containing tuples of groupwise (M2_value, mean, valid_count).");
 
   auto result_counts = make_numeric_column(
     data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
   auto result_means = make_numeric_column(
-    data_type(type_to_id<ResultType>()), num_groups, mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
   auto result_M2s = make_numeric_column(
-    data_type(type_to_id<ResultType>()), num_groups, mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
   auto validities = rmm::device_uvector<int8_t>(num_groups, stream);
 
   // Perform merging for all the aggregations. Their output (and their validity data) are written
   // out concurrently through an output zip iterator.
-  using IteratorTuple = thrust::tuple<size_type*, ResultType*, ResultType*, int8_t*>;
-  using ZipIterator   = thrust::zip_iterator<IteratorTuple>;
+  using iterator_tuple  = thrust::tuple<size_type*, result_type*, result_type*, int8_t*>;
+  using output_iterator = thrust::zip_iterator<iterator_tuple>;
   auto const out_iter =
-    ZipIterator{thrust::make_tuple(result_counts->mutable_view().template data<size_type>(),
-                                   result_means->mutable_view().template data<ResultType>(),
-                                   result_M2s->mutable_view().template data<ResultType>(),
-                                   validities.begin())};
+    output_iterator{thrust::make_tuple(result_counts->mutable_view().template data<size_type>(),
+                                       result_means->mutable_view().template data<result_type>(),
+                                       result_M2s->mutable_view().template data<result_type>(),
+                                       validities.begin())};
 
   auto const count_valid = values.child(0);
   auto const mean_values = values.child(1);
   auto const M2_values   = values.child(2);
   auto const iter        = thrust::make_counting_iterator<size_type>(0);
 
-  auto const fn = merge_fn<ResultType>{group_offsets.begin(),
-                                       count_valid.template begin<size_type>(),
-                                       mean_values.template begin<ResultType>(),
-                                       M2_values.template begin<ResultType>()};
+  auto const fn = merge_fn<result_type>{group_offsets.begin(),
+                                        count_valid.template begin<size_type>(),
+                                        mean_values.template begin<result_type>(),
+                                        M2_values.template begin<result_type>()};
   thrust::transform(rmm::exec_policy(stream), iter, iter + num_groups, out_iter, fn);
 
   // Generate bitmask for the output.
