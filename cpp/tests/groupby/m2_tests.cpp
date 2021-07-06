@@ -57,8 +57,8 @@ template <class T>
 struct GroupbyM2TypedTest : public cudf::test::BaseFixture {
 };
 
-using TestTypes =
-  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+using TestTypes = cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
+                                     cudf::test::FloatingPointTypes>;
 TYPED_TEST_SUITE(GroupbyM2TypedTest, TestTypes);
 
 TYPED_TEST(GroupbyM2TypedTest, EmptyInput)
@@ -121,6 +121,25 @@ TYPED_TEST(GroupbyM2TypedTest, SimpleInput)
   auto const [out_keys, out_M2s] = compute_M2(keys, vals);
   auto const expected_keys       = keys_col<T>{1, 2, 3};
   auto const expected_M2s        = M2s_col<R>{18.0, 32.75, 20.0 + 2.0 / 3.0};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, print_all);
+}
+
+TYPED_TEST(GroupbyM2TypedTest, SimpleInputHavingNegativeValues)
+{
+  using T = TypeParam;
+  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
+
+  // key = 1: vals = [0,  3, -6]
+  // key = 2: vals = [1, -4, -5, 9]
+  // key = 3: vals = [-2, 7, -8]
+  auto const keys = keys_col<T>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  auto const vals = vals_col<T>{0, 1, -2, 3, -4, -5, -6, 7, -8, 9};
+
+  auto const [out_keys, out_M2s] = compute_M2(keys, vals);
+  auto const expected_keys       = keys_col<T>{1, 2, 3};
+  auto const expected_M2s        = M2s_col<R>{42.0, 122.75, 114.0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, print_all);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, print_all);

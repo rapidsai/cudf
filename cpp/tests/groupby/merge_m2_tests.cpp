@@ -102,8 +102,8 @@ template <class T>
 struct GroupbyMergeM2TypedTest : public cudf::test::BaseFixture {
 };
 
-using TestTypes =
-  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+using TestTypes = cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
+                                     cudf::test::FloatingPointTypes>;
 TYPED_TEST_SUITE(GroupbyMergeM2TypedTest, TestTypes);
 
 TYPED_TEST(GroupbyMergeM2TypedTest, InvalidInput)
@@ -194,6 +194,52 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInput)
 
   auto const expected_keys = keys_col<T>{1, 2, 3};
   auto const expected_M2s  = M2s_col<R>{18.0, 32.75, 20.0 + 2.0 / 3.0};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+}
+
+TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInputHavingNegativeValues)
+{
+  using T = TypeParam;
+  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
+
+  // Full dataset:
+  //
+  // keys = [1, 2,  3, 1,  2,  2,  1, 3,  3, 2]
+  // vals = [0, 1, -2, 3, -4, -5, -6, 7, -8, 9]
+  //
+  // key = 1: vals = [0,  3, -6]
+  // key = 2: vals = [1, -4, -5, 9]
+  // key = 3: vals = [-2, 7, -8]
+
+  // Partitioned datasets:
+  auto const keys1 = keys_col<T>{1, 2, 3};
+  auto const keys2 = keys_col<T>{1, 2, 2};
+  auto const keys3 = keys_col<T>{1, 3, 3, 2};
+
+  auto const vals1 = vals_col<T>{0, 1, -2};
+  auto const vals2 = vals_col<T>{3, -4, -5};
+  auto const vals3 = vals_col<T>{-6, 7, -8, 9};
+
+  // Compute partial results (`COUNT_VALID`, `MEAN`, `M2`) of each dataset.
+  // The partial results are also assembled into a structs column.
+  auto const [out1_keys, out1_vals] = compute_partial_results(keys1, vals1);
+  auto const [out2_keys, out2_vals] = compute_partial_results(keys2, vals2);
+  auto const [out3_keys, out3_vals] = compute_partial_results(keys3, vals3);
+
+  // Merge the partial results to the final results.
+  // Merging can be done in just one merge step, or in multiple steps.
+  auto const [out4_keys, out4_vals] =
+    merge_M2(vcol_views{*out1_keys, *out2_keys}, vcol_views{*out1_vals, *out2_vals});
+  auto const [final_keys, final_vals] =
+    merge_M2(vcol_views{*out3_keys, *out3_keys}, vcol_views{*out3_vals, *out4_vals});
+
+  // Get the final M2 values.
+  auto const out_M2s = final_vals->child(2);
+
+  auto const expected_keys = keys_col<T>{1, 2, 3};
+  auto const expected_M2s  = M2s_col<R>{42.0, 122.75, 114.0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
