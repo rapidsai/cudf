@@ -252,7 +252,7 @@ inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
 /**
  * @brief Parses the cuDF test command line options.
  *
- * Currently only supports 'rmm_mode' string paramater, which set the rmm
+ * Currently only supports 'rmm_mode' string parameter, which set the rmm
  * allocation mode. The default value of the parameter is 'pool'.
  *
  * @return Parsing results in the form of unordered map

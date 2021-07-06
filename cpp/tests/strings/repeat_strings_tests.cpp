@@ -71,7 +71,7 @@ TEST_F(RepeatJoinStringTest, ValidStringScalar)
     EXPECT_EQ(result->size(), 0);
   }
 
-  // Negatitve repeat times.
+  // Negative repeat times.
   {
     auto const result = cudf::strings::repeat_strings(str, -10);
     EXPECT_EQ(result->is_valid(), true);

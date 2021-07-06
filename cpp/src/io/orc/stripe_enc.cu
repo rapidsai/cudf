@@ -619,7 +619,7 @@ static const __device__ __constant__ int32_t kTimeScale[10] = {
  * @brief Encode column data
  *
  * @param[in] chunks encoder chunks device array [column][rowgroup]
- * @param[in, out] chunks cunk streams device array [column][rowgroup]
+ * @param[in, out] chunks chunk streams device array [column][rowgroup]
  */
 // blockDim {512,1,1}
 template <int block_size>

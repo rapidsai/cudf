@@ -342,7 +342,7 @@ std::size_t get_full_join_size(cudf::table_device_view build_table,
                                                                              right_indices->data(),
                                                                              write_index.data(),
                                                                              join_size);
-  // Rlease intermediate memory alloation
+  // Release intermediate memory allocation
   left_indices->resize(0, stream);
 
   auto const left_table_row_count  = probe_table.num_rows();

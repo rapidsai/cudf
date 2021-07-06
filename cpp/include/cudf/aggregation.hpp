@@ -275,7 +275,7 @@ std::unique_ptr<Base> make_collect_set_aggregation(null_policy null_handling = n
  * @brief Factory to create a MERGE_LISTS aggregation.
  *
  * Given a lists column, this aggregation merges all the lists corresponding to the same key value
- * into one list. It is designed specificly to merge the partial results of multiple (distributed)
+ * into one list. It is designed specifically to merge the partial results of multiple (distributed)
  * groupby `COLLECT_LIST` aggregations into a final `COLLECT_LIST` result. As such, it requires the
  * input lists column to be non-nullable (the child column containing list entries is not subjected
  * to this requirement).
@@ -290,7 +290,7 @@ std::unique_ptr<Base> make_merge_lists_aggregation();
  * value into one list, then it drops all the duplicate entries in each lists, producing a lists
  * column containing non-repeated entries.
  *
- * This aggregation is designed specificly to merge the partial results of multiple (distributed)
+ * This aggregation is designed specifically to merge the partial results of multiple (distributed)
  * groupby `COLLECT_LIST` or `COLLECT_SET` aggregations into a final `COLLECT_SET` result. As such,
  * it requires the input lists column to be non-nullable (the child column containing list entries
  * is not subjected to this requirement).
