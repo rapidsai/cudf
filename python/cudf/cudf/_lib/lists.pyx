@@ -52,6 +52,8 @@ from cudf._lib.cpp.lists.contains cimport contains
 
 from cudf._lib.cpp.lists.extract cimport extract_list_element
 
+from cudf._lib.utils cimport data_from_unique_ptr
+
 
 def count_elements(Column col):
 
@@ -80,7 +82,7 @@ def explode_outer(Table tbl, int explode_column_idx, bool ignore_index=False):
     with nogil:
         c_result = move(cpp_explode_outer(c_table_view, c_explode_column_idx))
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=tbl._column_names,
         index_names=None if ignore_index else tbl._index_names

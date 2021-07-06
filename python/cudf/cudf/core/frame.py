@@ -615,10 +615,12 @@ class Frame(libcudf.table.Table):
         if not ignore_index and self._index is not None:
             explode_column_num += self._index.nlevels
 
-        res_tbl = libcudf.lists.explode_outer(
+        res_data, res_index = libcudf.lists.explode_outer(
             self, explode_column_num, ignore_index
         )
-        res = self.__class__._from_table(res_tbl)
+        res = self.__class__._from_data(  # type: ignore
+            cudf.core.column_accessor.ColumnAccessor(res_data), index=res_index
+        )
 
         res._data.multiindex = self._data.multiindex
         res._data._level_names = self._data._level_names
