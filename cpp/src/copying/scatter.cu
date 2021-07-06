@@ -34,6 +34,7 @@
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include "cudf/detail/iterator.cuh"
 
 #include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -241,29 +242,29 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
     size_type const n_fields = typed_s->view().num_columns();
     CUDF_EXPECTS(n_fields == target.num_children(), "Mismatched number of fields.");
 
-    auto scatter_functor = column_scalar_scatterer<decltype(scatter_iter)>{};
-    std::vector<std::unique_ptr<column>> fields;
-    std::transform(thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(n_fields),
-                   std::back_inserter(fields),
-                   [&](auto const& i) {
-                     auto row_slr = get_element(typed_s->view().column(i), 0, stream);
-                     return type_dispatcher<dispatch_storage_type>(row_slr->type(),
-                                                                   scatter_functor,
-                                                                   *row_slr,
-                                                                   scatter_iter,
-                                                                   scatter_rows,
-                                                                   target.child(i),
-                                                                   stream,
-                                                                   mr);
-                   });
+    auto scatter_functor   = column_scalar_scatterer<decltype(scatter_iter)>{};
+    auto fields_iter_begin = make_counting_transform_iterator(0, [&](auto const& i) {
+      auto row_slr = get_element(typed_s->view().column(i), 0, stream);
+      return type_dispatcher<dispatch_storage_type>(row_slr->type(),
+                                                    scatter_functor,
+                                                    *row_slr,
+                                                    scatter_iter,
+                                                    scatter_rows,
+                                                    target.child(i),
+                                                    stream,
+                                                    mr);
+    });
+    std::vector<std::unique_ptr<column>> fields(fields_iter_begin, fields_iter_begin + n_fields);
 
     // Compute nullmask
     rmm::device_buffer null_mask =
       target.nullable() ? copy_bitmask(target, stream, mr)
                         : create_null_mask(target.size(), mask_state::UNALLOCATED, stream, mr);
-    column null_mask_stub(data_type{type_id::STRUCT}, target.size(), rmm::device_buffer{});
-    null_mask_stub.set_null_mask(std::move(null_mask), target.null_count());
+    column null_mask_stub(data_type{type_id::STRUCT},
+                          target.size(),
+                          rmm::device_buffer{},
+                          std::move(null_mask),
+                          target.null_count());
     scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, null_mask_stub, stream, mr);
     size_type null_count = null_mask_stub.null_count();
     auto contents        = null_mask_stub.release();
