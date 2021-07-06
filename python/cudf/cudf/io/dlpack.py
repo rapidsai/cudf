@@ -35,12 +35,12 @@ def from_dlpack(pycapsule_obj):
     tensor is row-major, transpose it before passing it to this function.
     """
 
-    res = libdlpack.from_dlpack(pycapsule_obj)
+    data, _ = libdlpack.from_dlpack(pycapsule_obj)
 
-    if res._num_columns == 1:
-        return Series(res._data[0])
+    if len(data) == 1:
+        return Series._from_data(data)
     else:
-        return DataFrame(data=res._data)
+        return DataFrame._from_data(data)
 
 
 @ioutils.doc_to_dlpack()

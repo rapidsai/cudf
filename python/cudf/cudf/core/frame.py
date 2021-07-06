@@ -2062,12 +2062,12 @@ class Frame(libcudf.table.Table):
                 )
 
         # Handle dict arrays
-        cudf_category_frame = libcudf.table.Table()
+        cudf_category_frame = {}
         if len(dict_indices):
 
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
-            cudf_indices_frame = libcudf.interop.from_arrow(
+            cudf_indices_frame, _ = libcudf.interop.from_arrow(
                 dict_indices_table, dict_indices_table.column_names
             )
             # as dictionary size can vary, it can't be a single table
@@ -2078,9 +2078,8 @@ class Frame(libcudf.table.Table):
                 for name in dict_dictionaries.keys()
             }
 
-            for name in cudf_indices_frame._data.names:
-                codes = cudf_indices_frame._data[name]
-                cudf_category_frame._data[name] = build_categorical_column(
+            for name, codes in cudf_indices_frame.items():
+                cudf_category_frame[name] = build_categorical_column(
                     cudf_dictionaries_columns[name],
                     codes,
                     mask=codes.base_mask,
@@ -2090,30 +2089,20 @@ class Frame(libcudf.table.Table):
 
         # Handle non-dict arrays
         cudf_non_category_frame = (
-            libcudf.table.Table()
+            {}
             if data.num_columns == 0
-            else libcudf.interop.from_arrow(data, data.column_names)
+            else libcudf.interop.from_arrow(data, data.column_names)[0]
         )
 
-        if (
-            cudf_non_category_frame._num_columns > 0
-            and cudf_category_frame._num_columns > 0
-        ):
-            result = cudf_non_category_frame
-            for name in cudf_category_frame._data.names:
-                result._data[name] = cudf_category_frame._data[name]
-        elif cudf_non_category_frame._num_columns > 0:
-            result = cudf_non_category_frame
-        else:
-            result = cudf_category_frame
+        result = {**cudf_non_category_frame, **cudf_category_frame}
 
         # There are some special cases that need to be handled
         # based on metadata.
         if pandas_dtypes:
-            for name in result._data.names:
+            for name in result:
                 dtype = None
                 if (
-                    len(result._data[name]) == 0
+                    len(result[name]) == 0
                     and pandas_dtypes[name] == "categorical"
                 ):
                     # When pandas_dtype is a categorical column and the size
@@ -2139,18 +2128,18 @@ class Frame(libcudf.table.Table):
                     # struct fields, hence renaming the struct fields is
                     # necessary by extracting the field names from arrow
                     # struct types.
-                    result._data[name] = result._data[name]._rename_fields(
+                    result[name] = result[name]._rename_fields(
                         [field.name for field in data[name].type]
                     )
 
                 if dtype is not None:
-                    result._data[name] = result._data[name].astype(dtype)
+                    result[name] = result[name].astype(dtype)
 
-        result = libcudf.table.Table(
-            result._data.select_by_label(column_names)
+        return cls._from_data(
+            cudf.core.column_accessor.ColumnAccessor(
+                {name: result[name] for name in column_names}
+            )
         )
-
-        return cls._from_table(result)
 
     @annotate("TO_ARROW", color="orange", domain="cudf_python")
     def to_arrow(self):
