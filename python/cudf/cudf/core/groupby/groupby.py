@@ -287,10 +287,20 @@ class GroupBy(Serializable):
         return cls(obj, grouping, **kwargs)
 
     def _grouped(self):
-        grouped_keys, grouped_values, offsets = self._groupby.groups(self.obj)
+        (
+            (keys_data, keys_index),
+            (values_data, values_index),
+            offsets,
+        ) = self._groupby.groups(self.obj)
 
-        grouped_keys = cudf.Index._from_table(grouped_keys)
-        grouped_values = self.obj.__class__._from_table(grouped_values)
+        grouped_keys = cudf.Index._from_data(
+            cudf.core.column_accessor.ColumnAccessor(keys_data),
+            index=keys_index,
+        )
+        grouped_values = self.obj.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(values_data),
+            index=values_index,
+        )
         grouped_values._copy_type_metadata(self.obj)
         group_names = grouped_keys.unique()
         return (group_names, offsets, grouped_keys, grouped_values)
@@ -890,9 +900,11 @@ class GroupBy(Serializable):
             return getattr(self, method, limit)()
 
         value_columns = self.grouping.values
-        _, grouped_values, _ = self._groupby.groups(Table(value_columns._data))
+        _, (data, index), _ = self._groupby.groups(Table(value_columns._data))
 
-        grouped = self.obj.__class__._from_data(grouped_values._data)
+        grouped = self.obj.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), index=index
+        )
         result = grouped.fillna(
             value=value, inplace=inplace, axis=axis, limit=limit
         )
@@ -961,11 +973,10 @@ class GroupBy(Serializable):
         matching that of pandas. This also adds appropriate indices.
         """
         sorted_order_column = arange(0, result._data.nrows)
-        _, order, _ = self._groupby.groups(
+        _, (order, _), _ = self._groupby.groups(
             Table({"sorted_order_column": sorted_order_column})
         )
-        order = order._data["sorted_order_column"]
-        gather_map = order.argsort()
+        gather_map = order["sorted_order_column"].argsort()
         result = result.take(gather_map)
         result.index = self.obj.index
         return result

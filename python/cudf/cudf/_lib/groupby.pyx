@@ -35,6 +35,7 @@ from cudf._lib.cpp.table.table cimport table, table_view
 from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.utilities.host_span cimport host_span
 from cudf._lib.cpp.types cimport size_type
+from cudf._lib.utils cimport data_from_unique_ptr
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.groupby as libcudf_groupby
 
@@ -90,11 +91,11 @@ cdef class GroupBy:
         c_grouped_values = move(c_groups.values)
         c_group_offsets = c_groups.offsets
 
-        grouped_keys = Table.from_unique_ptr(
+        grouped_keys = data_from_unique_ptr(
             move(c_grouped_keys),
             column_names=range(c_grouped_keys.get()[0].num_columns())
         )
-        grouped_values = Table.from_unique_ptr(
+        grouped_values = data_from_unique_ptr(
             move(c_grouped_values),
             index_names=values._index_names,
             column_names=values._column_names
