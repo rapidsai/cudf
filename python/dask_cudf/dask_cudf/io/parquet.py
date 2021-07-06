@@ -7,7 +7,8 @@ import numpy as np
 from pyarrow import parquet as pq
 
 from dask import dataframe as dd
-from dask.dataframe.io.parquet.arrow import ArrowEngine
+from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine as ArrowEngine
+#from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 try:
     from dask.dataframe.io.parquet import (
@@ -57,6 +58,8 @@ class CudfEngine(ArrowEngine):
             (path, row_group, partition_keys) = piece
 
         strings_to_cats = kwargs.get("strings_to_categorical", False)
+        if row_group == [None]:
+            row_group = None
         if cudf.utils.ioutils._is_local_filesystem(fs):
             df = cudf.read_parquet(
                 path,
@@ -87,19 +90,31 @@ class CudfEngine(ArrowEngine):
         if partition_keys:
             if partitions is None:
                 raise ValueError("Must pass partition sets")
+            
             for i, (name, index2) in enumerate(partition_keys):
-                categories = [
-                    val.as_py() for val in partitions.levels[i].dictionary
-                ]
+
+                #categories = [
+                #    val.as_py() for val in partitions.levels[i].dictionary
+                #]
+                categories = partitions[i].keys
 
                 col = as_column(index2).as_frame().repeat(len(df))._data[None]
-                df[name] = build_categorical_column(
-                    categories=categories,
-                    codes=as_column(col.base_data, dtype=col.dtype),
-                    size=col.size,
-                    offset=col.offset,
-                    ordered=False,
+                # import pdb; pdb.set_trace()
+
+                df[name] = col.as_categorical_column(
+                    cudf.CategoricalDtype(
+                        categories=categories,
+                        ordered=False,
+                    )
                 )
+
+                # df[name] = build_categorical_column(
+                #     categories=categories,
+                #     codes=as_column(col.base_data, dtype=col.dtype),
+                #     size=col.size,
+                #     offset=col.offset,
+                #     ordered=False,
+                # )
 
         return df
 
