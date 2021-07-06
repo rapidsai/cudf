@@ -5,6 +5,7 @@ from __future__ import annotations, division
 import inspect
 import itertools
 import numbers
+import os
 import pickle
 import sys
 import warnings
@@ -24,6 +25,7 @@ from pandas.io.formats.printing import pprint_thing
 
 import cudf
 from cudf import _lib as libcudf
+from cudf._lib.copying import PackedColumns, pack, unpack
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf.api.types import is_bool_dtype, is_dict_like
 from cudf.core import column, reshape
@@ -99,6 +101,9 @@ _cupy_nan_methods_map = {
     "std": "nanstd",
     "var": "nanvar",
 }
+
+
+PACKED_SERIALIZATION = os.environ.get("CUDF_PACKED_SERIALIZATION", False)
 
 
 class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
@@ -561,6 +566,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         )
 
     def serialize(self):
+        if PACKED_SERIALIZATION:
+            return pack(self).serialize()
+
         header = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
@@ -579,6 +587,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
     @classmethod
     def deserialize(cls, header, frames):
+        if PACKED_SERIALIZATION:
+            return cls._from_table(
+                unpack(PackedColumns.deserialize(header, frames))
+            )
+
         # Reconstruct the index
         index_frames = frames[: header["index_frame_count"]]
 
