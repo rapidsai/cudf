@@ -149,11 +149,6 @@ def test_groupby_collect(func):
     a = func(gdf).to_pandas()
     b = func(ddf).compute().to_pandas()
 
-    a.index.name = None
-    a.name = None
-    b.index.name = None
-    b.name = None
-
     dd.assert_eq(a, b)
 
 
