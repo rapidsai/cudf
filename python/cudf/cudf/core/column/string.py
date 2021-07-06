@@ -2387,12 +2387,13 @@ class StringMethods(ColumnMethodsMixin):
             if self._column.null_count == len(self._column):
                 result_table = cudf.core.frame.Frame({0: self._column.copy()})
             else:
-                result_table = cpp_split(
+                data, index = cpp_split(
                     self._column, cudf.Scalar(pat, "str"), n
                 )
-                if len(result_table._data) == 1:
-                    if result_table._data[0].null_count == len(self._column):
-                        result_table = cudf.core.frame.Frame({})
+                if len(data) == 1 and data[0].null_count == len(self._column):
+                    result_table = cudf.core.frame.Frame({})
+                else:
+                    result_table = cudf.core.frame.Frame(data, index)
         else:
             result_table = cpp_split_record(
                 self._column, cudf.Scalar(pat, "str"), n
@@ -2542,10 +2543,13 @@ class StringMethods(ColumnMethodsMixin):
             if self._column.null_count == len(self._column):
                 result_table = cudf.core.frame.Frame({0: self._column.copy()})
             else:
-                result_table = cpp_rsplit(self._column, cudf.Scalar(pat), n)
-                if len(result_table._data) == 1:
-                    if result_table._data[0].null_count == len(self._column):
-                        result_table = cudf.core.frame.Frame({})
+                data, index = cpp_rsplit(
+                    self._column, cudf.Scalar(pat, "str"), n
+                )
+                if len(data) == 1 and data[0].null_count == len(self._column):
+                    result_table = cudf.core.frame.Frame({})
+                else:
+                    result_table = cudf.core.frame.Frame(data, index)
         else:
             result_table = cpp_rsplit_record(self._column, cudf.Scalar(pat), n)
 
@@ -2628,7 +2632,7 @@ class StringMethods(ColumnMethodsMixin):
             sep = " "
 
         return self._return_or_inplace(
-            libcudf.table.Table(
+            cudf.core.frame.Frame(
                 *cpp_partition(self._column, cudf.Scalar(sep))
             ),
             expand=expand,
@@ -2695,7 +2699,7 @@ class StringMethods(ColumnMethodsMixin):
             sep = " "
 
         return self._return_or_inplace(
-            libcudf.table.Table(
+            cudf.core.frame.Frame(
                 *cpp_rpartition(self._column, cudf.Scalar(sep))
             ),
             expand=expand,
