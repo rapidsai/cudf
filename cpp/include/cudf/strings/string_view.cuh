@@ -52,7 +52,9 @@ __device__ inline size_type characters_in_string(const char* str, size_type byte
 #else
   size_type chars = 0;
   auto const end  = ptr + bytes;
-  while (ptr < end) { chars += is_begin_utf8_char(*ptr++); }
+  while (ptr < end) {
+    chars += is_begin_utf8_char(*ptr++);
+  }
   return chars;
 #endif
 }
