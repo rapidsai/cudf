@@ -476,10 +476,8 @@ class Frame(libcudf.table.Table):
             )
 
         # Concatenate the Tables
-        data_out, index_out = libcudf.utils.table_inputs_from_list(
-            libcudf.concat.concat_tables(tables, ignore_index),
-            column_names=tables[0]._column_names,
-            index_names=None if ignore_index else tables[0]._index_names,
+        data_out, index_out = libcudf.concat.concat_tables(
+            tables, ignore_index
         )
         out = cls._from_data(
             cudf.core.column_accessor.ColumnAccessor(data_out), index=index_out

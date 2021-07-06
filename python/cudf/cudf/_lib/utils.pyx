@@ -184,8 +184,14 @@ def _index_level_name(index_name, level, column_names):
         return f"__index_level_{level}__"
 
 
-cdef columns_from_unique_ptr(unique_ptr[table] c_tbl):
-    """Get a list of columns from a libcudf table.
+cdef data_from_unique_ptr(
+    unique_ptr[table] c_tbl, column_names, index_names=None
+):
+    """Convert a libcudf table into a dict with an index.
+
+    This method is intended to provide the bridge between the columns returned
+    from calls to libcudf APIs and the cuDF Python Table objects, which require
+    named columns and a separate index.
 
     Since cuDF Python has an independent representation of a table as a
     collection of columns, this function simply returns a list of columns
@@ -205,34 +211,15 @@ cdef columns_from_unique_ptr(unique_ptr[table] c_tbl):
     List[Column]
         A list of the columns in the output table.
     """
-    cdef vector[unique_ptr[column]] columns = move(c_tbl.get().release())
-    cdef vector[unique_ptr[column]].iterator it = columns.begin()
+    cdef vector[unique_ptr[column]] c_columns = move(c_tbl.get().release())
+    cdef vector[unique_ptr[column]].iterator it = c_columns.begin()
 
     # First construct the index, if any
     cdef int i
 
-    return [Column.from_unique_ptr(move(dereference(it+i)))
-            for i in range(columns.size())]
+    columns = [Column.from_unique_ptr(move(dereference(it+i)))
+               for i in range(c_columns.size())]
 
-
-def table_inputs_from_list(columns, column_names, index_names=None):
-    """Convert a list of columns into a dict with an index.
-
-    This method is intended to provide the bridge between the columns returned
-    from calls to libcudf APIs and the cuDF Python Table objects, which require
-    named columns and a separate index.
-
-    Parameters
-    ----------
-    c_tbl : unique_ptr[cudf::table]
-    index_names : iterable
-    column_names : iterable
-
-    Returns
-    -------
-    List[Column]
-        A list of the columns in the output table.
-    """
     index = (
         cudf.Index._from_data(
             {
