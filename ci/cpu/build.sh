@@ -83,6 +83,12 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
   gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf_kafka $CONDA_BUILD_ARGS
   mkdir -p ${CONDA_BLD_DIR}/libcudf_kafka/work
   cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf_kafka/work
+
+  # If examples grows too large to build, should move to cpu side
+  gpuci_logger "Building libcudf examples"
+  gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf_example $CONDA_BUILD_ARGS
+  mkdir -p ${CONDA_BLD_DIR}/libcudf_example/work
+  cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf_example/work
 fi
 
 if [ "$BUILD_CUDF" == '1' ]; then
