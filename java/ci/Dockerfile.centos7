@@ -31,12 +31,16 @@ RUN yum install -y git zlib-devel maven tar wget patch
 ## pre-create the CMAKE_INSTALL_PREFIX folder, set writable by any user for Jenkins
 RUN mkdir /usr/local/rapids && mkdir /rapids && chmod 777 /usr/local/rapids && chmod 777 /rapids
 
-RUN cd /usr/local/ && wget --quiet https://github.com/Kitware/CMake/releases/download/v3.19.0/cmake-3.19.0-Linux-x86_64.tar.gz && \
-   tar zxf cmake-3.19.0-Linux-x86_64.tar.gz
+ARG CMAKE_VERSION=3.20.5
+RUN cd /usr/local/ && wget --quiet https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz && \
+   tar zxf cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz && \
+   rm cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz
+ENV PATH /usr/local/cmake-${CMAKE_VERSION}-linux-x86_64/bin:$PATH
 
 # get GDS user-space lib
-RUN cd /tmp/ && wget https://developer.download.nvidia.com/gds/redist/rel-0.95.1/gds-redistrib-0.95.1.tgz && \
-    tar zxf gds-redistrib-0.95.1.tgz && \
-    cp -R ./gds-redistrib-0.95.1/targets/x86_64-linux/lib/* /usr/local/cuda/targets/x86_64-linux/lib && \
-    cp -R ./gds-redistrib-0.95.1/targets/x86_64-linux/include/* /usr/local/cuda/targets/x86_64-linux/include && \
-    rm -rf gds-redistrib-0.95.1*
+ARG GDS_VERSION=1.0.0
+RUN cd /tmp/ && wget https://developer.download.nvidia.com/gds/redist/rel-${GDS_VERSION}/gds-redistrib-${GDS_VERSION}.tgz && \
+    tar zxf gds-redistrib-${GDS_VERSION}.tgz && \
+    cp -R ./gds-redistrib-${GDS_VERSION}/targets/x86_64-linux/lib/* /usr/local/cuda/targets/x86_64-linux/lib && \
+    cp -R ./gds-redistrib-${GDS_VERSION}/targets/x86_64-linux/include/* /usr/local/cuda/targets/x86_64-linux/include && \
+    rm -rf gds-redistrib-*

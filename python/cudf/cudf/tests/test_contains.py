@@ -6,7 +6,7 @@ import pytest
 
 from cudf import Series
 from cudf.core.index import RangeIndex, as_index
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,

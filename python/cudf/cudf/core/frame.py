@@ -506,7 +506,7 @@ class Frame(libcudf.table.Table):
 
         # Reassign precision for any decimal cols
         for name, col in out._data.items():
-            if isinstance(col, cudf.core.column.DecimalColumn):
+            if isinstance(col, cudf.core.column.Decimal64Column):
                 col = col._with_type_metadata(tables[0]._data[name].dtype)
 
         # Reassign index and column names

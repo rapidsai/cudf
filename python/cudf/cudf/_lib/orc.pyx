@@ -9,6 +9,10 @@ from libcpp.vector cimport vector
 from libcpp.utility cimport move
 from cudf._lib.cpp.column.column cimport column
 
+from cudf.utils.dtypes import is_struct_dtype
+
+from cudf._lib.column cimport Column
+
 from cudf._lib.cpp.io.orc_metadata cimport (
     raw_orc_statistics,
     read_raw_orc_statistics as libcudf_read_raw_orc_statistics
@@ -22,6 +26,7 @@ from cudf._lib.cpp.io.orc cimport (
     orc_chunked_writer
 )
 from cudf._lib.cpp.io.types cimport (
+    column_name_info,
     compression_type,
     data_sink,
     sink_info,
@@ -36,7 +41,11 @@ from cudf._lib.cpp.types cimport (
     data_type, type_id, size_type
 )
 
-from cudf._lib.io.utils cimport make_source_info, make_sink_info
+from cudf._lib.io.utils cimport (
+    make_source_info,
+    make_sink_info,
+    update_struct_field_names,
+)
 from cudf._lib.table cimport Table
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
@@ -65,12 +74,13 @@ cpdef read_raw_orc_statistics(filepath_or_buffer):
     return (raw.column_names, raw.file_stats, raw.stripes_stats)
 
 
-cpdef read_orc(object filepath_or_buffer,
+cpdef read_orc(object filepaths_or_buffers,
                object columns=None,
                object stripes=None,
                object skip_rows=None,
                object num_rows=None,
                bool use_index=True,
+               object decimal_cols_as_float=None,
                object timestamp_type=None):
     """
     Cython function to call into libcudf API, see `read_orc`.
@@ -80,7 +90,7 @@ cpdef read_orc(object filepath_or_buffer,
     cudf.io.orc.read_orc
     """
     cdef orc_reader_options c_orc_reader_options = make_orc_reader_options(
-        filepath_or_buffer,
+        filepaths_or_buffers,
         columns or [],
         stripes or [],
         get_size_t_arg(skip_rows, "skip_rows"),
@@ -94,7 +104,8 @@ cpdef read_orc(object filepath_or_buffer,
                 )
             )
         ),
-        use_index
+        use_index,
+        decimal_cols_as_float or [],
     )
 
     cdef table_with_metadata c_result
@@ -104,7 +115,11 @@ cpdef read_orc(object filepath_or_buffer,
 
     names = [name.decode() for name in c_result.metadata.column_names]
 
-    return Table.from_unique_ptr(move(c_result.tbl), names)
+    tbl = Table.from_unique_ptr(move(c_result.tbl), names)
+
+    update_struct_field_names(tbl, c_result.metadata.schema_info)
+
+    return tbl
 
 
 cdef compression_type _get_comp_type(object compression):
@@ -162,22 +177,27 @@ cdef size_type get_size_t_arg(object arg, str name) except*:
 
 
 cdef orc_reader_options make_orc_reader_options(
-    object filepath_or_buffer,
+    object filepaths_or_buffers,
     object column_names,
     object stripes,
     size_type skip_rows,
     size_type num_rows,
     type_id timestamp_type,
     bool use_index,
+    object decimal_cols_as_float
 ) except*:
 
     cdef vector[string] c_column_names
-    cdef vector[size_type] strps = stripes
+    cdef vector[vector[size_type]] strps = stripes
     c_column_names.reserve(len(column_names))
     for col in column_names:
         c_column_names.push_back(str(col).encode())
     cdef orc_reader_options opts
-    cdef source_info src = make_source_info([filepath_or_buffer])
+    cdef source_info src = make_source_info(filepaths_or_buffers)
+    cdef vector[string] c_decimal_cols_as_float
+    c_decimal_cols_as_float.reserve(len(decimal_cols_as_float))
+    for decimal_col in decimal_cols_as_float:
+        c_decimal_cols_as_float.push_back(str(decimal_col).encode())
     opts = move(
         orc_reader_options.builder(src)
         .columns(c_column_names)
@@ -186,6 +206,7 @@ cdef orc_reader_options make_orc_reader_options(
         .num_rows(num_rows)
         .timestamp_type(data_type(timestamp_type))
         .use_index(use_index)
+        .decimal_cols_as_float(c_decimal_cols_as_float)
         .build()
     )
 

@@ -7,7 +7,7 @@ from pandas._libs.missing import NAType as pd_NAType
 
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
-from cudf.core.dtypes import Decimal64Dtype
+from cudf.core.dtypes import Decimal64Dtype, ListDtype
 from cudf.core.index import BaseIndex
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
@@ -118,6 +118,19 @@ class Scalar(object):
     def _preprocess_host_value(self, value, dtype):
         valid = not _is_null_host_scalar(value)
 
+        if isinstance(value, list):
+            if dtype is not None:
+                raise TypeError("Lists may not be cast to a different dtype")
+            else:
+                dtype = ListDtype.from_arrow(
+                    pa.infer_type([value], from_pandas=True)
+                )
+                return value, dtype
+        elif isinstance(dtype, ListDtype):
+            if value not in {None, NA}:
+                raise ValueError(f"Can not coerce {value} to ListDtype")
+            else:
+                return NA, dtype
         if isinstance(dtype, Decimal64Dtype):
             value = pa.scalar(
                 value, type=pa.decimal128(dtype.precision, dtype.scale)
