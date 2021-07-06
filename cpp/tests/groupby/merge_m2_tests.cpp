@@ -176,6 +176,10 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInput)
   auto const vals2 = vals_col<T>{3, 4, 5};
   auto const vals3 = vals_col<T>{6, 7, 8, 9};
 
+  // The expected results to validate.
+  auto const expected_keys = keys_col<T>{1, 2, 3};
+  auto const expected_M2s  = M2s_col<R>{18.0, 32.75, 20.0 + 2.0 / 3.0};
+
   // Compute partial results (`COUNT_VALID`, `MEAN`, `M2`) of each dataset.
   // The partial results are also assembled into a structs column.
   auto const [out1_keys, out1_vals] = compute_partial_results(keys1, vals1);
@@ -184,19 +188,28 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInput)
 
   // Merge the partial results to the final results.
   // Merging can be done in just one merge step, or in multiple steps.
-  auto const [out4_keys, out4_vals] =
-    merge_M2(vcol_views{*out1_keys, *out2_keys}, vcol_views{*out1_vals, *out2_vals});
-  auto const [final_keys, final_vals] =
-    merge_M2(vcol_views{*out3_keys, *out3_keys}, vcol_views{*out3_vals, *out4_vals});
 
-  // Get the final M2 values.
-  auto const out_M2s = final_vals->child(2);
+  // Multiple steps merging:
+  {
+    auto const [out4_keys, out4_vals] =
+      merge_M2(vcol_views{*out1_keys, *out2_keys}, vcol_views{*out1_vals, *out2_vals});
+    auto const [final_keys, final_vals] =
+      merge_M2(vcol_views{*out3_keys, *out4_keys}, vcol_views{*out3_vals, *out4_vals});
 
-  auto const expected_keys = keys_col<T>{1, 2, 3};
-  auto const expected_M2s  = M2s_col<R>{18.0, 32.75, 20.0 + 2.0 / 3.0};
+    auto const out_M2s = final_vals->child(2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+  }
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+  // One step merging:
+  {
+    auto const [final_keys, final_vals] = merge_M2(vcol_views{*out1_keys, *out2_keys, *out3_keys},
+                                                   vcol_views{*out1_vals, *out2_vals, *out3_vals});
+
+    auto const out_M2s = final_vals->child(2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+  }
 }
 
 TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInputHavingNegativeValues)
@@ -222,6 +235,10 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInputHavingNegativeValues)
   auto const vals2 = vals_col<T>{3, -4, -5};
   auto const vals3 = vals_col<T>{-6, 7, -8, 9};
 
+  // The expected results to validate.
+  auto const expected_keys = keys_col<T>{1, 2, 3};
+  auto const expected_M2s  = M2s_col<R>{42.0, 122.75, 114.0};
+
   // Compute partial results (`COUNT_VALID`, `MEAN`, `M2`) of each dataset.
   // The partial results are also assembled into a structs column.
   auto const [out1_keys, out1_vals] = compute_partial_results(keys1, vals1);
@@ -230,19 +247,28 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInputHavingNegativeValues)
 
   // Merge the partial results to the final results.
   // Merging can be done in just one merge step, or in multiple steps.
-  auto const [out4_keys, out4_vals] =
-    merge_M2(vcol_views{*out1_keys, *out2_keys}, vcol_views{*out1_vals, *out2_vals});
-  auto const [final_keys, final_vals] =
-    merge_M2(vcol_views{*out3_keys, *out3_keys}, vcol_views{*out3_vals, *out4_vals});
 
-  // Get the final M2 values.
-  auto const out_M2s = final_vals->child(2);
+  // Multiple steps merging:
+  {
+    auto const [out4_keys, out4_vals] =
+      merge_M2(vcol_views{*out1_keys, *out2_keys}, vcol_views{*out1_vals, *out2_vals});
+    auto const [final_keys, final_vals] =
+      merge_M2(vcol_views{*out3_keys, *out4_keys}, vcol_views{*out3_vals, *out4_vals});
 
-  auto const expected_keys = keys_col<T>{1, 2, 3};
-  auto const expected_M2s  = M2s_col<R>{42.0, 122.75, 114.0};
+    auto const out_M2s = final_vals->child(2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+  }
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+  // One step merging:
+  {
+    auto const [final_keys, final_vals] = merge_M2(vcol_views{*out1_keys, *out2_keys, *out3_keys},
+                                                   vcol_views{*out1_vals, *out2_vals, *out3_vals});
+
+    auto const out_M2s = final_vals->child(2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+  }
 }
 
 TYPED_TEST(GroupbyMergeM2TypedTest, InputHasNulls)
@@ -269,6 +295,10 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHasNulls)
   auto const vals2 = vals_col<T>{{4, null, 6, 7}, null_at(1)};
   auto const vals3 = vals_col<T>{{8, 9, null}, null_at(2)};
 
+  // The expected results to validate.
+  auto const expected_keys = keys_col<T>{1, 2, 3, 4};
+  auto const expected_M2s  = M2s_col<R>{{4.5, 32.0 + 2.0 / 3.0, 18.0, 0.0 /*NULL*/}, null_at(3)};
+
   // Compute partial results (`COUNT_VALID`, `MEAN`, `M2`) of each dataset.
   // The partial results are also assembled into a structs column.
   auto const [out1_keys, out1_vals] = compute_partial_results(keys1, vals1);
@@ -277,19 +307,28 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHasNulls)
 
   // Merge the partial results to the final results.
   // Merging can be done in just one merge step, or in multiple steps.
-  auto const [out4_keys, out4_vals] =
-    merge_M2(vcol_views{*out1_keys, *out2_keys}, vcol_views{*out1_vals, *out2_vals});
-  auto const [final_keys, final_vals] =
-    merge_M2(vcol_views{*out3_keys, *out4_keys}, vcol_views{*out3_vals, *out4_vals});
 
-  // Get the final M2 values.
-  auto const out_M2s = final_vals->child(2);
+  // Multiple steps merging:
+  {
+    auto const [out4_keys, out4_vals] =
+      merge_M2(vcol_views{*out1_keys, *out2_keys}, vcol_views{*out1_vals, *out2_vals});
+    auto const [final_keys, final_vals] =
+      merge_M2(vcol_views{*out3_keys, *out4_keys}, vcol_views{*out3_vals, *out4_vals});
 
-  auto const expected_keys = keys_col<T>{1, 2, 3, 4};
-  auto const expected_M2s  = M2s_col<R>{{4.5, 32.0 + 2.0 / 3.0, 18.0, 0.0 /*NULL*/}, null_at(3)};
+    auto const out_M2s = final_vals->child(2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+  }
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+  // One step merging:
+  {
+    auto const [final_keys, final_vals] = merge_M2(vcol_views{*out1_keys, *out2_keys, *out3_keys},
+                                                   vcol_views{*out1_vals, *out2_vals, *out3_vals});
+
+    auto const out_M2s = final_vals->child(2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+  }
 }
 
 TYPED_TEST(GroupbyMergeM2TypedTest, InputHaveNullsAndNaNs)
@@ -318,6 +357,10 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHaveNullsAndNaNs)
   auto const vals3 = vals_col<double>{NaN, 6.0, 7.0};
   auto const vals4 = vals_col<double>{8.0, 9.0, 10.0, NaN};
 
+  // The expected results to validate.
+  auto const expected_keys = keys_col<T>{1, 2, 3, 4};
+  auto const expected_M2s  = M2s_col<R>{18.0, NaN, 18.0, NaN};
+
   // Compute partial results (`COUNT_VALID`, `MEAN`, `M2`) of each dataset.
   // The partial results are also assembled into a structs column.
   auto const [out1_keys, out1_vals] = compute_partial_results(keys1, vals1);
@@ -327,22 +370,31 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHaveNullsAndNaNs)
 
   // Merge the partial results to the final results.
   // Merging can be done in just one merge step, or in multiple steps.
-  auto const [out5_keys, out5_vals] =
-    merge_M2(vcol_views{*out1_keys, *out2_keys}, vcol_views{*out1_vals, *out2_vals});
-  auto const [out6_keys, out6_vals] =
-    merge_M2(vcol_views{*out3_keys, *out4_keys}, vcol_views{*out3_vals, *out4_vals});
 
-  auto const [final_keys, final_vals] =
-    merge_M2(vcol_views{*out5_keys, *out6_keys}, vcol_views{*out5_vals, *out6_vals});
+  // Multiple steps merging:
+  {
+    auto const [out5_keys, out5_vals] =
+      merge_M2(vcol_views{*out1_keys, *out2_keys}, vcol_views{*out1_vals, *out2_vals});
+    auto const [out6_keys, out6_vals] =
+      merge_M2(vcol_views{*out3_keys, *out4_keys}, vcol_views{*out3_vals, *out4_vals});
+    auto const [final_keys, final_vals] =
+      merge_M2(vcol_views{*out5_keys, *out6_keys}, vcol_views{*out5_vals, *out6_vals});
 
-  // Get the final M2 values.
-  auto const out_M2s = final_vals->child(2);
+    auto const out_M2s = final_vals->child(2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+  }
 
-  auto const expected_keys = keys_col<T>{1, 2, 3, 4};
-  auto const expected_M2s  = M2s_col<R>{18.0, NaN, 18.0, NaN};
+  // One step merging:
+  {
+    auto const [final_keys, final_vals] =
+      merge_M2(vcol_views{*out1_keys, *out2_keys, *out3_keys, *out4_keys},
+               vcol_views{*out1_vals, *out2_vals, *out3_vals, *out4_vals});
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+    auto const out_M2s = final_vals->child(2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+  }
 }
 
 TYPED_TEST(GroupbyMergeM2TypedTest, SlicedColumnsInput)
@@ -387,6 +439,10 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SlicedColumnsInput)
   auto const vals3 = cudf::slice(vals_original, {17, 20})[0];  // {NaN, 6.0, 7.0}
   auto const vals4 = cudf::slice(vals_original, {20, 24})[0];  // {8.0, 9.0, 10.0, NaN}
 
+  // The expected results to validate.
+  auto const expected_keys = keys_col<T>{1, 2, 3, 4};
+  auto const expected_M2s  = M2s_col<R>{18.0, NaN, 18.0, NaN};
+
   // Compute partial results (`COUNT_VALID`, `MEAN`, `M2`) of each dataset.
   // The partial results are also assembled into a structs column.
   auto const [out1_keys, out1_vals] = compute_partial_results(keys1, vals1);
@@ -396,20 +452,29 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SlicedColumnsInput)
 
   // Merge the partial results to the final results.
   // Merging can be done in just one merge step, or in multiple steps.
-  auto const [out5_keys, out5_vals] =
-    merge_M2(vcol_views{*out1_keys, *out2_keys}, vcol_views{*out1_vals, *out2_vals});
-  auto const [out6_keys, out6_vals] =
-    merge_M2(vcol_views{*out3_keys, *out4_keys}, vcol_views{*out3_vals, *out4_vals});
 
-  auto const [final_keys, final_vals] =
-    merge_M2(vcol_views{*out5_keys, *out6_keys}, vcol_views{*out5_vals, *out6_vals});
+  // Multiple steps merging:
+  {
+    auto const [out5_keys, out5_vals] =
+      merge_M2(vcol_views{*out1_keys, *out2_keys}, vcol_views{*out1_vals, *out2_vals});
+    auto const [out6_keys, out6_vals] =
+      merge_M2(vcol_views{*out3_keys, *out4_keys}, vcol_views{*out3_vals, *out4_vals});
+    auto const [final_keys, final_vals] =
+      merge_M2(vcol_views{*out5_keys, *out6_keys}, vcol_views{*out5_vals, *out6_vals});
 
-  // Get the final M2 values.
-  auto const out_M2s = final_vals->child(2);
+    auto const out_M2s = final_vals->child(2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+  }
 
-  auto const expected_keys = keys_col<T>{1, 2, 3, 4};
-  auto const expected_M2s  = M2s_col<R>{18.0, NaN, 18.0, NaN};
+  // One step merging:
+  {
+    auto const [final_keys, final_vals] =
+      merge_M2(vcol_views{*out1_keys, *out2_keys, *out3_keys, *out4_keys},
+               vcol_views{*out1_vals, *out2_vals, *out3_vals, *out4_vals});
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+    auto const out_M2s = final_vals->child(2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+  }
 }
