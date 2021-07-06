@@ -3274,8 +3274,10 @@ class Frame(libcudf.table.Table):
         return result
 
     def _encode(self):
-        keys, indices = libcudf.transform.table_encode(self)
-        keys = self.__class__._from_table(keys)
+        data, index, indices = libcudf.transform.table_encode(self)
+        keys = self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), index=index
+        )
         return keys, indices
 
     def _reindex(
