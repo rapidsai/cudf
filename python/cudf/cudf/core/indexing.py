@@ -93,7 +93,7 @@ class _SeriesIlocIndexer(object):
         data = self._sr._column[arg]
 
         if (
-            isinstance(data, list)
+            isinstance(data, (dict, list))
             or _is_scalar_or_zero_d_array(data)
             or _is_null_host_scalar(data)
         ):
@@ -110,7 +110,10 @@ class _SeriesIlocIndexer(object):
         # coerce value into a scalar or column
         if is_scalar(value):
             value = to_cudf_compatible_scalar(value)
-        else:
+        elif not (
+            isinstance(value, list)
+            and isinstance(self._sr._column.dtype, cudf.ListDtype)
+        ):
             value = column.as_column(value)
         if (
             not isinstance(

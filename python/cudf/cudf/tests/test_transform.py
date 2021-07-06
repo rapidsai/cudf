@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from cudf.core import Series
-from cudf.tests.utils import NUMERIC_TYPES
+from cudf.testing._utils import NUMERIC_TYPES
 
 supported_types = NUMERIC_TYPES
 

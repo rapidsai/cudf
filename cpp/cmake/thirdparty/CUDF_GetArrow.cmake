@@ -127,6 +127,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3)
 
 endfunction()
 
-set(CUDF_VERSION_Arrow 1.0.1)
+set(CUDF_VERSION_Arrow 4.0.1)
 
 find_and_configure_arrow(${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} ${CUDF_ENABLE_ARROW_S3})
