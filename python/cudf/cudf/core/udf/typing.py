@@ -44,39 +44,35 @@ class MaskedType(types.Type):
 
     def unify(self, context, other):
         """
-        Logic for sorting out what to do when the UDF conditionally
-        returns a `MaskedType`, an `NAType`, or a literal based off
-        the data at runtime.
+        Often within a UDF an instance arises where a variable could
+        be a `MaskedType`, an `NAType`, or a literal based off
+        the data at runtime, for examplem the variable `ret` here:
 
-        In this framework, every input column is treated as having
-        type `MaskedType`. Operations like `x + y` are understood
-        as translating to:
-
-        `Masked(value=x, valid=True) + Masked(value=y, valid=True)`
-
-        This means if the user writes a function such as
-        def f(x, y):
-            return x + y
-
-        numba sees this function as:
-        f(x: MaskedType, y: MaskedType) -> MaskedType
-
-        However if the user writes something like:
-        def f(x, y):
-            if x > 5:
-                return 42
+        def f(x):
+            if x == 1:
+                ret = x
+            elif x > 2:
+                ret = 1
             else:
-                return x + y
+                ret = cudf.NA
+            return ret
 
-        numba now sees this as
-        f(x: MaskedType(dtype_1), y: MaskedType(dtype_2))
-          -> MaskedType(dtype_unified)
+        When numba analyzes this function it will eventually figure
+        out that the variable `ret` could be any of the three types
+        from above. This scenario will only work if numba knows how
+        to find some kind of common type between the possibilities,
+        and this function implements that - the goal is to return a
+        common type when comparing `self` to other.
+
         """
 
         # If we have Masked and NA, the output should be a
         # MaskedType with the original type as its value_type
         if isinstance(other, NAType):
             return self
+
+        # two MaskedType unify to a new MaskedType whose value_type
+        # is the result of unifying `self` and `other` `value_type`
         elif isinstance(other, MaskedType):
             return MaskedType(
                 context.unify_pairs(self.value_type, other.value_type)

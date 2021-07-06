@@ -5,7 +5,7 @@ import pytest
 
 import cudf
 from cudf.core.udf.pipeline import nulludf
-from cudf.tests.utils import NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, assert_eq
 
 arith_ops = [
     operator.add,
