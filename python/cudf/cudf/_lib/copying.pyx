@@ -212,18 +212,16 @@ def _scatter_table(Table source_table, Column scatter_map,
             )
         )
 
-    out_table = Table.from_unique_ptr(
+    data, _ = data_from_unique_ptr(
         move(c_result),
         column_names=target_table._column_names,
         index_names=None
     )
 
-    out_table._index = (
+    return data, (
         None if target_table._index is None else target_table._index.copy(
             deep=False)
     )
-
-    return out_table
 
 
 def _scatter_scalar(scalars, Column scatter_map,
@@ -252,18 +250,16 @@ def _scatter_scalar(scalars, Column scatter_map,
             )
         )
 
-    out_table = Table.from_unique_ptr(
+    data, _ = data_from_unique_ptr(
         move(c_result),
         column_names=target_table._column_names,
         index_names=None
     )
 
-    out_table._index = (
+    return data, (
         None if target_table._index is None else target_table._index.copy(
             deep=False)
     )
-
-    return out_table
 
 
 def scatter(object input, object scatter_map, Table target,

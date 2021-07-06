@@ -694,7 +694,10 @@ class Frame(libcudf.table.Table):
         return self._data[None].copy(deep=False)
 
     def _scatter(self, key, value):
-        result = self._from_table(libcudf.copying.scatter(value, key, self))
+        data, index = libcudf.copying.scatter(value, key, self)
+        result = self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), index=index
+        )
 
         result._copy_type_metadata(self)
         return result
