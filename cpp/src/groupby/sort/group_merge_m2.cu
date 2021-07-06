@@ -32,31 +32,38 @@
 namespace cudf {
 namespace groupby {
 namespace detail {
-
 namespace {
 /**
+ * @brief Struct to store partial results for merging.
+ */
+template <class result_type>
+struct partial_result {
+  size_type count;
+  result_type mean;
+  result_type M2;
+};
+
+/**
  * @brief Functor to accumulate (merge) all partial results corresponding to the same key into a
- * final result storing in its member variables. It performs merging for the partial results of
+ * final result storing in a member variable. It performs merging for the partial results of
  * `COUNT_VALID`, `MEAN`, and `M2` at the same time.
  */
-template <class ResultType>
+template <class result_type>
 struct accumulate_fn {
-  size_type n_a;
-  ResultType mean_a;
-  ResultType M2_a;
+  partial_result<result_type> merge_vals;
 
-  void __device__ operator()(size_type const n_b,
-                             ResultType const mean_b,
-                             ResultType const M2_b) noexcept
+  void __device__ operator()(partial_result<result_type> const& partial_vals) noexcept
   {
-    if (n_b == 0) { return; }
+    if (partial_vals.count == 0) { return; }
 
-    auto const n_ab  = n_a + n_b;
-    auto const delta = mean_b - mean_a;
-    M2_a +=
-      M2_b + (delta * delta) * static_cast<ResultType>(n_a) * static_cast<ResultType>(n_b) / n_ab;
-    mean_a = (mean_a * n_a + mean_b * n_b) / n_ab;
-    n_a    = n_ab;
+    auto const n_ab  = merge_vals.count + partial_vals.count;
+    auto const delta = partial_vals.mean - merge_vals.mean;
+    merge_vals.M2 += partial_vals.M2 + (delta * delta) *
+                                         static_cast<result_type>(merge_vals.count) *
+                                         static_cast<result_type>(partial_vals.count) / n_ab;
+    merge_vals.mean =
+      (merge_vals.mean * merge_vals.count + partial_vals.mean * partial_vals.count) / n_ab;
+    merge_vals.count = n_ab;
   }
 };
 
@@ -64,50 +71,50 @@ struct accumulate_fn {
  * @brief Functor to merge partial results of `COUNT_VALID`, `MEAN`, and `M2` aggregations
  * for a given group (key) index.
  */
-template <class ResultType>
+template <class result_type>
 struct merge_fn {
   size_type const* const d_offsets;
   size_type const* const d_counts;
-  ResultType const* const d_means;
-  ResultType const* const d_M2s;
+  result_type const* const d_means;
+  result_type const* const d_M2s;
 
   auto __device__ operator()(size_type const group_idx) noexcept
   {
     auto const start_idx = d_offsets[group_idx], end_idx = d_offsets[group_idx + 1];
 
-    // This case should never happen, because all groups are non-empty due to the given input.
-    // Here just to make sure we cover this case.
+    // This case should never happen, because all groups are non-empty as the results of
+    // aggregation. Here we just to make sure we cover this case.
     if (start_idx == end_idx) {
-      return thrust::make_tuple(size_type{0}, ResultType{0}, ResultType{0}, int8_t{0});
+      return thrust::make_tuple(size_type{0}, result_type{0}, result_type{0}, int8_t{0});
     }
 
-    // Firstly, this stores (valid_count, mean, M2) of the first partial result.
-    // Then, it accumulates (merges) the remaining partial results into it.
-    // Note that, if `n_a == 0` then `mean_a` and `M2_a` will be null.
-    // Thus, in such situations, we need to set zero for them before accumulating partial results.
-    auto const n_a    = d_counts[start_idx];
-    auto const mean_a = n_a > 0 ? d_means[start_idx] : ResultType{0};
-    auto const M2_a   = n_a > 0 ? d_M2s[start_idx] : ResultType{0};
-    auto accumulator  = accumulate_fn<ResultType>{n_a, mean_a, M2_a};
+    // If `(n = d_counts[idx]) > 0` then `d_means[idx] != null` and `d_M2s[idx] != null`.
+    // Otherwise (`n == 0`), these value (mean and M2) will always be nulls.
+    // In such cases, reading `mean` and `M2` from memory will return garbage values.
+    // By setting these values to zero when `n == 0`, we can safely merge the all-zero tuple without
+    // affecting the final result.
+    auto get_partial_result = [&] __device__(size_type idx) {
+      {
+        auto const n = d_counts[idx];
+        return n > 0 ? partial_result<result_type>{n, d_means[idx], d_M2s[idx]}
+                     : partial_result<result_type>{size_type{0}, result_type{0}, result_type{0}};
+      };
+    };
 
-    for (auto idx = start_idx + 1; idx < end_idx; ++idx) {
-      // if `n_b > 0` then we must have `d_means[idx] != null` and `d_M2s[idx] != null`.
-      // if `n_b == 0` then `mean_b` and `M2_b` will be null.
-      // In such situations, we need to set zero for them before merging (all zero partial results
-      // will not change the final output).
-      auto const n_b    = d_counts[idx];
-      auto const mean_b = n_b > 0 ? d_means[idx] : ResultType{0};
-      auto const M2_b   = n_b > 0 ? d_M2s[idx] : ResultType{0};
-      accumulator(n_b, mean_b, M2_b);
-    }
+    // Firstly, store tuple(count, mean, M2) of the first partial result in an accumulator.
+    auto accumulator = accumulate_fn<result_type>{get_partial_result(start_idx)};
 
-    // If there are all nulls in the partial results (i.e., sum of valid counts is
-    // zero), then the output is null.
-    auto const is_valid = int8_t{accumulator.n_a > 0};
+    // Then, accumulate (merge) the remaining partial results into that accumulator.
+    for (auto idx = start_idx + 1; idx < end_idx; ++idx) { accumulator(get_partial_result(idx)); }
 
-    return accumulator.n_a > 0
-             ? thrust::make_tuple(accumulator.n_a, accumulator.mean_a, accumulator.M2_a, is_valid)
-             : thrust::make_tuple(size_type{0}, ResultType{0}, ResultType{0}, is_valid);
+    // Get the final result after merging.
+    auto const& merge_vals = accumulator.merge_vals;
+
+    // If there are all nulls in the partial results (i.e., sum of all valid counts is
+    // zero), then the output is a null.
+    auto const is_valid = int8_t{merge_vals.count > 0};
+
+    return thrust::make_tuple(merge_vals.count, merge_vals.mean, merge_vals.M2, is_valid);
   }
 };
 
@@ -163,7 +170,7 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
   thrust::transform(rmm::exec_policy(stream), iter, iter + num_groups, out_iter, fn);
 
   // Generate bitmask for the output.
-  // Only mean and M2 values can be nullable.
+  // Only mean and M2 values can be nullable. Count column must be non-nullable.
   auto [null_mask, null_count] = cudf::detail::valid_if(
     validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr);
   if (null_count > 0) {
