@@ -104,7 +104,7 @@ struct column_scalar_scatterer_impl {
   {
     CUDF_EXPECTS(source.get().type() == target.type(), "scalar and column types must match");
 
-    // make a copy of data and nullmask from source
+    // make a copy of data and null mask from source
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
@@ -237,8 +237,8 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
     // For each field of `source`, copy construct a scalar from the field
     // and dispatch the correct scalar scatterer
 
-    auto typed_s       = static_cast<struct_scalar const*>(&source.get());
-    size_type n_fields = typed_s->view().num_columns();
+    auto typed_s             = static_cast<struct_scalar const*>(&source.get());
+    size_type const n_fields = typed_s->view().num_columns();
     CUDF_EXPECTS(n_fields == target.num_children(), "Mismatched number of fields.");
 
     auto scatter_functor = column_scalar_scatterer<decltype(scatter_iter)>{};
