@@ -118,6 +118,14 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InvalidInput)
     EXPECT_THROW(merge_M2({keys}, {values}), cudf::logic_error);
   }
 
+  // The input column must be a structs column having 3 children.
+  {
+    auto vals1      = keys_col<T>{1, 2, 3};
+    auto vals2      = vals_col<double>{1.0, 2.0, 3.0};
+    auto const vals = structs_col{vals1, vals2};
+    EXPECT_THROW(merge_M2({keys}, {vals}), cudf::logic_error);
+  }
+
   // The input column must be a structs column having types (int32_t, double, double).
   {
     auto vals1      = keys_col<T>{1, 2, 3};
