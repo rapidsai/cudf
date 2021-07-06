@@ -3,13 +3,14 @@
 import datetime
 import decimal
 import os
+import random
 from io import BytesIO
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.orc
-import pyorc
+import pyorc as po
 import pytest
 
 import cudf
@@ -304,7 +305,7 @@ def test_orc_read_skiprows(tmpdir):
         {"a": [1, 0, 1, 0, None, 1, 1, 1, 0, None, 0, 0, 1, 1, 1, 1]},
         dtype=pd.BooleanDtype(),
     )
-    writer = pyorc.Writer(buff, pyorc.Struct(a=pyorc.Boolean()))
+    writer = po.Writer(buff, po.Struct(a=po.Boolean()))
     tuples = list(
         map(
             lambda x: (None,) if x[0] is pd.NA else x,
@@ -840,6 +841,159 @@ def test_orc_string_stream_offset_issue():
     df.to_orc(buffer)
 
     assert_eq(df, cudf.read_orc(buffer))
+
+
+def generate_list_struct_buff(size=28000):
+    rd = random.Random(0)
+    np.random.seed(seed=0)
+
+    buff = BytesIO()
+
+    schema = {
+        "lvl3_list": po.Array(po.Array(po.Array(po.BigInt()))),
+        "lvl1_list": po.Array(po.BigInt()),
+        "lvl1_struct": po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}),
+        "lvl2_struct": po.Struct(
+            **{
+                "a": po.BigInt(),
+                "lvl1_struct": po.Struct(
+                    **{"c": po.BigInt(), "d": po.BigInt()}
+                ),
+            }
+        ),
+        "list_nests_struct": po.Array(
+            po.Array(po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}))
+        ),
+        "struct_nests_list": po.Struct(
+            **{
+                "struct": po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}),
+                "list": po.Array(po.BigInt()),
+            }
+        ),
+    }
+
+    schema = po.Struct(**schema)
+
+    lvl3_list = [
+        [
+            [
+                [
+                    rd.choice([None, np.random.randint(1, 3)])
+                    for z in range(np.random.randint(1, 3))
+                ]
+                for z in range(np.random.randint(0, 3))
+            ]
+            for y in range(np.random.randint(0, 3))
+        ]
+        for x in range(size)
+    ]
+    lvl1_list = [
+        [
+            rd.choice([None, np.random.randint(0, 3)])
+            for y in range(np.random.randint(1, 4))
+        ]
+        for x in range(size)
+    ]
+    lvl1_struct = [
+        (np.random.randint(0, 3), np.random.randint(0, 3)) for x in range(size)
+    ]
+    lvl2_struct = [
+        (
+            rd.choice([None, np.random.randint(0, 3)]),
+            (
+                rd.choice([None, np.random.randint(0, 3)]),
+                np.random.randint(0, 3),
+            ),
+        )
+        for x in range(size)
+    ]
+    list_nests_struct = [
+        [
+            [rd.choice(lvl1_struct), rd.choice(lvl1_struct)]
+            for y in range(np.random.randint(1, 4))
+        ]
+        for x in range(size)
+    ]
+    struct_nests_list = [(lvl1_struct[x], lvl1_list[x]) for x in range(size)]
+
+    df = pd.DataFrame(
+        {
+            "lvl3_list": lvl3_list,
+            "lvl1_list": lvl1_list,
+            "lvl1_struct": lvl1_struct,
+            "lvl2_struct": lvl2_struct,
+            "list_nests_struct": list_nests_struct,
+            "struct_nests_list": struct_nests_list,
+        }
+    )
+
+    writer = po.Writer(buff, schema, stripe_size=1024)
+    tuples = list(
+        map(
+            lambda x: (None,) if x[0] is pd.NA else x,
+            list(df.itertuples(index=False, name=None)),
+        )
+    )
+    writer.writerows(tuples)
+    writer.close()
+
+    return buff
+
+
+list_struct_buff = generate_list_struct_buff()
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [
+        None,
+        ["lvl3_list", "list_nests_struct", "lvl2_struct", "struct_nests_list"],
+        ["lvl2_struct", "lvl1_struct"],
+    ],
+)
+@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 28000])
+@pytest.mark.parametrize("use_index", [True, False])
+@pytest.mark.parametrize("skip_rows", [0, 101, 1007])
+def test_lists_struct_nests(
+    columns, num_rows, use_index, skip_rows,
+):
+
+    has_lists = (
+        any("list" in col_name for col_name in columns) if columns else True
+    )
+
+    if has_lists and skip_rows > 0:
+        with pytest.raises(
+            RuntimeError, match="skip_rows is not supported by list column"
+        ):
+            cudf.read_orc(
+                list_struct_buff,
+                columns=columns,
+                num_rows=num_rows,
+                use_index=use_index,
+                skiprows=skip_rows,
+            )
+    else:
+        gdf = cudf.read_orc(
+            list_struct_buff,
+            columns=columns,
+            num_rows=num_rows,
+            use_index=use_index,
+            skiprows=skip_rows,
+        )
+
+        pyarrow_tbl = pyarrow.orc.ORCFile(list_struct_buff).read()
+
+        pyarrow_tbl = (
+            pyarrow_tbl[skip_rows : skip_rows + num_rows]
+            if columns is None
+            else pyarrow_tbl.select(columns)[skip_rows : skip_rows + num_rows]
+        )
+
+        if num_rows > 0:
+            assert_eq(True, pyarrow_tbl.equals(gdf.to_arrow()))
+        else:
+            assert_eq(pyarrow_tbl.to_pandas(), gdf)
 
 
 @pytest.mark.parametrize(

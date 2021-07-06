@@ -9,6 +9,10 @@ from libcpp.vector cimport vector
 from libcpp.utility cimport move
 from cudf._lib.cpp.column.column cimport column
 
+from cudf.utils.dtypes import is_struct_dtype
+
+from cudf._lib.column cimport Column
+
 from cudf._lib.cpp.io.orc_metadata cimport (
     raw_orc_statistics,
     read_raw_orc_statistics as libcudf_read_raw_orc_statistics
@@ -22,6 +26,7 @@ from cudf._lib.cpp.io.orc cimport (
     orc_chunked_writer
 )
 from cudf._lib.cpp.io.types cimport (
+    column_name_info,
     compression_type,
     data_sink,
     sink_info,
@@ -36,7 +41,11 @@ from cudf._lib.cpp.types cimport (
     data_type, type_id, size_type
 )
 
-from cudf._lib.io.utils cimport make_source_info, make_sink_info
+from cudf._lib.io.utils cimport (
+    make_source_info,
+    make_sink_info,
+    update_struct_field_names,
+)
 from cudf._lib.table cimport Table
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
@@ -106,7 +115,11 @@ cpdef read_orc(object filepaths_or_buffers,
 
     names = [name.decode() for name in c_result.metadata.column_names]
 
-    return Table.from_unique_ptr(move(c_result.tbl), names)
+    tbl = Table.from_unique_ptr(move(c_result.tbl), names)
+
+    update_struct_field_names(tbl, c_result.metadata.schema_info)
+
+    return tbl
 
 
 cdef compression_type _get_comp_type(object compression):
