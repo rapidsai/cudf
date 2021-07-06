@@ -95,7 +95,10 @@ struct ColumnDesc {
   uint32_t *valid_map_base;                // base pointer of valid bit map for this column
   void *column_data_base;                  // base pointer of column data
   uint32_t start_row;                      // starting row of the stripe
-  uint32_t num_rows;                       // starting row of the stripe
+  uint32_t num_rows;                       // number of rows in stripe
+  uint32_t column_num_rows;                // number of rows in whole column
+  uint32_t num_child_rows;                 // store number of child rows if it's list column
+  uint32_t num_rowgroups;                  // number of rowgroups in the chunk
   uint32_t dictionary_start;               // start position in global dictionary
   uint32_t dict_len;                       // length of local dictionary
   uint32_t null_count;                     // number of null values in this stripe's column
@@ -115,6 +118,9 @@ struct RowGroup {
   uint32_t chunk_id;        // Column chunk this entry belongs to
   uint32_t strm_offset[2];  // Index offset for CI_DATA and CI_DATA2 streams
   uint16_t run_pos[2];      // Run position for CI_DATA and CI_DATA2
+  uint32_t num_rows;        // number of rows in rowgroup
+  uint32_t start_row;       // starting row of the rowgroup
+  uint32_t num_child_rows;  // number of rows of children in rowgroup in case of list type
 };
 
 /**
@@ -224,6 +230,9 @@ void PostDecompressionReassemble(CompressedStreamInfo *strm_info,
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
+ * @param[in] rowidx_stride Row index stride
+ * @param[in] use_base_stride Whether to use base stride obtained from meta or use the computed
+ * value
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void ParseRowGroupIndex(RowGroup *row_groups,
@@ -233,6 +242,7 @@ void ParseRowGroupIndex(RowGroup *row_groups,
                         uint32_t num_stripes,
                         uint32_t num_rowgroups,
                         uint32_t rowidx_stride,
+                        bool use_base_stride,
                         rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
@@ -242,7 +252,6 @@ void ParseRowGroupIndex(RowGroup *row_groups,
  * @param[in] global_dictionary Global dictionary device array
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
- * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
@@ -250,7 +259,6 @@ void DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
                                       DictionaryEntry *global_dictionary,
                                       uint32_t num_columns,
                                       uint32_t num_stripes,
-                                      size_t max_rows              = ~0,
                                       size_t first_row             = 0,
                                       rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
@@ -261,25 +269,25 @@ void DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] global_dictionary Global dictionary device array
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
- * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] tz_table Timezone translation table
  * @param[in] tz_len Length of timezone translation table
- * @param[in] row_groups Optional row index data
+ * @param[in] row_groups Optional row index data [rowgroup][column]
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
+ * @param[in] level Current nesting level being processed
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void DecodeOrcColumnData(ColumnDesc const *chunks,
+void DecodeOrcColumnData(ColumnDesc *chunks,
                          DictionaryEntry *global_dictionary,
+                         device_2dspan<RowGroup> row_groups,
                          uint32_t num_columns,
                          uint32_t num_stripes,
-                         size_t max_rows              = ~0,
                          size_t first_row             = 0,
                          timezone_table_view tz_table = {},
-                         const RowGroup *row_groups   = 0,
                          uint32_t num_rowgroups       = 0,
                          uint32_t rowidx_stride       = 0,
+                         size_t level                 = 0,
                          rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**

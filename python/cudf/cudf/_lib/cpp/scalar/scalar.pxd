@@ -10,7 +10,7 @@ from cudf._lib.cpp.types cimport data_type
 from cudf._lib.cpp.wrappers.decimals cimport scale_type
 
 from cudf._lib.cpp.column.column_view cimport column_view
-
+from cudf._lib.cpp.table.table_view cimport table_view
 
 cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
     cdef cppclass scalar:
@@ -66,4 +66,8 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
 
     cdef cppclass list_scalar(scalar):
         list_scalar(column_view col) except +
+        list_scalar(column_view col, bool is_valid) except +
         column_view view() except +
+
+    cdef cppclass struct_scalar(scalar):
+        table_view view() except +

@@ -40,6 +40,7 @@
 #include <numeric>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 
 using std::string;
 using std::vector;
@@ -315,7 +316,9 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
         if (opts_.is_enabled_mangle_dupe_cols()) {
           // Rename duplicates of column X as X.1, X.2, ...; First appearance
           // stays as X
-          col_name += "." + std::to_string(col_names_histogram[col_name] - 1);
+          do {
+            col_name += "." + std::to_string(col_names_histogram[col_name] - 1);
+          } while (col_names_histogram[col_name]++);
         } else {
           // All duplicate columns will be ignored; First appearance is parsed
           const auto idx     = &col_name - col_names_.data();
@@ -336,13 +339,18 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
     for (const auto index : opts_.get_use_cols_indexes()) {
       column_flags_[index] = column_parse::enabled;
     }
-    num_active_cols_ = opts_.get_use_cols_indexes().size();
+    num_active_cols_ = std::unordered_set<int>(opts_.get_use_cols_indexes().begin(),
+                                               opts_.get_use_cols_indexes().end())
+                         .size();
 
     for (const auto &name : opts_.get_use_cols_names()) {
       const auto it = std::find(col_names_.begin(), col_names_.end(), name);
       if (it != col_names_.end()) {
-        column_flags_[it - col_names_.begin()] = column_parse::enabled;
-        num_active_cols_++;
+        auto curr_it = it - col_names_.begin();
+        if (column_flags_[curr_it] == column_parse::disabled) {
+          column_flags_[curr_it] = column_parse::enabled;
+          num_active_cols_++;
+        }
       }
     }
   }

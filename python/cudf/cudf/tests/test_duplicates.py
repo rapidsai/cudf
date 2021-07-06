@@ -9,7 +9,7 @@ from pandas import DataFrame, MultiIndex, Series, date_range
 
 import cudf
 from cudf import concat
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 # TODO: PANDAS 1.0 support
 # Revisit drop_duplicates() tests to update parameters like ignore_index.
