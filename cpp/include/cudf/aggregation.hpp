@@ -76,7 +76,7 @@ class aggregation {
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
-    RANK,            ///< get rank of current index (relative to rolling window)
+    RANK,            ///< get rank       of current index (relative to rolling window)
     DENSE_RANK,      ///< get dense rank of current index (relative to rolling window)
     COLLECT_LIST,    ///< collect values into a list
     COLLECT_SET,     ///< collect values into a list without duplicate entries

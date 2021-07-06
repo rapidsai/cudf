@@ -70,7 +70,6 @@ std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
         input.type(), DispatchFn<cudf::DeviceProduct>(), input, null_handling, stream, mr);
     case aggregation::RANK: return inclusive_rank_scan(*agg, stream, mr);
     case aggregation::DENSE_RANK: return inclusive_dense_rank_scan(*agg, stream, mr);
-
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
 }

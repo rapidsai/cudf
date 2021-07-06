@@ -43,34 +43,30 @@ std::unique_ptr<column> rank_scan(table_view const& order_by,
 
   if (has_nulls(order_by)) {
     row_equality_comparator<true> row_comparator(*d_order_by, *d_order_by, true);
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<size_type>(),
-                     mutable_ranks.end<size_type>(),
-                     [row_comparator,
-                      labels  = group_labels.data(),
-                      offsets = group_offsets.data()] __device__(size_type row_index) {
-                       auto group_start = offsets[labels[row_index]];
-                       if (row_index == group_start || !row_comparator(row_index, row_index - 1)) {
-                         return row_index - group_start + 1;
-                       } else {
-                         return 0;
-                       }
-                     });
+    thrust::tabulate(
+      rmm::exec_policy(stream),
+      mutable_ranks.begin<size_type>(),
+      mutable_ranks.end<size_type>(),
+      [row_comparator, labels = group_labels.data(), offsets = group_offsets.data()] __device__(
+        size_type row_index) {
+        auto group_start = offsets[labels[row_index]];
+        return (row_index == group_start || !row_comparator(row_index, row_index - 1))
+                 ? row_index - group_start + 1
+                 : 0;
+      });
   } else {
     row_equality_comparator<false> row_comparator(*d_order_by, *d_order_by, true);
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<size_type>(),
-                     mutable_ranks.end<size_type>(),
-                     [row_comparator,
-                      labels  = group_labels.data(),
-                      offsets = group_offsets.data()] __device__(size_type row_index) {
-                       auto group_start = offsets[labels[row_index]];
-                       if (row_index == group_start || !row_comparator(row_index, row_index - 1)) {
-                         return row_index - group_start + 1;
-                       } else {
-                         return 0;
-                       }
-                     });
+    thrust::tabulate(
+      rmm::exec_policy(stream),
+      mutable_ranks.begin<size_type>(),
+      mutable_ranks.end<size_type>(),
+      [row_comparator, labels = group_labels.data(), offsets = group_offsets.data()] __device__(
+        size_type row_index) {
+        auto group_start = offsets[labels[row_index]];
+        return (row_index == group_start || !row_comparator(row_index, row_index - 1))
+                 ? row_index - group_start + 1
+                 : 0;
+      });
   }
 
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),

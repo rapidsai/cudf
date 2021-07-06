@@ -79,28 +79,22 @@ std::unique_ptr<column> inclusive_rank_scan(aggregation const& agg,
   auto mutable_ranks   = ranks->mutable_view();
   if (has_nulls(rank_agg._order_by)) {
     row_equality_comparator<true> row_comparator(*d_order_by, *d_order_by, true);
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<size_type>(),
-                     mutable_ranks.end<size_type>(),
-                     [row_comparator] __device__(size_type row_index) {
-                       if (row_index == 0 || !row_comparator(row_index, row_index - 1)) {
-                         return row_index + 1;
-                       } else {
-                         return 0;
-                       }
-                     });
+    thrust::tabulate(
+      rmm::exec_policy(stream),
+      mutable_ranks.begin<size_type>(),
+      mutable_ranks.end<size_type>(),
+      [row_comparator] __device__(size_type row_index) {
+        return (row_index == 0 || !row_comparator(row_index, row_index - 1)) ? row_index + 1 : 0;
+      });
   } else {
     row_equality_comparator<false> row_comparator(*d_order_by, *d_order_by, true);
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<size_type>(),
-                     mutable_ranks.end<size_type>(),
-                     [row_comparator] __device__(size_type row_index) {
-                       if (row_index == 0 || !row_comparator(row_index, row_index - 1)) {
-                         return row_index + 1;
-                       } else {
-                         return 0;
-                       }
-                     });
+    thrust::tabulate(
+      rmm::exec_policy(stream),
+      mutable_ranks.begin<size_type>(),
+      mutable_ranks.end<size_type>(),
+      [row_comparator] __device__(size_type row_index) {
+        return (row_index == 0 || !row_comparator(row_index, row_index - 1)) ? row_index + 1 : 0;
+      });
   }
 
   thrust::inclusive_scan(rmm::exec_policy(stream),
@@ -129,11 +123,7 @@ std::unique_ptr<column> inclusive_dense_rank_scan(aggregation const& agg,
                      mutable_ranks.begin<size_type>(),
                      mutable_ranks.end<size_type>(),
                      [row_comparator] __device__(size_type row_index) {
-                       if (row_index == 0 || !row_comparator(row_index, row_index - 1)) {
-                         return 1;
-                       } else {
-                         return 0;
-                       }
+                       return (row_index == 0 || !row_comparator(row_index, row_index - 1)) ? 1 : 0;
                      });
   } else {
     row_equality_comparator<false> row_comparator(*d_order_by, *d_order_by, true);
@@ -141,11 +131,7 @@ std::unique_ptr<column> inclusive_dense_rank_scan(aggregation const& agg,
                      mutable_ranks.begin<size_type>(),
                      mutable_ranks.end<size_type>(),
                      [row_comparator] __device__(size_type row_index) {
-                       if (row_index == 0 || !row_comparator(row_index, row_index - 1)) {
-                         return 1;
-                       } else {
-                         return 0;
-                       }
+                       return (row_index == 0 || !row_comparator(row_index, row_index - 1)) ? 1 : 0;
                      });
   }
   thrust::inclusive_scan(rmm::exec_policy(stream),
