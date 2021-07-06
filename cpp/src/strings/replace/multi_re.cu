@@ -56,7 +56,7 @@ struct replace_multi_regex_fn {
   reprog_device* progs;  // array of regex progs
   size_type number_of_patterns;
   found_range* d_found_ranges;       // working array matched (begin,end) values
-  column_device_view const d_repls;  // replacment strings
+  column_device_view const d_repls;  // replacement strings
   int32_t* d_offsets{};              // these are null when
   char* d_chars{};                   // only computing size
 

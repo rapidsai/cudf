@@ -573,7 +573,7 @@ TEST_F(ParquetWriterTest, Strings)
 
 TEST_F(ParquetWriterTest, SlicedTable)
 {
-  // This test checks for writing zero copy, offseted views into existing cudf tables
+  // This test checks for writing zero copy, offsetted views into existing cudf tables
 
   std::vector<const char*> strings{
     "Monday", "Wȅdnȅsday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
