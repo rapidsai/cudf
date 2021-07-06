@@ -726,11 +726,12 @@ class StringMethods(ColumnMethodsMixin):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        out = cpp_extract(self._column, pat)
-        if out._num_columns == 1 and expand is False:
-            return self._return_or_inplace(out._columns[0], expand=expand)
+        data, index = cpp_extract(self._column, pat)
+        if len(data) == 1 and expand is False:
+            data = next(iter(data.values()))
         else:
-            return self._return_or_inplace(out, expand=expand)
+            data = cudf.core.frame.Frame(data, index)
+        return self._return_or_inplace(data, expand=expand)
 
     def contains(
         self,
@@ -3426,8 +3427,9 @@ class StringMethods(ColumnMethodsMixin):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
+        data, index = cpp_findall(self._column, pat)
         return self._return_or_inplace(
-            cpp_findall(self._column, pat), expand=expand
+            cudf.core.frame.Frame(data, index), expand=expand
         )
 
     def isempty(self) -> ParentType:

@@ -184,6 +184,10 @@ def _index_level_name(index_name, level, column_names):
         return f"__index_level_{level}__"
 
 
+# TODO: Look into simplifying calling APIs that don't use the index from this.
+# TODO: Figure out whether _from_data can be changed to accept a dict rather
+# than a ColumnAccessor, which would allow a much more idiomatic usage of this
+# function via _from_data(*data_from_unique_ptr(...)).
 cdef data_from_unique_ptr(
     unique_ptr[table] c_tbl, column_names, index_names=None
 ):
