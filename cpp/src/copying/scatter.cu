@@ -256,7 +256,7 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
     });
     std::vector<std::unique_ptr<column>> fields(fields_iter_begin, fields_iter_begin + n_fields);
 
-    // Compute nullmask
+    // Compute null mask
     rmm::device_buffer null_mask =
       target.nullable() ? copy_bitmask(target, stream, mr)
                         : create_null_mask(target.size(), mask_state::UNALLOCATED, stream, mr);
@@ -269,7 +269,7 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
     size_type null_count = null_mask_stub.null_count();
     auto contents        = null_mask_stub.release();
 
-    // Nullmask pushdown inside factory method
+    // Null mask pushdown inside factory method
     return make_structs_column(
       target.size(), std::move(fields), null_count, std::move(*contents.null_mask));
   }
