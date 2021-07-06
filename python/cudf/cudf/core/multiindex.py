@@ -174,7 +174,7 @@ class MultiIndex(BaseIndex):
 
             source_data[name] = libcudf.copying.gather(
                 level, codes._data.columns[0]
-            )._data[name]
+            )[0][name]
 
         self._data = source_data._data
         self.names = names
@@ -295,7 +295,12 @@ class MultiIndex(BaseIndex):
         return self._set_names(names=names, inplace=inplace)
 
     @classmethod
-    def _from_data(cls, data: ColumnAccessor, index=None) -> MultiIndex:
+    # TODO: This type ignore is indicating a real problem, which is that
+    # MultiIndex should not be inheriting from SingleColumnFrame, but fixing
+    # that will have to wait until we reshuffle the Index hierarchy.
+    def _from_data(  # type: ignore
+        cls, data: ColumnAccessor, index=None
+    ) -> MultiIndex:
         return cls.from_frame(cudf.DataFrame._from_data(data))
 
     @classmethod

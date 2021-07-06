@@ -34,7 +34,9 @@ from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.lists.gather cimport (
     segmented_gather as cpp_segmented_gather
 )
+from cudf._lib.utils cimport data_from_unique_ptr
 cimport cudf._lib.cpp.copying as cpp_copying
+
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
@@ -178,7 +180,7 @@ def gather(
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=(

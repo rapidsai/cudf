@@ -649,14 +649,16 @@ class Frame(libcudf.table.Table):
     def _gather(self, gather_map, keep_index=True, nullify=False):
         if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
-        result = self.__class__._from_table(
-            libcudf.copying.gather(
-                self,
-                as_column(gather_map),
-                keep_index=keep_index,
-                nullify=nullify,
-            )
+        res_data, res_index = libcudf.copying.gather(
+            self,
+            as_column(gather_map),
+            keep_index=keep_index,
+            nullify=nullify,
         )
+        result = self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(res_data), index=res_index
+        )
+
         result._copy_type_metadata(self, include_index=keep_index)
         if keep_index and self._index is not None:
             result._index.names = self._index.names
@@ -3362,6 +3364,18 @@ class SingleColumnFrame(Frame):
     Frames with only a single column share certain logic that is encoded in
     this class.
     """
+
+    @classmethod
+    def _from_data(
+        cls,
+        data: ColumnAccessor,
+        index: Optional[cudf.Index] = None,
+        name: Any = None,
+    ) -> SingleColumnFrame:
+        out = cls(data, index)
+        if name is not None:
+            out.name = name
+        return out
 
     @property
     def name(self):
