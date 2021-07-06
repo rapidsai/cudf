@@ -197,12 +197,25 @@ __forceinline__ __device__ bool is_escape_char(char const* const ptr)
   return (ptr[0] == '%' && is_hex_digit(ptr[1]) && is_hex_digit(ptr[2]));
 }
 
-template <int warps_per_threadblock, int block_size>
+/**
+ * @brief Count the number of characters of each string after URL decoding.
+ *
+ * @tparam threadblock_size Number of threads in a threadblock. This template argument must be a
+ * multiple of `cudf::detail::warp_size`.
+ * @tparam block_size Number of characters which will be loaded into the shared memory at a time.
+ *
+ * @param[in] in_chars Character buffer for the input string column.
+ * @param[in] in_offsets Offset value of each string associated with `in_chars`.
+ * @param[out] out_counts Number of characters in each decode URL.
+ * @param[in] num_strings Number of strings to count the number of decoded characters.
+ */
+template <int threadblock_size, int block_size>
 __global__ void url_decode_char_counter(char const* const in_chars,
                                         int32_t const* const in_offsets,
                                         int32_t* const out_counts,
-                                        int32_t const num_rows)
+                                        int32_t const num_strings)
 {
+  constexpr int warps_per_threadblock = threadblock_size / cudf::detail::warp_size;
   __shared__ char temporary_buffer[warps_per_threadblock][block_size + 2];
   __shared__ typename cub::WarpReduce<int8_t>::TempStorage cub_storage[warps_per_threadblock];
 
@@ -213,32 +226,39 @@ __global__ void url_decode_char_counter(char const* const in_chars,
   int nwarps            = gridDim.x * blockDim.x / cudf::detail::warp_size;
   char* in_chars_shared = temporary_buffer[local_warp_id];
 
-  for (size_type row_idx = global_warp_id; row_idx < num_rows; row_idx += nwarps) {
+  // Loop through strings, and assign each string to a warp.
+  for (size_type row_idx = global_warp_id; row_idx < num_strings; row_idx += nwarps) {
     auto in_chars_string      = in_chars + in_offsets[row_idx];
     auto string_length        = in_offsets[row_idx + 1] - in_offsets[row_idx];
     int nblocks               = (string_length + block_size - 1) / block_size;
     int32_t escape_char_count = 0;
 
-    for (int iblock = 0; iblock < nblocks; iblock++) {
-      int string_length_iblock = std::min(block_size, string_length - block_size * iblock);
+    for (int block_idx = 0; block_idx < nblocks; block_idx++) {
+      int string_length_block = std::min(block_size, string_length - block_size * block_idx);
 
-      // Each warp collectively loads input characters of the current block to shared memory
-      for (int ichar = warp_lane; ichar < string_length_iblock + 2;
-           ichar += cudf::detail::warp_size) {
+      // Each warp collectively loads input characters of the current block to the shared memory.
+      // Two halo cells with 0s are added after the input characters to avoid branches when testing
+      // escape characters.
+      for (int char_idx = warp_lane; char_idx < string_length_block + 2;
+           char_idx += cudf::detail::warp_size) {
         char ch    = 0;
-        int in_idx = iblock * block_size + ichar;
+        int in_idx = block_idx * block_size + char_idx;
         if (in_idx < string_length) ch = in_chars_string[in_idx];
-        in_chars_shared[ichar] = ch;
+        in_chars_shared[char_idx] = ch;
       }
 
       __syncwarp();
 
-      for (int ichar_start = 0; ichar_start < string_length_iblock;
-           ichar_start += cudf::detail::warp_size) {
-        int ichar = ichar_start + warp_lane;
+      // `char_idx_start` represents the start character index of the current warp.
+      for (int char_idx_start = 0; char_idx_start < string_length_block;
+           char_idx_start += cudf::detail::warp_size) {
+        int char_idx = char_idx_start + warp_lane;
         int8_t is_ichar_escape_char =
-          (ichar < string_length_iblock && is_escape_char(in_chars_shared + ichar)) ? 1 : 0;
+          (char_idx < string_length_block && is_escape_char(in_chars_shared + char_idx)) ? 1 : 0;
 
+        // Warp-wise reduction to calculate the number of escape characters.
+        // All threads in the warp participate in the reduction, even if `char_idx` is beyond
+        // `string_length_block`.
         int8_t total_escape_char =
           cub::WarpReduce<int8_t>(cub_storage[local_warp_id]).Sum(is_ichar_escape_char);
 
@@ -247,17 +267,32 @@ __global__ void url_decode_char_counter(char const* const in_chars,
         __syncwarp();
       }
     }
+    // URL decoding replaces 3 bytes with 1 for each escape character.
     if (warp_lane == 0) { out_counts[row_idx] = string_length - escape_char_count * 2; }
   }
 }
 
-template <int warps_per_threadblock, int block_size>
+/**
+ * @brief Decode and copy from the input char column to the output char column.
+ *
+ * @tparam threadblock_size Number of threads in a threadblock. This template argument must be a
+ * multiple of `cudf::detail::warp_size`.
+ * @tparam block_size Number of characters which will be loaded into the shared memory at a time.
+ *
+ * @param[in] in_chars Character buffer for the input string column.
+ * @param[in] in_offsets Offset value of each string associated with `in_chars`.
+ * @param[out] out_chars Character buffer for the output string column.
+ * @param[in] out_offsets Offset value of each string associated with `out_chars`.
+ * @param[in] num_strings Number of strings to decode and copy.
+ */
+template <int threadblock_size, int block_size>
 __global__ void url_decode_char_replacer(char const* const in_chars,
                                          int32_t const* const in_offsets,
                                          char* const out_chars,
                                          int32_t const* const out_offsets,
-                                         int32_t const num_rows)
+                                         int32_t const num_strings)
 {
+  constexpr int warps_per_threadblock = threadblock_size / cudf::detail::warp_size;
   __shared__ char temporary_buffer[warps_per_threadblock][block_size + 4];
   __shared__ typename cub::WarpScan<int8_t>::TempStorage cub_storage[warps_per_threadblock];
   __shared__ int out_idx[warps_per_threadblock];
@@ -269,7 +304,8 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
   int nwarps            = gridDim.x * blockDim.x / cudf::detail::warp_size;
   char* in_chars_shared = temporary_buffer[local_warp_id];
 
-  for (size_type row_idx = global_warp_id; row_idx < num_rows; row_idx += nwarps) {
+  // Loop through strings, and assign each string to a warp
+  for (size_type row_idx = global_warp_id; row_idx < num_strings; row_idx += nwarps) {
     auto in_chars_string  = in_chars + in_offsets[row_idx];
     auto out_chars_string = out_chars + out_offsets[row_idx];
     auto string_length    = in_offsets[row_idx + 1] - in_offsets[row_idx];
@@ -277,39 +313,50 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
 
     if (warp_lane == cudf::detail::warp_size - 1) { out_idx[local_warp_id] = 0; }
 
-    for (int iblock = 0; iblock < nblocks; iblock++) {
-      int string_length_iblock = std::min(block_size, string_length - block_size * iblock);
+    for (int block_idx = 0; block_idx < nblocks; block_idx++) {
+      int string_length_block = std::min(block_size, string_length - block_size * block_idx);
 
-      // Each warp collectively loads input characters of the current block to shared memory
-      for (int ichar = warp_lane; ichar < string_length_iblock + 4;
-           ichar += cudf::detail::warp_size) {
+      // Each warp collectively loads input characters of the current block to shared memory.
+      // Two halo cells with 0s before and after the input characters are added. The halo cells are
+      // used to test whether the current location as well as the previous two locations are escape
+      // characters, without branches.
+      for (int char_idx = warp_lane; char_idx < string_length_block + 4;
+           char_idx += cudf::detail::warp_size) {
         char ch    = 0;
-        int in_idx = iblock * block_size + ichar - 2;
+        int in_idx = block_idx * block_size + char_idx - 2;
         if (in_idx >= 0 && in_idx < string_length) ch = in_chars_string[in_idx];
-        in_chars_shared[ichar] = ch;
+        in_chars_shared[char_idx] = ch;
       }
 
       __syncwarp();
 
-      for (int ichar_start = 0; ichar_start < string_length_iblock;
-           ichar_start += cudf::detail::warp_size) {
-        int ichar = ichar_start + warp_lane;
+      // `char_idx_start` represents the start character index of the current warp.
+      for (int char_idx_start = 0; char_idx_start < string_length_block;
+           char_idx_start += cudf::detail::warp_size) {
+        int char_idx = char_idx_start + warp_lane;
+        // The current thread should output a character if it is not part of an escape sequence
+        // starting at the previous two locations.
         int8_t out_size =
-          (ichar >= string_length_iblock || is_escape_char(in_chars_shared + ichar) ||
-           is_escape_char(in_chars_shared + ichar + 1))
+          (char_idx >= string_length_block || is_escape_char(in_chars_shared + char_idx) ||
+           is_escape_char(in_chars_shared + char_idx + 1))
             ? 0
             : 1;
-        int8_t out_offset;
 
+        // Warp-wise prefix sum to establish output location of the current thread.
+        // All threads in the warp participate in the prefix sum, even if `char_idx` is beyond
+        // `string_length_block`.
+        int8_t out_offset;
         cub::WarpScan<int8_t>(cub_storage[local_warp_id]).ExclusiveSum(out_size, out_offset);
 
         if (out_size == 1) {
           char ch;
-          if (is_escape_char(in_chars_shared + ichar + 2)) {
-            ch = (hex_char_to_byte(in_chars_shared[ichar + 3]) << 4) |
-                 hex_char_to_byte(in_chars_shared[ichar + 4]);
+          if (is_escape_char(in_chars_shared + char_idx + 2)) {
+            // If the current location is the start of an escape sequence, load and decode.
+            ch = (hex_char_to_byte(in_chars_shared[char_idx + 3]) << 4) |
+                 hex_char_to_byte(in_chars_shared[char_idx + 4]);
           } else {
-            ch = in_chars_shared[ichar + 2];
+            // If the current location is not the start of an escape sequence, load directly.
+            ch = in_chars_shared[char_idx + 2];
           }
           out_chars_string[out_idx[local_warp_id] + out_offset] = ch;
         }
@@ -332,6 +379,10 @@ std::unique_ptr<column> url_decode(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
+  constexpr int threadblock_size = 128;
+  constexpr int block_size       = 256;
+  constexpr int num_threadblocks = 65536;
+
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
@@ -343,11 +394,12 @@ std::unique_ptr<column> url_decode(
   auto offsets_column = make_numeric_column(
     data_type{type_id::INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
 
-  // count number of bytes in each string after decoding
+  // count number of bytes in each string after decoding and store it in offsets_column
   auto offsets_view         = offsets_column->view();
   auto offsets_mutable_view = offsets_column->mutable_view();
-  url_decode_char_counter<4, 286><<<65536, 128, 0, stream.value()>>>(
-    d_in_chars, d_in_offsets, offsets_mutable_view.begin<int32_t>() + 1, strings_count);
+  url_decode_char_counter<threadblock_size, block_size>
+    <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(
+      d_in_chars, d_in_offsets, offsets_mutable_view.begin<int32_t>() + 1, strings_count);
 
   // use inclusive_scan to transform number of bytes into offsets
   thrust::inclusive_scan(rmm::exec_policy(stream),
@@ -359,8 +411,8 @@ std::unique_ptr<column> url_decode(
   CUDA_TRY(
     cudaMemsetAsync(offsets_mutable_view.begin<int32_t>(), 0, sizeof(int32_t), stream.value()));
 
-  // copy the total number of characters of all strings (last element of the offset column) to the
-  // host memory
+  // copy the total number of characters of all strings combined (last element of the offset column)
+  // to the host memory
   int32_t out_chars_bytes;
   CUDA_TRY(cudaMemcpyAsync(&out_chars_bytes,
                            offsets_view.begin<int32_t>() + offset_count - 1,
@@ -373,8 +425,14 @@ std::unique_ptr<column> url_decode(
   auto chars_column = create_chars_child_column(out_chars_bytes, stream, mr);
   auto d_out_chars  = chars_column->mutable_view().data<char>();
 
-  url_decode_char_replacer<4, 284><<<65536, 128, 0, stream.value()>>>(
-    d_in_chars, d_in_offsets, d_out_chars, offsets_column->view().begin<int32_t>(), strings_count);
+  // decode and copy the characters from the input column to the output column
+  url_decode_char_replacer<threadblock_size, block_size>
+    <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(
+      d_in_chars,
+      d_in_offsets,
+      d_out_chars,
+      offsets_column->view().begin<int32_t>(),
+      strings_count);
 
   // copy null mask
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
