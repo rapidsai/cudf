@@ -267,17 +267,6 @@ class Series(SingleColumnFrame, Serializable):
         self._index = RangeIndex(len(data)) if index is None else index
 
     @classmethod
-    def _from_table(cls, table, index=None):
-        if index is None and table._index is not None:
-            # TODO: We should be able to just copy here, but unfortunately
-            # there are currently many situations in cudf where table._index
-            # can be a non-Index type Table that does not currently support
-            # copy. We could implement copy as a stopgap, but the correct
-            # long-term solution is to ensure that _index is always an index.
-            index = cudf.Index(table._index)
-        return cls._from_data(table._data, index)
-
-    @classmethod
     def _from_data(
         cls,
         data: ColumnAccessor,

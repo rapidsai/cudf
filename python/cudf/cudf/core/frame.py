@@ -64,10 +64,6 @@ class Frame(libcudf.table.Table):
         cls._accessors = set()
 
     @classmethod
-    def _from_table(cls, table: Frame):
-        return cls(table._data, index=table._index)
-
-    @classmethod
     def _from_data(
         cls, data: ColumnAccessor, index: Optional[cudf.Index] = None,
     ):

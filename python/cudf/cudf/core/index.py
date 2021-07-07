@@ -1382,13 +1382,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
         ind.name = index.name
         return ind
 
-    @classmethod
-    def _from_table(cls, table):
-        if not isinstance(table, RangeIndex):
-            return cls._from_data(table._data._data)
-        else:
-            return as_index(table)
-
     @property
     def _copy_construct_defaults(self):
         return {"data": self._column, "name": self.name}

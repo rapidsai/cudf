@@ -303,10 +303,6 @@ class MultiIndex(BaseIndex):
     ) -> MultiIndex:
         return cls.from_frame(cudf.DataFrame._from_data(ColumnAccessor(data)))
 
-    @classmethod
-    def _from_table(cls, table, names=None):
-        return cls._from_data(table._data)
-
     @property
     def shape(self):
         return (self._data.nrows, len(self._data.names))
