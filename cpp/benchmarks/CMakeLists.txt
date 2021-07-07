@@ -58,7 +58,7 @@ endfunction()
 function(ConfigureNVBench CMAKE_BENCH_NAME)
     add_executable(${CMAKE_BENCH_NAME} ${ARGN})
     set_target_properties(${CMAKE_BENCH_NAME}
-        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/nvbenchmarks>")
+        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gbenchmarks>")
     target_link_libraries(${CMAKE_BENCH_NAME}
         PRIVATE cudf_benchmark_common cudf_datagen nvbench::main)
 endfunction()
