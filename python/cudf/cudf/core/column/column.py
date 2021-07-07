@@ -1228,57 +1228,6 @@ class ColumnBase(Column, Serializable):
             )
         return result_col
 
-    def scatter_to_table(
-        self,
-        row_indices: ColumnBase,
-        column_indices: ColumnBase,
-        names: List[Any],
-        nrows: int = None,
-        ncols: int = None,
-    ) -> "cudf.core.frame.Frame":
-        """
-        Scatters values from the column into a table.
-
-        Parameters
-        ----------
-        row_indices
-            A column of the same size as `self` specifying the
-            row index to scatter each value to
-        column_indices
-            A column of the same size as `self` specifying the
-            column index to scatter each value to
-        names
-            The column names of the resulting table
-
-        Returns
-        -------
-        """
-        if nrows is None:
-            nrows = 0
-            if len(row_indices) > 0:
-                nrows = int(row_indices.max() + 1)
-
-        if ncols is None:
-            ncols = 0
-            if len(column_indices) > 0:
-                ncols = int(column_indices.max() + 1)
-
-        if nrows * ncols == 0:
-            return cudf.core.frame.Frame({})
-
-        scatter_map = (column_indices * np.int32(nrows)) + row_indices
-        target = cudf.core.frame.Frame(
-            {None: column_empty_like(self, masked=True, newsize=nrows * ncols)}
-        )
-        target._data[None][scatter_map] = self
-        result_frames = target._split(range(nrows, nrows * ncols, nrows))
-        return cudf.core.frame.Frame(
-            {
-                name: next(iter(f._columns))
-                for name, f in zip(names, result_frames)
-            }
-        )
-
     def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
         """
         Copies type metadata from self onto other, returning a new column.

@@ -823,18 +823,28 @@ def _pivot(df, index, columns):
 
     for v in df:
         names = [as_tuple(v) + as_tuple(name) for name in column_labels]
-        col = df._data[v]
-        result.update(
-            cudf.DataFrame._from_table(
-                col.scatter_to_table(
-                    index_idx,
-                    columns_idx,
-                    names,
-                    nrows=len(index_labels),
-                    ncols=len(names),
-                )
-            )._data
-        )
+        nrows = len(index_labels)
+        ncols = len(names)
+        num_elements = nrows * ncols
+        if num_elements > 0:
+            col = df._data[v]
+            scatter_map = (columns_idx * np.int32(nrows)) + index_idx
+            target = cudf.core.frame.Frame(
+                {
+                    None: cudf.core.column.column_empty_like(
+                        col, masked=True, newsize=nrows * ncols
+                    )
+                }
+            )
+            target._data[None][scatter_map] = col
+            result_frames = target._split(range(nrows, nrows * ncols, nrows))
+            result.update(
+                {
+                    name: next(iter(f._columns))
+                    for name, f in zip(names, result_frames)
+                }
+            )
+
     return cudf.DataFrame._from_data(
         result, index=cudf.Index(index_labels, name=index.name)
     )
