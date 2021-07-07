@@ -46,7 +46,8 @@ void create_hashed_vocab(std::string const& hash_file)
   std::vector<std::pair<int, int>> coefficients(23, {65559, 0});
   std::ofstream outfile(hash_file, std::ofstream::out);
   outfile << "1\n0\n" << coefficients.size() << "\n";
-  for (auto c : coefficients) outfile << c.first << " " << c.second << "\n";
+  for (auto c : coefficients)
+    outfile << c.first << " " << c.second << "\n";
   std::vector<uint64_t> hash_table(23, 0);
   outfile << hash_table.size() << "\n";
   hash_table[0]  = 3015668L;              // based on values
@@ -54,7 +55,8 @@ void create_hashed_vocab(std::string const& hash_file)
   hash_table[5]  = 6358029;               // bert_hash_table.txt
   hash_table[16] = 451412625363L;         // file for the test
   hash_table[20] = 6206321707968235495L;  // words above
-  for (auto h : hash_table) outfile << h << "\n";
+  for (auto h : hash_table)
+    outfile << h << "\n";
   outfile << "100\n101\n102\n\n";
 }
 
