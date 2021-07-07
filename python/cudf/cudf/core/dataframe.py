@@ -498,7 +498,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # can be a non-Index type Table that does not currently support
             # copy. We could implement copy as a stopgap, but the correct
             # long-term solution is to ensure that _index is always an index.
-            index = Index._from_table(table._index)
+            index = cudf.Index(table._index)
         return cls._from_data(table._data, index)
 
     @classmethod

@@ -2276,9 +2276,7 @@ class Frame(libcudf.table.Table):
                 ) and not isinstance(
                     self._index, cudf.core.index.CategoricalIndex
                 ):
-                    self._index = cudf.core.index.Index._from_table(
-                        self._index
-                    )
+                    self._index = cudf.Index(self._index)
 
         return self
 
@@ -3274,7 +3272,9 @@ class Frame(libcudf.table.Table):
             self, splits, keep_index=keep_index
         )
         return [
-            self.__class__._from_data(ColumnAccessor(data), index)
+            self.__class__._from_data(
+                cudf.core.column_accessor.ColumnAccessor(data), index
+            )
             for data, index in results
         ]
 

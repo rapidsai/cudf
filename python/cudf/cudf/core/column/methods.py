@@ -64,8 +64,8 @@ class ColumnMethodsMixin:
         if inplace:
             if self._parent is not None:
                 self._parent._mimic_inplace(
-                    self._parent.__class__._from_table(
-                        cudf._lib.table.Table({self._parent.name: new_col})
+                    self._parent.__class__._from_data(
+                        {self._parent.name: new_col}
                     ),
                     inplace=True,
                 )
@@ -84,8 +84,8 @@ class ColumnMethodsMixin:
                 table = new_col
 
                 if isinstance(self._parent, cudf.BaseIndex):
-                    idx = self._parent._constructor_expanddim._from_table(
-                        table=table
+                    idx = self._parent._constructor_expanddim._from_data(
+                        table._data, table._index
                     )
                     idx.names = None
                     return idx
