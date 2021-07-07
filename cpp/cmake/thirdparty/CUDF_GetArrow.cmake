@@ -14,7 +14,7 @@
 # limitations under the License.
 #=============================================================================
 
-function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 WITH_PYTHON WITH_PARQUET)
+function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_PYTHON ENABLE_PARQUET)
 
     set(ARROW_BUILD_SHARED ON)
     set(ARROW_BUILD_STATIC OFF)
@@ -36,7 +36,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 WITH_PYTHON WIT
     endif()
 
     set(ARROW_PYTHON_OPTIONS "")
-    if(WITH_PYTHON)
+    if(ENABLE_PYTHON)
         list(APPEND ARROW_PYTHON_OPTIONS "ARROW_PYTHON ON")
         # Arrow's logic to build Boost from source is busted, so we have to get it from the system.
         list(APPEND ARROW_PYTHON_OPTIONS "BOOST_SOURCE SYSTEM")
@@ -66,7 +66,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 WITH_PYTHON WIT
                         "ARROW_JEMALLOC OFF"
                         "ARROW_S3 ${ENABLE_S3}"
                         # e.g. needed by blazingsql-io
-                        "ARROW_PARQUET ${WITH_PARQUET}"
+                        "ARROW_PARQUET ${ENABLE_PARQUET}"
                         ${ARROW_PYTHON_OPTIONS}
                         # Arrow modifies CMake's GLOBAL RULE_LAUNCH_COMPILE unless this is off
                         "ARROW_USE_CCACHE OFF"
@@ -110,7 +110,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 WITH_PYTHON WIT
                  DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/util")
             file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/gpu/cuda_version.h"
                  DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/gpu")
-            if(WITH_PARQUET)
+            if(ENABLE_PARQUET)
                 file(INSTALL "${Arrow_BINARY_DIR}/src/parquet/parquet_version.h"
                      DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/parquet")
             endif()
@@ -149,6 +149,6 @@ find_and_configure_arrow(
     ${CUDF_VERSION_Arrow}
     ${CUDF_USE_ARROW_STATIC}
     ${CUDF_ENABLE_ARROW_S3}
-    ${CUDF_USE_ARROW_PYTHON}
-    ${CUDF_USE_ARROW_PARQUET}
+    ${CUDF_ENABLE_ARROW_PYTHON}
+    ${CUDF_ENABLE_ARROW_PARQUET}
 )
