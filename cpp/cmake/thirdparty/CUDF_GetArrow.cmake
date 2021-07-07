@@ -109,6 +109,10 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 WITH_PYTHON WIT
                  DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/util")
             file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/gpu/cuda_version.h"
                  DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/gpu")
+            if(WITH_PARQUET)
+                file(INSTALL "${Arrow_BINARY_DIR}/src/parquet/parquet_version.h"
+                     DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/parquet")
+            endif()
             ###
             # This shouldn't be necessary!
             #
