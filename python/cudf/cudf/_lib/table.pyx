@@ -79,54 +79,6 @@ cdef class Table:
         return self._data.columns
 
     @staticmethod
-    cdef Table from_unique_ptr(
-        unique_ptr[table] c_tbl,
-        object column_names,
-        object index_names=None
-    ):
-        """
-        Construct a Table from a unique_ptr to a cudf::table.
-
-        Parameters
-        ----------
-        c_tbl : unique_ptr[cudf::table]
-        index_names : iterable
-        column_names : iterable
-        """
-        cdef vector[unique_ptr[column]] columns
-        columns = move(c_tbl.get()[0].release())
-
-        cdef vector[unique_ptr[column]].iterator it = columns.begin()
-
-        # First construct the index, if any
-        cdef int i
-
-        index = None
-        if index_names is not None:
-            index_data = ColumnAccessor._create_unsafe(
-                {
-                    name: Column.from_unique_ptr(
-                        move(dereference(it + i))
-                    )
-                    for i, name in enumerate(index_names)
-                }
-            )
-            index = Table(data=index_data)
-
-        # Construct the data dict
-        cdef int n_index_columns = len(index_names) if index_names else 0
-        data = ColumnAccessor._create_unsafe(
-            {
-                name: Column.from_unique_ptr(
-                    move(dereference(it + i + n_index_columns))
-                )
-                for i, name in enumerate(column_names)
-            }
-        )
-
-        return Table(data=data, index=index)
-
-    @staticmethod
     cdef Table from_table_view(
         table_view tv,
         object owner,
