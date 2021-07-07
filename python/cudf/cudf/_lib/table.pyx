@@ -78,58 +78,6 @@ cdef class Table:
         """
         return self._data.columns
 
-    @staticmethod
-    cdef Table from_table_view(
-        table_view tv,
-        object owner,
-        object column_names,
-        object index_names=None
-    ):
-        """
-        Given a ``cudf::table_view``, constructs a ``cudf.Table`` from it,
-        along with referencing an ``owner`` Python object that owns the memory
-        lifetime. If ``owner`` is a ``cudf.Table``, we reach inside of it and
-        reach inside of each ``cudf.Column`` to make the owner of each newly
-        created ``Buffer`` underneath the ``cudf.Column`` objects of the
-        created ``cudf.Table`` the respective ``Buffer`` from the relevant
-        ``cudf.Column`` of the ``owner`` ``cudf.Table``.
-        """
-        cdef size_type column_idx = 0
-        table_owner = isinstance(owner, Table)
-
-        # First construct the index, if any
-        index = None
-        if index_names is not None:
-            index_columns = []
-            for _ in index_names:
-                column_owner = owner
-                if table_owner:
-                    column_owner = owner._index._columns[column_idx]
-                index_columns.append(
-                    Column.from_column_view(
-                        tv.column(column_idx),
-                        column_owner
-                    )
-                )
-                column_idx += 1
-            index = Table(dict(zip(index_names, index_columns)))
-
-        # Construct the data dict
-        cdef size_type source_column_idx = 0
-        data_columns = []
-        for _ in column_names:
-            column_owner = owner
-            if table_owner:
-                column_owner = owner._columns[source_column_idx]
-            data_columns.append(
-                Column.from_column_view(tv.column(column_idx), column_owner)
-            )
-            column_idx += 1
-            source_column_idx += 1
-        data = dict(zip(column_names, data_columns))
-
-        return Table(data=data, index=index)
-
     cdef table_view view(self) except *:
         """
         Return a cudf::table_view of all columns (including index columns)
