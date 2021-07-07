@@ -1347,7 +1347,7 @@ class Frame(libcudf.table.Table):
             ) or method is not None
             if should_fill:
                 copy_data[name] = copy_data[name].fillna(value[name], method)
-        result = self._from_table(Frame(copy_data, self._index))
+        result = self._from_data(copy_data, self._index)
 
         return self._mimic_inplace(result, inplace=inplace)
 
@@ -1657,7 +1657,9 @@ class Frame(libcudf.table.Table):
         if not inplace:
             data_columns = (c._fill(v, begin, end) for (c, v) in col_and_fill)
             data = zip(self._column_names, data_columns)
-            return self.__class__._from_table(Frame(data, self._index))
+            return self.__class__._from_data(
+                cudf.core.column_accessor.ColumnAccessor(data), self._index
+            )
 
         for (c, v) in col_and_fill:
             c.fill(v, begin, end, inplace=True)
@@ -1673,7 +1675,9 @@ class Frame(libcudf.table.Table):
     def _shift(self, offset, fill_value=None):
         data_columns = (col.shift(offset, fill_value) for col in self._columns)
         data = zip(self._column_names, data_columns)
-        return self.__class__._from_table(Frame(data, self._index))
+        return self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), self._index
+        )
 
     def __array__(self, dtype=None):
         raise TypeError(
@@ -1793,13 +1797,11 @@ class Frame(libcudf.table.Table):
                 "decimals must be an integer, a dict-like or a Series"
             )
 
-        return self.__class__._from_table(
-            Frame(
-                data=cudf.core.column_accessor.ColumnAccessor(
-                    cols,
-                    multiindex=self._data.multiindex,
-                    level_names=self._data.level_names,
-                )
+        return self.__class__._from_data(
+            data=cudf.core.column_accessor.ColumnAccessor(
+                cols,
+                multiindex=self._data.multiindex,
+                level_names=self._data.level_names,
             ),
             index=self._index,
         )
@@ -2246,7 +2248,7 @@ class Frame(libcudf.table.Table):
         else:
             copy_data = self._data.copy(deep=True)
 
-        result = self._from_table(Frame(copy_data, self._index))
+        result = self._from_data(copy_data, self._index)
 
         return result
 
@@ -2295,7 +2297,9 @@ class Frame(libcudf.table.Table):
     def _unaryop(self, op):
         data_columns = (col.unary_operator(op) for col in self._columns)
         data = zip(self._column_names, data_columns)
-        return self.__class__._from_table(Frame(data, self._index))
+        return self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), self._index
+        )
 
     def isnull(self):
         """
@@ -2372,7 +2376,9 @@ class Frame(libcudf.table.Table):
         """
         data_columns = (col.isnull() for col in self._columns)
         data = zip(self._column_names, data_columns)
-        return self.__class__._from_table(Frame(data, self._index))
+        return self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), self._index
+        )
 
     # Alias for isnull
     isna = isnull
@@ -2452,7 +2458,9 @@ class Frame(libcudf.table.Table):
         """
         data_columns = (col.notnull() for col in self._columns)
         data = zip(self._column_names, data_columns)
-        return self.__class__._from_table(Frame(data, self._index))
+        return self.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data), self._index
+        )
 
     # Alias for notnull
     notna = notnull
@@ -3339,13 +3347,11 @@ class Frame(libcudf.table.Table):
             for name in names
         }
 
-        result = self.__class__._from_table(
-            Frame(
-                data=cudf.core.column_accessor.ColumnAccessor(
-                    cols,
-                    multiindex=self._data.multiindex,
-                    level_names=self._data.level_names,
-                )
+        result = self.__class__._from_data(
+            data=cudf.core.column_accessor.ColumnAccessor(
+                cols,
+                multiindex=self._data.multiindex,
+                level_names=self._data.level_names,
             ),
             index=index,
         )
