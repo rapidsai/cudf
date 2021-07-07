@@ -11,6 +11,7 @@ from typing import List, Union
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pandas.api import types as pd_types
 
 import cudf
@@ -125,7 +126,7 @@ def is_scalar(val):
     """
     return (
         isinstance(val, DeviceScalar)
-        or isinstance(val, cudf.Scalar)
+        or isinstance(val, (cudf.Scalar, pa.Scalar))
         or pd_types.is_scalar(val)
     )
 

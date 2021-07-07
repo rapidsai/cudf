@@ -7,13 +7,15 @@ from pandas._libs.missing import NAType as pd_NAType
 
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
-from cudf.core.dtypes import Decimal64Dtype, ListDtype
+from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype, ListDtype
 from cudf.core.index import BaseIndex
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
+    cudf_dtype_to_pa_type,
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
+from cudf.api.types import infer_dtype, is_string_dtype
 
 
 class Scalar(object):
@@ -137,6 +139,8 @@ class Scalar(object):
             ).as_py()
         if isinstance(value, decimal.Decimal) and dtype is None:
             dtype = Decimal64Dtype._from_decimal(value)
+        if isinstance(dtype, CategoricalDtype):
+            value = pa.scalar(value, type=cudf_dtype_to_pa_type(dtype))
 
         value = to_cudf_compatible_scalar(value, dtype=dtype)
 

@@ -194,7 +194,9 @@ def cudf_dtype_to_pa_type(dtype):
         Python dtype.
     """
     if is_categorical_dtype(dtype):
-        raise NotImplementedError()
+        cat_dtype = dtype.categories.dtype
+        cat_typ = pa.string() if is_string_dtype(cat_dtype) else pa.from_numpy_dtype(cat_dtype)
+        return pa.dictionary(index_type='int32', value_type=cat_typ, ordered=dtype.ordered)
     elif (
         is_list_dtype(dtype)
         or is_struct_dtype(dtype)
