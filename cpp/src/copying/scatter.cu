@@ -19,6 +19,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/indexalator.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.cuh>
@@ -34,7 +35,6 @@
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
-#include "cudf/detail/iterator.cuh"
 
 #include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
