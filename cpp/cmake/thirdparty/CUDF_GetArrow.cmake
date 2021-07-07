@@ -48,10 +48,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_PYTHON E
         list(APPEND ARROW_PYTHON_OPTIONS "ARROW_DEPENDENCY_SOURCE BUNDLED")
     endif()
 
-    # Set this so Arrow correctly finds the CUDA toolkit.
-    # * This must be an ENV var.
-    # * It must be a path to <cudatoolkit>/lib64/stubs.
-    # Anything else and Arrow can't find CUDA
+    # Set this so Arrow correctly finds the CUDA toolkit when the build machine
+    # does not have the CUDA driver installed. This must be an env var.
     set(ENV{CUDA_LIB_PATH} "${CUDAToolkit_LIBRARY_DIR}/stubs")
 
     cmake_language(CALL ${CPMAddOrFindPackage}
