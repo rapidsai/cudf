@@ -1718,7 +1718,9 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullability)
   // and considers all columns nullable. However cudf::concatenate will not force nulls in case no
   // columns are nullable. To get the expected result, we tell the writer the nullability of all
   // columns in advance.
-  for (auto& col_meta : metadata.column_metadata) { col_meta.set_nullability(false); }
+  for (auto& col_meta : metadata.column_metadata) {
+    col_meta.set_nullability(false);
+  }
 
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})

@@ -37,6 +37,24 @@ from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
+from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
+    infer_dtype,
+    is_bool_dtype,
+    is_categorical_dtype,
+    is_decimal32_dtype,
+    is_decimal64_dtype,
+    is_decimal_dtype,
+    is_dtype_equal,
+    is_integer_dtype,
+    is_interval_dtype,
+    is_list_dtype,
+    is_scalar,
+    is_string_dtype,
+    is_struct_dtype,
+    pandas_dtype,
+)
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import (
@@ -47,30 +65,13 @@ from cudf.core.dtypes import (
 )
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
-    _is_non_decimal_numeric_dtype,
-    _is_scalar_or_zero_d_array,
     check_cast_unsupported_dtype,
     cudf_dtype_from_pa_type,
     get_time_unit,
-    is_categorical_dtype,
-    is_decimal_dtype,
-    is_interval_dtype,
-    is_list_dtype,
-    is_scalar,
-    is_string_dtype,
-    is_struct_dtype,
     min_unsigned_type,
     np_to_pa_dtype,
 )
 from cudf.utils.utils import mask_dtype
-
-from ...api.types import (
-    infer_dtype,
-    is_bool_dtype,
-    is_dtype_equal,
-    is_integer_dtype,
-    pandas_dtype,
-)
 
 T = TypeVar("T", bound="ColumnBase")
 
@@ -279,7 +280,7 @@ class ColumnBase(Column, Serializable):
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
         elif isinstance(array.type, pa.Decimal128Type):
-            return cudf.core.column.DecimalColumn.from_arrow(array)
+            return cudf.core.column.Decimal64Column.from_arrow(array)
 
         result = libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
@@ -877,7 +878,7 @@ class ColumnBase(Column, Serializable):
 
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
         if _is_non_decimal_numeric_dtype(dtype):
-            return self.as_numerical_column(dtype)
+            return self.as_numerical_column(dtype, **kwargs)
         elif is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif pandas_dtype(dtype).type in {
@@ -892,6 +893,12 @@ class ColumnBase(Column, Serializable):
                     "Casting list columns not currently supported"
                 )
             return self
+        elif is_struct_dtype(dtype):
+            if not self.dtype == dtype:
+                raise NotImplementedError(
+                    "Casting struct columns not currently supported"
+                )
+            return self
         elif is_interval_dtype(self.dtype):
             return self.as_interval_column(dtype, **kwargs)
         elif is_decimal_dtype(dtype):
@@ -901,7 +908,7 @@ class ColumnBase(Column, Serializable):
         elif np.issubdtype(dtype, np.timedelta64):
             return self.as_timedelta_column(dtype, **kwargs)
         else:
-            return self.as_numerical_column(dtype)
+            return self.as_numerical_column(dtype, **kwargs)
 
     def as_categorical_column(self, dtype, **kwargs) -> ColumnBase:
         if "ordered" in kwargs:
@@ -947,7 +954,7 @@ class ColumnBase(Column, Serializable):
         )
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         raise NotImplementedError
 
@@ -967,13 +974,25 @@ class ColumnBase(Column, Serializable):
         raise NotImplementedError
 
     def as_string_column(
-        self, dtype: Dtype, format=None
+        self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
         raise NotImplementedError
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DecimalColumn":
+    ) -> Union[
+        "cudf.core.column.Decimal32Column", "cudf.core.column.Decimal64Column"
+    ]:
+        raise NotImplementedError
+
+    def as_decimal64_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.Decimal64Column":
+        raise NotImplementedError
+
+    def as_decimal32_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.Decimal32Column":
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
@@ -1468,10 +1487,22 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_decimal_dtype(dtype):
+    elif is_decimal64_dtype(dtype):
         if size is None:
             raise TypeError("Must specify size")
-        return cudf.core.column.DecimalColumn(
+        return cudf.core.column.Decimal64Column(
+            data=data,
+            size=size,
+            offset=offset,
+            dtype=dtype,
+            mask=mask,
+            null_count=null_count,
+            children=children,
+        )
+    elif is_decimal32_dtype(dtype):
+        if size is None:
+            raise TypeError("Must specify size")
+        return cudf.core.column.Decimal32Column(
             data=data,
             size=size,
             offset=offset,
@@ -2020,8 +2051,20 @@ def as_column(
                                 precision=dtype.precision, scale=dtype.scale
                             ),
                         )
-                        return cudf.core.column.DecimalColumn.from_arrow(data)
-                    dtype = pandas_dtype(dtype)
+                        return cudf.core.column.Decimal64Column.from_arrow(
+                            data
+                        )
+                    if isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
+                        data = pa.array(
+                            arbitrary,
+                            type=pa.decimal128(
+                                precision=dtype.precision, scale=dtype.scale
+                            ),
+                        )
+                        return cudf.core.column.Decimal32Column.from_arrow(
+                            data
+                        )
+                    dtype = pd.api.types.pandas_dtype(dtype)
                     if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
                         raise TypeError
                     else:

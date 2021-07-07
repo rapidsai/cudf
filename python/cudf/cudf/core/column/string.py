@@ -158,9 +158,10 @@ from cudf._lib.strings.translate import (
 )
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf._typing import ColumnLike, Dtype, ScalarLike
+from cudf.api.types import is_integer
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethodsMixin, ParentType
 from cudf.utils import utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -170,7 +171,11 @@ from cudf.utils.dtypes import (
     is_string_dtype,
 )
 
-from ...api.types import is_integer
+
+def str_to_boolean(column: StringColumn):
+    """Takes in string column and returns boolean column """
+    return (column.str().len() > cudf.Scalar(0, dtype="int8")).fillna(False)
+
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -183,7 +188,7 @@ _str_to_numeric_typecast_functions = {
     np.dtype("uint64"): str_cast.stoul,
     np.dtype("float32"): str_cast.stof,
     np.dtype("float64"): str_cast.stod,
-    np.dtype("bool"): str_cast.to_booleans,
+    np.dtype("bool"): str_to_boolean,
 }
 
 _numeric_to_str_typecast_functions = {
@@ -215,9 +220,6 @@ _timedelta_to_str_typecast_functions = {
     np.dtype("timedelta64[us]"): str_cast.int2timedelta,
     np.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
-
-
-ParentType = Union["cudf.Series", "cudf.core.index.BaseIndex"]
 
 
 class StringMethods(ColumnMethodsMixin):
@@ -5118,7 +5120,7 @@ class StringColumn(column.ColumnBase):
         return StringMethods(self, parent=parent)
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         out_dtype = np.dtype(dtype)
 
@@ -5192,10 +5194,12 @@ class StringColumn(column.ColumnBase):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DecimalColumn":
+    ) -> "cudf.core.column.Decimal64Column":
         return cpp_to_decimal(self, dtype)
 
-    def as_string_column(self, dtype: Dtype, format=None) -> StringColumn:
+    def as_string_column(
+        self, dtype: Dtype, format=None, **kwargs
+    ) -> StringColumn:
         return self
 
     @property

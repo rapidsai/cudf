@@ -14,7 +14,7 @@ import pytest
 
 import cudf
 from cudf import read_csv
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -1259,6 +1259,17 @@ def test_csv_reader_column_names(names):
         assert list(df) == ["0", "1", "2"]
     else:
         assert list(df) == list(names)
+
+
+def test_csv_reader_repeated_column_name():
+    buffer = """A,A,A.1,A,A.2,A,A.4,A,A
+                1,2,3.1,4,a.2,a,a.4,a,a
+                2,4,6.1,8,b.2,b,b.4,b,b"""
+
+    # pandas and cudf to have same repeated column names
+    pdf = pd.read_csv(StringIO(buffer))
+    gdf = cudf.read_csv(StringIO(buffer))
+    assert_eq(pdf.columns, gdf.columns)
 
 
 def test_csv_reader_bools_false_positives(tmpdir):

@@ -10,7 +10,6 @@ cmake-setuptools>=0.1.3
 cython>=0.29,<0.30
 dlpack
 fastavro>=0.22.9
-flatbuffers
 fsspec>=0.6.0
 hypothesis
 mimesis
