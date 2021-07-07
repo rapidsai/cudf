@@ -188,6 +188,10 @@ def _index_level_name(index_name, level, column_names):
 # TODO: Figure out whether _from_data can be changed to accept a dict rather
 # than a ColumnAccessor, which would allow a much more idiomatic usage of this
 # function via _from_data(*data_from_unique_ptr(...)).
+# TODO: There's a bit of an inconsistency in use cases where calling functions
+# are calling this function once to get the index and once to get the data. The
+# index is converted to an index object, while the data is not. Perhaps this
+# should be made more consistent.
 cdef data_from_unique_ptr(
     unique_ptr[table] c_tbl, column_names, index_names=None
 ):

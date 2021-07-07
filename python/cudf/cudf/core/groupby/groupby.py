@@ -195,9 +195,9 @@ class GroupBy(Serializable):
         # Note: When there are no key columns, the below produces
         # a Float64Index, while Pandas returns an Int64Index
         # (GH: 6945)
-        result = self._groupby.aggregate(self.obj, normalized_aggs)
+        data, index = self._groupby.aggregate(self.obj, normalized_aggs)
 
-        result = cudf.DataFrame._from_table(result)
+        result = cudf.DataFrame._from_data(data, cudf.Index._from_data(index))
 
         if self._sort:
             result = result.sort_index()

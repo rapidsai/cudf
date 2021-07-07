@@ -197,7 +197,7 @@ cdef class GroupBy:
             else:
                 raise
 
-        grouped_keys = Table.from_unique_ptr(
+        grouped_keys, _ = data_from_unique_ptr(
             move(c_result.first),
             column_names=self.keys._column_names
         )
@@ -213,7 +213,7 @@ cdef class GroupBy:
                     Column.from_unique_ptr(move(c_result.second[i].results[j]))
                 )
 
-        return Table(data=result_data, index=grouped_keys)
+        return result_data, grouped_keys
 
     def shift(self, Table values, int periods, list fill_values):
         cdef table_view view = values.view()
