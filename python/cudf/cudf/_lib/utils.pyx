@@ -10,6 +10,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
 from cudf._lib.cpp.column.column cimport column, column_view
 from cudf._lib.cpp.table.table cimport table_view
+from cudf._lib.cpp.types cimport size_type
 
 from libc.stdint cimport uint8_t
 from libcpp.memory cimport unique_ptr
@@ -243,4 +244,56 @@ cdef data_from_unique_ptr(
         name: columns[i + n_index_columns]
         for i, name in enumerate(column_names)
     }
+    return data, index
+
+
+cdef data_from_table_view(
+    table_view tv,
+    object owner,
+    object column_names,
+    object index_names=None
+):
+    """
+    Given a ``cudf::table_view``, constructs a ``cudf.Table`` from it,
+    along with referencing an ``owner`` Python object that owns the memory
+    lifetime. If ``owner`` is a ``cudf.Table``, we reach inside of it and
+    reach inside of each ``cudf.Column`` to make the owner of each newly
+    created ``Buffer`` underneath the ``cudf.Column`` objects of the
+    created ``cudf.Table`` the respective ``Buffer`` from the relevant
+    ``cudf.Column`` of the ``owner`` ``cudf.Table``.
+    """
+    cdef size_type column_idx = 0
+    table_owner = isinstance(owner, Table)
+
+    # First construct the index, if any
+    index = None
+    if index_names is not None:
+        index_columns = []
+        for _ in index_names:
+            column_owner = owner
+            if table_owner:
+                column_owner = owner._index._columns[column_idx]
+            index_columns.append(
+                Column.from_column_view(
+                    tv.column(column_idx),
+                    column_owner
+                )
+            )
+            column_idx += 1
+        index = Table(dict(zip(index_names, index_columns)))
+
+    # Construct the data dict
+    cdef size_type source_column_idx = 0
+    data_columns = []
+    for _ in column_names:
+        column_owner = owner
+        if table_owner:
+            column_owner = owner._columns[source_column_idx]
+        data_columns.append(
+            Column.from_column_view(tv.column(column_idx), column_owner)
+        )
+        column_idx += 1
+        source_column_idx += 1
+    data = dict(zip(column_names, data_columns))
+
     return data, index
