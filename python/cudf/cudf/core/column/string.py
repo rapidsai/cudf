@@ -4699,7 +4699,7 @@ class StringMethods(ColumnMethodsMixin):
             "instead"
         )
 
-        warnings.warn(warning_message, DeprecationWarning, stacklevel=2)
+        warnings.warn(warning_message, FutureWarning)
         tokens, masks, metadata = cpp_subword_tokenize_vocab_file(
             self._column,
             hash_file,
