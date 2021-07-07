@@ -805,10 +805,11 @@ class GroupBy(Serializable):
         """Internal implementation for `ffill` and `bfill`
         """
         value_columns = self.grouping.values
-        result = self._groupby.replace_nulls(
-            Table(value_columns._data), method
+        result = self.obj.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(
+                self._groupby.replace_nulls(Table(value_columns._data), method)
+            )
         )
-        result = self.obj.__class__._from_table(result)
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(value_columns)
 

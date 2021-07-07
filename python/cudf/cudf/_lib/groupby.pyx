@@ -265,12 +265,10 @@ cdef class GroupBy:
                 self.c_obj.get()[0].replace_nulls(val_view, policies)
             )
 
-        grouped_result = Table.from_unique_ptr(
+        return data_from_unique_ptr(
             move(c_result.second), column_names=values._column_names
-        )
+        )[0]
 
-        result = Table(data=grouped_result._data)
-        return result
 
 _GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax"}
 
