@@ -44,14 +44,14 @@ from cudf._lib.cpp.types cimport (
 from cudf._lib.io.utils cimport (
     make_source_info,
     make_sink_info,
-    update_struct_field_names,
+    update_column_struct_field_names,
 )
 from cudf._lib.table cimport Table
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
 import numpy as np
 
-from cudf._lib.utils cimport get_column_names
+from cudf._lib.utils cimport get_column_names, data_from_unique_ptr
 
 from cudf._lib.utils import (
     _index_level_name,
@@ -115,11 +115,14 @@ cpdef read_orc(object filepaths_or_buffers,
 
     names = [name.decode() for name in c_result.metadata.column_names]
 
-    tbl = Table.from_unique_ptr(move(c_result.tbl), names)
+    data, index = data_from_unique_ptr(move(c_result.tbl), names)
 
-    update_struct_field_names(tbl, c_result.metadata.schema_info)
+    data = {
+        name: update_column_struct_field_names(col, c_result.metadata.schema_info[i])
+        for i, (name, col) in enumerate(data.items())
+        }
 
-    return tbl
+    return data, index
 
 
 cdef compression_type _get_comp_type(object compression):
