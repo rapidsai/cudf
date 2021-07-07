@@ -6,6 +6,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core.dtypes import StructDtype
 from cudf.testing._utils import assert_eq
 
 
@@ -113,3 +114,8 @@ def test_struct_scalar_host_construction(data):
     slr = cudf.Scalar(data)
     assert slr.value == data
     assert list(slr.device_value.value.values()) == list(data.values())
+
+
+def test_struct_scalar_null():
+    slr = cudf.Scalar(cudf.NA, dtype=StructDtype)
+    assert slr.device_value.value is cudf.NA

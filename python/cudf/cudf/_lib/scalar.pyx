@@ -336,7 +336,7 @@ cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
     cdef table_view struct_view = table.view()
 
     s.reset(
-        new struct_scalar(struct_view)
+        new struct_scalar(struct_view, valid)
     )
 
 cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):

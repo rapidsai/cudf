@@ -70,5 +70,5 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         column_view view() except +
 
     cdef cppclass struct_scalar(scalar):
-        struct_scalar(table_view cols) except +
+        struct_scalar(table_view cols, bool valid) except +
         table_view view() except +
