@@ -4696,7 +4696,7 @@ class StringMethods(ColumnMethodsMixin):
         """
         warning_message = (
             "`ser.str.subword_tokenize` API will be depreciated"
-            "in future versions of cudf.\n"
+            " in future versions of cudf.\n"
             "Use `cudf.core.subword_tokenizer.SubwordTokenizer` "
             "instead"
         )
