@@ -45,7 +45,9 @@ template <typename Iterator1, typename T>
 void expect_match(Iterator1 expected, size_t expected_size, host_span<T> input)
 {
   EXPECT_EQ(expected_size, input.size());
-  for (size_t i = 0; i < expected_size; i++) { EXPECT_EQ(*(expected + i), *(input.begin() + i)); }
+  for (size_t i = 0; i < expected_size; i++) {
+    EXPECT_EQ(*(expected + i), *(input.begin() + i));
+  }
 }
 
 template <typename T>

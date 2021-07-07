@@ -81,7 +81,8 @@ __device__ inline size_type integer_to_string(IntegerType value, char* d_buffer)
   char* ptr = d_buffer;
   if (is_negative) *ptr++ = '-';
   // digits are backwards, reverse the string into the output
-  while (digits_idx-- > 0) *ptr++ = digits[digits_idx];
+  while (digits_idx-- > 0)
+    *ptr++ = digits[digits_idx];
   return bytes;
 }
 

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(basic_example VERSION 0.0.1 LANGUAGES CXX)
+project(basic_example VERSION 0.0.1 LANGUAGES CXX CUDA)
 
 set(CPM_DOWNLOAD_VERSION v0.32.2)
 file(DOWNLOAD https://github.com/cpm-cmake/CPM.cmake/releases/download/${CPM_DOWNLOAD_VERSION}/get_cpm.cmake ${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)

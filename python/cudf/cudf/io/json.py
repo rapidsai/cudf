@@ -3,20 +3,11 @@ import warnings
 from io import BytesIO, StringIO
 
 import pandas as pd
-from fsspec.core import get_fs_token_paths
 
 import cudf
 from cudf._lib import json as libjson
 from cudf.utils import ioutils
 from cudf.utils.dtypes import is_list_like
-
-
-def _ensure_filesystem(passed_filesystem, path):
-    if passed_filesystem is None:
-        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
-            0
-        ]
-    return passed_filesystem
 
 
 @ioutils.doc_read_json()
@@ -45,7 +36,9 @@ def read_json(
         filepaths_or_buffers = []
         for source in path_or_buf:
             if ioutils.is_directory(source, **kwargs):
-                fs = _ensure_filesystem(passed_filesystem=None, path=source)
+                fs = ioutils._ensure_filesystem(
+                    passed_filesystem=None, path=source
+                )
                 source = ioutils.stringify_pathlike(source)
                 source = fs.sep.join([source, "*.json"])
 
