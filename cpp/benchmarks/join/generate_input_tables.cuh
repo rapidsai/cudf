@@ -169,7 +169,7 @@ void generate_input_tables(key_type* const build_tbl,
   // expense of not being that accurate with applying the selectivity an especially more memory
   // efficient implementations would be to partition the random numbers into two intervals and then
   // let one table choose random numbers from only one interval and the other only select with
-  // selectivity probability from the same interval and from the other in the other cases.
+  // selective probability from the same interval and from the other in the other cases.
 
   static_assert(std::is_signed<key_type>::value, "key_type needs to be signed for lottery to work");
 
