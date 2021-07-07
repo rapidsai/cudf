@@ -901,11 +901,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     )
                 )
             else:
-                result = self._from_table(
-                    libcudf.copying.table_slice(
-                        self, [start, stop], keep_index
-                    )[0]
-                )
+                data, index = libcudf.copying.table_slice(
+                    self, [start, stop], keep_index
+                )[0]
+                result = self._from_data(ColumnAccessor(data), index)
 
                 result._copy_type_metadata(self, include_index=keep_index)
                 # Adding index of type RangeIndex back to

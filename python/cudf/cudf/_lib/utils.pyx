@@ -280,7 +280,7 @@ cdef data_from_table_view(
                 )
             )
             column_idx += 1
-        index = Table(dict(zip(index_names, index_columns)))
+        index = cudf.Index._from_data(dict(zip(index_names, index_columns)))
 
     # Construct the data dict
     cdef size_type source_column_idx = 0

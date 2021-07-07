@@ -3270,11 +3270,13 @@ class Frame(libcudf.table.Table):
         )
 
     def _split(self, splits, keep_index=True):
-        result = libcudf.copying.table_split(
+        results = libcudf.copying.table_split(
             self, splits, keep_index=keep_index
         )
-        result = [self.__class__._from_table(tbl) for tbl in result]
-        return result
+        return [
+            self.__class__._from_data(ColumnAccessor(data), index)
+            for data, index in results
+        ]
 
     def _encode(self):
         data, index, indices = libcudf.transform.table_encode(self)

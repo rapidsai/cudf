@@ -34,7 +34,10 @@ from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.lists.gather cimport (
     segmented_gather as cpp_segmented_gather
 )
-from cudf._lib.utils cimport data_from_unique_ptr
+from cudf._lib.utils cimport (
+    data_from_table_view,
+    data_from_unique_ptr
+)
 cimport cudf._lib.cpp.copying as cpp_copying
 
 
@@ -432,8 +435,8 @@ def table_slice(Table input_table, object indices, bool keep_index=True):
         )
 
     num_of_result_cols = c_result.size()
-    result =[
-        Table.from_table_view(
+    return [
+        data_from_table_view(
             c_result[i],
             input_table,
             column_names=input_table._column_names,
@@ -443,8 +446,6 @@ def table_slice(Table input_table, object indices, bool keep_index=True):
                 else None
             )
         ) for i in range(num_of_result_cols)]
-
-    return result
 
 
 def column_split(Column input_column, object splits):
@@ -503,8 +504,8 @@ def table_split(Table input_table, object splits, bool keep_index=True):
         )
 
     num_of_result_cols = c_result.size()
-    result = [
-        Table.from_table_view(
+    return [
+        data_from_table_view(
             c_result[i],
             input_table,
             column_names=input_table._column_names,
@@ -512,8 +513,6 @@ def table_split(Table input_table, object splits, bool keep_index=True):
                 keep_index is True)
             else None
         ) for i in range(num_of_result_cols)]
-
-    return result
 
 
 def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
@@ -878,12 +877,12 @@ cdef class _CPackedColumns:
         return p
 
     def unpack(self):
-        output_table = Table.from_table_view(
+        output_table = Table(*data_from_table_view(
             cpp_copying.unpack(self.c_obj),
             self,
             self.column_names,
             self.index_names
-        )
+        ))
 
         for name, dtype in self.column_dtypes.items():
             output_table._data[name] = (

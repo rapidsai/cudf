@@ -14,3 +14,5 @@ cdef vector[table_view] make_table_data_views(object tables) except*
 cdef vector[string] get_column_names(Table table, object index) except*
 cdef data_from_unique_ptr(
     unique_ptr[table] c_tbl, column_names, index_names=*)
+cdef data_from_table_view(
+    table_view tv, object owner, object column_names, object index_names=*)
