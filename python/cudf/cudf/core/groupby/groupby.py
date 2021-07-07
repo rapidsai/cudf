@@ -963,8 +963,13 @@ class GroupBy(Serializable):
             fill_value = [fill_value] * num_columns_to_shift
 
         value_columns = self.obj._data.select_by_label(value_column_names)
-        result = self._groupby.shift(Table(value_columns), periods, fill_value)
-        return self.obj.__class__._from_table(result)
+        data, index = self._groupby.shift(
+            Table(value_columns), periods, fill_value
+        )
+        return self.obj.__class__._from_data(
+            cudf.core.column_accessor.ColumnAccessor(data),
+            cudf.Index._from_data(index),
+        )
 
     def _mimic_pandas_order(
         self, result: DataFrameOrSeries

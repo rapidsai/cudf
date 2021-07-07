@@ -238,16 +238,16 @@ cdef class GroupBy:
                 self.c_obj.get()[0].shift(view, offsets, c_fill_values)
             )
 
-        grouped_keys = Table.from_unique_ptr(
+        grouped_keys, _ = data_from_unique_ptr(
             move(c_result.first),
             column_names=self.keys._column_names
         )
 
-        shifted = Table.from_unique_ptr(
+        shifted, _ = data_from_unique_ptr(
             move(c_result.second), column_names=values._column_names
         )
 
-        return Table(data=shifted._data, index=grouped_keys)
+        return shifted, grouped_keys
 
     def replace_nulls(self, Table values, object method):
         cdef table_view val_view = values.view()
