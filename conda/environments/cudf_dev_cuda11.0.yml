@@ -49,7 +49,6 @@ dependencies:
   - arrow-cpp-proc * cuda
   - double-conversion
   - rapidjson
-  - flatbuffers
   - hypothesis
   - sphinx-markdown-tables
   - sphinx-copybutton
