@@ -301,14 +301,11 @@ class MultiIndex(BaseIndex):
     def _from_data(  # type: ignore
         cls, data: ColumnAccessor, index=None
     ) -> MultiIndex:
-        return cls.from_frame(cudf.DataFrame._from_data(data))
+        return cls.from_frame(cudf.DataFrame._from_data(ColumnAccessor(data)))
 
     @classmethod
     def _from_table(cls, table, names=None):
-        df = cudf.DataFrame(table._data)
-        if names is None:
-            names = df.columns
-        return MultiIndex.from_frame(df, names=names)
+        return cls._from_data(table._data)
 
     @property
     def shape(self):
