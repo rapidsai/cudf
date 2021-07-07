@@ -38,7 +38,7 @@ struct TrieTest : public BaseFixture {
 
 TEST_F(TrieTest, CanMatchSinglePattern)
 {
-  auto pattern = cudf::io::text::trie{"abac"};
+  auto pattern = cudf::io::text::trie::create("abac", {});
 
   (void)pattern;
 }
@@ -46,7 +46,7 @@ TEST_F(TrieTest, CanMatchSinglePattern)
 TEST_F(TrieTest, CanMatchMultiplePatterns)
 {
   auto patterns = std::vector<std::string>{"abac", "abad"};
-  auto pattern  = cudf::io::text::trie(patterns);
+  auto pattern  = cudf::io::text::trie::create(patterns, {});
 
   (void)pattern;
 }

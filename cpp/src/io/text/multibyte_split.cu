@@ -1,5 +1,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/io/text/input_stream.hpp>
+#include <cudf/io/text/superstate.hpp>
 #include <cudf/io/text/trie.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -29,6 +30,8 @@ __global__ void multibyte_split_kernel(cudf::device_span<char> data)
   auto const data_begin = thread_idx * BYTES_PER_THREAD;
   auto data_end         = data_begin + BYTES_PER_THREAD;
 
+  // superstate<16> match_state;
+
   if (data_end > data.size()) { data_end = data.size(); }
 
   if (data_end < data.size()) {  //
@@ -39,7 +42,11 @@ __global__ void multibyte_split_kernel(cudf::device_span<char> data)
 
   for (uint32_t i = data_begin; i < data_end; i++) {
     printf("bid(%i) tid(%i) %3i: %c\n", blockIdx.x, threadIdx.x, i, data[i]);
+
+    // match_state = match_state.apply(machine, data[i]);
   }
+
+  // match_state is now the block-partial reduction, so we should set it.
 }
 
 }  // namespace

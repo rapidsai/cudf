@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/io/text/superstate.hpp>
+#include <cudf_test/base_fixture.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/io/text/superstate.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf_test/base_fixture.hpp>
-
-#include <thrust/functional.h>
 
 enum class state : uint8_t { a, b, c, error };
 enum class instruction : uint8_t { inc, dec, swap_ac };
