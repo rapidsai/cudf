@@ -195,11 +195,14 @@ endif()
 
 ###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
-ConfigureTest(MULTIBYTE_SPLIT_TEST
-    io/text/multibyte_split_test.cpp)
+ConfigureTest(SUPERSTATE_TEST
+    io/text/superstate_test.cpp)
 
 ConfigureTest(TRIE_TEST
     io/text/trie_test.cpp)
+
+ConfigureTest(MULTIBYTE_SPLIT_TEST
+    io/text/multibyte_split_test.cpp)
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
