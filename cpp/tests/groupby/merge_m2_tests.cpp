@@ -50,10 +50,9 @@ using structs_col = cudf::test::structs_column_wrapper;
 using vcol_views  = std::vector<cudf::column_view>;
 
 /**
- * @brief Compute groupwise `COUNT_VALID`, `MEAN`, `M2` aggregations for the given values
- *        columns.
+ * @brief Compute `COUNT_VALID`, `MEAN`, `M2` aggregations for the given values columns.
  * @return A pair of unique keys column and a structs column containing the computed values of
- *         `COUNT_VALID`, `MEAN`, `M2`.
+ *         (`COUNT_VALID`, `MEAN`, `M2`).
  */
 auto compute_partial_results(cudf::column_view const& keys, cudf::column_view const& values)
 {
@@ -78,7 +77,7 @@ auto compute_partial_results(cudf::column_view const& keys, cudf::column_view co
  * @brief Perform merging for partial results of M2 aggregations.
  *
  * @return A pair of unique keys column and a structs column containing the merged values of
- *         `COUNT_VALID`, `MEAN`, `M2`.
+ *         (`COUNT_VALID`, `MEAN`, `M2`).
  */
 auto merge_M2(vcol_views const& keys_cols, vcol_views const& values_cols)
 {

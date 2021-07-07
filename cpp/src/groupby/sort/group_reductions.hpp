@@ -218,9 +218,9 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
                                         rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief Internal API to calculate groupwise sum of squares of differences from group means.
+ * @brief Internal API to calculate sum of squares of differences from means.
  *
- * If there are only nulls in the group, the output value of that group will be `0`.
+ * If there are only nulls in the group, the output value of that group will be null.
  *
  * @code{.pseudo}
  * values        = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
@@ -420,17 +420,17 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
  * @brief Internal API to merge grouped M2 values corresponding to the same key.
  *
  * The values of M2 are merged following the parallel algorithm described here:
- * https://www.wikiwand.com/en/Algorithms_for_calculating_variance#/Parallel_algorithm
+ * `https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm`
  *
- * Merging M2 values require accessing to partial M2 values and also groupwise means and group valid
- * counts. Thus, the input to this aggregation need to be a structs column containing tuples of
- * groupwise `(valid_count, mean, M2_value)`.
+ * Merging M2 values require accessing to partial M2 values, means, and valid counts. Thus, the
+ * input to this aggregation need to be a structs column containing tuples of 3 values
+ * `(valid_count, mean, M2)`.
  *
  * This aggregation not only merges the partial results of `M2` but also merged all the partial
  * results of input aggregations (`COUNT_VALID`, `MEAN`, and `M2`). As such, the output will be a
  * structs column containing children columns of merged `COUNT_VALID`, `MEAN`, and `M2` values.
  *
- * @param values Grouped values (tuples of groupwise `(valid_count, mean, M2_value)`) to merge.
+ * @param values Grouped values (tuples of values `(valid_count, mean, M2)`) to merge.
  * @param group_offsets Offsets of groups' starting points within @p values.
  * @param num_groups Number of groups.
  * @param mr Device memory resource used to allocate the returned column's device memory

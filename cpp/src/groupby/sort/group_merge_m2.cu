@@ -138,7 +138,7 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
                  values.child(1).type().id() == type_to_id<result_type>() &&
                  values.child(2).type().id() == type_to_id<result_type>(),
                "Input to `group_merge_m2` must be a structs column having children columns "
-               "containing tuples of groupwise (M2_value, mean, valid_count).");
+               "containing tuples of (M2_value, mean, valid_count).");
 
   auto result_counts = make_numeric_column(
     data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
