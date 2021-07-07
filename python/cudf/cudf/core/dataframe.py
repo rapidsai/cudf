@@ -4311,9 +4311,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if self._num_columns == 0 or self._num_rows == 0:
             return DataFrame(index=index, columns=columns)
         # Cython renames the columns to the range [0...ncols]
-        result = self.__class__._from_table(libcudf.transpose.transpose(self))
+        data = libcudf.transpose.transpose(self)
         # Set the old column names as the new index
-        result._index = as_index(index)
+        result = self.__class__._from_data(
+            ColumnAccessor(data), as_index(index)
+        )
         # Set the old index as the new column names
         result.columns = columns
         return result

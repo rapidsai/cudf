@@ -55,6 +55,7 @@ from cudf._lib.cpp.scalar.scalar cimport (
     list_scalar,
     struct_scalar
 )
+from cudf._lib.utils cimport data_from_table_view
 from cudf.utils.dtypes import _decimal_to_int64, is_list_dtype, is_struct_dtype
 cimport cudf._lib.cpp.types as libcudf_types
 
@@ -315,10 +316,13 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
     cdef table_view struct_table_view = (<struct_scalar*>s.get()).view()
     columns = [str(i) for i in range(struct_table_view.num_columns())]
 
-    cdef Table to_arrow_table = Table.from_table_view(
+    data, _ = data_from_table_view(
         struct_table_view,
         None,
         column_names=columns
+    )
+    cdef Table to_arrow_table = Table(
+        cudf.core.column_accessor.ColumnAccessor(data)
     )
 
     python_dict = to_arrow(to_arrow_table, columns).to_pydict()
