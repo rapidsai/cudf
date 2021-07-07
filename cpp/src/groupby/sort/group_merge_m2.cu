@@ -105,7 +105,9 @@ struct merge_fn {
     auto accumulator = accumulate_fn<result_type>{get_partial_result(start_idx)};
 
     // Then, accumulate (merge) the remaining partial results into that accumulator.
-    for (auto idx = start_idx + 1; idx < end_idx; ++idx) { accumulator(get_partial_result(idx)); }
+    for (auto idx = start_idx + 1; idx < end_idx; ++idx) {
+      accumulator(get_partial_result(idx));
+    }
 
     // Get the final result after merging.
     auto const& merge_vals = accumulator.merge_vals;
