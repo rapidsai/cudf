@@ -37,6 +37,30 @@ struct trie_device_view {
   char const* tokens;
   uint16_t const* transitions;
   bool const* accepting;
+
+  inline constexpr uint16_t transition(uint16_t idx, char c)
+  {
+    auto pos = transitions[idx];
+    auto end = transitions[idx + 1];
+    while (pos < end) {
+      if (c == tokens[pos - 1]) { return pos; }
+      pos++;
+    }
+
+    return transition_init(c);
+  }
+
+  inline constexpr uint16_t transition_init(char c)
+  {
+    auto pos = transitions[0];
+    auto end = transitions[1];
+    while (pos < end) {
+      if (c == tokens[pos - 1]) { return pos; }
+      pos++;
+    }
+
+    return 0;
+  }
 };
 
 struct trie {
@@ -78,7 +102,7 @@ struct trie {
     std::vector<uint16_t> layer_offsets;
     std::vector<char> tokens;
     std::vector<uint16_t> transitions;
-    std::vector<bool> accepting;
+    std::vector<uint8_t> accepting;
 
     // create the trie tree
     auto root = std::make_unique<trie_builder_node>();
@@ -118,7 +142,33 @@ struct trie {
     auto device_transitions   = rmm::device_uvector<uint16_t>(transitions.size(), stream, mr);
     auto device_accepting     = rmm::device_uvector<bool>(accepting.size(), stream, mr);
 
-    // TODO: copy host buffers to device
+    // copy host buffers to device
+
+    RMM_CUDA_TRY(cudaMemcpyAsync(device_layer_offsets.data(),
+                                 layer_offsets.data(),
+                                 layer_offsets.size() * sizeof(uint16_t),
+                                 cudaMemcpyDefault,
+                                 stream.value()));
+
+    RMM_CUDA_TRY(cudaMemcpyAsync(device_tokens.data(),
+                                 tokens.data(),
+                                 tokens.size() * sizeof(char),
+                                 cudaMemcpyDefault,
+                                 stream.value()));
+
+    RMM_CUDA_TRY(cudaMemcpyAsync(device_transitions.data(),
+                                 transitions.data(),
+                                 transitions.size() * sizeof(uint16_t),
+                                 cudaMemcpyDefault,
+                                 stream.value()));
+
+    RMM_CUDA_TRY(cudaMemcpyAsync(device_accepting.data(),
+                                 accepting.data(),
+                                 accepting.size() * sizeof(bool),
+                                 cudaMemcpyDefault,
+                                 stream.value()));
+
+    // create owning container
 
     return trie{std::move(device_layer_offsets),
                 std::move(device_tokens),

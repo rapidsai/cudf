@@ -24,13 +24,14 @@ struct trie_state {
 };
 
 template <uint32_t BYTES_PER_THREAD>
-__global__ void multibyte_split_kernel(cudf::device_span<char> data)
+__global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
+                                       cudf::device_span<char> data)
 {
   auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
   auto const data_begin = thread_idx * BYTES_PER_THREAD;
   auto data_end         = data_begin + BYTES_PER_THREAD;
 
-  // superstate<16> match_state;
+  cudf::io::text::superstate<16> x;
 
   if (data_end > data.size()) { data_end = data.size(); }
 
@@ -40,8 +41,18 @@ __global__ void multibyte_split_kernel(cudf::device_span<char> data)
     printf("bid(%i) tid(%i)    : partial\n", blockIdx.x, threadIdx.x);
   }
 
+  auto machine = [&](uint8_t const& state, char const& byte) {
+    return trie.transition(state, byte);
+  };
+
   for (uint32_t i = data_begin; i < data_end; i++) {
-    printf("bid(%i) tid(%i) %3i: %c\n", blockIdx.x, threadIdx.x, i, data[i]);
+    x = x.apply(machine, data[i]);
+    printf("bid(%i) tid(%i) %3i: %c - %u\n",
+           blockIdx.x,
+           threadIdx.x,
+           i,
+           data[i],
+           static_cast<uint32_t>(x.get(0)));
 
     // match_state = match_state.apply(machine, data[i]);
   }
@@ -72,6 +83,8 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::input_stream& inpu
 
   // TODO: call state initalization kernels
 
+  auto const trie = cudf::io::text::trie::create(delimeter, stream);
+
   while (true) {
     uint32_t num_bytes_read = input.readsome(input_span, stream);
 
@@ -83,7 +96,8 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::input_stream& inpu
     auto num_tiles = ceil_div(num_bytes_read, BYTES_PER_TILE);
 
     auto kernel = multibyte_split_kernel<BYTES_PER_THREAD>;
-    kernel<<<num_tiles, THREADS_PER_TILE, 0, stream.value()>>>(input_span.first(num_bytes_read));
+    kernel<<<num_tiles, THREADS_PER_TILE, 0, stream.value()>>>(trie.view(),
+                                                               input_span.first(num_bytes_read));
   }
 
   // TODO: call state finalization kernels

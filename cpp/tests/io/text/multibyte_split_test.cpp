@@ -44,7 +44,7 @@ TEST_F(MultibyteSplitTest, Simple)
   std::string input =
     "here😎"
     "is😎"
-    "some😎"
+    "another😎"
     "simple😎"
     "text😎"
     "seperated😎"
@@ -61,7 +61,7 @@ TEST_F(MultibyteSplitTest, Simple)
 
   auto expected = strings_column_wrapper{"here",
                                          "is",
-                                         "some",
+                                         "another",
                                          "simple",
                                          "text",
                                          "seperated",
