@@ -56,6 +56,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 WITH_PYTHON WIT
         GIT_SHALLOW     TRUE
         SOURCE_SUBDIR   cpp
         OPTIONS         "CMAKE_VERBOSE_MAKEFILE ON"
+                        "CUDA_TOOLKIT_ROOT_DIR ${CUDAToolkit_LIBRARY_ROOT}"
                         "CUDA_USE_STATIC_CUDA_RUNTIME ${CUDA_STATIC_RUNTIME}"
                         "ARROW_IPC ON"
                         "ARROW_CUDA ON"
