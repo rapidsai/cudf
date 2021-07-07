@@ -32,7 +32,7 @@ namespace {
  */
 class file_source : public datasource {
  public:
-  explicit file_source(const char *filepath)
+  explicit file_source(const char* filepath)
     : _file(filepath, O_RDONLY), _cufile_in(detail::make_cufile_input(filepath))
   {
   }
@@ -58,7 +58,7 @@ class file_source : public datasource {
 
   size_t device_read(size_t offset,
                      size_t size,
-                     uint8_t *dst,
+                     uint8_t* dst,
                      rmm::cuda_stream_view stream) override
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
@@ -84,7 +84,7 @@ class file_source : public datasource {
  */
 class memory_mapped_source : public file_source {
  public:
-  explicit memory_mapped_source(const char *filepath, size_t offset, size_t size)
+  explicit memory_mapped_source(const char* filepath, size_t offset, size_t size)
     : file_source(filepath)
   {
     if (_file.size() != 0) map(_file.desc(), offset, size);
@@ -103,17 +103,17 @@ class memory_mapped_source : public file_source {
     auto const read_size = std::min(size, _map_size - (offset - _map_offset));
 
     return std::make_unique<non_owning_buffer>(
-      static_cast<uint8_t *>(_map_addr) + (offset - _map_offset), read_size);
+      static_cast<uint8_t*>(_map_addr) + (offset - _map_offset), read_size);
   }
 
-  size_t host_read(size_t offset, size_t size, uint8_t *dst) override
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     CUDF_EXPECTS(offset >= _map_offset, "Requested offset is outside mapping");
 
     // Clamp length to available data in the mapped region
     auto const read_size = std::min(size, _map_size - (offset - _map_offset));
 
-    auto const src = static_cast<uint8_t *>(_map_addr) + (offset - _map_offset);
+    auto const src = static_cast<uint8_t*>(_map_addr) + (offset - _map_offset);
     std::memcpy(dst, src, read_size);
     return read_size;
   }
@@ -139,7 +139,7 @@ class memory_mapped_source : public file_source {
  private:
   size_t _map_size   = 0;
   size_t _map_offset = 0;
-  void *_map_addr    = nullptr;
+  void* _map_addr    = nullptr;
 };
 
 /**
@@ -150,7 +150,7 @@ class memory_mapped_source : public file_source {
  */
 class direct_read_source : public file_source {
  public:
-  explicit direct_read_source(const char *filepath) : file_source(filepath) {}
+  explicit direct_read_source(const char* filepath) : file_source(filepath) {}
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
@@ -164,7 +164,7 @@ class direct_read_source : public file_source {
     return buffer::create(std::move(v));
   }
 
-  size_t host_read(size_t offset, size_t size, uint8_t *dst) override
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     lseek(_file.desc(), offset, SEEK_SET);
 
@@ -186,9 +186,9 @@ class direct_read_source : public file_source {
  */
 class user_datasource_wrapper : public datasource {
  public:
-  explicit user_datasource_wrapper(datasource *const source) : source(source) {}
+  explicit user_datasource_wrapper(datasource* const source) : source(source) {}
 
-  size_t host_read(size_t offset, size_t size, uint8_t *dst) override
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     return source->host_read(offset, size, dst);
   }
@@ -202,7 +202,7 @@ class user_datasource_wrapper : public datasource {
 
   size_t device_read(size_t offset,
                      size_t size,
-                     uint8_t *dst,
+                     uint8_t* dst,
                      rmm::cuda_stream_view stream) override
   {
     return source->device_read(offset, size, dst, stream);
@@ -218,12 +218,12 @@ class user_datasource_wrapper : public datasource {
   size_t size() const override { return source->size(); }
 
  private:
-  datasource *const source;  ///< A non-owning pointer to the user-implemented datasource
+  datasource* const source;  ///< A non-owning pointer to the user-implemented datasource
 };
 
 }  // namespace
 
-std::unique_ptr<datasource> datasource::create(const std::string &filepath,
+std::unique_ptr<datasource> datasource::create(const std::string& filepath,
                                                size_t offset,
                                                size_t size)
 {
@@ -237,14 +237,14 @@ std::unique_ptr<datasource> datasource::create(const std::string &filepath,
   return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, size);
 }
 
-std::unique_ptr<datasource> datasource::create(host_buffer const &buffer)
+std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
 {
   // Use Arrow IO buffer class for zero-copy reads of host memory
   return std::make_unique<arrow_io_source>(std::make_shared<arrow::io::BufferReader>(
-    reinterpret_cast<const uint8_t *>(buffer.data), buffer.size));
+    reinterpret_cast<const uint8_t*>(buffer.data), buffer.size));
 }
 
-std::unique_ptr<datasource> datasource::create(datasource *source)
+std::unique_ptr<datasource> datasource::create(datasource* source)
 {
   // instantiate a wrapper that forwards the calls to the user implementation
   return std::make_unique<user_datasource_wrapper>(source);

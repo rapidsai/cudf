@@ -63,7 +63,8 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
       if (n == 0xf) n = get_i32();
       t = g_list2struct[c & 0xf];
       if (depth > 10) return false;
-      for (int32_t i = 0; i < n; i++) skip_struct_field(t, depth + 1);
+      for (int32_t i = 0; i < n; i++)
+        skip_struct_field(t, depth + 1);
     } break;
     case ST_FLD_STRUCT:
       for (;;) {
@@ -84,10 +85,10 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
 template <int index>
 struct FunctionSwitchImpl {
   template <typename... Operator>
-  static inline bool run(CompactProtocolReader *cpr,
+  static inline bool run(CompactProtocolReader* cpr,
                          int field_type,
-                         const int &field,
-                         std::tuple<Operator...> &ops)
+                         const int& field,
+                         std::tuple<Operator...>& ops)
   {
     if (field == std::get<index>(ops).field()) {
       return std::get<index>(ops)(cpr, field_type);
@@ -100,10 +101,10 @@ struct FunctionSwitchImpl {
 template <>
 struct FunctionSwitchImpl<0> {
   template <typename... Operator>
-  static inline bool run(CompactProtocolReader *cpr,
+  static inline bool run(CompactProtocolReader* cpr,
                          int field_type,
-                         const int &field,
-                         std::tuple<Operator...> &ops)
+                         const int& field,
+                         std::tuple<Operator...>& ops)
   {
     if (field == std::get<0>(ops).field()) {
       return std::get<0>(ops)(cpr, field_type);
@@ -115,7 +116,7 @@ struct FunctionSwitchImpl<0> {
 };
 
 template <typename... Operator>
-inline bool function_builder(CompactProtocolReader *cpr, std::tuple<Operator...> &op)
+inline bool function_builder(CompactProtocolReader* cpr, std::tuple<Operator...>& op)
 {
   constexpr int index = std::tuple_size<std::tuple<Operator...>>::value - 1;
   int field           = 0;
@@ -131,7 +132,7 @@ inline bool function_builder(CompactProtocolReader *cpr, std::tuple<Operator...>
   return true;
 }
 
-bool CompactProtocolReader::read(FileMetaData *f)
+bool CompactProtocolReader::read(FileMetaData* f)
 {
   auto op = std::make_tuple(ParquetFieldInt32(1, f->version),
                             ParquetFieldStructList(2, f->schema),
@@ -142,7 +143,7 @@ bool CompactProtocolReader::read(FileMetaData *f)
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(SchemaElement *s)
+bool CompactProtocolReader::read(SchemaElement* s)
 {
   auto op = std::make_tuple(ParquetFieldEnum<Type>(1, s->type),
                             ParquetFieldInt32(2, s->type_length),
@@ -156,7 +157,7 @@ bool CompactProtocolReader::read(SchemaElement *s)
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(LogicalType *l)
+bool CompactProtocolReader::read(LogicalType* l)
 {
   auto op =
     std::make_tuple(ParquetFieldUnion(1, l->isset.STRING, l->STRING),
@@ -174,40 +175,40 @@ bool CompactProtocolReader::read(LogicalType *l)
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(DecimalType *d)
+bool CompactProtocolReader::read(DecimalType* d)
 {
   auto op = std::make_tuple(ParquetFieldInt32(1, d->scale), ParquetFieldInt32(2, d->precision));
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(TimeType *t)
+bool CompactProtocolReader::read(TimeType* t)
 {
   auto op =
     std::make_tuple(ParquetFieldBool(1, t->isAdjustedToUTC), ParquetFieldStruct(2, t->unit));
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(TimestampType *t)
+bool CompactProtocolReader::read(TimestampType* t)
 {
   auto op =
     std::make_tuple(ParquetFieldBool(1, t->isAdjustedToUTC), ParquetFieldStruct(2, t->unit));
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(TimeUnit *u)
+bool CompactProtocolReader::read(TimeUnit* u)
 {
   auto op = std::make_tuple(ParquetFieldUnion(1, u->isset.MILLIS, u->MILLIS),
                             ParquetFieldUnion(2, u->isset.MICROS, u->MICROS));
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(IntType *i)
+bool CompactProtocolReader::read(IntType* i)
 {
   auto op = std::make_tuple(ParquetFieldInt8(1, i->bitWidth), ParquetFieldBool(2, i->isSigned));
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(RowGroup *r)
+bool CompactProtocolReader::read(RowGroup* r)
 {
   auto op = std::make_tuple(ParquetFieldStructList(1, r->columns),
                             ParquetFieldInt64(2, r->total_byte_size),
@@ -215,7 +216,7 @@ bool CompactProtocolReader::read(RowGroup *r)
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(ColumnChunk *c)
+bool CompactProtocolReader::read(ColumnChunk* c)
 {
   auto op = std::make_tuple(ParquetFieldString(1, c->file_path),
                             ParquetFieldInt64(2, c->file_offset),
@@ -227,7 +228,7 @@ bool CompactProtocolReader::read(ColumnChunk *c)
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(ColumnChunkMetaData *c)
+bool CompactProtocolReader::read(ColumnChunkMetaData* c)
 {
   auto op = std::make_tuple(ParquetFieldEnum<Type>(1, c->type),
                             ParquetFieldEnumList(2, c->encodings),
@@ -243,7 +244,7 @@ bool CompactProtocolReader::read(ColumnChunkMetaData *c)
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(PageHeader *p)
+bool CompactProtocolReader::read(PageHeader* p)
 {
   auto op = std::make_tuple(ParquetFieldEnum<PageType>(1, p->type),
                             ParquetFieldInt32(2, p->uncompressed_page_size),
@@ -253,7 +254,7 @@ bool CompactProtocolReader::read(PageHeader *p)
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(DataPageHeader *d)
+bool CompactProtocolReader::read(DataPageHeader* d)
 {
   auto op = std::make_tuple(ParquetFieldInt32(1, d->num_values),
                             ParquetFieldEnum<Encoding>(2, d->encoding),
@@ -262,14 +263,14 @@ bool CompactProtocolReader::read(DataPageHeader *d)
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(DictionaryPageHeader *d)
+bool CompactProtocolReader::read(DictionaryPageHeader* d)
 {
   auto op = std::make_tuple(ParquetFieldInt32(1, d->num_values),
                             ParquetFieldEnum<Encoding>(2, d->encoding));
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(KeyValue *k)
+bool CompactProtocolReader::read(KeyValue* k)
 {
   auto op = std::make_tuple(ParquetFieldString(1, k->key), ParquetFieldString(2, k->value));
   return function_builder(this, op);
@@ -282,7 +283,7 @@ bool CompactProtocolReader::read(KeyValue *k)
  *
  * @return True if schema constructed completely, false otherwise
  */
-bool CompactProtocolReader::InitSchema(FileMetaData *md)
+bool CompactProtocolReader::InitSchema(FileMetaData* md)
 {
   if (static_cast<std::size_t>(WalkSchema(md)) != md->schema.size()) return false;
 
@@ -292,14 +293,14 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
    * schema_idx of each column of each row to it corresonding row_group. This is effectively
    * mapping the columns to the schema.
    */
-  for (auto &row_group : md->row_groups) {
+  for (auto& row_group : md->row_groups) {
     int current_schema_index = 0;
-    for (auto &column : row_group.columns) {
+    for (auto& column : row_group.columns) {
       int parent = 0;  // root of schema
-      for (auto const &path : column.meta_data.path_in_schema) {
+      for (auto const& path : column.meta_data.path_in_schema) {
         auto const it = [&] {
           // find_if starting at (current_schema_index + 1) and then wrapping
-          auto schema = [&](auto const &e) { return e.parent_idx == parent && e.name == path; };
+          auto schema = [&](auto const& e) { return e.parent_idx == parent && e.name == path; };
           auto mid    = md->schema.cbegin() + current_schema_index + 1;
           auto it     = std::find_if(mid, md->schema.cend(), schema);
           if (it != md->schema.cend()) return it;
@@ -328,10 +329,10 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
  * @return The node index that was populated
  */
 int CompactProtocolReader::WalkSchema(
-  FileMetaData *md, int idx, int parent_idx, int max_def_level, int max_rep_level)
+  FileMetaData* md, int idx, int parent_idx, int max_def_level, int max_rep_level)
 {
   if (idx >= 0 && (size_t)idx < md->schema.size()) {
-    SchemaElement *e = &md->schema[idx];
+    SchemaElement* e = &md->schema[idx];
     if (e->repetition_type == OPTIONAL) {
       ++max_def_level;
     } else if (e->repetition_type == REPEATED) {

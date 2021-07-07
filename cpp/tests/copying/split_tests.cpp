@@ -717,7 +717,9 @@ void split_null_input_strings_column_value(SplitFunc Split, CompareFunc Compare)
 
   auto expected = create_expected_string_tables_for_splits(strings, validity_masks, splits);
 
-  for (std::size_t i = 0; i < result.size(); ++i) { Compare(expected[i], result[i]); }
+  for (std::size_t i = 0; i < result.size(); ++i) {
+    Compare(expected[i], result[i]);
+  }
 }
 
 // split with strings
@@ -903,7 +905,7 @@ void split_structs(bool include_validity, SplitFunc Split, CompareFunc Compare)
   std::vector<bool> ages_validity = {1, 1, 1, 1, 0, 1, 0, 0, 1};
   auto ages_column                = include_validity ? fixed_width_column_wrapper<int>(
                                           ages.begin(), ages.end(), ages_validity.begin())
-                                      : fixed_width_column_wrapper<int>(ages.begin(), ages.end());
+                                                     : fixed_width_column_wrapper<int>(ages.begin(), ages.end());
 
   // 3. Boolean "is_human" column.
   std::vector<bool> is_human{true, true, false, false, false, false, true, true, true};
@@ -928,9 +930,9 @@ void split_structs(bool include_validity, SplitFunc Split, CompareFunc Compare)
   auto expected_names = include_validity
                           ? create_expected_string_columns_for_splits(names, splits, names_validity)
                           : create_expected_string_columns_for_splits(names, splits, false);
-  auto expected_ages = include_validity
-                         ? create_expected_columns_for_splits<int>(splits, ages, ages_validity)
-                         : create_expected_columns_for_splits<int>(splits, ages, false);
+  auto expected_ages  = include_validity
+                          ? create_expected_columns_for_splits<int>(splits, ages, ages_validity)
+                          : create_expected_columns_for_splits<int>(splits, ages, false);
   auto expected_is_human =
     include_validity ? create_expected_columns_for_splits<bool>(splits, is_human, is_human_validity)
                      : create_expected_columns_for_splits<bool>(splits, is_human, false);
