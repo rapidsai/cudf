@@ -1243,9 +1243,7 @@ class MultiIndex(BaseIndex):
             popped_data[n] = self._data.pop(n)
 
         # construct the popped result
-        popped = cudf.core.index.Index._from_table(
-            cudf.core.frame.Frame(popped_data)
-        )
+        popped = cudf.Index._from_data(popped_data)
         popped.names = popped_names
 
         # update self
