@@ -134,36 +134,10 @@ struct compute_size_and_repeat_fn {
   }
 };
 
-/**
- * @brief Check if the size of the output strings column exceeds the maximum indexable value.
- */
-void check_overflow(strings_column_view const& input,
-                    size_type repeat_times,
-                    rmm::cuda_stream_view stream)
-{
-  size_type size_start, size_end;
-  CUDA_TRY(cudaMemcpyAsync(&size_start,
-                           input.offsets().template data<size_type>() + input.offset(),
-                           sizeof(size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  CUDA_TRY(
-    cudaMemcpyAsync(&size_end,
-                    input.offsets().template data<size_type>() + input.offset() + input.size(),
-                    sizeof(size_type),
-                    cudaMemcpyDeviceToHost,
-                    stream.value()));
-  stream.synchronize();
-
-  CUDF_EXPECTS(size_end - size_start <= std::numeric_limits<size_type>::max() / repeat_times,
-               "The output strings have total size that exceeds the maximum allowed size.");
-}
-
 }  // namespace
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        size_type repeat_times,
-                                       check_output_overflow overflow_checking,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -179,17 +153,11 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   // If `repeat_times == 1`, just make a copy of the input.
   if (repeat_times == 1) { return std::make_unique<column>(input.parent(), stream, mr); }
 
-  // Check for overflow (whether the total size of the output strings column exceeds
-  // numeric_limits<size_type>::max().
-  if (overflow_checking == check_output_overflow::YES) {
-    check_overflow(input, repeat_times, stream);
-  }
-
   auto const strings_dv_ptr = column_device_view::create(input.parent(), stream);
   auto const fn = compute_size_and_repeat_fn{*strings_dv_ptr, repeat_times, input.has_nulls()};
+
   auto [offsets_column, chars_column] =
     make_strings_children(fn, strings_count * repeat_times, strings_count, stream, mr);
-
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
@@ -200,84 +168,6 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
 }
 
 namespace {
-constexpr auto invalid_size = std::numeric_limits<size_type>::lowest();
-constexpr auto max_offset   = static_cast<int64_t>(std::numeric_limits<size_type>::max());
-
-template <typename Func>
-std::tuple<std::unique_ptr<column>, size_type, rmm::device_buffer, size_type>
-generate_offsets_and_null_mask(Func& fn,
-                               size_type strings_count,
-                               bool generate_null_mask,
-                               check_output_overflow overflow_checking,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
-{
-  auto offsets_column = make_numeric_column(
-    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
-  auto offsets_view = offsets_column->mutable_view();
-  auto d_offsets    = offsets_view.template data<int32_t>();
-  fn.d_offsets      = d_offsets;
-
-  auto validities = rmm::device_uvector<int8_t>(generate_null_mask ? strings_count : 0, stream);
-  fn.d_validities = generate_null_mask ? validities.begin() : nullptr;
-
-  // Compute sizes of the output strings (and null mask, if needed).
-  thrust::for_each_n(
-    rmm::exec_policy(stream), thrust::make_counting_iterator<size_type>(0), strings_count, fn);
-
-  // Compute the offsets values.
-  if (overflow_checking == check_output_overflow::YES) {
-    CUDA_TRY(cudaMemsetAsync(d_offsets + strings_count, 0, sizeof(offset_type), stream.value()));
-    thrust::exclusive_scan(rmm::exec_policy(stream),
-                           d_offsets,
-                           d_offsets + strings_count + 1,
-                           d_offsets,
-                           size_type{0},
-                           [] __device__(auto const lhs, auto const rhs) {
-                             if (lhs == invalid_size || rhs == invalid_size) {
-                               return invalid_size;
-                             }
-                             auto const sum = static_cast<int64_t>(lhs) + static_cast<int64_t>(rhs);
-                             return sum > max_offset ? invalid_size : static_cast<size_type>(sum);
-                           });
-  } else {
-    thrust::exclusive_scan(
-      rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
-  }
-
-  auto const size_bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
-  CUDF_EXPECTS(size_bytes != invalid_size,
-               "The output strings have total size that exceeds the maximum allowed size.");
-
-  auto [null_mask, null_count] = cudf::detail::valid_if(
-    validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr);
-
-  return std::make_tuple(std::move(offsets_column),
-                         size_bytes,
-                         null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
-                         null_count);
-}
-
-template <typename Func>
-auto generate_output_strings(Func& fn,
-                             size_type strings_count,
-                             size_type size_bytes,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
-{
-  auto chars_column = create_chars_child_column(0, size_bytes, stream, mr);
-
-  // Note that if the output chars column has zero size, the function fn should not be called to
-  // avoid accidentally overwriting the offsets.
-  if (size_bytes > 0) {
-    fn.d_chars = chars_column->mutable_view().template data<char>();
-    thrust::for_each_n(
-      rmm::exec_policy(stream), thrust::make_counting_iterator<size_type>(0), strings_count, fn);
-  }
-
-  return chars_column;
-}
-
 /**
  * @brief Functor to compute string sizes and repeat the input strings, each string is repeated by a
  * separate number of times.
@@ -295,10 +185,6 @@ struct compute_size_and_repeat_separately_fn {
   // If d_chars != nullptr: only repeat strings.
   char* d_chars{nullptr};
 
-  // We may need to set `1` or `0` for the validities of the output strings,
-  // and only do that when both input columns have nulls.
-  int8_t* d_validities{nullptr};
-
   __device__ void operator()(size_type const idx) const noexcept
   {
     auto const string_is_valid = !strings_has_nulls || strings_dv.is_valid_nocheck(idx);
@@ -313,18 +199,10 @@ struct compute_size_and_repeat_separately_fn {
     auto const repeat_times = is_valid ? repeat_times_dv.element<IntType>(idx) : IntType{0};
 
     if (!d_chars) {
-      d_offsets[idx] = [&] {
-        if (repeat_times <= 0) { return size_type{0}; }
-        auto const size = static_cast<int64_t>(strings_dv.element<string_view>(idx).size_bytes()) *
-                          static_cast<int64_t>(repeat_times);
-        return size > max_offset ? invalid_size : static_cast<size_type>(size);
-      }();
-
-      // We will allocate memory for `d_validities` only when both input columns have nulls.
-      if (d_validities) { d_validities[idx] = is_valid; }
-    }
-
-    if (d_chars && repeat_times > 0) {
+      d_offsets[idx] = repeat_times > 0
+                         ? strings_dv.element<string_view>(idx).size_bytes() * repeat_times
+                         : size_type{0};
+    } else if (repeat_times > 0) {
       auto const d_str    = strings_dv.element<string_view>(idx);
       auto const str_size = d_str.size_bytes();
       if (str_size > 0) {
@@ -339,6 +217,60 @@ struct compute_size_and_repeat_separately_fn {
 };
 
 /**
+ * @brief Creates child offsets and chars columns by applying the template function that
+ * can be used for computing the output size of each string as well as create the output.
+ *
+ * This function is similar to `strings::detail::make_strings_children`, except that it accepts an
+ * input `std::optional<column_view>` that can contain the precomputed sizes of the output strings.
+ */
+template <typename Func>
+auto make_strings_children(Func fn,
+                           size_type exec_size,
+                           size_type strings_count,
+                           std::optional<column_view> output_strings_offsets,
+                           rmm::cuda_stream_view stream,
+                           rmm::mr::device_memory_resource* mr)
+{
+  auto offsets_column = [&] {
+    return output_strings_offsets.has_value()
+             ? std::make_unique<column>(output_strings_offsets.value())
+             : make_numeric_column(
+                 data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+  }();
+
+  auto offsets_view = offsets_column->mutable_view();
+  auto d_offsets    = offsets_view.template data<size_type>();
+  fn.d_offsets      = d_offsets;
+
+  // This may be called twice -- once for offsets and once for chars.
+  auto for_each_fn = [exec_size, stream](Func& fn) {
+    thrust::for_each_n(
+      rmm::exec_policy(stream), thrust::make_counting_iterator<size_type>(0), exec_size, fn);
+  };
+
+  // Compute the offsets values only if the output strings offsets are not given.
+  if (!output_strings_offsets.has_value()) {
+    for_each_fn(fn);
+    thrust::exclusive_scan(
+      rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+  }
+
+  // Now build the chars column
+  auto const bytes  = cudf::detail::get_value<size_type>(offsets_view, strings_count, stream);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
+
+  // Execute the function fn again to fill the chars column.
+  // Note that if the output chars column has zero size, the function fn should not be called to
+  // avoid accidentally overwriting the offsets.
+  if (bytes > 0) {
+    fn.d_chars = chars_column->mutable_view().template data<char>();
+    for_each_fn(fn);
+  }
+
+  return std::make_pair(std::move(offsets_column), std::move(chars_column));
+}
+
+/**
  * @brief The dispatch functions for repeating strings with separate repeating times.
  *
  * The functions expect that the input `repeat_times` column has a non-bool integer data type (i.e.,
@@ -346,13 +278,12 @@ struct compute_size_and_repeat_separately_fn {
  */
 struct dispatch_repeat_strings_separately_fn {
   template <class T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
-  std::tuple<std::unique_ptr<column>, std::unique_ptr<column>, rmm::device_buffer, size_type>
-  operator()(size_type strings_count,
-             strings_column_view const& input,
-             column_view const& repeat_times,
-             check_output_overflow overflow_checking,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr) const
+  std::unique_ptr<column> operator()(size_type strings_count,
+                                     strings_column_view const& input,
+                                     column_view const& repeat_times,
+                                     std::optional<column_view> output_strings_offsets,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     auto const strings_dv_ptr      = column_device_view::create(input.parent(), stream);
     auto const repeat_times_dv_ptr = column_device_view::create(repeat_times, stream);
@@ -362,32 +293,39 @@ struct dispatch_repeat_strings_separately_fn {
     auto fn                        = compute_size_and_repeat_separately_fn<T>{
       *strings_dv_ptr, *repeat_times_dv_ptr, strings_has_nulls, rtimes_has_nulls};
 
-    // If `generate_new_mask == false`, output null_mask and null_count are empty/zero.
-    auto [offsets_column, size_bytes, null_mask, null_count] = generate_offsets_and_null_mask(
-      fn, strings_count, generate_new_mask, overflow_checking, stream, mr);
+    auto [offsets_column, chars_column] =
+      make_strings_children(fn, strings_count, strings_count, output_strings_offsets, stream, mr);
 
     // If only one input column has nulls, we just copy its null mask and null count.
-    if (strings_has_nulls ^ rtimes_has_nulls) {
-      auto const& col = strings_has_nulls ? input.parent() : repeat_times;
-      null_mask       = cudf::detail::copy_bitmask(col, stream, mr);
-      null_count      = col.null_count();
-    }
+    // If both input columns have nulls, we generate new bitmask by AND their bitmasks.
+    auto [null_mask, null_count] = [&] {
+      if (strings_has_nulls ^ rtimes_has_nulls) {
+        auto const& col = strings_has_nulls ? input.parent() : repeat_times;
+        return std::make_pair(cudf::detail::copy_bitmask(col, stream, mr), col.null_count());
+      } else if (strings_has_nulls && rtimes_has_nulls) {
+        return std::make_pair(
+          cudf::detail::bitmask_and(table_view{{input.parent(), repeat_times}}, stream, mr),
+          UNKNOWN_NULL_COUNT);
+      }
+      return std::make_pair(rmm::device_buffer{0, stream, mr}, 0);
+    }();
 
-    // Now jus generate the output strings.
-    auto chars_column = generate_output_strings(fn, strings_count, size_bytes, stream, mr);
-
-    return std::make_tuple(
-      std::move(offsets_column), std::move(chars_column), std::move(null_mask), null_count);
+    return make_strings_column(strings_count,
+                               std::move(offsets_column),
+                               std::move(chars_column),
+                               null_count,
+                               std::move(null_mask),
+                               stream,
+                               mr);
   }
 
   template <class T, std::enable_if_t<!cudf::is_index_type<T>()>* = nullptr>
-  std::tuple<std::unique_ptr<column>, std::unique_ptr<column>, rmm::device_buffer, size_type>
-  operator()(size_type,
-             strings_column_view const&,
-             column_view const&,
-             check_output_overflow,
-             rmm::cuda_stream_view,
-             rmm::mr::device_memory_resource*) const
+  std::unique_ptr<column> operator()(size_type,
+                                     strings_column_view const&,
+                                     column_view const&,
+                                     std::optional<column_view>,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*) const
   {
     CUDF_FAIL("repeat_strings expects an integer type for the `repeat_times` input column.");
   }
@@ -397,31 +335,26 @@ struct dispatch_repeat_strings_separately_fn {
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        column_view const& repeat_times,
-                                       check_output_overflow overflow_checking,
+                                       std::optional<column_view> output_strings_offsets,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(input.size() == repeat_times.size(), "The input columns must have the same size.");
+  CUDF_EXPECTS(!output_strings_offsets.has_value() ||
+                 input.size() + 1 == output_strings_offsets.value().size(),
+               "Invalid output strings offsets.");
 
   auto const strings_count = input.size();
   if (strings_count == 0) { return make_empty_column(data_type{type_id::STRING}); }
 
-  auto [offsets_column, chars_column, null_mask, null_count] =
-    type_dispatcher(repeat_times.type(),
-                    dispatch_repeat_strings_separately_fn{},
-                    strings_count,
-                    input,
-                    repeat_times,
-                    overflow_checking,
-                    stream,
-                    mr);
-  return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+  return type_dispatcher(repeat_times.type(),
+                         dispatch_repeat_strings_separately_fn{},
+                         strings_count,
+                         input,
+                         repeat_times,
+                         output_strings_offsets,
+                         stream,
+                         mr);
 }
 
 }  // namespace detail
@@ -436,22 +369,20 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        size_type repeat_times,
-                                       check_output_overflow overflow_checking,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_strings(
-    input, repeat_times, overflow_checking, rmm::cuda_stream_default, mr);
+  return detail::repeat_strings(input, repeat_times, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        column_view const& repeat_times,
-                                       check_output_overflow overflow_checking,
+                                       std::optional<column_view> output_strings_offsets,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::repeat_strings(
-    input, repeat_times, overflow_checking, rmm::cuda_stream_default, mr);
+    input, repeat_times, output_strings_offsets, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

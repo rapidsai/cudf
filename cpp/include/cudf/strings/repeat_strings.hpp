@@ -106,22 +106,16 @@ std::unique_ptr<column> repeat_strings(
  *  - Any null row (from either the input strings column or the `repeat_times` column) will always
  *    result in a null output string.
  *
- * Using this API needs to follow a two-pass approach:
- *  - In the first pass, @p `output_sizes` is given as an empty array, and the API will only
- *    return a numeric column containing sizes of the output strings. This column can be used for
- *    bounds checking and data partitioning.
- *  - In the second pass, @p `output_sizes` is given that points to the array of output string
- *    sizes. The API will then perform string repeating.
+ * Note that this function cannot handle the cases when the size of the output column exceeds the
+ * maximum value that can be indexed by size_type (offset_type). In such situations, an exception
+ * may be thrown, or the output result is undefined. As such, the caller is responsible for checking
+ * output overflow to prevent runtime exception and data corruption.
  *
  * @code{.pseudo}
  * Example:
  * strs         = ['aa', null, '', 'bbc-']
  * repeat_times = [ 1,   2,     3,  4   ]
- *
- * new_sizes = repeat_strings(strs, device_span<size_type const>{}, repeat_times)
- * new_sizes is [2, 0, 0, 12]
- *
- * out = repeat_strings(strs, new_sizes, repeat_times)
+ * out          = repeat_strings(strs, repeat_times)
  * out is ['aa', null, '', 'bbc-bbc-bbc-bbc-']
  * @endcode
  *
@@ -131,16 +125,16 @@ std::unique_ptr<column> repeat_strings(
  * @param input The column containing strings to repeat.
  * @param repeat_times The column containing numbers of times that the corresponding input strings
  *        are copied to the output.
- * @param output_sizes Array containing sizes of the output strings.
+ * @param output_strings_offsets The column containing pre-computed offsets of the output strings.
  * @param mr Device memory resource used to allocate the returned strings column.
  * @return New column containing size of the output strings if @p `output_sizes` is given as empty
  *         array, or the final repeated strings if @p `output_sizes` is provided.
  */
 std::unique_ptr<column> repeat_strings(
   strings_column_view const& input,
-  device_span<size_type const> output_sizes,
   column_view const& repeat_times,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::optional<column_view> output_strings_offsets = std::nullopt,
+  rmm::mr::device_memory_resource* mr               = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings
