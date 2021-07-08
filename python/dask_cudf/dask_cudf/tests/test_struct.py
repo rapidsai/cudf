@@ -31,7 +31,6 @@ import dask_cudf
     ],
 )
 def test_select_struct(data, column):
-    # df = pd.DataFrame(data)
     df = cudf.DataFrame(data)
     ddf = dask_cudf.from_cudf(df, 2)
     assert df[column].to_arrow() == ddf[column].compute().to_arrow()
