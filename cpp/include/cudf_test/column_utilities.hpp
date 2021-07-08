@@ -32,8 +32,11 @@ namespace test {
  *
  * @param lhs The first column
  * @param rhs The second column
+ * @param throw_on_fail         If true, throw a cudf::logic error on failure instead of printing
  */
-void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_view const& rhs);
+void expect_column_properties_equal(cudf::column_view const& lhs,
+                                    cudf::column_view const& rhs,
+                                    bool throw_on_fail = false);
 
 /**
  * @brief Verifies the property equivalence of two columns.
@@ -46,7 +49,8 @@ void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_v
  * @param rhs The second column
  */
 void expect_column_properties_equivalent(cudf::column_view const& lhs,
-                                         cudf::column_view const& rhs);
+                                         cudf::column_view const& rhs,
+                                         bool throw_on_fail = false);
 
 /**
  * @brief Verifies the element-wise equality of two columns.
@@ -56,10 +60,12 @@ void expect_column_properties_equivalent(cudf::column_view const& lhs,
  * @param lhs                   The first column
  * @param rhs                   The second column
  * @param print_all_differences If true display all differences
+ * @param throw_on_fail         If true, throw a cudf::logic error on failure instead of printing
  */
 void expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
-                          bool print_all_differences = false);
+                          bool print_all_differences = false,
+                          bool throw_on_fail         = false);
 
 /**
  * @brief Verifies the element-wise equivalence of two columns.
@@ -70,10 +76,12 @@ void expect_columns_equal(cudf::column_view const& lhs,
  * @param lhs                   The first column
  * @param rhs                   The second column
  * @param print_all_differences If true display all differences
+ * @param throw_on_fail         If true, throw a cudf::logic error on failure instead of printing
  */
 void expect_columns_equivalent(cudf::column_view const& lhs,
                                cudf::column_view const& rhs,
-                               bool print_all_differences = false);
+                               bool print_all_differences = false,
+                               bool throw_on_fail         = false);
 
 /**
  * @brief Verifies the bitwise equality of two device memory buffers.
