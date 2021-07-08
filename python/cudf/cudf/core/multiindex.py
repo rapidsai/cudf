@@ -293,10 +293,10 @@ class MultiIndex(BaseIndex):
 
         return self._set_names(names=names, inplace=inplace)
 
-    @classmethod
     # TODO: This type ignore is indicating a real problem, which is that
     # MultiIndex should not be inheriting from SingleColumnFrame, but fixing
     # that will have to wait until we reshuffle the Index hierarchy.
+    @classmethod
     def _from_data(  # type: ignore
         cls, data: Mapping, index=None
     ) -> MultiIndex:
