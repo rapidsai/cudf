@@ -10,10 +10,10 @@ Welcome to cuDF's documentation!
    basics.rst
    io.rst
    groupby.md
-   dask-cudf.md
+   dask-cudf.rst
    10min-cudf-cupy.ipynb
    guide-to-udfs.ipynb
-   internals.md
+   internals.rst
    Working-with-missing-data.ipynb
 
 Indices and tables
