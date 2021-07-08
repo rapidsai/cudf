@@ -26,6 +26,24 @@
 namespace cudf {
 namespace groupby {
 namespace detail {
+namespace {
+template <typename Comparator>
+void generate_dense_rank_comparisons(mutable_column_view out,
+                                     device_span<size_type const> group_labels,
+                                     cudf::device_span<size_type const> group_offsets,
+                                     Comparator comp,
+                                     rmm::cuda_stream_view stream)
+{
+  thrust::tabulate(rmm::exec_policy(stream),
+                   out.begin<size_type>(),
+                   out.end<size_type>(),
+                   [comp, labels = group_labels.data(), offsets = group_offsets.data()] __device__(
+                     size_type row_index) {
+                     return row_index == offsets[labels[row_index]] ||
+                            !comp(row_index, row_index - 1);
+                   });
+}
+}  // namespace
 std::unique_ptr<column> dense_rank_scan(table_view const& order_by,
                                         cudf::device_span<size_type const> group_labels,
                                         cudf::device_span<size_type const> group_offsets,
@@ -40,39 +58,21 @@ std::unique_ptr<column> dense_rank_scan(table_view const& order_by,
                                        mr);
   auto mutable_ranks = ranks->mutable_view();
 
-  if (has_nulls(order_by)) {
+  if (has_nested_nulls(order_by)) {
     row_equality_comparator<true> row_comparator(*d_order_by, *d_order_by, true);
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<size_type>(),
-                     mutable_ranks.end<size_type>(),
-                     [row_comparator,
-                      labels  = group_labels.data(),
-                      offsets = group_offsets.data()] __device__(size_type row_index) {
-                       return (row_index == offsets[labels[row_index]] ||
-                               !row_comparator(row_index, row_index - 1))
-                                ? 1
-                                : 0;
-                     });
+    generate_dense_rank_comparisons(
+      mutable_ranks, group_labels, group_offsets, row_comparator, stream);
   } else {
     row_equality_comparator<false> row_comparator(*d_order_by, *d_order_by, true);
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<size_type>(),
-                     mutable_ranks.end<size_type>(),
-                     [row_comparator,
-                      labels  = group_labels.data(),
-                      offsets = group_offsets.data()] __device__(size_type row_index) {
-                       return (row_index == offsets[labels[row_index]] ||
-                               !row_comparator(row_index, row_index - 1))
-                                ? 1
-                                : 0;
-                     });
+    generate_dense_rank_comparisons(
+      mutable_ranks, group_labels, group_offsets, row_comparator, stream);
   }
 
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 group_labels.begin(),
                                 group_labels.end(),
                                 mutable_ranks.begin<size_type>(),
-                                mutable_ranks.data<size_type>());
+                                mutable_ranks.begin<size_type>());
   return ranks;
 }
 

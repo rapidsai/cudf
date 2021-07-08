@@ -492,20 +492,20 @@ template std::unique_ptr<aggregation> make_row_number_aggregation<aggregation>()
 template std::unique_ptr<rolling_aggregation> make_row_number_aggregation<rolling_aggregation>();
 
 /// Factory to create a RANK aggregation
-template <typename Base = aggregation>
+template <typename Base>
 std::unique_ptr<Base> make_rank_aggregation(table_view order_by)
 {
   return std::make_unique<detail::rank_aggregation>(order_by);
 }
-template std::unique_ptr<aggregation> make_rank_aggregation<aggregation>(table_view order_by);
+template std::unique_ptr<aggregation> make_rank_aggregation<aggregation>(table_view);
 
 /// Factory to create a DENSE_RANK aggregation
-template <typename Base = aggregation>
+template <typename Base>
 std::unique_ptr<Base> make_dense_rank_aggregation(table_view order_by)
 {
   return std::make_unique<detail::dense_rank_aggregation>(order_by);
 }
-template std::unique_ptr<aggregation> make_dense_rank_aggregation<aggregation>(table_view order_by);
+template std::unique_ptr<aggregation> make_dense_rank_aggregation<aggregation>(table_view);
 
 /// Factory to create a COLLECT_LIST aggregation
 template <typename Base = aggregation>

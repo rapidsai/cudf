@@ -569,7 +569,10 @@ class rank_aggregation final : public rolling_aggregation {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<rank_aggregation const&>(_other);
 
-    if (_order_by.num_rows() != other._order_by.num_rows()) { return false; }
+    if ((_order_by.num_rows() != other._order_by.num_rows()) ||
+        _order_by.num_columns() != other._order_by.num_columns()) {
+      return false;
+    }
     for (int i = 0; i < _order_by.num_columns(); i++) {
       column_view lhs = _order_by.column(i);
       column_view rhs = other._order_by.column(i);
@@ -600,10 +603,10 @@ class rank_aggregation final : public rolling_aggregation {
   {
     size_t result = std::hash<int>{}(_order_by.num_rows());
     for_each(_order_by.begin(), _order_by.end(), [&](column_view col) {
-      result ^= std::hash<int32_t>{}(static_cast<int32_t>(col.type().id())) ^
-                std::hash<size_type>{}(static_cast<size_type>(col.offset())) ^
-                std::hash<long int>{}(reinterpret_cast<long int>(col.data<size_type>())) ^
-                std::hash<long int>{}(reinterpret_cast<long int>(col.null_mask()));
+      result ^= std::hash<size_t>{}(static_cast<size_t>(col.type().id())) ^
+                std::hash<size_t>{}(static_cast<size_t>(col.offset())) ^
+                std::hash<size_t>{}(reinterpret_cast<size_t>(col.data<size_type>())) ^
+                std::hash<size_t>{}(reinterpret_cast<size_t>(col.null_mask()));
     });
     return result;
   }
@@ -623,7 +626,10 @@ class dense_rank_aggregation final : public rolling_aggregation {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<dense_rank_aggregation const&>(_other);
 
-    if (_order_by.num_rows() != other._order_by.num_rows()) { return false; }
+    if ((_order_by.num_rows() != other._order_by.num_rows()) ||
+        _order_by.num_columns() != other._order_by.num_columns()) {
+      return false;
+    }
     for (int i = 0; i < _order_by.num_columns(); i++) {
       column_view lhs = _order_by.column(i);
       column_view rhs = other._order_by.column(i);
@@ -654,10 +660,10 @@ class dense_rank_aggregation final : public rolling_aggregation {
   {
     size_t result = std::hash<int>{}(_order_by.num_rows());
     for_each(_order_by.begin(), _order_by.end(), [&](column_view col) {
-      result ^= std::hash<int32_t>{}(static_cast<int32_t>(col.type().id())) ^
-                std::hash<size_type>{}(static_cast<size_type>(col.offset())) ^
-                std::hash<long int>{}(reinterpret_cast<long int>(col.data<size_type>())) ^
-                std::hash<long int>{}(reinterpret_cast<long int>(col.null_mask()));
+      result ^= std::hash<size_t>{}(static_cast<size_t>(col.type().id())) ^
+                std::hash<size_t>{}(static_cast<size_t>(col.offset())) ^
+                std::hash<size_t>{}(reinterpret_cast<size_t>(col.data<size_type>())) ^
+                std::hash<size_t>{}(reinterpret_cast<size_t>(col.null_mask()));
     });
     return result;
   }
