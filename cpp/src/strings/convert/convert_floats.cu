@@ -252,7 +252,8 @@ struct ftos_converter {
       *ptr++ = (char)('0' + (value % 10));
       value /= 10;
     }
-    while (ptr != buffer) *output++ = *--ptr;  // 54321 -> 12345
+    while (ptr != buffer)
+      *output++ = *--ptr;  // 54321 -> 12345
     return output;
   }
 

@@ -49,7 +49,7 @@ std::string container::get_encoded()
     return (len & 1) || (m_cur >= m_end) ? 0
                                          : std::min(len >> 1, static_cast<uint64_t>(m_end - m_cur));
   }();
-  auto const s = reinterpret_cast<char const *>(m_cur);
+  auto const s = reinterpret_cast<char const*>(m_cur);
   m_cur += len;
   return std::string(s, len);
 }
@@ -63,7 +63,7 @@ std::string container::get_encoded()
  *
  * @returns true if successful, false if error
  */
-bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
+bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
 {
   constexpr uint32_t avro_magic = (('O' << 0) | ('b' << 8) | ('j' << 16) | (0x01 << 24));
   uint32_t sig4, max_block_size;
@@ -195,7 +195,7 @@ enum {
  *
  * @returns true if successful, false if error
  */
-bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &json_str)
+bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& json_str)
 {
   // Empty schema
   if (json_str == "[]") return true;
@@ -361,8 +361,8 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
 std::string schema_parser::get_str()
 {
   std::string s;
-  const char *start = m_cur;
-  const char *cur   = start;
+  const char* start = m_cur;
+  const char* cur   = start;
   while (cur < m_end && *cur++ != '"')
     ;
   int32_t len = static_cast<int32_t>(cur - start - 1);

@@ -7,8 +7,8 @@ channels:
   - rapidsai-nightly
   - conda-forge
 dependencies:
-  - clang=8.0.1
-  - clang-tools=8.0.1
+  - clang=11.0.0
+  - clang-tools=11.0.0
   - cupy>7.1.0,<10.0.0a0
   - rmm=21.08.*
   - cmake>=3.20.1
@@ -49,7 +49,6 @@ dependencies:
   - arrow-cpp-proc * cuda
   - double-conversion
   - rapidjson
-  - flatbuffers
   - hypothesis
   - sphinx-markdown-tables
   - sphinx-copybutton
