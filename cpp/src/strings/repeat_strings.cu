@@ -34,7 +34,6 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
                                              size_type repeat_times,
                                              rmm::cuda_stream_view stream,
@@ -67,7 +66,7 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
 
 namespace {
 /**
- * @brief Generate a strings column in which each row is an empty or null string.
+ * @brief Generate a strings column in which each row is an empty string or a null.
  *
  * The output strings column has the same bitmask as the input column.
  */
@@ -95,7 +94,7 @@ auto generate_empty_output(strings_column_view const& input,
 }
 
 /**
- * @brief Functor to compute string sizes and repeat the input strings.
+ * @brief Functor to compute output string sizes and repeat the input strings.
  *
  * This functor is called only when `repeat_times > 0`. In addition, the total number of threads
  * running this functor is `repeat_times * strings_count` (instead of `string_count`) for maximizing
@@ -225,7 +224,8 @@ struct compute_size_and_repeat_separately_fn {
  * can be used for computing the output size of each string as well as create the output.
  *
  * This function is similar to `strings::detail::make_strings_children`, except that it accepts an
- * input `std::optional<column_view>` that can contain the precomputed sizes of the output strings.
+ * optional input `std::optional<column_view>` that can contain the precomputed sizes of the output
+ * strings.
  */
 template <typename Func>
 auto make_strings_children(Func fn,
@@ -248,20 +248,22 @@ auto make_strings_children(Func fn,
       rmm::exec_policy(stream), thrust::make_counting_iterator<size_type>(0), exec_size, fn);
   };
 
-  // Compute the output sizes only if they are not given.
   if (!output_strings_sizes.has_value()) {
+    // Compute the output sizes only if they are not given.
     for_each_fn(fn);
-  } else {
-    auto const string_sizes = output_strings_sizes.value();
-    thrust::copy(rmm::exec_policy(stream),
-                 string_sizes.template begin<size_type>(),
-                 string_sizes.template end<size_type>(),
-                 d_offsets);
-  }
 
-  // Compute the offsets values.
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+    // Compute the offsets values.
+    thrust::exclusive_scan(
+      rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+  } else {
+    // Compute the offsets values from the provided output string sizes.
+    auto const string_sizes = output_strings_sizes.value();
+    CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(offset_type), stream.value()));
+    thrust::inclusive_scan(rmm::exec_policy(stream),
+                           string_sizes.template begin<size_type>(),
+                           string_sizes.template end<size_type>(),
+                           d_offsets + 1);
+  }
 
   // Now build the chars column
   auto const bytes  = cudf::detail::get_value<size_type>(offsets_view, strings_count, stream);
@@ -289,9 +291,12 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   CUDF_EXPECTS(input.size() == repeat_times.size(), "The input columns must have the same size.");
   CUDF_EXPECTS(cudf::is_index_type(repeat_times.type()),
                "repeat_strings expects an integer type for the `repeat_times` input column.");
-  CUDF_EXPECTS(
-    !output_strings_sizes.has_value() || input.size() == output_strings_sizes.value().size(),
-    "The given column of output string sizes is invalid.");
+  if (output_strings_sizes.has_value()) {
+    auto const output_sizes = output_strings_sizes.value();
+    CUDF_EXPECTS(input.size() == output_sizes.size() &&
+                   (!output_sizes.nullable() || !output_sizes.has_nulls()),
+                 "The given column of output string sizes is invalid.");
+  }
 
   auto const strings_count = input.size();
   if (strings_count == 0) { return make_empty_column(data_type{type_id::STRING}); }
@@ -333,7 +338,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
 
 namespace {
 /**
- * @brief Functor to compute output sizes of the repeated strings, each string is repeated by a
+ * @brief Functor to compute sizes of the output strings if each input string is repeated by a
  * separate number of times.
  */
 template <class Iterator>
@@ -364,11 +369,12 @@ struct compute_size_fn {
       repeat_times > 0 ? static_cast<int64_t>(repeat_times) * static_cast<int64_t>(string_size)
                        : int64_t{0};
 
-    // If overflow happen, the output string size will be incorrect due to downcasting.
-    // In such cases, the output_sizes column should be discarded.
+    // If overflow happen, the stored value of output string size will be incorrect due to
+    // downcasting. In such cases, the entire output_strings_sizes column should be discarded.
     d_sizes[idx] = static_cast<size_type>(output_size);
 
     // The output_size value will be sum up to detect overflow at the caller site.
+    // The caller can detect overflow easily by checking `SUM(output_size) > INT_MAX`.
     return output_size;
   }
 };
