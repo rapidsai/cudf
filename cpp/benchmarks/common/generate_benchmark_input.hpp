@@ -137,7 +137,7 @@ struct distribution_params<
 };
 
 /**
- * @brief Boolens are parameterized with the probability of getting `true` value.
+ * @brief Booleans are parameterized with the probability of getting `true` value.
  */
 template <typename T>
 struct distribution_params<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
@@ -195,7 +195,7 @@ std::vector<cudf::type_id> get_type_or_group(int32_t id);
  *
  * If an element of the input vector is a `cudf::type_id` enumerator, function return value simply
  * includes this type. If an element of the input vector is a `type_group_id` enumerator, function
- * return value includes all types coresponding to the group enumerator.
+ * return value includes all types corresponding to the group enumerator.
  *
  * @param ids Vector of integers equal to either a `cudf::type_id` enumerator or a `type_group_id`
  * enumerator.

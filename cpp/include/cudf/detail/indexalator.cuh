@@ -29,7 +29,7 @@ namespace detail {
 /**
  * @brief The base class for the input or output index normalizing iterator.
  *
- * This implementation uses CTRP to define the `input_indexalator` and the
+ * This implementation uses CRTP to define the `input_indexalator` and the
  * `output_indexalator` classes. This is so this class can manipulate the
  * uniquely typed subclass member variable `p_` directly without requiring
  * virtual functions since iterator instances will be copied to device memory.
@@ -241,7 +241,7 @@ struct base_indexalator {
  */
 struct input_indexalator : base_indexalator<input_indexalator> {
   friend struct indexalator_factory;
-  friend struct base_indexalator<input_indexalator>;  // for CTRP
+  friend struct base_indexalator<input_indexalator>;  // for CRTP
 
   using reference = size_type const;  // this keeps STL and thrust happy
 
@@ -326,7 +326,7 @@ struct input_indexalator : base_indexalator<input_indexalator> {
  */
 struct output_indexalator : base_indexalator<output_indexalator> {
   friend struct indexalator_factory;
-  friend struct base_indexalator<output_indexalator>;  // for CTRP
+  friend struct base_indexalator<output_indexalator>;  // for CRTP
 
   using reference = output_indexalator const&;  // required for output iterators
 

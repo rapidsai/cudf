@@ -526,7 +526,7 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
   // TODO: Need to be able to return metadata in tree form from reader so they can be compared.
-  // Unfortunately the closest thing to a heirarchical schema is column_name_info which does not
+  // Unfortunately the closest thing to a hierarchical schema is column_name_info which does not
   // have any tests for it c++ or python.
   compare_metadata_equality(expected_metadata, result.metadata);
 }
@@ -573,7 +573,7 @@ TEST_F(ParquetWriterTest, Strings)
 
 TEST_F(ParquetWriterTest, SlicedTable)
 {
-  // This test checks for writing zero copy, offseted views into existing cudf tables
+  // This test checks for writing zero copy, offsetted views into existing cudf tables
 
   std::vector<const char*> strings{
     "Monday", "Wȅdnȅsday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
@@ -1569,7 +1569,7 @@ TEST_F(ParquetChunkedWriterTest, ReadingUnclosedFile)
   srand(31337);
   auto table = create_random_fixed_table<int>(4, 4, true);
 
-  auto filepath = temp_env->get_temp_filepath("ReadingUnlosedFile.parquet");
+  auto filepath = temp_env->get_temp_filepath("ReadingUnclosedFile.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
   cudf_io::parquet_chunked_writer writer(args);
@@ -2288,7 +2288,7 @@ TEST_F(ParquetReaderTest, UserBoundsWithNulls)
 
   // skip_rows / num_rows
   // clang-format off
-  std::vector<std::pair<int, int>> params{ {-1, -1}, {1, 3}, {3, -1}, 
+  std::vector<std::pair<int, int>> params{ {-1, -1}, {1, 3}, {3, -1},
                                            {31, -1}, {32, -1}, {33, -1},
                                            {31, 5}, {32, 5}, {33, 5},
                                            {-1, 7}, {-1, 31}, {-1, 32}, {-1, 33},
