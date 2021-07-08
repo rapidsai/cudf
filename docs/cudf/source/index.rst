@@ -9,7 +9,7 @@ Welcome to cuDF's documentation!
    10min.ipynb
    basics.rst
    io.rst
-   groupby.md
+   groupby.rst
    dask-cudf.rst
    10min-cudf-cupy.ipynb
    guide-to-udfs.ipynb
