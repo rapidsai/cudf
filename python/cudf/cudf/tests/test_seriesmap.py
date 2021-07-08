@@ -4,12 +4,12 @@ from itertools import product
 from math import floor
 
 import numpy as np
-import cudf
 import pandas as pd
 import pytest
 
+import cudf
 from cudf import Series
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
 def test_series_map_basic():

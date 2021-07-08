@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq, gen_rand, random_bitmask
+from cudf.testing._utils import assert_eq, gen_rand, random_bitmask
 
 
 @pytest.mark.parametrize("side", ["left", "right"])

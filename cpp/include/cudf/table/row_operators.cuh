@@ -191,8 +191,8 @@ class element_equality_comparator {
    */
   template <typename Element,
             std::enable_if_t<cudf::is_equality_comparable<Element, Element>()>* = nullptr>
-  __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index) const
-    noexcept
+  __device__ bool operator()(size_type lhs_element_index,
+                             size_type rhs_element_index) const noexcept
   {
     if (has_nulls) {
       bool const lhs_is_null{lhs.is_null(lhs_element_index)};

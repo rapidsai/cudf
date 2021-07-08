@@ -64,8 +64,8 @@ struct unsnap_queue_s {
  * @brief snappy decompression state
  */
 struct unsnap_state_s {
-  const uint8_t *base;         ///< base ptr of compressed stream
-  const uint8_t *end;          ///< end of compressed stream
+  const uint8_t* base;         ///< base ptr of compressed stream
+  const uint8_t* end;          ///< end of compressed stream
   uint32_t uncompressed_size;  ///< uncompressed stream size
   uint32_t bytes_left;         ///< bytes to uncompressed remaining
   int32_t error;               ///< current error status
@@ -74,7 +74,7 @@ struct unsnap_state_s {
   gpu_inflate_input_s in;      ///< input parameters for current block
 };
 
-inline __device__ volatile uint8_t &byte_access(unsnap_state_s *s, uint32_t pos)
+inline __device__ volatile uint8_t& byte_access(unsnap_state_s* s, uint32_t pos)
 {
   return s->q.buf[pos & (prefetch_size - 1)];
 }
@@ -85,9 +85,9 @@ inline __device__ volatile uint8_t &byte_access(unsnap_state_s *s, uint32_t pos)
  * @param s decompression state
  * @param t warp lane id
  */
-__device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t)
+__device__ void snappy_prefetch_bytestream(unsnap_state_s* s, int t)
 {
-  const uint8_t *base  = s->base;
+  const uint8_t* base  = s->base;
   uint32_t end         = (uint32_t)(s->end - base);
   uint32_t align_bytes = (uint32_t)(0x20 - (0x1f & reinterpret_cast<uintptr_t>(base)));
   int32_t pos          = min(align_bytes, end);
@@ -275,7 +275,7 @@ inline __device__ uint32_t get_len5_mask(uint32_t v0, uint32_t v1)
  * @param s decompression state
  * @param t warp lane id
  */
-__device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
+__device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
 {
   uint32_t cur        = 0;
   uint32_t end        = static_cast<uint32_t>(s->end - s->base);
@@ -285,13 +285,15 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
 
   for (;;) {
     int32_t batch_len;
-    volatile unsnap_batch_s *b;
+    volatile unsnap_batch_s* b;
 
     // Wait for prefetcher
     if (t == 0) {
       s->q.prefetch_rdpos = cur;
 #pragma unroll(1)  // We don't want unrolling here
-      while (s->q.prefetch_wrpos < min(cur + 5 * batch_size, end)) { busy_wait(10); }
+      while (s->q.prefetch_wrpos < min(cur + 5 * batch_size, end)) {
+        busy_wait(10);
+      }
       b = &s->q.batch[batch * batch_size];
     }
     // Process small symbols in parallel: for data that does not get good compression,
@@ -315,17 +317,17 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
       is_long_sym    = ((b0 & ~4) != 0) && (((b0 + 1) & 2) == 0);
       short_sym_mask = ballot(is_long_sym);
       batch_len      = 0;
-      b = reinterpret_cast<volatile unsnap_batch_s *>(shuffle(reinterpret_cast<uintptr_t>(b)));
+      b = reinterpret_cast<volatile unsnap_batch_s*>(shuffle(reinterpret_cast<uintptr_t>(b)));
       if (!(short_sym_mask & 1)) {
         batch_len = shuffle((t == 0) ? (short_sym_mask) ? __ffs(short_sym_mask) - 1 : 32 : 0);
         if (batch_len != 0) {
           uint32_t blen = 0;
           int32_t ofs   = 0;
           if (t < batch_len) {
-            blen = (b0 & 1) ? ((b0 >> 2) & 7) + 4 : ((b0 >> 2) + 1);
-            ofs  = (b0 & 1) ? ((b0 & 0xe0) << 3) | byte_access(s, cur_t + 1)
-                           : (b0 & 2) ? byte_access(s, cur_t + 1) | (byte_access(s, cur_t + 2) << 8)
-                                      : -(int32_t)(cur_t + 1);
+            blen        = (b0 & 1) ? ((b0 >> 2) & 7) + 4 : ((b0 >> 2) + 1);
+            ofs         = (b0 & 1)   ? ((b0 & 0xe0) << 3) | byte_access(s, cur_t + 1)
+                          : (b0 & 2) ? byte_access(s, cur_t + 1) | (byte_access(s, cur_t + 2) << 8)
+                                     : -(int32_t)(cur_t + 1);
             b[t].len    = blen;
             b[t].offset = ofs;
             ofs += blen;  // for correct out-of-range detection below
@@ -368,11 +370,10 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
             uint32_t blen = 0;
             int32_t ofs   = 0;
             if (t < batch_add) {
-              blen = (b0 & 1) ? ((b0 >> 2) & 7) + 4 : ((b0 >> 2) + 1);
-              ofs  = (b0 & 1)
-                      ? ((b0 & 0xe0) << 3) | byte_access(s, cur_t + 1)
-                      : (b0 & 2) ? byte_access(s, cur_t + 1) | (byte_access(s, cur_t + 2) << 8)
-                                 : -(int32_t)(cur_t + 1);
+              blen                    = (b0 & 1) ? ((b0 >> 2) & 7) + 4 : ((b0 >> 2) + 1);
+              ofs                     = (b0 & 1) ? ((b0 & 0xe0) << 3) | byte_access(s, cur_t + 1)
+                                        : (b0 & 2) ? byte_access(s, cur_t + 1) | (byte_access(s, cur_t + 2) << 8)
+                                                   : -(int32_t)(cur_t + 1);
               b[batch_len + t].len    = blen;
               b[batch_len + t].offset = ofs;
               ofs += blen;  // for correct out-of-range detection below
@@ -451,7 +452,9 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
           // Wait for prefetcher
           s->q.prefetch_rdpos = cur;
 #pragma unroll(1)  // We don't want unrolling here
-          while (s->q.prefetch_wrpos < min(cur + 5 * batch_size, end)) { busy_wait(10); }
+          while (s->q.prefetch_wrpos < min(cur + 5 * batch_size, end)) {
+            busy_wait(10);
+          }
           dst_pos += blen;
           if (bytes_left < blen) break;
           bytes_left -= blen;
@@ -467,7 +470,9 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
     }
     batch_len = shuffle(batch_len);
     if (t == 0) {
-      while (s->q.batch_len[batch] != 0) { busy_wait(20); }
+      while (s->q.batch_len[batch] != 0) {
+        busy_wait(20);
+      }
     }
     if (batch_len != batch_size) { break; }
   }
@@ -489,18 +494,20 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
  *would result in out-of-bounds accesses)
  */
 template <typename Storage>
-__device__ void snappy_process_symbols(unsnap_state_s *s, int t, Storage &temp_storage)
+__device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_storage)
 {
-  const uint8_t *literal_base = s->base;
-  uint8_t *out                = static_cast<uint8_t *>(s->in.dstDevice);
+  const uint8_t* literal_base = s->base;
+  uint8_t* out                = static_cast<uint8_t*>(s->in.dstDevice);
   int batch                   = 0;
 
   do {
-    volatile unsnap_batch_s *b = &s->q.batch[batch * batch_size];
+    volatile unsnap_batch_s* b = &s->q.batch[batch * batch_size];
     int32_t batch_len, blen_t, dist_t;
 
     if (t == 0) {
-      while ((batch_len = s->q.batch_len[batch]) == 0) { busy_wait(20); }
+      while ((batch_len = s->q.batch_len[batch]) == 0) {
+        busy_wait(20);
+      }
     } else {
       batch_len = 0;
     }
@@ -529,7 +536,7 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t, Storage &temp_s
           uint32_t tr  = t - shuffle(bofs - blen_t, it);
           int32_t dist = shuffle(dist_t, it);
           if (it < n) {
-            const uint8_t *src = (dist > 0) ? (out + t - dist) : (literal_base + tr - dist);
+            const uint8_t* src = (dist > 0) ? (out + t - dist) : (literal_base + tr - dist);
             out[t]             = *src;
           }
           out += shuffle(bofs, n - 1);
@@ -556,7 +563,7 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t, Storage &temp_s
           }
           blen += blen2;
           if (t < blen) {
-            const uint8_t *src = (dist > 0) ? (out - d) : (literal_base - d);
+            const uint8_t* src = (dist > 0) ? (out - d) : (literal_base - d);
             out[t]             = src[t];
           }
           out += blen;
@@ -569,12 +576,12 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t, Storage &temp_s
         uint8_t b0, b1;
         if (t < blen) {
           uint32_t pos       = t;
-          const uint8_t *src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
+          const uint8_t* src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
           b0                 = *src;
         }
         if (32 + t < blen) {
           uint32_t pos       = 32 + t;
-          const uint8_t *src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
+          const uint8_t* src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
           b1                 = *src;
         }
         if (t < blen) { out[t] = b0; }
@@ -616,24 +623,23 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t, Storage &temp_s
  */
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs)
+  unsnap_kernel(gpu_inflate_input_s* inputs, gpu_inflate_status_s* outputs)
 {
   __shared__ __align__(16) unsnap_state_s state_g;
   __shared__ cub::WarpReduce<uint32_t>::TempStorage temp_storage;
   int t             = threadIdx.x;
-  unsnap_state_s *s = &state_g;
+  unsnap_state_s* s = &state_g;
   int strm_id       = blockIdx.x;
 
   if (t < sizeof(gpu_inflate_input_s) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->in)[t] =
-      reinterpret_cast<const uint32_t *>(&inputs[strm_id])[t];
+    reinterpret_cast<uint32_t*>(&s->in)[t] = reinterpret_cast<const uint32_t*>(&inputs[strm_id])[t];
     __threadfence_block();
   }
   if (t < batch_count) { s->q.batch_len[t] = 0; }
   __syncthreads();
   if (!t) {
-    const uint8_t *cur = static_cast<const uint8_t *>(s->in.srcDevice);
-    const uint8_t *end = cur + s->in.srcSize;
+    const uint8_t* cur = static_cast<const uint8_t*>(s->in.srcDevice);
+    const uint8_t* end = cur + s->in.srcSize;
     s->error           = 0;
     if (log_cyclecount) { s->tstart = clock(); }
     if (cur < end) {
@@ -700,8 +706,8 @@ __global__ void __launch_bounds__(block_size)
   }
 }
 
-cudaError_t __host__ gpu_unsnap(gpu_inflate_input_s *inputs,
-                                gpu_inflate_status_s *outputs,
+cudaError_t __host__ gpu_unsnap(gpu_inflate_input_s* inputs,
+                                gpu_inflate_status_s* outputs,
                                 int count,
                                 rmm::cuda_stream_view stream)
 {

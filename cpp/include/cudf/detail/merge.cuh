@@ -77,8 +77,8 @@ struct tagged_element_relational_comparator {
   {
   }
 
-  __device__ weak_ordering compare(index_type lhs_tagged_index, index_type rhs_tagged_index) const
-    noexcept
+  __device__ weak_ordering compare(index_type lhs_tagged_index,
+                                   index_type rhs_tagged_index) const noexcept
   {
     side const l_side = thrust::get<0>(lhs_tagged_index);
     side const r_side = thrust::get<0>(rhs_tagged_index);
@@ -117,8 +117,8 @@ struct row_lexicographic_tagged_comparator {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
   }
 
-  __device__ bool operator()(index_type lhs_tagged_index, index_type rhs_tagged_index) const
-    noexcept
+  __device__ bool operator()(index_type lhs_tagged_index,
+                             index_type rhs_tagged_index) const noexcept
   {
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
       bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
