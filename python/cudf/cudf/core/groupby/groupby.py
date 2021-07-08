@@ -195,9 +195,9 @@ class GroupBy(Serializable):
         # Note: When there are no key columns, the below produces
         # a Float64Index, while Pandas returns an Int64Index
         # (GH: 6945)
-        data, index = self._groupby.aggregate(self.obj, normalized_aggs)
-
-        result = cudf.DataFrame._from_data(data, cudf.Index._from_data(index))
+        result = cudf.DataFrame._from_data(
+            *self._groupby.aggregate(self.obj, normalized_aggs)
+        )
 
         if self._sort:
             result = result.sort_index()
@@ -287,16 +287,8 @@ class GroupBy(Serializable):
         return cls(obj, grouping, **kwargs)
 
     def _grouped(self):
-        (
-            (keys_data, keys_index),
-            (values_data, values_index),
-            offsets,
-        ) = self._groupby.groups(self.obj)
-
-        grouped_keys = cudf.Index._from_data(keys_data, keys_index)
-        grouped_values = self.obj.__class__._from_data(
-            values_data, values_index
-        )
+        grouped_keys, grouped_values, offsets = self._groupby.groups(self.obj)
+        grouped_values = self.obj.__class__._from_data(*grouped_values)
         grouped_values._copy_type_metadata(self.obj)
         group_names = grouped_keys.unique()
         return (group_names, offsets, grouped_keys, grouped_values)
@@ -956,11 +948,8 @@ class GroupBy(Serializable):
             fill_value = [fill_value] * num_columns_to_shift
 
         value_columns = self.obj._data.select_by_label(value_column_names)
-        data, index = self._groupby.shift(
-            Table(value_columns), periods, fill_value
-        )
         return self.obj.__class__._from_data(
-            data, cudf.Index._from_data(index),
+            *self._groupby.shift(Table(value_columns), periods, fill_value)
         )
 
     def _mimic_pandas_order(
