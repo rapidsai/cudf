@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
+from cudf.api.types import is_numeric_dtype
 from cudf.core._compat import PANDAS_GE_110
 from cudf.utils.dtypes import is_categorical_dtype
 
@@ -205,9 +206,15 @@ def assert_column_equal(
     columns_equal = False
     try:
         columns_equal = (
-            left.equals(right)
-            if check_exact
-            else cp.allclose(left.values, right.values, rtol=rtol, atol=atol)
+            (
+                cp.all(left.isnull().values == right.isnull().values)
+                and cp.allclose(
+                    left[left.isnull().unary_operator("not")].values,
+                    right[right.isnull().unary_operator("not")].values,
+                )
+            )
+            if not check_exact and is_numeric_dtype(left)
+            else left.equals(right)
         )
     except TypeError as e:
         if str(e) != "Categoricals can only compare with the same type":
