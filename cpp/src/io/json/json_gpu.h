@@ -51,13 +51,13 @@ using col_map_type = concurrent_unordered_map<uint32_t, cudf::size_type>;
  * @param[out] num_valid_fields The numbers of valid fields in columns
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-void convert_json_to_columns(parse_options_view const &options,
+void convert_json_to_columns(parse_options_view const& options,
                              device_span<char const> data,
                              device_span<uint64_t const> row_offsets,
                              device_span<data_type const> column_types,
-                             col_map_type *col_map,
-                             device_span<void *const> output_columns,
-                             device_span<bitmask_type *const> valid_fields,
+                             col_map_type* col_map,
+                             device_span<void* const> output_columns,
+                             device_span<bitmask_type* const> valid_fields,
                              device_span<cudf::size_type> num_valid_fields,
                              rmm::cuda_stream_view stream);
 
@@ -75,12 +75,12 @@ void convert_json_to_columns(parse_options_view const &options,
  * @returns The count for each column data type
  */
 std::vector<cudf::io::column_type_histogram> detect_data_types(
-  parse_options_view const &options,
+  parse_options_view const& options,
   device_span<char const> data,
   device_span<uint64_t const> row_offsets,
   bool do_set_null_count,
   int num_columns,
-  col_map_type *col_map,
+  col_map_type* col_map,
   rmm::cuda_stream_view stream);
 
 /**
@@ -93,10 +93,10 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
  * @param[out] keys_info optional, information (offset, length, hash) for each found key
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-void collect_keys_info(parse_options_view const &options,
+void collect_keys_info(parse_options_view const& options,
                        device_span<char const> data,
                        device_span<uint64_t const> row_offsets,
-                       unsigned long long int *keys_cnt,
+                       unsigned long long int* keys_cnt,
                        thrust::optional<mutable_table_device_view> keys_info,
                        rmm::cuda_stream_view stream);
 

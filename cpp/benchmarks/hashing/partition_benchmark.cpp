@@ -65,7 +65,9 @@ static void CustomRanges(benchmark::internal::Benchmark* b)
 {
   for (int columns = 1; columns <= 256; columns *= 16) {
     for (int partitions = 64; partitions <= 1024; partitions *= 2) {
-      for (int rows = 1 << 17; rows <= 1 << 21; rows *= 2) { b->Args({rows, columns, partitions}); }
+      for (int rows = 1 << 17; rows <= 1 << 21; rows *= 2) {
+        b->Args({rows, columns, partitions});
+      }
     }
   }
 }
