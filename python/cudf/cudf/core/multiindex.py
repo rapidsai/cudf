@@ -6,7 +6,7 @@ import numbers
 import pickle
 import warnings
 from collections.abc import Sequence
-from typing import Any, List, Tuple, Union
+from typing import Any, List, Mapping, Tuple, Union
 
 import cupy
 import numpy as np
@@ -18,7 +18,6 @@ from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.column import as_column, column
-from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import SingleColumnFrame
 from cudf.core.index import BaseIndex, as_index
 from cudf.utils.utils import _maybe_indices_to_slice
@@ -299,9 +298,9 @@ class MultiIndex(BaseIndex):
     # MultiIndex should not be inheriting from SingleColumnFrame, but fixing
     # that will have to wait until we reshuffle the Index hierarchy.
     def _from_data(  # type: ignore
-        cls, data: ColumnAccessor, index=None
+        cls, data: Mapping, index=None
     ) -> MultiIndex:
-        return cls.from_frame(cudf.DataFrame._from_data(ColumnAccessor(data)))
+        return cls.from_frame(cudf.DataFrame._from_data(data))
 
     @property
     def shape(self):

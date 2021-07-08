@@ -118,9 +118,11 @@ cpdef read_orc(object filepaths_or_buffers,
     data, index = data_from_unique_ptr(move(c_result.tbl), names)
 
     data = {
-        name: update_column_struct_field_names(col, c_result.metadata.schema_info[i])
+        name: update_column_struct_field_names(
+            col, c_result.metadata.schema_info[i]
+        )
         for i, (name, col) in enumerate(data.items())
-        }
+    }
 
     return data, index
 
