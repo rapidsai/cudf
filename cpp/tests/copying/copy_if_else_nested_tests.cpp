@@ -219,6 +219,8 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ColumnStructBothValid)
   using structs = structs_column_wrapper;
   using bools   = fixed_width_column_wrapper<bool, int32_t>;
 
+  auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
+
   auto lhs_child_ints    = ints{11, 11, 11, 11, 11, 11, 11};
   auto lhs_child_strings = strings{{"11", "11", "11", "11", "11", "11", "11"}, all_nulls()};
   auto lhs_col           = structs{{lhs_child_ints, lhs_child_strings}}.release();
@@ -233,8 +235,6 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ColumnStructBothValid)
   std::cout << "RHS column" << std::endl;
   cudf::test::print(rhs_col->view());
 
-  auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
-
   auto expected_ints = ints{{11, 11, -22, 11, 11, -22, 11}, nulls_at(std::vector<size_type>{2, 5})};
   auto expected_strings = strings{{"NA", "NA", "22", "NA", "NA", "22", "NA"},
                                   nulls_at(std::vector<size_type>{0, 1, 3, 4, 6})};
@@ -246,6 +246,44 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ColumnStructBothValid)
   auto result_column = copy_if_else(lhs_col->view(), rhs_col->view(), selector_column->view());
   std::cout << "Actual result" << std::endl;
   cudf::test::print(result_column->view());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column->view());
+}
+
+TYPED_TEST(TypedCopyIfElseNestedTest, git)
+{
+  using T = TypeParam;
+
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using ints    = fixed_width_column_wrapper<T, int32_t>;
+  using strings = strings_column_wrapper;
+  using structs = structs_column_wrapper;
+  using bools   = fixed_width_column_wrapper<bool, int32_t>;
+
+  auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
+
+  auto lhs_child_ints    = ints{11};
+  auto lhs_child_strings = strings{{"11"}, null_at(0)};
+  auto lhs_children      = std::vector<column_view>{{lhs_child_ints, lhs_child_strings}};
+  auto lhs_scalar        = cudf::make_struct_scalar(lhs_children);
+  auto lhs_col           = cudf::make_column_from_scalar(*lhs_scalar, selector_column->size());
+
+  auto rhs_child_ints    = ints{{22}, null_at(0)};
+  auto rhs_child_strings = strings{"22"};
+  auto rhs_children      = std::vector<column_view>{{rhs_child_ints, rhs_child_strings}};
+  auto rhs_scalar        = cudf::make_struct_scalar(table_view{});
+
+  auto expected_ints = ints{{11, 11, -22, 11, 11, -22, 11}, nulls_at(std::vector<size_type>{2, 5})};
+  auto expected_strings = strings{{"NA", "NA", "22", "NA", "NA", "22", "NA"},
+                                  nulls_at(std::vector<size_type>{0, 1, 3, 4, 6})};
+  auto expected_result  = structs{{expected_ints, expected_strings}}.release();
+
+  std::cout << "Expected result" << std::endl;
+  cudf::test::print(expected_result->view());
+
+  auto result_column = copy_if_else(*lhs_scalar, *rhs_scalar, selector_column->view());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column->view());
 }
