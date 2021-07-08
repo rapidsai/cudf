@@ -339,7 +339,8 @@ void init_dictionaries(orc_table_view &orc_table,
   std::vector<rmm::device_uvector<uint32_t>> dict_indices;
   for (size_t i = 0; i < orc_table.num_string_columns(); ++i) {
     auto &str_column = orc_table.string_column(i);
-    dict_indices.emplace_back(str_column.size(), stream);
+    dict_indices.push_back(
+      cudf::detail::make_zeroed_device_uvector_async<uint32_t>(str_column.size(), stream));
   }
   std::vector<device_span<uint32_t>> dict_indices_views;
   for (auto &di : dict_indices) { dict_indices_views.emplace_back(di); }
@@ -1312,14 +1313,16 @@ string_dictionaries allocate_dictionaries(orc_table_view const &orc_table,
                  orc_table.string_column_indices.end(),
                  std::back_inserter(data),
                  [&](auto &idx) {
-                   return rmm::device_uvector<uint32_t>(orc_table.columns[idx].size(), stream);
+                   return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
+                     orc_table.columns[idx].size(), stream);
                  });
   std::vector<rmm::device_uvector<uint32_t>> index;
   std::transform(orc_table.string_column_indices.begin(),
                  orc_table.string_column_indices.end(),
                  std::back_inserter(index),
                  [&](auto &idx) {
-                   return rmm::device_uvector<uint32_t>(orc_table.columns[idx].size(), stream);
+                   return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
+                     orc_table.columns[idx].size(), stream);
                  });
   stream.synchronize();
 
