@@ -21,6 +21,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/sequence.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -36,6 +37,7 @@
 #include "thrust/iterator/counting_iterator.h"
 #include "thrust/iterator/transform_iterator.h"
 
+using cudf::detail::make_device_uvector_async;
 namespace cudf {
 
 namespace detail {
@@ -43,32 +45,6 @@ namespace detail {
 static inline __host__ __device__ int32_t align_offset(int32_t offset, std::size_t alignment)
 {
   return (offset + alignment - 1) & ~(alignment - 1);
-}
-
-/**
- * Copy a simple vector to device memory asynchronously. Be sure to read
- * the data on the same stream as is used to copy it.
- */
-template <typename T>
-std::unique_ptr<rmm::device_uvector<T>> copy_to_dev_async(const std::vector<T> &input,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource *mr)
-{
-  std::unique_ptr<rmm::device_uvector<T>> ret(new rmm::device_uvector<T>(input.size(), stream, mr));
-  CUDA_TRY(cudaMemcpyAsync(
-    ret->data(), input.data(), sizeof(T) * input.size(), cudaMemcpyHostToDevice, stream.value()));
-  return ret;
-}
-
-template <typename T>
-rmm::device_uvector<T> copy_to_dev_async2(const std::vector<T> &input,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource *mr)
-{
-  rmm::device_uvector<T> ret(input.size(), stream, mr);
-  CUDA_TRY(cudaMemcpyAsync(
-    ret.data(), input.data(), sizeof(T) * input.size(), cudaMemcpyHostToDevice, stream.value()));
-  return ret;
 }
 
 __global__ void copy_to_fixed_width_columns(const cudf::size_type num_rows,
@@ -180,8 +156,8 @@ __global__ void copy_to_fixed_width_columns(const cudf::size_type num_rows,
         }
 
         cudf::bitmask_type *nm          = output_nm[col_index];
-        int8_t *valid_byte              = &row_vld_tmp[col_index / 8];
-        cudf::size_type byte_bit_offset = col_index % 8;
+        int8_t *valid_byte              = &row_vld_tmp[word_index(col_index)];
+        cudf::size_type byte_bit_offset = intra_word_index(col_index);
         int predicate                   = *valid_byte & (1 << byte_bit_offset);
         uint32_t bitmask                = __ballot_sync(active_mask, predicate);
         if (row_index % 32 == 0) { nm[word_index(row_index)] = bitmask; }
@@ -278,8 +254,8 @@ __global__ void copy_from_fixed_width_columns(const cudf::size_type start_row,
         }
         // atomicOr only works on 32 bit or 64 bit  aligned values, and not byte aligned
         // so we have to rewrite the addresses to make sure that it is 4 byte aligned
-        int8_t *valid_byte              = &row_vld_tmp[col_index / 8];
-        cudf::size_type byte_bit_offset = col_index % 8;
+        int8_t *valid_byte              = &row_vld_tmp[word_index(col_index)];
+        cudf::size_type byte_bit_offset = intra_word_index(col_index);
         uint64_t fixup_bytes            = reinterpret_cast<uint64_t>(valid_byte) % 4;
         int32_t *valid_int              = reinterpret_cast<int32_t *>(valid_byte - fixup_bytes);
         cudf::size_type int_bit_offset  = byte_bit_offset + (fixup_bytes * 8);
@@ -505,8 +481,8 @@ __global__ void copy_from_columns(const size_type num_rows,
         // we do this directly in the final location because the entire row may not
         // fit in shared memory and may require many blocks to process it entirely
         int8_t *valid_byte =
-          &output_data[block.buffer_num][row_offsets[row] + validity_offset + col / 8];
-        cudf::size_type byte_bit_offset = col % 8;
+          &output_data[block.buffer_num][row_offsets[row] + validity_offset + word_index(col)];
+        cudf::size_type byte_bit_offset = intra_word_index(col);
         uint64_t fixup_bytes            = reinterpret_cast<uint64_t>(valid_byte) % 4;
         int32_t *valid_int              = reinterpret_cast<int32_t *>(valid_byte - fixup_bytes);
         cudf::size_type int_bit_offset  = byte_bit_offset + (fixup_bytes * 8);
@@ -648,7 +624,7 @@ __global__ void copy_to_columns(const size_type num_rows,
   // This has been broken up for us in the block_info struct, so we don't have
   // any calculation to do here, but it is important to note.
 
-  bool debug_print = false; //blockIdx.x == 1 && threadIdx.x == 0;
+  bool debug_print = false; //blockIdx.x == 0 && threadIdx.x == 0;
 
   if (debug_print) {
     printf("%d %d - %d rows, %d columns\n", threadIdx.x, blockIdx.x, num_rows, num_columns);
@@ -806,7 +782,7 @@ __global__ void copy_to_columns(const size_type num_rows,
     auto const col             = index / validity_batches_per_col;
     auto const batch           = index % validity_batches_per_col;
     auto const starting_row    = batch * 32;
-    auto const validity_offset = col_offsets[num_columns] + col / 8;
+    auto const validity_offset = col_offsets[num_columns] + word_index(col);
 
     if (debug_print) {
       printf("col: %d, batch: %d, starting_row: %d, validity_offset: %d\n", col, batch, starting_row, validity_offset);
@@ -821,7 +797,7 @@ __global__ void copy_to_columns(const size_type num_rows,
       }
   
       auto const val_byte     = *validity_ptr;
-      auto const src_shift    = col % 8;
+      auto const src_shift    = intra_word_index(col);
       auto const dst_shift    = row % 32;
       auto const src_bit_mask = 1 << src_shift;
       if (debug_print) {
@@ -920,10 +896,10 @@ static std::unique_ptr<cudf::column> fixed_width_convert_to_rows(
   const cudf::size_type num_rows,
   const cudf::size_type num_columns,
   const cudf::size_type size_per_row,
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> &column_start,
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> &column_size,
-  std::unique_ptr<rmm::device_uvector<const int8_t *>> &input_data,
-  std::unique_ptr<rmm::device_uvector<const cudf::bitmask_type *>> &input_nm,
+  rmm::device_uvector<cudf::size_type> &column_start,
+  rmm::device_uvector<cudf::size_type> &column_size,
+  rmm::device_uvector<const int8_t *> &input_data,
+  rmm::device_uvector<const cudf::bitmask_type *> &input_nm,
   const cudf::scalar &zero,
   const cudf::scalar &scalar_size_per_row,
   rmm::cuda_stream_view stream,
@@ -954,10 +930,10 @@ static std::unique_ptr<cudf::column> fixed_width_convert_to_rows(
     num_rows,
     num_columns,
     size_per_row,
-    column_start->data(),
-    column_size->data(),
-    input_data->data(),
-    input_nm->data(),
+    column_start.data(),
+    column_size.data(),
+    input_data.data(),
+    input_nm.data(),
     data->mutable_view().data<int8_t>());
 
   return cudf::make_lists_column(num_rows,
@@ -1004,7 +980,7 @@ static inline int32_t compute_fixed_width_layout(std::vector<cudf::data_type> co
   // Now we need to add in space for validity
   // Eventually we can think about nullable vs not nullable, but for now we will just always add it
   // in
-  int32_t validity_bytes_needed = (schema.size() + 7) / 8;
+  int32_t validity_bytes_needed = word_index(schema.size() + 7);
   // validity comes at the end and is byte aligned so we can pack more in.
   at_offset += validity_bytes_needed;
   // Now we need to pad the end so all rows are 64 bit aligned
@@ -1235,8 +1211,8 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(cudf::table_view con
     }
   }
 
-  auto dev_input_data = detail::copy_to_dev_async2(input_data, stream, mr);
-  auto dev_input_nm   = detail::copy_to_dev_async2(input_nm, stream, mr);
+  auto dev_input_data = make_device_uvector_async(input_data, stream, mr);
+  auto dev_input_nm   = make_device_uvector_async(input_nm, stream, mr);
 
   std::vector<size_type> row_sizes;     // size of each row in bytes including any alignment padding
   std::vector<size_type> row_offsets;   // offset from the start of the data to this row
@@ -1287,8 +1263,8 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(cudf::table_view con
 #endif
 
 
-  auto dev_col_sizes  = detail::copy_to_dev_async2(column_sizes, stream, mr);
-  auto dev_col_starts = detail::copy_to_dev_async2(column_starts, stream, mr);
+  auto dev_col_sizes  = make_device_uvector_async(column_sizes, stream, mr);
+  auto dev_col_starts = make_device_uvector_async(column_starts, stream, mr);
 
   std::vector<detail::row_batch> row_batches;
 
@@ -1322,16 +1298,9 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(cudf::table_view con
   size_type row_batch_rows  = 0;
   uint64_t row_offset       = 0;
 
-  auto calculate_validity_size = [](int const num_cols) {
-    // Now we need to add in space for validity
-    // Eventually we can think about nullable vs not nullable, but for now we will just always add
-    // it in
-    return (num_cols + 7) / 8;
-  };
-
   // fixed_width_size_per_row is the size of the fixed-width portion of a row. We need to then
   // calculate the size of each row's variable-width data and validity as well.
-  auto validity_size = calculate_validity_size(num_columns);
+  auto validity_size = num_bitmask_words(num_columns);
   for (int row = 0; row < num_rows; ++row) {
     auto aligned_row_batch_size =
       detail::align_offset(row_batch_size, 8);  // rows are 8 byte aligned
@@ -1364,7 +1333,7 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(cudf::table_view con
     row_batches.push_back(detail::row_batch{static_cast<size_type>(row_batch_size), row_batch_rows});
   }
 
-  auto dev_row_offsets = detail::copy_to_dev_async2(row_offsets, stream, mr);
+  auto dev_row_offsets = make_device_uvector_async(row_offsets, stream, mr);
 
 #if defined(DEBUG)
   printf("%d rows and %d columns in table\n", num_rows, num_columns);
@@ -1384,7 +1353,7 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(cudf::table_view con
     output_data.push_back(static_cast<int8_t *>(temp.data()));
     output_buffers.push_back(std::move(temp));
   }
-  auto dev_output_data = detail::copy_to_dev_async2(output_data, stream, mr);
+  auto dev_output_data = make_device_uvector_async(output_data, stream, mr);
 
   std::vector<detail::block_info> block_infos =
     build_block_infos(column_sizes, column_starts, row_batches, num_rows, shmem_limit_per_block);
@@ -1402,7 +1371,7 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(cudf::table_view con
   printf(" total):\n");
 #endif
 
-  auto dev_block_infos = detail::copy_to_dev_async2(block_infos, stream, mr);
+  auto dev_block_infos = make_device_uvector_async(block_infos, stream, mr);
 
   // blast through the entire table and convert it
   dim3 blocks(block_infos.size());
@@ -1443,7 +1412,7 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(cudf::table_view con
     }
     offset_offset += row_batches[i].row_count;
 
-    auto dev_offsets = detail::copy_to_dev_async2(offset_vals, stream, mr);
+    auto dev_offsets = make_device_uvector_async(offset_vals, stream, mr);
     auto offsets     = std::make_unique<column>(
       data_type{type_id::INT32}, (size_type)offset_vals.size(), dev_offsets.release());
 
@@ -1477,8 +1446,8 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
     std::vector<cudf::size_type> column_size;
 
     int32_t size_per_row  = detail::compute_fixed_width_layout(schema, column_start, column_size);
-    auto dev_column_start = detail::copy_to_dev_async(column_start, stream, mr);
-    auto dev_column_size  = detail::copy_to_dev_async(column_size, stream, mr);
+    auto dev_column_start = make_device_uvector_async(column_start, stream, mr);
+    auto dev_column_size  = make_device_uvector_async(column_size, stream, mr);
 
     int32_t max_rows_per_batch = std::numeric_limits<int>::max() / size_per_row;
     // Make the number of rows per batch a multiple of 32 so we don't have to worry about
@@ -1495,8 +1464,8 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
       input_data.emplace_back(cv.data<int8_t>());
       input_nm.emplace_back(cv.null_mask());
     }
-    auto dev_input_data = detail::copy_to_dev_async(input_data, stream, mr);
-    auto dev_input_nm   = detail::copy_to_dev_async(input_nm, stream, mr);
+    auto dev_input_data = make_device_uvector_async(input_data, stream, mr);
+    auto dev_input_nm   = make_device_uvector_async(input_nm, stream, mr);
 
     using ScalarType = cudf::scalar_type_t<cudf::size_type>;
     auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32), stream.value());
@@ -1561,7 +1530,7 @@ std::unique_ptr<cudf::table> convert_from_rows2(cudf::lists_column_view const &i
   size_type fixed_width_size_per_row = detail::compute_column_information(
     iter, iter + num_columns, column_starts, column_sizes);//, [](void *) {});
 
-  size_type validity_size = (num_columns + 7) / 8;
+  size_type validity_size = num_bitmask_words(num_columns);
 
   size_type row_size = detail::align_offset(fixed_width_size_per_row + validity_size, 8);
 
@@ -1569,8 +1538,8 @@ std::unique_ptr<cudf::table> convert_from_rows2(cudf::lists_column_view const &i
   // this is probably fine
   CUDF_EXPECTS(row_size * num_rows == child.size(),
                "The layout of the data appears to be off");
-  auto dev_col_starts = detail::copy_to_dev_async2(column_starts, stream, mr);
-  auto dev_col_sizes  = detail::copy_to_dev_async2(column_sizes, stream, mr);
+  auto dev_col_starts = make_device_uvector_async(column_starts, stream, mr);
+  auto dev_col_sizes  = make_device_uvector_async(column_sizes, stream, mr);
 
   // build the row_batches from the passed in list column
   std::vector<detail::row_batch> row_batches;
@@ -1590,13 +1559,13 @@ std::unique_ptr<cudf::table> convert_from_rows2(cudf::lists_column_view const &i
     output_columns.emplace_back(std::move(column));
   }
 
-  auto dev_output_data = detail::copy_to_dev_async2(output_data, stream, mr);
-  auto dev_output_nm   = detail::copy_to_dev_async2(output_nm, stream, mr);
+  auto dev_output_data = make_device_uvector_async(output_data, stream, mr);
+  auto dev_output_nm   = make_device_uvector_async(output_nm, stream, mr);
 
   std::vector<detail::block_info> block_infos =
     build_block_infos(column_sizes, column_starts, row_batches, num_rows, shmem_limit_per_block);
 
-  auto dev_block_infos = detail::copy_to_dev_async2(block_infos, stream, mr);
+  auto dev_block_infos = make_device_uvector_async(block_infos, stream, mr);
 
   dim3 blocks(block_infos.size());
   #if defined(DEBUG) || 1
@@ -1647,8 +1616,8 @@ std::unique_ptr<cudf::table> convert_from_rows(cudf::lists_column_view const &in
     // this is probably fine
     CUDF_EXPECTS(size_per_row * num_rows == child.size(),
                  "The layout of the data appears to be off");
-    auto dev_column_start = detail::copy_to_dev_async(column_start, stream, mr);
-    auto dev_column_size  = detail::copy_to_dev_async(column_size, stream, mr);
+    auto dev_column_start = make_device_uvector_async(column_start, stream);
+    auto dev_column_size = make_device_uvector_async(column_size, stream);
 
     // Allocate the columns we are going to write into
     std::vector<std::unique_ptr<cudf::column>> output_columns;
@@ -1663,8 +1632,8 @@ std::unique_ptr<cudf::table> convert_from_rows(cudf::lists_column_view const &in
       output_columns.emplace_back(std::move(column));
     }
 
-    auto dev_output_data = detail::copy_to_dev_async(output_data, stream, mr);
-    auto dev_output_nm   = detail::copy_to_dev_async(output_nm, stream, mr);
+    auto dev_output_data = make_device_uvector_async(output_data, stream, mr);
+    auto dev_output_nm   = make_device_uvector_async(output_nm, stream, mr);
 
     dim3 blocks;
     dim3 threads;
@@ -1675,10 +1644,10 @@ std::unique_ptr<cudf::table> convert_from_rows(cudf::lists_column_view const &in
       num_rows,
       num_columns,
       size_per_row,
-      dev_column_start->data(),
-      dev_column_size->data(),
-      dev_output_data->data(),
-      dev_output_nm->data(),
+      dev_column_start.data(),
+      dev_column_size.data(),
+      dev_output_data.data(),
+      dev_output_nm.data(),
       child.data<int8_t>());
 
     return std::make_unique<cudf::table>(std::move(output_columns));
