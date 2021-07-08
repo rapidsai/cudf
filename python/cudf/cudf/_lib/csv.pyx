@@ -396,13 +396,10 @@ def read_csv(
         c_result = move(cpp_read_csv(read_csv_options_c))
 
     meta_names = [name.decode() for name in c_result.metadata.column_names]
-    data, _ = data_from_unique_ptr(
+    df = cudf.DataFrame._from_data(*data_from_unique_ptr(
         move(c_result.tbl),
         column_names=meta_names
-    )
-    df = cudf.DataFrame._from_data(
-        cudf.core.column_accessor.ColumnAccessor(data)
-    )
+    ))
 
     if names is not None and isinstance(names[0], (int)):
         df.columns = [int(x) for x in df._data]
