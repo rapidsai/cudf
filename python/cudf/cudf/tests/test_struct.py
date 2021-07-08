@@ -6,7 +6,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -75,3 +75,26 @@ def test_serialize_struct_dtype(fields):
     dtype = cudf.StructDtype(fields)
     recreated = dtype.__class__.deserialize(*dtype.serialize())
     assert recreated == dtype
+
+
+@pytest.mark.parametrize(
+    "series, expected",
+    [
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": 1},
+                {},
+            ],
+            {"a": "Hello world", "b": [], "c": cudf.NA},
+        ),
+        ([{}], {}),
+        (
+            [{"b": True}, {"a": 1, "c": [1, 2, 3], "d": "1", "b": False}],
+            {"a": cudf.NA, "c": cudf.NA, "d": cudf.NA, "b": True},
+        ),
+    ],
+)
+def test_struct_getitem(series, expected):
+    sr = cudf.Series(series)
+    assert sr[0] == expected

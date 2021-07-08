@@ -21,6 +21,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/json.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -98,6 +99,44 @@ class parser {
     return false;
   }
 
+  CUDA_HOST_DEVICE_CALLABLE bool is_hex_digit(char c)
+  {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+  }
+
+  CUDA_HOST_DEVICE_CALLABLE int64_t chars_left() { return input_len - ((pos - input) + 1); }
+
+  /**
+   * @brief Parse an escape sequence.
+   *
+   * Must be a valid sequence as specified by the JSON format
+   * https://www.json.org/json-en.html
+   *
+   * @returns True on success or false on fail.
+   */
+  CUDA_HOST_DEVICE_CALLABLE bool parse_escape_seq()
+  {
+    if (*pos != '\\') { return false; }
+    char c = *++pos;
+
+    // simple case
+    if (c == '\"' || c == '\\' || c == '/' || c == 'b' || c == 'f' || c == 'n' || c == 'r' ||
+        c == 't') {
+      pos++;
+      return true;
+    }
+
+    // hex digits: must be of the form uXXXX  where each X is a valid hex digit
+    if (c == 'u' && chars_left() >= 4 && is_hex_digit(pos[1]) && is_hex_digit(pos[2]) &&
+        is_hex_digit(pos[3]) && is_hex_digit(pos[4])) {
+      pos += 5;
+      return true;
+    }
+
+    // an illegal escape sequence.
+    return false;
+  }
+
   /**
    * @brief Parse a quote-enclosed JSON string.
    *
@@ -122,12 +161,16 @@ class parser {
 
         const char* start = ++pos;
         while (!eof()) {
-          if (*pos == quote) {
+          // handle escaped characters
+          if (*pos == '\\') {
+            if (!parse_escape_seq()) { return parse_result::ERROR; }
+          } else if (*pos == quote) {
             str = string_view(start, pos - start);
             pos++;
             return parse_result::SUCCESS;
+          } else {
+            pos++;
           }
-          pos++;
         }
       }
     }
@@ -229,15 +272,22 @@ class json_state : private parser {
       int arr_count = 0;
 
       while (!eof(end)) {
-        // could do some additional checks here. we know our current
-        // element type, so we could be more strict on what kinds of
-        // characters we expect to see.
-        switch (*end++) {
-          case '{': obj_count++; break;
-          case '}': obj_count--; break;
-          case '[': arr_count++; break;
-          case ']': arr_count--; break;
-          default: break;
+        // parse strings explicitly so we handle all interesting corner cases (such as strings
+        // containing {, }, [ or ]
+        if (is_quote(*end)) {
+          string_view str;
+          pos = end;
+          if (parse_string(str, false, *end) == parse_result::ERROR) { return parse_result::ERROR; }
+          end = pos;
+        } else {
+          char const c = *end++;
+          switch (c) {
+            case '{': obj_count++; break;
+            case '}': obj_count--; break;
+            case '[': arr_count++; break;
+            case ']': arr_count--; break;
+            default: break;
+          }
         }
         if (obj_count == 0 && arr_count == 0) { break; }
       }
@@ -964,8 +1014,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     cudf::detail::get_value<offset_type>(offsets_view, col.size(), stream);
 
   // allocate output string column
-  auto chars = cudf::make_fixed_width_column(
-    data_type{type_id::INT8}, output_size, mask_state::UNALLOCATED, stream, mr);
+  auto chars = create_chars_child_column(output_size, stream, mr);
 
   // potential optimization : if we know that all outputs are valid, we could skip creating
   // the validity mask altogether

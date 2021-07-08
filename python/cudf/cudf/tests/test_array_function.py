@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 from cudf.utils.utils import IS_NEP18_ACTIVE
 
 missing_arrfunc_cond = not IS_NEP18_ACTIVE

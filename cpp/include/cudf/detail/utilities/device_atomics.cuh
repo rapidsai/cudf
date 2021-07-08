@@ -95,12 +95,12 @@ struct genericAtomicOperationImpl<T, Op, 2> {
 
     do {
       assumed                 = old;
-      T target_value          = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
+      T const target_value    = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
       uint16_t updating_value = type_reinterpret<uint16_t, T>(op(target_value, update_value));
 
-      T_int new_value = (is_32_align) ? (old & 0xffff0000) | updating_value
-                                      : (old & 0xffff) | (T_int(updating_value) << 16);
-      old = atomicCAS(address_uint32, assumed, new_value);
+      T_int const new_value = (is_32_align) ? (old & 0xffff0000) | updating_value
+                                            : (old & 0xffff) | (T_int(updating_value) << 16);
+      old                   = atomicCAS(address_uint32, assumed, new_value);
     } while (assumed != old);
 
     return (is_32_align) ? T(old & 0xffff) : T(old >> 16);

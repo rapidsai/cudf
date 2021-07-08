@@ -267,7 +267,8 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     }
     digits_idx = std::max(digits_idx, min_digits);
     // digits are backwards, reverse the string into the output
-    while (digits_idx-- > 0) *str++ = digits[digits_idx];
+    while (digits_idx-- > 0)
+      *str++ = digits[digits_idx];
     return str;
   }
 
@@ -427,7 +428,7 @@ struct dispatch_from_durations_fn {
     // build chars column
     auto const chars_bytes =
       cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-    auto chars_column = detail::create_chars_child_column(strings_count, chars_bytes, stream, mr);
+    auto chars_column = detail::create_chars_child_column(chars_bytes, stream, mr);
     auto d_chars      = chars_column->mutable_view().template data<char>();
 
     thrust::for_each_n(rmm::exec_policy(stream),
