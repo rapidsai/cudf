@@ -7,6 +7,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
+#include <cub/block/block_scan.cuh>
+
 #include <bitset>
 #include <iostream>
 #include <memory>
@@ -23,41 +25,100 @@ struct trie_state {
   uint8_t placeholder;
 };
 
+using superstate = cudf::io::text::superstate<16>;
+
+auto constexpr BYTES_PER_THREAD = 8;
+auto constexpr THREADS_PER_TILE = 256;
+auto constexpr BYTES_PER_TILE   = BYTES_PER_THREAD * THREADS_PER_TILE;
+auto constexpr TILES_PER_CHUNK  = 1024;
+auto constexpr BYTES_PER_CHUNK  = BYTES_PER_TILE * TILES_PER_CHUNK;
+
+// multibyte_split works by splitting up inputs in to 32 inputs (bytes) per thread, and transforming
+// them in to data structures called "superstates". these superstates are created by searching a
+// trie, but instead of a tradition trie where the search begins at a single node at the beginning,
+// we allow our search to begin anywhere within the trie tree. The position within the trie tree is
+// stored as a "partial match path", which indicates "we can get from here to there by a set of
+// specific transitions". By scanning together superstates, we effectively know "we can get here
+// from the beginning by following the inputs". By doing this, each thread knows exactly what state
+// it begins in. From there, each thread can then take deterministic action. In this case, the
+// deterministic action is counting and outputting delimiter offsets when a delimiter is found.
+
+struct BlockPrefixCallbackOp {
+  // Running prefix
+  superstate running_total;
+  // Constructor
+  __device__ BlockPrefixCallbackOp(superstate running_total) : running_total(running_total) {}
+  // Callback operator to be entered by the first warp of threads in the block.
+  // Thread-0 is responsible for returning a value for seeding the block-wide scan.
+  __device__ superstate operator()(superstate const& block_aggregate)
+  {
+    superstate old_prefix = running_total;
+    running_total         = old_prefix + block_aggregate;
+    return old_prefix;
+  }
+};
+
 template <uint32_t BYTES_PER_THREAD>
 __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
                                        cudf::device_span<char> data)
 {
+  typedef cub::BlockScan<superstate, THREADS_PER_TILE> BlockScan;
+
+  __shared__ union {
+    typename BlockScan::TempStorage scan;
+  } temp_storage;
+
   auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
   auto const data_begin = thread_idx * BYTES_PER_THREAD;
   auto data_end         = data_begin + BYTES_PER_THREAD;
 
-  cudf::io::text::superstate<16> x;
-
   if (data_end > data.size()) { data_end = data.size(); }
 
+  superstate thread_data[BYTES_PER_THREAD];
+
+  for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
+    auto const element_idx = data_begin + i;
+    if (element_idx >= data.size()) {
+      thread_data[i] = superstate();
+    } else {
+      thread_data[i] = superstate().apply([&](uint8_t state) {  //
+        return trie.transition(state, data[element_idx]);
+      });
+    }
+  }
+
+  BlockPrefixCallbackOp prefix_op({});
+
+  __syncthreads();
+
+  BlockScan(temp_storage.scan)
+    .InclusiveScan(  //
+      thread_data,
+      thread_data,
+      [](superstate const& lhs, superstate const& rhs) { return lhs + rhs; },
+      prefix_op);
+
+  __syncthreads();
+
   if (data_end < data.size()) {  //
-    printf("bid(%i) tid(%i)    : whole\n", blockIdx.x, threadIdx.x);
+    printf("bid(%2i) tid(%2i)    : whole\n", blockIdx.x, threadIdx.x);
   } else if (data_begin < data.size()) {
-    printf("bid(%i) tid(%i)    : partial\n", blockIdx.x, threadIdx.x);
+    printf("bid(%2i) tid(%2i)    : partial\n", blockIdx.x, threadIdx.x);
   }
 
-  auto machine = [&](uint8_t const& state, char const& byte) {
-    return trie.transition(state, byte);
-  };
-
-  for (uint32_t i = data_begin; i < data_end; i++) {
-    x = x.apply(machine, data[i]);
-    printf("bid(%i) tid(%i) %3i: %c - %u\n",
-           blockIdx.x,
-           threadIdx.x,
-           i,
-           data[i],
-           static_cast<uint32_t>(x.get(0)));
-
-    // match_state = match_state.apply(machine, data[i]);
+  for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
+    auto const element_idx = thread_idx * BYTES_PER_THREAD + i;
+    if (element_idx >= data.size()) {
+      break;
+    } else {
+      printf("bid(%2i) tid(%2i) %3i: %c - %u\n",
+             blockIdx.x,
+             threadIdx.x,
+             i,
+             data[data_begin + i],
+             static_cast<uint32_t>(thread_data[i].get(0)));
+    }
   }
-
-  // match_state is now the block-partial reduction, so we should set it.
 }
 
 }  // namespace
@@ -72,12 +133,6 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::input_stream& inpu
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  auto constexpr BYTES_PER_THREAD = 32;
-  auto constexpr THREADS_PER_TILE = 256;
-  auto constexpr BYTES_PER_TILE   = BYTES_PER_THREAD * THREADS_PER_TILE;
-  auto constexpr TILES_PER_CHUNK  = 1024;
-  auto constexpr BYTES_PER_CHUNK  = BYTES_PER_TILE * TILES_PER_CHUNK;
-
   auto input_buffer     = rmm::device_uvector<char>(BYTES_PER_CHUNK, stream);
   auto const input_span = cudf::device_span<char>(input_buffer);
 

@@ -105,23 +105,31 @@ struct superstate {
     }
     return result;
   }
+
+  template <typename BinaryOp>
+  inline constexpr superstate apply(BinaryOp const& op)
+  {
+    superstate<N, State> result(0);
+    for (uint8_t pre = 0; pre < N; pre++) {
+      auto const mid  = get(pre);
+      auto const post = op(mid);
+      result.set(pre, post);
+    }
+    return result;
+  }
 };
 
 template <typename State, uint8_t N, typename Instruction>
 inline constexpr superstate<N, State> operator+(superstate<N, State> lhs, Instruction rhs)
 {
-  return lhs.apply(  //
-    [](State state, Instruction rhs) { return state + rhs; },
-    rhs);
+  return lhs.apply([&](State state) { return state + rhs; });
 }
 
 template <typename State, uint8_t N>
 inline constexpr superstate<N, State> operator+(superstate<N, State> lhs, superstate<N, State> rhs)
 {
   using Index = typename superstate<N, State>::Index;
-  return lhs.apply(  //
-    [](State state, superstate<N, State> rhs) { return rhs.get(static_cast<Index>(state)); },
-    rhs);
+  return lhs.apply([&](State state) { return rhs.get(static_cast<Index>(state)); });
 }
 
 }  // namespace text
