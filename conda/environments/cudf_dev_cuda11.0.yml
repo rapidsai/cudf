@@ -31,7 +31,6 @@ dependencies:
   - nbsphinx
   - numpydoc
   - ipython
-  - recommonmark
   - pandoc=<2.0.0
   - cudatoolkit=11.0
   - pip
