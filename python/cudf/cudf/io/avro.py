@@ -30,11 +30,10 @@ def read_avro(
         ValueError("URL content-encoding decompression is not supported")
 
     if engine == "cudf":
-        data, index = libcudf.avro.read_avro(
-            filepath_or_buffer, columns, skiprows, num_rows
-        )
         return cudf.DataFrame._from_data(
-            cudf.core.column_accessor.ColumnAccessor(data), index=index
+            *libcudf.avro.read_avro(
+                filepath_or_buffer, columns, skiprows, num_rows
+            )
         )
     else:
         raise NotImplementedError("read_avro currently only supports cudf")

@@ -7,7 +7,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 from uuid import uuid4
 
 import cupy
@@ -269,7 +269,7 @@ class Series(SingleColumnFrame, Serializable):
     @classmethod
     def _from_data(
         cls,
-        data: ColumnAccessor,
+        data: Mapping,
         index: Optional[BaseIndex] = None,
         # TODO: Remove this, callers should always just change the name of the
         # column in data.

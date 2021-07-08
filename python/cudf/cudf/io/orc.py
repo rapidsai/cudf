@@ -290,18 +290,17 @@ def read_orc(
             stripes = selected_stripes
 
     if engine == "cudf":
-        data, _ = liborc.read_orc(
-            filepaths_or_buffers,
-            columns,
-            stripes,
-            skiprows,
-            num_rows,
-            use_index,
-            decimal_cols_as_float,
-            timestamp_type,
-        )
         return DataFrame._from_data(
-            cudf.core.column_accessor.ColumnAccessor(data)
+            *liborc.read_orc(
+                filepaths_or_buffers,
+                columns,
+                stripes,
+                skiprows,
+                num_rows,
+                use_index,
+                decimal_cols_as_float,
+                timestamp_type,
+            )
         )
     else:
 

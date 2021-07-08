@@ -10,7 +10,7 @@ import sys
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from typing import Any, Optional, TypeVar
+from typing import Any, Mapping, Optional, TypeVar
 
 import cupy
 import numpy as np
@@ -491,7 +491,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     @classmethod
     def _from_data(
         cls,
-        data: ColumnAccessor,
+        data: Mapping,
         index: Optional[BaseIndex] = None,
         # TODO: Remove this, callers should always just change the name of the
         # columns in data.
@@ -885,10 +885,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     )
                 )
             else:
-                data, index = libcudf.copying.table_slice(
-                    self, [start, stop], keep_index
-                )[0]
-                result = self._from_data(ColumnAccessor(data), index)
+                result = self._from_data(
+                    *libcudf.copying.table_slice(
+                        self, [start, stop], keep_index
+                    )[0]
+                )
 
                 result._copy_type_metadata(self, include_index=keep_index)
                 # Adding index of type RangeIndex back to
@@ -4294,11 +4295,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         index = self.columns.copy(deep=False)
         if self._num_columns == 0 or self._num_rows == 0:
             return DataFrame(index=index, columns=columns)
-        # Cython renames the columns to the range [0...ncols]
-        data = libcudf.transpose.transpose(self)
         # Set the old column names as the new index
         result = self.__class__._from_data(
-            ColumnAccessor(data), as_index(index)
+            # Cython renames the columns to the range [0...ncols]
+            libcudf.transpose.transpose(self),
+            as_index(index),
         )
         # Set the old index as the new column names
         result.columns = columns

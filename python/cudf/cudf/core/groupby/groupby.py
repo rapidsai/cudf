@@ -293,13 +293,9 @@ class GroupBy(Serializable):
             offsets,
         ) = self._groupby.groups(self.obj)
 
-        grouped_keys = cudf.Index._from_data(
-            cudf.core.column_accessor.ColumnAccessor(keys_data),
-            index=keys_index,
-        )
+        grouped_keys = cudf.Index._from_data(keys_data, keys_index)
         grouped_values = self.obj.__class__._from_data(
-            cudf.core.column_accessor.ColumnAccessor(values_data),
-            index=values_index,
+            values_data, values_index
         )
         grouped_values._copy_type_metadata(self.obj)
         group_names = grouped_keys.unique()
@@ -806,9 +802,7 @@ class GroupBy(Serializable):
         """
         value_columns = self.grouping.values
         result = self.obj.__class__._from_data(
-            cudf.core.column_accessor.ColumnAccessor(
-                self._groupby.replace_nulls(Table(value_columns._data), method)
-            )
+            self._groupby.replace_nulls(Table(value_columns._data), method)
         )
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(value_columns)
@@ -903,9 +897,7 @@ class GroupBy(Serializable):
         value_columns = self.grouping.values
         _, (data, index), _ = self._groupby.groups(Table(value_columns._data))
 
-        grouped = self.obj.__class__._from_data(
-            cudf.core.column_accessor.ColumnAccessor(data), index=index
-        )
+        grouped = self.obj.__class__._from_data(data, index)
         result = grouped.fillna(
             value=value, inplace=inplace, axis=axis, limit=limit
         )
@@ -968,8 +960,7 @@ class GroupBy(Serializable):
             Table(value_columns), periods, fill_value
         )
         return self.obj.__class__._from_data(
-            cudf.core.column_accessor.ColumnAccessor(data),
-            cudf.Index._from_data(index),
+            data, cudf.Index._from_data(index),
         )
 
     def _mimic_pandas_order(

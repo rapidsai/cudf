@@ -1388,6 +1388,8 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
     @classmethod
     def _from_data(cls, data, index=None):
+        if not isinstance(data, cudf.core.column_accessor.ColumnAccessor):
+            data = cudf.core.column_accessor.ColumnAccessor(data)
         if len(data) == 0:
             raise ValueError("Cannot construct Index from any empty Table")
         if len(data) == 1:
@@ -1411,7 +1413,7 @@ class BaseIndex(SingleColumnFrame, Serializable):
                 out = super(BaseIndex, CategoricalIndex).__new__(
                     CategoricalIndex
                 )
-            out._data = cudf.core.column_accessor.ColumnAccessor(data)
+            out._data = data
             out._index = None
             return out
         else:
