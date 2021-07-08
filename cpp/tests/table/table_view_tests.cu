@@ -31,7 +31,7 @@
 #include <vector>
 
 // Compares two tables row by row, if table1 row is less than table2, then corresponding row value
-// in `ouput` would be `true`/1 else `false`/0.
+// in `output` would be `true`/1 else `false`/0.
 struct TableViewTest : public cudf::test::BaseFixture {
 };
 void row_comparison(cudf::table_view input1,

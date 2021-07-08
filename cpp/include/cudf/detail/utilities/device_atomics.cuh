@@ -161,7 +161,7 @@ struct genericAtomicOperationImpl<T, Op, 8> {
 
 // -----------------------------------------------------------------------
 // specialized functions for operators
-// `atomicAdd` supports int32, float, double (signed int64 is not supproted.)
+// `atomicAdd` supports int32, float, double (signed int64 is not supported.)
 // `atomicMin`, `atomicMax` support int32_t, int64_t
 // `atomicAnd`, `atomicOr`, `atomicXor` support int32_t, int64_t
 template <>
