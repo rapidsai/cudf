@@ -15,10 +15,10 @@
  */
 
 #include "operation.cuh"
-#include "traits.hpp"
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf::binops::compiled {

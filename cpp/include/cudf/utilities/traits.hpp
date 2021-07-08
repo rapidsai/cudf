@@ -75,6 +75,21 @@ template <typename L, typename R>
 struct is_equality_comparable_impl<L, R, void_t<equality_comparable<L, R>>> : std::true_type {
 };
 
+// has common type
+template <typename AlwaysVoid, typename... Ts>
+struct has_common_type_impl : std::false_type {
+};
+
+template <typename... Ts>
+struct has_common_type_impl<void_t<std::common_type_t<Ts...>>, Ts...> : std::true_type {
+};
+
+template <typename... Ts>
+using has_common_type = typename has_common_type_impl<void, Ts...>::type;
+
+template <typename... Ts>
+constexpr inline bool has_common_type_v = has_common_type_impl<void, Ts...>::value;
+
 template <typename T>
 using is_timestamp_t = cuda::std::disjunction<std::is_same<cudf::timestamp_D, T>,
                                               std::is_same<cudf::timestamp_s, T>,

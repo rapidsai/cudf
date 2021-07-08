@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/utilities/traits.hpp>
-#include "traits.hpp"
 
 #include <cmath>
 
