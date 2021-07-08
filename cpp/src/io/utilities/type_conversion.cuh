@@ -25,7 +25,7 @@ namespace io {
  *
  * @return data_type The converted data type
  */
-data_type convert_string_to_dtype(const std::string &dtype);
+data_type convert_string_to_dtype(const std::string& dtype);
 
 }  // namespace io
 }  // namespace cudf

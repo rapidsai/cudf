@@ -1261,6 +1261,17 @@ def test_csv_reader_column_names(names):
         assert list(df) == list(names)
 
 
+def test_csv_reader_repeated_column_name():
+    buffer = """A,A,A.1,A,A.2,A,A.4,A,A
+                1,2,3.1,4,a.2,a,a.4,a,a
+                2,4,6.1,8,b.2,b,b.4,b,b"""
+
+    # pandas and cudf to have same repeated column names
+    pdf = pd.read_csv(StringIO(buffer))
+    gdf = cudf.read_csv(StringIO(buffer))
+    assert_eq(pdf.columns, gdf.columns)
+
+
 def test_csv_reader_bools_false_positives(tmpdir):
     # values that are equal to ["True", "TRUE", "False", "FALSE"]
     # when using ints to detect bool values

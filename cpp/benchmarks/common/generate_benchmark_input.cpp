@@ -53,7 +53,7 @@ T get_distribution_mean(distribution_params<T> const& dist)
       auto const range_size = dist.lower_bound < dist.upper_bound
                                 ? dist.upper_bound - dist.lower_bound
                                 : dist.lower_bound - dist.upper_bound;
-      auto const p = geometric_dist_p(range_size);
+      auto const p          = geometric_dist_p(range_size);
       if (dist.lower_bound < dist.upper_bound)
         return dist.lower_bound + (1. / p);
       else

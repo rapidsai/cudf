@@ -56,8 +56,8 @@ static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
  *
  * @return GMT offset
  */
-CUDA_HOST_DEVICE_CALLABLE int32_t get_gmt_offset_impl(int64_t const *ttimes,
-                                                      int32_t const *offsets,
+CUDA_HOST_DEVICE_CALLABLE int32_t get_gmt_offset_impl(int64_t const* ttimes,
+                                                      int32_t const* offsets,
                                                       size_t count,
                                                       int64_t ts)
 {
@@ -112,8 +112,8 @@ struct timezone_table {
   rmm::device_uvector<int32_t> offsets;
   timezone_table() : ttimes{0, rmm::cuda_stream_default}, offsets{0, rmm::cuda_stream_default} {}
   timezone_table(int32_t gmt_offset,
-                 rmm::device_uvector<int64_t> &&ttimes,
-                 rmm::device_uvector<int32_t> &&offsets)
+                 rmm::device_uvector<int64_t>&& ttimes,
+                 rmm::device_uvector<int32_t>&& offsets)
     : gmt_offset{gmt_offset}, ttimes{std::move(ttimes)}, offsets{std::move(offsets)}
   {
   }
@@ -130,7 +130,7 @@ struct timezone_table {
  *
  * @return The transition table for the given timezone
  */
-timezone_table build_timezone_transition_table(std::string const &timezone_name,
+timezone_table build_timezone_transition_table(std::string const& timezone_name,
                                                rmm::cuda_stream_view stream);
 
 }  // namespace io

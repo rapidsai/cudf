@@ -110,7 +110,7 @@ class orc_streams {
   orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
                                      size_t num_rowgroups) const;
 
-  operator std::vector<Stream> const&() const { return streams; }
+  operator std::vector<Stream> const &() const { return streams; }
 
  private:
   std::vector<Stream> streams;
