@@ -270,7 +270,7 @@ class Series(SingleColumnFrame, Serializable):
     def _from_data(
         cls,
         data: ColumnAccessor,
-        index: Optional[Index] = None,
+        index: Optional[BaseIndex] = None,
         # TODO: Remove this, callers should always just change the name of the
         # column in data.
         name: Any = None,
@@ -278,13 +278,9 @@ class Series(SingleColumnFrame, Serializable):
         """
         Construct the Series from a ColumnAccessor
         """
-        out = cls.__new__(cls)
-        super(Series, out).__init__(
-            data, index if index is not None else RangeIndex(data.nrows)
-        )
-
-        if name is not None:
-            out.name = name
+        out: Series = super()._from_data(data, index, name)
+        if index is None:
+            out._index = RangeIndex(out._data.nrows)
         return out
 
     def __contains__(self, item):

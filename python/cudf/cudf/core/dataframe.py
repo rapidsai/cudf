@@ -32,7 +32,7 @@ from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
-from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
+from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
 from cudf.core.window import Rolling
@@ -492,17 +492,14 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     def _from_data(
         cls,
         data: ColumnAccessor,
-        index: Optional[Index] = None,
+        index: Optional[BaseIndex] = None,
         # TODO: Remove this, callers should always just change the name of the
         # columns in data.
         columns: Any = None,
     ) -> DataFrame:
-        out = cls.__new__(cls)
-        super(DataFrame, out).__init__(
-            data=data,
-            index=index if index is not None else cudf.RangeIndex(data.nrows),
-        )
-
+        out = super()._from_data(data, index)
+        if index is None:
+            out.index = RangeIndex(out._data.nrows)
         if columns is not None:
             out.columns = columns
         return out

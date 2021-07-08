@@ -65,9 +65,13 @@ class Frame(libcudf.table.Table):
 
     @classmethod
     def _from_data(
-        cls, data: ColumnAccessor, index: Optional[cudf.Index] = None,
+        cls,
+        data: ColumnAccessor,
+        index: Optional[cudf.core.index.BaseIndex] = None,
     ):
-        return cls(data, index)
+        obj = cls.__new__(cls)
+        libcudf.table.Table.__init__(obj, data, index)
+        return obj
 
     def _mimic_inplace(
         self: T, result: Frame, inplace: bool = False
@@ -3381,10 +3385,11 @@ class SingleColumnFrame(Frame):
     def _from_data(
         cls,
         data: ColumnAccessor,
-        index: Optional[cudf.Index] = None,
+        index: Optional[cudf.core.index.BaseIndex] = None,
         name: Any = None,
-    ) -> SingleColumnFrame:
-        out = cls(data, index)
+    ):
+
+        out = super()._from_data(data, index)
         if name is not None:
             out.name = name
         return out
