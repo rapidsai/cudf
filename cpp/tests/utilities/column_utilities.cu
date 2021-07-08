@@ -683,7 +683,7 @@ struct column_view_printer {
   {
     lists_column_view lcv(col);
 
-    // propage slicing to the child if necessary
+    // propagate slicing to the child if necessary
     column_view child    = lcv.get_sliced_child(rmm::cuda_stream_default);
     bool const is_sliced = lcv.offset() > 0 || child.offset() > 0;
 

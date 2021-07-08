@@ -1,16 +1,16 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import re
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
 import pytest
-from decimal import Decimal
 
 import cudf as gd
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
-from cudf.utils.dtypes import is_categorical_dtype
 from cudf.core.dtypes import Decimal64Dtype
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.utils.dtypes import is_categorical_dtype
 
 
 def make_frames(index=None, nulls="none"):

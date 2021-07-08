@@ -102,15 +102,15 @@ constexpr int prefetch_size      = (1 << log2_prefetch_size);
 
 /// @brief Prefetcher state
 struct prefetch_queue_s {
-  const uint8_t *cur_p;  ///< Prefetch location
+  const uint8_t* cur_p;  ///< Prefetch location
   int run;               ///< prefetcher will exit when run=0
   uint8_t pref_data[prefetch_size];
 };
 
 template <typename T>
-inline __device__ volatile uint32_t *prefetch_addr32(volatile prefetch_queue_s &q, T *ptr)
+inline __device__ volatile uint32_t* prefetch_addr32(volatile prefetch_queue_s& q, T* ptr)
 {
-  return reinterpret_cast<volatile uint32_t *>(&q.pref_data[(prefetch_size - 4) & (size_t)(ptr)]);
+  return reinterpret_cast<volatile uint32_t*>(&q.pref_data[(prefetch_size - 4) & (size_t)(ptr)]);
 }
 
 #endif  // ENABLE_PREFETCH
@@ -120,12 +120,12 @@ inline __device__ volatile uint32_t *prefetch_addr32(volatile prefetch_queue_s &
  */
 struct inflate_state_s {
   // output state
-  uint8_t *out;      ///< output buffer
-  uint8_t *outbase;  ///< start of output buffer
-  uint8_t *outend;   ///< end of output buffer
+  uint8_t* out;      ///< output buffer
+  uint8_t* outbase;  ///< start of output buffer
+  uint8_t* outend;   ///< end of output buffer
   // Input state
-  uint8_t *cur;  ///< input buffer
-  uint8_t *end;  ///< end of input buffer
+  uint8_t* cur;  ///< input buffer
+  uint8_t* end;  ///< end of input buffer
 
   uint2 bitbuf;     ///< bit buffer (64-bit)
   uint32_t bitpos;  ///< position in bit buffer
@@ -165,24 +165,24 @@ inline __device__ unsigned int bfe(unsigned int source,
   return bits;
 };
 
-inline __device__ uint32_t showbits(inflate_state_s *s, uint32_t n)
+inline __device__ uint32_t showbits(inflate_state_s* s, uint32_t n)
 {
   uint32_t next32 = __funnelshift_rc(s->bitbuf.x, s->bitbuf.y, s->bitpos);
   return (next32 & ((1 << n) - 1));
 }
 
-inline __device__ uint32_t nextbits32(inflate_state_s *s)
+inline __device__ uint32_t nextbits32(inflate_state_s* s)
 {
   return __funnelshift_rc(s->bitbuf.x, s->bitbuf.y, s->bitpos);
 }
 
-inline __device__ void skipbits(inflate_state_s *s, uint32_t n)
+inline __device__ void skipbits(inflate_state_s* s, uint32_t n)
 {
   uint32_t bitpos = s->bitpos + n;
   if (bitpos >= 32) {
-    uint8_t *cur = s->cur + 8;
+    uint8_t* cur = s->cur + 8;
     s->bitbuf.x  = s->bitbuf.y;
-    s->bitbuf.y  = (cur < s->end) ? *reinterpret_cast<uint32_t *>(cur) : 0;
+    s->bitbuf.y  = (cur < s->end) ? *reinterpret_cast<uint32_t*>(cur) : 0;
     s->cur       = cur - 4;
     bitpos &= 0x1f;
   }
@@ -191,7 +191,7 @@ inline __device__ void skipbits(inflate_state_s *s, uint32_t n)
 
 // TODO: If we require 4-byte alignment of input bitstream & length (padded), reading bits would
 // become quite a bit faster
-__device__ uint32_t getbits(inflate_state_s *s, uint32_t n)
+__device__ uint32_t getbits(inflate_state_s* s, uint32_t n)
 {
   uint32_t v = showbits(s, n);
   skipbits(s, n);
@@ -222,7 +222,7 @@ __device__ uint32_t getbits(inflate_state_s *s, uint32_t n)
  * - Incomplete codes are handled by this decoder, since they are permitted
  *   in the deflate format.  See the format notes for fixed() and dynamic().
  */
-__device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *symbols)
+__device__ int decode(inflate_state_s* s, const int16_t* counts, const int16_t* symbols)
 {
   unsigned int len;    // current number of bits in code
   unsigned int code;   // len bits being decoded
@@ -279,15 +279,16 @@ __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *
  *   the code bits definition.
  */
 __device__ int construct(
-  inflate_state_s *s, int16_t *counts, int16_t *symbols, const int16_t *length, int n)
+  inflate_state_s* s, int16_t* counts, int16_t* symbols, const int16_t* length, int n)
 {
   int symbol;  // current symbol when stepping through length[]
   int len;     // current length when stepping through counts[]
   int left;    // number of possible codes left of current length
-  int16_t *offs = s->u.scratch.offs;
+  int16_t* offs = s->u.scratch.offs;
 
   // count number of codes of each length
-  for (len = 0; len <= max_bits; len++) counts[len] = 0;
+  for (len = 0; len <= max_bits; len++)
+    counts[len] = 0;
   for (symbol = 0; symbol < n; symbol++)
     (counts[length[symbol]])++;  // assumes lengths are within bounds
   if (counts[0] == n)            // no codes!
@@ -303,7 +304,8 @@ __device__ int construct(
 
   // generate offsets into symbol table for each length for sorting
   offs[1] = 0;
-  for (len = 1; len < max_bits; len++) offs[len + 1] = offs[len] + counts[len];
+  for (len = 1; len < max_bits; len++)
+    offs[len + 1] = offs[len] + counts[len];
 
   // put symbols in table sorted by length, by symbol order within each length
   for (symbol = 0; symbol < n; symbol++)
@@ -318,12 +320,12 @@ static const __device__ __constant__ uint8_t g_code_order[19 + 1] = {
   16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15, 0xff};
 
 /// Dynamic block (custom huffman tables)
-__device__ int init_dynamic(inflate_state_s *s)
+__device__ int init_dynamic(inflate_state_s* s)
 {
   int nlen, ndist, ncode; /* number of lengths in descriptor */
   int index;              /* index of lengths[] */
   int err;                /* construct() return value */
-  int16_t *lengths = s->u.scratch.lengths;
+  int16_t* lengths = s->u.scratch.lengths;
 
   // get number of lengths in each table, check lengths
   nlen  = getbits(s, 5) + 257;
@@ -333,8 +335,10 @@ __device__ int init_dynamic(inflate_state_s *s)
     return -3;  // bad counts
   }
   // read code length code lengths (really), missing lengths are zero
-  for (index = 0; index < ncode; index++) lengths[g_code_order[index]] = getbits(s, 3);
-  for (; index < 19; index++) lengths[g_code_order[index]] = 0;
+  for (index = 0; index < ncode; index++)
+    lengths[g_code_order[index]] = getbits(s, 3);
+  for (; index < 19; index++)
+    lengths[g_code_order[index]] = 0;
 
   // build huffman table for code lengths codes (use lencode temporarily)
   err = construct(s, s->lencnt, s->lensym, lengths, 19);
@@ -404,20 +408,25 @@ __device__ int init_dynamic(inflate_state_s *s)
  *   length, this can be implemented as an incomplete code.  Then the invalid
  *   codes are detected while decoding.
  */
-__device__ int init_fixed(inflate_state_s *s)
+__device__ int init_fixed(inflate_state_s* s)
 {
-  int16_t *lengths = s->u.scratch.lengths;
+  int16_t* lengths = s->u.scratch.lengths;
   int symbol;
 
   // literal/length table
-  for (symbol = 0; symbol < 144; symbol++) lengths[symbol] = 8;
-  for (; symbol < 256; symbol++) lengths[symbol] = 9;
-  for (; symbol < 280; symbol++) lengths[symbol] = 7;
-  for (; symbol < fix_l_codes; symbol++) lengths[symbol] = 8;
+  for (symbol = 0; symbol < 144; symbol++)
+    lengths[symbol] = 8;
+  for (; symbol < 256; symbol++)
+    lengths[symbol] = 9;
+  for (; symbol < 280; symbol++)
+    lengths[symbol] = 7;
+  for (; symbol < fix_l_codes; symbol++)
+    lengths[symbol] = 8;
   construct(s, s->lencnt, s->lensym, lengths, fix_l_codes);
 
   // distance table
-  for (symbol = 0; symbol < max_d_codes; symbol++) lengths[symbol] = 5;
+  for (symbol = 0; symbol < max_d_codes; symbol++)
+    lengths[symbol] = 5;
 
   // build huffman table for distance codes
   construct(s, s->distcnt, s->distsym, lengths, max_d_codes);
@@ -497,21 +506,21 @@ static const __device__ __constant__ uint16_t g_dext[30] = {  // Extra bits for 
   0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13};
 
 /// @brief Thread 0 only: decode bitstreams and output symbols into the symbol queue
-__device__ void decode_symbols(inflate_state_s *s)
+__device__ void decode_symbols(inflate_state_s* s)
 {
   uint32_t bitpos = s->bitpos;
   uint2 bitbuf    = s->bitbuf;
-  uint8_t *cur    = s->cur;
-  uint8_t *end    = s->end;
+  uint8_t* cur    = s->cur;
+  uint8_t* end    = s->end;
   int32_t batch   = 0;
   int32_t sym, batch_len;
 
   do {
-    volatile uint32_t *b = &s->x.u.symqueue[batch * batch_size];
+    volatile uint32_t* b = &s->x.u.symqueue[batch * batch_size];
     // Wait for the next batch entry to be empty
 #if ENABLE_PREFETCH
     // Wait for prefetcher to fetch a worst-case of 48 bits per symbol
-    while ((*(volatile int32_t *)&s->pref.cur_p - (int32_t)(size_t)cur < batch_size * 6) ||
+    while ((*(volatile int32_t*)&s->pref.cur_p - (int32_t)(size_t)cur < batch_size * 6) ||
            (s->x.batch_len[batch] != 0)) {}
 #else
     while (s->x.batch_len[batch] != 0) {}
@@ -544,7 +553,7 @@ __device__ void decode_symbols(inflate_state_s *s)
       } else {
         // Slow length path
         uint32_t next32r       = __brev(next32);
-        const int16_t *symbols = &s->lensym[s->index_slow_len];
+        const int16_t* symbols = &s->lensym[s->index_slow_len];
         unsigned int first     = s->first_slow_len;
         int lext;
 #pragma unroll 1
@@ -583,7 +592,7 @@ __device__ void decode_symbols(inflate_state_s *s)
           cur += 4;
 #else
           cur += 8;
-          bitbuf.y = (cur < end) ? *(const uint32_t *)cur : 0;
+          bitbuf.y = (cur < end) ? *(const uint32_t*)cur : 0;
           cur -= 4;
 #endif
           bitpos &= 0x1f;
@@ -599,7 +608,7 @@ __device__ void decode_symbols(inflate_state_s *s)
           len += dext;
         } else {
           uint32_t next32r       = __brev(next32);
-          const int16_t *symbols = &s->distsym[s->index_slow_dist];
+          const int16_t* symbols = &s->distsym[s->index_slow_dist];
           unsigned int first     = s->first_slow_dist;
 #pragma unroll 1
           for (len = log2_dist_lut + 1; len <= max_bits; len++) {
@@ -636,7 +645,7 @@ __device__ void decode_symbols(inflate_state_s *s)
 #else
         cur += 8;
         if (cur < end) {
-          bitbuf.y = *(const uint32_t *)cur;
+          bitbuf.y = *(const uint32_t*)cur;
           cur -= 4;
         } else {
           bitbuf.y = 0;
@@ -654,7 +663,7 @@ __device__ void decode_symbols(inflate_state_s *s)
     } while (batch_len < batch_size - 1);
     s->x.batch_len[batch] = batch_len;
 #if ENABLE_PREFETCH
-    ((volatile inflate_state_s *)s)->cur = cur;
+    ((volatile inflate_state_s*)s)->cur = cur;
 #endif
     if (batch_len != 0) batch = (batch + 1) & (batch_count - 1);
   } while (sym != 256);
@@ -672,13 +681,13 @@ __device__ void decode_symbols(inflate_state_s *s)
  * @brief Build lookup tables for faster decode
  * LUT format is symbols*16+length
  */
-__device__ void init_length_lut(inflate_state_s *s, int t)
+__device__ void init_length_lut(inflate_state_s* s, int t)
 {
-  int32_t *lut = s->u.lut.lenlut;
+  int32_t* lut = s->u.lut.lenlut;
 
   for (uint32_t bits = t; bits < (1 << log2_len_lut); bits += blockDim.x) {
-    const int16_t *cnt     = s->lencnt;
-    const int16_t *symbols = s->lensym;
+    const int16_t* cnt     = s->lencnt;
+    const int16_t* symbols = s->lensym;
     int sym                = -10 << 5;
     unsigned int first     = 0;
     unsigned int rbits     = __brev(bits) >> (32 - log2_len_lut);
@@ -704,7 +713,7 @@ __device__ void init_length_lut(inflate_state_s *s, int t)
   if (!t) {
     unsigned int first = 0;
     unsigned int index = 0;
-    const int16_t *cnt = s->lencnt;
+    const int16_t* cnt = s->lencnt;
     for (unsigned int len = 1; len <= log2_len_lut; len++) {
       unsigned int count = cnt[len];
       index += count;
@@ -720,13 +729,13 @@ __device__ void init_length_lut(inflate_state_s *s, int t)
  * @brief Build lookup tables for faster decode of distance symbol
  * LUT format is symbols*16+length
  */
-__device__ void init_distance_lut(inflate_state_s *s, int t)
+__device__ void init_distance_lut(inflate_state_s* s, int t)
 {
-  int32_t *lut = s->u.lut.distlut;
+  int32_t* lut = s->u.lut.distlut;
 
   for (uint32_t bits = t; bits < (1 << log2_dist_lut); bits += blockDim.x) {
-    const int16_t *cnt     = s->distcnt;
-    const int16_t *symbols = s->distsym;
+    const int16_t* cnt     = s->distcnt;
+    const int16_t* symbols = s->distsym;
     int sym                = 0;
     unsigned int first     = 0;
     unsigned int rbits     = __brev(bits) >> (32 - log2_dist_lut);
@@ -749,7 +758,7 @@ __device__ void init_distance_lut(inflate_state_s *s, int t)
   if (!t) {
     unsigned int first = 0;
     unsigned int index = 0;
-    const int16_t *cnt = s->distcnt;
+    const int16_t* cnt = s->distcnt;
     for (unsigned int len = 1; len <= log2_dist_lut; len++) {
       unsigned int count = cnt[len];
       index += count;
@@ -762,15 +771,15 @@ __device__ void init_distance_lut(inflate_state_s *s, int t)
 }
 
 /// @brief WARP1: process symbols and output uncompressed stream
-__device__ void process_symbols(inflate_state_s *s, int t)
+__device__ void process_symbols(inflate_state_s* s, int t)
 {
-  uint8_t *out           = s->out;
-  const uint8_t *outend  = s->outend;
-  const uint8_t *outbase = s->outbase;
+  uint8_t* out           = s->out;
+  const uint8_t* outend  = s->outend;
+  const uint8_t* outbase = s->outbase;
   int batch              = 0;
 
   do {
-    volatile uint32_t *b = &s->x.u.symqueue[batch * batch_size];
+    volatile uint32_t* b = &s->x.u.symqueue[batch * batch_size];
     int batch_len, pos;
     int32_t symt;
     uint32_t lit_mask;
@@ -798,7 +807,7 @@ __device__ void process_symbols(inflate_state_s *s, int t)
       len    = max((symbol & 0xffff) - 256, 0);  // max should be unnecessary, but just in case
       dist   = symbol >> 16;
       for (int i = t; i < len; i += 32) {
-        const uint8_t *src = out + ((i >= dist) ? (i % dist) : i) - dist;
+        const uint8_t* src = out + ((i >= dist) ? (i % dist) : i) - dist;
         uint8_t b          = (src < outbase) ? 0 : *src;
         if (out + i < outend) { out[i] = b; }
       }
@@ -838,7 +847,7 @@ __device__ void process_symbols(inflate_state_s *s, int t)
  * - A stored block can have zero length.  This is sometimes used to byte-align
  *   subsets of the compressed data for random access or partial recovery.
  */
-__device__ int init_stored(inflate_state_s *s)
+__device__ int init_stored(inflate_state_s* s)
 {
   uint32_t len, nlen;  // length of stored block
 
@@ -863,13 +872,13 @@ __device__ int init_stored(inflate_state_s *s)
 }
 
 /// Copy bytes from stored block to destination
-__device__ void copy_stored(inflate_state_s *s, int t)
+__device__ void copy_stored(inflate_state_s* s, int t)
 {
   int len         = s->stored_blk_len;
-  uint8_t *cur    = s->cur + (s->bitpos >> 3);
-  uint8_t *out    = s->out;
-  uint8_t *outend = s->outend;
-  uint8_t *cur4;
+  uint8_t* cur    = s->cur + (s->bitpos >> 3);
+  uint8_t* out    = s->out;
+  uint8_t* outend = s->outend;
+  uint8_t* cur4;
   int slow_bytes = min(len, (int)((16 - (size_t)out) & 0xf));
   int fast_bytes, bitpos;
 
@@ -893,18 +902,18 @@ __device__ void copy_stored(inflate_state_s *s, int t)
     // Fast copy 16 bytes at a time
     for (int i = t * 16; i < fast_bytes; i += blockDim.x * 16) {
       uint4 u;
-      u.x = *reinterpret_cast<const uint32_t *>(cur4 + i + 0 * 4);
-      u.y = *reinterpret_cast<const uint32_t *>(cur4 + i + 1 * 4);
-      u.z = *reinterpret_cast<const uint32_t *>(cur4 + i + 2 * 4);
-      u.w = *reinterpret_cast<const uint32_t *>(cur4 + i + 3 * 4);
+      u.x = *reinterpret_cast<const uint32_t*>(cur4 + i + 0 * 4);
+      u.y = *reinterpret_cast<const uint32_t*>(cur4 + i + 1 * 4);
+      u.z = *reinterpret_cast<const uint32_t*>(cur4 + i + 2 * 4);
+      u.w = *reinterpret_cast<const uint32_t*>(cur4 + i + 3 * 4);
       if (bitpos != 0) {
-        uint32_t v = (bitpos != 0) ? *reinterpret_cast<const uint32_t *>(cur4 + i + 4 * 4) : 0;
+        uint32_t v = (bitpos != 0) ? *reinterpret_cast<const uint32_t*>(cur4 + i + 4 * 4) : 0;
         u.x        = __funnelshift_rc(u.x, u.y, bitpos);
         u.y        = __funnelshift_rc(u.y, u.z, bitpos);
         u.z        = __funnelshift_rc(u.z, u.w, bitpos);
         u.w        = __funnelshift_rc(u.w, v, bitpos);
       }
-      *reinterpret_cast<uint4 *>(out + i) = u;
+      *reinterpret_cast<uint4*>(out + i) = u;
     }
   }
   cur += fast_bytes;
@@ -920,20 +929,20 @@ __device__ void copy_stored(inflate_state_s *s, int t)
   __syncthreads();
   if (t == 0) {
     // Reset bitstream to end of block
-    uint8_t *p            = cur + len;
+    uint8_t* p            = cur + len;
     uint32_t prefix_bytes = (uint32_t)(((size_t)p) & 3);
     p -= prefix_bytes;
     s->cur      = p;
-    s->bitbuf.x = (p < s->end) ? *reinterpret_cast<uint32_t *>(p) : 0;
+    s->bitbuf.x = (p < s->end) ? *reinterpret_cast<uint32_t*>(p) : 0;
     p += 4;
-    s->bitbuf.y = (p < s->end) ? *reinterpret_cast<uint32_t *>(p) : 0;
+    s->bitbuf.y = (p < s->end) ? *reinterpret_cast<uint32_t*>(p) : 0;
     s->bitpos   = prefix_bytes * 8;
     s->out      = out;
   }
 }
 
 #if ENABLE_PREFETCH
-__device__ void init_prefetcher(inflate_state_s *s, int t)
+__device__ void init_prefetcher(inflate_state_s* s, int t)
 {
   if (t == 0) {
     s->pref.cur_p = s->cur;
@@ -941,17 +950,17 @@ __device__ void init_prefetcher(inflate_state_s *s, int t)
   }
 }
 
-__device__ void prefetch_warp(volatile inflate_state_s *s, int t)
+__device__ void prefetch_warp(volatile inflate_state_s* s, int t)
 {
-  const uint8_t *cur_p = s->pref.cur_p;
-  const uint8_t *end   = s->end;
+  const uint8_t* cur_p = s->pref.cur_p;
+  const uint8_t* end   = s->end;
   while (shuffle((t == 0) ? s->pref.run : 0)) {
     int32_t cur_lo = (int32_t)(size_t)cur_p;
     int do_pref =
-      shuffle((t == 0) ? (cur_lo - *(volatile int32_t *)&s->cur < prefetch_size - 32 * 4 - 4) : 0);
+      shuffle((t == 0) ? (cur_lo - *(volatile int32_t*)&s->cur < prefetch_size - 32 * 4 - 4) : 0);
     if (do_pref) {
-      const uint8_t *p             = cur_p + 4 * t;
-      *prefetch_addr32(s->pref, p) = (p < end) ? *reinterpret_cast<const uint32_t *>(p) : 0;
+      const uint8_t* p             = cur_p + 4 * t;
+      *prefetch_addr32(s->pref, p) = (p < end) ? *reinterpret_cast<const uint32_t*>(p) : 0;
       cur_p += 4 * 32;
       __threadfence_block();
       __syncwarp();
@@ -968,7 +977,7 @@ __device__ void prefetch_warp(volatile inflate_state_s *s, int t)
  * @brief Parse GZIP header
  * See https://tools.ietf.org/html/rfc1952
  */
-__device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
+__device__ int parse_gzip_header(const uint8_t* src, size_t src_size)
 {
   int hdr_len = -1;
 
@@ -1020,16 +1029,16 @@ __device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
  */
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int parse_hdr)
+  inflate_kernel(gpu_inflate_input_s* inputs, gpu_inflate_status_s* outputs, int parse_hdr)
 {
   __shared__ __align__(16) inflate_state_s state_g;
 
   int t                  = threadIdx.x;
   int z                  = blockIdx.x;
-  inflate_state_s *state = &state_g;
+  inflate_state_s* state = &state_g;
 
   if (!t) {
-    uint8_t *p      = const_cast<uint8_t *>(static_cast<uint8_t const *>(inputs[z].srcDevice));
+    uint8_t* p      = const_cast<uint8_t*>(static_cast<uint8_t const*>(inputs[z].srcDevice));
     size_t src_size = inputs[z].srcSize;
     uint32_t prefix_bytes;
     // Parse header if needed
@@ -1045,16 +1054,16 @@ __global__ void __launch_bounds__(block_size)
       }
     }
     // Initialize shared state
-    state->out     = const_cast<uint8_t *>(static_cast<uint8_t const *>(inputs[z].dstDevice));
+    state->out     = const_cast<uint8_t*>(static_cast<uint8_t const*>(inputs[z].dstDevice));
     state->outbase = state->out;
     state->outend  = state->out + inputs[z].dstSize;
     state->end     = p + src_size;
     prefix_bytes   = (uint32_t)(((size_t)p) & 3);
     p -= prefix_bytes;
     state->cur      = p;
-    state->bitbuf.x = (p < state->end) ? *reinterpret_cast<uint32_t *>(p) : 0;
+    state->bitbuf.x = (p < state->end) ? *reinterpret_cast<uint32_t*>(p) : 0;
     p += 4;
-    state->bitbuf.y = (p < state->end) ? *reinterpret_cast<uint32_t *>(p) : 0;
+    state->bitbuf.y = (p < state->end) ? *reinterpret_cast<uint32_t*>(p) : 0;
     state->bitpos   = prefix_bytes * 8;
   }
   __syncthreads();
@@ -1139,21 +1148,21 @@ __global__ void __launch_bounds__(block_size)
  *
  * @param inputs Source and destination information per block
  */
-__global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_input_s *inputs)
+__global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_input_s* inputs)
 {
-  __shared__ const uint8_t *volatile src_g;
-  __shared__ uint8_t *volatile dst_g;
+  __shared__ const uint8_t* volatile src_g;
+  __shared__ uint8_t* volatile dst_g;
   __shared__ uint32_t volatile copy_len_g;
 
   uint32_t t = threadIdx.x;
   uint32_t z = blockIdx.x;
-  const uint8_t *src;
-  uint8_t *dst;
+  const uint8_t* src;
+  uint8_t* dst;
   uint32_t len, src_align_bytes, src_align_bits, dst_align_bytes;
 
   if (!t) {
-    src        = static_cast<const uint8_t *>(inputs[z].srcDevice);
-    dst        = static_cast<uint8_t *>(inputs[z].dstDevice);
+    src        = static_cast<const uint8_t*>(inputs[z].srcDevice);
+    dst        = static_cast<uint8_t*>(inputs[z].dstDevice);
     len        = min((uint32_t)inputs[z].srcSize, (uint32_t)inputs[z].dstSize);
     src_g      = src;
     dst_g      = dst;
@@ -1175,12 +1184,12 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_inp
   src_align_bytes = (uint32_t)(3 & reinterpret_cast<uintptr_t>(src));
   src_align_bits  = src_align_bytes << 3;
   while (len >= 32) {
-    const uint32_t *src32 = reinterpret_cast<const uint32_t *>(src - src_align_bytes);
+    const uint32_t* src32 = reinterpret_cast<const uint32_t*>(src - src_align_bytes);
     uint32_t copy_cnt     = min(len >> 2, 1024);
     if (t < copy_cnt) {
       uint32_t v = src32[t];
       if (src_align_bits != 0) { v = __funnelshift_r(v, src32[t + 1], src_align_bits); }
-      reinterpret_cast<uint32_t *>(dst)[t] = v;
+      reinterpret_cast<uint32_t*>(dst)[t] = v;
     }
     src += copy_cnt * 4;
     dst += copy_cnt * 4;
@@ -1189,8 +1198,8 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_inp
   if (t < len) { dst[t] = src[t]; }
 }
 
-cudaError_t __host__ gpuinflate(gpu_inflate_input_s *inputs,
-                                gpu_inflate_status_s *outputs,
+cudaError_t __host__ gpuinflate(gpu_inflate_input_s* inputs,
+                                gpu_inflate_status_s* outputs,
                                 int count,
                                 int parse_hdr,
                                 rmm::cuda_stream_view stream)
@@ -1203,7 +1212,7 @@ cudaError_t __host__ gpuinflate(gpu_inflate_input_s *inputs,
   return cudaSuccess;
 }
 
-cudaError_t __host__ gpu_copy_uncompressed_blocks(gpu_inflate_input_s *inputs,
+cudaError_t __host__ gpu_copy_uncompressed_blocks(gpu_inflate_input_s* inputs,
                                                   int count,
                                                   rmm::cuda_stream_view stream)
 {

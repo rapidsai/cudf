@@ -30,16 +30,6 @@ namespace cudf {
 namespace lists {
 namespace detail {
 
-void assert_same_data_type(column_view const& lhs, column_view const& rhs)
-{
-  CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Mismatched Data types.");
-  // Empty string column has no children
-  CUDF_EXPECTS(lhs.type().id() == type_id::STRING or lhs.num_children() == rhs.num_children(),
-               "Mismatched number of child columns.");
-
-  for (int i{0}; i < lhs.num_children(); ++i) { assert_same_data_type(lhs.child(i), rhs.child(i)); }
-}
-
 /**
  * @brief Constructs null mask for a scattered list's child column
  *

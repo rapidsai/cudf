@@ -62,11 +62,13 @@ ConfigureTest(GROUPBY_TEST
     groupby/count_tests.cpp
     groupby/groups_tests.cpp
     groupby/keys_tests.cpp
+    groupby/m2_tests.cpp
     groupby/min_tests.cpp
     groupby/max_scan_tests.cpp
     groupby/max_tests.cpp
     groupby/mean_tests.cpp
     groupby/median_tests.cpp
+    groupby/merge_m2_tests.cpp
     groupby/merge_lists_tests.cpp
     groupby/merge_sets_tests.cpp
     groupby/min_scan_tests.cpp
@@ -203,7 +205,7 @@ ConfigureTest(SORT_TEST
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
 ConfigureTest(COPYING_TEST
-    copying/concatenate_tests.cu
+    copying/concatenate_tests.cpp
     copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
     copying/copy_tests.cu
@@ -233,7 +235,8 @@ ConfigureTest(UTILITIES_TEST
     utilities_tests/column_utilities_tests.cpp
     utilities_tests/column_wrapper_tests.cpp
     utilities_tests/lists_column_wrapper_tests.cpp
-    utilities_tests/default_stream_tests.cpp)
+    utilities_tests/default_stream_tests.cpp
+    utilities_tests/type_check_tests.cpp)
 
 ###################################################################################################
 # - span tests -------------------------------------------------------------------------------

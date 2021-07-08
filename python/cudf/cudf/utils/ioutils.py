@@ -8,6 +8,7 @@ from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 import fsspec
 import fsspec.implementations.local
 import pandas as pd
+from fsspec.core import get_fs_token_paths
 
 from cudf.utils.docutils import docfmt_partial
 
@@ -338,6 +339,9 @@ num_rows : int, default None
     If not None, the total number of rows to read.
 use_index : bool, default True
     If True, use row index if available for faster seeking.
+decimal_cols_as_float: list, default None
+    If specified, names of the columns that should be converted from
+    Decimal to Float64 in the resulting dataframe.
 kwargs are passed to the engine
 
 Returns
@@ -1373,3 +1377,11 @@ def _prepare_filters(filters):
         filters = [filters]
 
     return filters
+
+
+def _ensure_filesystem(passed_filesystem, path):
+    if passed_filesystem is None:
+        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
+            0
+        ]
+    return passed_filesystem
