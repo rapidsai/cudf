@@ -339,8 +339,8 @@ std::unique_ptr<column> empty_output_for_rolling_aggregation(column_view const& 
   // TODO:
   //  Ideally, for UDF aggregations, the returned column would match
   //  the agg's return type. It currently returns empty_like(input), because:
-  //    1. This preserves prior behaviour for empty input columns.
-  //    2. There is insufficient information to construct nested return colums.
+  //    1. This preserves prior behavior for empty input columns.
+  //    2. There is insufficient information to construct nested return columns.
   //       `cudf::make_udf_aggregation()` expresses the return type as a `data_type`
   //        which cannot express recursively nested types (e.g. `STRUCT<LIST<INT32>>`.)
   //    3. In any case, UDFs that return nested types are not currently supported.
@@ -616,7 +616,7 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
     return aggs;
   }
 
-  // COLLECT_LIST aggregations do not peform a rolling operation at all. They get processed
+  // COLLECT_LIST aggregations do not perform a rolling operation at all. They get processed
   // entirely in the finalize() step.
   std::vector<std::unique_ptr<aggregation>> visit(
     data_type, cudf::detail::collect_list_aggregation const&) override
@@ -624,7 +624,7 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
     return {};
   }
 
-  // COLLECT_SET aggregations do not peform a rolling operation at all. They get processed
+  // COLLECT_SET aggregations do not perform a rolling operation at all. They get processed
   // entirely in the finalize() step.
   std::vector<std::unique_ptr<aggregation>> visit(
     data_type, cudf::detail::collect_set_aggregation const&) override

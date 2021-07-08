@@ -62,11 +62,13 @@ ConfigureTest(GROUPBY_TEST
     groupby/count_tests.cpp
     groupby/groups_tests.cpp
     groupby/keys_tests.cpp
+    groupby/m2_tests.cpp
     groupby/min_tests.cpp
     groupby/max_scan_tests.cpp
     groupby/max_tests.cpp
     groupby/mean_tests.cpp
     groupby/median_tests.cpp
+    groupby/merge_m2_tests.cpp
     groupby/merge_lists_tests.cpp
     groupby/merge_sets_tests.cpp
     groupby/min_scan_tests.cpp

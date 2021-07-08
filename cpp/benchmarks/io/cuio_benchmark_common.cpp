@@ -94,7 +94,8 @@ std::vector<int> select_column_indexes(int num_cols, column_selection col_sel)
                 (col_sel == column_selection::SECOND_HALF) ? num_cols / 2 : 0);
       break;
     case column_selection::ALTERNATE:
-      for (size_t i = 0; i < col_idxs.size(); ++i) col_idxs[i] = 2 * i;
+      for (size_t i = 0; i < col_idxs.size(); ++i)
+        col_idxs[i] = 2 * i;
       break;
   }
   return col_idxs;
