@@ -133,17 +133,25 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
 
   __syncthreads();
 
+  if (threadIdx.x == 0) { *result_count = matches_in_block; }
+
   for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
-    printf("bid(%2u) tid(%2u) byte(%2u): %c %2u - %2u\n",  //
+    auto const match_length = trie.get_match_length(thread_superstates[i].get(0));
+
+    if (match_length == 0) { continue; }
+
+    auto const match_end   = data_begin + i + 1;
+    auto const match_begin = match_end - match_length;
+
+    printf("bid(%2u) tid(%2u) byte(%2u): %c %2u - [%3u, %3u)\n",  //
            blockIdx.x,
            threadIdx.x,
            i,
            data[data_begin + i],
            thread_offsets[i],
-           static_cast<uint32_t>(trie.get_match_length(thread_superstates[i].get(0))));
+           match_begin,
+           match_end);
   }
-
-  if (threadIdx.x == 0) { *result_count = matches_in_block; }
 }
 
 }  // namespace
