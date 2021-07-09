@@ -48,6 +48,26 @@ void set_null_mask(bitmask_type* bitmask,
                    rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
+ * @copydoc cudf::count_set_bits
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ */
+cudf::size_type count_set_bits(bitmask_type const* bitmask,
+                               size_type start,
+                               size_type stop,
+                               rmm::cuda_stream_view stream);
+
+/**
+ * @copydoc cudf::count_unset_bits
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ */
+cudf::size_type count_unset_bits(bitmask_type const* bitmask,
+                                 size_type start,
+                                 size_type stop,
+                                 rmm::cuda_stream_view stream);
+
+/**
  * @copydoc cudf::segmented_count_set_bits
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
