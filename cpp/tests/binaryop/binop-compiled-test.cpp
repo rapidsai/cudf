@@ -81,6 +81,14 @@ struct BinaryOperationCompiledTest : public BinaryOperationTest {
 
     auto out = cudf::experimental::binary_operation(lhs, rhs, op, data_type(type_to_id<TypeOut>()));
     ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, OPERATOR());
+
+    auto s_lhs = this->template make_random_wrapped_scalar<TypeLhs>();
+    auto s_rhs = this->template make_random_wrapped_scalar<TypeRhs>();
+
+    out = cudf::experimental::binary_operation(lhs, s_rhs, op, data_type(type_to_id<TypeOut>()));
+    ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, s_rhs, OPERATOR());
+    out = cudf::experimental::binary_operation(s_lhs, rhs, op, data_type(type_to_id<TypeOut>()));
+    ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, s_lhs, rhs, OPERATOR());
   }
 };
 
