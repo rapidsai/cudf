@@ -651,6 +651,7 @@ static const __device__ __constant__ uint8_t ClosestFixedBitsMap[65] = {
  * @param[in] vals buffer for output values (uint32_t, int32_t, uint64_t or int64_t)
  * @param[in] maxvals maximum number of values to decode
  * @param[in] t thread id
+ * @param[in] has_buffered_values If true, means there are already buffered values
  *
  * @return number of values decoded
  */
@@ -660,7 +661,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
                                          volatile T* vals,
                                          uint32_t maxvals,
                                          int t,
-                                         bool has_buffer = false)
+                                         bool has_buffered_values = false)
 {
   uint32_t numvals, numruns;
   int r, tr;
@@ -709,8 +710,9 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
       }
       if ((numvals != 0) and (numvals + n > maxvals)) break;
       // case where there are buffered values and can't consume a whole chunk
-      // from decoded values, so work on buffered values and then start fresh in next iteration.
-      if ((numvals == 0) and (n > maxvals) and (has_buffer)) break;
+      // from decoded values, so skip adding any more to buffer, work on buffered values and then
+      // start fresh in next iteration with empty buffer.
+      if ((numvals == 0) and (n > maxvals) and (has_buffered_values)) break;
 
       pos += l;
       if (pos > maxpos) break;
