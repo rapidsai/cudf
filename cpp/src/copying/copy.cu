@@ -144,67 +144,31 @@ struct copy_if_else_functor_impl<string_view> {
 };
 
 /**
- * @brief Functor to generate gather-map for LHS column
- *
- * If specified `Predicate` evaluates to `true` for index `i`,
- * gather map must contain `i` (to select LHS[i]).
- * If false, gather map must have `null_index`, so that a null
- * is gathered in its place.
+ * @brief Adapter to negate predicates.
  */
 template <typename Predicate>
-class lhs_gather_map_functor {
+class logical_not {
  public:
-  lhs_gather_map_functor(Predicate predicate, size_type null_index)
-    : _pred(predicate), _null_index(null_index)
-  {
-  }
-
-  size_type __device__ operator()(size_type i) const { return _pred(i) ? i : _null_index; }
+  explicit logical_not(Predicate predicate) : _pred{predicate} {}
+  bool __device__ operator()(size_type i) const { return not _pred(i); }
 
  private:
   Predicate _pred;
-  size_type _null_index;
 };
-
-/**
- * @brief Creates a pair consisting of a column and its view
- */
-template <typename T>
-auto get_column_and_view(T const& t,
-                         cudf::size_type,
-                         rmm::cuda_stream_view,
-                         rmm::mr::device_memory_resource*)
-{
-  return std::make_tuple(t, t);
-}
-
-template <>
-auto get_column_and_view<cudf::scalar>(cudf::scalar const& scalar,
-                                       cudf::size_type size,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
-{
-  auto column      = cudf::make_column_from_scalar(scalar, size, stream, mr);
-  auto column_view = column->view();
-  return std::make_tuple(std::move(column), column_view);
-}
 
 /**
  * @brief Implementation of copy_if_else() with gather()/scatter().
  *
  * Handles nested-typed columns and scalars
  */
-template <typename Left, typename Right, typename Filter>
-std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
-                                                     Right const& rhs,
+template <typename Filter>
+std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lhs,
+                                                     cudf::column_view const& rhs,
                                                      size_type size,
                                                      Filter is_left,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
-  auto const [lhs_col, lhs_view] = get_column_and_view(lhs, size, stream, mr);
-  auto const [rhs_col, rhs_view] = get_column_and_view(rhs, size, stream, mr);
-
   auto scatter_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
   auto const scatter_map_end = thrust::copy_if(rmm::exec_policy(stream),
                                                thrust::make_counting_iterator(size_type{0}),
@@ -212,7 +176,7 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
                                                scatter_map.begin(),
                                                is_left);
 
-  auto const scatter_src_lhs = cudf::detail::gather(table_view{std::vector<column_view>{lhs_view}},
+  auto const scatter_src_lhs = cudf::detail::gather(table_view{std::vector<column_view>{lhs}},
                                                     scatter_map.begin(),
                                                     scatter_map_end,
                                                     out_of_bounds_policy::DONT_CHECK,
@@ -222,12 +186,62 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
     table_view{std::vector<column_view>{scatter_src_lhs->get_column(0).view()}},
     scatter_map.begin(),
     scatter_map_end,
-    table_view{std::vector<column_view>{rhs_view}},
+    table_view{std::vector<column_view>{rhs}},
     false,
     stream,
     mr);
 
   return std::move(result->release()[0]);
+}
+
+template <typename Filter>
+std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
+                                                     cudf::column_view const& rhs,
+                                                     size_type size,
+                                                     Filter is_left,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr)
+{
+  auto scatter_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
+  auto const scatter_map_end = thrust::copy_if(rmm::exec_policy(stream),
+                                               thrust::make_counting_iterator(size_type{0}),
+                                               thrust::make_counting_iterator(size_type{size}),
+                                               scatter_map.begin(),
+                                               is_left);
+
+  auto const scatter_map_size  = scatter_map_end - scatter_map.begin();
+  auto scatter_source          = std::vector<std::reference_wrapper<const scalar>>{std::ref(lhs)};
+  auto scatter_map_column_view = cudf::column_view{cudf::data_type{cudf::type_id::INT32},
+                                                   static_cast<cudf::size_type>(scatter_map_size),
+                                                   scatter_map.begin()};
+
+  auto result = cudf::scatter(
+    scatter_source, scatter_map_column_view, table_view{std::vector<column_view>{rhs}}, false, mr);
+
+  return std::move(result->release()[0]);
+}
+
+template <typename Filter>
+std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lhs,
+                                                     cudf::scalar const& rhs,
+                                                     size_type size,
+                                                     Filter is_left,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr)
+{
+  return scatter_gather_based_if_else(rhs, lhs, size, logical_not{is_left}, stream, mr);
+}
+
+template <typename Filter>
+std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
+                                                     cudf::scalar const& rhs,
+                                                     size_type size,
+                                                     Filter is_left,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr)
+{
+  auto rhs_col = cudf::make_column_from_scalar(rhs, size, stream, mr);
+  return scatter_gather_based_if_else(lhs, rhs_col->view(), size, is_left, stream, mr);
 }
 
 /**
