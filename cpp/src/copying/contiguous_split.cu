@@ -53,7 +53,7 @@ inline __device__ std::size_t _round_up_safe(std::size_t number_to_round, std::s
  * The definition of "buffer" used throughout this module is a component piece of a
  * cudf column. So for example, a fixed-width column with validity would have 2 associated
  * buffers : the data itself and the validity buffer.  contiguous_split operates by breaking
- * each column up into it's individual components and copying each one as a seperate kernel
+ * each column up into it's individual components and copying each one as a separate kernel
  * block.
  */
 struct src_buf_info {
@@ -188,7 +188,7 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
     }
 
     // if we're performing a value shift (offsets), or a bit shift (validity) the # of bytes and
-    // alignment must be a multiple of 4. value shifting and bit shifting are mututally exclusive
+    // alignment must be a multiple of 4. value shifting and bit shifting are mutually exclusive
     // and will never both be true at the same time.
     if (value_shift || bit_shift) {
       std::size_t idx = (num_bytes - remainder) / 4;
@@ -249,7 +249,7 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  *
  * @param num_src_bufs Total number of source buffers (N)
  * @param src_bufs Input source buffers (N)
- * @param dst_bufs Desination buffers (N*M)
+ * @param dst_bufs Destination buffers (N*M)
  * @param buf_info Information on the range of values to be copied for each destination buffer.
  */
 template <int block_size>

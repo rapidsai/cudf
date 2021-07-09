@@ -290,7 +290,7 @@ bool CompactProtocolReader::InitSchema(FileMetaData* md)
   /* Inside FileMetaData, there is a std::vector of RowGroups and each RowGroup contains a
    * a std::vector of ColumnChunks. Each ColumnChunk has a member ColumnMetaData, which contains
    * a std::vector of std::strings representing paths. The purpose of the code below is to set the
-   * schema_idx of each column of each row to it corresonding row_group. This is effectively
+   * schema_idx of each column of each row to it corresponding row_group. This is effectively
    * mapping the columns to the schema.
    */
   for (auto& row_group : md->row_groups) {

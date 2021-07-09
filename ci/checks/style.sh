@@ -11,7 +11,8 @@ LC_ALL=C.UTF-8
 LANG=C.UTF-8
 
 # Activate common conda env
-source activate gdf
+. /opt/conda/etc/profile.d/conda.sh
+conda activate rapids
 
 # Run isort and get results/return code
 ISORT=`isort --check-only python/**/*.py`

@@ -74,7 +74,7 @@ struct encoder_decimal_info {
 };
 
 /**
- * @brief Returns the total number of rowgroups in the list of contigious stripes.
+ * @brief Returns the total number of rowgroups in the list of contiguous stripes.
  */
 inline auto stripes_size(host_span<stripe_rowgroups const> stripes)
 {

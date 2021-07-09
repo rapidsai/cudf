@@ -232,7 +232,7 @@ struct ColumnChunkMetaData {
  * column
  *
  * Each column chunk lives in a particular row group and are guaranteed to be
- * contiguous in the file. Any mssing or corrupted chunks can be skipped during
+ * contiguous in the file. Any missing or corrupted chunks can be skipped during
  * reading.
  */
 struct ColumnChunk {
