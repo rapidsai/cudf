@@ -91,35 +91,6 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
 
   __syncthreads();
 
-  for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
-    auto const element_idx = thread_idx * BYTES_PER_THREAD + i;
-    if (element_idx < data.size()) {
-      printf(
-        "bid(%2i) tid(%2i) %3i: %c - %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u "
-        "%2u\n",
-        blockIdx.x,
-        threadIdx.x,
-        i,
-        data[data_begin + i],
-        static_cast<uint32_t>(thread_data[i].get(0)),
-        static_cast<uint32_t>(thread_data[i].get(1)),
-        static_cast<uint32_t>(thread_data[i].get(2)),
-        static_cast<uint32_t>(thread_data[i].get(3)),
-        static_cast<uint32_t>(thread_data[i].get(4)),
-        static_cast<uint32_t>(thread_data[i].get(5)),
-        static_cast<uint32_t>(thread_data[i].get(6)),
-        static_cast<uint32_t>(thread_data[i].get(7)),
-        static_cast<uint32_t>(thread_data[i].get(8)),
-        static_cast<uint32_t>(thread_data[i].get(9)),
-        static_cast<uint32_t>(thread_data[i].get(10)),
-        static_cast<uint32_t>(thread_data[i].get(11)),
-        static_cast<uint32_t>(thread_data[i].get(12)),
-        static_cast<uint32_t>(thread_data[i].get(13)),
-        static_cast<uint32_t>(thread_data[i].get(14)),
-        static_cast<uint32_t>(thread_data[i].get(15)));
-    }
-  }
-
   BlockScan(temp_storage.scan)
     .InclusiveScan(  //
       thread_data,
@@ -136,7 +107,7 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
   }
 
   for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
-    auto const element_idx = thread_idx * BYTES_PER_THREAD + i;
+    auto const element_idx = data_begin + i;
     if (element_idx < data.size()) {
       printf(
         "bid(%2i) tid(%2i) %3i: %c - %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u "

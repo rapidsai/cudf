@@ -40,7 +40,7 @@ struct MultibyteSplitTest : public BaseFixture {
 
 TEST_F(MultibyteSplitTest, Simple)
 {
-  std::string separator = "😎deli";  // F0 9F 98 8E | 11110000 11111001 1100010 11101000
+  std::string separator = "😎delimeters.";  // F0 9F 98 8E | 11110000 11111001 1100010 11101000
   std::string input =
     "aaa😎"
     "bbb😎"

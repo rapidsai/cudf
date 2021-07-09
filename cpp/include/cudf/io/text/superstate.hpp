@@ -67,7 +67,7 @@ struct superstate {
    */
   constexpr superstate() : _data(0)
   {
-    for (auto i = 0; i < N; i++) { _data |= i << (i * BITS); }
+    for (auto i = 0; i < N; i++) { _data |= static_cast<Data>(i) << (i * BITS); }
   }
 
   explicit inline constexpr superstate(Data data) : _data(data) {}
