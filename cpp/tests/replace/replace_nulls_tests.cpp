@@ -33,7 +33,8 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
-#include "thrust/iterator/counting_iterator.h"
+
+#include <thrust/iterator/counting_iterator.h>
 
 using namespace cudf::test::iterators;
 
