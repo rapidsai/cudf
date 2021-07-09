@@ -210,7 +210,7 @@ struct compute_size_and_repeat_separately_fn {
 
     if (!d_chars) {
       // If overflow happen, the stored value of output string size will be incorrect due to
-      // downcasting. In such cases, the entire output_strings_sizes column should be discarded.
+      // downcasting. In such cases, the entire output string size array should be discarded.
       d_offsets[idx] = static_cast<size_type>(output_size);
     } else if (repeat_times > 0) {
       auto const d_str    = strings_dv.element<string_view>(idx);
