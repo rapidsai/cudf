@@ -225,7 +225,9 @@ __global__ void for_each_kernel(cudf::size_type size, Functor f)
   int step  = blksz * gridsz;
 
 #pragma unroll
-  for (cudf::size_type i = start; i < size; i += step) { f(i); }
+  for (cudf::size_type i = start; i < size; i += step) {
+    f(i);
+  }
 }
 
 /**

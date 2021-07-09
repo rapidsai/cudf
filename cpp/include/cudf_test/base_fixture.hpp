@@ -131,8 +131,8 @@ class UniformRandomGenerator {
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
    */
-  template <typename TL                                                           = T,
-            std::enable_if_t<cudf::is_numeric<TL>() && !cudf::is_boolean<TL>()> * = nullptr>
+  template <typename TL                                                          = T,
+            std::enable_if_t<cudf::is_numeric<TL>() && !cudf::is_boolean<TL>()>* = nullptr>
   UniformRandomGenerator(T lower,
                          T upper,
                          uint64_t seed = detail::random_generator_incrementing_seed())
@@ -140,7 +140,7 @@ class UniformRandomGenerator {
   {
   }
 
-  template <typename TL = T, std::enable_if_t<cudf::is_boolean<TL>()> * = nullptr>
+  template <typename TL = T, std::enable_if_t<cudf::is_boolean<TL>()>* = nullptr>
   UniformRandomGenerator(T lower,
                          T upper,
                          uint64_t seed = detail::random_generator_incrementing_seed())
@@ -155,8 +155,8 @@ class UniformRandomGenerator {
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
    */
-  template <typename TL                                                             = T,
-            std::enable_if_t<cudf::is_chrono<TL>() or cudf::is_fixed_point<TL>()> * = nullptr>
+  template <typename TL                                                            = T,
+            std::enable_if_t<cudf::is_chrono<TL>() or cudf::is_fixed_point<TL>()>* = nullptr>
   UniformRandomGenerator(typename TL::rep lower,
                          typename TL::rep upper,
                          uint64_t seed = detail::random_generator_incrementing_seed())

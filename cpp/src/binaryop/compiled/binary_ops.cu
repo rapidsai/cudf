@@ -58,10 +58,10 @@ struct scalar_as_column_device_view {
 };
 // specialization for cudf::string_view
 template <>
-scalar_as_column_device_view::return_type scalar_as_column_device_view::
-operator()<cudf::string_view>(scalar const& s,
-                              rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+scalar_as_column_device_view::return_type
+scalar_as_column_device_view::operator()<cudf::string_view>(scalar const& s,
+                                                            rmm::cuda_stream_view stream,
+                                                            rmm::mr::device_memory_resource* mr)
 {
   using T                 = cudf::string_view;
   auto h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
