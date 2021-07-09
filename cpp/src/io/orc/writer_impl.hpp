@@ -150,6 +150,7 @@ struct string_dictionaries {
   std::vector<rmm::device_uvector<uint32_t>> index;
   rmm::device_uvector<device_span<uint32_t>> d_data_view;
   rmm::device_uvector<device_span<uint32_t>> d_index_view;
+  std::map<int, bool> dictionary_enabled;
 };
 
 /**
@@ -232,6 +233,7 @@ class writer::impl {
                           host_span<stripe_rowgroups const> stripe_bounds,
                           hostdevice_vector<gpu::DictionaryChunk> const& dict,
                           host_span<rmm::device_uvector<uint32_t>> dict_index,
+                          std::map<int, bool>& dictionary_enabled,
                           hostdevice_vector<gpu::StripeDictionary>& stripe_dict);
 
   /**
