@@ -61,6 +61,8 @@ struct trie_device_view {
 
     return 0;
   }
+
+  inline constexpr bool is_match(uint16_t idx) { return accepting[idx]; }
 };
 
 struct trie {
@@ -83,7 +85,7 @@ struct trie {
     : _layer_offsets(std::move(layer_offsets)),
       _tokens(std::move(tokens)),
       _transitions(std::move(transitions)),
-      _accepting(std::move(_accepting))
+      _accepting(std::move(accepting))
   {
   }
 

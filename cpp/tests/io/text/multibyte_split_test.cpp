@@ -40,29 +40,31 @@ struct MultibyteSplitTest : public BaseFixture {
 
 TEST_F(MultibyteSplitTest, Simple)
 {
-  std::string separator = "😎delimeters.";  // F0 9F 98 8E | 11110000 11111001 1100010 11101000
+  // 😀 | F0 9F 98 80 | 11110000 10011111 01100010 01010000
+  // 😎 | F0 9F 98 8E | 11110000 10011111 01100010 11101000
+  auto separators = std::vector<std::string>({"😀", "😎", ",", "::"});
   std::string input =
-    "aaa😎"
-    "bbb😎"
-    "ccc😎"
-    "ddd😎"
-    "eee😎"
-    "fff😎"
-    "ggg😎"
-    "hhh😎"
-    "___😎"
-    "here😎"
-    "is😎"
-    "another😎"
-    "simple😎"
+    "aaa😀"
+    "bbb😀"
+    "ccc😀"
+    "ddd😀"
+    "eee😀"
+    "fff::"
+    "ggg😀"
+    "hhh😀"
+    "___,"
+    "here,"
+    "is,"
+    "another,"
+    "simple😀"
     "text😎"
     "seperated😎"
     "by😎"
-    "emojis😎"
-    "which😎"
+    "emojis,"
+    "which,"
     "are😎"
-    "multple😎"
-    "bytes😎"
+    "multiple,"
+    "bytes::"
     "and😎"
     "used😎"
     "as😎"
@@ -77,7 +79,7 @@ TEST_F(MultibyteSplitTest, Simple)
   auto input_stream    = std::basic_istringstream(input);
   auto input_stream_io = cudf::io::text::host_input_stream(input_stream);
 
-  auto out = cudf::io::text::multibyte_split(input_stream_io, separator);
+  auto out = cudf::io::text::multibyte_split(input_stream_io, separators);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
 }

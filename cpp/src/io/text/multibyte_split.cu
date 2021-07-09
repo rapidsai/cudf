@@ -28,7 +28,7 @@ struct trie_state {
 using superstate = cudf::io::text::superstate<16>;
 
 auto constexpr BYTES_PER_THREAD = 8;
-auto constexpr THREADS_PER_TILE = 256;
+auto constexpr THREADS_PER_TILE = 32;
 auto constexpr BYTES_PER_TILE   = BYTES_PER_THREAD * THREADS_PER_TILE;
 auto constexpr TILES_PER_CHUNK  = 1024;
 auto constexpr BYTES_PER_CHUNK  = BYTES_PER_TILE * TILES_PER_CHUNK;
@@ -107,31 +107,24 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
   }
 
   for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
+    auto const real_state  = thread_data[i].get(0);
     auto const element_idx = data_begin + i;
     if (element_idx < data.size()) {
-      printf(
-        "bid(%2i) tid(%2i) %3i: %c - %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u %2u "
-        "%2u\n",
-        blockIdx.x,
-        threadIdx.x,
-        i,
-        data[data_begin + i],
-        static_cast<uint32_t>(thread_data[i].get(0)),
-        static_cast<uint32_t>(thread_data[i].get(1)),
-        static_cast<uint32_t>(thread_data[i].get(2)),
-        static_cast<uint32_t>(thread_data[i].get(3)),
-        static_cast<uint32_t>(thread_data[i].get(4)),
-        static_cast<uint32_t>(thread_data[i].get(5)),
-        static_cast<uint32_t>(thread_data[i].get(6)),
-        static_cast<uint32_t>(thread_data[i].get(7)),
-        static_cast<uint32_t>(thread_data[i].get(8)),
-        static_cast<uint32_t>(thread_data[i].get(9)),
-        static_cast<uint32_t>(thread_data[i].get(10)),
-        static_cast<uint32_t>(thread_data[i].get(11)),
-        static_cast<uint32_t>(thread_data[i].get(12)),
-        static_cast<uint32_t>(thread_data[i].get(13)),
-        static_cast<uint32_t>(thread_data[i].get(14)),
-        static_cast<uint32_t>(thread_data[i].get(15)));
+      if (trie.is_match(real_state)) {
+        printf("bid(%2i) tid(%2i) %3i: %c - %2u MATCH\n",
+               blockIdx.x,
+               threadIdx.x,
+               i,
+               data[data_begin + i],
+               static_cast<uint32_t>(real_state));
+      } else {
+        printf("bid(%2i) tid(%2i) %3i: %c - %2u\n",
+               blockIdx.x,
+               threadIdx.x,
+               i,
+               data[data_begin + i],
+               static_cast<uint32_t>(real_state));
+      }
     }
   }
 
@@ -148,7 +141,7 @@ namespace text {
 namespace detail {
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::input_stream& input,
-                                              std::string delimeter,
+                                              std::vector<std::string> const& delimeters,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
@@ -157,7 +150,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::input_stream& inpu
 
   // TODO: call state initalization kernels
 
-  auto const trie = cudf::io::text::trie::create(delimeter, stream);
+  auto const trie = cudf::io::text::trie::create(delimeters, stream);
 
   while (true) {
     uint32_t num_bytes_read = input.readsome(input_span, stream);
@@ -182,10 +175,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::input_stream& inpu
 }  // namespace detail
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::input_stream& input,
-                                              std::string delimeter,
+                                              std::vector<std::string> const& delimeters,
                                               rmm::mr::device_memory_resource* mr)
 {
-  return detail::multibyte_split(input, delimeter, rmm::cuda_stream_default, mr);
+  return detail::multibyte_split(input, delimeters, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace text
