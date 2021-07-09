@@ -24,8 +24,8 @@ public class CudaTest {
 
   @Test
   public void testGetCudaRuntimeInfo() {
-    assert Cuda.getDriverVersion() >= Cuda.getRuntimeVersion();
-    assert Cuda.getRuntimeVersion() > 1000;
+    assert Cuda.getDriverVersion() >= 1000;
+    assert Cuda.getRuntimeVersion() >= 1000;
     assertEquals(Cuda.getNativeComputeMode(), Cuda.getComputeMode().nativeId);
   }
 
