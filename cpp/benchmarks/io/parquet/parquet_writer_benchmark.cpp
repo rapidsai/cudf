@@ -23,10 +23,6 @@
 
 #include <cudf/io/parquet.hpp>
 
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
-
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
-
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
 constexpr size_t data_size         = 512 << 20;
@@ -54,10 +50,7 @@ void BM_parq_write_varying_inout(benchmark::State& state)
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(sink_type);
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
-  auto statistics_mr                  = rmm::mr::make_statistics_adaptor(mr);
-
-  rmm::mr::set_current_device_resource(&statistics_mr);
+  auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::parquet_writer_options opts =
@@ -65,10 +58,9 @@ void BM_parq_write_varying_inout(benchmark::State& state)
         .compression(compression);
     cudf_io::write_parquet(opts);
   }
-  rmm::mr::set_current_device_resource(mr);
 
   state.SetBytesProcessed(data_size * state.iterations());
-  state.counters["peak_memory_usage"] = statistics_mr.get_bytes_counter().peak;
+  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
 }
 
 void BM_parq_write_varying_options(benchmark::State& state)
