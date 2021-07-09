@@ -42,14 +42,14 @@ namespace test {
  * ```
  */
 class BaseFixture : public ::testing::Test {
-  rmm::mr::device_memory_resource *_mr{rmm::mr::get_current_device_resource()};
+  rmm::mr::device_memory_resource* _mr{rmm::mr::get_current_device_resource()};
 
  public:
   /**
    * @brief Returns pointer to `device_memory_resource` that should be used for
    * all tests inheriting from this fixture
    */
-  rmm::mr::device_memory_resource *mr() { return _mr; }
+  rmm::mr::device_memory_resource* mr() { return _mr; }
 };
 
 template <typename T, typename Enable = void>
@@ -167,13 +167,13 @@ class UniformRandomGenerator {
   /**
    * @brief Returns the next random number.
    */
-  template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()> * = nullptr>
+  template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()>* = nullptr>
   T generate()
   {
     return T{dist(rng)};
   }
 
-  template <typename TL = T, std::enable_if_t<cudf::is_timestamp<TL>()> * = nullptr>
+  template <typename TL = T, std::enable_if_t<cudf::is_timestamp<TL>()>* = nullptr>
   T generate()
   {
     return T{typename T::duration{dist(rng)}};
@@ -247,7 +247,7 @@ inline auto make_binning()
  * @return Memory resource instance
  */
 inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
-  std::string const &allocation_mode)
+  std::string const& allocation_mode)
 {
   if (allocation_mode == "binning") return make_binning();
   if (allocation_mode == "cuda") return make_cuda();
@@ -262,12 +262,12 @@ inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
 /**
  * @brief Parses the cuDF test command line options.
  *
- * Currently only supports 'rmm_mode' string paramater, which set the rmm
+ * Currently only supports 'rmm_mode' string parameter, which set the rmm
  * allocation mode. The default value of the parameter is 'pool'.
  *
  * @return Parsing results in the form of unordered map
  */
-inline auto parse_cudf_test_opts(int argc, char **argv)
+inline auto parse_cudf_test_opts(int argc, char** argv)
 {
   try {
     cxxopts::Options options(argv[0], " - cuDF tests command line options");
@@ -275,7 +275,7 @@ inline auto parse_cudf_test_opts(int argc, char **argv)
       "rmm_mode", "RMM allocation mode", cxxopts::value<std::string>()->default_value("pool"));
 
     return options.parse(argc, argv);
-  } catch (const cxxopts::OptionException &e) {
+  } catch (const cxxopts::OptionException& e) {
     CUDF_FAIL("Error parsing command line options");
   }
 }
@@ -291,7 +291,7 @@ inline auto parse_cudf_test_opts(int argc, char **argv)
  * allocation mode used for creating the default memory resource.
  */
 #define CUDF_TEST_PROGRAM_MAIN()                                        \
-  int main(int argc, char **argv)                                       \
+  int main(int argc, char** argv)                                       \
   {                                                                     \
     ::testing::InitGoogleTest(&argc, argv);                             \
     auto const cmd_opts = parse_cudf_test_opts(argc, argv);             \

@@ -37,7 +37,7 @@
 
 /**
  * @file column_device_view.cuh
- * @brief Column device view class definitons
+ * @brief Column device view class definitions
  */
 
 namespace cudf {
@@ -54,14 +54,14 @@ namespace cudf {
  * - `DYNAMIC` defers the assumption of nullability to runtime with the users stating
  *    on construction of the iterator if column has nulls.
  */
-namespace contains_nulls {
-struct YES {
+struct contains_nulls {
+  struct YES {
+  };
+  struct NO {
+  };
+  struct DYNAMIC {
+  };
 };
-struct NO {
-};
-struct DYNAMIC {
-};
-}  // namespace contains_nulls
 
 namespace detail {
 /**
@@ -541,7 +541,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *
    * optional_begin with mode `DYNAMIC` defers the assumption of nullability to
    * runtime, with the user stating on construction of the iterator if column has nulls.
-   * `DYNAMIC` mode is nice when an algorithm is going to execute on mutliple
+   * `DYNAMIC` mode is nice when an algorithm is going to execute on multiple
    * iterators and you don't want to compile all the combinations of iterator types
    *
    * Example:

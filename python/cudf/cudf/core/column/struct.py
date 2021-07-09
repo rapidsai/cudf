@@ -80,6 +80,15 @@ class StructColumn(ColumnBase):
             pa_type, len(self), buffers, children=children
         )
 
+    def __getitem__(self, args):
+        result = super().__getitem__(args)
+        if isinstance(result, dict):
+            return {
+                field: value
+                for field, value in zip(self.dtype.fields, result.values())
+            }
+        return result
+
     def copy(self, deep=True):
         result = super().copy(deep=deep)
         if deep:
@@ -99,7 +108,7 @@ class StructColumn(ColumnBase):
         )
         return StructColumn(
             data=None,
-            size=self.base_size,
+            size=self.size,
             dtype=dtype,
             mask=self.base_mask,
             offset=self.offset,
@@ -122,7 +131,7 @@ class StructColumn(ColumnBase):
                     for i, f in enumerate(dtype.fields.keys())
                 ),
                 mask=self.base_mask,
-                size=self.base_size,
+                size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
             )

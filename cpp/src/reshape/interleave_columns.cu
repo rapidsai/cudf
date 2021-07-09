@@ -104,7 +104,7 @@ struct interleave_columns_functor {
     // Create the chars column
     auto const bytes =
       cudf::detail::get_value<int32_t>(offsets_column->view(), num_strings, stream);
-    auto chars_column = strings::detail::create_chars_child_column(num_strings, bytes, stream, mr);
+    auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
     // Fill the chars column
     auto d_results_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(

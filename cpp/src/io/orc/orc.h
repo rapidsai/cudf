@@ -135,32 +135,32 @@ struct Metadata {
  */
 class ProtobufReader {
  public:
-  ProtobufReader(const uint8_t *base, size_t len) : m_base(base), m_cur(base), m_end(base + len) {}
+  ProtobufReader(const uint8_t* base, size_t len) : m_base(base), m_cur(base), m_end(base + len) {}
 
   template <typename T>
-  void read(T &s)
+  void read(T& s)
   {
     read(s, m_end - m_cur);
   }
-  void read(PostScript &, size_t maxlen);
-  void read(FileFooter &, size_t maxlen);
-  void read(StripeInformation &, size_t maxlen);
-  void read(SchemaType &, size_t maxlen);
-  void read(UserMetadataItem &, size_t maxlen);
-  void read(StripeFooter &, size_t maxlen);
-  void read(Stream &, size_t maxlen);
-  void read(ColumnEncoding &, size_t maxlen);
-  void read(integer_statistics &, size_t maxlen);
-  void read(double_statistics &, size_t maxlen);
-  void read(string_statistics &, size_t maxlen);
-  void read(bucket_statistics &, size_t maxlen);
-  void read(decimal_statistics &, size_t maxlen);
-  void read(date_statistics &, size_t maxlen);
-  void read(binary_statistics &, size_t maxlen);
-  void read(timestamp_statistics &, size_t maxlen);
-  void read(column_statistics &, size_t maxlen);
-  void read(StripeStatistics &, size_t maxlen);
-  void read(Metadata &, size_t maxlen);
+  void read(PostScript&, size_t maxlen);
+  void read(FileFooter&, size_t maxlen);
+  void read(StripeInformation&, size_t maxlen);
+  void read(SchemaType&, size_t maxlen);
+  void read(UserMetadataItem&, size_t maxlen);
+  void read(StripeFooter&, size_t maxlen);
+  void read(Stream&, size_t maxlen);
+  void read(ColumnEncoding&, size_t maxlen);
+  void read(integer_statistics&, size_t maxlen);
+  void read(double_statistics&, size_t maxlen);
+  void read(string_statistics&, size_t maxlen);
+  void read(bucket_statistics&, size_t maxlen);
+  void read(decimal_statistics&, size_t maxlen);
+  void read(date_statistics&, size_t maxlen);
+  void read(binary_statistics&, size_t maxlen);
+  void read(timestamp_statistics&, size_t maxlen);
+  void read(column_statistics&, size_t maxlen);
+  void read(StripeStatistics&, size_t maxlen);
+  void read(Metadata&, size_t maxlen);
 
  private:
   template <int index>
@@ -178,11 +178,11 @@ class ProtobufReader {
   void skip_struct_field(int t);
 
   template <typename T, typename... Operator>
-  void function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op);
+  void function_builder(T& s, size_t maxlen, std::tuple<Operator...>& op);
 
   template <typename base_t,
             typename std::enable_if_t<!std::is_arithmetic<base_t>::value and
-                                      !std::is_enum<base_t>::value> * = nullptr>
+                                      !std::is_enum<base_t>::value>* = nullptr>
   int static constexpr encode_field_number_base(int field_number) noexcept
   {
     return (field_number * 8) + PB_TYPE_FIXEDLEN;
@@ -190,21 +190,21 @@ class ProtobufReader {
 
   template <typename base_t,
             typename std::enable_if_t<std::is_integral<base_t>::value or
-                                      std::is_enum<base_t>::value> * = nullptr>
+                                      std::is_enum<base_t>::value>* = nullptr>
   int static constexpr encode_field_number_base(int field_number) noexcept
   {
     return (field_number * 8) + PB_TYPE_VARINT;
   }
 
   template <typename base_t,
-            typename std::enable_if_t<std::is_same<base_t, float>::value> * = nullptr>
+            typename std::enable_if_t<std::is_same<base_t, float>::value>* = nullptr>
   int static constexpr encode_field_number_base(int field_number) noexcept
   {
     return (field_number * 8) + PB_TYPE_FIXED32;
   }
 
   template <typename base_t,
-            typename std::enable_if_t<std::is_same<base_t, double>::value> * = nullptr>
+            typename std::enable_if_t<std::is_same<base_t, double>::value>* = nullptr>
   int static constexpr encode_field_number_base(int field_number) noexcept
   {
     return (field_number * 8) + PB_TYPE_FIXED64;
@@ -212,7 +212,7 @@ class ProtobufReader {
 
   template <typename T,
             typename std::enable_if_t<!std::is_class<T>::value or
-                                      std::is_same<T, std::string>::value> * = nullptr>
+                                      std::is_same<T, std::string>::value>* = nullptr>
   int static constexpr encode_field_number(int field_number) noexcept
   {
     return encode_field_number_base<T>(field_number);
@@ -220,8 +220,8 @@ class ProtobufReader {
 
   // containters change the field number encoding
   template <typename T,
-            typename std::enable_if_t<std::is_same<T, std::vector<typename T::value_type>>::value>
-              * = nullptr>
+            typename std::enable_if_t<
+              std::is_same<T, std::vector<typename T::value_type>>::value>* = nullptr>
   int static constexpr encode_field_number(int field_number) noexcept
   {
     return encode_field_number_base<T>(field_number);
@@ -229,49 +229,49 @@ class ProtobufReader {
 
   // optional fields don't change the field number encoding
   template <typename T,
-            typename std::enable_if_t<std::is_same<T, std::optional<typename T::value_type>>::value>
-              * = nullptr>
+            typename std::enable_if_t<
+              std::is_same<T, std::optional<typename T::value_type>>::value>* = nullptr>
   int static constexpr encode_field_number(int field_number) noexcept
   {
     return encode_field_number_base<typename T::value_type>(field_number);
   }
 
-  uint32_t read_field_size(const uint8_t *end);
+  uint32_t read_field_size(const uint8_t* end);
 
-  template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
-  void read_field(T &value, const uint8_t *end)
+  template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  void read_field(T& value, const uint8_t* end)
   {
     value = get<T>();
   }
 
-  template <typename T, typename std::enable_if_t<std::is_enum<T>::value> * = nullptr>
-  void read_field(T &value, const uint8_t *end)
+  template <typename T, typename std::enable_if_t<std::is_enum<T>::value>* = nullptr>
+  void read_field(T& value, const uint8_t* end)
   {
     value = static_cast<T>(get<uint32_t>());
   }
 
-  template <typename T, typename std::enable_if_t<std::is_same<T, std::string>::value> * = nullptr>
-  void read_field(T &value, const uint8_t *end)
+  template <typename T, typename std::enable_if_t<std::is_same<T, std::string>::value>* = nullptr>
+  void read_field(T& value, const uint8_t* end)
   {
     auto const size = read_field_size(end);
-    value.assign(reinterpret_cast<const char *>(m_cur), size);
+    value.assign(reinterpret_cast<const char*>(m_cur), size);
     m_cur += size;
   }
 
   template <typename T,
-            typename std::enable_if_t<std::is_same<T, std::vector<std::string>>::value> * = nullptr>
-  void read_field(T &value, const uint8_t *end)
+            typename std::enable_if_t<std::is_same<T, std::vector<std::string>>::value>* = nullptr>
+  void read_field(T& value, const uint8_t* end)
   {
     auto const size = read_field_size(end);
-    value.emplace_back(reinterpret_cast<const char *>(m_cur), size);
+    value.emplace_back(reinterpret_cast<const char*>(m_cur), size);
     m_cur += size;
   }
 
-  template <typename T,
-            typename std::enable_if_t<
-              std::is_same<T, std::vector<typename T::value_type>>::value and
-              !std::is_same<std::string, typename T::value_type>::value> * = nullptr>
-  void read_field(T &value, const uint8_t *end)
+  template <
+    typename T,
+    typename std::enable_if_t<std::is_same<T, std::vector<typename T::value_type>>::value and
+                              !std::is_same<std::string, typename T::value_type>::value>* = nullptr>
+  void read_field(T& value, const uint8_t* end)
   {
     auto const size = read_field_size(end);
     value.emplace_back();
@@ -279,9 +279,9 @@ class ProtobufReader {
   }
 
   template <typename T,
-            typename std::enable_if_t<std::is_same<T, std::optional<typename T::value_type>>::value>
-              * = nullptr>
-  void read_field(T &value, const uint8_t *end)
+            typename std::enable_if_t<
+              std::is_same<T, std::optional<typename T::value_type>>::value>* = nullptr>
+  void read_field(T& value, const uint8_t* end)
   {
     typename T::value_type contained_value;
     read_field(contained_value, end);
@@ -289,29 +289,30 @@ class ProtobufReader {
   }
 
   template <typename T>
-  auto read_field(T &value, const uint8_t *end) -> decltype(read(value, 0))
+  auto read_field(T& value, const uint8_t* end) -> decltype(read(value, 0))
   {
     auto const size = read_field_size(end);
     read(value, size);
   }
 
-  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value> * = nullptr>
-  void read_field(T &value, const uint8_t *end)
+  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  void read_field(T& value, const uint8_t* end)
   {
     memcpy(&value, m_cur, sizeof(T));
     m_cur += sizeof(T);
   }
 
   template <typename T>
-  void read_packed_field(T &value, const uint8_t *end)
+  void read_packed_field(T& value, const uint8_t* end)
   {
     auto const len       = get<uint32_t>();
     auto const field_end = std::min(m_cur + len, end);
-    while (m_cur < field_end) value.push_back(get<typename T::value_type>());
+    while (m_cur < field_end)
+      value.push_back(get<typename T::value_type>());
   }
 
   template <typename T>
-  void read_raw_field(T &value, const uint8_t *end)
+  void read_raw_field(T& value, const uint8_t* end)
   {
     auto const size = read_field_size(end);
     value.emplace_back(m_cur, m_cur + size);
@@ -321,14 +322,14 @@ class ProtobufReader {
   template <typename T>
   struct field_reader {
     int const encoded_field_number;
-    T &output_value;
+    T& output_value;
 
-    field_reader(int field_number, T &field_value)
+    field_reader(int field_number, T& field_value)
       : encoded_field_number(encode_field_number<T>(field_number)), output_value(field_value)
     {
     }
 
-    inline void operator()(ProtobufReader *pbr, const uint8_t *end)
+    inline void operator()(ProtobufReader* pbr, const uint8_t* end)
     {
       pbr->read_field(output_value, end);
     }
@@ -337,14 +338,14 @@ class ProtobufReader {
   template <typename T>
   struct packed_field_reader {
     int const encoded_field_number;
-    T &output_value;
+    T& output_value;
 
-    packed_field_reader(int field_number, T &field_value)
+    packed_field_reader(int field_number, T& field_value)
       : encoded_field_number(encode_field_number<T>(field_number)), output_value(field_value)
     {
     }
 
-    inline void operator()(ProtobufReader *pbr, const uint8_t *end)
+    inline void operator()(ProtobufReader* pbr, const uint8_t* end)
     {
       pbr->read_packed_field(output_value, end);
     }
@@ -353,22 +354,22 @@ class ProtobufReader {
   template <typename T>
   struct raw_field_reader {
     int const encoded_field_number;
-    T &output_value;
+    T& output_value;
 
-    raw_field_reader(int field_number, T &field_value)
+    raw_field_reader(int field_number, T& field_value)
       : encoded_field_number(encode_field_number<T>(field_number)), output_value(field_value)
     {
     }
 
-    inline void operator()(ProtobufReader *pbr, const uint8_t *end)
+    inline void operator()(ProtobufReader* pbr, const uint8_t* end)
     {
       pbr->read_raw_field(output_value, end);
     }
   };
 
-  const uint8_t *const m_base;
-  const uint8_t *m_cur;
-  const uint8_t *const m_end;
+  const uint8_t* const m_base;
+  const uint8_t* m_cur;
+  const uint8_t* const m_end;
 
  public:
   /**
@@ -381,7 +382,7 @@ class ProtobufReader {
    * @return the field reader object of the right type
    */
   template <typename T>
-  static auto make_field_reader(int field_number, T &field_value)
+  static auto make_field_reader(int field_number, T& field_value)
   {
     return field_reader<T>(field_number, field_value);
   }
@@ -395,7 +396,7 @@ class ProtobufReader {
    * @return the packed field reader object of the right type
    */
   template <typename T>
-  static auto make_packed_field_reader(int field_number, T &field_value)
+  static auto make_packed_field_reader(int field_number, T& field_value)
   {
     return packed_field_reader<T>(field_number, field_value);
   }
@@ -410,7 +411,7 @@ class ProtobufReader {
    * @return the raw field reader object of the right type
    */
   template <typename T>
-  static auto make_raw_field_reader(int field_number, T &field_value)
+  static auto make_raw_field_reader(int field_number, T& field_value)
   {
     return raw_field_reader<T>(field_number, field_value);
   }
@@ -469,7 +470,7 @@ inline int64_t ProtobufReader::get<int64_t>()
 class ProtobufWriter {
  public:
   ProtobufWriter() { m_buf = nullptr; }
-  ProtobufWriter(std::vector<uint8_t> *output) { m_buf = output; }
+  ProtobufWriter(std::vector<uint8_t>* output) { m_buf = output; }
   void putb(uint8_t v) { m_buf->push_back(v); }
   uint32_t put_uint(uint64_t v)
   {
@@ -496,19 +497,19 @@ class ProtobufWriter {
                            TypeKind kind);
 
  public:
-  size_t write(const PostScript &);
-  size_t write(const FileFooter &);
-  size_t write(const StripeInformation &);
-  size_t write(const SchemaType &);
-  size_t write(const UserMetadataItem &);
-  size_t write(const StripeFooter &);
-  size_t write(const Stream &);
-  size_t write(const ColumnEncoding &);
-  size_t write(const StripeStatistics &);
-  size_t write(const Metadata &);
+  size_t write(const PostScript&);
+  size_t write(const FileFooter&);
+  size_t write(const StripeInformation&);
+  size_t write(const SchemaType&);
+  size_t write(const UserMetadataItem&);
+  size_t write(const StripeFooter&);
+  size_t write(const Stream&);
+  size_t write(const ColumnEncoding&);
+  size_t write(const StripeStatistics&);
+  size_t write(const Metadata&);
 
  protected:
-  std::vector<uint8_t> *m_buf;
+  std::vector<uint8_t>* m_buf;
   struct ProtobufFieldWriter;
 };
 
@@ -519,7 +520,7 @@ class ProtobufWriter {
 class OrcDecompressor {
  public:
   OrcDecompressor(CompressionKind kind, uint32_t blockSize);
-  const uint8_t *Decompress(const uint8_t *srcBytes, size_t srcLen, size_t *dstLen);
+  const uint8_t* Decompress(const uint8_t* srcBytes, size_t srcLen, size_t* dstLen);
   uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
   uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
   {
@@ -538,42 +539,51 @@ class OrcDecompressor {
 };
 
 /**
+ * @brief Stores orc id for each column and its adjacent number of children
+ * in case of struct or number of children in case of list column.
+ * If list column has struct column, then all child columns of that struct are treated as child
+ * column of list.
+ *
+ * @code{.pseudo}
+ * Consider following data where a struct has two members and a list column
+ * {"struct": [{"a": 1, "b": 2}, {"a":3, "b":5}], "list":[[1, 2], [2, 3]]}
+ *
+ * `orc_column_meta` for struct column would be
+ * id = 0
+ * num_children = 2
+ *
+ * `orc_column_meta` for list column would be
+ * id = 3
+ * num_children = 1
+ * @endcode
+ *
+ */
+struct orc_column_meta {
+  // orc_column_meta(uint32_t _id, uint32_t _num_children) : id(_id), num_children(_num_children){};
+  uint32_t id;            // orc id for the column
+  uint32_t num_children;  // number of children at the same level of nesting in case of struct
+};
+
+/**
  * @brief A helper class for ORC file metadata. Provides some additional
  * convenience methods for initializing and accessing metadata.
  */
 class metadata {
-  using OrcStripeInfo = std::pair<const StripeInformation *, const StripeFooter *>;
+  using OrcStripeInfo = std::pair<const StripeInformation*, const StripeFooter*>;
 
  public:
-  explicit metadata(datasource *const src);
+  struct stripe_source_mapping {
+    int source_idx;
+    std::vector<OrcStripeInfo> stripe_info;
+  };
 
-  /**
-   * @brief Filters and reads the info of only a selection of stripes
-   *
-   * @param[in] stripes Indices of individual stripes
-   * @param[in] row_start Starting row of the selection
-   * @param[in,out] row_count Total number of rows selected
-   *
-   * @return List of stripe info and total number of selected rows
-   */
-  std::vector<OrcStripeInfo> select_stripes(const std::vector<size_type> &stripes,
-                                            size_type &row_start,
-                                            size_type &row_count);
-
-  /**
-   * @brief Filters and reduces down to a selection of columns
-   *
-   * @param[in] use_names List of column names to select
-   * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
-   *
-   * @return List of ORC column indexes
-   */
-  std::vector<int> select_columns(std::vector<std::string> use_names, bool &has_timestamp_column);
+ public:
+  explicit metadata(datasource* const src);
 
   size_t get_total_rows() const { return ff.numberOfRows; }
   int get_num_stripes() const { return ff.stripes.size(); }
   int get_num_columns() const { return ff.types.size(); }
-  std::string const &get_column_name(int32_t column_id)
+  std::string const& get_column_name(int32_t column_id) const
   {
     if (column_names.empty() && get_num_columns() != 0) { init_column_names(); }
     return column_names[column_id];
@@ -586,6 +596,7 @@ class metadata {
   Metadata md;
   std::vector<StripeFooter> stripefooters;
   std::unique_ptr<OrcDecompressor> decompressor;
+  datasource* const source;
 
  private:
   struct schema_indexes {
@@ -593,10 +604,9 @@ class metadata {
     int32_t field  = -1;
   };
   std::vector<schema_indexes> get_schema_indexes() const;
-  void init_column_names();
+  void init_column_names() const;
 
-  std::vector<std::string> column_names;
-  datasource *const source;
+  mutable std::vector<std::string> column_names;
 };
 
 }  // namespace orc

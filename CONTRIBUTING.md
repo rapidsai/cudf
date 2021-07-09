@@ -133,7 +133,7 @@ Compiler requirements:
 
 * `gcc`     version 9.3+
 * `nvcc`    version 11.0+
-* `cmake`   version 3.18.0+
+* `cmake`   version 3.20.1+
 
 CUDA/GPU requirements:
 
@@ -257,17 +257,31 @@ When you have a debug build of `libcudf` installed, debugging with the `cuda-gdb
 
 If you are debugging a Python script, simply run the following:
 
-#### `cuda-gdb`
-
 ```bash
 cuda-gdb -ex r --args python <program_name>.py <program_arguments>
 ```
 
-#### `cuda-memcheck`
-
 ```bash
 cuda-memcheck python <program_name>.py <program_arguments>
 ```
+
+### Device debug symbols
+
+The device debug symbols are not automatically added with the cmake `Debug`
+build type because it causes a runtime delay of several minutes when loading
+the libcudf.so library.
+
+Therefore, it is recommended to add device debug symbols only to specific files by
+setting the `-G` compile option locally in your `cpp/CMakeLists.txt` for that file.
+Here is an example of adding the `-G` option to the compile command for
+`src/copying/copy.cu` source file:
+
+```
+set_source_files_properties(src/copying/copy.cu PROPERTIES COMPILE_OPTIONS "-G")
+```
+
+This will add the device debug symbols for this object file in libcudf.so.
+You can then use `cuda-dbg` to debug into the kernels in that source file.
 
 ### Building and Testing on a gpuCI image locally
 

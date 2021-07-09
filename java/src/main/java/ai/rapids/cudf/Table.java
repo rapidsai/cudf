@@ -28,14 +28,7 @@ import java.io.File;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
+import java.util.*;
 
 /**
  * Class to represent a collection of ColumnVectors and operations that can be performed on them
@@ -463,6 +456,17 @@ public final class Table implements AutoCloseable {
                                                 long[] aggInstances, boolean ignoreNullKeys,
                                                 boolean keySorted, boolean[] keysDescending,
                                                 boolean[] keysNullSmallest) throws CudfException;
+
+  private static native long[] groupByScan(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
+      long[] aggInstances, boolean ignoreNullKeys,
+      boolean keySorted, boolean[] keysDescending,
+      boolean[] keysNullSmallest) throws CudfException;
+
+  private static native long[] groupByReplaceNulls(long inputTable, int[] keyIndices,
+      int[] replaceColumnsIndices,
+      boolean[] isPreceding, boolean ignoreNullKeys,
+      boolean keySorted, boolean[] keysDescending,
+      boolean[] keysNullSmallest) throws CudfException;
 
   private static native long[] rollingWindowAggregate(
       long inputTable,
@@ -918,6 +922,46 @@ public final class Table implements AutoCloseable {
   public static TableWriter writeParquetChunked(ParquetWriterOptions options,
                                                 HostBufferConsumer consumer) {
     return new ParquetTableWriter(options, consumer);
+  }
+
+  /**
+   * This is an evolving API and most likely be removed in future releases. Please use with the
+   * caveat that this will not exist in the near future.
+   * @param options the Parquet writer options.
+   * @param consumer a class that will be called when host buffers are ready with Parquet
+   *                 formatted data in them.
+   * @param columnViews ColumnViews to write to Parquet
+   */
+  public static void writeColumnViewsToParquet(ParquetWriterOptions options,
+                                               HostBufferConsumer consumer,
+                                               ColumnView... columnViews) {
+    assert columnViews != null && columnViews.length > 0 : "ColumnViews can't be null or empty";
+    long rows = columnViews[0].getRowCount();
+
+    for (ColumnView columnView : columnViews) {
+      assert (null != columnView) : "ColumnViews can't be null";
+      assert (rows == columnView.getRowCount()) : "All columns should have the same number of " +
+          "rows " + columnView.getType();
+    }
+
+    // Since Arrays are mutable objects make a copy
+    long[] viewPointers = new long[columnViews.length];
+    for (int i = 0; i < columnViews.length; i++) {
+      viewPointers[i] = columnViews[i].getNativeView();
+    }
+
+    long nativeHandle = createCudfTableView(viewPointers);
+    try {
+      try (ParquetTableWriter writer = new ParquetTableWriter(options, consumer)) {
+        long total = 0;
+        for (ColumnView cv : columnViews) {
+          total += cv.getDeviceMemorySize();
+        }
+        writeParquetChunk(writer.handle, nativeHandle, total);
+      }
+    } finally {
+      deleteCudfTable(nativeHandle);
+    }
   }
 
   /**
@@ -2621,6 +2665,96 @@ public final class Table implements AutoCloseable {
       } finally {
         Aggregation.close(aggInstances);
       }
+    }
+
+    public Table scan(AggregationOnColumn... aggregates) {
+      assert aggregates != null;
+
+      // To improve performance and memory we want to remove duplicate operations
+      // and also group the operations by column so hopefully cudf can do multiple aggregations
+      // in a single pass.
+
+      // Use a tree map to make debugging simpler (columns are all in the same order)
+      TreeMap<Integer, ColumnOps> groupedOps = new TreeMap<>();
+      // Total number of operations that will need to be done.
+      int keysLength = operation.indices.length;
+      int totalOps = 0;
+      for (int outputIndex = 0; outputIndex < aggregates.length; outputIndex++) {
+        AggregationOnColumn agg = aggregates[outputIndex];
+        ColumnOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnOps());
+        totalOps += ops.add(agg, outputIndex + keysLength);
+      }
+      int[] aggColumnIndexes = new int[totalOps];
+      long[] aggOperationInstances = new long[totalOps];
+      try {
+        int opIndex = 0;
+        for (Map.Entry<Integer, ColumnOps> entry: groupedOps.entrySet()) {
+          int columnIndex = entry.getKey();
+          for (Aggregation operation: entry.getValue().operations()) {
+            aggColumnIndexes[opIndex] = columnIndex;
+            aggOperationInstances[opIndex] = operation.createNativeInstance();
+            opIndex++;
+          }
+        }
+        assert opIndex == totalOps : opIndex + " == " + totalOps;
+
+        try (Table aggregate = new Table(groupByScan(
+            operation.table.nativeHandle,
+            operation.indices,
+            aggColumnIndexes,
+            aggOperationInstances,
+            groupByOptions.getIgnoreNullKeys(),
+            groupByOptions.getKeySorted(),
+            groupByOptions.getKeysDescending(),
+            groupByOptions.getKeysNullSmallest()))) {
+          // prepare the final table
+          ColumnVector[] finalCols = new ColumnVector[keysLength + aggregates.length];
+
+          // get the key columns
+          for (int aggIndex = 0; aggIndex < keysLength; aggIndex++) {
+            finalCols[aggIndex] = aggregate.getColumn(aggIndex);
+          }
+
+          int inputColumn = keysLength;
+          // Now get the aggregation columns
+          for (ColumnOps ops: groupedOps.values()) {
+            for (List<Integer> indices: ops.outputIndices()) {
+              for (int outIndex: indices) {
+                finalCols[outIndex] = aggregate.getColumn(inputColumn);
+              }
+              inputColumn++;
+            }
+          }
+          return new Table(finalCols);
+        }
+      } finally {
+        Aggregation.close(aggOperationInstances);
+      }
+    }
+
+    public Table replaceNulls(ReplacePolicyWithColumn... replacements) {
+      assert replacements != null;
+
+      // TODO in the future perhaps to improve performance and memory we want to
+      //  remove duplicate operations.
+
+      boolean[] isPreceding = new boolean[replacements.length];
+      int [] columnIndexes = new int[replacements.length];
+
+      for (int index = 0; index < replacements.length; index++) {
+        isPreceding[index] = replacements[index].policy.isPreceding;
+        columnIndexes[index] = replacements[index].column;
+      }
+
+      return new Table(groupByReplaceNulls(
+          operation.table.nativeHandle,
+          operation.indices,
+          columnIndexes,
+          isPreceding,
+          groupByOptions.getIgnoreNullKeys(),
+          groupByOptions.getKeySorted(),
+          groupByOptions.getKeysDescending(),
+          groupByOptions.getKeysNullSmallest()));
     }
 
     /**

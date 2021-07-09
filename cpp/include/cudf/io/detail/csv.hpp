@@ -41,10 +41,10 @@ class reader {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::vector<std::string> const &filepaths,
-                  csv_reader_options const &options,
+  explicit reader(std::vector<std::string> const& filepaths,
+                  csv_reader_options const& options,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource *mr);
+                  rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Constructor from an array of datasources
@@ -54,10 +54,10 @@ class reader {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-                  csv_reader_options const &options,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                  csv_reader_options const& options,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource *mr);
+                  rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -91,9 +91,9 @@ class writer {
    * @param mr Device memory resource to use for device memory allocation
    */
   writer(std::unique_ptr<cudf::io::data_sink> sinkp,
-         csv_writer_options const &options,
+         csv_writer_options const& options,
          rmm::cuda_stream_view stream,
-         rmm::mr::device_memory_resource *mr);  // cannot provide definition here (because
+         rmm::mr::device_memory_resource* mr);  // cannot provide definition here (because
                                                 // _impl is incomplete hence unique_ptr has
                                                 // not enough sizeof() info)
 
@@ -109,8 +109,8 @@ class writer {
    * @param metadata Table metadata and column names
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void write(table_view const &table,
-             const table_metadata *metadata = nullptr,
+  void write(table_view const& table,
+             const table_metadata* metadata = nullptr,
              rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 };
 }  // namespace csv

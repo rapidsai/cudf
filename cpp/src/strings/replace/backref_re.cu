@@ -110,9 +110,7 @@ std::unique_ptr<column> replace_with_backrefs(
   using BackRefIterator = decltype(backrefs.begin());
 
   // create child columns
-  children_pair children = [&] {
-    // Each invocation is predicated on the stack size
-    // which is dependent on the number of regex instructions
+  auto [offsets, chars] = [&] {
     if (regex_insts <= RX_SMALL_INSTS) {
       return make_strings_children(
         backrefs_fn<BackRefIterator, RX_STACK_SMALL>{
@@ -121,11 +119,19 @@ std::unique_ptr<column> replace_with_backrefs(
         stream,
         mr);
     } else if (regex_insts <= RX_MEDIUM_INSTS) {
-      return replace_with_backrefs_medium(
-        *d_strings, *d_prog, d_repl_template, backrefs, stream, mr);
+      return make_strings_children(
+        backrefs_fn<BackRefIterator, RX_STACK_MEDIUM>{
+          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
+        strings.size(),
+        stream,
+        mr);
     } else if (regex_insts <= RX_LARGE_INSTS) {
-      return replace_with_backrefs_large(
-        *d_strings, *d_prog, d_repl_template, backrefs, stream, mr);
+      return make_strings_children(
+        backrefs_fn<BackRefIterator, RX_STACK_LARGE>{
+          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
+        strings.size(),
+        stream,
+        mr);
     } else {
       return make_strings_children(
         backrefs_fn<BackRefIterator, RX_STACK_ANY>{
@@ -137,8 +143,8 @@ std::unique_ptr<column> replace_with_backrefs(
   }();
 
   return make_strings_column(strings.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets),
+                             std::move(chars),
                              strings.null_count(),
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                              stream,

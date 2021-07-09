@@ -124,7 +124,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
             // Need to assume that an additional "overflow" stripe is present
             stripes_to_read.push_back(num_stripes);
           }
-          read_options.set_stripes(stripes_to_read);
+          read_options.set_stripes({stripes_to_read});
         } break;
         case row_selection::NROWS:
           read_options.set_skip_rows(chunk * chunk_row_cnt);

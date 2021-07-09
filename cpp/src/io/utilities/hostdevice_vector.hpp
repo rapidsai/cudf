@@ -38,8 +38,8 @@ class hostdevice_vector {
 
   hostdevice_vector() {}
 
-  hostdevice_vector(hostdevice_vector &&v) { move(std::move(v)); }
-  hostdevice_vector &operator=(hostdevice_vector &&v)
+  hostdevice_vector(hostdevice_vector&& v) { move(std::move(v)); }
+  hostdevice_vector& operator=(hostdevice_vector&& v)
   {
     move(std::move(v));
     return *this;
@@ -70,7 +70,7 @@ class hostdevice_vector {
     }
   }
 
-  bool insert(const T &data)
+  bool insert(const T& data)
   {
     if (num_elements < max_elements) {
       h_data[num_elements] = data;
@@ -84,12 +84,12 @@ class hostdevice_vector {
   size_t size() const noexcept { return num_elements; }
   size_t memory_size() const noexcept { return sizeof(T) * num_elements; }
 
-  T &operator[](size_t i) const { return h_data[i]; }
-  T *host_ptr(size_t offset = 0) const { return h_data + offset; }
-  T *device_ptr(size_t offset = 0) { return reinterpret_cast<T *>(d_data.data()) + offset; }
-  T const *device_ptr(size_t offset = 0) const
+  T& operator[](size_t i) const { return h_data[i]; }
+  T* host_ptr(size_t offset = 0) const { return h_data + offset; }
+  T* device_ptr(size_t offset = 0) { return reinterpret_cast<T*>(d_data.data()) + offset; }
+  T const* device_ptr(size_t offset = 0) const
   {
-    return reinterpret_cast<T const *>(d_data.data()) + offset;
+    return reinterpret_cast<T const*>(d_data.data()) + offset;
   }
 
   operator cudf::device_span<T>() { return {device_ptr(), max_elements}; }
@@ -113,7 +113,7 @@ class hostdevice_vector {
   }
 
  private:
-  void move(hostdevice_vector &&v)
+  void move(hostdevice_vector&& v)
   {
     stream       = v.stream;
     max_elements = v.max_elements;
@@ -129,7 +129,7 @@ class hostdevice_vector {
   rmm::cuda_stream_view stream{};
   size_t max_elements{};
   size_t num_elements{};
-  T *h_data{};
+  T* h_data{};
   rmm::device_buffer d_data{};
 };
 
@@ -174,6 +174,15 @@ class hostdevice_2dvector {
   }
 
   auto size() const noexcept { return _size; }
+
+  T* base_host_ptr(size_t offset = 0) { return _data.host_ptr(offset); }
+  T* base_device_ptr(size_t offset = 0) { return _data.device_ptr(offset); }
+
+  T const* base_host_ptr(size_t offset = 0) const { return _data.host_ptr(offset); }
+
+  T const* base_device_ptr(size_t offset = 0) const { return _data.device_ptr(offset); }
+
+  size_t memory_size() const noexcept { return _data.memory_size(); }
 
   void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
   {

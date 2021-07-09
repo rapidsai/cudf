@@ -64,7 +64,9 @@ __global__ void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size_
   using F               = Functor<T, functor_type>;
   cudf::size_type index = blockIdx.x * blockDim.x + threadIdx.x;
   while (index < n_rows) {
-    for (int c = 0; c < n_cols; c++) { A[c][index] = F::f(A[c][index]); }
+    for (int c = 0; c < n_cols; c++) {
+      A[c][index] = F::f(A[c][index]);
+    }
     index += blockDim.x * gridDim.x;
   }
 }

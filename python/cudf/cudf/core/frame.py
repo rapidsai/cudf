@@ -17,6 +17,7 @@ from nvtx import annotate
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
+from cudf.api.types import is_dict_like, is_dtype_equal
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -35,8 +36,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     min_scalar_type,
 )
-
-from ..api.types import is_dict_like, is_dtype_equal
 
 T = TypeVar("T", bound="Frame")
 
@@ -507,7 +506,7 @@ class Frame(libcudf.table.Table):
 
         # Reassign precision for any decimal cols
         for name, col in out._data.items():
-            if isinstance(col, cudf.core.column.DecimalColumn):
+            if isinstance(col, cudf.core.column.Decimal64Column):
                 col = col._with_type_metadata(tables[0]._data[name].dtype)
 
         # Reassign index and column names
@@ -4009,15 +4008,6 @@ def _get_replacement_values_for_columns(
             all_na_columns[i] = all_na
 
     return all_na_columns, to_replace_columns, values_columns
-
-
-# If the dictionary array is a string array and of length `0`
-# it should be a null array
-def _get_dictionary_array(array):
-    if isinstance(array, pa.StringArray) and len(array) == 0:
-        return pa.array([], type=pa.null())
-    else:
-        return array
 
 
 # Create a dictionary of the common, non-null columns
