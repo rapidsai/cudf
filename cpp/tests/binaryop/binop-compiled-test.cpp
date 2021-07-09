@@ -34,20 +34,6 @@
 
 namespace cudf::test::binop {
 
-// combinations to test
-//     n  t   d
-// n n.n n.t n.d
-// t t.n t.t t.d
-// d d.n d.t d.d
-
-constexpr size_type col_size = 10000;
-template <typename T>
-struct BinaryOperationCompiledTest : public BinaryOperationTest {
-  using TypeOut = cudf::test::GetType<T, 0>;
-  using TypeLhs = cudf::test::GetType<T, 1>;
-  using TypeRhs = cudf::test::GetType<T, 2>;
-};
-
 template <typename T>
 auto lhs_random_column(size_type size)
 {
@@ -71,6 +57,32 @@ auto rhs_random_column<std::string>(size_type size)
   return cudf::test::strings_column_wrapper({"ééé", "bbb", "aa", "", "<null>", "bb", "eee"},
                                             {1, 1, 1, 1, 0, 1, 1});
 }
+
+// combinations to test
+//     n  t   d
+// n n.n n.t n.d
+// t t.n t.t t.d
+// d d.n d.t d.d
+
+constexpr size_type col_size = 10000;
+template <typename T>
+struct BinaryOperationCompiledTest : public BinaryOperationTest {
+  using TypeOut = cudf::test::GetType<T, 0>;
+  using TypeLhs = cudf::test::GetType<T, 1>;
+  using TypeRhs = cudf::test::GetType<T, 2>;
+
+  template <template <typename... Ty> class FunctorOP>
+  void test(cudf::binary_operator op)
+  {
+    using OPERATOR = FunctorOP<TypeOut, TypeLhs, TypeRhs>;
+
+    auto lhs = lhs_random_column<TypeLhs>(col_size);
+    auto rhs = rhs_random_column<TypeRhs>(col_size);
+
+    auto out = cudf::experimental::binary_operation(lhs, rhs, op, data_type(type_to_id<TypeOut>()));
+    ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, OPERATOR());
+  }
+};
 
 // ADD
 //     n      t     d
@@ -100,19 +112,7 @@ TYPED_TEST_CASE(BinaryOperationCompiledTest_Add, Add_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Add, Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
+  this->template test<cudf::library::operation::Add>(cudf::binary_operator::ADD);
 }
 
 // SUB
@@ -136,19 +136,7 @@ TYPED_TEST_CASE(BinaryOperationCompiledTest_Sub, Sub_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Sub, Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using SUB = cudf::library::operation::Sub<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
+  this->template test<cudf::library::operation::Sub>(cudf::binary_operator::SUB);
 }
 
 // MUL
@@ -171,19 +159,7 @@ TYPED_TEST_CASE(BinaryOperationCompiledTest_Mul, Mul_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Mul, Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using MUL = cudf::library::operation::Mul<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::MUL, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MUL());
+  this->template test<cudf::library::operation::Mul>(cudf::binary_operator::MUL);
 }
 
 // DIV
@@ -208,19 +184,7 @@ TYPED_TEST_CASE(BinaryOperationCompiledTest_Div, Div_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Div, Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using DIV = cudf::library::operation::Div<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::DIV, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, DIV());
+  this->template test<cudf::library::operation::Div>(cudf::binary_operator::DIV);
 }
 
 // TRUE-DIV
@@ -242,19 +206,7 @@ TYPED_TEST_CASE(BinaryOperationCompiledTest_TrueDiv, TrueDiv_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_TrueDiv, Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using TRUEDIV = cudf::library::operation::TrueDiv<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::TRUE_DIV, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, TRUEDIV());
+  this->template test<cudf::library::operation::TrueDiv>(cudf::binary_operator::TRUE_DIV);
 }
 // FLOOR_DIV
 //     n      t     d
@@ -263,19 +215,7 @@ TYPED_TEST(BinaryOperationCompiledTest_TrueDiv, Vector_Vector)
 // d
 TYPED_TEST(BinaryOperationCompiledTest_TrueDiv, FloorDiv_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using FLOORDIV = cudf::library::operation::FloorDiv<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::FLOOR_DIV, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, FLOORDIV());
+  this->template test<cudf::library::operation::FloorDiv>(cudf::binary_operator::FLOOR_DIV);
 }
 
 // MOD
@@ -296,19 +236,7 @@ TYPED_TEST_CASE(BinaryOperationCompiledTest_Mod, Mod_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Mod, Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using MOD = cudf::library::operation::Mod<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
+  this->template test<cudf::library::operation::Mod>(cudf::binary_operator::MOD);
 }
 
 // PYMOD
@@ -326,19 +254,7 @@ struct BinaryOperationCompiledTest_PyMod : public BinaryOperationCompiledTest<T>
 TYPED_TEST_CASE(BinaryOperationCompiledTest_PyMod, PyMod_types);
 TYPED_TEST(BinaryOperationCompiledTest_PyMod, Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using PYMOD = cudf::library::operation::PyMod<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::PYMOD, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PYMOD());
+  this->template test<cudf::library::operation::PyMod>(cudf::binary_operator::PYMOD);
 }
 
 // POW
@@ -439,19 +355,7 @@ TYPED_TEST(BinaryOperationCompiledTest_FloatOps, ATan2_Vector_Vector)
 
 TYPED_TEST(BinaryOperationCompiledTest_FloatOps, PMod_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::PMOD, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
+  this->template test<cudf::library::operation::PMod>(cudf::binary_operator::PMOD);
 }
 
 // Bit Operations
@@ -478,105 +382,33 @@ TYPED_TEST_CASE(BinaryOperationCompiledTest_Bit, Bit_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Bit, BitwiseAnd_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using BITWISE_AND = cudf::library::operation::BitwiseAnd<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::BITWISE_AND, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, BITWISE_AND());
+  this->template test<cudf::library::operation::BitwiseAnd>(cudf::binary_operator::BITWISE_AND);
 }
 
 TYPED_TEST(BinaryOperationCompiledTest_Bit, BitwiseOr_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using BITWISE_OR = cudf::library::operation::BitwiseOr<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::BITWISE_OR, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, BITWISE_OR());
+  this->template test<cudf::library::operation::BitwiseOr>(cudf::binary_operator::BITWISE_OR);
 }
 
 TYPED_TEST(BinaryOperationCompiledTest_Bit, BitwiseXor_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using BITWISE_XOR = cudf::library::operation::BitwiseXor<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::BITWISE_XOR, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, BITWISE_XOR());
+  this->template test<cudf::library::operation::BitwiseXor>(cudf::binary_operator::BITWISE_XOR);
 }
 
 TYPED_TEST(BinaryOperationCompiledTest_Bit, ShiftLeft_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using SHIFT_LEFT = cudf::library::operation::ShiftLeft<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::SHIFT_LEFT, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_LEFT());
+  this->template test<cudf::library::operation::ShiftLeft>(cudf::binary_operator::SHIFT_LEFT);
 }
 
 TYPED_TEST(BinaryOperationCompiledTest_Bit, ShiftRight_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using SHIFT_RIGHT = cudf::library::operation::ShiftRight<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::SHIFT_RIGHT, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT());
+  this->template test<cudf::library::operation::ShiftRight>(cudf::binary_operator::SHIFT_RIGHT);
 }
 
 TYPED_TEST(BinaryOperationCompiledTest_Bit, ShiftRightUnsigned_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using SHIFT_RIGHT_UNSIGNED =
-    cudf::library::operation::ShiftRightUnsigned<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::SHIFT_RIGHT_UNSIGNED, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
+  this->template test<cudf::library::operation::ShiftRightUnsigned>(
+    cudf::binary_operator::SHIFT_RIGHT_UNSIGNED);
 }
 
 // Logical Operations
@@ -599,36 +431,12 @@ TYPED_TEST_CASE(BinaryOperationCompiledTest_Logical, Logical_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Logical, LogicalAnd_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using LOGICAL_AND = cudf::library::operation::LogicalAnd<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::LOGICAL_AND, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOGICAL_AND());
+  this->template test<cudf::library::operation::LogicalAnd>(cudf::binary_operator::LOGICAL_AND);
 }
 
 TYPED_TEST(BinaryOperationCompiledTest_Logical, LogicalOr_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using LOGICAL_OR = cudf::library::operation::LogicalOr<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::LOGICAL_OR, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOGICAL_OR());
+  this->template test<cudf::library::operation::LogicalOr>(cudf::binary_operator::LOGICAL_OR);
 }
 
 // Comparison Operations ==, !=, <, >, <=, >=
@@ -651,104 +459,32 @@ TYPED_TEST_CASE(BinaryOperationCompiledTest_Comparison, Comparison_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Comparison, Equal_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using EQUAL = cudf::library::operation::Equal<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::EQUAL, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, EQUAL());
+  this->template test<cudf::library::operation::Equal>(cudf::binary_operator::EQUAL);
 }
 
 TYPED_TEST(BinaryOperationCompiledTest_Comparison, NotEqual_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using NOT_EQUAL = cudf::library::operation::NotEqual<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::NOT_EQUAL, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, NOT_EQUAL());
+  this->template test<cudf::library::operation::NotEqual>(cudf::binary_operator::NOT_EQUAL);
 }
 
 TYPED_TEST(BinaryOperationCompiledTest_Comparison, Less_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using LESS = cudf::library::operation::Less<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::LESS, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
+  this->template test<cudf::library::operation::Less>(cudf::binary_operator::LESS);
 }
 
 TYPED_TEST(BinaryOperationCompiledTest_Comparison, Greater_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using GREATER = cudf::library::operation::Greater<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::GREATER, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER());
+  this->template test<cudf::library::operation::Greater>(cudf::binary_operator::GREATER);
 }
 
 TYPED_TEST(BinaryOperationCompiledTest_Comparison, LessEqual_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using LESS_EQUAL = cudf::library::operation::LessEqual<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::LESS_EQUAL, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS_EQUAL());
+  this->template test<cudf::library::operation::LessEqual>(cudf::binary_operator::LESS_EQUAL);
 }
 
 TYPED_TEST(BinaryOperationCompiledTest_Comparison, GreaterEqual_Vector_Vector)
 {
-  using TypeOut = typename TestFixture::TypeOut;
-  using TypeLhs = typename TestFixture::TypeLhs;
-  using TypeRhs = typename TestFixture::TypeRhs;
-
-  using GREATER_EQUAL = cudf::library::operation::GreaterEqual<TypeOut, TypeLhs, TypeRhs>;
-
-  auto lhs = lhs_random_column<TypeLhs>(col_size);
-  auto rhs = rhs_random_column<TypeRhs>(col_size);
-
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::GREATER_EQUAL, data_type(type_to_id<TypeOut>()));
-
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER_EQUAL());
+  this->template test<cudf::library::operation::GreaterEqual>(cudf::binary_operator::GREATER_EQUAL);
 }
 
 // Null Operations NullMax, NullMin
