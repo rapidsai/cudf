@@ -40,8 +40,17 @@ struct MultibyteSplitTest : public BaseFixture {
 
 TEST_F(MultibyteSplitTest, Simple)
 {
-  std::string separator = "😎";  // F0 9F 98 8E | 11110000 11111001 1100010 11101000
+  std::string separator = "😎deli";  // F0 9F 98 8E | 11110000 11111001 1100010 11101000
   std::string input =
+    "aaa😎"
+    "bbb😎"
+    "ccc😎"
+    "ddd😎"
+    "eee😎"
+    "fff😎"
+    "ggg😎"
+    "hhh😎"
+    "___😎"
     "here😎"
     "is😎"
     "another😎"
@@ -59,22 +68,11 @@ TEST_F(MultibyteSplitTest, Simple)
     "as😎"
     "delimeters.";
 
-  auto expected = strings_column_wrapper{"here",
-                                         "is",
-                                         "another",
-                                         "simple",
-                                         "text",
-                                         "seperated",
-                                         "by",
-                                         "emojis",
-                                         "which",
-                                         "are",
-                                         "multple",
-                                         "bytes",
-                                         "and",
-                                         "used",
-                                         "as",
-                                         "delimeters."};
+  auto expected = strings_column_wrapper{
+    "aaa",  "bbb",     "ccc",     "ddd",    "eee",  "fff",       "ggg",         "hhh",    "___",
+    "here", "is",      "another", "simple", "text", "seperated", "by",          "emojis", "which",
+    "are",  "multple", "bytes",   "and",    "used", "as",        "delimeters.",
+  };
 
   auto input_stream    = std::basic_istringstream(input);
   auto input_stream_io = cudf::io::text::host_input_stream(input_stream);
