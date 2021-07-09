@@ -160,10 +160,7 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ScalarStructBothInvalid)
 
   auto expected_ints    = ints{-11, -11, -22, -11, -11, -22, -11};
   auto expected_strings = strings{"-11", "-11", "-22", "-11", "-22", "-11", "-11"};
-  auto expected_nulls   = std::vector<size_type>(selector_column->size());
-  std::iota(expected_nulls.begin(), expected_nulls.end(), 0);
-  auto expected_result =
-    structs{{expected_ints, expected_strings}, nulls_at(expected_nulls)}.release();
+  auto expected_result  = structs{{expected_ints, expected_strings}, all_nulls()}.release();
 
   auto result_column = copy_if_else(lhs_scalar, rhs_scalar, selector_column->view());
 
@@ -428,8 +425,6 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ScalarListBothInvalid)
 
   auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
 
-  auto expected_nulls = std::vector<size_type>(selector_column->size());
-  std::iota(expected_nulls.begin(), expected_nulls.end(), 0);
   auto expected = lcw{{
                         {-33, -33, -33},
                         {-33, -33, -33},
@@ -439,7 +434,7 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ScalarListBothInvalid)
                         {-22, -22},
                         {-33, -33, -33},
                       },
-                      nulls_at(expected_nulls)}
+                      all_nulls()}
                     .release();
 
   auto result = copy_if_else(lhs_scalar, rhs_scalar, selector_column->view());
