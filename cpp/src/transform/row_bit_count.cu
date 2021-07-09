@@ -380,7 +380,7 @@ __device__ size_type row_size_functor::operator()<struct_view>(column_device_vie
 /**
  * @brief Kernel for computing per-row sizes in bits.
  *
- * @param cols An span of column_device_views represeting a column hierarcy
+ * @param cols An span of column_device_views representing a column hierarchy
  * @param info An span of column_info structs corresponding the elements in `cols`
  * @param output Output span of size (# rows) where per-row bit sizes are stored
  * @param max_branch_depth Maximum depth of the span stack needed per-thread

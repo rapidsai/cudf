@@ -49,7 +49,7 @@ namespace io {
 template <typename ColumnDescriptor>
 rmm::device_uvector<column_device_view> create_leaf_column_device_views(
   typename cudf::device_span<ColumnDescriptor> col_desc,
-  const table_device_view &parent_table_device_view,
+  const table_device_view& parent_table_device_view,
   rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<column_device_view> leaf_column_views(parent_table_device_view.num_columns(),
@@ -71,7 +71,7 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
                                                  : col.child(0);
       }
       // Store leaf_column to device storage
-      column_device_view *leaf_col_ptr = leaf_columns.begin() + index;
+      column_device_view* leaf_col_ptr = leaf_columns.begin() + index;
       *leaf_col_ptr                    = col;
       col_desc[index].leaf_column      = leaf_col_ptr;
     });

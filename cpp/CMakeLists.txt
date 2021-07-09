@@ -44,6 +44,8 @@ option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks"
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
+option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
+option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
 option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
@@ -194,14 +196,16 @@ add_library(cudf
     src/filling/sequence.cu
     src/groupby/groupby.cu
     src/groupby/hash/groupby.cu
+    src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_argmax.cu
     src/groupby/sort/group_argmin.cu
-    src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_collect.cu
-    src/groupby/sort/group_merge_lists.cu
     src/groupby/sort/group_count.cu
+    src/groupby/sort/group_m2.cu
     src/groupby/sort/group_max.cu
     src/groupby/sort/group_min.cu
+    src/groupby/sort/group_merge_lists.cu
+    src/groupby/sort/group_merge_m2.cu
     src/groupby/sort/group_nth_element.cu
     src/groupby/sort/group_nunique.cu
     src/groupby/sort/group_product.cu
@@ -272,7 +276,7 @@ add_library(cudf
     src/join/join.cu
     src/join/semi_join.cu
     src/lists/contains.cu
-    src/lists/combine/concatenate_list_elements.cu		
+    src/lists/combine/concatenate_list_elements.cu
     src/lists/combine/concatenate_rows.cu
     src/lists/copying/concatenate.cu
     src/lists/copying/copying.cu
