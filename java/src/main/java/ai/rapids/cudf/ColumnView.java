@@ -1392,21 +1392,24 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * This is just a convenience method for an inclusive scan with a SUM aggregation.
    */
   public final ColumnVector prefixSum() {
-    return scan(Aggregation.sum());
+    return scan(this, Aggregation.sum());
   }
 
   /**
    * Computes a scan for a column. This is very similar to a running window on the column.
-   * @param aggregation the aggregation to perform
+   * @param input native id of a ColumnVector or ColumnView, a 0 (null column) is ok for
+   *              rank and dense rank aggregations.
+   * @param aggregation the aggregation to perform.
    * @param scanType should the scan be inclusive, include the current row, or exclusive.
    * @param nullPolicy how should nulls be treated. Note that some aggregations also include a
    *                   null policy too. Currently none of those aggregations are supported so
    *                   it is undefined how they would interact with each other.
    */
-  public final ColumnVector scan(Aggregation aggregation, ScanType scanType, NullPolicy nullPolicy) {
+  private static final ColumnVector scan(long input, Aggregation aggregation,
+      ScanType scanType, NullPolicy nullPolicy) {
     long nativeId = aggregation.createNativeInstance();
     try {
-      return new ColumnVector(scan(getNativeView(), nativeId,
+      return new ColumnVector(scan(input, nativeId,
           scanType.isInclusive, nullPolicy.includeNulls));
     } finally {
       Aggregation.close(nativeId);
@@ -1414,20 +1417,66 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Computes a scan for a column. This is very similar to a running window on the column.
+   * @param input input column that the scan operates on, a null value is ok for
+   *              rank and dense rank aggregations.
+   * @param aggregation the aggregation to perform.
+   * @param scanType should the scan be inclusive, include the current row, or exclusive.
+   *                 Note that rank and dense rank aggregates do not support exclusive scans.
+   * @param nullPolicy how should nulls be treated. Note that some aggregations also include a
+   *                   null policy too. Currently none of those aggregations are supported so
+   *                   it is undefined how they would interact with each other. Also note that
+   *                   rank and dense rank aggregates ignore the null policy.
+   */
+  public static final ColumnVector scan(ColumnVector input, Aggregation aggregation,
+      ScanType scanType, NullPolicy nullPolicy) {
+    if (input == null) return scan(0, aggregation, scanType, nullPolicy);
+    return scan(input.getNativeView(), aggregation, scanType, nullPolicy);
+  }
+
+  public static final ColumnVector scan(ColumnView input, Aggregation aggregation,
+      ScanType scanType, NullPolicy nullPolicy) {
+    if (input == null) return scan(0, aggregation, scanType, nullPolicy);
+    return scan(input.getNativeView(), aggregation, scanType, nullPolicy);
+  }
+
+  /**
    * Computes a scan for a column that excludes nulls.
-   * @param aggregation the aggregation to perform
+   * @param input input column that the scan operates on, a null is ok for
+   *              rank and dense rank aggregations.
+   * @param aggregation the aggregation to perform.
    * @param scanType should the scan be inclusive, include the current row, or exclusive.
    */
-  public final ColumnVector scan(Aggregation aggregation, ScanType scanType) {
-    return scan(aggregation, scanType, NullPolicy.EXCLUDE);
+  public static final ColumnVector scan(ColumnVector input,
+      Aggregation aggregation, ScanType scanType) {
+    return scan(input, aggregation, scanType, NullPolicy.EXCLUDE);
+  }
+
+  public static final ColumnVector scan(ColumnView input,
+      Aggregation aggregation, ScanType scanType) {
+    return scan(input, aggregation, scanType, NullPolicy.EXCLUDE);
   }
 
   /**
    * Computes an inclusive scan for a column that excludes nulls.
-   * @param aggregation the aggregation to perform
+   * @param input input column that the scan operates on, a null value is ok for
+   *              rank and dense rank aggregations.
+   * @param aggregation the aggregation to perform.
    */
-  public final ColumnVector scan(Aggregation aggregation) {
-    return scan(aggregation, ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+  public static final ColumnVector scan(ColumnVector input, Aggregation aggregation) {
+    return scan(input, aggregation, ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+  }
+
+  public static final ColumnVector scan(ColumnView input, Aggregation aggregation) {
+    return scan(input, aggregation, ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+  }
+  /**
+   * Computes an inclusive scan for a column that excludes nulls. The input column
+   * is passed as a null.
+   * @param aggregation the aggregation to perform.
+   */
+  public static final ColumnVector scan(Aggregation aggregation) {
+    return scan(0L, aggregation, ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
   }
 
 

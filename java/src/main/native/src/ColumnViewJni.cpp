@@ -280,16 +280,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_scan(JNIEnv *env, jclass,
                                                             jlong j_agg,
                                                             jboolean is_inclusive,
                                                             jboolean include_nulls) {
-  JNI_NULL_CHECK(env, j_col_view, "column view is null", 0);
   JNI_NULL_CHECK(env, j_agg, "aggregation is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    auto col = reinterpret_cast<cudf::column_view *>(j_col_view);
     auto agg = reinterpret_cast<cudf::aggregation *>(j_agg);
+    std::unique_ptr<cudf::column> result;
+    if(agg->kind == cudf::aggregation::RANK || agg->kind == cudf::aggregation::DENSE_RANK) {
+      result = cudf::scan(agg->clone(),
+              is_inclusive ? cudf::scan_type::INCLUSIVE : cudf::scan_type::EXCLUSIVE,
+              include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE);
+    } else {
+      JNI_NULL_CHECK(env, j_col_view, "column view is null", 0);
+      auto col = reinterpret_cast<cudf::column_view *>(j_col_view);
 
-    std::unique_ptr<cudf::column> result = cudf::scan(*col, agg->clone(), 
-            is_inclusive ? cudf::scan_type::INCLUSIVE : cudf::scan_type::EXCLUSIVE,
-            include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE);
+      result = cudf::scan(*col, agg->clone(),
+              is_inclusive ? cudf::scan_type::INCLUSIVE : cudf::scan_type::EXCLUSIVE,
+              include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE);
+    }
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
