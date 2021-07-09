@@ -73,11 +73,11 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
                                        uint32_t* result_count)
 {
   typedef cub::BlockScan<superstate, THREADS_PER_TILE> SuperstateBlockScan;
-  typedef cub::BlockScan<uint32_t, THREADS_PER_TILE> ResultOffsetBlockScan;
+  typedef cub::BlockScan<uint32_t, THREADS_PER_TILE> OffsetBlockScan;
 
   __shared__ union {
     typename SuperstateBlockScan::TempStorage superstate_scan;
-    typename ResultOffsetBlockScan::TempStorage result_offset_scan;
+    typename OffsetBlockScan::TempStorage offset_scan;
   } temp_storage;
 
   auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -86,29 +86,29 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
 
   if (data_end > data.size()) { data_end = data.size(); }
 
-  superstate thread_data[BYTES_PER_THREAD];
+  superstate thread_superstates[BYTES_PER_THREAD];
 
   for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
     auto const element_idx = data_begin + i;
     if (element_idx >= data.size()) {
       // this check is not necessary if we gaurantee no OOB accesses, which we can do because of
       // the batch-read/batch-process approach. Keeping the check in for now, though.
-      thread_data[i] = superstate();
+      thread_superstates[i] = superstate();
     } else {
-      thread_data[i] = superstate().apply([&](uint8_t state) {  //
+      thread_superstates[i] = superstate().apply([&](uint8_t state) {  //
         return trie.transition(state, data[element_idx]);
       });
     }
   }
 
-  BlockPrefixCallbackOp prefix_op({});
-
   __syncthreads();
+
+  BlockPrefixCallbackOp prefix_op({});
 
   SuperstateBlockScan(temp_storage.superstate_scan)
     .InclusiveScan(  //
-      thread_data,
-      thread_data,
+      thread_superstates,
+      thread_superstates,
       [](superstate const& lhs, superstate const& rhs) { return lhs + rhs; },
       prefix_op);
 
@@ -117,33 +117,33 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
   uint32_t thread_offsets[BYTES_PER_THREAD];
 
   for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
-    auto const element_idx = data_begin + i;
-    if (element_idx < data.size()) {
-      thread_offsets[i] = trie.is_match(thread_data[i].get(0));
-    } else {
-      thread_offsets[i] = false;
-    }
+    thread_offsets[i] = trie.is_match(thread_superstates[i].get(0));
   }
+
+  __syncthreads();
 
   uint32_t matches_in_block;
 
-  ResultOffsetBlockScan(temp_storage.result_offset_scan)
+  OffsetBlockScan(temp_storage.offset_scan)
     .ExclusiveScan(
       thread_offsets,
       thread_offsets,
       [](uint32_t const& lhs, uint32_t const& rhs) { return lhs + rhs; },
       matches_in_block);
 
-  if (threadIdx.x == 0) { *result_count = matches_in_block; }
+  __syncthreads();
 
-  // for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
-  //   auto const element_idx = data_begin + i;
-  //   if (element_idx < data.size()) {
-  //     thread_offsets[i] = trie.is_match(thread_data[i].get(0));
-  //   } else {
-  //     thread_offsets[i] = false;
-  //   }
-  // }
+  for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
+    printf("bid(%2u) tid(%2u) byte(%2u): %c %2u - %2u\n",  //
+           blockIdx.x,
+           threadIdx.x,
+           i,
+           data[data_begin + i],
+           thread_offsets[i],
+           static_cast<uint32_t>(trie.is_match(thread_superstates[i].get(0))));
+  }
+
+  if (threadIdx.x == 0) { *result_count = matches_in_block; }
 }
 
 }  // namespace
