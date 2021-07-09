@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
+#include <cudf/detail/datetime.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/null_mask.hpp>
@@ -357,6 +358,30 @@ std::unique_ptr<column> day_of_year(column_view const& column,
   return detail::apply_datetime_op<detail::extract_day_num_of_year, cudf::type_id::INT16>(
     column, stream, mr);
 }
+
+std::unique_ptr<column> is_leap_year(column_view const& column,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(is_timestamp(column.type()), "Column type should be timestamp");
+
+  auto years      = detail::extract_year(column, stream);
+  auto years_view = years->view();
+
+  auto mask   = copy_bitmask(column.null_mask(), column.offset(), column.offset() + column.size());
+  auto result = make_fixed_width_column(
+    data_type{type_id::BOOL8}, column.size(), std::move(mask), column.null_count(), stream, mr);
+  auto m_view = result->mutable_view();
+  thrust::transform(
+    rmm::exec_policy(stream),
+    years_view.begin<int16_t>(),
+    years_view.end<int16_t>(),
+    m_view.begin<bool>(),
+    [] __device__(auto i_year) { return cuda::std::chrono::year(i_year).is_leap(); });
+
+  return result;
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> extract_year(column_view const& column, rmm::mr::device_memory_resource* mr)
@@ -426,5 +451,12 @@ std::unique_ptr<cudf::column> add_calendrical_months(cudf::column_view const& ti
   return detail::add_calendrical_months(
     timestamp_column, months_column, rmm::cuda_stream_default, mr);
 }
+
+std::unique_ptr<column> is_leap_year(column_view const& column, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::is_leap_year(column, rmm::cuda_stream_default, mr);
+}
+
 }  // namespace datetime
 }  // namespace cudf
