@@ -78,7 +78,7 @@ class scalar {
   /**
    * @brief Indicates whether the scalar contains a valid value.
    *
-   * @note Using the value when `is_valid() == false` is undefined behaviour. In addition, this
+   * @note Using the value when `is_valid() == false` is undefined behavior. In addition, this
    * function does a stream synchronization.
    *
    * @param stream CUDA stream used for device memory operations.

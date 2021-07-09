@@ -416,7 +416,7 @@ struct field_descriptor {
  * @param[in] end pointer to the first character after the parsing range
  * @param[in] opts The global parsing behavior options
  * @param[in] field_idx Index of the current field in the input row
- * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory.
+ * @param[in] col_map Pointer to the (column name hash -> column index) map in device memory.
  * nullptr is passed when the input file does not consist of objects.
  * @return Descriptor of the parsed field
  */
@@ -481,7 +481,7 @@ __device__ std::pair<char const*, char const*> get_row_data_range(
  * @param[in] data The entire data to read
  * @param[in] row_offsets The offset of each row in the input
  * @param[in] column_types The data type of each column
- * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory.
+ * @param[in] col_map Pointer to the (column name hash -> column index) map in device memory.
  * nullptr is passed when the input file does not consist of objects.
  * @param[out] output_columns The output column data
  * @param[out] valid_fields The bitmaps indicating whether column fields are valid

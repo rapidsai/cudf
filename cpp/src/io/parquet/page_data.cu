@@ -1467,7 +1467,7 @@ __device__ void gpuDecodeLevels(page_state_s* s, int32_t target_leaf_count, int 
     gpuDecodeStream(s->def, s, cur_leaf_count, t, level_type::DEFINITION);
     __syncwarp();
 
-    // because the rep and def streams are encoded seperately, we cannot request an exact
+    // because the rep and def streams are encoded separately, we cannot request an exact
     // # of values to be decoded at once. we can only process the lowest # of decoded rep/def
     // levels we get.
     int actual_leaf_count = has_repetition ? min(s->lvl_count[level_type::REPETITION],

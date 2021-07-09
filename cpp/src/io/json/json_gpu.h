@@ -44,7 +44,7 @@ using col_map_type = concurrent_unordered_map<uint32_t, cudf::size_type>;
  * @param[in] data The entire data to read
  * @param[in] row_offsets The start of each data record
  * @param[in] dtypes The data type of each column
- * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory.
+ * @param[in] col_map Pointer to the (column name hash -> column index) map in device memory.
  * nullptr is passed when the input file does not consist of objects.
  * @param[out] output_columns The output column data
  * @param[out] valid_fields The bitmaps indicating whether column fields are valid
@@ -68,7 +68,7 @@ void convert_json_to_columns(parse_options_view const& options,
  * @param[in] data Input data buffer
  * @param[in] row_offsets The offset of each row in the input
  * @param[in] num_columns The number of columns of input data
- * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory.
+ * @param[in] col_map Pointer to the (column name hash -> column index) map in device memory.
  * nullptr is passed when the input file does not consist of objects.
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *

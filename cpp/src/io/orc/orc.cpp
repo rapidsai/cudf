@@ -459,7 +459,7 @@ metadata::metadata(datasource* const src) : source(src)
   auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
   orc::ProtobufReader(md_data, md_length).read(md);
 
-  // Initilize the column names
+  // Initialize the column names
   init_column_names();
 }
 

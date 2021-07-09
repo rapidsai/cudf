@@ -399,7 +399,7 @@ std::unique_ptr<column> make_strings_column(
  *  one more than the total number of strings so the `offsets.back()` is the total number of bytes
  *  in the strings array. `offsets.front()` must always be 0 to point to the beginning of `strings`.
  * @param[in] null_mask Device span containing the null element indicator bitmask. Arrow format for
- *  nulls is used for interpeting this bitmask.
+ *  nulls is used for interpreting this bitmask.
  * @param[in] null_count The number of null string entries. If equal to `UNKNOWN_NULL_COUNT`, the
  *  null count will be computed dynamically on the first invocation of `column::null_count()`
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
@@ -428,7 +428,7 @@ std::unique_ptr<column> make_strings_column(
  *  strings are identified by the offsets and the nullmask.
  * @param[in] null_count The number of null string entries.
  * @param[in] null_mask The bits specifying the null strings in device memory. Arrow format for
- *  nulls is used for interpeting this bitmask.
+ *  nulls is used for interpreting this bitmask.
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used for allocation of the column's `null_mask` and children
  * columns' device memory.
@@ -491,7 +491,7 @@ std::unique_ptr<column> make_strings_column(
  *                     further nested.
  * @param[in] null_count The number of null list entries.
  * @param[in] null_mask The bits specifying the null lists in device memory.
- *                  Arrow format for nulls is used for interpeting this bitmask.
+ *                  Arrow format for nulls is used for interpreting this bitmask.
  * @param[in] stream Optional stream for use with all memory allocation
  *               and device kernels
  * @param[in] mr Optional resource to use for device memory

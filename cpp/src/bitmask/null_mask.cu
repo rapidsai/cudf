@@ -513,7 +513,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
     // first_word_indices and last_word_indices to have the same type.
     to_word_index(false, d_last_indices.data()));
 
-  // first allocate temporary memroy
+  // first allocate temporary memory
 
   size_t temp_storage_bytes{0};
   CUDA_TRY(cub::DeviceSegmentedReduce::Sum(nullptr,

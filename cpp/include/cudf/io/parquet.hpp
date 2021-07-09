@@ -973,7 +973,7 @@ class chunked_parquet_writer_options_builder {
    * @brief Set to true if timestamps should be written as
    * int96 types instead of int64 types. Even though int96 is deprecated and is
    * not an internal type for cudf, it needs to be written for backwards
-   * compatability reasons.
+   * compatibility reasons.
    *
    * @param enabled Boolean value to enable/disable int96 timestamps.
    * @return this for chaining.
