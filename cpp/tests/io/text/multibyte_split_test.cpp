@@ -42,7 +42,7 @@ TEST_F(MultibyteSplitTest, Simple)
 {
   // 😀 | F0 9F 98 80 | 11110000 10011111 01100010 01010000
   // 😎 | F0 9F 98 8E | 11110000 10011111 01100010 11101000
-  auto separators = std::vector<std::string>({"😀", "😎", ",", "::"});
+  auto delimiters = std::vector<std::string>({"😀", "😎", ",", "::"});
   std::string input =
     "aaa😀"
     "bbb😀"
@@ -79,7 +79,7 @@ TEST_F(MultibyteSplitTest, Simple)
   auto input_stream    = std::basic_istringstream(input);
   auto input_stream_io = cudf::io::text::host_input_stream(input_stream);
 
-  auto out = cudf::io::text::multibyte_split(input_stream_io, separators);
+  auto out = cudf::io::text::multibyte_split(input_stream_io, delimiters);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
 }

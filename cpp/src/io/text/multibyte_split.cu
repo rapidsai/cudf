@@ -140,7 +140,7 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
            i,
            data[data_begin + i],
            thread_offsets[i],
-           static_cast<uint32_t>(trie.is_match(thread_superstates[i].get(0))));
+           static_cast<uint32_t>(trie.get_match_length(thread_superstates[i].get(0))));
   }
 
   if (threadIdx.x == 0) { *result_count = matches_in_block; }

@@ -8,21 +8,21 @@
 namespace {
 
 struct trie_builder_node {
-  bool is_accepting;
+  uint8_t match_length;
   std::unordered_map<char, std::unique_ptr<trie_builder_node>> children;
 
   void insert(std::string s) { insert(s.c_str(), s.size()); }
 
-  trie_builder_node& insert(char const* s, uint16_t size)
+  trie_builder_node& insert(char const* s, uint16_t size, uint8_t depth = 0)
   {
     if (size == 0) {
-      is_accepting = true;
+      match_length = depth;
       return *this;
     }
 
     if (children[*s] == nullptr) { children[*s] = std::make_unique<trie_builder_node>(); }
 
-    return children[*s]->insert(s + 1, size - 1);
+    return children[*s]->insert(s + 1, size - 1, depth + 1);
   }
 };
 
@@ -36,7 +36,7 @@ struct trie_device_view {
   uint16_t const* layer_offsets;
   char const* tokens;
   uint16_t const* transitions;
-  bool const* accepting;
+  uint8_t const* match_length;
 
   inline constexpr uint16_t transition(uint16_t idx, char c)
   {
@@ -62,12 +62,13 @@ struct trie_device_view {
     return 0;
   }
 
-  inline constexpr bool is_match(uint16_t idx) { return accepting[idx]; }
+  inline constexpr bool is_match(uint16_t idx) { return static_cast<bool>(get_match_length(idx)); }
+  inline constexpr uint8_t get_match_length(uint16_t idx) { return match_length[idx]; }
 };
 
 struct trie {
   // could compress all of this to 32 bits without major perf reduction:
-  // 1) merge accepting state in to the most significant bit of the
+  // 1) merge is_accepting state in to the most significant bit of the
   // corrosponding transition, and use a mask to access both values. 2) change
   // layer_offsets to uint8_t, max string length would be 253 2^8-3 (two values
   // reserved: empty string, and error state)
@@ -75,17 +76,17 @@ struct trie {
   rmm::device_uvector<uint16_t> _layer_offsets;
   rmm::device_uvector<char> _tokens;
   rmm::device_uvector<uint16_t> _transitions;
-  rmm::device_uvector<bool> _accepting;
+  rmm::device_uvector<uint8_t> _match_length;
 
  public:
   trie(rmm::device_uvector<uint16_t>&& layer_offsets,
        rmm::device_uvector<char>&& tokens,
        rmm::device_uvector<uint16_t>&& transitions,
-       rmm::device_uvector<bool>&& accepting)
+       rmm::device_uvector<uint8_t>&& match_length)
     : _layer_offsets(std::move(layer_offsets)),
       _tokens(std::move(tokens)),
       _transitions(std::move(transitions)),
-      _accepting(std::move(accepting))
+      _match_length(std::move(match_length))
   {
   }
 
@@ -104,7 +105,7 @@ struct trie {
     std::vector<uint16_t> layer_offsets;
     std::vector<char> tokens;
     std::vector<uint16_t> transitions;
-    std::vector<uint8_t> accepting;
+    std::vector<uint8_t> match_length;
 
     // create the trie tree
     auto root = std::make_unique<trie_builder_node>();
@@ -114,7 +115,7 @@ struct trie {
     auto sum = 1;
     layer_offsets.emplace_back(0);
     transitions.emplace_back(sum);
-    accepting.emplace_back(root->is_accepting);
+    match_length.emplace_back(root->match_length);
 
     auto nodes = std::queue<std::unique_ptr<trie_builder_node>>();
     nodes.push(std::move(root));
@@ -128,21 +129,21 @@ struct trie {
         sum += node->children.size();
         transitions.emplace_back(sum);
         for (auto& item : node->children) {
-          accepting.emplace_back(item.second->is_accepting);
+          match_length.emplace_back(item.second->match_length);
           tokens.emplace_back(item.first);
           nodes.push(std::move(item.second));
         }
       }
     }
 
-    accepting.emplace_back(false);
+    match_length.emplace_back(false);
 
     // allocate device memory
 
     auto device_layer_offsets = rmm::device_uvector<uint16_t>(layer_offsets.size(), stream, mr);
     auto device_tokens        = rmm::device_uvector<char>(tokens.size(), stream, mr);
     auto device_transitions   = rmm::device_uvector<uint16_t>(transitions.size(), stream, mr);
-    auto device_accepting     = rmm::device_uvector<bool>(accepting.size(), stream, mr);
+    auto device_match_length  = rmm::device_uvector<uint8_t>(match_length.size(), stream, mr);
 
     // copy host buffers to device
 
@@ -164,9 +165,9 @@ struct trie {
                                  cudaMemcpyDefault,
                                  stream.value()));
 
-    RMM_CUDA_TRY(cudaMemcpyAsync(device_accepting.data(),
-                                 accepting.data(),
-                                 accepting.size() * sizeof(bool),
+    RMM_CUDA_TRY(cudaMemcpyAsync(device_match_length.data(),
+                                 match_length.data(),
+                                 match_length.size() * sizeof(uint8_t),
                                  cudaMemcpyDefault,
                                  stream.value()));
 
@@ -175,13 +176,13 @@ struct trie {
     return trie{std::move(device_layer_offsets),
                 std::move(device_tokens),
                 std::move(device_transitions),
-                std::move(device_accepting)};
+                std::move(device_match_length)};
   }
 
   trie_device_view view() const
   {
     return trie_device_view{
-      _layer_offsets.data(), _tokens.data(), _transitions.data(), _accepting.data()};
+      _layer_offsets.data(), _tokens.data(), _transitions.data(), _match_length.data()};
   }
 };
 
