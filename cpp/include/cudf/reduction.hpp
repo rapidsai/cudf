@@ -72,12 +72,11 @@ std::unique_ptr<scalar> reduce(
 /**
  * @brief  Computes the scan of a column.
  *
- * The null values are skipped for the operation, and if an input element
- * at `i` is null, then the output element at `i` will also be null.
+ * The null values are skipped for the operation, and if an input element at `i` is null,
+ * then the output element at `i` will also be null. Rank and dense_rank aggregations are
+ * exceptions to this rule, always returning a fully valid column of rankings. Most
+ * aggregation functions require the input argument for useful results.
  *
- * @throws cudf::logic_error if column datatype is not numeric type.
- *
- * @param[in] input The input column view for the scan
  * @param[in] agg unique_ptr to aggregation operator applied by the scan
  * @param[in] inclusive The flag for applying an inclusive scan if
  *            scan_type::INCLUSIVE, an exclusive scan if scan_type::EXCLUSIVE.
@@ -86,6 +85,21 @@ std::unique_ptr<scalar> reduce(
  * Any operation with a null results in a null.
  * @param[in] mr Device memory resource used to allocate the returned scalar's device memory
  * @returns unique pointer to new output column
+ */
+std::unique_ptr<column> scan(
+  std::unique_ptr<aggregation> const& agg,
+  scan_type inclusive,
+  null_policy null_handling           = null_policy::EXCLUDE,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc std::unique_ptr<column> scan(
+ *            std::unique_ptr<aggregation> const& agg,
+ *            scan_type inclusive,
+ *            null_policy null_handling,
+ *            rmm::mr::device_memory_resource* mr)
+ *
+ * @param[in] input The input column view for the scan
  */
 std::unique_ptr<column> scan(
   const column_view& input,

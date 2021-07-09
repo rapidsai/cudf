@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -23,6 +24,14 @@
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
+std::unique_ptr<column> scan(std::unique_ptr<aggregation> const& agg,
+                             scan_type inclusive,
+                             null_policy null_handling,
+                             rmm::mr::device_memory_resource* mr)
+{
+  auto empty_col = make_empty_column(data_type{type_id::UINT32});
+  return scan(empty_col->view(), agg, inclusive, null_handling, mr);
+}
 
 std::unique_ptr<column> scan(column_view const& input,
                              std::unique_ptr<aggregation> const& agg,
