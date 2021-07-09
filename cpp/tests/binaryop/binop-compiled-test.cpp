@@ -357,11 +357,11 @@ using Pow_types = cudf::test::Types<cudf::test::Types<double, int64_t, int64_t>,
                                     cudf::test::Types<double, int32_t, int64_t>>;
 
 template <typename T>
-struct BinaryOperationCompiledTest_Pow : public BinaryOperationCompiledTest<T> {
+struct BinaryOperationCompiledTest_FloatOps : public BinaryOperationCompiledTest<T> {
 };
-TYPED_TEST_CASE(BinaryOperationCompiledTest_Pow, Pow_types);
+TYPED_TEST_CASE(BinaryOperationCompiledTest_FloatOps, Pow_types);
 
-TYPED_TEST(BinaryOperationCompiledTest_Pow, Pow_Vector_Vector)
+TYPED_TEST(BinaryOperationCompiledTest_FloatOps, Pow_Vector_Vector)
 {
   using TypeOut = typename TestFixture::TypeOut;
   using TypeLhs = typename TestFixture::TypeLhs;
@@ -392,7 +392,7 @@ TYPED_TEST(BinaryOperationCompiledTest_Pow, Pow_Vector_Vector)
 // n log(n, n)
 // t
 // d
-TYPED_TEST(BinaryOperationCompiledTest_Pow, LogBase_Vector_Vector)
+TYPED_TEST(BinaryOperationCompiledTest_FloatOps, LogBase_Vector_Vector)
 {
   using TypeOut = typename TestFixture::TypeOut;
   using TypeLhs = typename TestFixture::TypeLhs;
@@ -420,7 +420,7 @@ TYPED_TEST(BinaryOperationCompiledTest_Pow, LogBase_Vector_Vector)
 // n ATan2(n, n)
 // t
 // d
-TYPED_TEST(BinaryOperationCompiledTest_Pow, ATan2_Vector_Vector)
+TYPED_TEST(BinaryOperationCompiledTest_FloatOps, ATan2_Vector_Vector)
 {
   using TypeOut = typename TestFixture::TypeOut;
   using TypeLhs = typename TestFixture::TypeLhs;
@@ -437,7 +437,7 @@ TYPED_TEST(BinaryOperationCompiledTest_Pow, ATan2_Vector_Vector)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
 }
 
-TYPED_TEST(BinaryOperationCompiledTest_Pow, PMod_Vector_Vector)
+TYPED_TEST(BinaryOperationCompiledTest_FloatOps, PMod_Vector_Vector)
 {
   using TypeOut = typename TestFixture::TypeOut;
   using TypeLhs = typename TestFixture::TypeLhs;
