@@ -29,18 +29,11 @@ namespace cudf {
 namespace binops {
 namespace compiled {
 
-template <typename BinaryOperator>
+template <typename BinaryOperator, typename TypeLhs, typename TypeRhs>
 constexpr bool is_bool_result()
 {
-  return std::is_same_v<BinaryOperator, ops::NullEquals> or
-         std::is_same_v<BinaryOperator, ops::Equal> or
-         std::is_same_v<BinaryOperator, ops::NotEqual> or
-         std::is_same_v<BinaryOperator, ops::Less> or
-         std::is_same_v<BinaryOperator, ops::Greater> or
-         std::is_same_v<BinaryOperator, ops::LessEqual> or
-         std::is_same_v<BinaryOperator, ops::GreaterEqual> or
-         std::is_same_v<BinaryOperator, ops::LogicalOr> or
-         std::is_same_v<BinaryOperator, ops::LogicalAnd>;
+  using ReturnType = std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>;
+  return std::is_same_v<bool, ReturnType>;
 }
 
 /**
@@ -125,7 +118,7 @@ struct ops_wrapper {
         // To supress nvcc warning
         return std::invoke_result_t<BinaryOperator, TypeCommon, TypeCommon>{};
       }();
-      if constexpr (is_bool_result<BinaryOperator>())
+      if constexpr (is_bool_result<BinaryOperator, TypeCommon, TypeCommon>())
         out.element<decltype(result)>(i) = result;
       else
         type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
@@ -172,7 +165,7 @@ struct ops2_wrapper {
         // To supress nvcc warning
         return std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>{};
       }();
-      if constexpr (is_bool_result<BinaryOperator>())
+      if constexpr (is_bool_result<BinaryOperator, TypeLhs, TypeRhs>())
         out.element<decltype(result)>(i) = result;
       else
         type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
