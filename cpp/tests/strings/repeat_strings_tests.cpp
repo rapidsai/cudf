@@ -234,6 +234,21 @@ TEST_F(RepeatStringsTest, StringsColumnWithColumnRepeatTimesInvalidInput)
   }
 }
 
+TEST_F(RepeatStringsTest, StringsColumnWithColumnRepeatTimesOverflowOutput)
+{
+  auto const strs    = strs_col{"1", "12", "123", "1234", "12345", "123456", "1234567"};
+  auto const strs_cv = cudf::strings_column_view(strs);
+
+  auto const half_max     = std::numeric_limits<int32_t>::max() / 2;
+  auto const repeat_times = int32s_col{half_max, half_max, half_max, half_max, half_max};
+
+  auto const [sizes, total_bytes] =
+    cudf::strings::repeat_strings_output_sizes(strs_cv, repeat_times);
+  (void)sizes;
+  auto const expected_bytes = static_cast<int64_t>(half_max) * int64_t{1 + 2 + 3 + 4 + 5 + 6 + 7};
+  EXPECT_EQ(expected_bytes, total_bytes);
+}
+
 TYPED_TEST(RepeatStringsTypedTest, StringsColumnNoNullWithScalarRepeatTimes)
 {
   auto const strs    = strs_col{"0a0b0c", "abcxyz", "xyzééé", "ááá", "íí"};
