@@ -407,7 +407,8 @@ class aggregate_orc_metadata {
       CUDF_EXPECTS(row_count >= 0, "Invalid row count");
       CUDF_EXPECTS(row_start <= get_num_rows(), "Invalid row start");
 
-      size_type count = 0;
+      size_type count            = 0;
+      size_type stripe_skip_rows = 0;
       // Iterate all source files, each source file has corelating metadata
       for (size_t src_file_idx = 0;
            src_file_idx < per_file_metadata.size() && count < row_start + row_count;
@@ -422,11 +423,15 @@ class aggregate_orc_metadata {
           if (count > row_start || count == 0) {
             stripe_infos.push_back(
               std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
+          } else {
+            stripe_skip_rows = count;
           }
         }
 
         selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
       }
+      // Need to remove skipped rows from the stripes which are not selected.
+      row_start -= stripe_skip_rows;
     }
 
     // Read each stripe's stripefooter metadata
