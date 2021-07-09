@@ -23,6 +23,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <string>
+#include <type_traits>
 
 namespace cudf {
 namespace test {
@@ -59,11 +61,20 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
     return cudf::test::fixed_width_column_wrapper<T>(data_iter, data_iter + size, validity_iter);
   }
 
-  template <typename T>
+  template <typename T, typename std::enable_if_t<!std::is_same_v<T, std::string>>* = nullptr>
   auto make_random_wrapped_scalar()
   {
     cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max);
     return cudf::scalar_type_t<T>(rand_gen.generate());
+  }
+
+  template <typename T, typename std::enable_if_t<std::is_same_v<T, std::string>>* = nullptr>
+  auto make_random_wrapped_scalar()
+  {
+    cudf::test::UniformRandomGenerator<uint8_t> rand_gen(r_min, r_max);
+    uint8_t size = rand_gen.generate();
+    std::string str{"ஔⒶbc⁂∰ൠ \tنж水✉♪✿™"};
+    return cudf::scalar_type_t<T>(string_view(str.data(), size));
   }
 };
 
