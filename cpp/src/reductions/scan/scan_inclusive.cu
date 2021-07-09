@@ -23,6 +23,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/reduction.hpp>
+#include <cudf/strings/detail/gather.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -65,6 +66,45 @@ rmm::device_buffer mask_scan(const column_view& input_view,
 }
 
 namespace {
+
+/**
+ * @brief Strings inclusive scan operator
+ *
+ * This was specifically created to workaround a thrust issue
+ * https://github.com/NVIDIA/thrust/issues/1479
+ * where invalid values are passed to the operator.
+ * This operator will accept index values, check them and then
+ * run the `Op` operation on the individual string_view objects.
+ * The returned result is the appropriate index value.
+ */
+template <typename Op>
+struct string_scan_operator {
+  column_device_view const col;
+  string_view const null_replacement{};  ///< value returned when element is null
+  bool const has_nulls;                  ///< true if col has null elements
+
+  string_scan_operator(column_device_view const& col, bool has_nulls = true)
+    : col{col}, null_replacement{Op::template identity<string_view>()}, has_nulls{has_nulls}
+  {
+    CUDF_EXPECTS(type_id::STRING == device_storage_type_id(col.type().id()),
+                 "the data type mismatch");
+    // verify validity bitmask is non-null, otherwise, is_null_nocheck() will crash
+    if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
+  }
+
+  CUDA_DEVICE_CALLABLE
+  size_type operator()(size_type lhs, size_type rhs) const
+  {
+    // thrust::inclusive_scan may pass us garbage values so we need to protect ourselves;
+    // in these cases the return value does not matter since the result is not used
+    if (lhs < 0 || rhs < 0 || lhs >= col.size() || rhs >= col.size()) return 0;
+    string_view d_lhs =
+      has_nulls && col.is_null_nocheck(lhs) ? null_replacement : col.element<string_view>(lhs);
+    string_view d_rhs =
+      has_nulls && col.is_null_nocheck(rhs) ? null_replacement : col.element<string_view>(rhs);
+    return Op{}(d_lhs, d_rhs) == d_lhs ? lhs : rhs;
+  }
+};
 
 /**
  * @brief Dispatcher for running Scan operation on input column
@@ -117,14 +157,17 @@ struct scan_dispatcher {
   {
     auto d_input = column_device_view::create(input_view, stream);
 
-    rmm::device_uvector<T> result(input_view.size(), stream);
-    auto begin =
-      make_null_replacement_iterator(*d_input, Op::template identity<T>(), input_view.has_nulls());
-    thrust::inclusive_scan(
-      rmm::exec_policy(stream), begin, begin + input_view.size(), result.data(), Op{});
+    // build indices of the operation results
+    rmm::device_uvector<size_type> result(input_view.size(), stream);
+    thrust::inclusive_scan(rmm::exec_policy(stream),
+                           thrust::counting_iterator<size_type>(0),
+                           thrust::counting_iterator<size_type>(input_view.size()),
+                           result.begin(),
+                           string_scan_operator<Op>{*d_input, input_view.has_nulls()});
 
-    CHECK_CUDA(stream.value());
-    return cudf::make_strings_column(result, Op::template identity<string_view>(), stream, mr);
+    // call gather with the indices to build the output column
+    return cudf::strings::detail::gather(
+      strings_column_view(input_view), result.begin(), result.end(), false, stream, mr);
   }
 
  public:
