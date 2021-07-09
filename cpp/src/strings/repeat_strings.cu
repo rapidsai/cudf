@@ -188,7 +188,7 @@ struct compute_size_and_repeat_separately_fn {
   // If d_chars != nullptr: only repeat strings.
   char* d_chars{nullptr};
 
-  __device__ void operator()(size_type const idx) const noexcept
+  __device__ int64_t operator()(size_type const idx) const noexcept
   {
     auto const string_is_valid = !strings_has_nulls || strings_dv.is_valid_nocheck(idx);
     auto const rtimes_is_valid = !rtimes_has_nulls || repeat_times_dv.is_valid_nocheck(idx);
@@ -196,15 +196,22 @@ struct compute_size_and_repeat_separately_fn {
     // Any null input (either string or repeat_times value) will result in a null output.
     auto const is_valid = string_is_valid && rtimes_is_valid;
 
-    // When the input string is null, `repeat_times` is also set to 0.
+    // When the input string is null, `repeat_times` and `string_size` are also set to 0.
     // This makes sure that if `repeat_times > 0` then we will always have a valid input string,
     // and if `repeat_times <= 0` we will never copy anything to the output.
     auto const repeat_times = is_valid ? repeat_times_iter[idx] : size_type{0};
+    auto const string_size =
+      is_valid ? strings_dv.element<string_view>(idx).size_bytes() : size_type{0};
+
+    // The output_size is returned, and it needs to be an int64_t number to prevent overflow.
+    auto const output_size =
+      repeat_times > 0 ? static_cast<int64_t>(repeat_times) * static_cast<int64_t>(string_size)
+                       : int64_t{0};
 
     if (!d_chars) {
-      d_offsets[idx] = repeat_times > 0
-                         ? strings_dv.element<string_view>(idx).size_bytes() * repeat_times
-                         : size_type{0};
+      // If overflow happen, the stored value of output string size will be incorrect due to
+      // downcasting. In such cases, the entire output_strings_sizes column should be discarded.
+      d_offsets[idx] = static_cast<size_type>(output_size);
     } else if (repeat_times > 0) {
       auto const d_str    = strings_dv.element<string_view>(idx);
       auto const str_size = d_str.size_bytes();
@@ -216,6 +223,10 @@ struct compute_size_and_repeat_separately_fn {
         }
       }
     }
+
+    // The output_size value may be used to sum up to detect overflow at the caller site.
+    // The caller can detect overflow easily by checking `SUM(output_size) > INT_MAX`.
+    return output_size;
   }
 };
 
@@ -336,51 +347,6 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                              mr);
 }
 
-namespace {
-/**
- * @brief Functor to compute sizes of the output strings if each input string is repeated by a
- * separate number of times.
- */
-template <class Iterator>
-struct compute_size_fn {
-  column_device_view const strings_dv;
-  column_device_view const repeat_times_dv;
-  Iterator const repeat_times_iter;
-  bool const strings_has_nulls;
-  bool const rtimes_has_nulls;
-
-  // Store computed sizes of the output strings.
-  size_type* const d_sizes;
-
-  __device__ int64_t operator()(size_type const idx) const noexcept
-  {
-    auto const string_is_valid = !strings_has_nulls || strings_dv.is_valid_nocheck(idx);
-    auto const rtimes_is_valid = !rtimes_has_nulls || repeat_times_dv.is_valid_nocheck(idx);
-
-    // Any null input (either string or repeat_times value) will result in a null output (size = 0).
-    auto const is_valid = string_is_valid && rtimes_is_valid;
-
-    auto const repeat_times = is_valid ? repeat_times_iter[idx] : size_type{0};
-    auto const string_size =
-      is_valid ? strings_dv.element<string_view>(idx).size_bytes() : size_type{0};
-
-    // The return value needs to be an int64_t number to prevent overflow.
-    auto const output_size =
-      repeat_times > 0 ? static_cast<int64_t>(repeat_times) * static_cast<int64_t>(string_size)
-                       : int64_t{0};
-
-    // If overflow happen, the stored value of output string size will be incorrect due to
-    // downcasting. In such cases, the entire output_strings_sizes column should be discarded.
-    d_sizes[idx] = static_cast<size_type>(output_size);
-
-    // The output_size value will be sum up to detect overflow at the caller site.
-    // The caller can detect overflow easily by checking `SUM(output_size) > INT_MAX`.
-    return output_size;
-  }
-};
-
-}  // namespace
-
 std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
   strings_column_view const& input,
   column_view const& repeat_times,
@@ -407,7 +373,7 @@ std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
   auto const repeat_times_iter =
     cudf::detail::indexalator_factory::make_input_iterator(repeat_times);
 
-  auto const fn = compute_size_fn<decltype(repeat_times_iter)>{
+  auto const fn = compute_size_and_repeat_separately_fn<decltype(repeat_times_iter)>{
     *strings_dv_ptr,
     *repeat_times_dv_ptr,
     repeat_times_iter,
