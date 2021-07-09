@@ -173,7 +173,6 @@ message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
 
 find_path(ARROW_INCLUDE "arrow"
           HINTS "$ENV{ARROW_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include"
                 "${CUDF_CPP_BUILD_DIR}/_deps/arrow-src/cpp/src")
 
 message(STATUS "ARROW: ARROW_INCLUDE set to ${ARROW_INCLUDE}")
@@ -187,7 +186,6 @@ endif(CUDF_JNI_ARROW_STATIC)
 
 find_library(ARROW_LIBRARY ${CUDF_JNI_ARROW_LIBNAME} REQUIRED
   HINTS "$ENV{ARROW_ROOT}/lib"
-        "$ENV{CONDA_PREFIX}/lib"
         "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/release")
 
 if(NOT ARROW_LIBRARY)

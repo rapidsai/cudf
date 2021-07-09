@@ -293,7 +293,7 @@ class column {
   /**
    * @brief Implicit conversion operator to a `mutable_column_view`.
    *
-   * This allows pasing a `column` object into a function that accepts a
+   * This allows passing a `column` object into a function that accepts a
    *`mutable_column_view`. The conversion is automatic.
 
    * @note Creating a mutable view of a `column` invalidates the `column`'s

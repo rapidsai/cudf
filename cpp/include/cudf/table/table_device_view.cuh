@@ -28,7 +28,7 @@
 
 /**
  * @file table_device_view.cuh
- * @brief Table device view class definitons
+ * @brief Table device view class definitions
  */
 
 namespace cudf {

@@ -173,7 +173,7 @@ std::vector<std::unique_ptr<column>> generate_structs(bool include_validity)
   std::vector<bool> ages_validity = {1, 1, 1, 1, 0, 1, 0, 0, 1};
   auto ages_column                = include_validity ? fixed_width_column_wrapper<int>(
                                           ages.begin(), ages.end(), ages_validity.begin())
-                                      : fixed_width_column_wrapper<int>(ages.begin(), ages.end());
+                                                     : fixed_width_column_wrapper<int>(ages.begin(), ages.end());
 
   // 3. Boolean "is_human" column.
   std::vector<bool> is_human{true, true, false, false, false, false, true, true, true};
