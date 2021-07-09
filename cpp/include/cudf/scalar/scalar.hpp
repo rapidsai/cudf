@@ -154,7 +154,7 @@ class fixed_width_scalar : public scalar {
   void set_value(T value, rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
-   * @brief Implicit conversion operator to get the value of the scalar on the host.
+   * @brief Explicit conversion operator to get the value of the scalar on the host.
    */
   explicit operator value_type() const;
 
@@ -366,6 +366,11 @@ class fixed_point_scalar : public scalar {
   T fixed_point_value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
+   * @brief Explicit conversion operator to get the value of the scalar on the host.
+   */
+  explicit operator value_type() const;
+
+  /**
    * @brief Returns a raw pointer to the value in device memory.
    */
   rep_type* data();
@@ -465,7 +470,7 @@ class string_scalar : public scalar {
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Implicit conversion operator to get the value of the scalar in a host std::string.
+   * @brief Explicit conversion operator to get the value of the scalar in a host std::string.
    */
   explicit operator std::string() const;
 
