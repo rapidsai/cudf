@@ -1342,8 +1342,8 @@ def column_empty(
     if is_struct_dtype(dtype):
         data = None
         children = tuple(
-            column_empty(row_count, dtype.fields[f])
-            for f in dtype.fields.keys()
+            column_empty(row_count, field_dtype)
+            for field_dtype in dtype.fields.values()
         )
     elif is_categorical_dtype(dtype):
         data = None
