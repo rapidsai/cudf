@@ -1,7 +1,9 @@
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/io/text/input_stream.hpp>
 #include <cudf/io/text/superstate.hpp>
 #include <cudf/io/text/trie.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -69,8 +71,9 @@ struct BlockPrefixCallbackOp {
 
 template <uint32_t BYTES_PER_THREAD>
 __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
-                                       cudf::device_span<char> data,
-                                       uint32_t* result_count)
+                                       cudf::device_span<char const> data,
+                                       uint32_t* result_count,
+                                       cudf::device_span<int32_t> results)
 {
   typedef cub::BlockScan<superstate, THREADS_PER_TILE> SuperstateBlockScan;
   typedef cub::BlockScan<uint32_t, THREADS_PER_TILE> OffsetBlockScan;
@@ -151,6 +154,8 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
            thread_offsets[i],
            match_begin,
            match_end);
+
+    if (results.size() > 0) { results[thread_offsets[i]] = match_end; }
   }
 }
 
@@ -161,36 +166,31 @@ namespace io {
 namespace text {
 namespace detail {
 
-std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::input_stream& input,
+std::unique_ptr<cudf::column> multibyte_split(cudf::string_scalar const& input,
                                               std::vector<std::string> const& delimeters,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  auto input_buffer     = rmm::device_uvector<char>(BYTES_PER_CHUNK, stream);
-  auto const input_span = cudf::device_span<char>(input_buffer);
+  // auto input_buffer     = rmm::device_uvector<char>(BYTES_PER_CHUNK, stream);
+  // auto const input_span = cudf::device_span<char>(input_buffer);
 
   // TODO: call state initalization kernels
 
   auto const trie = cudf::io::text::trie::create(delimeters, stream);
 
   auto num_results = rmm::device_scalar<uint32_t>(0, stream);
+  auto num_tiles   = ceil_div(input.size(), BYTES_PER_TILE);
 
-  while (true) {
-    uint32_t num_bytes_read = input.readsome(input_span, stream);
+  auto offsets = rmm::device_uvector<cudf::size_type>(0, stream);
 
-    if (num_bytes_read == 0) {
-      // if there's no more data to read, we're done.
-      break;
-    }
+  // count the results
 
-    auto num_tiles = ceil_div(num_bytes_read, BYTES_PER_TILE);
-
-    auto kernel = multibyte_split_kernel<BYTES_PER_THREAD>;
-    kernel<<<num_tiles, THREADS_PER_TILE, 0, stream.value()>>>(  //
-      trie.view(),
-      input_span.first(num_bytes_read),
-      num_results.data());
-  }
+  auto kernel = multibyte_split_kernel<BYTES_PER_THREAD>;
+  kernel<<<num_tiles, THREADS_PER_TILE, 0, stream.value()>>>(  //
+    trie.view(),
+    cudf::device_span<char const>(input.data(), input.size()),
+    num_results.data(),
+    offsets);
 
   auto host_num_results = num_results.value(stream);
 
@@ -198,14 +198,46 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::input_stream& inpu
 
   std::cout << "num results: " << host_num_results << std::endl;
 
+  // allocate the results
+
+  offsets = rmm::device_uvector<cudf::size_type>(host_num_results + 2, stream);
+  offsets.set_element_to_zero_async(0, stream);
+  cudf::size_type const x = offsets.size() - 1;
+  cudf::size_type const y = input.size();
+  offsets.set_element_async(x, y, stream);
+
+  // materialize the results
+
+  kernel<<<num_tiles, THREADS_PER_TILE, 0, stream.value()>>>(  //
+    trie.view(),
+    cudf::device_span<char const>(input.data(), input.size()),
+    num_results.data(),
+    cudf::device_span<cudf::size_type>(offsets.data() + 1, host_num_results));
+
+  stream.synchronize();
+
   // TODO: call state finalization kernels
 
+  return cudf::make_strings_column(  //
+    cudf::device_span<char const>(input.data(), input.size()),
+    offsets);
+
   CUDF_FAIL();
+
+  /*
+  std::unique_ptr<column> make_strings_column(
+  cudf::device_span<char const> strings,
+  cudf::device_span<size_type const> offsets,
+  cudf::device_span<bitmask_type const> null_mask = {},
+  size_type null_count                            = cudf::UNKNOWN_NULL_COUNT,
+  rmm::cuda_stream_view stream                    = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr             = rmm::mr::get_current_device_resource());
+  */
 }
 
 }  // namespace detail
 
-std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::input_stream& input,
+std::unique_ptr<cudf::column> multibyte_split(cudf::string_scalar const& input,
                                               std::vector<std::string> const& delimeters,
                                               rmm::mr::device_memory_resource* mr)
 {

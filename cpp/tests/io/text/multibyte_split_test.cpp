@@ -18,14 +18,11 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
-
-#include <cudf/io/text/host_input_stream.hpp>
-
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/io/text/host_input_stream.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
-
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <sstream>
@@ -43,7 +40,7 @@ TEST_F(MultibyteSplitTest, Simple)
   // 😀 | F0 9F 98 80 | 11110000 10011111 01100010 01010000
   // 😎 | F0 9F 98 8E | 11110000 10011111 01100010 11101000
   auto delimiters = std::vector<std::string>({"😀", "😎", ",", "::"});
-  std::string input =
+  cudf::string_scalar input(
     "aaa😀"
     "bbb😀"
     "ccc😀"
@@ -68,7 +65,7 @@ TEST_F(MultibyteSplitTest, Simple)
     "and😎"
     "used😎"
     "as😎"
-    "delimeters.";
+    "delimeters.");
 
   auto expected = strings_column_wrapper{
     "aaa😀",       "bbb😀",  "ccc😀",    "ddd😀",        "eee😀",     "fff::",     "ggg😀",
@@ -77,10 +74,7 @@ TEST_F(MultibyteSplitTest, Simple)
     "and😎",       "used😎", "as😎",     "delimeters.",
   };
 
-  auto input_stream    = std::basic_istringstream(input);
-  auto input_stream_io = cudf::io::text::host_input_stream(input_stream);
-
-  auto out = cudf::io::text::multibyte_split(input_stream_io, delimiters);
+  auto out = cudf::io::text::multibyte_split(input, delimiters);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
 }

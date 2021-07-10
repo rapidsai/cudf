@@ -13,7 +13,7 @@ namespace io {
 namespace text {
 
 std::unique_ptr<cudf::column> multibyte_split(
-  cudf::io::text::input_stream& input,
+  cudf::string_scalar const& input,
   std::vector<std::string> const& delimeters,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
