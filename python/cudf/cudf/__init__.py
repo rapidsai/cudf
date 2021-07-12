@@ -47,6 +47,7 @@ from cudf.core.algorithms import factorize
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal64Dtype,
+    Decimal32Dtype,
     IntervalDtype,
     ListDtype,
     StructDtype,

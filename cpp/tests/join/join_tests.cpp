@@ -782,7 +782,7 @@ TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-// // Test to check join behaviour when join keys are null.
+// // Test to check join behavior when join keys are null.
 TEST_F(JoinTest, InnerJoinOnNulls)
 {
   // clang-format off

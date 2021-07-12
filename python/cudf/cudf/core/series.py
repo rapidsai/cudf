@@ -2414,7 +2414,7 @@ class Series(SingleColumnFrame, Serializable):
 
         col = _concat_columns([o._column for o in objs])
 
-        if isinstance(col, cudf.core.column.DecimalColumn):
+        if isinstance(col, cudf.core.column.Decimal64Column):
             col = col._with_type_metadata(objs[0]._column.dtype)
 
         return cls(data=col, index=index, name=name)
@@ -6291,6 +6291,80 @@ class DatetimeProperties(object):
         dtype: int16
         """
         return self._get_dt_field("weekday")
+
+    @property
+    def dayofyear(self):
+        """
+        The day of the year, from 1-365 in non-leap years and
+        from 1-366 in leap years.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range('2016-12-31',
+        ...     '2017-01-08', freq='D'))
+        >>> datetime_series
+        0   2016-12-31
+        1   2017-01-01
+        2   2017-01-02
+        3   2017-01-03
+        4   2017-01-04
+        5   2017-01-05
+        6   2017-01-06
+        7   2017-01-07
+        8   2017-01-08
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.dayofyear
+        0    366
+        1      1
+        2      2
+        3      3
+        4      4
+        5      5
+        6      6
+        7      7
+        8      8
+        dtype: int16
+        """
+        return self._get_dt_field("day_of_year")
+
+    @property
+    def day_of_year(self):
+        """
+        The day of the year, from 1-365 in non-leap years and
+        from 1-366 in leap years.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range('2016-12-31',
+        ...     '2017-01-08', freq='D'))
+        >>> datetime_series
+        0   2016-12-31
+        1   2017-01-01
+        2   2017-01-02
+        3   2017-01-03
+        4   2017-01-04
+        5   2017-01-05
+        6   2017-01-06
+        7   2017-01-07
+        8   2017-01-08
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.day_of_year
+        0    366
+        1      1
+        2      2
+        3      3
+        4      4
+        5      5
+        6      6
+        7      7
+        8      8
+        dtype: int16
+        """
+        return self._get_dt_field("day_of_year")
 
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)

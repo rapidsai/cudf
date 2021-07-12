@@ -237,7 +237,7 @@ public:
       }
 
       // There is an option to have a file writer too, with metadata
-      auto tmp_writer = arrow::ipc::NewStreamWriter(sink.get(), arrow_tab->schema());
+      auto tmp_writer = arrow::ipc::MakeStreamWriter(sink, arrow_tab->schema());
       if (!tmp_writer.ok()) {
         throw std::runtime_error(tmp_writer.status().message());
       }
