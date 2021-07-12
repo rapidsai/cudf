@@ -73,7 +73,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
     0,
     [row_indices = row_indices.begin<size_type>(),
      validity    = c.null_mask(),
-     offsets     = c.offsets().begin<size_type>(),
+     offsets     = c.offsets().begin<offset_type>(),
      offset      = c.offset()] __device__(int index) {
       // both null mask and offsets data are not pre-sliced. so we need to add the column offset to
       // every incoming index.
@@ -125,7 +125,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   auto output_row_iter = cudf::detail::make_counting_transform_iterator(
     0,
     [row_indices  = row_indices.begin<size_type>(),
-     offsets      = c.offsets().begin<size_type>(),
+     offsets      = c.offsets().begin<offset_type>(),
      offset       = c.offset(),
      first_offset = cudf::detail::get_value<offset_type>(
        c.offsets(), c.offset(), rmm::cuda_stream_default)] __device__(int index) {
@@ -440,10 +440,12 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
              << h_differences[i] << "] = " << h_right_strings[i] << std::endl;
     return buffer.str();
   } else {
-    int index = h_differences[0];  // only stringify first difference
+    auto const index = h_differences[0];  // only stringify first difference
 
-    int lhs_index = cudf::detail::get_value<int>(lhs_row_indices, index, rmm::cuda_stream_default);
-    int rhs_index = cudf::detail::get_value<int>(rhs_row_indices, index, rmm::cuda_stream_default);
+    auto const lhs_index =
+      cudf::detail::get_value<size_type>(lhs_row_indices, index, rmm::cuda_stream_default);
+    auto const rhs_index =
+      cudf::detail::get_value<size_type>(rhs_row_indices, index, rmm::cuda_stream_default);
     auto diff_lhs = cudf::detail::slice(lhs, lhs_index, lhs_index + 1);
     auto diff_rhs = cudf::detail::slice(rhs, rhs_index, rhs_index + 1);
     return depth_str + "first difference: " + "lhs[" + std::to_string(index) +
@@ -575,8 +577,8 @@ struct column_comparator_impl<list_view, check_exact_equality> {
        rhs_valids,
        lhs_indices = lhs_row_indices.begin<size_type>(),
        rhs_indices = rhs_row_indices.begin<size_type>()] __device__(size_type index) {
-        size_type lhs_index = lhs_indices[index];
-        size_type rhs_index = rhs_indices[index];
+        auto const lhs_index = lhs_indices[index];
+        auto const rhs_index = rhs_indices[index];
 
         // check for validity match
         if (lhs_valids[lhs_index] != rhs_valids[rhs_index]) { return true; }
