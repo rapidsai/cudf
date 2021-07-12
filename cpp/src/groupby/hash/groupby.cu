@@ -413,7 +413,9 @@ void sparse_to_dense_results(table_view const& keys,
                                                       row_bitmask_ptr,
                                                       stream,
                                                       mr);
-    for (auto&& agg : agg_v) { agg->finalize(finalizer); }
+    for (auto&& agg : agg_v) {
+      agg->finalize(finalizer);
+    }
   }
 }
 

@@ -335,11 +335,14 @@ TYPED_TEST(ReplaceNullsTest, ReplacementHasNulls)
 TYPED_TEST(ReplaceNullsTest, LargeScale)
 {
   std::vector<TypeParam> inputColumn(10000);
-  for (size_t i = 0; i < inputColumn.size(); i++) inputColumn[i] = i % 2;
+  for (size_t i = 0; i < inputColumn.size(); i++)
+    inputColumn[i] = i % 2;
   std::vector<cudf::valid_type> inputValid(10000);
-  for (size_t i = 0; i < inputValid.size(); i++) inputValid[i] = i % 2;
+  for (size_t i = 0; i < inputValid.size(); i++)
+    inputValid[i] = i % 2;
   std::vector<TypeParam> expectedColumn(10000);
-  for (size_t i = 0; i < expectedColumn.size(); i++) expectedColumn[i] = 1;
+  for (size_t i = 0; i < expectedColumn.size(); i++)
+    expectedColumn[i] = 1;
 
   ReplaceNullsColumn<TypeParam>(
     cudf::test::fixed_width_column_wrapper<TypeParam>(
@@ -352,11 +355,14 @@ TYPED_TEST(ReplaceNullsTest, LargeScale)
 TYPED_TEST(ReplaceNullsTest, LargeScaleScalar)
 {
   std::vector<TypeParam> inputColumn(10000);
-  for (size_t i = 0; i < inputColumn.size(); i++) inputColumn[i] = i % 2;
+  for (size_t i = 0; i < inputColumn.size(); i++)
+    inputColumn[i] = i % 2;
   std::vector<cudf::valid_type> inputValid(10000);
-  for (size_t i = 0; i < inputValid.size(); i++) inputValid[i] = i % 2;
+  for (size_t i = 0; i < inputValid.size(); i++)
+    inputValid[i] = i % 2;
   std::vector<TypeParam> expectedColumn(10000);
-  for (size_t i = 0; i < expectedColumn.size(); i++) expectedColumn[i] = 1;
+  for (size_t i = 0; i < expectedColumn.size(); i++)
+    expectedColumn[i] = 1;
   cudf::numeric_scalar<TypeParam> replacement(1);
 
   ReplaceNullsScalar<TypeParam>(cudf::test::fixed_width_column_wrapper<TypeParam>(

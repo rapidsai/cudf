@@ -796,7 +796,8 @@ struct datetime_formatter {
       val       = val / 10;
     }
     ptr = tmpl + bytes - 1;
-    while (bytes-- > 0) *str++ = *ptr--;
+    while (bytes-- > 0)
+      *str++ = *ptr--;
     return str;
   }
 
