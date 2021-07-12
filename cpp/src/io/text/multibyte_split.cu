@@ -30,35 +30,12 @@ struct trie_state {
 
 using superstate = cudf::io::text::superstate<16>;
 
-auto constexpr BYTES_PER_THREAD = 8;
+// keep BYTES_PER_TILE below input size to force multi-tile execution.
+auto constexpr BYTES_PER_THREAD = 2;
 auto constexpr THREADS_PER_TILE = 32;
 auto constexpr BYTES_PER_TILE   = BYTES_PER_THREAD * THREADS_PER_TILE;
 auto constexpr TILES_PER_CHUNK  = 1024;
 auto constexpr BYTES_PER_CHUNK  = BYTES_PER_TILE * TILES_PER_CHUNK;
-
-struct BlockPrefixCallbackOp {
-  // Running prefix
-  superstate running_total;
-  // Constructor
-  __device__ BlockPrefixCallbackOp(superstate running_total) : running_total(running_total) {}
-  // Callback operator to be entered by the first warp of threads in the block.
-  // Thread-0 is responsible for returning a value for seeding the block-wide scan.
-  __device__ superstate operator()(superstate const& block_aggregate)
-  {
-    superstate old_prefix = running_total;
-    running_total         = old_prefix + block_aggregate;
-    return old_prefix;
-  }
-
-  static rmm::device_uvector<superstate> create_temp_storage(uint32_t num_elements,
-                                                             rmm::cuda_stream_view stream)
-  {
-    auto num_prefixes = ceil_div(num_elements, BYTES_PER_TILE);
-
-    return rmm::device_uvector<superstate>(num_prefixes, stream);
-  }
-};
-
 // multibyte_split works by splitting up inputs in to 32 inputs (bytes) per thread, and transforming
 // them in to data structures called "superstates". these superstates are created by searching a
 // trie, but instead of a tradition trie where the search begins at a single node at the beginning,
@@ -89,6 +66,8 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
 
   if (data_end > data.size()) { data_end = data.size(); }
 
+  // STEP 1 + 2: Load inputs, transform to individual superstates
+
   superstate thread_superstates[BYTES_PER_THREAD];
 
   for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
@@ -104,18 +83,16 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
     }
   }
 
+  // STEP 3: Scan superstates can to produce absolute thread states.
+
   __syncthreads();
-
-  BlockPrefixCallbackOp prefix_op({});
-
   SuperstateBlockScan(temp_storage.superstate_scan)
     .InclusiveScan(  //
       thread_superstates,
       thread_superstates,
-      [](superstate const& lhs, superstate const& rhs) { return lhs + rhs; },
-      prefix_op);
+      [](superstate const& lhs, superstate const& rhs) { return lhs + rhs; });
 
-  __syncthreads();
+  // STEP 4: Populate match flags
 
   uint32_t thread_offsets[BYTES_PER_THREAD];
 
@@ -123,10 +100,11 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
     thread_offsets[i] = trie.is_match(thread_superstates[i].get(0));
   }
 
-  __syncthreads();
+  // STEP 5: Scan match flags to produce match offsets
 
   uint32_t matches_in_block;
 
+  __syncthreads();
   OffsetBlockScan(temp_storage.offset_scan)
     .ExclusiveScan(
       thread_offsets,
@@ -134,9 +112,11 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
       [](uint32_t const& lhs, uint32_t const& rhs) { return lhs + rhs; },
       matches_in_block);
 
-  __syncthreads();
+  // Step 6: Assign final block-aggregate match offset as the total number of matches.
 
   if (threadIdx.x == 0) { *result_count = matches_in_block; }
+
+  // Step 7: Assign results from each thread using match offsets.
 
   for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
     auto const match_length = trie.get_match_length(thread_superstates[i].get(0));
