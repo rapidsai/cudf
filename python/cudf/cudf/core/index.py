@@ -35,7 +35,7 @@ from cudf.core.column import (
     arange,
     column,
 )
-from cudf.core.column.column import _concat_columns, as_column
+from cudf.core.column.column import as_column, concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import SingleColumnFrame
@@ -587,7 +587,7 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
     @classmethod
     def _concat(cls, objs):
-        data = _concat_columns([o._values for o in objs])
+        data = concat_columns([o._values for o in objs])
         names = {obj.name for obj in objs}
         if len(names) == 1:
             [name] = names
@@ -2569,17 +2569,13 @@ class CategoricalIndex(GenericIndex):
             dtype = None
 
         if categories is not None:
-            data.cat().set_categories(
-                categories, ordered=ordered, inplace=True
-            )
+            data = data.set_categories(categories, ordered=ordered)
         elif isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
-            data.cat().set_categories(
-                dtype.categories, ordered=ordered, inplace=True
-            )
+            data = data.set_categories(dtype.categories, ordered=ordered)
         elif ordered is True and data.ordered is False:
-            data.cat().as_ordered(inplace=True)
+            data = data.as_ordered()
         elif ordered is False and data.ordered is True:
-            data.cat().as_unordered(inplace=True)
+            data = data.as_unordered()
 
         super().__init__(data, **kwargs)
 
@@ -2588,14 +2584,14 @@ class CategoricalIndex(GenericIndex):
         """
         The category codes of this categorical.
         """
-        return self._values.cat().codes
+        return as_index(self._values.codes)
 
     @property
     def categories(self):
         """
         The categories of this categorical.
         """
-        return self._values.cat().categories
+        return as_index(self._values.categories)
 
 
 def interval_range(
@@ -2871,7 +2867,7 @@ class StringIndex(GenericIndex):
     @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
-        return StringMethods(column=self._values, parent=self)
+        return StringMethods(parent=self)
 
     def _clean_nulls_from_index(self):
         """
