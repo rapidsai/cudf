@@ -133,7 +133,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             and isinstance(self.index, (str, list))
             and _is_supported({self._slice: arg}, _supported)
         ):
-            result = groupby_agg(
+            return groupby_agg(
                 self.obj,
                 self.index,
                 {self._slice: arg},
@@ -143,17 +143,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
                 sep=self.sep,
                 sort=self.sort,
                 as_index=self.as_index,
-            )
-
-            if self._slice:
-                result = result[self._slice]
-
-            if not isinstance(arg, (list, dict)) and isinstance(
-                result, DaskDataFrame
-            ):
-                result = result[result.columns[0]]
-
-            return result
+            )[self._slice]
 
         return super().aggregate(
             arg, split_every=split_every, split_out=split_out
