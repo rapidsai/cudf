@@ -1,4 +1,5 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import logging
 
 import numpy as np
@@ -8,7 +9,7 @@ from numba import cuda
 
 import cudf
 from cudf.comm.gpuarrow import GpuArrowReader
-from cudf.tests.utils import INTEGER_TYPES
+from cudf.testing._utils import INTEGER_TYPES
 
 
 def make_gpu_parse_arrow_data_batch():

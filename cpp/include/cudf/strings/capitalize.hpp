@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 namespace cudf {
@@ -29,46 +31,65 @@ namespace strings {
 /**
  * @brief Returns a column of capitalized strings.
  *
+ * If the `delimiters` is an empty string, then only the first character of each
+ * row is capitalized. Otherwise, a non-delimiter character is capitalized after
+ * any delimiter character is found.
+ *
+ * @code{.pseudo}
+ * Example:
+ * input = ["tesT1", "a Test", "Another Test", "a\tb"];
+ * output = capitalize(input)
+ * output is ["Test1", "A test", "Another test", "A\tb"]
+ * output = capitalize(input, " ")
+ * output is ["Test1", "A Test", "Another Test", "A\tb"]
+ * output = capitalize(input, " \t")
+ * output is ["Test1", "A Test", "Another Test", "A\tB"]
+ * @endcode
+ *
  * Any null string entries return corresponding null output column entries.
  *
- * Example:
- * ```
- * input_string_tbl = ["tesT1", "a Test", "Another Test"];
+ * @throw cudf::logic_error if `delimiter.is_valid()` is  `false`.
  *
- * capt_string_tbl = ["Test1", "A test", "Another test"]
- * ```
- *
- * @param[in] strings String column.
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param input String column.
+ * @param delimiters Characters for identifying words to capitalize.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Column of strings capitalized from the input column.
  */
 std::unique_ptr<column> capitalize(
-  strings_column_view const& strings,
+  strings_column_view const& input,
+  string_scalar const& delimiters     = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Modifies first character after spaces to uppercase and lower-cases the rest.
+ * @brief Modifies first character of each word to upper-case and lower-cases the rest.
  *
- * Returns a column of strings where, for each string row in the input,
- * the first character after spaces is modified to upper-case,
- * while all the remaining characters in a word are modified to lower-case.
+ * A word here is a sequence of characters of `sequence_type` delimited by
+ * any characters not part of the `sequence_type` character set.
+ *
+ * This function returns a column of strings where, for each string row in the input,
+ * the first character of each word is converted to upper-case,
+ * while all the remaining characters in a word are converted to lower-case.
+ *
+ * @code{.pseudo}
+ * Example:
+ * input = ["   teST1", "a Test", " Another test ", "n2vidia"];
+ * output = title(input)
+ * output is ["   Test1", "A Test", " Another Test ", "N2Vidia"]
+ * output = title(input,ALPHANUM)
+ * output is ["   Test1", "A Test", " Another Test ", "N2vidia"]
+ * @endcode
  *
  * Any null string entries return corresponding null output column entries.
  *
- * Example:
- * ```
- * input_string_tbl = ["   tesT1", "a Test", " Another test "];
- *
- * titled_string_tbl = ["   Test1", "A Test", " Another Test "]
- * ```
- *
- * @param[in] strings String column.
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
- * @return Column of title strings.
+ * @param input String column.
+ * @param sequence_type The character type that is used when identifying words.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Column of titled strings.
  */
 std::unique_ptr<column> title(
-  strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  strings_column_view const& input,
+  string_character_types sequence_type = string_character_types::ALPHA,
+  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

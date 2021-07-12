@@ -477,8 +477,8 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
                     offsets_update_fn);
 
   // build the characters column
-  auto chars_column = create_chars_child_column(
-    strings_count, chars_bytes + (delta_per_target * target_count), stream, mr);
+  auto chars_column =
+    create_chars_child_column(chars_bytes + (delta_per_target * target_count), stream, mr);
   auto d_out_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
     rmm::exec_policy(stream),
@@ -568,9 +568,9 @@ std::unique_ptr<column> replace<replace_algorithm::AUTO>(strings_column_view con
     (strings.offset() == 0)
       ? 0
       : cudf::detail::get_value<int32_t>(strings.offsets(), strings.offset(), stream);
-  size_type const chars_end = (offset_count == strings.offsets().size())
-                                ? strings.chars_size()
-                                : cudf::detail::get_value<int32_t>(
+  size_type const chars_end   = (offset_count == strings.offsets().size())
+                                  ? strings.chars_size()
+                                  : cudf::detail::get_value<int32_t>(
                                     strings.offsets(), strings.offset() + strings_count, stream);
   size_type const chars_bytes = chars_end - chars_start;
 
@@ -604,11 +604,11 @@ std::unique_ptr<column> replace<replace_algorithm::CHAR_PARALLEL>(
   auto const offset_count  = strings_count + 1;
   auto const d_offsets     = strings.offsets().data<int32_t>() + strings.offset();
   size_type chars_start    = (strings.offset() == 0) ? 0
-                                                  : cudf::detail::get_value<int32_t>(
+                                                     : cudf::detail::get_value<int32_t>(
                                                       strings.offsets(), strings.offset(), stream);
-  size_type chars_end = (offset_count == strings.offsets().size())
-                          ? strings.chars_size()
-                          : cudf::detail::get_value<int32_t>(
+  size_type chars_end      = (offset_count == strings.offsets().size())
+                               ? strings.chars_size()
+                               : cudf::detail::get_value<int32_t>(
                               strings.offsets(), strings.offset() + strings_count, stream);
   return replace_char_parallel(
     strings, chars_start, chars_end, d_target, d_repl, maxrepl, stream, mr);
@@ -819,7 +819,7 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
   // build chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
