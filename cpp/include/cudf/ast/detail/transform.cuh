@@ -75,8 +75,8 @@ using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
  * subclasses to get around the lack of device-side polymorphism.
  *
  * @tparam Subclass The subclass to dispatch methods to.
- * @tparam has_nulls Whether or not the result data is nullable.
  * @tparam T The underlying data type.
+ * @tparam has_nulls Whether or not the result data is nullable.
  */
 template <typename Subclass, typename T, bool has_nulls>
 struct expression_result {
@@ -89,7 +89,12 @@ struct expression_result {
   // TODO: The index is ignored by the value subclass, but is included in this
   // signature because it is required by the implementation in the template
   // specialization for column views. It would be nice to clean this up, see
-  // the related TODO below.
+  // the related TODO below. Note that storing the index in the class on
+  // construction (which would result in a cleaner delineation of the API for
+  // the derived types) results in a significant performance penalty because
+  // the index is pushed down the memory hierarchy by the time it needs to be
+  // used, whereas passing it as a parameter keeps it in registers for fast
+  // access at the point where indexing occurs.
   template <typename Element>
   __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
   {
@@ -108,8 +113,8 @@ struct expression_result {
  * (possibly nullable) scalar type that can be written to by the
  * expression_evaluator. The data (and its validity) can then be accessed.
  *
- * @tparam has_nulls Whether or not the result data is nullable.
  * @tparam T The underlying data type.
+ * @tparam has_nulls Whether or not the result data is nullable.
  */
 template <typename T, bool has_nulls>
 struct value_expression_result
@@ -165,7 +170,6 @@ struct value_expression_result
  * column. Not all methods are implemented
  *
  * @tparam has_nulls Whether or not the result data is nullable.
- * @tparam T The underlying data type.
  */
 template <bool has_nulls>
 struct mutable_column_expression_result
@@ -217,10 +221,10 @@ struct mutable_column_expression_result
  *
  * This struct should never be instantiated directly. It is created by the
  * `ast_plan` on construction, and the resulting member is publicly accessible
- * for passing to kernels for constructing `expression_evaluators`.
+ * for passing to kernels for constructing an `expression_evaluator`.
  *
  */
-struct dev_ast_plan {
+struct device_ast_plan {
   device_span<const detail::device_data_reference> data_references;
   device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals;
   device_span<const ast_operator> operators;
@@ -263,22 +267,22 @@ struct ast_plan {
            rmm::mr::device_memory_resource* mr)
     : _linearizer(expr, left, right)
   {
-    std::vector<cudf::size_type> _sizes;
-    std::vector<const void*> _data_pointers;
+    std::vector<cudf::size_type> sizes;
+    std::vector<const void*> data_pointers;
 
-    extract_size_and_pointer(_linearizer.data_references(), _sizes, _data_pointers);
-    extract_size_and_pointer(_linearizer.literals(), _sizes, _data_pointers);
-    extract_size_and_pointer(_linearizer.operators(), _sizes, _data_pointers);
-    extract_size_and_pointer(_linearizer.operator_source_indices(), _sizes, _data_pointers);
+    extract_size_and_pointer(_linearizer.data_references(), sizes, data_pointers);
+    extract_size_and_pointer(_linearizer.literals(), sizes, data_pointers);
+    extract_size_and_pointer(_linearizer.operators(), sizes, data_pointers);
+    extract_size_and_pointer(_linearizer.operator_source_indices(), sizes, data_pointers);
 
     // Create device buffer
-    auto const buffer_size = std::accumulate(_sizes.cbegin(), _sizes.cend(), 0);
-    auto buffer_offsets    = std::vector<int>(_sizes.size());
-    thrust::exclusive_scan(_sizes.cbegin(), _sizes.cend(), buffer_offsets.begin(), 0);
+    auto const buffer_size = std::accumulate(sizes.cbegin(), sizes.cend(), 0);
+    auto buffer_offsets    = std::vector<int>(sizes.size());
+    thrust::exclusive_scan(sizes.cbegin(), sizes.cend(), buffer_offsets.begin(), 0);
 
     auto h_data_buffer = std::make_unique<char[]>(buffer_size);
-    for (unsigned int i = 0; i < _data_pointers.size(); ++i) {
-      std::memcpy(h_data_buffer.get() + buffer_offsets[i], _data_pointers[i], _sizes[i]);
+    for (unsigned int i = 0; i < data_pointers.size(); ++i) {
+      std::memcpy(h_data_buffer.get() + buffer_offsets[i], data_pointers[i], sizes[i]);
     }
 
     _device_data_buffer = rmm::device_buffer(h_data_buffer.get(), buffer_size, stream, mr);
@@ -311,23 +315,23 @@ struct ast_plan {
    * @brief Construct an AST plan for an expression operating on one table.
    *
    * @param expr The expression for which to construct a plan.
-   * @param left The left table on which the expression acts.
+   * @param table The table on which the expression acts.
    * @param has_nulls Boolean indicator of whether or not the data contains nulls.
    * @param stream Stream view on which to allocate resources and queue execution.
    * @param mr Device memory resource used to allocate the returned column's device.
    */
   ast_plan(detail::node const& expr,
-           cudf::table_view left,
+           cudf::table_view table,
            bool has_nulls,
            rmm::cuda_stream_view stream,
            rmm::mr::device_memory_resource* mr)
-    : ast_plan(expr, left, left, has_nulls, stream, mr)
+    : ast_plan(expr, table, table, has_nulls, stream, mr)
   {
   }
 
   cudf::data_type output_type() const { return _linearizer.root_data_type(); }
 
-  dev_ast_plan
+  device_ast_plan
     dev_plan;  ///< The collection of data required to evaluate the expression on the device.
 
  private:
@@ -335,16 +339,18 @@ struct ast_plan {
    * @brief Helper function for adding components (operators, literals, etc) to AST plan
    *
    * @tparam T  The underlying type of the input `std::vector`
-   * @param  v  The `std::vector` containing components (operators, literals, etc)
+   * @param[in]  v  The `std::vector` containing components (operators, literals, etc).
+   * @param[in,out]  sizes  The `std::vector` containing the size of each data buffer.
+   * @param[in,out]  data_pointers  The `std::vector` containing pointers to each data buffer.
    */
   template <typename T>
   void extract_size_and_pointer(std::vector<T> const& v,
-                                std::vector<cudf::size_type>& _sizes,
-                                std::vector<const void*>& _data_pointers)
+                                std::vector<cudf::size_type>& sizes,
+                                std::vector<const void*>& data_pointers)
   {
     auto const data_size = sizeof(T) * v.size();
-    _sizes.push_back(data_size);
-    _data_pointers.push_back(v.data());
+    sizes.push_back(data_size);
+    data_pointers.push_back(v.data());
   }
 
   rmm::device_buffer
@@ -366,21 +372,23 @@ struct expression_evaluator {
   /**
    * @brief Construct an expression evaluator acting on two tables.
    *
-   * @param left View on the left table view used for evaluation.
+   * @param left View of the left table view used for evaluation.
+   * @param right View of the right table view used for evaluation.
    * @param plan The collection of device references representing the expression to evaluate.
    * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
    * storing intermediates.
-   * @param left View on the right table view used for evaluation.
+   * @param compare_nulls Whether the equality operator returns true or false for two nulls.
+
    */
   __device__ expression_evaluator(table_device_view const& left,
                                   table_device_view const& right,
-                                  dev_ast_plan const& plan,
+                                  device_ast_plan const& plan,
                                   IntermediateDataType<has_nulls>* thread_intermediate_storage,
                                   null_equality compare_nulls = null_equality::EQUAL)
     : left(left),
+      right(right),
       plan(plan),
       thread_intermediate_storage(thread_intermediate_storage),
-      right(right),
       compare_nulls(compare_nulls)
   {
   }
@@ -388,17 +396,18 @@ struct expression_evaluator {
   /**
    * @brief Construct an expression evaluator acting on one table.
    *
-   * @param left View on the left table view used for evaluation.
+   * @param table View of the table view used for evaluation.
    * @param plan The collection of device references representing the expression to evaluate.
    * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
    * storing intermediates.
+   * @param compare_nulls Whether the equality operator returns true or false for two nulls.
    */
-  __device__ expression_evaluator(table_device_view const& left,
-                                  dev_ast_plan const& plan,
+  __device__ expression_evaluator(table_device_view const& table,
+                                  device_ast_plan const& plan,
                                   IntermediateDataType<has_nulls>* thread_intermediate_storage,
                                   null_equality compare_nulls = null_equality::EQUAL)
-    : left(left),
-      right(left),
+    : left(table),
+      right(table),
       plan(plan),
       thread_intermediate_storage(thread_intermediate_storage),
       compare_nulls(compare_nulls)
@@ -424,7 +433,7 @@ struct expression_evaluator {
   {
     auto const data_index = device_data_reference.data_index;
     auto const ref_type   = device_data_reference.reference_type;
-    // TODO: Everywhere in the code assumes that the tbale reference is either
+    // TODO: Everywhere in the code assumes that the table reference is either
     // left or right. Should we error-check somewhere to prevent
     // table_reference::OUTPUT from being specified?
     auto const& table = device_data_reference.table_source == table_reference::LEFT ? left : right;
@@ -731,9 +740,9 @@ struct expression_evaluator {
       using OperatorFunctor = detail::operator_functor<op>;
       using Out             = cuda::std::invoke_result_t<OperatorFunctor, Input>;
       if constexpr (has_nulls) {
-        auto result = input.has_value()
-                        ? possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*input))
-                        : possibly_null_value_t<Out, has_nulls>();
+        auto const result = input.has_value()
+                              ? possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*input))
+                              : possibly_null_value_t<Out, has_nulls>();
         this->template resolve_output<Out>(output_object, output, output_row_index, result);
       } else {
         this->template resolve_output<Out>(
@@ -758,7 +767,7 @@ struct expression_evaluator {
    * @brief Subclass of the expression output handler for binary operations.
    *
    * This functor's call operator is specialized to handle binary operations,
-   * which require a two operands.
+   * which require two operands.
    */
   template <typename LHS, typename RHS>
   struct binary_expression_output_handler : public expression_output_handler {
@@ -814,11 +823,11 @@ struct expression_evaluator {
                           ? possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*lhs, *rhs))
                           : possibly_null_value_t<Out, has_nulls>();
           this->template resolve_output<Out>(output_object, output, output_row_index, result);
-        }  // if constexpr (op == ast_operator::EQUAL) {
+        }
       } else {
         this->template resolve_output<Out>(
           output_object, output, output_row_index, OperatorFunctor{}(lhs, rhs));
-      }  // if constexpr (has_nulls) {
+      }
     }
 
     template <ast_operator op,
@@ -837,13 +846,13 @@ struct expression_evaluator {
 
   table_device_view const& left;   ///< The left table to operate on.
   table_device_view const& right;  ///< The right table to operate on.
-  dev_ast_plan const&
+  device_ast_plan const&
     plan;  ///< The container of device data representing the expression to evaluate.
   IntermediateDataType<has_nulls>*
     thread_intermediate_storage;  ///< The shared memory store of intermediates produced during
                                   ///< evaluation.
   null_equality
-    compare_nulls;  ///< Whether the equality operators returns true or false for two nulls.
+    compare_nulls;  ///< Whether the equality operator returns true or false for two nulls.
 };
 
 /**

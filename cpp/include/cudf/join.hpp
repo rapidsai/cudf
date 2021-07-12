@@ -673,11 +673,10 @@ class hash_join {
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
  *
- * @param[in] left_keys The left table
- * @param[in] right_keys The right table
- * @param[in] binary_predicate The condition on which to join.
- * @param[in] compare_nulls controls whether null join-key values
- * should match or not.
+ * @param left The left table
+ * @param right The right table
+ * @param binary_predicate The condition on which to join.
+ * @param compare_nulls Whether the equality operator returns true or false for two nulls.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -718,11 +717,10 @@ conditional_inner_join(
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
  *
- * @param[in] left_keys The left table
- * @param[in] right_keys The right table
- * @param[in] binary_predicate The condition on which to join.
- * @param[in] compare_nulls controls whether null join-key values
- * should match or not.
+ * @param left The left table
+ * @param right The right table
+ * @param binary_predicate The condition on which to join.
+ * @param compare_nulls Whether the equality operator returns true or false for two nulls.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -761,11 +759,10 @@ conditional_left_join(table_view left,
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
  *
- * @param[in] left_keys The left table
- * @param[in] right_keys The right table
- * @param[in] binary_predicate The condition on which to join.
- * @param[in] compare_nulls controls whether null join-key values
- * should match or not.
+ * @param left The left table
+ * @param right The right table
+ * @param binary_predicate The condition on which to join.
+ * @param compare_nulls Whether the equality operator returns true or false for two nulls.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -799,11 +796,10 @@ conditional_full_join(table_view left,
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
  *
- * @param[in] left_keys The left table
- * @param[in] right_keys The right table
- * @param[in] binary_predicate The condition on which to join.
- * @param[in] compare_nulls controls whether null join-key values
- * should match or not.
+ * @param left The left table
+ * @param right The right table
+ * @param binary_predicate The condition on which to join.
+ * @param compare_nulls Whether the equality operator returns true or false for two nulls.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A vector `left_indices` that can be used to construct the result of
@@ -837,11 +833,10 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
  *
- * @param[in] left_keys The left table
- * @param[in] right_keys The right table
- * @param[in] binary_predicate The condition on which to join.
- * @param[in] compare_nulls controls whether null join-key values
- * should match or not.
+ * @param left The left table
+ * @param right The right table
+ * @param binary_predicate The condition on which to join.
+ * @param compare_nulls Whether the equality operator returns true or false for two nulls.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A vector `left_indices` that can be used to construct the result of
