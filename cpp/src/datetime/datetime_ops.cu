@@ -128,6 +128,17 @@ struct extract_day_num_of_year {
   }
 };
 
+struct is_leap_year_op {
+  template <typename Timestamp>
+  CUDA_DEVICE_CALLABLE bool operator()(Timestamp const ts) const
+  {
+    using namespace cuda::std::chrono;
+    auto const days_since_epoch = floor<days>(ts);
+    auto const date             = year_month_day(days_since_epoch);
+    return date.year().is_leap();
+  }
+};
+
 // Apply the functor for every element/row in the input column to create the output column
 template <typename TransformFunctor, typename OutputColT>
 struct launch_functor {
@@ -363,23 +374,7 @@ std::unique_ptr<column> is_leap_year(column_view const& column,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(is_timestamp(column.type()), "Column type should be timestamp");
-
-  auto years      = detail::extract_year(column, stream);
-  auto years_view = years->view();
-
-  auto mask   = copy_bitmask(column.null_mask(), column.offset(), column.offset() + column.size());
-  auto result = make_fixed_width_column(
-    data_type{type_id::BOOL8}, column.size(), std::move(mask), column.null_count(), stream, mr);
-  auto m_view = result->mutable_view();
-  thrust::transform(
-    rmm::exec_policy(stream),
-    years_view.begin<int16_t>(),
-    years_view.end<int16_t>(),
-    m_view.begin<bool>(),
-    [] __device__(auto i_year) { return cuda::std::chrono::year(i_year).is_leap(); });
-
-  return result;
+  return apply_datetime_op<is_leap_year_op, type_id::BOOL8>(column, stream, mr);
 }
 
 }  // namespace detail
