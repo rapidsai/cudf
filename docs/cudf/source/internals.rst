@@ -54,10 +54,10 @@ As another example, the ``StringColumn`` backing the Series
 2. No mask buffer as there are no nulls in the Series
 3. Two children columns:
 
--  A column of 8-bit characters
-   ``['d', 'o', 'y', 'o', 'u', h' ... '?']``
--  A column of "offsets" to the characters column (in this case,
-   ``[0, 2, 5, 9, 12, 19]``)
+    -  A column of 8-bit characters
+       ``['d', 'o', 'y', 'o', 'u', h' ... '?']``
+    -  A column of "offsets" to the characters column (in this case,
+       ``[0, 2, 5, 9, 12, 19]``)
 
 Buffer
 ------

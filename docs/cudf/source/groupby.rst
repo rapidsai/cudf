@@ -201,8 +201,11 @@ Limitations
    Pandas behavior.
 
 -  cuDF does not support some of the exceptional cases that Pandas
-   supports with ``apply``, such as
-   ```describe`` <https://pandas.pydata.org/pandas-docs/stable/user_guide/groupby.html#flexible-apply>`__.
+   supports with ``apply``, such as calling |describe|_ inside the
+   callable.
+
+ .. |describe| replace:: ``describe``
+ .. _describe: https://pandas.pydata.org/pandas-docs/stable/user_guide/groupby.html#flexible-apply
 
 Rolling window calculations
 ---------------------------
