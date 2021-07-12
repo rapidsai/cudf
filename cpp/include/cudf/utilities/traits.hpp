@@ -84,7 +84,7 @@ struct has_common_type_impl : std::false_type {
 template <typename... Ts>
 struct has_common_type_impl<void_t<std::common_type_t<Ts...>>, Ts...> : std::true_type {
 };
-} // namespace detail
+}  // namespace detail
 
 template <typename... Ts>
 using has_common_type = typename detail::has_common_type_impl<void, Ts...>::type;
