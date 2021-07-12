@@ -214,8 +214,6 @@ fi
 ################################################################################
 # TEST - Run py.test, notebooks
 ################################################################################
-OUTPUT=$(cat /opt/conda/envs/rapids/include/libcudf/libcudacxx/cuda/std/detail/__config)
-gpuci_logger "${OUTPUT}"
 
 cd "$WORKSPACE/python/cudf"
 gpuci_logger "Python py.test for cuDF"
