@@ -49,21 +49,15 @@ enum string_character_types : uint32_t {
   ALL_TYPES  = ALPHANUM | CASE_TYPES | SPACE       /// all character types
 };
 
-// OR operators for combining types
-string_character_types operator|(string_character_types lhs, string_character_types rhs)
-{
-  return static_cast<string_character_types>(
-    static_cast<std::underlying_type_t<string_character_types>>(lhs) |
-    static_cast<std::underlying_type_t<string_character_types>>(rhs));
-}
+/**
+ * @brief OR operator for combining string_character_types
+ */
+string_character_types operator|(string_character_types lhs, string_character_types rhs);
 
-string_character_types& operator|=(string_character_types& lhs, string_character_types rhs)
-{
-  lhs = static_cast<string_character_types>(
-    static_cast<std::underlying_type_t<string_character_types>>(lhs) |
-    static_cast<std::underlying_type_t<string_character_types>>(rhs));
-  return lhs;
-}
+/**
+ * @brief Compound assignment OR operator for combining string_character_types
+ */
+string_character_types& operator|=(string_character_types& lhs, string_character_types rhs);
 
 /**
  * @brief Returns a boolean column identifying strings entries in which all

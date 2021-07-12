@@ -21,7 +21,7 @@ namespace detail {
 
 bool result_cache::has_result(size_t col_idx, aggregation const& agg) const
 {
-  if (col_idx < 0 or col_idx > _cache.size()) return false;
+  if (col_idx > _cache.size()) return false;
 
   auto result_it = _cache[col_idx].find(agg);
 
@@ -50,11 +50,8 @@ std::unique_ptr<column> result_cache::release_result(size_t col_idx, aggregation
 {
   CUDF_EXPECTS(has_result(col_idx, agg), "Result does not exist in cache");
 
-  // unordered_map.extract() is a c++17 feature so we do this:
-  auto result_it                 = _cache[col_idx].find(agg);
-  std::unique_ptr<column> result = std::move(result_it->second.second);
-  _cache[col_idx].erase(result_it);
-  return result;
+  auto result_it = _cache[col_idx].extract(agg);
+  return std::move(result_it.mapped().second);
 }
 
 }  // namespace detail

@@ -21,12 +21,10 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
-
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -117,7 +115,7 @@ std::unique_ptr<column> filter_characters(
   rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
   CUDF_EXPECTS(replacement.is_valid(), "Parameter replacement must be valid");
   cudf::string_view d_replacement(replacement.data(), replacement.size());
 
@@ -139,8 +137,7 @@ std::unique_ptr<column> filter_characters(
 
   // this utility calls the strip_fn to build the offsets and chars columns
   filter_fn ffn{*d_strings, keep_characters, table.begin(), table.end(), d_replacement};
-  auto children = cudf::strings::detail::make_strings_children(
-    ffn, strings.size(), strings.null_count(), stream, mr);
+  auto children = cudf::strings::detail::make_strings_children(ffn, strings.size(), stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(children.first),

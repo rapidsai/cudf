@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#include <nvtext/normalize.hpp>
 #include <text/subword/detail/data_normalizer.hpp>
 #include <text/utilities/tokenize_ops.cuh>
 
-#include <strings/utilities.cuh>
+#include <nvtext/normalize.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -29,6 +28,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -129,7 +129,6 @@ struct codepoint_to_utf8_fn {
       if (!d_chars) d_offsets[idx] = 0;
       return;
     }
-    auto const d_str  = d_strings.element<cudf::string_view>(idx);
     auto const offset = d_cp_offsets[idx];
     auto const count  = d_cp_offsets[idx + 1] - offset;  // number of code-points
     auto str_cps      = cp_data + offset;                // code-points for this string
@@ -180,7 +179,7 @@ std::unique_ptr<cudf::column> normalize_spaces(
 
   // build offsets and children using the normalize_space_fn
   auto children = cudf::strings::detail::make_strings_children(
-    normalize_spaces_fn{*d_strings}, strings.size(), strings.null_count(), stream, mr);
+    normalize_spaces_fn{*d_strings}, strings.size(), stream, mr);
 
   return cudf::make_strings_column(strings.size(),
                                    std::move(children.first),
@@ -225,11 +224,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
   // build offsets and children using the codepoint_to_utf8_fn
   auto children = cudf::strings::detail::make_strings_children(
-    codepoint_to_utf8_fn{*d_strings, cp_chars, cp_offsets},
-    strings.size(),
-    strings.null_count(),
-    stream,
-    mr);
+    codepoint_to_utf8_fn{*d_strings, cp_chars, cp_offsets}, strings.size(), stream, mr);
 
   return cudf::make_strings_column(strings.size(),
                                    std::move(children.first),

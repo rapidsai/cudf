@@ -7,12 +7,14 @@ import pandas as pd
 
 import cudf
 from cudf import _lib as libcudf
+from cudf.api.types import is_integer, is_number
 from cudf.core import column
 from cudf.core.column.column import as_column
 from cudf.utils import cudautils
+from cudf.utils.utils import GetAttrGetItemMixin
 
 
-class Rolling:
+class Rolling(GetAttrGetItemMixin):
     """
     Rolling window calculations.
 
@@ -154,6 +156,8 @@ class Rolling:
     dtype: float64
     """
 
+    _PROTECTED_KEYS = frozenset(("obj",))
+
     _time_window = False
 
     def __init__(
@@ -180,15 +184,6 @@ class Rolling:
                     "Only the default win_type 'boxcar' is currently supported"
                 )
         self.win_type = win_type
-
-    def __getattr__(self, key):
-        if key == "obj":
-            raise AttributeError()
-        return self.obj[key].rolling(
-            window=self.window,
-            min_periods=self.min_periods,
-            center=self.center,
-        )
 
     def __getitem__(self, arg):
         if isinstance(arg, tuple):
@@ -301,9 +296,9 @@ class Rolling:
           Only valid for datetime index.
         """
         window, min_periods = self.window, self.min_periods
-        if pd.api.types.is_number(window):
+        if is_number(window):
             # only allow integers
-            if not pd.api.types.is_integer(window):
+            if not is_integer(window):
                 raise ValueError("window must be an integer")
             if window <= 0:
                 raise ValueError("window cannot be zero or negative")
@@ -344,7 +339,7 @@ class Rolling:
         For non-fixed width windows,
         convert the window argument into window sizes.
         """
-        if pd.api.types.is_integer(window):
+        if is_integer(window):
             return window
         else:
             return cudautils.window_sizes_from_offset(
@@ -382,7 +377,7 @@ class RollingGroupby(Rolling):
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
     def _window_to_window_sizes(self, window):
-        if pd.api.types.is_integer(window):
+        if is_integer(window):
             return cudautils.grouped_window_sizes_from_offset(
                 column.arange(len(self.obj)).data_array_view,
                 self._group_starts,

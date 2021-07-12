@@ -18,9 +18,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -131,8 +131,8 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
   children.emplace_back(std::move(chars_column));
   return std::make_unique<column>(data_type{type_id::STRING},
                                   num_strings,
-                                  rmm::device_buffer{0, stream, mr},
-                                  null_mask,
+                                  rmm::device_buffer{},
+                                  std::move(null_mask),
                                   null_count,
                                   std::move(children));
 }

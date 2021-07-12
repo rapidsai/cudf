@@ -87,7 +87,7 @@ and then check the syntax of your Python and Cython code by running:
 
 ```bash
 flake8 python
-flake8 --config=python/cudf/.flake8.cython
+flake8 --config=python/.flake8.cython
 ```
 
 Additionally, many editors have plugins that will apply `isort` and `Black` as
@@ -133,7 +133,7 @@ Compiler requirements:
 
 * `gcc`     version 9.3+
 * `nvcc`    version 11.0+
-* `cmake`   version 3.18.0+
+* `cmake`   version 3.20.1+
 
 CUDA/GPU requirements:
 
@@ -160,7 +160,7 @@ git submodule update --init --remote --recursive
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
 # note: RAPIDS currently doesn't support `channel_priority: strict`; use `channel_priority: flexible` instead
-conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml
+conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda11.0.yml
 # activate the environment
 conda activate cudf_dev
 ```
@@ -257,17 +257,31 @@ When you have a debug build of `libcudf` installed, debugging with the `cuda-gdb
 
 If you are debugging a Python script, simply run the following:
 
-#### `cuda-gdb`
-
 ```bash
 cuda-gdb -ex r --args python <program_name>.py <program_arguments>
 ```
 
-#### `cuda-memcheck`
-
 ```bash
 cuda-memcheck python <program_name>.py <program_arguments>
 ```
+
+### Device debug symbols
+
+The device debug symbols are not automatically added with the cmake `Debug`
+build type because it causes a runtime delay of several minutes when loading
+the libcudf.so library.
+
+Therefore, it is recommended to add device debug symbols only to specific files by
+setting the `-G` compile option locally in your `cpp/CMakeLists.txt` for that file.
+Here is an example of adding the `-G` option to the compile command for
+`src/copying/copy.cu` source file:
+
+```
+set_source_files_properties(src/copying/copy.cu PROPERTIES COMPILE_OPTIONS "-G")
+```
+
+This will add the device debug symbols for this object file in libcudf.so.
+You can then use `cuda-dbg` to debug into the kernels in that source file.
 
 ### Building and Testing on a gpuCI image locally
 
@@ -281,8 +295,8 @@ A Dockerfile is provided with a preconfigured conda environment for building and
 ### Prerequisites
 
 * Install [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0)) for Docker + GPU support
-* Verify NVIDIA driver is `410.48` or higher
-* Ensure CUDA 10.0+ is installed
+* Verify NVIDIA driver is `450.80.02` or higher
+* Ensure CUDA 11.0+ is installed
 
 ### Usage
 
@@ -309,16 +323,16 @@ flag. Below is a list of the available arguments and their purpose:
 
 | Build Argument | Default Value | Other Value(s) | Purpose |
 | --- | --- | --- | --- |
-| `CUDA_VERSION` | 10.0 | 10.1, 10.2 | set CUDA version |
-| `LINUX_VERSION` | ubuntu16.04 | ubuntu18.04 | set Ubuntu version |
-| `CC` & `CXX` | 5 | 7 | set gcc/g++ version; **NOTE:** gcc7 requires Ubuntu 18.04 |
+| `CUDA_VERSION` | 11.0 | 11.2.2 | set CUDA version |
+| `LINUX_VERSION` | ubuntu18.04 | ubuntu20.04 | set Ubuntu version |
+| `CC` & `CXX` | 9 | 10 | set gcc/g++ version |
 | `CUDF_REPO` | This repo | Forks of cuDF | set git URL to use for `git clone` |
 | `CUDF_BRANCH` | main | Any branch name | set git branch to checkout of `CUDF_REPO` |
 | `NUMBA_VERSION` | newest | >=0.40.0 | set numba version |
 | `NUMPY_VERSION` | newest | >=1.14.3 | set numpy version |
 | `PANDAS_VERSION` | newest | >=0.23.4 | set pandas version |
 | `PYARROW_VERSION` | 1.0.1 | Not supported | set pyarrow version |
-| `CMAKE_VERSION` | newest | >=3.14 | set cmake version |
+| `CMAKE_VERSION` | newest | >=3.18 | set cmake version |
 | `CYTHON_VERSION` | 0.29 | Not supported | set Cython version |
 | `PYTHON_VERSION` | 3.7 | 3.8 | set python version |
 

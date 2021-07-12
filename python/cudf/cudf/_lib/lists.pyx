@@ -16,6 +16,12 @@ from cudf._lib.cpp.lists.drop_list_duplicates cimport (
 from cudf._lib.cpp.lists.sorting cimport (
     sort_lists as cpp_sort_lists
 )
+from cudf._lib.cpp.lists.combine cimport (
+    concatenate_rows as cpp_concatenate_rows,
+    concatenate_null_policy,
+    concatenate_list_elements as cpp_concatenate_list_elements
+)
+
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
@@ -28,6 +34,7 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport (
     size_type,
     null_equality,
+    null_policy,
     order,
     null_order,
     nan_equality
@@ -163,3 +170,34 @@ def contains_scalar(Column col, object py_search_key):
         ))
     result = Column.from_unique_ptr(move(c_result))
     return result
+
+
+def concatenate_rows(Table tbl):
+    cdef unique_ptr[column] c_result
+
+    cdef table_view c_table_view = tbl.view()
+
+    with nogil:
+        c_result = move(cpp_concatenate_rows(
+            c_table_view,
+        ))
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result
+
+
+def concatenate_list_elements(Column input_column, dropna=False):
+    cdef concatenate_null_policy policy = (
+        concatenate_null_policy.IGNORE if dropna
+        else concatenate_null_policy.NULLIFY_OUTPUT_ROW
+    )
+    cdef column_view c_input = input_column.view()
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(cpp_concatenate_list_elements(
+            c_input,
+            policy
+        ))
+
+    return Column.from_unique_ptr(move(c_result))

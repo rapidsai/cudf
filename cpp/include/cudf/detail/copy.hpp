@@ -89,6 +89,47 @@ std::unique_ptr<column> shift(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Performs segmented shifts for specified values.
+ *
+ * For each segment, `i`th element is determined by the `i - offset`th element
+ * of the segment. If `i - offset < 0 or >= segment_size`, the value is determined by
+ * @p fill_value.
+ *
+ * Example:
+ * @code{.pseudo}
+ * segmented_values: { 3 1 2 | 3 5 3 | 2 6 }
+ * segment_offsets: {0 3 6 8}
+ * offset: 2
+ * fill_value: @
+ * result: { @ @ 3 | @ @ 3 | @ @ }
+ * -------------------------------------------------
+ * segmented_values: { 3 1 2 | 3 5 3 | 2 6 }
+ * segment_offsets: {0 3 6 8}
+ * offset: -1
+ * fill_value: -1
+ * result: { 1 2 -1 | 5 3 -1 | 6 -1 }
+ * @endcode
+ *
+ * @param segmented_values Segmented column, specified by @p segment_offsets
+ * @param segment_offsets Each segment's offset of @p segmented_values. A list of offsets
+ * with size `num_segments + 1`. The size of each segment is `segment_offsets[i+1] -
+ * segment_offsets[i]`.
+ * @param offset The offset by which to shift the input
+ * @param fill_value Fill value for indeterminable outputs
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
+ *
+ * @note If `offset == 0`, a copy of @p segmented_values is returned.
+ */
+std::unique_ptr<column> segmented_shift(
+  column_view const& segmented_values,
+  device_span<size_type const> segment_offsets,
+  size_type offset,
+  scalar const& fill_value,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @copydoc cudf::contiguous_split
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -191,9 +232,10 @@ std::unique_ptr<table> sample(
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<scalar> get_element(column_view const& input,
-                                    size_type index,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr);
+std::unique_ptr<scalar> get_element(
+  column_view const& input,
+  size_type index,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 }  // namespace cudf

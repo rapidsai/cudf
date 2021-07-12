@@ -53,7 +53,7 @@ inline __device__ std::size_t _round_up_safe(std::size_t number_to_round, std::s
  * The definition of "buffer" used throughout this module is a component piece of a
  * cudf column. So for example, a fixed-width column with validity would have 2 associated
  * buffers : the data itself and the validity buffer.  contiguous_split operates by breaking
- * each column up into it's individual components and copying each one as a seperate kernel
+ * each column up into it's individual components and copying each one as a separate kernel
  * block.
  */
 struct src_buf_info {
@@ -188,7 +188,7 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
     }
 
     // if we're performing a value shift (offsets), or a bit shift (validity) the # of bytes and
-    // alignment must be a multiple of 4. value shifting and bit shifting are mututally exclusive
+    // alignment must be a multiple of 4. value shifting and bit shifting are mutually exclusive
     // and will never both be true at the same time.
     if (value_shift || bit_shift) {
       std::size_t idx = (num_bytes - remainder) / 4;
@@ -248,14 +248,12 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  * the actual copy.
  *
  * @param num_src_bufs Total number of source buffers (N)
- * @param num_partitions Number of partitions the each source buffer is split into (M)
  * @param src_bufs Input source buffers (N)
- * @param dst_bufs Desination buffers (N*M)
+ * @param dst_bufs Destination buffers (N*M)
  * @param buf_info Information on the range of values to be copied for each destination buffer.
  */
 template <int block_size>
 __global__ void copy_partition(int num_src_bufs,
-                               int num_partitions,
                                uint8_t** src_bufs,
                                uint8_t** dst_bufs,
                                dst_buf_info* buf_info)
@@ -447,6 +445,13 @@ struct buf_info_functor {
     return {current + 1, offset_stack_pos + offset_depth};
   }
 
+  template <typename T, typename... Args>
+  std::enable_if_t<std::is_same<T, cudf::dictionary32>::value, std::pair<src_buf_info*, size_type>>
+  operator()(Args&&...)
+  {
+    CUDF_FAIL("Unsupported type");
+  }
+
  private:
   std::pair<src_buf_info*, size_type> add_null_buffer(column_view const& col,
                                                       src_buf_info* current,
@@ -597,17 +602,6 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
                                offset_stack_pos,
                                parent_offset_index,
                                offset_depth);
-}
-
-template <>
-std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::dictionary32>(
-  column_view const& col,
-  src_buf_info* current,
-  int offset_stack_pos,
-  int parent_offset_index,
-  int offset_depth)
-{
-  CUDF_FAIL("Unsupported type");
 }
 
 template <typename InputIter>
@@ -892,13 +886,15 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
       size_type* offset_stack  = &d_offset_stack[stack_pos];
       int parent_offsets_index = src_info.parent_offsets_index;
       int stack_size           = 0;
+      int root_column_offset   = src_info.column_offset;
       while (parent_offsets_index >= 0) {
         offset_stack[stack_size++] = parent_offsets_index;
+        root_column_offset         = d_src_buf_info[parent_offsets_index].column_offset;
         parent_offsets_index       = d_src_buf_info[parent_offsets_index].parent_offsets_index;
       }
-      // make sure to include the -column- offset in our calculations
-      int row_start = d_indices[split_index] + src_info.column_offset;
-      int row_end   = d_indices[split_index + 1] + src_info.column_offset;
+      // make sure to include the -column- offset on the root column in our calculation.
+      int row_start = d_indices[split_index] + root_column_offset;
+      int row_end   = d_indices[split_index + 1] + root_column_offset;
       while (stack_size > 0) {
         stack_size--;
         auto const offsets = d_src_buf_info[offset_stack[stack_size]].offsets;
@@ -929,6 +925,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
       int const element_size = cudf::type_dispatcher(data_type{src_info.type}, size_of_helper{});
       std::size_t const bytes =
         static_cast<std::size_t>(num_elements) * static_cast<std::size_t>(element_size);
+
       return dst_buf_info{_round_up_safe(bytes, 64),
                           num_elements,
                           element_size,
@@ -1021,9 +1018,9 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
   // copy.  1 block per buffer
   {
-    constexpr size_type block_size = 512;
+    constexpr size_type block_size = 256;
     copy_partition<block_size><<<num_bufs, block_size, 0, stream.value()>>>(
-      num_src_bufs, num_partitions, d_src_bufs, d_dst_bufs, d_dst_buf_info);
+      num_src_bufs, d_src_bufs, d_dst_bufs, d_dst_buf_info);
   }
 
   // DtoH dst info (to retrieve null counts)

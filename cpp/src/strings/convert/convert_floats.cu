@@ -20,13 +20,13 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -124,8 +124,7 @@ __device__ inline double stod(string_view const& d_str)
   else if (exp_ten < std::numeric_limits<double>::min_exponent10)
     return double{0};
 
-  // using exp10() since the pow(10.0,exp_ten) function is
-  // very inaccurate in 10.2: http://nvbugs/2971187
+  // exp10() is faster than pow(10.0,exp_ten)
   double const base =
     sign * static_cast<double>(digits) * exp10(static_cast<double>(1 - num_digits));
   double const exponent = exp10(static_cast<double>(exp_ten));
@@ -235,7 +234,7 @@ struct ftos_converter {
   static constexpr double upper_limit = 1000000000;  // max is 1x10^9
   static constexpr double lower_limit = 0.0001;      // printf uses scientific notation below this
   // Tables for doing normalization: converting to exponent form
-  // IEEE double float has maximum exponent of 305 so these should cover everthing
+  // IEEE double float has maximum exponent of 305 so these should cover everything
   const double upper10[9]  = {10, 100, 10000, 1e8, 1e16, 1e32, 1e64, 1e128, 1e256};
   const double lower10[9]  = {.1, .01, .0001, 1e-8, 1e-16, 1e-32, 1e-64, 1e-128, 1e-256};
   const double blower10[9] = {1.0, .1, .001, 1e-7, 1e-15, 1e-31, 1e-63, 1e-127, 1e-255};
@@ -253,7 +252,8 @@ struct ftos_converter {
       *ptr++ = (char)('0' + (value % 10));
       value /= 10;
     }
-    while (ptr != buffer) *output++ = *--ptr;  // 54321 -> 12345
+    while (ptr != buffer)
+      *output++ = *--ptr;  // 54321 -> 12345
     return output;
   }
 
@@ -492,11 +492,10 @@ struct dispatch_from_floats_fn {
     auto d_offsets    = offsets_view.template data<int32_t>();
 
     // build chars column
-    size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-    auto chars_column =
-      detail::create_chars_child_column(strings_count, floats.null_count(), bytes, stream, mr);
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars    = chars_view.template data<char>();
+    auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
+    auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
+    auto chars_view   = chars_column->mutable_view();
+    auto d_chars      = chars_view.template data<char>();
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
@@ -529,7 +528,7 @@ std::unique_ptr<column> from_floats(column_view const& floats,
                                     rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = floats.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   return type_dispatcher(floats.type(), dispatch_from_floats_fn{}, floats, stream, mr);
 }

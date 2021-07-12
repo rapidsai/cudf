@@ -7,10 +7,11 @@ import pytest
 import dask
 from dask import dataframe as dd
 
-import dask_cudf
-
 import cudf
 from cudf.core._compat import PANDAS_GE_120
+
+import dask_cudf
+from dask_cudf.groupby import _is_supported
 
 
 @pytest.mark.parametrize("aggregation", ["sum", "mean", "count", "min", "max"])
@@ -47,10 +48,7 @@ def test_groupby_basic_aggs(aggregation):
     "func",
     [
         lambda df: df.groupby("x").agg({"y": "max"}),
-        pytest.param(
-            lambda df: df.groupby("x").y.agg(["sum", "max"]),
-            marks=pytest.mark.skip,
-        ),
+        lambda df: df.groupby("x").y.agg(["sum", "max"]),
     ],
 )
 def test_groupby_agg(func):
@@ -97,7 +95,6 @@ def test_groupby_agg_empty_partition(tmpdir, split_out):
     dd.assert_eq(gb.compute().sort_index(), expect)
 
 
-@pytest.mark.xfail(reason="cudf issues")
 @pytest.mark.parametrize(
     "func",
     [lambda df: df.groupby("x").std(), lambda df: df.groupby("x").y.std()],
@@ -114,12 +111,33 @@ def test_groupby_std(func):
 
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
-    a = func(gdf.to_pandas())
+    a = func(gdf).to_pandas()
     b = func(ddf).compute().to_pandas()
 
-    a.index.name = None
-    a.name = None
-    b.index.name = None
+    dd.assert_eq(a, b)
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df: df.groupby("x").agg({"y": "collect"}),
+        lambda df: df.groupby("x").y.agg("collect"),
+    ],
+)
+def test_groupby_collect(func):
+    pdf = pd.DataFrame(
+        {
+            "x": np.random.randint(0, 5, size=10000),
+            "y": np.random.normal(size=10000),
+        }
+    )
+
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
+
+    a = func(gdf).to_pandas()
+    b = func(ddf).compute().to_pandas()
 
     dd.assert_eq(a, b)
 
@@ -533,3 +551,32 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     )
 
     dd.assert_eq(gf, pf)
+
+
+@pytest.mark.parametrize(
+    "aggregations", [(sum, "sum"), (max, "max"), (min, "min")]
+)
+def test_groupby_agg_redirect(aggregations):
+    pdf = pd.DataFrame(
+        {
+            "x": np.random.randint(0, 5, size=10000),
+            "y": np.random.normal(size=10000),
+        }
+    )
+
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
+
+    a = ddf.groupby("x").agg({"x": aggregations[0]}).compute()
+    b = ddf.groupby("x").agg({"x": aggregations[1]}).compute()
+
+    dd.assert_eq(a, b)
+
+
+@pytest.mark.parametrize(
+    "arg",
+    [["not_supported"], {"a": "not_supported"}, {"a": ["not_supported"]}],
+)
+def test_is_supported(arg):
+    assert _is_supported(arg, {"supported"}) is False

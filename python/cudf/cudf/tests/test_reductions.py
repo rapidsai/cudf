@@ -2,20 +2,19 @@
 
 from __future__ import division, print_function
 
-import random
 import re
+from decimal import Decimal
 from itertools import product
 
 import numpy as np
 import pandas as pd
 import pytest
-from decimal import Decimal
 
 import cudf
 from cudf.core import Series
 from cudf.core.dtypes import Decimal64Dtype
-from cudf.tests import utils
-from cudf.tests.utils import NUMERIC_TYPES, gen_rand, assert_eq
+from cudf.testing import _utils as utils
+from cudf.testing._utils import NUMERIC_TYPES, assert_eq, gen_rand
 
 params_dtype = NUMERIC_TYPES
 
@@ -69,12 +68,15 @@ def test_sum_decimal(dtype, nelem):
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_product(dtype, nelem):
+    np.random.seed(0)
     dtype = np.dtype(dtype).type
     if np.dtype(dtype).kind in {"u", "i"}:
         data = np.ones(nelem, dtype=dtype)
         # Set at most 30 items to [0..2) to keep the value within 2^32
         for _ in range(30):
-            data[random.randrange(nelem)] = random.random() * 2
+            data[np.random.randint(low=0, high=nelem, size=1)] = (
+                np.random.uniform() * 2
+            )
     else:
         data = gen_rand(dtype, nelem)
 

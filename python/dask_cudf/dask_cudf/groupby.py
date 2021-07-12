@@ -60,8 +60,18 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
+        arg = _redirect_aggs(arg)
 
-        _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
+        _supported = {
+            "count",
+            "mean",
+            "std",
+            "var",
+            "sum",
+            "min",
+            "max",
+            "collect",
+        }
         if (
             isinstance(self.obj, DaskDataFrame)
             and isinstance(self.index, (str, list))
@@ -106,8 +116,18 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
+        arg = _redirect_aggs(arg)
 
-        _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
+        _supported = {
+            "count",
+            "mean",
+            "std",
+            "var",
+            "sum",
+            "min",
+            "max",
+            "collect",
+        }
         if (
             isinstance(self.obj, DaskDataFrame)
             and isinstance(self.index, (str, list))
@@ -123,7 +143,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
                 sep=self.sep,
                 sort=self.sort,
                 as_index=self.as_index,
-            )
+            )[self._slice]
 
         return super().aggregate(
             arg, split_every=split_every, split_out=split_out
@@ -145,7 +165,7 @@ def groupby_agg(
 
         This aggregation algorithm only supports the following options:
 
-        {"count", "mean", "std", "var", "sum", "min", "max"}
+        {"count", "mean", "std", "var", "sum", "min", "max", "collect"}
 
         This "optimized" approach is more performant than the algorithm
         in `dask.dataframe`, because it allows the cudf backend to
@@ -159,7 +179,7 @@ def groupby_agg(
     split_out = split_out or 1
 
     # Standardize `gb_cols` and `columns` lists
-    aggs = aggs_in.copy()
+    aggs = _redirect_aggs(aggs_in.copy())
     if isinstance(gb_cols, str):
         gb_cols = [gb_cols]
     columns = [c for c in ddf.columns if c not in gb_cols]
@@ -171,7 +191,7 @@ def groupby_agg(
         # strings (no lists)
         str_cols_out = True
         for col in aggs:
-            if isinstance(aggs[col], str):
+            if isinstance(aggs[col], str) or callable(aggs[col]):
                 aggs[col] = [aggs[col]]
             else:
                 str_cols_out = False
@@ -179,7 +199,16 @@ def groupby_agg(
                 columns.append(col)
 
     # Assert that aggregations are supported
-    _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
+    _supported = {
+        "count",
+        "mean",
+        "std",
+        "var",
+        "sum",
+        "min",
+        "max",
+        "collect",
+    }
     if not _is_supported(aggs, _supported):
         raise ValueError(
             f"Supported aggs include {_supported} for groupby_agg API. "
@@ -277,15 +306,38 @@ def groupby_agg(
     return new_dd_object(graph, gb_agg_name, _meta, divisions)
 
 
+def _redirect_aggs(arg):
+    """ Redirect aggregations to their corresponding name in cuDF
+    """
+    redirects = {
+        sum: "sum",
+        max: "max",
+        min: "min",
+        list: "collect",
+        "list": "collect",
+    }
+    if isinstance(arg, dict):
+        new_arg = dict()
+        for col in arg:
+            if isinstance(arg[col], list):
+                new_arg[col] = [redirects.get(agg, agg) for agg in arg[col]]
+            else:
+                new_arg[col] = redirects.get(arg[col], arg[col])
+        return new_arg
+    if isinstance(arg, list):
+        return [redirects.get(agg, agg) for agg in arg]
+    return redirects.get(arg, arg)
+
+
 def _is_supported(arg, supported: set):
-    """ Check that aggregations in `args` is a subset of `supportd`
+    """ Check that aggregations in `arg` are a subset of `supported`
     """
     if isinstance(arg, (list, dict)):
         if isinstance(arg, dict):
             _global_set = set()
             for col in arg:
                 if isinstance(arg[col], list):
-                    _global_set.union(set(arg[col]))
+                    _global_set = _global_set.union(set(arg[col]))
                 else:
                     _global_set.add(arg[col])
         else:
@@ -381,6 +433,8 @@ def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
             agg_dict[col] = ["sum"]
         elif agg in ("min", "max"):
             agg_dict[col] = [agg]
+        elif agg == "collect":
+            agg_dict[col] = ["collect"]
         else:
             raise ValueError(f"Unexpected aggregation: {agg}")
 
@@ -459,6 +513,9 @@ def _finalize_gb_agg(
                 gb.drop(columns=[sum_name], inplace=True)
             if "count" not in agg_list:
                 gb.drop(columns=[count_name], inplace=True)
+        if "collect" in agg_list:
+            collect_name = _make_name(col, "collect", sep=sep)
+            gb[collect_name] = gb[collect_name].list.concat()
 
     # Ensure sorted keys if `sort=True`
     if sort:

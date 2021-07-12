@@ -18,6 +18,7 @@
 #include "random_distribution_factory.hpp"
 
 #include <cudf/column/column.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/bit.hpp>
 
@@ -26,7 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <future>
 #include <memory>
@@ -52,7 +53,7 @@ T get_distribution_mean(distribution_params<T> const& dist)
       auto const range_size = dist.lower_bound < dist.upper_bound
                                 ? dist.upper_bound - dist.lower_bound
                                 : dist.lower_bound - dist.upper_bound;
-      auto const p = geometric_dist_p(range_size);
+      auto const p          = geometric_dist_p(range_size);
       if (dist.lower_bound < dist.upper_bound)
         return dist.lower_bound + (1. / p);
       else
@@ -107,7 +108,8 @@ size_t avg_element_bytes(data_profile const& profile, cudf::type_id tid)
 /**
  * @brief Functor that computes a random column element with the given data profile.
  *
- * The implementation is SFINAEd for diffent type groups. Currently only used for fixed-width types.
+ * The implementation is SFINAEd for different type groups. Currently only used for fixed-width
+ * types.
  */
 template <typename T, typename Enable = void>
 struct random_value_fn;
@@ -413,9 +415,9 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
     }
   }
 
-  rmm::device_vector<char> d_chars(out_col.chars);
-  rmm::device_vector<cudf::size_type> d_offsets(out_col.offsets);
-  rmm::device_vector<cudf::bitmask_type> d_null_mask(out_col.null_mask);
+  auto d_chars     = cudf::detail::make_device_uvector_sync(out_col.chars);
+  auto d_offsets   = cudf::detail::make_device_uvector_sync(out_col.offsets);
+  auto d_null_mask = cudf::detail::make_device_uvector_sync(out_col.null_mask);
   return cudf::make_strings_column(d_chars, d_offsets, d_null_mask);
 }
 

@@ -50,7 +50,7 @@ struct null_replacing_transformer {
   }
 
   template <typename ElementType>
-  CUDA_HOST_DEVICE_CALLABLE type operator()(thrust::pair<ElementType, bool> const &pair_value)
+  CUDA_HOST_DEVICE_CALLABLE type operator()(thrust::pair<ElementType, bool> const& pair_value)
   {
     if (pair_value.second)
       return f(pair_value.first);
@@ -83,7 +83,7 @@ struct meanvar {
   using this_t = cudf::meanvar<ElementType>;
 
   CUDA_HOST_DEVICE_CALLABLE
-  this_t operator+(this_t const &rhs) const
+  this_t operator+(this_t const& rhs) const
   {
     return this_t((this->value + rhs.value),
                   (this->value_squared + rhs.value_squared),
@@ -91,7 +91,7 @@ struct meanvar {
   };
 
   CUDA_HOST_DEVICE_CALLABLE
-  bool operator==(this_t const &rhs) const
+  bool operator==(this_t const& rhs) const
   {
     return ((this->value == rhs.value) && (this->value_squared == rhs.value_squared) &&
             (this->count == rhs.count));
@@ -114,7 +114,7 @@ struct meanvar {
 template <typename ElementType>
 struct transformer_squared {
   CUDA_HOST_DEVICE_CALLABLE
-  ElementType operator()(ElementType const &value) { return (value * value); };
+  ElementType operator()(ElementType const& value) { return (value * value); };
 };
 
 /**
@@ -131,7 +131,7 @@ struct transformer_meanvar {
   using ResultType = meanvar<ElementType>;
 
   CUDA_HOST_DEVICE_CALLABLE
-  ResultType operator()(thrust::pair<ElementType, bool> const &pair)
+  ResultType operator()(thrust::pair<ElementType, bool> const& pair)
   {
     ElementType v = pair.first;
     return meanvar<ElementType>(v, v * v, (pair.second) ? 1 : 0);

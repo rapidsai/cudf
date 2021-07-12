@@ -2,21 +2,28 @@
 
 from __future__ import annotations
 
+import builtins
 import datetime as dt
 import re
 from numbers import Number
-from typing import Any, Sequence, Union, cast
+from types import SimpleNamespace
+from typing import Any, Mapping, Sequence, Union, cast
 
 import numpy as np
 import pandas as pd
-from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, column, string
+from cudf.core.column import (
+    ColumnBase,
+    as_column,
+    column,
+    column_empty_like,
+    string,
+)
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import _fillna_natwise
 
@@ -126,21 +133,26 @@ class DatetimeColumn(column.ColumnBase):
     def weekday(self) -> ColumnBase:
         return self.get_dt_field("weekday")
 
+    @property
+    def dayofyear(self) -> ColumnBase:
+        return self.get_dt_field("day_of_year")
+
+    @property
+    def day_of_year(self) -> ColumnBase:
+        return self.get_dt_field("day_of_year")
+
     def to_pandas(
-        self, index: "cudf.Index" = None, nullable: bool = False, **kwargs
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "cudf.Series":
         # Workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
         # Pandas supports only `datetime64[ns]`, hence the cast.
-        pd_series = pd.Series(
-            self.astype("datetime64[ns]").to_array("NAT"), copy=False
+        return pd.Series(
+            self.astype("datetime64[ns]").to_array("NAT"),
+            copy=False,
+            index=index,
         )
-
-        if index is not None:
-            pd_series.index = index
-
-        return pd_series
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
@@ -196,6 +208,33 @@ class DatetimeColumn(column.ColumnBase):
             ),
         )
 
+    @property
+    def __cuda_array_interface__(self) -> Mapping[builtins.str, Any]:
+        output = {
+            "shape": (len(self),),
+            "strides": (self.dtype.itemsize,),
+            "typestr": self.dtype.str,
+            "data": (self.data_ptr, False),
+            "version": 1,
+        }
+
+        if self.nullable and self.has_nulls:
+
+            # Create a simple Python object that exposes the
+            # `__cuda_array_interface__` attribute here since we need to modify
+            # some of the attributes from the numba device array
+            mask = SimpleNamespace(
+                __cuda_array_interface__={
+                    "shape": (len(self),),
+                    "typestr": "<t1",
+                    "data": (self.mask_ptr, True),
+                    "version": 1,
+                }
+            )
+            output["mask"] = mask
+
+        return output
+
     def as_datetime_column(self, dtype: Dtype, **kwargs) -> DatetimeColumn:
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
@@ -210,14 +249,14 @@ class DatetimeColumn(column.ColumnBase):
         )
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         return cast(
             "cudf.core.column.NumericalColumn", self.as_numerical.astype(dtype)
         )
 
     def as_string_column(
-        self, dtype: Dtype, format=None
+        self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
         if format is None:
             format = _dtype_to_format_conversion.get(
@@ -274,8 +313,8 @@ class DatetimeColumn(column.ColumnBase):
         reflect: bool = False,
     ) -> ColumnBase:
         if isinstance(rhs, cudf.DateOffset):
-            return binop_offset(self, rhs, op)
-        lhs, rhs = self, rhs
+            return rhs._datetime_binop(self, op, reflect=reflect)
+        lhs: Union[ScalarLike, ColumnBase] = self
         if op in ("eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"):
             out_dtype = np.dtype(np.bool_)  # type: Dtype
         elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
@@ -300,13 +339,16 @@ class DatetimeColumn(column.ColumnBase):
                 f"Series of dtype {self.dtype} cannot perform "
                 f" the operation {op}"
             )
-        return binop(lhs, rhs, op=op, out_dtype=out_dtype, reflect=reflect)
+
+        if reflect:
+            lhs, rhs = rhs, lhs
+        return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def fillna(
         self, fill_value: Any = None, method: str = None, dtype: Dtype = None
     ) -> DatetimeColumn:
         if fill_value is not None:
-            if cudf.utils.utils.isnat(fill_value):
+            if cudf.utils.utils._isnat(fill_value):
                 return _fillna_natwise(self)
             if is_scalar(fill_value):
                 if not isinstance(fill_value, cudf.Scalar):
@@ -372,19 +414,22 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return False
 
-
-@annotate("BINARY_OP", color="orange", domain="cudf_python")
-def binop(
-    lhs: Union[ColumnBase, ScalarLike],
-    rhs: Union[ColumnBase, ScalarLike],
-    op: str,
-    out_dtype: Dtype,
-    reflect: bool,
-) -> ColumnBase:
-    if reflect:
-        lhs, rhs = rhs, lhs
-    out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-    return out
+    def _make_copy_with_na_as_null(self):
+        """Return a copy with NaN values replaced with nulls."""
+        null = column_empty_like(self, masked=True, newsize=1)
+        out_col = cudf._lib.replace.replace(
+            self,
+            as_column(
+                Buffer(
+                    np.array([self.default_na_value()], dtype=self.dtype).view(
+                        "|u1"
+                    )
+                ),
+                dtype=self.dtype,
+            ),
+            null,
+        )
+        return out_col
 
 
 def binop_offset(lhs, rhs, op):

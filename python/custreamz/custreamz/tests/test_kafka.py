@@ -2,7 +2,7 @@
 import confluent_kafka as ck
 import pytest
 
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize("commit_offset", [-1, 0, 1, 1000])

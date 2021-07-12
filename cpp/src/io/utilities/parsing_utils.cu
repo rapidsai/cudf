@@ -1,12 +1,10 @@
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/device_vector.h>
 #include <thrust/pair.h>
 
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_vector.hpp>
-
-#include <cudf/io/types.hpp>
 
 #include <algorithm>
 
@@ -32,7 +30,7 @@ constexpr T divCeil(T dividend, T divisor) noexcept
  * @brief Sets the specified element of the array to the passed value
  */
 template <class T, class V>
-__device__ __forceinline__ void setElement(T* array, cudf::size_type idx, const T& t, const V& v)
+__device__ __forceinline__ void setElement(T* array, cudf::size_type idx, const T& t, const V&)
 {
   array[idx] = t;
 }
@@ -55,7 +53,7 @@ __device__ __forceinline__ void setElement(thrust::pair<T, V>* array,
  * Does not do anything, indexing is not allowed with void* arrays.
  */
 template <class T, class V>
-__device__ __forceinline__ void setElement(void* array, cudf::size_type idx, const T& t, const V& v)
+__device__ __forceinline__ void setElement(void*, cudf::size_type, const T&, const V&)
 {
 }
 
@@ -105,7 +103,8 @@ template <class T>
 cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
                                   const std::vector<char>& keys,
                                   uint64_t result_offset,
-                                  T* positions)
+                                  T* positions,
+                                  rmm::cuda_stream_view stream)
 {
   int block_size    = 0;  // suggested thread count to use
   int min_grid_size = 0;  // minimum block count required
@@ -113,17 +112,18 @@ cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, count_and_set_positions<T>));
   const int grid_size = divCeil(d_data.size(), (size_t)block_size);
 
-  rmm::device_vector<cudf::size_type> d_count(1, 0);
+  auto d_count = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(1, stream);
   for (char key : keys) {
-    count_and_set_positions<T><<<grid_size, block_size>>>(static_cast<const char*>(d_data.data()),
-                                                          d_data.size(),
-                                                          result_offset,
-                                                          key,
-                                                          d_count.data().get(),
-                                                          positions);
+    count_and_set_positions<T>
+      <<<grid_size, block_size, 0, stream.value()>>>(static_cast<const char*>(d_data.data()),
+                                                     d_data.size(),
+                                                     result_offset,
+                                                     key,
+                                                     d_count.data(),
+                                                     positions);
   }
 
-  return d_count[0];
+  return cudf::detail::make_std_vector_sync(d_count, stream)[0];
 }
 
 template <class T>
@@ -131,10 +131,11 @@ cudf::size_type find_all_from_set(const char* h_data,
                                   size_t h_size,
                                   const std::vector<char>& keys,
                                   uint64_t result_offset,
-                                  T* positions)
+                                  T* positions,
+                                  rmm::cuda_stream_view stream)
 {
-  rmm::device_buffer d_chunk(std::min(max_chunk_bytes, h_size));
-  rmm::device_vector<cudf::size_type> d_count(1, 0);
+  rmm::device_buffer d_chunk(std::min(max_chunk_bytes, h_size), stream);
+  auto d_count = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(1, stream);
 
   int block_size    = 0;  // suggested thread count to use
   int min_grid_size = 0;  // minimum block count required
@@ -150,51 +151,62 @@ cudf::size_type find_all_from_set(const char* h_data,
     const int grid_size     = divCeil(chunk_bits, block_size);
 
     // Copy chunk to device
-    CUDA_TRY(cudaMemcpyAsync(d_chunk.data(), h_chunk, chunk_bytes, cudaMemcpyDefault));
+    CUDA_TRY(
+      cudaMemcpyAsync(d_chunk.data(), h_chunk, chunk_bytes, cudaMemcpyDefault, stream.value()));
 
     for (char key : keys) {
-      count_and_set_positions<T><<<grid_size, block_size>>>(static_cast<char*>(d_chunk.data()),
-                                                            chunk_bytes,
-                                                            chunk_offset + result_offset,
-                                                            key,
-                                                            d_count.data().get(),
-                                                            positions);
+      count_and_set_positions<T>
+        <<<grid_size, block_size, 0, stream.value()>>>(static_cast<char*>(d_chunk.data()),
+                                                       chunk_bytes,
+                                                       chunk_offset + result_offset,
+                                                       key,
+                                                       d_count.data(),
+                                                       positions);
     }
   }
 
-  return d_count[0];
+  return cudf::detail::make_std_vector_sync(d_count, stream)[0];
 }
 
 template cudf::size_type find_all_from_set<uint64_t>(const rmm::device_buffer& d_data,
                                                      const std::vector<char>& keys,
                                                      uint64_t result_offset,
-                                                     uint64_t* positions);
+                                                     uint64_t* positions,
+                                                     rmm::cuda_stream_view stream);
 
 template cudf::size_type find_all_from_set<pos_key_pair>(const rmm::device_buffer& d_data,
                                                          const std::vector<char>& keys,
                                                          uint64_t result_offset,
-                                                         pos_key_pair* positions);
+                                                         pos_key_pair* positions,
+                                                         rmm::cuda_stream_view stream);
 
 template cudf::size_type find_all_from_set<uint64_t>(const char* h_data,
                                                      size_t h_size,
                                                      const std::vector<char>& keys,
                                                      uint64_t result_offset,
-                                                     uint64_t* positions);
+                                                     uint64_t* positions,
+                                                     rmm::cuda_stream_view stream);
 
 template cudf::size_type find_all_from_set<pos_key_pair>(const char* h_data,
                                                          size_t h_size,
                                                          const std::vector<char>& keys,
                                                          uint64_t result_offset,
-                                                         pos_key_pair* positions);
+                                                         pos_key_pair* positions,
+                                                         rmm::cuda_stream_view stream);
 
-cudf::size_type count_all_from_set(const rmm::device_buffer& d_data, const std::vector<char>& keys)
+cudf::size_type count_all_from_set(const rmm::device_buffer& d_data,
+                                   const std::vector<char>& keys,
+                                   rmm::cuda_stream_view stream)
 {
-  return find_all_from_set<void>(d_data, keys, 0, nullptr);
+  return find_all_from_set<void>(d_data, keys, 0, nullptr, stream);
 }
 
-cudf::size_type count_all_from_set(const char* h_data, size_t h_size, const std::vector<char>& keys)
+cudf::size_type count_all_from_set(const char* h_data,
+                                   size_t h_size,
+                                   const std::vector<char>& keys,
+                                   rmm::cuda_stream_view stream)
 {
-  return find_all_from_set<void>(h_data, h_size, keys, 0, nullptr);
+  return find_all_from_set<void>(h_data, h_size, keys, 0, nullptr, stream);
 }
 
 std::string infer_compression_type(

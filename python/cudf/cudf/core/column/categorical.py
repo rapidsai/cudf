@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+from collections.abc import MutableSequence
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -11,12 +12,12 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    Union,
     cast,
 )
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from numba import cuda
 
 import cudf
@@ -26,10 +27,11 @@ from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethodsMixin, ParentType
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_interval_dtype,
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
@@ -43,9 +45,6 @@ if TYPE_CHECKING:
         StringColumn,
         TimeDeltaColumn,
     )
-
-
-ParentType = Union["cudf.Series", "cudf.Index"]
 
 
 class CategoricalAccessor(ColumnMethodsMixin):
@@ -112,7 +111,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         super().__init__(column=column, parent=parent)
 
     @property
-    def categories(self) -> "cudf.Index":
+    def categories(self) -> "cudf.core.index.BaseIndex":
         """
         The categories of this categorical.
         """
@@ -818,7 +817,7 @@ class CategoricalColumn(column.ColumnBase):
         return self._encode(item) in self.as_numerical
 
     def serialize(self) -> Tuple[dict, list]:
-        header = {}  # type: Dict[Any, Any]
+        header: Dict[Any, Any] = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"], dtype_frames = self.dtype.serialize()
@@ -1075,10 +1074,7 @@ class CategoricalColumn(column.ColumnBase):
             " if you need this functionality."
         )
 
-    def to_pandas(
-        self, index: ColumnLike = None, nullable: bool = False, **kwargs
-    ) -> pd.Series:
-
+    def to_pandas(self, index: pd.Index = None, **kwargs) -> pd.Series:
         if self.categories.dtype.kind == "f":
             new_mask = bools_to_mask(self.notnull())
             col = column.build_categorical_column(
@@ -1093,11 +1089,35 @@ class CategoricalColumn(column.ColumnBase):
 
         signed_dtype = min_signed_type(len(col.categories))
         codes = col.cat().codes.astype(signed_dtype).fillna(-1).to_array()
-        categories = col.categories.dropna(drop_nan=True).to_pandas()
+        if is_interval_dtype(col.categories.dtype):
+            # leaving out dropna because it temporarily changes an interval
+            # index into a struct and throws off results.
+            # TODO: work on interval index dropna
+            categories = col.categories.to_pandas()
+        else:
+            categories = col.categories.dropna(drop_nan=True).to_pandas()
         data = pd.Categorical.from_codes(
             codes, categories=categories, ordered=col.ordered
         )
         return pd.Series(data, index=index)
+
+    def to_arrow(self) -> pa.Array:
+        """Convert to PyArrow Array."""
+        # arrow doesn't support unsigned codes
+        signed_type = (
+            min_signed_type(self.codes.max())
+            if self.codes.size > 0
+            else np.int8
+        )
+        codes = self.codes.astype(signed_type)
+        categories = self.categories
+
+        out_indices = codes.to_arrow()
+        out_dictionary = categories.to_arrow()
+
+        return pa.DictionaryArray.from_arrays(
+            out_indices, out_dictionary, ordered=self.ordered,
+        )
 
     @property
     def values_host(self) -> np.ndarray:
@@ -1327,21 +1347,11 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def is_monotonic_increasing(self) -> bool:
-        if not hasattr(self, "_is_monotonic_increasing"):
-            self._is_monotonic_increasing = (
-                bool(self.ordered)
-                and self.as_numerical.is_monotonic_increasing
-            )
-        return self._is_monotonic_increasing
+        return bool(self.ordered) and self.as_numerical.is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self) -> bool:
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            self._is_monotonic_decreasing = (
-                bool(self.ordered)
-                and self.as_numerical.is_monotonic_decreasing
-            )
-        return self._is_monotonic_decreasing
+        return bool(self.ordered) and self.as_numerical.is_monotonic_decreasing
 
     def as_categorical_column(
         self, dtype: Dtype, **kwargs
@@ -1374,10 +1384,10 @@ class CategoricalColumn(column.ColumnBase):
             new_categories=dtype.categories, ordered=dtype.ordered
         )
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
+    def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
-    def as_string_column(self, dtype, format=None) -> StringColumn:
+    def as_string_column(self, dtype, format=None, **kwargs) -> StringColumn:
         return self._get_decategorized_column().as_string_column(
             dtype, format=format
         )
@@ -1455,6 +1465,67 @@ class CategoricalColumn(column.ColumnBase):
         raise NotImplementedError(
             "Categorical column views are not currently supported"
         )
+
+    @staticmethod
+    def _concat(objs: MutableSequence[CategoricalColumn]) -> CategoricalColumn:
+        # TODO: This function currently assumes it is being called from
+        # column._concat_columns, at least to the extent that all the
+        # preprocessing in that function has already been done. That should be
+        # improved as the concatenation API is solidified.
+
+        # Find the first non-null column:
+        head = next((obj for obj in objs if obj.valid_count), objs[0])
+
+        # Combine and de-dupe the categories
+        cats = (
+            cudf.concat([o.cat().categories for o in objs])
+            .drop_duplicates()
+            ._column
+        )
+        objs = [
+            o.cat()._set_categories(o.cat().categories, cats, is_unique=True)
+            for o in objs
+        ]
+        codes = [o.codes for o in objs]
+
+        newsize = sum(map(len, codes))
+        if newsize > libcudf.MAX_COLUMN_SIZE:
+            raise MemoryError(
+                f"Result of concat cannot have "
+                f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
+            )
+        elif newsize == 0:
+            codes_col = column.column_empty(0, head.codes.dtype, masked=True)
+        else:
+            # Filter out inputs that have 0 length, then concatenate.
+            codes = [o for o in codes if len(o)]
+            codes_col = libcudf.concat.concat_columns(objs)
+
+        return column.build_categorical_column(
+            categories=column.as_column(cats),
+            codes=column.as_column(codes_col.base_data, dtype=codes_col.dtype),
+            mask=codes_col.base_mask,
+            size=codes_col.size,
+            offset=codes_col.offset,
+        )
+
+    def _with_type_metadata(
+        self: CategoricalColumn, dtype: Dtype
+    ) -> CategoricalColumn:
+        if isinstance(dtype, CategoricalDtype):
+            return column.build_categorical_column(
+                categories=dtype.categories._values,
+                codes=column.as_column(
+                    self.codes.base_data, dtype=self.codes.dtype
+                ),
+                mask=self.codes.base_mask,
+                ordered=dtype.ordered,
+                size=self.codes.size,
+                offset=self.codes.offset,
+                null_count=self.codes.null_count,
+            )
+
+        return self
 
 
 def _create_empty_categorical_column(

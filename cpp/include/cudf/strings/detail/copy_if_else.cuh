@@ -17,9 +17,9 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -61,7 +61,7 @@ std::unique_ptr<cudf::column> copy_if_else(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = std::distance(lhs_begin, lhs_end);
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   // create null mask
   auto valid_mask = cudf::detail::valid_if(
@@ -73,8 +73,7 @@ std::unique_ptr<cudf::column> copy_if_else(
     stream,
     mr);
   size_type null_count = valid_mask.second;
-  rmm::device_buffer null_mask{0, stream, mr};
-  if (null_count) null_mask = valid_mask.first;
+  auto null_mask       = (null_count > 0) ? std::move(valid_mask.first) : rmm::device_buffer{};
 
   // build offsets column
   auto offsets_transformer = [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {
@@ -92,8 +91,9 @@ std::unique_ptr<cudf::column> copy_if_else(
   auto d_offsets = offsets_column->view().template data<int32_t>();
 
   // build chars column
-  size_type bytes   = thrust::device_pointer_cast(d_offsets)[strings_count];
-  auto chars_column = create_chars_child_column(strings_count, null_count, bytes, stream, mr);
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().template data<char>();
   // fill in chars
   thrust::for_each_n(

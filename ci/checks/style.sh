@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 #####################
 # cuDF Style Tester #
 #####################
@@ -11,7 +11,8 @@ LC_ALL=C.UTF-8
 LANG=C.UTF-8
 
 # Activate common conda env
-source activate gdf
+. /opt/conda/etc/profile.d/conda.sh
+conda activate rapids
 
 # Run isort and get results/return code
 ISORT=`isort --check-only python/**/*.py`
@@ -32,6 +33,10 @@ FLAKE_CYTHON_RETVAL=$?
 # Run mypy and get results/return code
 MYPY_CUDF=`mypy --config=python/cudf/setup.cfg python/cudf/cudf`
 MYPY_CUDF_RETVAL=$?
+
+# Run pydocstyle and get results/return code
+PYDOCSTYLE=`pydocstyle --config=python/.flake8 python`
+PYDOCSTYLE_RETVAL=$?
 
 # Run clang-format and check for a consistent code format
 CLANG_FORMAT=`python cpp/scripts/run-clang-format.py 2>&1`
@@ -78,6 +83,14 @@ else
   echo -e "\n\n>>>> PASSED: mypy style check\n\n"
 fi
 
+if [ "$PYDOCSTYLE_RETVAL" != "0" ]; then
+  echo -e "\n\n>>>> FAILED: pydocstyle style check; begin output\n\n"
+  echo -e "$PYDOCSTYLE"
+  echo -e "\n\n>>>> FAILED: pydocstyle style check; end output\n\n"
+else
+  echo -e "\n\n>>>> PASSED: pydocstyle style check\n\n"
+fi
+
 if [ "$CLANG_FORMAT_RETVAL" != "0" ]; then
   echo -e "\n\n>>>> FAILED: clang format check; begin output\n\n"
   echo -e "$CLANG_FORMAT"
@@ -91,7 +104,7 @@ HEADER_META=`ci/checks/headers_test.sh`
 HEADER_META_RETVAL=$?
 echo -e "$HEADER_META"
 
-RETVALS=($ISORT_RETVAL $BLACK_RETVAL $FLAKE_RETVAL $FLAKE_CYTHON_RETVAL $CLANG_FORMAT_RETVAL $HEADER_META_RETVAL $MYPY_CUDF_RETVAL)
+RETVALS=($ISORT_RETVAL $BLACK_RETVAL $FLAKE_RETVAL $FLAKE_CYTHON_RETVAL $PYDOCSTYLE_RETVAL $CLANG_FORMAT_RETVAL $HEADER_META_RETVAL $MYPY_CUDF_RETVAL)
 IFS=$'\n'
 RETVAL=`echo "${RETVALS[*]}" | sort -nr | head -n1`
 

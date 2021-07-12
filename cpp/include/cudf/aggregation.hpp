@@ -40,14 +40,16 @@ namespace cudf {
 
 // forward declaration
 namespace detail {
+class simple_aggregations_collector;
 class aggregation_finalizer;
 }  // namespace detail
 /**
- * @brief Base class for specifying the desired aggregation in an
+ * @brief Abstract base class for specifying the desired aggregation in an
  * `aggregation_request`.
  *
- * Other kinds of aggregations may derive from this class to encapsulate
- * additional information needed to compute the aggregation.
+ * All aggregations must derive from this class to implement the pure virtual
+ * functions and potentially encapsulate additional information needed to
+ * compute the aggregation.
  */
 class aggregation {
  public:
@@ -65,8 +67,9 @@ class aggregation {
     ALL,             ///< all reduction
     SUM_OF_SQUARES,  ///< sum of squares reduction
     MEAN,            ///< arithmetic mean reduction
-    VARIANCE,        ///< groupwise variance
-    STD,             ///< groupwise standard deviation
+    M2,              ///< sum of squares of differences from the mean
+    VARIANCE,        ///< variance
+    STD,             ///< standard deviation
     MEDIAN,          ///< median reduction
     QUANTILE,        ///< compute specified quantile(s)
     ARGMAX,          ///< Index of max element
@@ -79,61 +82,98 @@ class aggregation {
     LEAD,            ///< window function, accesses row at specified offset following current row
     LAG,             ///< window function, accesses row at specified offset preceding current row
     PTX,             ///< PTX  UDF based reduction
-    CUDA             ///< CUDA UDF based reduction
+    CUDA,            ///< CUDA UDF based reduction
+    MERGE_LISTS,     ///< merge multiple lists values into one list
+    MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
+    MERGE_M2         ///< merge partial values of M2 aggregation
   };
 
+  aggregation() = delete;
   aggregation(aggregation::Kind a) : kind{a} {}
   Kind kind;  ///< The aggregation to perform
-
-  virtual bool is_equal(aggregation const& other) const { return kind == other.kind; }
-
-  virtual size_t do_hash() const { return std::hash<int>{}(kind); }
-
-  virtual std::unique_ptr<aggregation> clone() const
-  {
-    return std::make_unique<aggregation>(*this);
-  }
-
   virtual ~aggregation() = default;
 
+  virtual bool is_equal(aggregation const& other) const { return kind == other.kind; }
+  virtual size_t do_hash() const { return std::hash<int>{}(kind); }
+  virtual std::unique_ptr<aggregation> clone() const = 0;
+
   // override functions for compound aggregations
-  virtual std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const;
-  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer);
+  virtual std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const = 0;
+  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer) const         = 0;
+};
+
+/**
+ * @brief Derived class intended for enforcing operation-specific restrictions
+ * when calling various cudf functions.
+ *
+ * As an example, rolling_window will only accept rolling_aggregation inputs,
+ * and the appropriate derived classes (sum_aggregation, mean_aggregation, etc)
+ * derive from this interface to represent these valid options.
+ */
+class rolling_aggregation : public virtual aggregation {
+ public:
+  ~rolling_aggregation() = default;
+
+ protected:
+  rolling_aggregation() {}
 };
 
 enum class udf_type : bool { CUDA, PTX };
 
 /// Factory to create a SUM aggregation
-std::unique_ptr<aggregation> make_sum_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_sum_aggregation();
 
 /// Factory to create a PRODUCT aggregation
-std::unique_ptr<aggregation> make_product_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_product_aggregation();
 
 /// Factory to create a MIN aggregation
-std::unique_ptr<aggregation> make_min_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_min_aggregation();
 
 /// Factory to create a MAX aggregation
-std::unique_ptr<aggregation> make_max_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_max_aggregation();
 
 /**
  * @brief Factory to create a COUNT aggregation
  *
  * @param null_handling Indicates if null values will be counted.
  */
-std::unique_ptr<aggregation> make_count_aggregation(
-  null_policy null_handling = null_policy::EXCLUDE);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_count_aggregation(null_policy null_handling = null_policy::EXCLUDE);
 
-/// Factory to create a ANY aggregation
-std::unique_ptr<aggregation> make_any_aggregation();
+/// Factory to create an ANY aggregation
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_any_aggregation();
 
 /// Factory to create a ALL aggregation
-std::unique_ptr<aggregation> make_all_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_all_aggregation();
 
 /// Factory to create a SUM_OF_SQUARES aggregation
-std::unique_ptr<aggregation> make_sum_of_squares_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_sum_of_squares_aggregation();
 
 /// Factory to create a MEAN aggregation
-std::unique_ptr<aggregation> make_mean_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_mean_aggregation();
+
+/**
+ * @brief Factory to create a M2 aggregation
+ *
+ * A M2 aggregation is sum of squares of differences from the mean. That is:
+ *  `M2 = SUM((x - MEAN) * (x - MEAN))`.
+ *
+ * This aggregation produces the intermediate values that are used to compute variance and standard
+ * deviation across multiple discrete sets. See
+ * `https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm` for more
+ * detail.
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_m2_aggregation();
 
 /**
  * @brief Factory to create a VARIANCE aggregation
@@ -141,7 +181,8 @@ std::unique_ptr<aggregation> make_mean_aggregation();
  * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `variance` is `N - ddof`, where `N` is the population size.
  */
-std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof = 1);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_variance_aggregation(size_type ddof = 1);
 
 /**
  * @brief Factory to create a STD aggregation
@@ -149,10 +190,12 @@ std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof = 1);
  * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `std` is `N - ddof`, where `N` is the population size.
  */
-std::unique_ptr<aggregation> make_std_aggregation(size_type ddof = 1);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_std_aggregation(size_type ddof = 1);
 
 /// Factory to create a MEDIAN aggregation
-std::unique_ptr<aggregation> make_median_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_median_aggregation();
 
 /**
  * @brief Factory to create a QUANTILE aggregation
@@ -160,22 +203,25 @@ std::unique_ptr<aggregation> make_median_aggregation();
  * @param quantiles The desired quantiles
  * @param interpolation The desired interpolation
  */
-std::unique_ptr<aggregation> make_quantile_aggregation(std::vector<double> const& q,
-                                                       interpolation i = interpolation::LINEAR);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_quantile_aggregation(std::vector<double> const& q,
+                                                interpolation i = interpolation::LINEAR);
 
 /**
  * @brief Factory to create an `argmax` aggregation
  *
  * `argmax` returns the index of the maximum element.
  */
-std::unique_ptr<aggregation> make_argmax_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_argmax_aggregation();
 
 /**
  * @brief Factory to create an `argmin` aggregation
  *
  * `argmin` returns the index of the minimum element.
  */
-std::unique_ptr<aggregation> make_argmin_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_argmin_aggregation();
 
 /**
  * @brief Factory to create a `nunique` aggregation
@@ -183,8 +229,8 @@ std::unique_ptr<aggregation> make_argmin_aggregation();
  * `nunique` returns the number of unique elements.
  * @param null_handling Indicates if null values will be counted.
  */
-std::unique_ptr<aggregation> make_nunique_aggregation(
-  null_policy null_handling = null_policy::EXCLUDE);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling = null_policy::EXCLUDE);
 
 /**
  * @brief Factory to create a `nth_element` aggregation
@@ -199,11 +245,13 @@ std::unique_ptr<aggregation> make_nunique_aggregation(
  * @param n index of nth element in each group.
  * @param null_handling Indicates to include/exclude nulls during indexing.
  */
-std::unique_ptr<aggregation> make_nth_element_aggregation(
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_nth_element_aggregation(
   size_type n, null_policy null_handling = null_policy::INCLUDE);
 
 /// Factory to create a ROW_NUMBER aggregation
-std::unique_ptr<aggregation> make_row_number_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_row_number_aggregation();
 
 /**
  * @brief Factory to create a COLLECT_LIST aggregation
@@ -215,11 +263,12 @@ std::unique_ptr<aggregation> make_row_number_aggregation();
  *
  * @param null_handling Indicates whether to include/exclude nulls in list elements.
  */
-std::unique_ptr<aggregation> make_collect_list_aggregation(
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_collect_list_aggregation(
   null_policy null_handling = null_policy::INCLUDE);
 
 /**
- * @brief Factory to create a COLLECT_SET aggregation
+ * @brief Factory to create a COLLECT_SET aggregation.
  *
  * `COLLECT_SET` returns a lists column of all included elements in the group/series. Within each
  * list, the duplicated entries are dropped out such that each entry appears only once.
@@ -228,21 +277,23 @@ std::unique_ptr<aggregation> make_collect_list_aggregation(
  * of the list rows.
  *
  * @param null_handling Indicates whether to include/exclude nulls during collection
- * @param nulls_equal   Flag to specify whether null entries within each list should be considered
- * equal
- * @param nans_equal    Flag to specify whether NaN values in floating point column should be
- * considered equal
+ * @param nulls_equal Flag to specify whether null entries within each list should be considered
+ *        equal.
+ * @param nans_equal Flag to specify whether NaN values in floating point column should be
+ *        considered equal.
  */
-std::unique_ptr<aggregation> make_collect_set_aggregation(
-  null_policy null_handling = null_policy::INCLUDE,
-  null_equality nulls_equal = null_equality::EQUAL,
-  nan_equality nans_equal   = nan_equality::UNEQUAL);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
+                                                   null_equality nulls_equal = null_equality::EQUAL,
+                                                   nan_equality nans_equal = nan_equality::UNEQUAL);
 
 /// Factory to create a LAG aggregation
-std::unique_ptr<aggregation> make_lag_aggregation(size_type offset);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_lag_aggregation(size_type offset);
 
 /// Factory to create a LEAD aggregation
-std::unique_ptr<aggregation> make_lead_aggregation(size_type offset);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_lead_aggregation(size_type offset);
 
 /**
  * @brief Factory to create an aggregation base on UDF for PTX or CUDA
@@ -253,9 +304,62 @@ std::unique_ptr<aggregation> make_lead_aggregation(size_type offset);
  *
  * @return aggregation unique pointer housing user_defined_aggregator string.
  */
-std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
-                                                  std::string const& user_defined_aggregator,
-                                                  data_type output_type);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_udf_aggregation(udf_type type,
+                                           std::string const& user_defined_aggregator,
+                                           data_type output_type);
+
+/**
+ * @brief Factory to create a MERGE_LISTS aggregation.
+ *
+ * Given a lists column, this aggregation merges all the lists corresponding to the same key value
+ * into one list. It is designed specifically to merge the partial results of multiple (distributed)
+ * groupby `COLLECT_LIST` aggregations into a final `COLLECT_LIST` result. As such, it requires the
+ * input lists column to be non-nullable (the child column containing list entries is not subjected
+ * to this requirement).
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_lists_aggregation();
+
+/**
+ * @brief Factory to create a MERGE_SETS aggregation.
+ *
+ * Given a lists column, this aggregation firstly merges all the lists corresponding to the same key
+ * value into one list, then it drops all the duplicate entries in each lists, producing a lists
+ * column containing non-repeated entries.
+ *
+ * This aggregation is designed specifically to merge the partial results of multiple (distributed)
+ * groupby `COLLECT_LIST` or `COLLECT_SET` aggregations into a final `COLLECT_SET` result. As such,
+ * it requires the input lists column to be non-nullable (the child column containing list entries
+ * is not subjected to this requirement).
+ *
+ * In practice, the input (partial results) to this aggregation should be generated by (distributed)
+ * `COLLECT_LIST` aggregations, not `COLLECT_SET`, to avoid unnecessarily removing duplicate entries
+ * for the partial results.
+ *
+ * @param nulls_equal Flag to specify whether nulls within each list should be considered equal
+ *        during dropping duplicate list entries.
+ * @param nans_equal Flag to specify whether NaN values in floating point column should be
+ *        considered equal during dropping duplicate list entries.
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal = null_equality::EQUAL,
+                                                  nan_equality nans_equal = nan_equality::UNEQUAL);
+
+/**
+ * @brief Factory to create a MERGE_M2 aggregation
+ *
+ * Merges the results of `M2` aggregations on independent sets into a new `M2` value equivalent to
+ * if a single `M2` aggregation was done across all of the sets at once. This aggregation is only
+ * valid on structs whose members are the result of the `COUNT_VALID`, `MEAN`, and `M2` aggregations
+ * on the same sets. The output of this aggregation is a struct containing the merged `COUNT_VALID`,
+ * `MEAN`, and `M2` aggregations.
+ *
+ * The input `M2` aggregation values are expected to be all non-negative numbers, since they
+ * were output from `M2` aggregation.
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_m2_aggregation();
 
 /** @} */  // end of group
 }  // namespace cudf

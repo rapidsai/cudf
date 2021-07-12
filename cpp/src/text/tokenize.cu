@@ -77,8 +77,7 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
                          d_token_counts.template begin<int32_t>(),
                          d_token_counts.template end<int32_t>(),
                          token_offsets.begin() + 1);
-  int32_t const zero = 0;
-  token_offsets.set_element_async(0, zero, stream);
+  token_offsets.set_element_to_zero_async(0, stream);
   auto const total_tokens = token_offsets.back_element(stream);
   // build a list of pointers to each token
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
@@ -181,7 +180,6 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   // To minimize memory, count the number of characters so we can
   // build the output offsets without an intermediate buffer.
   // In the worst case each byte is a character so the output is 4x the input.
-  auto strings_view = cudf::column_device_view::create(strings_column.parent(), stream);
   cudf::size_type num_characters = thrust::count_if(
     rmm::exec_policy(stream), d_chars, d_chars + chars_bytes, [] __device__(uint8_t byte) {
       return cudf::strings::detail::is_begin_utf8_char(byte);

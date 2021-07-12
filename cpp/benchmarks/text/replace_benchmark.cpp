@@ -41,7 +41,8 @@ static void BM_replace(benchmark::State& state)
   std::default_random_engine generator;
   std::uniform_int_distribution<int> tokens_dist(0, words.size() - 1);
   std::string row;  // build a row of random tokens
-  while (static_cast<int>(row.size()) < n_length) row += words[tokens_dist(generator)];
+  while (static_cast<int>(row.size()) < n_length)
+    row += words[tokens_dist(generator)];
 
   std::uniform_int_distribution<int> position_dist(0, 16);
 
@@ -54,7 +55,7 @@ static void BM_replace(benchmark::State& state)
   cudf::test::strings_column_wrapper replacements({"1", "2", "7", "0"});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true);
     nvtext::replace_tokens(
       view, cudf::strings_column_view(targets), cudf::strings_column_view(replacements));
   }

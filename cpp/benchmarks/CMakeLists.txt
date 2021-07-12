@@ -50,9 +50,17 @@ target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen)
 function(ConfigureBench CMAKE_BENCH_NAME)
     add_executable(${CMAKE_BENCH_NAME} ${ARGN})
     set_target_properties(${CMAKE_BENCH_NAME}
-        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gbenchmarks>")
+        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>")
     target_link_libraries(${CMAKE_BENCH_NAME}
         PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main)
+endfunction()
+
+function(ConfigureNVBench CMAKE_BENCH_NAME)
+    add_executable(${CMAKE_BENCH_NAME} ${ARGN})
+    set_target_properties(${CMAKE_BENCH_NAME}
+        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>")
+    target_link_libraries(${CMAKE_BENCH_NAME}
+        PRIVATE cudf_benchmark_common cudf_datagen nvbench::main)
 endfunction()
 
 ###################################################################################################
@@ -66,6 +74,10 @@ ConfigureBench(GATHER_BENCH copying/gather_benchmark.cu)
 ###################################################################################################
 # - scatter benchmark -----------------------------------------------------------------------------
 ConfigureBench(SCATTER_BENCH copying/scatter_benchmark.cu)
+
+###################################################################################################
+# - lists scatter benchmark -----------------------------------------------------------------------
+ConfigureBench(SCATTER_LISTS_BENCH lists/copying/scatter_lists_benchmark.cu)
 
 ###################################################################################################
 # - contiguous_split benchmark  -------------------------------------------------------------------
@@ -97,13 +109,19 @@ ConfigureBench(ITERATOR_BENCH iterator/iterator_benchmark.cu)
 
 ###################################################################################################
 # - search benchmark ------------------------------------------------------------------------------
-ConfigureBench(SEARCH_BENCH search/search_benchmark.cu)
+ConfigureBench(SEARCH_BENCH search/search_benchmark.cpp)
 
 ###################################################################################################
 # - sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH
+  sort/rank_benchmark.cpp
   sort/sort_benchmark.cpp
   sort/sort_strings_benchmark.cpp)
+
+###################################################################################################
+# - quantiles benchmark --------------------------------------------------------------------------------
+ConfigureBench(QUANTILES_BENCH
+  quantiles/quantiles_benchmark.cpp)
 
 ###################################################################################################
 # - type_dispatcher benchmark ---------------------------------------------------------------------
@@ -119,14 +137,27 @@ ConfigureBench(REDUCTION_BENCH
   reduction/minmax_benchmark.cpp)
 
 ###################################################################################################
+# - reduction benchmark ---------------------------------------------------------------------------
+ConfigureBench(REPLACE_BENCH
+  replace/clamp_benchmark.cpp)
+
+###################################################################################################
+# - filling benchmark -----------------------------------------------------------------------------
+ConfigureBench(FILL_BENCH
+  filling/repeat_benchmark.cpp)
+
+###################################################################################################
 # - groupby benchmark -----------------------------------------------------------------------------
 ConfigureBench(GROUPBY_BENCH
   groupby/group_sum_benchmark.cu
-  groupby/group_nth_benchmark.cu)
+  groupby/group_nth_benchmark.cu
+  groupby/group_shift_benchmark.cu)
 
 ###################################################################################################
 # - hashing benchmark -----------------------------------------------------------------------------
-ConfigureBench(HASHING_BENCH hashing/hashing_benchmark.cpp)
+ConfigureBench(HASHING_BENCH
+  hashing/hash_benchmark.cpp
+  hashing/partition_benchmark.cpp)
 
 ###################################################################################################
 # - merge benchmark -------------------------------------------------------------------------------
@@ -170,7 +201,9 @@ ConfigureBench(AST_BENCH ast/transform_benchmark.cpp)
 
 ###################################################################################################
 # - binaryop benchmark ----------------------------------------------------------------------------
-ConfigureBench(BINARYOP_BENCH binaryop/binaryop_benchmark.cu)
+ConfigureBench(BINARYOP_BENCH
+  binaryop/binaryop_benchmark.cpp
+  binaryop/jit_binaryop_benchmark.cpp)
 
 ###################################################################################################
 # - nvtext benchmark -------------------------------------------------------------------
@@ -190,7 +223,8 @@ ConfigureBench(STRINGS_BENCH
   string/contains_benchmark.cpp
   string/convert_datetime_benchmark.cpp
   string/convert_durations_benchmark.cpp
-  string/convert_floats_benchmark.cpp
+  string/convert_fixed_point_benchmark.cpp
+  string/convert_numerics_benchmark.cpp
   string/copy_benchmark.cpp
   string/extract_benchmark.cpp
   string/factory_benchmark.cu

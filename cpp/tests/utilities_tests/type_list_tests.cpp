@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,6 @@
 #include <cudf_test/type_list_utilities.hpp>
 
 using namespace cudf::test;  // this will make reading code way easier
-
-namespace std {
-template <class T, class U>
-constexpr bool is_same_v = std::is_same<T, U>::value;
-}
 
 namespace {
 // Work around to remove parentheses surrounding a type
@@ -65,7 +60,7 @@ template <typename T>
 std::string type_name()
 {
   int status;
-  char *realname;
+  char* realname;
   realname = abi::__cxa_demangle(typeid(T).name(), 0, 0, &status);
   std::string name{realname};
   free(realname);
@@ -91,15 +86,14 @@ TEST(TypeList, GetType)
 TEST(TypeList, Concat)
 {
   EXPECT_SAME_TYPE(Concat<>, Types<>);
-  EXPECT_SAME_TYPE((Concat<Types<long, void *, char *>>), (Types<long, void *, char *>));
+  EXPECT_SAME_TYPE((Concat<Types<long, void*, char*>>), (Types<long, void*, char*>));
 
-  EXPECT_SAME_TYPE((Concat<Types<long, void *, char *>, Types<float, char, double>>),
-                   (Types<long, void *, char *, float, char, double>));
+  EXPECT_SAME_TYPE((Concat<Types<long, void*, char*>, Types<float, char, double>>),
+                   (Types<long, void*, char*, float, char, double>));
 
-  EXPECT_SAME_TYPE((Concat<Types<long, void *, char *>,
-                           Types<float, char, double>,
-                           Types<int *, long *, unsigned>>),
-                   (Types<long, void *, char *, float, char, double, int *, long *, unsigned>));
+  EXPECT_SAME_TYPE(
+    (Concat<Types<long, void*, char*>, Types<float, char, double>, Types<int*, long*, unsigned>>),
+    (Types<long, void*, char*, float, char, double, int*, long*, unsigned>));
 }
 
 TEST(TypeList, Flatten)

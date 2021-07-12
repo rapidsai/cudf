@@ -9,7 +9,7 @@ import pandas as pd
 import pyorc
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 from cudf.utils.dtypes import (
     pandas_dtypes_to_cudf_dtypes,
     pyarrow_dtypes_to_pandas_dtypes,
@@ -114,6 +114,8 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
             meta["value_type"] = random.choice(
                 list(cudf.utils.dtypes.ALL_TYPES - {"category"})
             )
+        elif dtype == "decimal64":
+            meta["max_precision"] = cudf.Decimal64Dtype.MAX_PRECISION
 
         meta["dtype"] = dtype
         meta["null_frequency"] = null_frequency

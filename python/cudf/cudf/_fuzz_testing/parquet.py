@@ -12,7 +12,7 @@ from cudf._fuzz_testing.utils import (
     _generate_rand_meta,
     pyarrow_to_pandas,
 )
-from cudf.tests import dataset_generator as dg
+from cudf.testing import dataset_generator as dg
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -57,8 +57,8 @@ class ParquetReader(IOFuzz):
                 # TODO: Remove uint32 below after this bug is fixed
                 # https://github.com/pandas-dev/pandas/issues/37327
                 - {"uint32"}
+                | {"list", "decimal64"}
             )
-            dtypes_list.extend(["list"])
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
@@ -145,8 +145,8 @@ class ParquetWriter(IOFuzz):
                 # TODO: Remove uint32 below after this bug is fixed
                 # https://github.com/pandas-dev/pandas/issues/37327
                 - {"uint32"}
+                | {"list", "decimal64"}
             )
-            dtypes_list.extend(["list"])
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )

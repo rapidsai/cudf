@@ -81,11 +81,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
       case 17: // ROW_NUMBER
         ret = cudf::make_row_number_aggregation();
         break;
-      // case 18: COLLECT
-      // case 19: LEAD
-      // case 20: LAG
-      // case 21: PTX
-      // case 22: CUDA
+      // case 18: COLLECT_LIST
+      // case 19: COLLECT_SET
+      // case 20: MERGE_LISTS
+      case 20:
+        ret = cudf::make_merge_lists_aggregation();
+        break;
+      // case 21: MERGE_SETS
+      // case 22: LEAD
+      // case 23: LAG
+      // case 24: PTX
+      // case 25: CUDA
       default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
     }
 
@@ -186,10 +192,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createLeadLagAgg(JNIEnv 
     std::unique_ptr<cudf::aggregation> ret;
     // These numbers come from Aggregation.java and must stay in sync
     switch (kind) {
-      case 19: // LEAD
+      case 22: // LEAD
         ret = cudf::make_lead_aggregation(offset);
         break;
-      case 20: // LAG
+      case 23: // LAG
         ret = cudf::make_lag_aggregation(offset);
         break;
       default: throw std::logic_error("Unsupported Lead/Lag Aggregation Operation");
@@ -199,14 +205,52 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createLeadLagAgg(JNIEnv 
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCollectAgg(JNIEnv *env,
-                                                                     jclass class_object,
-                                                                     jboolean include_nulls) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCollectListAgg(JNIEnv *env,
+                                                                             jclass class_object,
+                                                                             jboolean include_nulls) {
   try {
     cudf::jni::auto_set_device(env);
     cudf::null_policy policy =
         include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE;
     std::unique_ptr<cudf::aggregation> ret = cudf::make_collect_list_aggregation(policy);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCollectSetAgg(JNIEnv *env,
+                                                                            jclass class_object,
+                                                                            jboolean include_nulls,
+                                                                            jboolean nulls_equal,
+                                                                            jboolean nans_equal) {
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::null_policy null_policy =
+        include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE;
+    cudf::null_equality null_equality =
+        nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    cudf::nan_equality nan_equality =
+        nans_equal ? cudf::nan_equality::ALL_EQUAL : cudf::nan_equality::UNEQUAL;
+    std::unique_ptr<cudf::aggregation> ret = cudf::make_collect_set_aggregation(null_policy,
+                                                                                null_equality,
+                                                                                nan_equality);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createMergeSetsAgg(JNIEnv *env,
+                                                                           jclass class_object,
+                                                                           jboolean nulls_equal,
+                                                                           jboolean nans_equal) {
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::null_equality null_equality =
+        nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    cudf::nan_equality nan_equality =
+        nans_equal ? cudf::nan_equality::ALL_EQUAL : cudf::nan_equality::UNEQUAL;
+    std::unique_ptr<cudf::aggregation> ret = cudf::make_merge_sets_aggregation(null_equality,
+                                                                               nan_equality);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);

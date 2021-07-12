@@ -20,8 +20,8 @@ from numba import cuda
 import cudf
 from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
 from cudf.core.column import column
-from cudf.tests import utils
-from cudf.tests.utils import (
+from cudf.testing import _utils as utils
+from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -41,6 +41,28 @@ def test_init_via_list_of_tuples():
 
     pdf = pd.DataFrame(data)
     gdf = cudf.DataFrame(data)
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("columns", [["a", "b"], pd.Series(["a", "b"])])
+def test_init_via_list_of_series(columns):
+    data = [pd.Series([1, 2]), pd.Series([3, 4])]
+
+    pdf = cudf.DataFrame(data, columns=columns)
+    gdf = cudf.DataFrame(data, columns=columns)
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("index", [None, [0, 1, 2]])
+def test_init_with_missing_columns(index):
+    """Test initialization when columns and data keys are disjoint."""
+    data = {"a": [1, 2, 3], "b": [2, 3, 4]}
+    columns = ["c", "d"]
+
+    pdf = cudf.DataFrame(data, columns=columns, index=index)
+    gdf = cudf.DataFrame(data, columns=columns, index=index)
 
     assert_eq(pdf, gdf)
 
@@ -714,6 +736,17 @@ def test_dataframe_astype(nelem):
     np.testing.assert_equal(df["a"].to_array(), df["b"].to_array())
 
 
+def test_astype_dict():
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": ["1", "2", "3"]})
+    pdf = gdf.to_pandas()
+
+    assert_eq(pdf.astype({"a": "str"}), gdf.astype({"a": "str"}))
+    assert_eq(
+        pdf.astype({"a": "str", "b": np.int64}),
+        gdf.astype({"a": "str", "b": np.int64}),
+    )
+
+
 @pytest.mark.parametrize("nelem", [0, 100])
 def test_index_astype(nelem):
     df = cudf.DataFrame()
@@ -1068,6 +1101,13 @@ def test_dataframe_setitem_index_len1():
     gdf["b"] = gdf.index._values
 
     np.testing.assert_equal(gdf.b.to_array(), [0])
+
+
+def test_empty_dataframe_setitem_df():
+    gdf1 = cudf.DataFrame()
+    gdf2 = cudf.DataFrame({"a": [1, 2, 3, 4, 5]})
+    gdf1["a"] = gdf2["a"]
+    assert_eq(gdf1, gdf2)
 
 
 def test_assign():
@@ -2000,6 +2040,27 @@ def test_quantile(q, numeric_only):
             ),
             gdf.quantile(q, numeric_only=False),
         )
+
+
+@pytest.mark.parametrize("q", [0.2, 1, 0.001, [0.5], [], [0.005, 0.8, 0.03]])
+@pytest.mark.parametrize("interpolation", ["higher", "lower", "nearest"])
+def test_decimal_quantile(q, interpolation):
+    data = ["244.8", "32.24", "2.22", "98.14", "453.23", "5.45"]
+    gdf = cudf.DataFrame(
+        {"id": np.random.randint(0, 10, size=len(data)), "val": data}
+    )
+    gdf["id"] = gdf["id"].astype("float64")
+    gdf["val"] = gdf["val"].astype(cudf.Decimal64Dtype(7, 2))
+    pdf = gdf.to_pandas()
+
+    got = gdf.quantile(q, numeric_only=False, interpolation=interpolation)
+    expected = pdf.quantile(
+        q if isinstance(q, list) else [q],
+        numeric_only=False,
+        interpolation=interpolation,
+    )
+
+    assert_eq(got, expected)
 
 
 def test_empty_quantile():
@@ -4327,12 +4388,6 @@ def test_constructor_properties():
     df[key1] = val1
     df[key2] = val2
 
-    # Correct use of _constructor (for DataFrame)
-    assert_eq(df, df._constructor({key1: val1, key2: val2}))
-
-    # Correct use of _constructor (for cudf.Series)
-    assert_eq(df[key1], df[key2]._constructor(val1, name=key1))
-
     # Correct use of _constructor_sliced (for DataFrame)
     assert_eq(df[key1], df._constructor_sliced(val1, name=key1))
 
@@ -6019,7 +6074,7 @@ def test_dataframe_init_1d_list(data, columns):
 def test_dataframe_init_from_arrays_cols(data, cols, index):
 
     gd_data = data
-    if isinstance(data, cupy.core.ndarray):
+    if isinstance(data, cupy.ndarray):
         # pandas can't handle cupy arrays in general
         pd_data = data.get()
 
@@ -7779,6 +7834,7 @@ def test_equals_dtypes():
     [
         pd.DataFrame({"a": [10, 11, 12]}, index=["a", "b", "z"]),
         pd.DataFrame({"z": ["a"]}),
+        pd.DataFrame({"a": [], "b": []}),
     ],
 )
 @pytest.mark.parametrize(
@@ -8099,13 +8155,23 @@ def test_dataframe_constructor_columns(df, columns, index):
 
     gdf = cudf.from_pandas(df)
     host_columns = (
-        columns.to_pandas() if isinstance(columns, cudf.Index) else columns
+        columns.to_pandas() if isinstance(columns, cudf.BaseIndex) else columns
     )
 
     expected = pd.DataFrame(df, columns=host_columns, index=index)
     actual = cudf.DataFrame(gdf, columns=columns, index=index)
 
     assert_local_eq(actual, df, expected, host_columns)
+
+
+def test_dataframe_constructor_column_index_only():
+    columns = ["a", "b", "c"]
+    index = ["r1", "r2", "r3"]
+
+    gdf = cudf.DataFrame(index=index, columns=columns)
+    assert not id(gdf["a"]._column) == id(gdf["b"]._column) and not id(
+        gdf["b"]._column
+    ) == id(gdf["c"]._column)
 
 
 @pytest.mark.parametrize(
@@ -8511,3 +8577,123 @@ def test_dataframe_argsort(df, ascending, expected):
     actual = df.argsort(ascending=ascending)
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data,columns,index",
+    [
+        (pd.Series([1, 2, 3]), None, None),
+        (pd.Series(["a", "b", None, "c"], name="abc"), None, None),
+        (
+            pd.Series(["a", "b", None, "c"], name="abc"),
+            ["abc", "b"],
+            [1, 2, 3],
+        ),
+    ],
+)
+def test_dataframe_init_from_series(data, columns, index):
+    expected = pd.DataFrame(data, columns=columns, index=index)
+    actual = cudf.DataFrame(data, columns=columns, index=index)
+
+    assert_eq(
+        expected,
+        actual,
+        check_index_type=False if len(expected) == 0 else True,
+    )
+
+
+@pytest.mark.parametrize(
+    "data, expected",
+    [
+        ({"a": [1, 2, 3, 4], "b": [5, 6, 7, 8], "c": [1.2, 1, 2, 3]}, False),
+        ({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}, True),
+        ({"a": ["a", "b", "c"], "b": [4, 5, 6], "c": [7, 8, 9]}, False),
+        ({"a": [True, False, False], "b": [False, False, True]}, True),
+        ({"a": [True, False, False]}, True),
+        ({"a": [[1, 2], [3, 4]]}, True),
+        ({"a": [[1, 2], [3, 4]], "b": ["a", "b"]}, False),
+        ({"a": [{"c": 5}, {"e": 5}], "b": [{"c": 5}, {"g": 7}]}, True),
+        ({}, True),
+    ],
+)
+def test_is_homogeneous_dataframe(data, expected):
+    actual = cudf.DataFrame(data)._is_homogeneous
+
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "data, indexes, expected",
+    [
+        (
+            {"a": [1, 2, 3, 4], "b": [5, 6, 7, 8], "c": [1.2, 1, 2, 3]},
+            ["a", "b"],
+            True,
+        ),
+        (
+            {
+                "a": [1, 2, 3, 4],
+                "b": [5, 6, 7, 8],
+                "c": [1.2, 1, 2, 3],
+                "d": ["hello", "world", "cudf", "rapids"],
+            },
+            ["a", "b"],
+            False,
+        ),
+        (
+            {
+                "a": ["a", "b", "c"],
+                "b": [4, 5, 6],
+                "c": [7, 8, 9],
+                "d": [1, 2, 3],
+            },
+            ["a", "b"],
+            True,
+        ),
+    ],
+)
+def test_is_homogeneous_multiIndex_dataframe(data, indexes, expected):
+    test_dataframe = cudf.DataFrame(data).set_index(indexes)
+    actual = cudf.DataFrame(test_dataframe)._is_homogeneous
+
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "data, expected", [([1, 2, 3, 4], True), ([True, False], True)]
+)
+def test_is_homogeneous_series(data, expected):
+    actual = cudf.Series(data)._is_homogeneous
+
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "levels, codes, expected",
+    [
+        (
+            [["lama", "cow", "falcon"], ["speed", "weight", "length"]],
+            [[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2]],
+            True,
+        ),
+        (
+            [[1, 2, 3], [True, False, True]],
+            [[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2]],
+            False,
+        ),
+    ],
+)
+def test_is_homogeneous_multiIndex(levels, codes, expected):
+    actual = cudf.MultiIndex(levels=levels, codes=codes)._is_homogeneous
+
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "data, expected",
+    [([1, 2, 3], True), (["Hello", "World"], True), ([True, False], True)],
+)
+def test_is_homogeneous_index(data, expected):
+    actual = cudf.Index(data)._is_homogeneous
+
+    assert actual == expected

@@ -21,6 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -28,8 +29,6 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -797,7 +796,8 @@ struct datetime_formatter {
       val       = val / 10;
     }
     ptr = tmpl + bytes - 1;
-    while (bytes-- > 0) *str++ = *ptr--;
+    while (bytes-- > 0)
+      *str++ = *ptr--;
     return str;
   }
 
@@ -912,14 +912,9 @@ struct dispatch_from_timestamps_fn {
                        d_timestamps.size(),
                        pfn);
   }
-  template <typename T, std::enable_if_t<not cudf::is_timestamp<T>()>* = nullptr>
-  void operator()(column_device_view const&,
-                  format_item const*,
-                  size_type,
-                  timestamp_units,
-                  const int32_t*,
-                  char* d_chars,
-                  rmm::cuda_stream_view stream) const
+
+  template <typename T, typename... Args>
+  std::enable_if_t<not cudf::is_timestamp<T>(), void> operator()(Args&&...) const
   {
     CUDF_FAIL("Only timestamps type are expected");
   }
@@ -934,7 +929,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = timestamps.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
   timestamp_units units =
@@ -962,11 +957,10 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   auto d_new_offsets = offsets_view.template data<int32_t>();
 
   // build chars column
-  size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-  auto chars_column =
-    create_chars_child_column(strings_count, timestamps.null_count(), bytes, stream, mr);
-  auto chars_view = chars_column->mutable_view();
-  auto d_chars    = chars_view.template data<char>();
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
+  auto d_chars      = chars_column->mutable_view().template data<char>();
   // fill in chars column with timestamps
   // dispatcher is called to handle the different timestamp types
   cudf::type_dispatcher(timestamps.type(),

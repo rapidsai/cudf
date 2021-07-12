@@ -21,13 +21,13 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <strings/convert/utilities.cuh>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -349,11 +349,10 @@ struct dispatch_from_integers_fn {
     auto d_new_offsets = offsets_view.template data<int32_t>();
 
     // build chars column
-    size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-    auto chars_column =
-      detail::create_chars_child_column(strings_count, integers.null_count(), bytes, stream, mr);
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars    = chars_view.template data<char>();
+    auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
+    auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
+    auto chars_view   = chars_column->mutable_view();
+    auto d_chars      = chars_view.template data<char>();
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
@@ -393,7 +392,7 @@ std::unique_ptr<column> from_integers(column_view const& integers,
                                       rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = integers.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   return type_dispatcher(integers.type(), dispatch_from_integers_fn{}, integers, stream, mr);
 }
