@@ -87,7 +87,7 @@ class StructColumn(ColumnBase):
                 field: value
                 for field, value in zip(self.dtype.fields, result.values())
             }
-        return result
+        return result._rename_fields(self.dtype.fields.keys())
 
     def copy(self, deep=True):
         result = super().copy(deep=deep)
