@@ -2823,26 +2823,22 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, null, 3, 5, 8, 10)) {
       // Due to https://github.com/rapidsai/cudf/issues/8462 NullPolicy.INCLUDE
       // tests have been disabled
-    // try (ColumnVector result = ColumnVector.scan(v1, Aggregation.sum(),
-    //       ScanType.INCLUSIVE, NullPolicy.INCLUDE);
-    //      ColumnVector expected = ColumnVector.fromBoxedInts(1, 3, null, null, null, null, null)) {
-    //   assertColumnsAreEqual(expected, result);
-    // }
+//      try (ColumnVector result = v1.scan(Aggregation.sum(), ScanType.INCLUSIVE, NullPolicy.INCLUDE);
+//           ColumnVector expected = ColumnVector.fromBoxedInts(1, 3, null, null, null, null, null)) {
+//        assertColumnsAreEqual(expected, result);
+//      }
 
-      try (ColumnVector result = ColumnVector.scan(v1, Aggregation.sum(),
-            ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+      try (ColumnVector result = v1.scan(Aggregation.sum(), ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
            ColumnVector expected = ColumnVector.fromBoxedInts(1, 3, null, 6, 11, 19, 29)) {
         assertColumnsAreEqual(expected, result);
       }
 
-    // try (ColumnVector result = ColumnVector.scan(v1, Aggregation.sum(),
-    //       ScanType.EXCLUSIVE, NullPolicy.INCLUDE);
-    //      ColumnVector expected = ColumnVector.fromBoxedInts(0, 1, 3, 3, 6, 11, 19)) {
-    //   assertColumnsAreEqual(expected, result);
-    // }
+//      try (ColumnVector result = v1.scan(Aggregation.sum(), ScanType.EXCLUSIVE, NullPolicy.INCLUDE);
+//           ColumnVector expected = ColumnVector.fromBoxedInts(0, 1, 3, 3, 6, 11, 19)) {
+//        assertColumnsAreEqual(expected, result);
+//      }
 
-      try (ColumnVector result = ColumnVector.scan(v1, Aggregation.sum(),
-            ScanType.EXCLUSIVE, NullPolicy.EXCLUDE);
+      try (ColumnVector result = v1.scan(Aggregation.sum(), ScanType.EXCLUSIVE, NullPolicy.EXCLUDE);
            ColumnVector expected = ColumnVector.fromBoxedInts(0, 1, null, 3, 6, 11, 19)) {
         assertColumnsAreEqual(expected, result);
       }
@@ -2854,26 +2850,22 @@ public class ColumnVectorTest extends CudfTestBase {
     // Due to https://github.com/rapidsai/cudf/issues/8462 NullPolicy.INCLUDE
     // tests have been disabled
     try (ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, null, 3, 5, 8, 10)) {
-      // try (ColumnVector result = ColumnVector.scan(v1, Aggregation.max(),
-      //       ScanType.INCLUSIVE, NullPolicy.INCLUDE);
-      //      ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, null, null, null, null)) {
-      //   assertColumnsAreEqual(expected, result);
-      // }
+//      try (ColumnVector result = v1.scan(Aggregation.max(), ScanType.INCLUSIVE, NullPolicy.INCLUDE);
+//           ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, null, null, null, null)) {
+//        assertColumnsAreEqual(expected, result);
+//      }
 
-      try (ColumnVector result = ColumnVector.scan(v1, Aggregation.max(),
-            ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+      try (ColumnVector result = v1.scan(Aggregation.max(), ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
            ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, 3, 5, 8, 10)) {
         assertColumnsAreEqual(expected, result);
       }
 
-      // try (ColumnVector result = ColumnVector.scan(v1, Aggregation.max(),
-      //       ScanType.EXCLUSIVE, NullPolicy.INCLUDE);
-      //      ColumnVector expected = ColumnVector.fromBoxedInts(Integer.MIN_VALUE, 1, 2, 2, 3, 5, 8)) {
-      //   assertColumnsAreEqual(expected, result);
-      // }
+//      try (ColumnVector result = v1.scan(Aggregation.max(), ScanType.EXCLUSIVE, NullPolicy.INCLUDE);
+//           ColumnVector expected = ColumnVector.fromBoxedInts(Integer.MIN_VALUE, 1, 2, 2, 3, 5, 8)) {
+//        assertColumnsAreEqual(expected, result);
+//      }
 
-      try (ColumnVector result = ColumnVector.scan(v1, Aggregation.max(),
-            ScanType.EXCLUSIVE, NullPolicy.EXCLUDE);
+      try (ColumnVector result = v1.scan(Aggregation.max(), ScanType.EXCLUSIVE, NullPolicy.EXCLUDE);
            ColumnVector expected = ColumnVector.fromBoxedInts(Integer.MIN_VALUE, 1, null, 2, 3, 5, 8)) {
         assertColumnsAreEqual(expected, result);
       }
@@ -2885,26 +2877,22 @@ public class ColumnVectorTest extends CudfTestBase {
     // Due to https://github.com/rapidsai/cudf/issues/8462 NullPolicy.INCLUDE
     // tests have been disabled
     try (ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, null, 3, 5, 8, 10)) {
-      // try (ColumnVector result = ColumnVector.scan(v1, Aggregation.min(),
-      //       ScanType.INCLUSIVE, NullPolicy.INCLUDE);
-      //      ColumnVector expected = ColumnVector.fromBoxedInts(1, 1, null, null, null, null, null)) {
-      //   assertColumnsAreEqual(expected, result);
-      // }
+//      try (ColumnVector result = v1.scan(Aggregation.min(), ScanType.INCLUSIVE, NullPolicy.INCLUDE);
+//           ColumnVector expected = ColumnVector.fromBoxedInts(1, 1, null, null, null, null, null)) {
+//        assertColumnsAreEqual(expected, result);
+//      }
 
-      try (ColumnVector result = ColumnVector.scan(v1, Aggregation.min(),
-            ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+      try (ColumnVector result = v1.scan(Aggregation.min(), ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
            ColumnVector expected = ColumnVector.fromBoxedInts(1, 1, null, 1, 1, 1, 1)) {
         assertColumnsAreEqual(expected, result);
       }
 
-      // try (ColumnVector result = ColumnVector.scan(v1, Aggregation.min(),
-      //       ScanType.EXCLUSIVE, NullPolicy.INCLUDE);
-      //      ColumnVector expected = ColumnVector.fromBoxedInts(Integer.MAX_VALUE, 1, 1, 1, 1, 1, 1)) {
-      //   assertColumnsAreEqual(expected, result);
-      // }
+//      try (ColumnVector result = v1.scan(Aggregation.min(), ScanType.EXCLUSIVE, NullPolicy.INCLUDE);
+//           ColumnVector expected = ColumnVector.fromBoxedInts(Integer.MAX_VALUE, 1, 1, 1, 1, 1, 1)) {
+//        assertColumnsAreEqual(expected, result);
+//      }
 
-      try (ColumnVector result = ColumnVector.scan(v1, Aggregation.min(),
-            ScanType.EXCLUSIVE, NullPolicy.EXCLUDE);
+      try (ColumnVector result = v1.scan(Aggregation.min(), ScanType.EXCLUSIVE, NullPolicy.EXCLUDE);
            ColumnVector expected = ColumnVector.fromBoxedInts(Integer.MAX_VALUE, 1, null, 1, 1, 1, 1)) {
         assertColumnsAreEqual(expected, result);
       }
@@ -2916,26 +2904,22 @@ public class ColumnVectorTest extends CudfTestBase {
     // Due to https://github.com/rapidsai/cudf/issues/8462 NullPolicy.INCLUDE
     // tests have been disabled
     try (ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, null, 3, 5, 8, 10)) {
-      // try (ColumnVector result = ColumnVector.scan(v1, Aggregation.product(),
-      //       ScanType.INCLUSIVE, NullPolicy.INCLUDE);
-      //      ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, null, null, null, null)) {
-      //   assertColumnsAreEqual(expected, result);
-      // }
+//      try (ColumnVector result = v1.scan(Aggregation.product(), ScanType.INCLUSIVE, NullPolicy.INCLUDE);
+//           ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, null, null, null, null)) {
+//        assertColumnsAreEqual(expected, result);
+//      }
 
-      try (ColumnVector result = ColumnVector.scan(v1, Aggregation.product(),
-            ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+      try (ColumnVector result = v1.scan(Aggregation.product(), ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
            ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, 6, 30, 240, 2400)) {
         assertColumnsAreEqual(expected, result);
       }
 
-      // try (ColumnVector result = ColumnVector.scan(v1, Aggregation.product(),
-      //       ScanType.EXCLUSIVE, NullPolicy.INCLUDE);
-      //      ColumnVector expected = ColumnVector.fromBoxedInts(1, 1, 2, 2, 6, 30, 240)) {
-      //   assertColumnsAreEqual(expected, result);
-      // }
+//      try (ColumnVector result = v1.scan(Aggregation.product(), ScanType.EXCLUSIVE, NullPolicy.INCLUDE);
+//           ColumnVector expected = ColumnVector.fromBoxedInts(1, 1, 2, 2, 6, 30, 240)) {
+//        assertColumnsAreEqual(expected, result);
+//      }
 
-      try (ColumnVector result = ColumnVector.scan(v1, Aggregation.product(),
-            ScanType.EXCLUSIVE, NullPolicy.EXCLUDE);
+      try (ColumnVector result = v1.scan(Aggregation.product(), ScanType.EXCLUSIVE, NullPolicy.EXCLUDE);
            ColumnVector expected = ColumnVector.fromBoxedInts(1, 1, null, 2, 6, 30, 240)) {
         assertColumnsAreEqual(expected, result);
       }
@@ -2949,14 +2933,15 @@ public class ColumnVectorTest extends CudfTestBase {
                                   .column(-97, -97, -97, null, -16, 5, null, null, 6, 6, 34, null)
                                   .column(3, 3, 4, 7, 7, 7, 7, 7, 8, 8, 8, 9)
                                   .build()) {
-      try (ColumnVector result = ColumnVector.scan(null, Aggregation.rank(orderBy),
+      try (ColumnVector result = v1.scan(Aggregation.rank(orderBy),
               ScanType.INCLUSIVE, NullPolicy.INCLUDE);
            ColumnVector expected = ColumnVector.fromBoxedInts(
               1, 1, 3, 4, 5, 6, 7, 7, 9, 9, 11, 12)) {
         assertColumnsAreEqual(expected, result);
       }
 
-      try (ColumnVector result = ColumnVector.scan(Aggregation.rank(orderBy));
+      try (ColumnVector result = v1.scan(Aggregation.rank(orderBy),
+              ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
            ColumnVector expected = ColumnVector.fromBoxedInts(
               1, 1, 3, 4, 5, 6, 7, 7, 9, 9, 11, 12)) {
         assertColumnsAreEqual(expected, result);
@@ -2973,7 +2958,7 @@ public class ColumnVectorTest extends CudfTestBase {
                                   .column(-97, -97, -97, null, -16, 5, null, null, 6, 6, 34, null)
                                   .column(3, 3, 4, 7, 7, 7, 7, 7, 8, 8, 8, 9)
                                   .build()) {
-      try (ColumnVector result = ColumnVector.scan(null, Aggregation.denseRank(orderBy),
+      try (ColumnVector result = v1.scan(Aggregation.denseRank(orderBy),
               ScanType.INCLUSIVE, NullPolicy.INCLUDE);
            ColumnVector expected = ColumnVector.fromBoxedInts(
               1, 1, 2, 3, 4, 5, 6, 6, 7, 7, 8, 9)) {
@@ -2981,7 +2966,8 @@ public class ColumnVectorTest extends CudfTestBase {
       }
 
       // Exclude should have identical results
-      try (ColumnVector result = ColumnVector.scan(Aggregation.denseRank(orderBy));
+      try (ColumnVector result = v1.scan(Aggregation.denseRank(orderBy),
+              ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
            ColumnVector expected = ColumnVector.fromBoxedInts(
             1, 1, 2, 3, 4, 5, 6, 6, 7, 7, 8, 9)) {
         assertColumnsAreEqual(expected, result);
