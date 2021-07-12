@@ -195,7 +195,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(
  *
  * `output[i] == true` if year of `column[i]` is a leap year
  * `output[i] == false` if year of `column[i]` is not a leap year
- * `output[i] is null` if year of `column[i]` is null
+ * `output[i] is null` if `column[i]` is null
  *
  * @param[in] cudf::column_view of the input datetime values
  *
