@@ -151,13 +151,18 @@ TEST_F(StringsCaseTest, Title)
 
 TEST_F(StringsCaseTest, MultiCharUpper)
 {
-  cudf::test::strings_column_wrapper strings{"\u1f52", "\u1f83", "\u1e98", "\ufb05", "\u0149"};
+  cudf::test::strings_column_wrapper strings{"\u1f52 \u1f83", "\u1e98 \ufb05", "\u0149"};
   cudf::test::strings_column_wrapper expected{
-    "\u03a5\u0313\u0300", "\u1f0b\u0399", "\u0057\u030a", "\u0053\u0054", "\u02bc\u004e"};
+    "\u03a5\u0313\u0300 \u1f0b\u0399", "\u0057\u030a \u0053\u0054", "\u02bc\u004e"};
   auto strings_view = cudf::strings_column_view(strings);
 
   auto results = cudf::strings::to_upper(strings_view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
+  results = cudf::strings::capitalize(strings_view, std::string(" "));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = cudf::strings::title(strings_view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

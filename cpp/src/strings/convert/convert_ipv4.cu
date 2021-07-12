@@ -146,7 +146,8 @@ struct integers_to_ipv4_fn {
       else {
         char digits[3];
         int num_digits = convert(value, digits);
-        while (num_digits-- > 0) *out_ptr++ = digits[num_digits];
+        while (num_digits-- > 0)
+          *out_ptr++ = digits[num_digits];
       }
       if ((n + 1) < 4) *out_ptr++ = '.';
       shift_bits -= 8;
