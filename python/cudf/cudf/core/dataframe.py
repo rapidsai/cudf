@@ -4719,7 +4719,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             * 1 or 'columns': apply function to each row.
 
         Examples
-        ----------
+        --------
 
         Simple function of a single variable which could be NA
 
@@ -4840,10 +4840,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         dtype: float64
 
         Notes
-        ----------
+        -----
         Available only using cuda 11.1+ due to particular required
         runtime compilation features
-
         """
 
         # libcudacxx tuples are not compatible with nvrtc 11.0
