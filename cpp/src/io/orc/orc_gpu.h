@@ -415,8 +415,8 @@ void BuildStripeDictionaries(StripeDictionary* stripes_dev,
  * @param[in] row_index_stride Rowgroup size in rows
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void orc_init_statistics_groups(statistics_group *groups,
-                                const stats_column_desc *cols,
+void orc_init_statistics_groups(statistics_group* groups,
+                                const stats_column_desc* cols,
                                 device_2dspan<rows_range const> rowgroup_bounds,
                                 rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
@@ -428,8 +428,8 @@ void orc_init_statistics_groups(statistics_group *groups,
  * @param[in] statistics_count Number of statistics buffers to encode
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void orc_init_statistics_buffersize(statistics_merge_group *groups,
-                                    const statistics_chunk *chunks,
+void orc_init_statistics_buffersize(statistics_merge_group* groups,
+                                    const statistics_chunk* chunks,
                                     uint32_t statistics_count,
                                     rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
@@ -441,9 +441,9 @@ void orc_init_statistics_buffersize(statistics_merge_group *groups,
  * @param[in,out] chunks Statistics data
  * @param[in] statistics_count Number of statistics buffers
  */
-void orc_encode_statistics(uint8_t *blob_bfr,
-                           statistics_merge_group *groups,
-                           const statistics_chunk *chunks,
+void orc_encode_statistics(uint8_t* blob_bfr,
+                           statistics_merge_group* groups,
+                           const statistics_chunk* chunks,
                            uint32_t statistics_count,
                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 

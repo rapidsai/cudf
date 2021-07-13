@@ -612,7 +612,6 @@ class metadata {
 };
 
 struct orc_column_device_view {
-  uint32_t index = 0;  // probably not needed
   column_device_view cudf_column;
   int32_t parent_index = -1;
 };

@@ -469,15 +469,14 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
     }();
 
     auto RLE_column_size = [&](TypeKind type_kind) {
-      return std::accumulate(thrust::make_counting_iterator(0ul),
-                             thrust::make_counting_iterator(segmentation.num_rowgroups()),
-                             0ul,
-                             [&](auto data_size, auto rg_idx) {
-                               return data_size +
-                                      RLE_stream_size(
-                                        type_kind,
-                                        segmentation.rowgroups[rg_idx][column.index()].size());
-                             });
+      return std::accumulate(
+        thrust::make_counting_iterator(0ul),
+        thrust::make_counting_iterator(segmentation.num_rowgroups()),
+        0ul,
+        [&](auto data_size, auto rg_idx) {
+          return data_size +
+                 RLE_stream_size(type_kind, segmentation.rowgroups[rg_idx][column.index()].size());
+        });
     };
 
     auto add_stream =
@@ -566,8 +565,7 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
       case TypeKind::DECIMAL:
         // varint values (NO RLE)
         // data_stream_size = decimal_column_sizes.at(column.index());
-        add_stream(
-          gpu::CI_DATA, DATA, TypeKind::DECIMAL, decimal_column_sizes.at(column.index()));
+        add_stream(gpu::CI_DATA, DATA, TypeKind::DECIMAL, decimal_column_sizes.at(column.index()));
         // scale stream TODO: compute exact size since all elems are equal
         add_RLE_stream(gpu::CI_DATA2, SECONDARY, TypeKind::INT);
         column.set_orc_encoding(DIRECT_V2);
@@ -684,7 +682,7 @@ encoded_data writer::impl::encode_columns(orc_table_view const& orc_table,
   for (auto const& column : orc_table.columns) {
     if (column.orc_kind() == TypeKind::BOOLEAN && column.nullable()) {
       validity_check_inputs[column.index()] = {column.null_mask(),
-                                                    validity_check_indices(column.index())};
+                                               validity_check_indices(column.index())};
     }
   }
   for (auto& cnt_in : validity_check_inputs) {
@@ -895,10 +893,9 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
     }
     statistics_merge_group* col_stats =
       &stat_merge[segmentation.num_stripes() * orc_table.num_columns() + column.index()];
-    col_stats->col = stat_desc.device_ptr(column.index());
-    col_stats->start_chunk =
-      static_cast<uint32_t>(column.index() * segmentation.num_stripes());
-    col_stats->num_chunks = static_cast<uint32_t>(segmentation.num_stripes());
+    col_stats->col         = stat_desc.device_ptr(column.index());
+    col_stats->start_chunk = static_cast<uint32_t>(column.index() * segmentation.num_stripes());
+    col_stats->num_chunks  = static_cast<uint32_t>(segmentation.num_stripes());
   }
   stat_desc.host_to_device(stream);
   stat_merge.host_to_device(stream);
@@ -1126,24 +1123,28 @@ void writer::impl::init_state()
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
-void __device__ preorder_append(uint32_t& idx,
-                                int32_t parent_idx,
-                                device_span<orc_column_device_view> cols,
-                                column_device_view col)
+/**
+ * @brief Preorder append ORC device columns
+ */
+void __device__ append_orc_device_column(uint32_t& idx,
+                                         int32_t parent_idx,
+                                         device_span<orc_column_device_view> cols,
+                                         column_device_view col)
 {
   auto const current_idx = idx;
-  cols[current_idx]      = orc_column_device_view{idx, col, parent_idx};
+  cols[current_idx]      = orc_column_device_view{col, parent_idx};
   idx++;
-  if (col.type().id() == type_id::LIST) preorder_append(idx, current_idx, cols, col.child(1));
+  if (col.type().id() == type_id::LIST)
+    append_orc_device_column(idx, current_idx, cols, col.child(1));
   if (col.type().id() == type_id::STRUCT)
     for (auto child_idx = 0; child_idx < col.num_child_columns(); ++child_idx)
-      preorder_append(idx, current_idx, cols, col.child(child_idx));
+      append_orc_device_column(idx, current_idx, cols, col.child(child_idx));
 };
 
-orc_table_view get_columns_info(table_view const& table,
-                                table_device_view const& d_table,
-                                table_metadata const* user_metadata,
-                                rmm::cuda_stream_view stream)
+orc_table_view make_orc_table_view(table_view const& table,
+                                   table_device_view const& d_table,
+                                   table_metadata const* user_metadata,
+                                   rmm::cuda_stream_view stream)
 {
   std::vector<orc_column_view> orc_columns;
   std::vector<int> str_col_indexes;
@@ -1152,9 +1153,7 @@ orc_table_view get_columns_info(table_view const& table,
                                                                        int root_index) {
     orc_columns.emplace_back(
       orc_columns.size(), str_col_indexes.size(), root_index, col, user_metadata);
-    if (orc_columns.back().is_string()) {
-      str_col_indexes.push_back(orc_columns.back().index());
-    }
+    if (orc_columns.back().is_string()) { str_col_indexes.push_back(orc_columns.back().index()); }
     if (col.type().id() == type_id::LIST) append_orc_column(col.child(1), -1);
     if (col.type().id() == type_id::STRUCT)
       for (auto child = col.child_begin(); child != col.child_end(); ++child)
@@ -1172,7 +1171,7 @@ orc_table_view get_columns_info(table_view const& table,
      d_table    = d_table] __device__() mutable {
       uint32_t idx = 0;
       for (auto const& column : d_table) {
-        preorder_append(idx, -1, d_orc_cols, column);
+        append_orc_device_column(idx, -1, d_orc_cols, column);
       }
     },
     stream);
@@ -1232,8 +1231,7 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
   for (auto& orc_col : orc_table.columns) {
     if (orc_col.orc_kind() == DECIMAL) {
       auto& current_sizes =
-        elem_sizes
-          .insert({orc_col.index(), rmm::device_uvector<uint32_t>(orc_col.size(), stream)})
+        elem_sizes.insert({orc_col.index(), rmm::device_uvector<uint32_t>(orc_col.size(), stream)})
           .first->second;
       thrust::tabulate(rmm::exec_policy(stream),
                        current_sizes.begin(),
@@ -1365,7 +1363,7 @@ void writer::impl::write(table_view const& table)
 
   auto const d_table = table_device_view::create(table, stream);
 
-  auto orc_table = get_columns_info(table, *d_table, user_metadata, stream);
+  auto orc_table = make_orc_table_view(table, *d_table, user_metadata, stream);
 
   auto rowgroup_ranges = calculate_rowgroup_ranges(orc_table, row_index_stride_, stream);
 
