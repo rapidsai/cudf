@@ -616,7 +616,7 @@ struct orc_column_device_view {
   int32_t parent_index = -1;
 };
 
-struct rows_range {
+struct rowgroup_rows {
   size_type begin;
   size_type end;
   constexpr auto size() const noexcept { return end - begin; }

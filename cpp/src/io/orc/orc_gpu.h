@@ -382,7 +382,7 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns
                            device_span<device_span<uint32_t>> dict_data,
                            device_span<device_span<uint32_t>> dict_index,
                            device_span<device_span<uint32_t>> dict_indices,
-                           device_2dspan<rows_range const> rowgroup_ranges,
+                           device_2dspan<rowgroup_rows const> rowgroup_bounds,
                            device_span<int const> str_col_indexes,
                            rmm::cuda_stream_view stream);
 
@@ -417,7 +417,7 @@ void BuildStripeDictionaries(StripeDictionary* stripes_dev,
  */
 void orc_init_statistics_groups(statistics_group* groups,
                                 const stats_column_desc* cols,
-                                device_2dspan<rows_range const> rowgroup_bounds,
+                                device_2dspan<rowgroup_rows const> rowgroup_bounds,
                                 rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**

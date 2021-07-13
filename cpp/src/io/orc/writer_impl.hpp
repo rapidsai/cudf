@@ -131,7 +131,7 @@ class orc_streams {
 };
 
 struct file_segmentation {
-  hostdevice_2dvector<rows_range> rowgroups;
+  hostdevice_2dvector<rowgroup_rows> rowgroups;
   std::vector<stripe_rowgroups> stripes;
   auto num_rowgroups() const { return rowgroups.size().first; }
   auto num_stripes() const { return stripes.size(); }

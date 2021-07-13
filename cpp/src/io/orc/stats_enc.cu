@@ -41,7 +41,7 @@ constexpr unsigned int init_threads_per_block = init_threads_per_group * init_gr
 __global__ void __launch_bounds__(init_threads_per_block)
   gpu_init_statistics_groups(statistics_group* groups,
                              const stats_column_desc* cols,
-                             device_2dspan<rows_range const> rowgroup_bounds)
+                             device_2dspan<rowgroup_rows const> rowgroup_bounds)
 {
   __shared__ __align__(4) statistics_group group_g[init_groups_per_block];
   uint32_t const col_id    = blockIdx.y;
@@ -374,7 +374,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
  */
 void orc_init_statistics_groups(statistics_group* groups,
                                 const stats_column_desc* cols,
-                                device_2dspan<rows_range const> rowgroup_bounds,
+                                device_2dspan<rowgroup_rows const> rowgroup_bounds,
                                 rmm::cuda_stream_view stream)
 {
   dim3 dim_grid((rowgroup_bounds.size().first + init_groups_per_block - 1) / init_groups_per_block,

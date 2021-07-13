@@ -121,7 +121,7 @@ __global__ void __launch_bounds__(block_size, 2)
                            device_span<device_span<uint32_t>> dict_data,
                            device_span<device_span<uint32_t>> dict_index,
                            device_span<device_span<uint32_t>> dict_indices,
-                           device_2dspan<rows_range const> rowgroup_ranges,
+                           device_2dspan<rowgroup_rows const> rowgroup_bounds,
                            device_span<int const> str_col_indexes)
 {
   __shared__ __align__(16) dictinit_state_s state_g;
@@ -145,10 +145,10 @@ __global__ void __launch_bounds__(block_size, 2)
   if (t == 0) {
     s->chunk             = chunks[group_id * num_str_cols + str_col_idx];
     s->chunk.leaf_column = &orc_columns[col_idx].cudf_column;
-    s->chunk.dict_data   = dict_data[str_col_idx].data() + rowgroup_ranges[group_id][col_idx].begin;
+    s->chunk.dict_data   = dict_data[str_col_idx].data() + rowgroup_bounds[group_id][col_idx].begin;
     s->chunk.dict_index  = dict_index[str_col_idx].data();
-    s->chunk.start_row   = rowgroup_ranges[group_id][col_idx].begin;
-    s->chunk.num_rows    = rowgroup_ranges[group_id][col_idx].size();
+    s->chunk.start_row   = rowgroup_bounds[group_id][col_idx].begin;
+    s->chunk.num_rows    = rowgroup_bounds[group_id][col_idx].size();
     s->dict              = dict_indices[str_col_idx].data() + s->chunk.start_row;
   }
   for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
@@ -424,15 +424,15 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns
                            device_span<device_span<uint32_t>> dict_data,
                            device_span<device_span<uint32_t>> dict_index,
                            device_span<device_span<uint32_t>> dict_indices,
-                           device_2dspan<rows_range const> rowgroup_ranges,
+                           device_2dspan<rowgroup_rows const> rowgroup_bounds,
                            device_span<int const> str_col_indexes,
                            rmm::cuda_stream_view stream)
 {
   static constexpr int block_size = 512;
   dim3 dim_block(block_size, 1);
-  dim3 dim_grid(str_col_indexes.size(), rowgroup_ranges.size().first);
+  dim3 dim_grid(str_col_indexes.size(), rowgroup_bounds.size().first);
   gpuInitDictionaryIndices<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
-    chunks, orc_columns, dict_data, dict_index, dict_indices, rowgroup_ranges, str_col_indexes);
+    chunks, orc_columns, dict_data, dict_index, dict_indices, rowgroup_bounds, str_col_indexes);
 }
 
 /**
