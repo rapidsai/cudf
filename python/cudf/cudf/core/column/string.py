@@ -100,7 +100,7 @@ _timedelta_to_str_typecast_functions = {
 class StringMethods(ColumnMethods):
     _column: StringColumn
 
-    def __init__(self, parent=None):
+    def __init__(self, parent):
         """
         Vectorized string functions for Series and Index.
 
