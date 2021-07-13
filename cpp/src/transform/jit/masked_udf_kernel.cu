@@ -14,23 +14,21 @@
  * limitations under the License.
  */
 
-// Include Jitify's cstddef header first
-#include <cstddef>
-
-#include <cuda/std/climits>
-#include <cuda/std/cstddef>
-#include <cuda/std/limits>
-#include <cuda/std/type_traits>
 
 #include <cstdint>
-
+#include <cstddef>
 #include <transform/jit/operation-udf.hpp>
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 
+#include <cuda/std/climits>
+#include <cuda/std/cstddef>
+#include <cuda/std/limits>
+#include <cuda/std/type_traits>
 #include <cuda/std/tuple>
-#include <tuple>
+
+
 
 namespace cudf {
 namespace transformation {
