@@ -78,10 +78,7 @@ void BM_parq_write_varying_options(benchmark::State& state)
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(io_type::FILEPATH);
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
-  auto statistics_mr                  = rmm::mr::make_statistics_adaptor(mr);
-
-  rmm::mr::set_current_device_resource(&statistics_mr);
+  auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::parquet_writer_options const options =
@@ -91,10 +88,9 @@ void BM_parq_write_varying_options(benchmark::State& state)
         .column_chunks_file_path(file_path);
     cudf_io::write_parquet(options);
   }
-  rmm::mr::set_current_device_resource(mr);
 
   state.SetBytesProcessed(data_size * state.iterations());
-  state.counters["peak_memory_usage"] = statistics_mr.get_bytes_counter().peak;
+  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
 }
 
 #define PARQ_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)                              \
