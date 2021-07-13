@@ -202,25 +202,25 @@ struct StripeDictionary {
  * @param[in] num_streams Number of compressed streams
  * @param[in] compression_block_size maximum size of compressed blocks (up to 16M)
  * @param[in] log2maxcr log2 of maximum compression ratio (used to infer max uncompressed size from
- *compressed size)
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * compressed size)
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void ParseCompressedStripeData(CompressedStreamInfo* strm_info,
                                int32_t num_streams,
                                uint32_t compression_block_size,
-                               uint32_t log2maxcr           = 24,
-                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                               uint32_t log2maxcr,
+                               rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for re-assembling decompressed blocks into a single contiguous block
  *
  * @param[in] strm_info List of compressed streams
  * @param[in] num_streams Number of compressed streams
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void PostDecompressionReassemble(CompressedStreamInfo* strm_info,
                                  int32_t num_streams,
-                                 rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                                 rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for constructing rowgroup from index streams
@@ -234,7 +234,7 @@ void PostDecompressionReassemble(CompressedStreamInfo* strm_info,
  * @param[in] rowidx_stride Row index stride
  * @param[in] use_base_stride Whether to use base stride obtained from meta or use the computed
  * value
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void ParseRowGroupIndex(RowGroup* row_groups,
                         CompressedStreamInfo* strm_info,
@@ -244,7 +244,7 @@ void ParseRowGroupIndex(RowGroup* row_groups,
                         uint32_t num_rowgroups,
                         uint32_t rowidx_stride,
                         bool use_base_stride,
-                        rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                        rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for decoding NULLs and building string dictionary index tables
@@ -254,14 +254,14 @@ void ParseRowGroupIndex(RowGroup* row_groups,
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] first_row Crop all rows below first_row
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                       DictionaryEntry* global_dictionary,
                                       uint32_t num_columns,
                                       uint32_t num_stripes,
-                                      size_t first_row             = 0,
-                                      rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                                      size_t first_row,
+                                      rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for decoding column data
@@ -277,30 +277,30 @@ void DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
  * @param[in] level Current nesting level being processed
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void DecodeOrcColumnData(ColumnDesc* chunks,
                          DictionaryEntry* global_dictionary,
                          device_2dspan<RowGroup> row_groups,
                          uint32_t num_columns,
                          uint32_t num_stripes,
-                         size_t first_row             = 0,
-                         timezone_table_view tz_table = {},
-                         uint32_t num_rowgroups       = 0,
-                         uint32_t rowidx_stride       = 0,
-                         size_t level                 = 0,
-                         rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                         size_t first_row,
+                         timezone_table_view tz_table,
+                         uint32_t num_rowgroups,
+                         uint32_t rowidx_stride,
+                         size_t level,
+                         rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for encoding column data
  *
  * @param[in] chunks  encoder chunk device array [column][rowgroup]
  * @param[in, out] streams chunk streams device array [column][rowgroup]
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
                          device_2dspan<encoder_chunk_streams> streams,
-                         rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                         rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for encoding column dictionaries
@@ -310,21 +310,21 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
  * @param[in] num_string_columns Number of string columns
  * @param[in] num_stripes Number of stripes
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void EncodeStripeDictionaries(StripeDictionary const* stripes,
                               device_2dspan<EncChunk const> chunks,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,
                               device_2dspan<encoder_chunk_streams> enc_streams,
-                              rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                              rmm::cuda_stream_view stream);
 
 /**
  * @brief Set leaf column element of EncChunk
  *
  * @param[in] orc_columns Pre-order flattened device array of ORC column views
  * @param[in,out] chunks encoder chunk device array [column][rowgroup]
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void set_chunk_columns(device_span<orc_column_device_view const> orc_columns,
                        device_2dspan<EncChunk> chunks,
@@ -335,11 +335,11 @@ void set_chunk_columns(device_span<orc_column_device_view const> orc_columns,
  *
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
                            device_2dspan<encoder_chunk_streams> enc_streams,
-                           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                           rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel(s) for compressing data streams
@@ -348,11 +348,11 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
  * @param[in] num_compressed_blocks Total number of compressed blocks
  * @param[in] compression Type of compression
  * @param[in] comp_blk_size Compression block size
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[out] comp_in Per-block compression input parameters
  * @param[out] comp_out Per-block compression status
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void CompressOrcDataStreams(uint8_t* compressed_data,
                             uint32_t num_compressed_blocks,
@@ -362,7 +362,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             device_2dspan<encoder_chunk_streams> enc_streams,
                             gpu_inflate_input_s* comp_in,
                             gpu_inflate_status_s* comp_out,
-                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                            rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing dictionary chunks
@@ -372,10 +372,9 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
  * @param[in] dict_data dictionary data (index of non-null rows)
  * @param[in] dict_index row indices of corresponding string (row from dictionary index)
  * @param[in] tmp_indices Temporary buffer for dictionary indices
- * @param[in] row_index_stride Rowgroup size in rows
+ * @param[in] rowgroup_bounds Ranges of rows in each rowgroup [rowgroup][column]
  * @param[in] str_col_indexes List of columns that are strings type
- * @param[in] num_rowgroups Number of row groups
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns,
                            DictionaryChunk* chunks,
@@ -395,7 +394,7 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
  * @param[in] num_columns Number of columns
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void BuildStripeDictionaries(StripeDictionary* stripes_dev,
                              StripeDictionary* stripes_host,
@@ -403,22 +402,20 @@ void BuildStripeDictionaries(StripeDictionary* stripes_dev,
                              uint32_t num_stripes,
                              uint32_t num_rowgroups,
                              uint32_t num_columns,
-                             rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                             rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernels to initialize statistics collection
  *
  * @param[out] groups Statistics groups (rowgroup-level)
  * @param[in] cols Column descriptors
- * @param[in] num_columns Number of columns
- * @param[in] num_rowgroups Number of rowgroups
- * @param[in] row_index_stride Rowgroup size in rows
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] rowgroup_bounds Ranges of rows in each rowgroup [rowgroup][column]
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void orc_init_statistics_groups(statistics_group* groups,
                                 const stats_column_desc* cols,
                                 device_2dspan<rowgroup_rows const> rowgroup_bounds,
-                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                                rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernels to return statistics buffer offsets and sizes
@@ -426,12 +423,12 @@ void orc_init_statistics_groups(statistics_group* groups,
  * @param[in,out] groups Statistics merge groups
  * @param[in] chunks Statistics chunks
  * @param[in] statistics_count Number of statistics buffers to encode
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void orc_init_statistics_buffersize(statistics_merge_group* groups,
                                     const statistics_chunk* chunks,
                                     uint32_t statistics_count,
-                                    rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                                    rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel to encode statistics in ORC protobuf format
@@ -445,7 +442,7 @@ void orc_encode_statistics(uint8_t* blob_bfr,
                            statistics_merge_group* groups,
                            const statistics_chunk* chunks,
                            uint32_t statistics_count,
-                           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                           rmm::cuda_stream_view stream);
 
 }  // namespace gpu
 }  // namespace orc
