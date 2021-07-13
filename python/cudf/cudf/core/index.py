@@ -13,6 +13,7 @@ from nvtx import annotate
 from pandas._config import get_option
 
 import cudf
+from cudf._lib.datetime import is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.table import Table
@@ -2342,6 +2343,24 @@ class DatetimeIndex(GenericIndex):
         Int16Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
         return self._get_dt_field("day_of_year")
+
+    @property
+    def is_leap_year(self):
+        """
+        Boolean indicator if the date belongs to a leap year.
+
+        A leap year is a year, which has 366 days (instead of 365) including
+        29th of February as an intercalary day. Leap years are years which are
+        multiples of four with the exception of years divisible by 100 but not
+        by 400.
+
+        Returns
+        -------
+        ndarray
+        Booleans indicating if dates belong to a leap year.
+        """
+        res = is_leap_year(self._values).fillna(False)
+        return cupy.array(res.to_gpu_array())
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
