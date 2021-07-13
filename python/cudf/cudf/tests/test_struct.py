@@ -119,3 +119,17 @@ def test_struct_scalar_host_construction(data):
 def test_struct_scalar_null():
     slr = cudf.Scalar(cudf.NA, dtype=StructDtype)
     assert slr.device_value.value is cudf.NA
+
+
+def test_dataframe_to_struct():
+    df = cudf.DataFrame()
+    expect = cudf.Series(dtype=cudf.StructDtype({}))
+    got = df.to_struct()
+    assert_eq(expect, got)
+
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
+    expect = cudf.Series(
+        [{"a": 1, "b": "x"}, {"a": 2, "b": "y"}, {"a": 3, "b": "z"}]
+    )
+    got = df.to_struct()
+    assert_eq(expect, got)
