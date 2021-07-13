@@ -61,15 +61,15 @@ struct orc_table_view {
   std::vector<int> string_column_indices;
   rmm::device_uvector<int> d_string_column_indices;
 
-  auto num_columns() const { return columns.size(); }
-  size_type num_rows() const;
-  auto num_string_columns() const { return string_column_indices.size(); }
+  auto num_columns() const noexcept { return columns.size(); }
+  size_type num_rows() const noexcept;
+  auto num_string_columns() const noexcept { return string_column_indices.size(); }
 
-  auto& column(int idx) { return columns[idx]; }
-  auto const& column(int idx) const { return columns[idx]; }
+  auto& column(int idx) { return columns.at(idx); }
+  auto const& column(int idx) const { return columns.at(idx); }
 
-  auto& string_column(int idx) { return columns[string_column_indices[idx]]; }
-  auto const& string_column(int idx) const { return columns[string_column_indices[idx]]; }
+  auto& string_column(int idx) { return columns.at(string_column_indices.at(idx)); }
+  auto const& string_column(int idx) const { return columns.at(string_column_indices.at(idx)); }
 };
 
 /**
@@ -136,8 +136,9 @@ class orc_streams {
 struct file_segmentation {
   hostdevice_2dvector<rowgroup_rows> rowgroups;
   std::vector<stripe_rowgroups> stripes;
-  auto num_rowgroups() const { return rowgroups.size().first; }
-  auto num_stripes() const { return stripes.size(); }
+
+  auto num_rowgroups() const noexcept { return rowgroups.size().first; }
+  auto num_stripes() const noexcept { return stripes.size(); }
 };
 
 /**
@@ -148,12 +149,16 @@ struct encoded_data {
   hostdevice_2dvector<gpu::encoder_chunk_streams> streams;  // streams of encoded data, per chunk
 };
 
-struct string_dictionaries {
+/**
+ * @brief Dictionary data for string columns and their device views, per column.
+ */
+ struct string_dictionaries {
   std::vector<rmm::device_uvector<uint32_t>> data;
   std::vector<rmm::device_uvector<uint32_t>> index;
   rmm::device_uvector<device_span<uint32_t>> d_data_view;
   rmm::device_uvector<device_span<uint32_t>> d_index_view;
-  std::map<int, bool> dictionary_enabled;
+   // Dictionaries are currently disabled for columns with a rowgroup larger than 2^15
+  thrust::host_vector<bool> dictionary_enabled;
 };
 
 /**
@@ -230,13 +235,14 @@ class writer::impl {
    * @param stripe_bounds List of stripe boundaries
    * @param dict List of dictionary chunks
    * @param dict_index List of dictionary indices
+   * @param dictionary_enabled Whether dictionary encoding is enabled for a given column
    * @param stripe_dict List of stripe dictionaries
    */
   void build_dictionaries(orc_table_view& orc_table,
                           host_span<stripe_rowgroups const> stripe_bounds,
                           hostdevice_vector<gpu::DictionaryChunk> const& dict,
                           host_span<rmm::device_uvector<uint32_t>> dict_index,
-                          std::map<int, bool>& dictionary_enabled,
+                          host_span<bool const> dictionary_enabled,
                           hostdevice_vector<gpu::StripeDictionary>& stripe_dict);
 
   /**

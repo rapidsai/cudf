@@ -252,7 +252,10 @@ class orc_column_view {
   uint32_t* d_decimal_offsets = nullptr;
 };
 
-size_type orc_table_view::num_rows() const { return columns.empty() ? 0 : columns.front().size(); }
+size_type orc_table_view::num_rows() const noexcept
+{
+  return columns.empty() ? 0 : columns.front().size();
+}
 
 /**
  * @brief Gathers stripe information.
@@ -363,7 +366,7 @@ void writer::impl::build_dictionaries(orc_table_view& orc_table,
                                       host_span<stripe_rowgroups const> stripe_bounds,
                                       hostdevice_vector<gpu::DictionaryChunk> const& dict,
                                       host_span<rmm::device_uvector<uint32_t>> dict_index,
-                                      std::map<int, bool>& dictionary_enabled,
+                                      host_span<bool const> dictionary_enabled,
                                       hostdevice_vector<gpu::StripeDictionary>& stripe_dict)
 {
   const auto num_rowgroups = dict.size() / orc_table.num_string_columns();
@@ -1314,7 +1317,7 @@ string_dictionaries allocate_dictionaries(orc_table_view const& orc_table,
                                           host_2dspan<rowgroup_rows const> rowgroup_bounds,
                                           rmm::cuda_stream_view stream)
 {
-  std::map<int, bool> is_dict_enabled;
+  thrust::host_vector<bool> is_dict_enabled(orc_table.num_columns());
   for (auto col_idx : orc_table.string_column_indices)
     is_dict_enabled[col_idx] = std::all_of(
       thrust::make_counting_iterator(0ul),

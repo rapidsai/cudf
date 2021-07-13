@@ -1030,7 +1030,7 @@ __global__ void __launch_bounds__(512)
 /**
  * @brief Merge chunked column data into a single contiguous stream
  *
- * @param[in] strm_desc StripeStream device array [stripe][stream]
+ * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in,out] streams List of encoder chunk streams [column][rowgroup]
  */
 // blockDim {1024,1,1}
