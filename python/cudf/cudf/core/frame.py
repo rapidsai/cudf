@@ -1295,10 +1295,12 @@ class Frame(libcudf.table.Table):
 
         if value is not None and method is not None:
             raise ValueError("Cannot specify both 'value' and 'method'.")
-        
+
         if method:
             if method not in {"ffill", "bfill", "pad", "backfill"}:
-                raise NotImplementedError(f"Fill method {method} is not supported")
+                raise NotImplementedError(
+                    f"Fill method {method} is not supported"
+                )
             if method == "pad":
                 method = "ffill"
             elif method == "backfill":
