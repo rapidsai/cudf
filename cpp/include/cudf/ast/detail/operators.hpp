@@ -207,12 +207,12 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op
  *
  * @tparam op AST operator.
  */
-template <ast_operator op>
+template <ast_operator op, bool has_nulls>
 struct operator_functor {
 };
 
 template <>
-struct operator_functor<ast_operator::ADD> {
+struct operator_functor<ast_operator::ADD, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -223,7 +223,7 @@ struct operator_functor<ast_operator::ADD> {
 };
 
 template <>
-struct operator_functor<ast_operator::SUB> {
+struct operator_functor<ast_operator::SUB, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -234,7 +234,7 @@ struct operator_functor<ast_operator::SUB> {
 };
 
 template <>
-struct operator_functor<ast_operator::MUL> {
+struct operator_functor<ast_operator::MUL, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -245,7 +245,7 @@ struct operator_functor<ast_operator::MUL> {
 };
 
 template <>
-struct operator_functor<ast_operator::DIV> {
+struct operator_functor<ast_operator::DIV, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -256,7 +256,7 @@ struct operator_functor<ast_operator::DIV> {
 };
 
 template <>
-struct operator_functor<ast_operator::TRUE_DIV> {
+struct operator_functor<ast_operator::TRUE_DIV, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -268,7 +268,7 @@ struct operator_functor<ast_operator::TRUE_DIV> {
 };
 
 template <>
-struct operator_functor<ast_operator::FLOOR_DIV> {
+struct operator_functor<ast_operator::FLOOR_DIV, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -280,7 +280,7 @@ struct operator_functor<ast_operator::FLOOR_DIV> {
 };
 
 template <>
-struct operator_functor<ast_operator::MOD> {
+struct operator_functor<ast_operator::MOD, false> {
   static constexpr auto arity{2};
 
   template <typename LHS,
@@ -315,7 +315,7 @@ struct operator_functor<ast_operator::MOD> {
 };
 
 template <>
-struct operator_functor<ast_operator::PYMOD> {
+struct operator_functor<ast_operator::PYMOD, false> {
   static constexpr auto arity{2};
 
   template <typename LHS,
@@ -362,7 +362,7 @@ struct operator_functor<ast_operator::PYMOD> {
 };
 
 template <>
-struct operator_functor<ast_operator::POW> {
+struct operator_functor<ast_operator::POW, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -373,7 +373,7 @@ struct operator_functor<ast_operator::POW> {
 };
 
 template <>
-struct operator_functor<ast_operator::EQUAL> {
+struct operator_functor<ast_operator::EQUAL, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -384,7 +384,7 @@ struct operator_functor<ast_operator::EQUAL> {
 };
 
 template <>
-struct operator_functor<ast_operator::NOT_EQUAL> {
+struct operator_functor<ast_operator::NOT_EQUAL, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -395,7 +395,7 @@ struct operator_functor<ast_operator::NOT_EQUAL> {
 };
 
 template <>
-struct operator_functor<ast_operator::LESS> {
+struct operator_functor<ast_operator::LESS, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -406,7 +406,7 @@ struct operator_functor<ast_operator::LESS> {
 };
 
 template <>
-struct operator_functor<ast_operator::GREATER> {
+struct operator_functor<ast_operator::GREATER, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -417,7 +417,7 @@ struct operator_functor<ast_operator::GREATER> {
 };
 
 template <>
-struct operator_functor<ast_operator::LESS_EQUAL> {
+struct operator_functor<ast_operator::LESS_EQUAL, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -428,7 +428,7 @@ struct operator_functor<ast_operator::LESS_EQUAL> {
 };
 
 template <>
-struct operator_functor<ast_operator::GREATER_EQUAL> {
+struct operator_functor<ast_operator::GREATER_EQUAL, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -439,7 +439,7 @@ struct operator_functor<ast_operator::GREATER_EQUAL> {
 };
 
 template <>
-struct operator_functor<ast_operator::BITWISE_AND> {
+struct operator_functor<ast_operator::BITWISE_AND, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -450,7 +450,7 @@ struct operator_functor<ast_operator::BITWISE_AND> {
 };
 
 template <>
-struct operator_functor<ast_operator::BITWISE_OR> {
+struct operator_functor<ast_operator::BITWISE_OR, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -461,7 +461,7 @@ struct operator_functor<ast_operator::BITWISE_OR> {
 };
 
 template <>
-struct operator_functor<ast_operator::BITWISE_XOR> {
+struct operator_functor<ast_operator::BITWISE_XOR, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -472,7 +472,7 @@ struct operator_functor<ast_operator::BITWISE_XOR> {
 };
 
 template <>
-struct operator_functor<ast_operator::LOGICAL_AND> {
+struct operator_functor<ast_operator::LOGICAL_AND, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -483,7 +483,7 @@ struct operator_functor<ast_operator::LOGICAL_AND> {
 };
 
 template <>
-struct operator_functor<ast_operator::LOGICAL_OR> {
+struct operator_functor<ast_operator::LOGICAL_OR, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -494,7 +494,7 @@ struct operator_functor<ast_operator::LOGICAL_OR> {
 };
 
 template <>
-struct operator_functor<ast_operator::IDENTITY> {
+struct operator_functor<ast_operator::IDENTITY, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
@@ -505,7 +505,7 @@ struct operator_functor<ast_operator::IDENTITY> {
 };
 
 template <>
-struct operator_functor<ast_operator::SIN> {
+struct operator_functor<ast_operator::SIN, false> {
   static constexpr auto arity{1};
 
   template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
@@ -516,7 +516,7 @@ struct operator_functor<ast_operator::SIN> {
 };
 
 template <>
-struct operator_functor<ast_operator::COS> {
+struct operator_functor<ast_operator::COS, false> {
   static constexpr auto arity{1};
 
   template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
@@ -527,7 +527,7 @@ struct operator_functor<ast_operator::COS> {
 };
 
 template <>
-struct operator_functor<ast_operator::TAN> {
+struct operator_functor<ast_operator::TAN, false> {
   static constexpr auto arity{1};
 
   template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
@@ -538,7 +538,7 @@ struct operator_functor<ast_operator::TAN> {
 };
 
 template <>
-struct operator_functor<ast_operator::ARCSIN> {
+struct operator_functor<ast_operator::ARCSIN, false> {
   static constexpr auto arity{1};
 
   template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
@@ -549,7 +549,7 @@ struct operator_functor<ast_operator::ARCSIN> {
 };
 
 template <>
-struct operator_functor<ast_operator::ARCCOS> {
+struct operator_functor<ast_operator::ARCCOS, false> {
   static constexpr auto arity{1};
 
   template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
@@ -560,7 +560,7 @@ struct operator_functor<ast_operator::ARCCOS> {
 };
 
 template <>
-struct operator_functor<ast_operator::ARCTAN> {
+struct operator_functor<ast_operator::ARCTAN, false> {
   static constexpr auto arity{1};
 
   template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
@@ -571,7 +571,7 @@ struct operator_functor<ast_operator::ARCTAN> {
 };
 
 template <>
-struct operator_functor<ast_operator::SINH> {
+struct operator_functor<ast_operator::SINH, false> {
   static constexpr auto arity{1};
 
   template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
@@ -582,7 +582,7 @@ struct operator_functor<ast_operator::SINH> {
 };
 
 template <>
-struct operator_functor<ast_operator::COSH> {
+struct operator_functor<ast_operator::COSH, false> {
   static constexpr auto arity{1};
 
   template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
@@ -593,7 +593,7 @@ struct operator_functor<ast_operator::COSH> {
 };
 
 template <>
-struct operator_functor<ast_operator::TANH> {
+struct operator_functor<ast_operator::TANH, false> {
   static constexpr auto arity{1};
 
   template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
@@ -604,7 +604,7 @@ struct operator_functor<ast_operator::TANH> {
 };
 
 template <>
-struct operator_functor<ast_operator::ARCSINH> {
+struct operator_functor<ast_operator::ARCSINH, false> {
   static constexpr auto arity{1};
 
   template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
@@ -615,7 +615,7 @@ struct operator_functor<ast_operator::ARCSINH> {
 };
 
 template <>
-struct operator_functor<ast_operator::ARCCOSH> {
+struct operator_functor<ast_operator::ARCCOSH, false> {
   static constexpr auto arity{1};
 
   template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
@@ -626,7 +626,7 @@ struct operator_functor<ast_operator::ARCCOSH> {
 };
 
 template <>
-struct operator_functor<ast_operator::ARCTANH> {
+struct operator_functor<ast_operator::ARCTANH, false> {
   static constexpr auto arity{1};
 
   template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
@@ -637,7 +637,7 @@ struct operator_functor<ast_operator::ARCTANH> {
 };
 
 template <>
-struct operator_functor<ast_operator::EXP> {
+struct operator_functor<ast_operator::EXP, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
@@ -648,7 +648,7 @@ struct operator_functor<ast_operator::EXP> {
 };
 
 template <>
-struct operator_functor<ast_operator::LOG> {
+struct operator_functor<ast_operator::LOG, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
@@ -659,7 +659,7 @@ struct operator_functor<ast_operator::LOG> {
 };
 
 template <>
-struct operator_functor<ast_operator::SQRT> {
+struct operator_functor<ast_operator::SQRT, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
@@ -670,7 +670,7 @@ struct operator_functor<ast_operator::SQRT> {
 };
 
 template <>
-struct operator_functor<ast_operator::CBRT> {
+struct operator_functor<ast_operator::CBRT, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
@@ -681,7 +681,7 @@ struct operator_functor<ast_operator::CBRT> {
 };
 
 template <>
-struct operator_functor<ast_operator::CEIL> {
+struct operator_functor<ast_operator::CEIL, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
@@ -692,7 +692,7 @@ struct operator_functor<ast_operator::CEIL> {
 };
 
 template <>
-struct operator_functor<ast_operator::FLOOR> {
+struct operator_functor<ast_operator::FLOOR, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
@@ -703,7 +703,7 @@ struct operator_functor<ast_operator::FLOOR> {
 };
 
 template <>
-struct operator_functor<ast_operator::ABS> {
+struct operator_functor<ast_operator::ABS, false> {
   static constexpr auto arity{1};
 
   // Only accept signed or unsigned types (both require is_arithmetic<T> to be true)
@@ -721,7 +721,7 @@ struct operator_functor<ast_operator::ABS> {
 };
 
 template <>
-struct operator_functor<ast_operator::RINT> {
+struct operator_functor<ast_operator::RINT, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
@@ -732,7 +732,7 @@ struct operator_functor<ast_operator::RINT> {
 };
 
 template <>
-struct operator_functor<ast_operator::BIT_INVERT> {
+struct operator_functor<ast_operator::BIT_INVERT, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
@@ -743,7 +743,7 @@ struct operator_functor<ast_operator::BIT_INVERT> {
 };
 
 template <>
-struct operator_functor<ast_operator::NOT> {
+struct operator_functor<ast_operator::NOT, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
@@ -751,6 +751,12 @@ struct operator_functor<ast_operator::NOT> {
   {
     return !input;
   }
+};
+
+template <ast_operator op>
+struct operator_functor<op, true> : operator_functor<op, false> {
+  using operator_functor<op, false>::arity;
+  using operator_functor<op, false>::operator();
 };
 
 /**
@@ -793,6 +799,7 @@ struct single_dispatch_binary_operator_types {
  * This functor performs single dispatch, which assumes lhs_type == rhs_type. This may not be true
  * for all binary operators but holds for all currently implemented operators.
  */
+template <bool has_nulls>
 struct type_dispatch_binary_op {
   /**
    * @brief Performs type dispatch for a binary operator.
@@ -812,10 +819,11 @@ struct type_dispatch_binary_op {
                                             Ts&&... args)
   {
     // Single dispatch (assume lhs_type == rhs_type)
-    type_dispatcher(lhs_type,
-                    detail::single_dispatch_binary_operator_types<operator_functor<op>>{},
-                    std::forward<F>(f),
-                    std::forward<Ts>(args)...);
+    type_dispatcher(
+      lhs_type,
+      detail::single_dispatch_binary_operator_types<operator_functor<op, has_nulls>>{},
+      std::forward<F>(f),
+      std::forward<Ts>(args)...);
   }
 };
 
@@ -829,12 +837,12 @@ struct type_dispatch_binary_op {
  * @param f Forwarded functor to be called.
  * @param args Forwarded arguments to `operator()` of `f`.
  */
-template <typename F, typename... Ts>
+template <bool has_nulls, typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr void binary_operator_dispatcher(
   ast_operator op, cudf::data_type lhs_type, cudf::data_type rhs_type, F&& f, Ts&&... args)
 {
   ast_operator_dispatcher(op,
-                          detail::type_dispatch_binary_op{},
+                          detail::type_dispatch_binary_op<has_nulls>{},
                           lhs_type,
                           rhs_type,
                           std::forward<F>(f),
@@ -877,12 +885,13 @@ struct dispatch_unary_operator_types {
 /**
  * @brief Functor performing a type dispatch for a unary operator.
  */
+template <bool has_nulls>
 struct type_dispatch_unary_op {
   template <ast_operator op, typename F, typename... Ts>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type input_type, F&& f, Ts&&... args)
   {
     type_dispatcher(input_type,
-                    detail::dispatch_unary_operator_types<operator_functor<op>>{},
+                    detail::dispatch_unary_operator_types<operator_functor<op, has_nulls>>{},
                     std::forward<F>(f),
                     std::forward<Ts>(args)...);
   }
@@ -897,14 +906,14 @@ struct type_dispatch_unary_op {
  * @param f Forwarded functor to be called.
  * @param args Forwarded arguments to `operator()` of `f`.
  */
-template <typename F, typename... Ts>
+template <bool has_nulls, typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr void unary_operator_dispatcher(ast_operator op,
                                                                    cudf::data_type input_type,
                                                                    F&& f,
                                                                    Ts&&... args)
 {
   ast_operator_dispatcher(op,
-                          detail::type_dispatch_unary_op{},
+                          detail::type_dispatch_unary_op<has_nulls>{},
                           input_type,
                           std::forward<F>(f),
                           std::forward<Ts>(args)...);
@@ -981,16 +990,18 @@ struct return_type_functor {
  * @param operand_types Vector of input types to the operator.
  * @return cudf::data_type Return type of the operator.
  */
+template <bool has_nulls>
 inline cudf::data_type ast_operator_return_type(ast_operator op,
                                                 std::vector<cudf::data_type> const& operand_types)
 {
   auto result = cudf::data_type(cudf::type_id::EMPTY);
   switch (operand_types.size()) {
     case 1:
-      unary_operator_dispatcher(op, operand_types[0], detail::return_type_functor{}, result);
+      unary_operator_dispatcher<has_nulls>(
+        op, operand_types[0], detail::return_type_functor{}, result);
       break;
     case 2:
-      binary_operator_dispatcher(
+      binary_operator_dispatcher<has_nulls>(
         op, operand_types[0], operand_types[1], detail::return_type_functor{}, result);
       break;
     default: CUDF_FAIL("Unsupported operator return type."); break;
@@ -1005,7 +1016,8 @@ struct arity_functor {
   template <ast_operator op>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::size_type& result)
   {
-    result = operator_functor<op>::arity;
+    // Arity is not dependent on null handling, so just use the false implementation here.
+    result = operator_functor<op, false>::arity;
   }
 };
 

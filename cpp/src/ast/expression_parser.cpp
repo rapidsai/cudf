@@ -162,7 +162,9 @@ cudf::size_type expression_parser::visit(operation const& expr)
     });
   // Resolve expression type
   auto const op        = expr.get_operator();
-  auto const data_type = cudf::ast::detail::ast_operator_return_type(op, operand_types);
+  auto const data_type = has_nulls
+                           ? cudf::ast::detail::ast_operator_return_type<true>(op, operand_types)
+                           : cudf::ast::detail::ast_operator_return_type<false>(op, operand_types);
   _operators.push_back(op);
   // Push data reference
   auto const output = [&]() {

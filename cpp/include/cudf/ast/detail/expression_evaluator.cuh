@@ -596,16 +596,16 @@ struct expression_evaluator {
      * @param input Input to the operation.
      * @param output Output data reference.
      */
-    template <
-      ast_operator op,
-      typename OutputType,
-      std::enable_if_t<detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
+    template <ast_operator op,
+              typename OutputType,
+              std::enable_if_t<detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
+                                                         Input>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
                                possibly_null_value_t<Input, has_nulls> const input,
                                detail::device_data_reference const output) const
     {
-      using OperatorFunctor = detail::operator_functor<op>;
+      using OperatorFunctor = detail::operator_functor<op, has_nulls>;
       using Out             = cuda::std::invoke_result_t<OperatorFunctor, Input>;
       if constexpr (has_nulls) {
         auto const result = input.has_value()
@@ -618,10 +618,10 @@ struct expression_evaluator {
       }
     }
 
-    template <
-      ast_operator op,
-      typename OutputType,
-      std::enable_if_t<!detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
+    template <ast_operator op,
+              typename OutputType,
+              std::enable_if_t<!detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
+                                                          Input>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
                                possibly_null_value_t<Input, has_nulls> const input,
@@ -656,17 +656,18 @@ struct expression_evaluator {
      * @param rhs Right input to the operation.
      * @param output Output data reference.
      */
-    template <ast_operator op,
-              typename OutputType,
-              std::enable_if_t<
-                detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
+    template <
+      ast_operator op,
+      typename OutputType,
+      std::enable_if_t<
+        detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>, LHS, RHS>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
                                possibly_null_value_t<LHS, has_nulls> const lhs,
                                possibly_null_value_t<RHS, has_nulls> const rhs,
                                detail::device_data_reference const output) const
     {
-      using OperatorFunctor = detail::operator_functor<op>;
+      using OperatorFunctor = detail::operator_functor<op, has_nulls>;
       using Out             = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
       if constexpr (has_nulls) {
         if constexpr (op == ast_operator::EQUAL) {
@@ -698,10 +699,11 @@ struct expression_evaluator {
       }
     }
 
-    template <ast_operator op,
-              typename OutputType,
-              std::enable_if_t<
-                !detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
+    template <
+      ast_operator op,
+      typename OutputType,
+      std::enable_if_t<
+        !detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>, LHS, RHS>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
                                possibly_null_value_t<LHS, has_nulls> const lhs,
