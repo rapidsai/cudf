@@ -120,9 +120,8 @@ void generalized_operation(table_view data_view,
   mask_ptrs.reserve(data_view.num_columns());
   offsets.reserve(data_view.num_columns());
 
-  column_view col;
   for (int col_idx = 0; col_idx < data_view.num_columns(); col_idx++) {
-    col = data_view.column(col_idx);
+    auto const& col = data_view.column(col_idx);
 
     data_ptrs.push_back(cudf::jit::get_data_ptr(col));
     mask_ptrs.push_back(col.null_mask());
@@ -182,8 +181,8 @@ std::unique_ptr<column> generalized_masked_op(table_view data_view,
   transformation::jit::generalized_operation(
     data_view, udf, output_type, *output, *output_mask, stream, mr);
 
-  auto final_output_mask = cudf::bools_to_mask(*output_mask);
-  output.get()->set_null_mask(std::move(*(final_output_mask.first)));
+  auto [final_output_mask, out_something] = cudf::bools_to_mask(*output_mask);
+  output.get()->set_null_mask(std::move(final_output_mask));
   return output;
 }
 
