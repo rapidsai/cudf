@@ -1,8 +1,8 @@
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 """
 isort: skip_file
 """
 
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
