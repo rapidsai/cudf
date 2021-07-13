@@ -25,10 +25,6 @@ inline constexpr auto ceil_div(Dividend dividend, Divisor divisor)
   return dividend / divisor + (dividend % divisor != 0);
 }
 
-struct trie_state {
-  uint8_t placeholder;
-};
-
 using superstate = cudf::io::text::superstate<16>;
 
 template <typename T>
@@ -78,12 +74,12 @@ struct scan_tile_state {
   T back_element(rmm::cuda_stream_view s) const { return tile_state.back_element(s); }
 };
 
-// keep BYTES_PER_TILE below input size to force multi-tile execution.
-auto constexpr BYTES_PER_THREAD = 4;
-auto constexpr THREADS_PER_TILE = 4;
-auto constexpr BYTES_PER_TILE   = BYTES_PER_THREAD * THREADS_PER_TILE;
+// keep ITEMS_PER_TILE below input size to force multi-tile execution.
+auto constexpr ITEMS_PER_THREAD = 4;
+auto constexpr THREADS_PER_TILE = 32;
+auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
 auto constexpr TILES_PER_CHUNK  = 1024;
-auto constexpr BYTES_PER_CHUNK  = BYTES_PER_TILE * TILES_PER_CHUNK;
+auto constexpr BYTES_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 // multibyte_split works by splitting up inputs in to 32 inputs (bytes) per thread, and transforming
 // them in to data structures called "superstates". these superstates are created by searching a
 // trie, but instead of a tradition trie where the search begins at a single node at the beginning,
@@ -94,7 +90,7 @@ auto constexpr BYTES_PER_CHUNK  = BYTES_PER_TILE * TILES_PER_CHUNK;
 // it begins in. From there, each thread can then take deterministic action. In this case, the
 // deterministic action is counting and outputting delimiter offsets when a delimiter is found.
 
-struct SuperstateScan {
+struct PatternScan {
   typedef cub::BlockScan<superstate, THREADS_PER_TILE> BlockScan;
 
   struct _TempStorage {
@@ -108,20 +104,18 @@ struct SuperstateScan {
 
   using TempStorage = cub::Uninitialized<_TempStorage>;
 
-  __device__ inline SuperstateScan(TempStorage& temp_storage) : _temp_storage(temp_storage.Alias())
-  {
-  }
+  __device__ inline PatternScan(TempStorage& temp_storage) : _temp_storage(temp_storage.Alias()) {}
 
   __device__ inline void Scan(scan_tile_state_view<superstate> tile_state,
                               cudf::io::text::trie_device_view trie,
-                              char (&thread_data)[BYTES_PER_THREAD],
-                              uint32_t (&thread_state)[BYTES_PER_THREAD])
+                              char (&thread_data)[ITEMS_PER_THREAD],
+                              uint32_t (&thread_state)[ITEMS_PER_THREAD])
   {
     // create a state that represents all possible starting states.
     auto thread_superstate = superstate();
 
     // transition all possible states
-    for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
+    for (uint32_t i = 0; i < ITEMS_PER_THREAD; i++) {
       thread_superstate = thread_superstate.apply([&](uint8_t state) {  //
         return trie.transition(state, thread_data[i]);
       });
@@ -138,16 +132,12 @@ struct SuperstateScan {
     };
 
     BlockScan(_temp_storage.scan)
-      .ExclusiveScan(  //
-        thread_superstate,
-        thread_superstate,
-        thrust::plus<superstate>(),
-        prefix_callback);
+      .ExclusiveSum(thread_superstate, thread_superstate, prefix_callback);
 
     // transition from known state to known state
     thread_state[0] = trie.transition(thread_superstate.get(0), thread_data[0]);
 
-    for (uint32_t i = 1; i < BYTES_PER_THREAD; i++) {
+    for (uint32_t i = 1; i < ITEMS_PER_THREAD; i++) {
       thread_state[i] = trie.transition(thread_state[i - 1], thread_data[i]);
     }
   }
@@ -173,7 +163,7 @@ __global__ void multibyte_split_kernel(cudf::size_type num_tiles,
   typedef cub::BlockScan<uint32_t, THREADS_PER_TILE> OffsetScan;
 
   __shared__ union {
-    typename SuperstateScan::TempStorage superstate_scan;
+    typename PatternScan::TempStorage pattern_scan;
     struct {
       typename OffsetScan::TempStorage offset_scan;
       uint32_t offset_scan_exclusive_prefix;
@@ -181,31 +171,32 @@ __global__ void multibyte_split_kernel(cudf::size_type num_tiles,
   } temp_storage;
 
   auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
-  auto const data_begin = thread_idx * BYTES_PER_THREAD;
-  auto data_end         = data_begin + BYTES_PER_THREAD;
+  auto const data_begin = thread_idx * ITEMS_PER_THREAD;
 
-  if (data_end > data.size()) { data_end = data.size(); }
+  // STEP 1: Load inputs
 
-  // STEP 1 + 2: Load inputs, transform to individual superstates
+  char thread_data[ITEMS_PER_THREAD];
 
-  char thread_data[BYTES_PER_THREAD];
+  for (auto i = 0; i < ITEMS_PER_THREAD; i++) {  //
+    thread_data[i] = data[data_begin + i];
+  }
 
-  for (auto i = 0; i < BYTES_PER_THREAD; i++) { thread_data[i] = data[data_begin + i]; }
+  // STEP 2: Scan inputs to determine absolute thread states
 
-  uint32_t thread_states[BYTES_PER_THREAD];
+  uint32_t thread_states[ITEMS_PER_THREAD];
 
-  SuperstateScan(temp_storage.superstate_scan)
+  PatternScan(temp_storage.pattern_scan)  //
     .Scan(tile_superstates, trie, thread_data, thread_states);
 
-  // STEP 4: Populate match flags
+  // STEP 3: Flag matches
 
-  uint32_t thread_offsets[BYTES_PER_THREAD];
+  uint32_t thread_offsets[ITEMS_PER_THREAD];
 
-  for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
+  for (int32_t i = 0; i < ITEMS_PER_THREAD; i++) {
     thread_offsets[i] = trie.is_match(thread_states[i]);
   }
 
-  // STEP 5: Scan match flags to produce match offsets
+  // STEP 4: Scan flags to determine absolute thread output offset
 
   __syncthreads();  // required before temp_memory re-use
 
@@ -219,15 +210,11 @@ __global__ void multibyte_split_kernel(cudf::size_type num_tiles,
   };
 
   OffsetScan(temp_storage.offset_scan)
-    .ExclusiveScan(  //
-      thread_offsets,
-      thread_offsets,
-      thrust::plus<uint32_t>(),
-      prefix_callback);
+    .ExclusiveSum(thread_offsets, thread_offsets, prefix_callback);
 
-  // Step 7: Assign string_offsets from each thread using match offsets.
+  // Step 5: Assign string_offsets from each thread using match offsets.
 
-  for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
+  for (uint32_t i = 0; i < ITEMS_PER_THREAD; i++) {
     auto const match_length = trie.get_match_length(thread_states[i]);
 
     if (match_length == 0) { continue; }
@@ -239,7 +226,7 @@ __global__ void multibyte_split_kernel(cudf::size_type num_tiles,
            blockIdx.x,
            threadIdx.x,
            i,
-           data[data_begin + i],
+           thread_data[i],
            thread_offsets[i],
            match_begin,
            match_end);
@@ -264,7 +251,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::string_scalar const& input,
 {
   auto const trie = cudf::io::text::trie::create(delimeters, stream);
 
-  auto num_tiles = ceil_div(input.size(), BYTES_PER_TILE);
+  auto num_tiles = ceil_div(input.size(), ITEMS_PER_TILE);
 
   // pattern-match and count delimiters
 
