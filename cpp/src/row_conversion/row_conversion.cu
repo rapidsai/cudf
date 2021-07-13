@@ -37,6 +37,8 @@
 #include "thrust/iterator/counting_iterator.h"
 #include "thrust/iterator/transform_iterator.h"
 
+#define NUM_BLOCKS_PER_KERNEL_TO_COLUMNS (2)
+
 using cudf::detail::make_device_uvector_async;
 namespace cudf {
 
@@ -156,11 +158,11 @@ __global__ void copy_to_fixed_width_columns(const cudf::size_type num_rows,
         }
 
         cudf::bitmask_type *nm          = output_nm[col_index];
-        int8_t *valid_byte              = &row_vld_tmp[word_index(col_index)];
-        cudf::size_type byte_bit_offset = intra_word_index(col_index);
+        int8_t *valid_byte              = &row_vld_tmp[col_index / 8];
+        cudf::size_type byte_bit_offset = col_index % 8;
         int predicate                   = *valid_byte & (1 << byte_bit_offset);
         uint32_t bitmask                = __ballot_sync(active_mask, predicate);
-        if (row_index % 32 == 0) { nm[word_index(row_index)] = bitmask; }
+        if (row_index % 32 == 0) { nm[row_index / 8] = bitmask; }
       }  // end column loop
     }    // end row copy
     // wait for the row_group to be totally copied before starting on the next row group
@@ -254,8 +256,8 @@ __global__ void copy_from_fixed_width_columns(const cudf::size_type start_row,
         }
         // atomicOr only works on 32 bit or 64 bit  aligned values, and not byte aligned
         // so we have to rewrite the addresses to make sure that it is 4 byte aligned
-        int8_t *valid_byte              = &row_vld_tmp[word_index(col_index)];
-        cudf::size_type byte_bit_offset = intra_word_index(col_index);
+        int8_t *valid_byte              = &row_vld_tmp[col_index / 8];
+        cudf::size_type byte_bit_offset = col_index % 8;
         uint64_t fixup_bytes            = reinterpret_cast<uint64_t>(valid_byte) % 4;
         int32_t *valid_int              = reinterpret_cast<int32_t *>(valid_byte - fixup_bytes);
         cudf::size_type int_bit_offset  = byte_bit_offset + (fixup_bytes * 8);
@@ -481,8 +483,8 @@ __global__ void copy_from_columns(const size_type num_rows,
         // we do this directly in the final location because the entire row may not
         // fit in shared memory and may require many blocks to process it entirely
         int8_t *valid_byte =
-          &output_data[block.buffer_num][row_offsets[row] + validity_offset + word_index(col)];
-        cudf::size_type byte_bit_offset = intra_word_index(col);
+          &output_data[block.buffer_num][row_offsets[row] + validity_offset + (col  / 8)];
+        cudf::size_type byte_bit_offset = col % 8;
         uint64_t fixup_bytes            = reinterpret_cast<uint64_t>(valid_byte) % 4;
         int32_t *valid_int              = reinterpret_cast<int32_t *>(valid_byte - fixup_bytes);
         cudf::size_type int_bit_offset  = byte_bit_offset + (fixup_bytes * 8);
@@ -597,6 +599,7 @@ __global__ void copy_from_columns(const size_type num_rows,
  *
  * @param num_rows total number of rows in the table
  * @param num_columns total number of columns in the table
+ * @param shmem_used_per_block amount of shared memory that is used by a block
  * @param offsets
  * @param output_data
  * @param output_nm
@@ -608,6 +611,7 @@ __global__ void copy_from_columns(const size_type num_rows,
  */
 __global__ void copy_to_columns(const size_type num_rows,
                                 const size_type num_columns,
+                                const size_type shmem_used_per_block,
                                 const size_type *offsets,
                                 int8_t **output_data,
                                 cudf::bitmask_type **output_nm,
@@ -624,18 +628,10 @@ __global__ void copy_to_columns(const size_type num_rows,
   // This has been broken up for us in the block_info struct, so we don't have
   // any calculation to do here, but it is important to note.
 
-  bool debug_print = false; //blockIdx.x == 0 && threadIdx.x == 0;
+  constexpr bool debug_print = false; //blockIdx.x == 0 && threadIdx.x == 0;
 
   if (debug_print) {
     printf("%d %d - %d rows, %d columns\n", threadIdx.x, blockIdx.x, num_rows, num_columns);
-    printf("Column Info:\n");
-    for (int i = 0; i < num_columns; ++i) {
-      printf("col %d is at %p with size %d and offset %d\n",
-             i,
-             output_data[i],
-             col_sizes[i],
-             col_offsets[i]);
-    }
     printf("block infos are at %p and my index is %d\n", block_infos, blockIdx.x);
     /*    printf("Row Offsets:\n");
     for (int i=0; i<num_rows; ++i) {
@@ -644,7 +640,13 @@ __global__ void copy_to_columns(const size_type num_rows,
     printf("output data to %p\n", output_data[block_infos[blockIdx.x].buffer_num]);
   }
 //  else { return; }
-  auto block               = block_infos[blockIdx.x];
+
+  for (int block_offset = 0; block_offset < NUM_BLOCKS_PER_KERNEL_TO_COLUMNS; ++block_offset) {
+    auto this_block_index = blockIdx.x*NUM_BLOCKS_PER_KERNEL_TO_COLUMNS + block_offset;
+    if (this_block_index > blockDim.x) {
+      break;
+    }
+    auto block               = block_infos[this_block_index];
   auto const rows_in_block = block.end_row - block.start_row + 1;
   auto const cols_in_block = block.end_col - block.start_col + 1;
   extern __shared__ int8_t shared_data[];
@@ -767,60 +769,57 @@ __global__ void copy_to_columns(const size_type num_rows,
     }
   }
 
-  __syncthreads();
-
-  // now handle validity. Each thread is responsible for 32 rows in a single column.
+  // now handle validity. Each thread is responsible for 32 rows in 8 columns.
   // to prevent indexing issues with a large number of threads, this is compressed
   // to a single loop like above. TODO: investigate using shared memory here
   auto const validity_batches_per_col = (num_rows + 31) / 32;
-  auto const validity_batches_total   = validity_batches_per_col * num_columns;
-  if (debug_print) {
-    printf("validity_batched_per_col is %d\nvalidity_batches_total is %d for %d rows\n", validity_batches_per_col, validity_batches_total, num_rows);
+  auto const validity_batches_total   = std::max(1, validity_batches_per_col * (num_columns / 8));
+  if (debug_print && threadIdx.x == 0 && blockIdx.x == 0) {
+    printf("validity_batched_per_col is %d\nvalidity_batches_total is %d for %d rows\n%d blocks of %d threads\n", validity_batches_per_col, validity_batches_total, num_rows, gridDim.x, blockDim.x);
   }
-  for (int index = threadIdx.x; index < validity_batches_total; index += blockDim.x) {
-    // what column is this?
-    auto const col             = index / validity_batches_per_col;
+  for (int index = blockIdx.x * blockDim.x + threadIdx.x; index < validity_batches_total; index += blockDim.x * gridDim.x) {
+    auto const start_col       = (index * 8) / validity_batches_per_col;
     auto const batch           = index % validity_batches_per_col;
     auto const starting_row    = batch * 32;
-    auto const validity_offset = col_offsets[num_columns] + word_index(col);
+    auto const validity_offset = col_offsets[num_columns] + (start_col / 8);
 
     if (debug_print) {
-      printf("col: %d, batch: %d, starting_row: %d, validity_offset: %d\n", col, batch, starting_row, validity_offset);
+      printf("%d-%d: cols: %d-%d, word index: %d, batch: %d, starting_row: %d, +validity_offset: %d, index: %d, stride: %d\n", threadIdx.x, blockIdx.x, start_col, start_col + 7, (start_col / 8), batch, starting_row, validity_offset, index, blockDim.x * gridDim.x);
     }
 
-    int32_t dst_validity = 0;
+    // one for each column
+    int32_t dst_validity[8] = {0};
     for (int row = starting_row; row < std::min(num_rows, starting_row + 32); ++row) {
       int8_t const * const validity_ptr = &input_data[offsets[row] + validity_offset];
 
       if (debug_print) {
-        printf("validity_ptr is %p for row %d\nwhich is input_data[%d]\n", validity_ptr, row, offsets[row] + validity_offset);
+        printf("%d: validity_ptr is %p for row %d\n", threadIdx.x, validity_ptr, row);
       }
   
       auto const val_byte     = *validity_ptr;
-      auto const src_shift    = intra_word_index(col);
-      auto const dst_shift    = row % 32;
-      auto const src_bit_mask = 1 << src_shift;
-      if (debug_print) {
-        printf("src bit mask is 0x%x\n", src_bit_mask);
-        printf("src shift is 0x%x and dst shift is 0x%x\n", src_shift, dst_shift);
-        printf("validity bit is 0x%x\n", (val_byte & src_bit_mask) >> src_shift);
-      }
-//      auto const dst_bit_mask = 1 << dst_shift;
-      dst_validity |= (((val_byte & src_bit_mask) >> src_shift) << dst_shift);
-      if (debug_print) {
-        printf("validity is now 0x%x\n", dst_validity);
+
+      for (int i=0; i<std::min(num_columns - start_col, 8); ++i) {
+        auto const src_shift    = (start_col + i) % 8;
+        auto const dst_shift    = row % 32;
+        auto const src_bit_mask = 1 << src_shift;
+        if (debug_print) {
+          printf("%d-%d: src bit mask is 0x%x, src shift is 0x%x and dst shift is 0x%x, validity bit is 0x%x\n", threadIdx.x, blockIdx.x, src_bit_mask, src_shift, dst_shift, (val_byte & src_bit_mask) >> src_shift);
+        }
+  //      auto const dst_bit_mask = 1 << dst_shift;
+        dst_validity[i] |= (((val_byte & src_bit_mask) >> src_shift) << dst_shift);
       }
     }
     
 
-    int32_t *validity_ptr = reinterpret_cast<int32_t *>(output_nm[col] + (starting_row / 32));
-    if (debug_print) {
-      printf("valiidty_ptr is output_nm[%d]: %p + starting_row / 8: %d because starting row is %d, which becomes %p\n", col, output_nm[col], starting_row / 32, starting_row, output_nm[col] + (starting_row / 32));
-      printf("validity to write is %d\n", dst_validity);
-      printf("validity write %p <- %d\n", validity_ptr, dst_validity);
+    for (int i=0; i<std::min(num_columns - start_col, 8); ++i) {
+      int32_t *validity_ptr = reinterpret_cast<int32_t *>(output_nm[start_col + i] + (starting_row / 32));
+      if (debug_print) {
+        printf("%d-%d: validity write output_nm[%d][%d] - %p <- %d\n", threadIdx.x, blockIdx.x, start_col + i, starting_row, validity_ptr, dst_validity[i]);
+      }
+      *validity_ptr         = dst_validity[i];
     }
-    *validity_ptr         = dst_validity;
   }
+}
 }
 
 /**
@@ -980,7 +979,7 @@ static inline int32_t compute_fixed_width_layout(std::vector<cudf::data_type> co
   // Now we need to add in space for validity
   // Eventually we can think about nullable vs not nullable, but for now we will just always add it
   // in
-  int32_t validity_bytes_needed = word_index(schema.size() + 7);
+  int32_t validity_bytes_needed = (schema.size() + 7) / 8;
   // validity comes at the end and is byte aligned so we can pack more in.
   at_offset += validity_bytes_needed;
   // Now we need to pad the end so all rows are 64 bit aligned
@@ -1300,7 +1299,7 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(cudf::table_view con
 
   // fixed_width_size_per_row is the size of the fixed-width portion of a row. We need to then
   // calculate the size of each row's variable-width data and validity as well.
-  auto validity_size = num_bitmask_words(num_columns);
+  auto validity_size = num_bitmask_words(num_columns) * 4;
   for (int row = 0; row < num_rows; ++row) {
     auto aligned_row_batch_size =
       detail::align_offset(row_batch_size, 8);  // rows are 8 byte aligned
@@ -1521,6 +1520,8 @@ std::unique_ptr<cudf::table> convert_from_rows2(cudf::lists_column_view const &i
   CUDA_TRY(
     cudaDeviceGetAttribute(&shmem_limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
 
+  shmem_limit_per_block /= NUM_BLOCKS_PER_KERNEL_TO_COLUMNS;
+
   std::vector<cudf::size_type> column_starts;
   std::vector<cudf::size_type> column_sizes;
 
@@ -1530,7 +1531,7 @@ std::unique_ptr<cudf::table> convert_from_rows2(cudf::lists_column_view const &i
   size_type fixed_width_size_per_row = detail::compute_column_information(
     iter, iter + num_columns, column_starts, column_sizes);//, [](void *) {});
 
-  size_type validity_size = num_bitmask_words(num_columns);
+  size_type validity_size = num_bitmask_words(num_columns) * 4;
 
   size_type row_size = detail::align_offset(fixed_width_size_per_row + validity_size, 8);
 
@@ -1567,7 +1568,7 @@ std::unique_ptr<cudf::table> convert_from_rows2(cudf::lists_column_view const &i
 
   auto dev_block_infos = make_device_uvector_async(block_infos, stream, mr);
 
-  dim3 blocks(block_infos.size());
+  dim3 blocks((block_infos.size() + (NUM_BLOCKS_PER_KERNEL_TO_COLUMNS - 1)) / NUM_BLOCKS_PER_KERNEL_TO_COLUMNS);
   #if defined(DEBUG) || 1
   dim3 threads(std::min(std::min(512, shmem_limit_per_block / 8), (int)child.size()));
   #else
@@ -1581,6 +1582,7 @@ std::unique_ptr<cudf::table> convert_from_rows2(cudf::lists_column_view const &i
   detail::copy_to_columns<<<blocks, threads, shmem_limit_per_block, stream.value()>>>(
     num_rows,
     num_columns,
+    shmem_limit_per_block,
     input.offsets().data<size_type>(),
     dev_output_data.data(),
     dev_output_nm.data(),
