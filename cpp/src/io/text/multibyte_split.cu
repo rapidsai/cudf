@@ -10,6 +10,7 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
+#include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
 
 #include <bitset>
@@ -30,9 +31,56 @@ struct trie_state {
 
 using superstate = cudf::io::text::superstate<16>;
 
+template <typename T>
+struct scan_tile_state_view {
+  bool* tile_status;
+  T* tile_state;
+
+  __device__ void initialize(cudf::size_type num_tiles)
+  {
+    auto thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (thread_idx < num_tiles) { tile_status[thread_idx] = false; }
+  }
+
+  __device__ void set_state(cudf::size_type tile_idx, T value)
+  {
+    cub::ThreadStore<cub::STORE_CG>(tile_state + tile_idx, value);
+    __threadfence();
+    cub::ThreadStore<cub::STORE_CG>(tile_status + tile_idx, true);
+  }
+
+  __device__ T get_state_sync(cudf::size_type tile_idx)
+  {
+    while (cub::ThreadLoad<cub::LOAD_CG>(tile_status + tile_idx) == false) { __threadfence(); }
+    return cub::ThreadLoad<cub::LOAD_CG>(tile_state + tile_idx);
+  }
+};
+
+template <typename T>
+struct scan_tile_state {
+  rmm::device_uvector<bool> tile_status;
+  rmm::device_uvector<T> tile_state;
+
+  scan_tile_state(cudf::size_type num_tiles,
+                  rmm::cuda_stream_view stream,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+    : tile_status(rmm::device_uvector<bool>(num_tiles + 1, stream, mr)),
+      tile_state(rmm::device_uvector<T>(num_tiles + 1, stream, mr))
+
+  {
+  }
+
+  operator scan_tile_state_view<T>()
+  {
+    return scan_tile_state_view<T>{tile_status.data(), tile_state.data()};
+  }
+
+  T back_element(rmm::cuda_stream_view s) const { return tile_state.back_element(s); }
+};
+
 // keep BYTES_PER_TILE below input size to force multi-tile execution.
-auto constexpr BYTES_PER_THREAD = 2;
-auto constexpr THREADS_PER_TILE = 32;
+auto constexpr BYTES_PER_THREAD = 4;
+auto constexpr THREADS_PER_TILE = 4;
 auto constexpr BYTES_PER_TILE   = BYTES_PER_THREAD * THREADS_PER_TILE;
 auto constexpr TILES_PER_CHUNK  = 1024;
 auto constexpr BYTES_PER_CHUNK  = BYTES_PER_TILE * TILES_PER_CHUNK;
@@ -46,18 +94,90 @@ auto constexpr BYTES_PER_CHUNK  = BYTES_PER_TILE * TILES_PER_CHUNK;
 // it begins in. From there, each thread can then take deterministic action. In this case, the
 // deterministic action is counting and outputting delimiter offsets when a delimiter is found.
 
-template <uint32_t BYTES_PER_THREAD>
-__global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
-                                       cudf::device_span<char const> data,
-                                       uint32_t* result_count,
-                                       cudf::device_span<int32_t> results)
+struct SuperstateScan {
+  typedef cub::BlockScan<superstate, THREADS_PER_TILE> BlockScan;
+
+  struct _TempStorage {
+    typename BlockScan::TempStorage scan;
+    superstate block_aggregate;
+    superstate exclusive_prefix;
+    superstate inclusive_prefix;
+  };
+
+  _TempStorage& _temp_storage;
+
+  using TempStorage = cub::Uninitialized<_TempStorage>;
+
+  __device__ inline SuperstateScan(TempStorage& temp_storage) : _temp_storage(temp_storage.Alias())
+  {
+  }
+
+  __device__ inline void Scan(scan_tile_state_view<superstate> tile_state,
+                              cudf::io::text::trie_device_view trie,
+                              char (&thread_data)[BYTES_PER_THREAD],
+                              uint32_t (&thread_state)[BYTES_PER_THREAD])
+  {
+    // create a state that represents all possible starting states.
+    auto thread_superstate = superstate();
+
+    // transition all possible states
+    for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
+      thread_superstate = thread_superstate.apply([&](uint8_t state) {  //
+        return trie.transition(state, thread_data[i]);
+      });
+    }
+
+    auto prefix_callback = [&] __device__(superstate const& block_aggregate) -> superstate {
+      if (threadIdx.x == 0) {
+        _temp_storage.block_aggregate  = block_aggregate;
+        _temp_storage.exclusive_prefix = tile_state.get_state_sync(blockIdx.x);
+        _temp_storage.inclusive_prefix = _temp_storage.exclusive_prefix + block_aggregate;
+        tile_state.set_state(blockIdx.x + 1, _temp_storage.inclusive_prefix);
+      }
+      return _temp_storage.exclusive_prefix;
+    };
+
+    BlockScan(_temp_storage.scan)
+      .ExclusiveScan(  //
+        thread_superstate,
+        thread_superstate,
+        thrust::plus<superstate>(),
+        prefix_callback);
+
+    // transition from known state to known state
+    thread_state[0] = trie.transition(thread_superstate.get(0), thread_data[0]);
+
+    for (uint32_t i = 1; i < BYTES_PER_THREAD; i++) {
+      thread_state[i] = trie.transition(thread_state[i - 1], thread_data[i]);
+    }
+  }
+};
+
+__global__ void multibyte_split_init_kernel(cudf::size_type num_tiles,
+                                            scan_tile_state_view<superstate> tile_superstates,
+                                            scan_tile_state_view<uint32_t> tile_output_offsets)
 {
-  typedef cub::BlockScan<superstate, THREADS_PER_TILE> SuperstateBlockScan;
-  typedef cub::BlockScan<uint32_t, THREADS_PER_TILE> OffsetBlockScan;
+  tile_superstates.initialize(num_tiles);
+  tile_superstates.set_state(0, superstate());
+  tile_output_offsets.initialize(num_tiles);
+  tile_output_offsets.set_state(0, 0);
+}
+
+__global__ void multibyte_split_kernel(cudf::size_type num_tiles,
+                                       scan_tile_state_view<superstate> tile_superstates,
+                                       scan_tile_state_view<uint32_t> tile_output_offsets,
+                                       cudf::io::text::trie_device_view trie,
+                                       cudf::device_span<char const> data,
+                                       cudf::device_span<int32_t> string_offsets)
+{
+  typedef cub::BlockScan<uint32_t, THREADS_PER_TILE> OffsetScan;
 
   __shared__ union {
-    typename SuperstateBlockScan::TempStorage superstate_scan;
-    typename OffsetBlockScan::TempStorage offset_scan;
+    typename SuperstateScan::TempStorage superstate_scan;
+    struct {
+      typename OffsetScan::TempStorage offset_scan;
+      uint32_t offset_scan_exclusive_prefix;
+    };
   } temp_storage;
 
   auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -68,58 +188,47 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
 
   // STEP 1 + 2: Load inputs, transform to individual superstates
 
-  superstate thread_superstates[BYTES_PER_THREAD];
+  char thread_data[BYTES_PER_THREAD];
 
-  for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
-    auto const element_idx = data_begin + i;
-    if (element_idx >= data.size()) {
-      // this check is not necessary if we gaurantee no OOB accesses, which we can do because of
-      // the batch-read/batch-process approach. Keeping the check in for now, though.
-      thread_superstates[i] = superstate();
-    } else {
-      thread_superstates[i] = superstate().apply([&](uint8_t state) {  //
-        return trie.transition(state, data[element_idx]);
-      });
-    }
-  }
+  for (auto i = 0; i < BYTES_PER_THREAD; i++) { thread_data[i] = data[data_begin + i]; }
 
-  // STEP 3: Scan superstates can to produce absolute thread states.
+  uint32_t thread_states[BYTES_PER_THREAD];
 
-  __syncthreads();
-  SuperstateBlockScan(temp_storage.superstate_scan)
-    .InclusiveScan(  //
-      thread_superstates,
-      thread_superstates,
-      [](superstate const& lhs, superstate const& rhs) { return lhs + rhs; });
+  SuperstateScan(temp_storage.superstate_scan)
+    .Scan(tile_superstates, trie, thread_data, thread_states);
 
   // STEP 4: Populate match flags
 
   uint32_t thread_offsets[BYTES_PER_THREAD];
 
   for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
-    thread_offsets[i] = trie.is_match(thread_superstates[i].get(0));
+    thread_offsets[i] = trie.is_match(thread_states[i]);
   }
 
   // STEP 5: Scan match flags to produce match offsets
 
-  uint32_t matches_in_block;
+  __syncthreads();  // required before temp_memory re-use
 
-  __syncthreads();
-  OffsetBlockScan(temp_storage.offset_scan)
-    .ExclusiveScan(
+  auto prefix_callback = [&] __device__(uint32_t const& block_aggregate) -> uint32_t {
+    if (threadIdx.x == 0) {
+      temp_storage.offset_scan_exclusive_prefix = tile_output_offsets.get_state_sync(blockIdx.x);
+      auto inclusive_prefix = temp_storage.offset_scan_exclusive_prefix + block_aggregate;
+      tile_output_offsets.set_state(blockIdx.x + 1, inclusive_prefix);
+    }
+    return temp_storage.offset_scan_exclusive_prefix;
+  };
+
+  OffsetScan(temp_storage.offset_scan)
+    .ExclusiveScan(  //
       thread_offsets,
       thread_offsets,
-      [](uint32_t const& lhs, uint32_t const& rhs) { return lhs + rhs; },
-      matches_in_block);
+      thrust::plus<uint32_t>(),
+      prefix_callback);
 
-  // Step 6: Assign final block-aggregate match offset as the total number of matches.
-
-  if (threadIdx.x == 0) { *result_count = matches_in_block; }
-
-  // Step 7: Assign results from each thread using match offsets.
+  // Step 7: Assign string_offsets from each thread using match offsets.
 
   for (uint32_t i = 0; i < BYTES_PER_THREAD; i++) {
-    auto const match_length = trie.get_match_length(thread_superstates[i].get(0));
+    auto const match_length = trie.get_match_length(thread_states[i]);
 
     if (match_length == 0) { continue; }
 
@@ -135,7 +244,9 @@ __global__ void multibyte_split_kernel(cudf::io::text::trie_device_view trie,
            match_begin,
            match_end);
 
-    if (results.size() > 0) { results[thread_offsets[i]] = match_end; }
+    if (string_offsets.size() > thread_offsets[i]) {  //
+      string_offsets[thread_offsets[i]] = match_end;
+    }
   }
 }
 
@@ -151,68 +262,60 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::string_scalar const& input,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  // auto input_buffer     = rmm::device_uvector<char>(BYTES_PER_CHUNK, stream);
-  // auto const input_span = cudf::device_span<char>(input_buffer);
-
-  // TODO: call state initalization kernels
-
   auto const trie = cudf::io::text::trie::create(delimeters, stream);
 
-  auto num_results = rmm::device_scalar<uint32_t>(0, stream);
-  auto num_tiles   = ceil_div(input.size(), BYTES_PER_TILE);
+  auto num_tiles = ceil_div(input.size(), BYTES_PER_TILE);
 
-  auto offsets = rmm::device_uvector<cudf::size_type>(0, stream);
+  // pattern-match and count delimiters
 
-  // count the results
+  auto tile_superstates = scan_tile_state<superstate<16>>(num_tiles, stream);
+  auto tile_offsets     = scan_tile_state<uint32_t>(num_tiles, stream);
+  auto num_init_blocks  = ceil_div(num_tiles, THREADS_PER_TILE);
 
-  auto kernel = multibyte_split_kernel<BYTES_PER_THREAD>;
-  kernel<<<num_tiles, THREADS_PER_TILE, 0, stream.value()>>>(  //
+  multibyte_split_init_kernel<<<num_init_blocks, THREADS_PER_TILE, 0, stream.value()>>>(  //
+    num_tiles,
+    tile_superstates,
+    tile_offsets);
+
+  multibyte_split_kernel<<<num_tiles, THREADS_PER_TILE, 0, stream.value()>>>(  //
+    num_tiles,
+    tile_superstates,
+    tile_offsets,
     trie.view(),
     cudf::device_span<char const>(input.data(), input.size()),
-    num_results.data(),
-    offsets);
+    cudf::device_span<cudf::size_type>(static_cast<size_type*>(nullptr), 0));
 
-  auto host_num_results = num_results.value(stream);
+  // allocate string offsets
 
-  stream.synchronize();
+  auto num_results    = tile_offsets.back_element(stream);
+  auto string_offsets = rmm::device_uvector<cudf::size_type>(num_results + 2, stream);
+  auto const x        = string_offsets.size() - 1;
+  auto const y        = input.size();
 
-  std::cout << "num results: " << host_num_results << std::endl;
+  std::cout << "num_results: " << num_results << std::endl;
 
-  // allocate the results
+  // first and last element are set manually to zero and size of input, respectively.
+  // kernel is only responsible for determining delimiter offsets
+  string_offsets.set_element_to_zero_async(0, stream);
+  string_offsets.set_element_async(x, y, stream);
 
-  offsets = rmm::device_uvector<cudf::size_type>(host_num_results + 2, stream);
-  offsets.set_element_to_zero_async(0, stream);
-  cudf::size_type const x = offsets.size() - 1;
-  cudf::size_type const y = input.size();
-  offsets.set_element_async(x, y, stream);
+  // pattern-match and materialize string offsets
 
-  // materialize the results
-
-  kernel<<<num_tiles, THREADS_PER_TILE, 0, stream.value()>>>(  //
+  multibyte_split_kernel<<<num_tiles, THREADS_PER_TILE, 0, stream.value()>>>(  //
+    num_tiles,
+    tile_superstates,
+    tile_offsets,
     trie.view(),
     cudf::device_span<char const>(input.data(), input.size()),
-    num_results.data(),
-    cudf::device_span<cudf::size_type>(offsets.data() + 1, host_num_results));
-
-  stream.synchronize();
-
-  // TODO: call state finalization kernels
+    cudf::device_span<cudf::size_type>(string_offsets).subspan(1, num_results));
 
   return cudf::make_strings_column(  //
     cudf::device_span<char const>(input.data(), input.size()),
-    offsets);
-
-  CUDF_FAIL();
-
-  /*
-  std::unique_ptr<column> make_strings_column(
-  cudf::device_span<char const> strings,
-  cudf::device_span<size_type const> offsets,
-  cudf::device_span<bitmask_type const> null_mask = {},
-  size_type null_count                            = cudf::UNKNOWN_NULL_COUNT,
-  rmm::cuda_stream_view stream                    = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr             = rmm::mr::get_current_device_resource());
-  */
+    string_offsets,
+    {},
+    0,
+    stream,
+    mr);
 }
 
 }  // namespace detail
