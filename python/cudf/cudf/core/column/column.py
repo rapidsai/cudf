@@ -2029,21 +2029,21 @@ def as_column(
     elif (
         isinstance(arbitrary, list)
         and len(arbitrary) > 0
-        and isinstance(arbitrary[0], cudf.Series)
+        and cudf.utils.dtypes.is_column_like(arbitrary[0])
     ):
-        data_col = arbitrary[0]._column
+        data_col = as_column(arbitrary[0])
         lengths_col = [len(data_col)]
         mask_col = [True]
 
         # Build Data & Mask
         for data in arbitrary[1:]:
-            if data is None:
+            if cudf._lib.scalar._is_null_host_scalar(data):
                 mask_col.append(False)
                 lengths_col.append(0)
             else:
                 mask_col.append(True)
-                data_col = data_col.append(data._column)
-                lengths_col.append(len(data._column))
+                data_col = data_col.append(as_column(data))
+                lengths_col.append(len(data))
 
         # Build offsets
         offset_col = cudf.core.column.column_empty(
@@ -2055,6 +2055,7 @@ def as_column(
             cudf.core.column.NumericalColumn, offset_col
         )._apply_scan_op("sum")
 
+        # Build ListColumn
         res = cudf.core.column.ListColumn(
             size=len(arbitrary),
             dtype=cudf.ListDtype(data_col.dtype),
@@ -2064,7 +2065,6 @@ def as_column(
             children=(offset_col, data_col),
         )
         return res
-
     else:
         try:
             data = as_column(
