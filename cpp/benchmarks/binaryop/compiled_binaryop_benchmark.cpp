@@ -24,11 +24,11 @@
 #include <thrust/iterator/counting_iterator.h>
 
 template <typename TypeLhs, typename TypeRhs, typename TypeOut, cudf::binary_operator>
-class JIT_BINARYOP : public cudf::benchmark {
+class COMPILED_BINARYOP : public cudf::benchmark {
 };
 
 template <typename TypeLhs, typename TypeRhs, typename TypeOut>
-void BM_binaryop(benchmark::State& state, cudf::binary_operator binop)
+void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
@@ -41,29 +41,29 @@ void BM_binaryop(benchmark::State& state, cudf::binary_operator binop)
   auto output_dtype = cudf::data_type(cudf::type_to_id<TypeOut>());
 
   // Call once for hot cache.
-  cudf::binary_operation(lhs, rhs, binop, output_dtype);
+  cudf::experimental::binary_operation(lhs, rhs, binop, output_dtype);
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    cudf::binary_operation(lhs, rhs, binop, output_dtype);
+    cudf::experimental::binary_operation(lhs, rhs, binop, output_dtype);
   }
 }
 
 // TODO tparam boolean for null.
-#define BINARYOP_BENCHMARK_DEFINE(TypeLhs, TypeRhs, binop, TypeOut)               \
-  BENCHMARK_TEMPLATE_DEFINE_F(                                                    \
-    JIT_BINARYOP, binop, TypeLhs, TypeRhs, TypeOut, cudf::binary_operator::binop) \
-  (::benchmark::State & st)                                                       \
-  {                                                                               \
-    BM_binaryop<TypeLhs, TypeRhs, TypeOut>(st, cudf::binary_operator::binop);     \
-  }                                                                               \
-  BENCHMARK_REGISTER_F(JIT_BINARYOP, binop)                                       \
-    ->Unit(benchmark::kMicrosecond)                                               \
-    ->UseManualTime()                                                             \
-    ->Arg(10000)      /* 10k */                                                   \
-    ->Arg(100000)     /* 100k */                                                  \
-    ->Arg(1000000)    /* 1M */                                                    \
-    ->Arg(10000000)   /* 10M */                                                   \
+#define BINARYOP_BENCHMARK_DEFINE(TypeLhs, TypeRhs, binop, TypeOut)                    \
+  BENCHMARK_TEMPLATE_DEFINE_F(                                                         \
+    COMPILED_BINARYOP, binop, TypeLhs, TypeRhs, TypeOut, cudf::binary_operator::binop) \
+  (::benchmark::State & st)                                                            \
+  {                                                                                    \
+    BM_compiled_binaryop<TypeLhs, TypeRhs, TypeOut>(st, cudf::binary_operator::binop); \
+  }                                                                                    \
+  BENCHMARK_REGISTER_F(COMPILED_BINARYOP, binop)                                       \
+    ->Unit(benchmark::kMicrosecond)                                                    \
+    ->UseManualTime()                                                                  \
+    ->Arg(10000)      /* 10k */                                                        \
+    ->Arg(100000)     /* 100k */                                                       \
+    ->Arg(1000000)    /* 1M */                                                         \
+    ->Arg(10000000)   /* 10M */                                                        \
     ->Arg(100000000); /* 100M */
 
 using namespace cudf;
