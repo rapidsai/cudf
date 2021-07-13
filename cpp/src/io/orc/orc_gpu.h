@@ -418,18 +418,34 @@ void BuildStripeDictionaries(StripeDictionary* stripes_dev,
 void orc_init_statistics_groups(statistics_group *groups,
                                 const stats_column_desc *cols,
                                 device_2dspan<rows_range const> rowgroup_bounds,
+                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+
 /**
  * @brief Launches kernels to return statistics buffer offsets and sizes
-                                    const statistics_chunk* chunks,
+ *
+ * @param[in,out] groups Statistics merge groups
+ * @param[in] chunks Statistics chunks
+ * @param[in] statistics_count Number of statistics buffers to encode
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ */
+void orc_init_statistics_buffersize(statistics_merge_group *groups,
+                                    const statistics_chunk *chunks,
+                                    uint32_t statistics_count,
+                                    rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+
+/**
+ * @brief Launches kernel to encode statistics in ORC protobuf format
+ *
+ * @param[out] blob_bfr Output buffer for statistics blobs
  * @param[in,out] groups Statistics merge groups
  * @param[in,out] chunks Statistics data
  * @param[in] statistics_count Number of statistics buffers
  */
-void orc_encode_statistics(uint8_t* blob_bfr,
-                           statistics_merge_group* groups,
-                           const statistics_chunk* chunks,
+void orc_encode_statistics(uint8_t *blob_bfr,
+                           statistics_merge_group *groups,
+                           const statistics_chunk *chunks,
                            uint32_t statistics_count,
-                           rmm::cuda_stream_view stream);
+                           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 }  // namespace gpu
 }  // namespace orc
