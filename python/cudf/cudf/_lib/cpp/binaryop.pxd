@@ -33,7 +33,6 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         BITWISE_XOR "cudf::binary_operator::BITWISE_XOR"
         LOGICAL_AND "cudf::binary_operator::LOGICAL_AND"
         LOGICAL_OR "cudf::binary_operator::LOGICAL_OR"
-        COALESCE "cudf::binary_operator::COALESCE"
         GENERIC_BINARY "cudf::binary_operator::GENERIC_BINARY"
 
     cdef unique_ptr[column] binary_operation (
