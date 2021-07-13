@@ -373,7 +373,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
  * @param[in] dict_index row indices of corresponding string (row from dictionary index)
  * @param[in] dict_indices TODO
  * @param[in] row_index_stride Rowgroup size in rows
- * @param[in] str_col_flat_indexes List of columns that are strings type
+ * @param[in] str_col_indexes List of columns that are strings type
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
@@ -383,7 +383,7 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> d_orc_colum
                            device_span<device_span<uint32_t>> dict_index,
                            device_span<device_span<uint32_t>> dict_indices,
                            device_2dspan<rows_range const> rowgroup_ranges,
-                           device_span<int const> str_col_flat_indexes,
+                           device_span<int const> str_col_indexes,
                            rmm::cuda_stream_view stream);
 
 /**

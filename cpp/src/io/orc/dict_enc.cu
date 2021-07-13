@@ -125,7 +125,7 @@ __global__ void __launch_bounds__(block_size, 2)
                            device_span<device_span<uint32_t>> dict_index,
                            device_span<device_span<uint32_t>> dict_indices,
                            device_2dspan<rows_range const> rowgroup_ranges,
-                           device_span<int const> str_col_flat_indexes)
+                           device_span<int const> str_col_indexes)
 {
   __shared__ __align__(16) dictinit_state_s state_g;
 
@@ -139,9 +139,9 @@ __global__ void __launch_bounds__(block_size, 2)
 
   dictinit_state_s* const s = &state_g;
   uint32_t const str_col_id = blockIdx.x;
-  uint32_t const col_idx    = str_col_flat_indexes[str_col_id];
+  uint32_t const col_idx    = str_col_indexes[str_col_id];
   uint32_t group_id         = blockIdx.y;
-  auto const num_str_cols   = str_col_flat_indexes.size();
+  auto const num_str_cols   = str_col_indexes.size();
   uint32_t nnz, start_row, dict_char_count;
   int t = threadIdx.x;
 
@@ -431,12 +431,12 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> d_orc_colum
                            device_span<device_span<uint32_t>> dict_index,
                            device_span<device_span<uint32_t>> dict_indices,
                            device_2dspan<rows_range const> rowgroup_ranges,
-                           device_span<int const> str_col_flat_indexes,
+                           device_span<int const> str_col_indexes,
                            rmm::cuda_stream_view stream)
 {
   static constexpr int block_size = 512;
   dim3 dim_block(block_size, 1);
-  dim3 dim_grid(str_col_flat_indexes.size(), rowgroup_ranges.size().first);
+  dim3 dim_grid(str_col_indexes.size(), rowgroup_ranges.size().first);
   gpuInitDictionaryIndices<block_size>
     <<<dim_grid, dim_block, 0, stream.value()>>>(chunks,
                                                  d_orc_columns,
@@ -444,7 +444,7 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> d_orc_colum
                                                  dict_index,
                                                  dict_indices,
                                                  rowgroup_ranges,
-                                                 str_col_flat_indexes);
+                                                 str_col_indexes);
 }
 
 /**
