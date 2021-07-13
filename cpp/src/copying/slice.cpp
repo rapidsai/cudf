@@ -36,7 +36,22 @@ std::vector<column_view> slice(column_view const& input,
 
   if (indices.empty()) return {};
 
-  auto null_counts = cudf::detail::segmented_count_unset_bits(input.null_mask(), indices, stream);
+  auto null_counts = [&]() {
+    // need to shift incoming indices by the column offset to generate the correct bit ranges
+    // to count
+    if (input.offset() > 0) {
+      std::vector<size_type> shifted_indices;
+      shifted_indices.reserve(indices.size());
+      std::transform(indices.begin(),
+                     indices.end(),
+                     std::back_inserter(shifted_indices),
+                     [offset = input.offset()](size_type index) { return index + offset; });
+      return cudf::detail::segmented_count_unset_bits(input.null_mask(), shifted_indices, stream);
+    }
+    // can use the initial indices
+    return cudf::detail::segmented_count_unset_bits(input.null_mask(), indices, stream);
+  }();
+
   auto const children = std::vector<column_view>(input.child_begin(), input.child_end());
 
   auto op = [&](auto i) {
