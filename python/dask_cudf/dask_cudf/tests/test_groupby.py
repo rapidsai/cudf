@@ -7,11 +7,11 @@ import pytest
 import dask
 from dask import dataframe as dd
 
-import cudf
-from cudf.core._compat import PANDAS_GE_120
-
 import dask_cudf
 from dask_cudf.groupby import _is_supported
+
+import cudf
+from cudf.core._compat import PANDAS_GE_120
 
 
 @pytest.mark.parametrize("aggregation", ["sum", "mean", "count", "min", "max"])
@@ -580,3 +580,14 @@ def test_groupby_agg_redirect(aggregations):
 )
 def test_is_supported(arg):
     assert _is_supported(arg, {"supported"}) is False
+
+
+def test_groupby_unique_lists():
+    df = pd.DataFrame({"a": [0, 0, 0, 1, 1, 1], "b": [10, 10, 10, 7, 8, 9]})
+    ddf = dd.from_pandas(df, 2)
+    gdf = cudf.from_pandas(df)
+    gddf = dask_cudf.from_cudf(gdf, 2)
+    dd.assert_eq(
+        ddf.groupby("a").b.unique().compute(),
+        gddf.groupby("a").b.unique().compute(),
+    )

@@ -2026,6 +2026,44 @@ def as_column(
         mask = bools_to_mask(as_column(mask).unary_operator("not"))
 
         data = data.set_mask(mask)
+    elif (
+        isinstance(arbitrary, list)
+        and len(arbitrary) > 0
+        and isinstance(arbitrary[0], cudf.Series)
+    ):
+        data_col = arbitrary[0]._column
+        lengths_col = [len(data_col)]
+        mask_col = [True]
+
+        # Build Data & Mask
+        for data in arbitrary[1:]:
+            if data is None:
+                mask_col.append(False)
+                lengths_col.append(0)
+            else:
+                mask_col.append(True)
+                data_col = data_col.append(data._column)
+                lengths_col.append(len(data._column))
+
+        # Build offsets
+        offset_col = cudf.core.column.column_empty(
+            row_count=len(arbitrary) + 1, dtype="int32"
+        )
+        offset_col[0] = 0
+        offset_col[1:] = lengths_col
+        offset_col = cast(
+            cudf.core.column.NumericalColumn, offset_col
+        )._apply_scan_op("sum")
+
+        res = cudf.core.column.ListColumn(
+            size=len(arbitrary),
+            dtype=cudf.ListDtype(data_col.dtype),
+            mask=cudf._lib.transform.bools_to_mask(as_column(mask_col)),
+            offset=0,
+            null_count=0,
+            children=(offset_col, data_col),
+        )
+        return res
 
     else:
         try:
