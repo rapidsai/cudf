@@ -331,7 +331,7 @@ cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
             ],
             names=columns
         )
-    # print(pyarrow_table)
+
     cdef Table table = from_arrow(pyarrow_table, column_names=columns)
     cdef table_view struct_view = table.view()
 
