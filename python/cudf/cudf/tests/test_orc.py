@@ -1073,7 +1073,12 @@ def test_orc_writer_list(tmpdir):
 def test_orc_writer_list_multiple_stripes(tmpdir):
     num_rows = 1_200_000
     pdf_in = pd.DataFrame(
-        {"ld": [[decimal.Decimal(str(i / 2))] * 5 for i in range(num_rows)], }
+        {
+            "ld": [
+                [decimal.Decimal(str(elem / 2))] * 5
+                for elem in range(num_rows)
+            ],
+        }
     )
 
     buffer = BytesIO()
