@@ -1012,12 +1012,12 @@ __global__ void __launch_bounds__(block_size)
 }
 
 __global__ void __launch_bounds__(512)
-  gpu_set_chunk_columns(device_span<orc_column_device_view const> d_orc_columns,
+  gpu_set_chunk_columns(device_span<orc_column_device_view const> orc_columns,
                         device_2dspan<EncChunk> chunks)
 {
   // Set leaf_column member of EncChunk
   for (size_type i = threadIdx.x; i < chunks.size().second; i += blockDim.x) {
-    chunks[blockIdx.x][i].leaf_column = &d_orc_columns[blockIdx.x].cudf_column;
+    chunks[blockIdx.x][i].leaf_column = &orc_columns[blockIdx.x].cudf_column;
   }
 }
 
@@ -1228,14 +1228,14 @@ void EncodeStripeDictionaries(StripeDictionary const* stripes,
     <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, enc_streams);
 }
 
-void set_chunk_columns(device_span<orc_column_device_view const> d_orc_columns,
+void set_chunk_columns(device_span<orc_column_device_view const> orc_columns,
                        device_2dspan<EncChunk> chunks,
                        rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);
   dim3 dim_grid(chunks.size().first, 1);
 
-  gpu_set_chunk_columns<<<dim_grid, dim_block, 0, stream.value()>>>(d_orc_columns, chunks);
+  gpu_set_chunk_columns<<<dim_grid, dim_block, 0, stream.value()>>>(orc_columns, chunks);
 }
 
 void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,

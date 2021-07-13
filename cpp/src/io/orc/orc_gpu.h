@@ -322,11 +322,11 @@ void EncodeStripeDictionaries(StripeDictionary const* stripes,
 /**
  * @brief Set leaf column element of EncChunk
  *
- * @param[in] d_orc_columns Pre-order flattened device array of ORC column views
+ * @param[in] orc_columns Pre-order flattened device array of ORC column views
  * @param[in,out] chunks encoder chunk device array [column][rowgroup]
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void set_chunk_columns(device_span<orc_column_device_view const> d_orc_columns,
+void set_chunk_columns(device_span<orc_column_device_view const> orc_columns,
                        device_2dspan<EncChunk> chunks,
                        rmm::cuda_stream_view stream);
 
@@ -367,7 +367,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
 /**
  * @brief Launches kernel for initializing dictionary chunks
  *
- * @param[in] d_orc_columns Pre-order flattened device array of ORC column views
+ * @param[in] orc_columns Pre-order flattened device array of ORC column views
  * @param[in,out] chunks DictionaryChunk device array [rowgroup][column]
  * @param[in] dict_data dictionary data (index of non-null rows)
  * @param[in] dict_index row indices of corresponding string (row from dictionary index)
@@ -377,7 +377,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void InitDictionaryIndices(device_span<orc_column_device_view const> d_orc_columns,
+void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns,
                            DictionaryChunk* chunks,
                            device_span<device_span<uint32_t>> dict_data,
                            device_span<device_span<uint32_t>> dict_index,
