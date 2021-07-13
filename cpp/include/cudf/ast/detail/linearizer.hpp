@@ -108,7 +108,7 @@ class linearizer {
    * @param right The right table used for evaluating the abstract syntax tree.
    */
   linearizer(detail::node const& expr, cudf::table_view left, cudf::table_view right)
-    : _left(left), _right(right), _node_count(0), _intermediate_counter()
+    : _left{left}, _right{right}, _node_count{0}, _intermediate_counter{}
   {
     expr.accept(*this);
   }
@@ -120,7 +120,7 @@ class linearizer {
    * @param table The table used for evaluating the abstract syntax tree.
    */
   linearizer(detail::node const& expr, cudf::table_view table)
-    : _left(table), _right(table), _node_count(0), _intermediate_counter()
+    : _left{table}, _right{table}, _node_count{0}, _intermediate_counter{}
   {
     expr.accept(*this);
   }
