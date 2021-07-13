@@ -23,6 +23,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
@@ -595,8 +596,15 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
   offset_stack_pos += offset_depth;
 
   // recurse on children
-  return setup_source_buf_info(col.child_begin(),
-                               col.child_end(),
+  cudf::structs_column_view scv(col);
+  std::vector<column_view> sliced_children;
+  sliced_children.reserve(scv.num_children());
+  std::transform(thrust::make_counting_iterator(0),
+                 thrust::make_counting_iterator(scv.num_children()),
+                 std::back_inserter(sliced_children),
+                 [&scv](size_type child_index) { return scv.get_sliced_child(child_index); });
+  return setup_source_buf_info(sliced_children.begin(),
+                               sliced_children.end(),
                                head,
                                current,
                                offset_stack_pos,

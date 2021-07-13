@@ -1593,6 +1593,39 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitTableLarge)
   }
 }
 
+TEST_F(ContiguousSplitTableCornerCases, PreSplitStructs)
+{
+  cudf::test::fixed_width_column_wrapper<int> a{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  cudf::test::fixed_width_column_wrapper<float> b{{0, -1, -2, -3, -4, -5, -6, -7, -8, -9},
+                                                  {1, 1, 1, 0, 0, 0, 0, 1, 1, 1}};
+  cudf::test::strings_column_wrapper c{
+    {"abc", "def", "ghi", "jkl", "mno", "", "st", "uvwx", "yy", "zzzz"},
+    {0, 0, 1, 1, 1, 1, 1, 1, 1, 1}};
+  std::vector<bool> list_validity{1, 0, 1, 0, 1, 0, 1, 1, 1, 1};
+  cudf::test::lists_column_wrapper<int16_t> d{
+    {{0, 1}, {2, 3, 4}, {5, 6}, {7}, {8, 9, 10}, {11, 12}, {}, {15, 16, 17}, {18, 19}, {20}},
+    list_validity.begin()};
+  cudf::test::fixed_width_column_wrapper<int> _a{10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+  cudf::test::fixed_width_column_wrapper<float> _b{
+    -10, -20, -30, -40, -50, -60, -70, -80, -90, -100};
+  cudf::test::strings_column_wrapper _c{
+    "aa", "", "ccc", "dddd", "eeeee", "f", "gg", "hhh", "i", "jjj"};
+  cudf::test::structs_column_wrapper e({_a, _b, _c}, {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
+  cudf::test::structs_column_wrapper s({a, b, c, d, e}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 1});
+
+  auto pre_split = cudf::split(s, {4});
+
+  auto iter = thrust::make_counting_iterator(0);
+  std::for_each(iter, iter + pre_split.size(), [&](cudf::size_type index) {
+    cudf::table_view t({pre_split[index]});
+    auto result   = cudf::contiguous_split(t, {1});
+    auto expected = cudf::split(t, {1});
+
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result[0].table, expected[0]);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result[1].table, expected[1]);
+  });
+}
+
 TEST_F(ContiguousSplitTableCornerCases, NestedEmpty)
 {
   // this produces an empty strings column with no children,
