@@ -6050,13 +6050,9 @@ class Series(SingleColumnFrame, Serializable):
             raise NotImplementedError("limit parameter not supported yet.")
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
-        if fill_method == "pad":
-            fill_method = "ffill"
-        elif fill_method == "backfill":
-            fill_method = "bfill"
-        elif fill_method not in ["ffill", "bfill"]:
+        elif fill_method not in {"ffill", "pad", "bfill", "backfill"}:
             raise ValueError(
-                "fill_method must be either 'ffill', 'pad', "
+                "fill_method must be one of 'ffill', 'pad', "
                 "'bfill', or 'backfill'."
             )
 
