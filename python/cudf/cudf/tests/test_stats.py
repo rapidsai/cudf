@@ -329,7 +329,7 @@ def test_series_median(dtype, num_na):
     ],
 )
 @pytest.mark.parametrize("periods", range(-5, 5))
-@pytest.mark.parametrize("fill_method", ["ffill", "bfill"])
+@pytest.mark.parametrize("fill_method", ["ffill", "bfill", "pad", "backfill"])
 def test_series_pct_change(data, periods, fill_method):
     cs = cudf.Series(data)
     ps = cs.to_pandas()
