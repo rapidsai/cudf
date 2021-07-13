@@ -143,7 +143,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
                 sep=self.sep,
                 sort=self.sort,
                 as_index=self.as_index,
-            )
+            )[self._slice]
 
         return super().aggregate(
             arg, split_every=split_every, split_out=split_out

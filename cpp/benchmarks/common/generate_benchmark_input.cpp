@@ -108,7 +108,8 @@ size_t avg_element_bytes(data_profile const& profile, cudf::type_id tid)
 /**
  * @brief Functor that computes a random column element with the given data profile.
  *
- * The implementation is SFINAEd for diffent type groups. Currently only used for fixed-width types.
+ * The implementation is SFINAEd for different type groups. Currently only used for fixed-width
+ * types.
  */
 template <typename T, typename Enable = void>
 struct random_value_fn;

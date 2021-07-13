@@ -134,7 +134,7 @@ col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes,
  * @param[in] row_offsets Device array of row start locations in the input buffer
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  *
- * @return std::unique_ptr<table> cudf table with three columns (offsets, lenghts, hashes)
+ * @return std::unique_ptr<table> cudf table with three columns (offsets, lengths, hashes)
  */
 std::unique_ptr<table> create_json_keys_info_table(const parse_options_view& options,
                                                    device_span<char const> const data,

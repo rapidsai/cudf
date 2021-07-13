@@ -11,7 +11,8 @@ LC_ALL=C.UTF-8
 LANG=C.UTF-8
 
 # Activate common conda env
-source activate gdf
+. /opt/conda/etc/profile.d/conda.sh
+conda activate rapids
 
 # Run isort-cudf and get results/return code
 ISORT_CUDF=`isort python/cudf --check-only --skip-glob *.pyx --settings-path=python/cudf/setup.cfg 2>&1`
