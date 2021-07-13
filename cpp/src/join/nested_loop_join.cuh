@@ -85,15 +85,8 @@ get_conditional_join_indices(table_view const& left,
   // If none of the input columns actually contain nulls, we can still use the
   // non-nullable version of the expression evaluation code path for
   // performance, so we capture that information as well.
-  auto const nullable =
-    std::any_of(left.begin(), left.end(), [](column_view c) { return c.nullable(); }) ||
-    std::any_of(right.begin(), right.end(), [](column_view c) { return c.nullable(); });
-  auto const has_nulls =
-    nullable &&
-    (std::any_of(
-       left.begin(), left.end(), [](column_view c) { return c.nullable() && c.has_nulls(); }) ||
-     std::any_of(
-       right.begin(), right.end(), [](column_view c) { return c.nullable() && c.has_nulls(); }));
+  auto const nullable  = cudf::nullable(left) || cudf::nullable(right);
+  auto const has_nulls = nullable && (cudf::has_nulls(left) || cudf::has_nulls(right));
 
   auto const plan = ast::detail::ast_plan{binary_pred, left, right, has_nulls, stream, mr};
   CUDF_EXPECTS(plan.output_type().id() == type_id::BOOL8,
