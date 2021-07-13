@@ -1045,3 +1045,39 @@ def test_orc_timestamp_read(datadir):
     gdf = cudf.read_orc(path)
 
     assert_eq(pdf, gdf)
+
+
+def test_orc_writer_list(tmpdir):
+    num_rows = 12345
+    pdf_in = pd.DataFrame(
+        {
+            "lls": [[["a"], ["bb"]] * 5 for i in range(num_rows)],
+            "lls2": [[["cccc", "dddd"]] * 6 for i in range(num_rows)],
+            "ls_dict": [["X"] * 7 for i in range(num_rows)],
+            "ls_direct": [[str(i)] * 9 for i in range(num_rows)],
+            "li": [[1] * 11 for i in range(num_rows)],
+            "lf": [[1 * 0.5] * 13 for i in range(num_rows)],
+            "ld": [
+                [decimal.Decimal(str(i / 2))] * 15 for i in range(num_rows)
+            ],
+        }
+    )
+
+    buffer = BytesIO()
+    cudf.from_pandas(pdf_in).to_orc(buffer)
+
+    pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
+    assert_eq(pdf_out, pdf_in)
+
+
+def test_orc_writer_list_multiple_stripes(tmpdir):
+    num_rows = 1_200_000
+    pdf_in = pd.DataFrame(
+        {"ld": [[decimal.Decimal(str(i / 2))] * 5 for i in range(num_rows)],}
+    )
+
+    buffer = BytesIO()
+    cudf.from_pandas(pdf_in).to_orc(buffer)
+
+    pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
+    assert_eq(pdf_out, pdf_in)
