@@ -112,7 +112,7 @@ public final class Table implements AutoCloseable {
   }
 
   /** Return the native table view handle for this table */
-  long getNativeView() {
+  public long getNativeView() {
     return nativeHandle;
   }
 

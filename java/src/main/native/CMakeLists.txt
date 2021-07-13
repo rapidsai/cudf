@@ -261,6 +261,7 @@ set(SOURCE_FILES
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
     "src/ColumnViewJni.cpp"
+    "src/CompiledExpression.cpp"
     "src/ContiguousTableJni.cpp"
     "src/HostMemoryBufferNativeUtilsJni.cpp"
     "src/NvcompJni.cpp"
