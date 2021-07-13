@@ -51,8 +51,9 @@ using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
 
 /**
- * TODO
- * flattened hierarchy
+ * Non-owning view of a cuDF table that includes ORC-related information.
+ *
+ * Columns hierarchy is flattened and stored in preorder.
  */
 struct orc_table_view {
   std::vector<orc_column_view> columns;
@@ -129,7 +130,9 @@ class orc_streams {
   std::vector<Stream> streams;
   std::vector<int32_t> ids;
 };
-
+/**
+ * @brief Description of how the ORC file is segmented into stripes and rowgroups.
+ */
 struct file_segmentation {
   hostdevice_2dvector<rowgroup_rows> rowgroups;
   std::vector<stripe_rowgroups> stripes;
@@ -223,7 +226,7 @@ class writer::impl {
   /**
    * @brief Builds up per-stripe dictionaries for string columns.
    *
-   * @param orc_table TODO
+   * @param orc_table Non-owning view of a cuDF table w/ ORC-related info
    * @param stripe_bounds List of stripe boundaries
    * @param dict List of dictionary chunks
    * @param dict_index List of dictionary indices
@@ -240,7 +243,7 @@ class writer::impl {
    * @brief Builds up per-column streams.
    *
    * @param[in,out] columns List of columns
-   * @param[in] file_segmentation TODO
+   * @param[in] segmentation stripes and rowgroups ranges
    * @param[in] decimal_column_sizes Sizes of encoded decimal columns
    * @return List of stream descriptors
    */
@@ -251,11 +254,11 @@ class writer::impl {
   /**
    * @brief Encodes the input columns into streams.
    *
-   * @param orc_table TODO
+   * @param orc_table Non-owning view of a cuDF table w/ ORC-related info
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
    * @param dec_chunk_sizes Information about size of encoded decimal columns
-   * @param segmentation TODO
+   * @param segmentation stripes and rowgroups ranges
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Encoded data and per-chunk stream descriptors
    */
@@ -270,7 +273,7 @@ class writer::impl {
    * chunks into contiguous data streams.
    *
    * @param[in] num_index_streams Total number of index streams
-   * @param[in] segmentation TODO
+   * @param[in] segmentation stripes and rowgroups ranges
    * @param[in,out] enc_streams List of encoder chunk streams [column][rowgroup]
    * @param[in,out] strm_desc List of stream descriptors [stripe][data_stream]
    *
@@ -288,8 +291,7 @@ class writer::impl {
    *
    * @param orc_table Table information to be written
    * @param columns List of columns
-   * @param segmentation TODO
-   *
+   * @param segmentation stripes and rowgroups ranges
    * @return The statistic blobs
    */
   std::vector<std::vector<uint8_t>> gather_statistic_blobs(orc_table_view const& orc_table,

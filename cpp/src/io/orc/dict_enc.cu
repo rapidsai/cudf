@@ -120,7 +120,7 @@ __global__ void __launch_bounds__(block_size, 2)
                            device_span<orc_column_device_view const> orc_columns,
                            device_span<device_span<uint32_t>> dict_data,
                            device_span<device_span<uint32_t>> dict_index,
-                           device_span<device_span<uint32_t>> dict_indices,
+                           device_span<device_span<uint32_t>> tmp_indices,
                            device_2dspan<rowgroup_rows const> rowgroup_bounds,
                            device_span<int const> str_col_indexes)
 {
@@ -149,7 +149,7 @@ __global__ void __launch_bounds__(block_size, 2)
     s->chunk.dict_index  = dict_index[str_col_idx].data();
     s->chunk.start_row   = rowgroup_bounds[group_id][col_idx].begin;
     s->chunk.num_rows    = rowgroup_bounds[group_id][col_idx].size();
-    s->dict              = dict_indices[str_col_idx].data() + s->chunk.start_row;
+    s->dict              = tmp_indices[str_col_idx].data() + s->chunk.start_row;
   }
   for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
@@ -423,7 +423,7 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns
                            DictionaryChunk* chunks,
                            device_span<device_span<uint32_t>> dict_data,
                            device_span<device_span<uint32_t>> dict_index,
-                           device_span<device_span<uint32_t>> dict_indices,
+                           device_span<device_span<uint32_t>> tmp_indices,
                            device_2dspan<rowgroup_rows const> rowgroup_bounds,
                            device_span<int const> str_col_indexes,
                            rmm::cuda_stream_view stream)
@@ -432,7 +432,7 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns
   dim3 dim_block(block_size, 1);
   dim3 dim_grid(str_col_indexes.size(), rowgroup_bounds.size().first);
   gpuInitDictionaryIndices<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
-    chunks, orc_columns, dict_data, dict_index, dict_indices, rowgroup_bounds, str_col_indexes);
+    chunks, orc_columns, dict_data, dict_index, tmp_indices, rowgroup_bounds, str_col_indexes);
 }
 
 /**

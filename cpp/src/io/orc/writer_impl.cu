@@ -258,8 +258,8 @@ size_type orc_table_view::num_rows() const { return columns.empty() ? 0 : column
  * @brief Gathers stripe information.
  *
  * @param columns List of columns
- * @param rowgroup_bounds TODO
- * @param max_stripe_size TODO
+ * @param rowgroup_bounds Ranges of rows in each rowgroup [rowgroup][column]
+ * @param max_stripe_size Maximum size of each stripe, in bytes
  * @return List of stripe descriptors
  */
 file_segmentation calculate_segmentation(host_span<orc_column_view const> columns,
@@ -314,12 +314,12 @@ file_segmentation calculate_segmentation(host_span<orc_column_view const> column
 /**
  * @brief Builds up column dictionaries indices
  *
- * @param orc_table TODO
- * @param rowgroup_bounds TODO
+ * @param orc_table Non-owning view of a cuDF table w/ ORC-related info
+ * @param rowgroup_bounds Ranges of rows in each rowgroup [rowgroup][column]
  * @param dict_data Dictionary data memory
  * @param dict_index Dictionary index memory
  * @param dict List of dictionary chunks
- * @param stream TODO
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void init_dictionaries(orc_table_view& orc_table,
                        device_2dspan<rowgroup_rows const> rowgroup_bounds,
