@@ -55,8 +55,8 @@ struct conversion_map<io_file_format::ORC> {
                            std::pair<cudf::duration_ns, cudf::duration_ms>>;
 };
 
-// In Parquet timestamps and durations with second resoluion are converted to
-// milliseconds. Timestamps and durations with nanosecond resoluion are
+// In Parquet timestamps and durations with second resolution are converted to
+// milliseconds. Timestamps and durations with nanosecond resolution are
 // converted to microseconds.
 template <>
 struct conversion_map<io_file_format::PARQUET> {

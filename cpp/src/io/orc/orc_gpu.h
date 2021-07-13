@@ -38,7 +38,7 @@ using cudf::detail::device_2dspan;
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
-  explicit constexpr CompressedStreamInfo(const uint8_t *compressed_data_, size_t compressed_size_)
+  explicit constexpr CompressedStreamInfo(const uint8_t* compressed_data_, size_t compressed_size_)
     : compressed_data(compressed_data_),
       uncompressed_data(nullptr),
       compressed_data_size(compressed_size_),
@@ -50,13 +50,13 @@ struct CompressedStreamInfo {
       max_uncompressed_size(0)
   {
   }
-  const uint8_t *compressed_data;  // [in] base ptr to compressed stream data
-  uint8_t *uncompressed_data;  // [in] base ptr to uncompressed stream data or NULL if not known yet
+  const uint8_t* compressed_data;  // [in] base ptr to compressed stream data
+  uint8_t* uncompressed_data;  // [in] base ptr to uncompressed stream data or NULL if not known yet
   size_t compressed_data_size;      // [in] compressed data size for this stream
-  gpu_inflate_input_s *decctl;      // [in] base ptr to decompression structure to be filled
-  gpu_inflate_status_s *decstatus;  // [in] results of decompression
-  gpu_inflate_input_s
-    *copyctl;  // [in] base ptr to copy structure to be filled for uncompressed blocks
+  gpu_inflate_input_s* decctl;      // [in] base ptr to decompression structure to be filled
+  gpu_inflate_status_s* decstatus;  // [in] results of decompression
+  gpu_inflate_input_s*
+    copyctl;  // [in] base ptr to copy structure to be filled for uncompressed blocks
   uint32_t num_compressed_blocks;  // [in,out] number of entries in decctl(in), number of compressed
                                    // blocks(out)
   uint32_t num_uncompressed_blocks;  // [in,out] number of entries in copyctl(in), number of
@@ -90,11 +90,11 @@ constexpr int orc_decimal2float64_scale = 0x80;
  * @brief Struct to describe per stripe's column information
  */
 struct ColumnDesc {
-  const uint8_t *streams[CI_NUM_STREAMS];  // ptr to data stream index
+  const uint8_t* streams[CI_NUM_STREAMS];  // ptr to data stream index
   uint32_t strm_id[CI_NUM_STREAMS];        // stream ids
   uint32_t strm_len[CI_NUM_STREAMS];       // stream length
-  uint32_t *valid_map_base;                // base pointer of valid bit map for this column
-  void *column_data_base;                  // base pointer of column data
+  uint32_t* valid_map_base;                // base pointer of valid bit map for this column
+  void* column_data_base;                  // base pointer of column data
   uint32_t start_row;                      // starting row of the stripe
   uint32_t num_rows;                       // number of rows in stripe
   uint32_t column_num_rows;                // number of rows in whole column
@@ -135,16 +135,16 @@ struct EncChunk {
   uint8_t dtype_len;                 // data type length
   int32_t scale;                     // scale for decimals or timestamps
 
-  uint32_t *dict_index;  // dictionary index from row index
+  uint32_t* dict_index;  // dictionary index from row index
   device_span<uint32_t> decimal_offsets;
-  column_device_view const *leaf_column;
+  column_device_view const* leaf_column;
 };
 
 /**
  * @brief Struct to describe the streams that correspond to a single `EncChunk`.
  */
 struct encoder_chunk_streams {
-  uint8_t *data_ptrs[CI_NUM_STREAMS];  // encoded output
+  uint8_t* data_ptrs[CI_NUM_STREAMS];  // encoded output
   int32_t ids[CI_NUM_STREAMS];         // stream id; -1 if stream is not present
   uint32_t lengths[CI_NUM_STREAMS];    // in: max length, out: actual length
 };
@@ -167,8 +167,8 @@ struct StripeStream {
  * @brief Struct to describe a dictionary chunk
  */
 struct DictionaryChunk {
-  uint32_t *dict_data;   // dictionary data (index of non-null rows)
-  uint32_t *dict_index;  // row indices of corresponding string (row from dictionary index)
+  uint32_t* dict_data;   // dictionary data (index of non-null rows)
+  uint32_t* dict_index;  // row indices of corresponding string (row from dictionary index)
   uint32_t start_row;    // start row of this chunk
   uint32_t num_rows;     // num rows in this chunk
   uint32_t num_strings;  // number of strings in this chunk
@@ -177,22 +177,22 @@ struct DictionaryChunk {
   uint32_t num_dict_strings;  // number of strings in dictionary
   uint32_t dict_char_count;   // size of dictionary string data for this chunk
 
-  column_device_view const *leaf_column;  //!< Pointer to string column
+  column_device_view const* leaf_column;  //!< Pointer to string column
 };
 
 /**
  * @brief Struct to describe a dictionary
  */
 struct StripeDictionary {
-  uint32_t *dict_data;       // row indices of corresponding string (row from dictionary index)
-  uint32_t *dict_index;      // dictionary index from row index
+  uint32_t* dict_data;       // row indices of corresponding string (row from dictionary index)
+  uint32_t* dict_index;      // dictionary index from row index
   uint32_t column_id;        // real column id
   uint32_t start_chunk;      // first chunk in stripe
   uint32_t num_chunks;       // number of chunks in the stripe
   uint32_t num_strings;      // number of unique strings in the dictionary
   uint32_t dict_char_count;  // total size of dictionary string data
 
-  column_device_view const *leaf_column;  //!< Pointer to string column
+  column_device_view const* leaf_column;  //!< Pointer to string column
 };
 
 /**
@@ -205,7 +205,7 @@ struct StripeDictionary {
  *compressed size)
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void ParseCompressedStripeData(CompressedStreamInfo *strm_info,
+void ParseCompressedStripeData(CompressedStreamInfo* strm_info,
                                int32_t num_streams,
                                uint32_t compression_block_size,
                                uint32_t log2maxcr           = 24,
@@ -218,7 +218,7 @@ void ParseCompressedStripeData(CompressedStreamInfo *strm_info,
  * @param[in] num_streams Number of compressed streams
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void PostDecompressionReassemble(CompressedStreamInfo *strm_info,
+void PostDecompressionReassemble(CompressedStreamInfo* strm_info,
                                  int32_t num_streams,
                                  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
@@ -236,9 +236,9 @@ void PostDecompressionReassemble(CompressedStreamInfo *strm_info,
  * value
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void ParseRowGroupIndex(RowGroup *row_groups,
-                        CompressedStreamInfo *strm_info,
-                        ColumnDesc *chunks,
+void ParseRowGroupIndex(RowGroup* row_groups,
+                        CompressedStreamInfo* strm_info,
+                        ColumnDesc* chunks,
                         uint32_t num_columns,
                         uint32_t num_stripes,
                         uint32_t num_rowgroups,
@@ -256,8 +256,8 @@ void ParseRowGroupIndex(RowGroup *row_groups,
  * @param[in] first_row Crop all rows below first_row
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
-                                      DictionaryEntry *global_dictionary,
+void DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
+                                      DictionaryEntry* global_dictionary,
                                       uint32_t num_columns,
                                       uint32_t num_stripes,
                                       size_t first_row             = 0,
@@ -279,8 +279,8 @@ void DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] level Current nesting level being processed
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void DecodeOrcColumnData(ColumnDesc *chunks,
-                         DictionaryEntry *global_dictionary,
+void DecodeOrcColumnData(ColumnDesc* chunks,
+                         DictionaryEntry* global_dictionary,
                          device_2dspan<RowGroup> row_groups,
                          uint32_t num_columns,
                          uint32_t num_stripes,
@@ -312,7 +312,7 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void EncodeStripeDictionaries(StripeDictionary const *stripes,
+void EncodeStripeDictionaries(StripeDictionary const* stripes,
                               device_2dspan<EncChunk const> chunks,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,
@@ -354,14 +354,14 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
  * @param[out] comp_in Per-block compression input parameters
  * @param[out] comp_out Per-block compression status
  */
-void CompressOrcDataStreams(uint8_t *compressed_data,
+void CompressOrcDataStreams(uint8_t* compressed_data,
                             uint32_t num_compressed_blocks,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
-                            gpu_inflate_input_s *comp_in,
-                            gpu_inflate_status_s *comp_out,
+                            gpu_inflate_input_s* comp_in,
+                            gpu_inflate_status_s* comp_out,
                             rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
@@ -378,7 +378,7 @@ void CompressOrcDataStreams(uint8_t *compressed_data,
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void InitDictionaryIndices(device_span<orc_column_device_view const> d_orc_columns,
-                           DictionaryChunk *chunks,
+                           DictionaryChunk* chunks,
                            device_span<device_span<uint32_t>> dict_data,
                            device_span<device_span<uint32_t>> dict_index,
                            device_span<device_span<uint32_t>> dict_indices,
@@ -397,9 +397,9 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> d_orc_colum
  * @param[in] num_columns Number of columns
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void BuildStripeDictionaries(StripeDictionary *stripes_dev,
-                             StripeDictionary *stripes_host,
-                             DictionaryChunk const *chunks,
+void BuildStripeDictionaries(StripeDictionary* stripes_dev,
+                             StripeDictionary* stripes_host,
+                             DictionaryChunk const* chunks,
                              uint32_t num_stripes,
                              uint32_t num_rowgroups,
                              uint32_t num_columns,
@@ -418,34 +418,18 @@ void BuildStripeDictionaries(StripeDictionary *stripes_dev,
 void orc_init_statistics_groups(statistics_group *groups,
                                 const stats_column_desc *cols,
                                 device_2dspan<rows_range const> rowgroup_bounds,
-                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
-
 /**
  * @brief Launches kernels to return statistics buffer offsets and sizes
- *
- * @param[in,out] groups Statistics merge groups
- * @param[in] chunks Statistics chunks
- * @param[in] statistics_count Number of statistics buffers to encode
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
- */
-void orc_init_statistics_buffersize(statistics_merge_group *groups,
-                                    const statistics_chunk *chunks,
-                                    uint32_t statistics_count,
-                                    rmm::cuda_stream_view stream = rmm::cuda_stream_default);
-
-/**
- * @brief Launches kernel to encode statistics in ORC protobuf format
- *
- * @param[out] blob_bfr Output buffer for statistics blobs
+                                    const statistics_chunk* chunks,
  * @param[in,out] groups Statistics merge groups
  * @param[in,out] chunks Statistics data
  * @param[in] statistics_count Number of statistics buffers
  */
-void orc_encode_statistics(uint8_t *blob_bfr,
-                           statistics_merge_group *groups,
-                           const statistics_chunk *chunks,
+void orc_encode_statistics(uint8_t* blob_bfr,
+                           statistics_merge_group* groups,
+                           const statistics_chunk* chunks,
                            uint32_t statistics_count,
-                           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                           rmm::cuda_stream_view stream);
 
 }  // namespace gpu
 }  // namespace orc
