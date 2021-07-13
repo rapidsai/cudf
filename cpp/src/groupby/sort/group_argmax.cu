@@ -50,11 +50,11 @@ std::unique_ptr<column> group_argmax(column_view const& values,
   // This can't use gather because nulls in gathered column will not store ARGMAX_SENTINEL.
   auto indices_view = indices->mutable_view();
   thrust::gather_if(rmm::exec_policy(stream),
-                    indices_view.begin<size_type>(),   // map first
-                    indices_view.end<size_type>(),     // map last
-                    indices_view.begin<size_type>(),   // stencil
-                    key_sort_order.data<size_type>(),  // input
-                    indices_view.begin<size_type>(),   // result
+                    indices_view.begin<size_type>(),    // map first
+                    indices_view.end<size_type>(),      // map last
+                    indices_view.begin<size_type>(),    // stencil
+                    key_sort_order.begin<size_type>(),  // input
+                    indices_view.begin<size_type>(),    // result
                     [] __device__(auto i) { return (i != cudf::detail::ARGMAX_SENTINEL); });
   return indices;
 }
