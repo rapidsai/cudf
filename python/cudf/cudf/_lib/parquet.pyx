@@ -171,8 +171,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         meta = json.loads(json_str)
         if 'index_columns' in meta and len(meta['index_columns']) > 0:
             index_col = meta['index_columns']
-            if isinstance(index_col[0], dict) and \
-                    index_col[0]['kind'] == 'range':
+            if _is_range_index_meta(index_col):
                 is_range_index = True
             else:
                 is_range_index = False
@@ -211,11 +210,10 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     if index_col is not None and len(index_col) > 0:
         if is_range_index:
             range_index_meta = index_col[0]
+            per_file_metadata = [
+                pa.parquet.read_metadata(s) for s in filepaths_or_buffers
+            ]
             if row_groups is not None:
-                per_file_metadata = [
-                    pa.parquet.read_metadata(s) for s in filepaths_or_buffers
-                ]
-
                 filtered_idx = []
                 for i, file_meta in enumerate(per_file_metadata):
                     row_groups_i = []
@@ -239,12 +237,36 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                 else:
                     idx = cudf.Index(cudf.core.column.column_empty(0))
             else:
-                idx = cudf.RangeIndex(
-                    start=range_index_meta['start'],
-                    stop=range_index_meta['stop'],
-                    step=range_index_meta['step'],
-                    name=range_index_meta['name']
-                )
+                first_index = per_file_metadata[0].metadata[b'pandas']
+                range_idxs = []
+                for i, file_meta in enumerate(per_file_metadata):
+                    current_meta = json.loads(file_meta.metadata[b'pandas'])
+                    if _is_range_index_meta(current_meta['index_columns']):
+                        rid_meta = current_meta['index_columns'][0]
+                        range_idxs.append(
+                            cudf.RangeIndex(
+                                start=rid_meta['start'],
+                                stop=rid_meta['stop'],
+                                step=rid_meta['step'],
+                                name=rid_meta['name']
+                            )
+                        )
+                    elif len(current_meta['index_columns'][0]) == 1:
+                        index_field_name = current_meta['index_columns'][0]
+                        for col in current_meta['columns']:
+                            if index_field_name == col['field_name']:
+                                if not cudf.api.types.is_numeric_dtype(
+                                    col['numpy_type']
+                                ):
+                                    raise ValueError(
+                                        "Cannot append non-homogeneous types"
+                                    )
+                    else:
+                        raise ValueError(
+                            "Cannot append RangeIndex to MultiIndex"
+                        )
+
+                idx = cudf.concat(range_idxs)
                 if skiprows is not None:
                     idx = idx[skiprows:]
                 if num_rows is not None:
@@ -533,3 +555,7 @@ cdef _set_col_metadata(Column col, column_in_metadata& col_meta):
         if is_decimal_dtype(col):
             col_meta.set_decimal_precision(col.dtype.precision)
         return
+
+
+def _is_range_index_meta(meta):
+    return isinstance(meta[0], dict) and (meta[0]['kind'] == 'range')
