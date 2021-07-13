@@ -669,7 +669,7 @@ std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_comma
     if (op.type == path_operator_type::ROOT) {
       CUDF_EXPECTS(h_operators.size() == 0, "Root operator ($) can only exist at the root");
     }
-    // if we havent' gotten a root operator to start, and we're not empty, quietly push a
+    // if we have not gotten a root operator to start, and we're not empty, quietly push a
     // root operator now.
     if (h_operators.size() == 0 && op.type != path_operator_type::ROOT &&
         op.type != path_operator_type::END) {

@@ -67,7 +67,7 @@ not necessary for your test fixtures to inherit from it.
 
 Example:
 ```c++
-class MyTestFiture : public cudf::test::BaseFixture {...};
+class MyTestFixture : public cudf::test::BaseFixture {...};
 ```
 
 ## Typed Tests
