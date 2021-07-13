@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-#include <cub/cub.cuh>
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/utilities/bit.hpp>
-#include <io/utilities/block_utils.cuh>
-#include <rmm/cuda_stream_view.hpp>
 #include "orc_common.h"
 #include "orc_gpu.h"
+
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/bit.hpp>
+#include <io/utilities/block_utils.cuh>
+
+#include <cub/cub.cuh>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -785,10 +788,13 @@ __global__ void __launch_bounds__(block_size)
             // Reusing the lengths array for the scale stream
             // Note: can be written in a faster manner, given that all values are equal
           case DECIMAL: s->lengths.u32[nz_idx] = zigzag(s->chunk.scale); break;
-          case LIST:
-            s->lengths.u32[nz_idx] = s->chunk.leaf_column->child(0).element<size_type>(row + 1) -
-                                     s->chunk.leaf_column->child(0).element<size_type>(row);
-            break;
+          case LIST: {
+            auto const& offsets =
+              s->chunk.leaf_column->child(lists_column_view::offsets_column_index);
+            // Compute list length from the offsets
+            s->lengths.u32[nz_idx] =
+              offsets.element<size_type>(row + 1) - offsets.element<size_type>(row);
+          } break;
           default: break;
         }
       }

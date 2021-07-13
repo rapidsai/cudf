@@ -25,15 +25,7 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-/**
- * @brief Initializes statistics groups
- *
- * @param[out] groups Statistics groups
- * @param[in] cols Column descriptors
- * @param[in] num_columns Number of columns
- * @param[in] num_rowgroups Number of rowgroups
- * @param[in] row_index_stride Rowgroup size in rows
- */
+
 constexpr unsigned int init_threads_per_group = 32;
 constexpr unsigned int init_groups_per_block  = 4;
 constexpr unsigned int init_threads_per_block = init_threads_per_group * init_groups_per_block;
