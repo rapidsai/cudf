@@ -8,9 +8,17 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 from libcpp.string cimport string
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.io.types cimport source_info, io_type, host_buffer
-from cudf._lib.cpp.io.types cimport sink_info, data_sink, datasource
+from cudf._lib.cpp.io.types cimport (
+    sink_info,
+    data_sink,
+    datasource,
+    column_name_info,
+)
 from cudf._lib.io.datasource cimport Datasource
+
+from cudf.utils.dtypes import is_struct_dtype
 
 import codecs
 import errno
@@ -108,3 +116,38 @@ cdef cppclass iobase_data_sink(data_sink):
 
     size_t bytes_written() with gil:
         return buf.tell()
+
+
+cdef update_struct_field_names(
+    Table table,
+    vector[column_name_info]& schema_info
+):
+    for i, (name, col) in enumerate(table._data.items()):
+        table._data[name] = _update_column_struct_field_names(
+            col, schema_info[i]
+        )
+
+
+cdef Column _update_column_struct_field_names(
+    Column col,
+    column_name_info& info
+):
+    cdef vector[string] field_names
+
+    if is_struct_dtype(col):
+        field_names.reserve(len(col.base_children))
+        for i in range(info.children.size()):
+            field_names.push_back(info.children[i].name)
+        col = col._rename_fields(
+            field_names
+        )
+
+    if col.children:
+        children = list(col.children)
+        for i, child in enumerate(children):
+            children[i] = _update_column_struct_field_names(
+                child,
+                info.children[i]
+            )
+        col.set_base_children(tuple(children))
+    return col

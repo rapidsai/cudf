@@ -41,7 +41,8 @@ static void BM_replace(benchmark::State& state)
   std::default_random_engine generator;
   std::uniform_int_distribution<int> tokens_dist(0, words.size() - 1);
   std::string row;  // build a row of random tokens
-  while (static_cast<int>(row.size()) < n_length) row += words[tokens_dist(generator)];
+  while (static_cast<int>(row.size()) < n_length)
+    row += words[tokens_dist(generator)];
 
   std::uniform_int_distribution<int> position_dist(0, 16);
 

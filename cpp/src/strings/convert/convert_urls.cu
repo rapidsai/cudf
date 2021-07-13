@@ -38,7 +38,6 @@
 #include <thrust/scan.h>
 
 #include <algorithm>
-#include <iostream>
 
 using cudf::device_span;
 
