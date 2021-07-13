@@ -21,7 +21,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include <cstdlib>
+#include <random>
 #include <vector>
 
 struct StringsConvertTest : public cudf::test::BaseFixture {
@@ -168,8 +168,12 @@ TEST_F(StringsConvertTest, UrlDecodeLargeStrings)
   std::vector<char> string_plain;
   string_plain.reserve(string_len + 1);
 
+  std::random_device rd;
+  std::mt19937 random_number_generator(rd());
+  std::uniform_int_distribution<int> distribution(0, 4);
+
   for (int character_idx = 0; character_idx < string_len; character_idx++) {
-    switch (rand() % 5) {
+    switch (distribution(random_number_generator)) {
       case 0:
         string_encoded.push_back('a');
         string_plain.push_back('a');
