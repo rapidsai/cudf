@@ -6,6 +6,13 @@ from cudf.testing._utils import assert_eq
 @pytest.mark.parametrize("data", [
     {
         'A': [1, None, 3]
+    },
+    {
+        'A': [None, 2, 3, None, 5]
+    },
+    {
+        'A': [1, None, 3],
+        'B': [None, 2, 3]
     }
 ])
 @pytest.mark.parametrize("method", ['linear'])
@@ -17,5 +24,5 @@ def test_interpolate_nans(data, method,axis):
     
     expect = pdf.interpolate(method=method, axis=axis)
     got = gdf.interpolate(method=method, axis=axis)
-
+    breakpoint()
     assert_eq(expect, got)

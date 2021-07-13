@@ -5823,7 +5823,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         method='linear',
         axis=0
     ):
-        return self._apply_support_method("interpolate", method=method, axis=axis)
+        return super()._interpolate(method)
 
     def quantile(
         self,

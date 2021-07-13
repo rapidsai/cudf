@@ -5407,16 +5407,7 @@ class Series(SingleColumnFrame, Serializable):
         self,
         method='linear'
     ):
-        data = cupy.asarray(self._column.astype('float').fillna(np.nan))
-        interp_points = cupy.asarray(self.index)
-
-        known = self[~self.isnull()]
-        known_x = cupy.asarray(known.index)
-        known_y = cupy.asarray(known._column)
-
-        result = cupy.interp(interp_points, known_x, known_y)
-
-        return cudf.Series(result)
+        return super()._interpolate(method)
 
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True

@@ -1424,6 +1424,25 @@ class Frame(libcudf.table.Table):
         result._copy_type_metadata(self)
         return result
 
+    def _interpolate(self, method='linear'):
+
+        to_return = {}
+        for colname, col in self._data.items():
+            if col.nullable:
+                data = cupy.asarray(col.astype('float').fillna(np.nan))
+                not_null = col.isnull().unary_operator('not')
+
+                known_x = cupy.asarray(self.index._column.apply_boolean_mask(not_null))
+                known_y = cupy.asarray(col.apply_boolean_mask(not_null)).astype('float')
+
+                result = cupy.interp(cupy.asarray(self.index), known_x, known_y, left=np.nan, right=np.nan)
+            else:
+                result = col
+            to_return[colname] = result
+
+
+        return self.__class__(to_return)
+
     def _quantiles(
         self,
         q,
