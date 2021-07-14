@@ -122,7 +122,7 @@ __global__ void __launch_bounds__(block_size, 2)
                            device_span<device_span<uint32_t>> dict_index,
                            device_span<device_span<uint32_t>> tmp_indices,
                            device_2dspan<rowgroup_rows const> rowgroup_bounds,
-                           device_span<int const> str_col_indexes)
+                           device_span<uint32_t const> str_col_indexes)
 {
   __shared__ __align__(16) dictinit_state_s state_g;
 
@@ -425,7 +425,7 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns
                            device_span<device_span<uint32_t>> dict_index,
                            device_span<device_span<uint32_t>> tmp_indices,
                            device_2dspan<rowgroup_rows const> rowgroup_bounds,
-                           device_span<int const> str_col_indexes,
+                           device_span<uint32_t const> str_col_indexes,
                            rmm::cuda_stream_view stream)
 {
   static constexpr int block_size = 512;

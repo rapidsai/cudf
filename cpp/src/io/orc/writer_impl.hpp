@@ -58,18 +58,21 @@ using cudf::detail::hostdevice_2dvector;
 struct orc_table_view {
   std::vector<orc_column_view> columns;
   rmm::device_uvector<orc_column_device_view> d_columns;
-  std::vector<int> string_column_indices;
-  rmm::device_uvector<int> d_string_column_indices;
+  std::vector<uint32_t> string_column_indices;
+  rmm::device_uvector<uint32_t> d_string_column_indices;
 
   auto num_columns() const noexcept { return columns.size(); }
   size_type num_rows() const noexcept;
   auto num_string_columns() const noexcept { return string_column_indices.size(); }
 
-  auto& column(int idx) { return columns.at(idx); }
-  auto const& column(int idx) const { return columns.at(idx); }
+  auto& column(uint32_t idx) { return columns.at(idx); }
+  auto const& column(uint32_t idx) const { return columns.at(idx); }
 
-  auto& string_column(int idx) { return columns.at(string_column_indices.at(idx)); }
-  auto const& string_column(int idx) const { return columns.at(string_column_indices.at(idx)); }
+  auto& string_column(uint32_t idx) { return columns.at(string_column_indices.at(idx)); }
+  auto const& string_column(uint32_t idx) const
+  {
+    return columns.at(string_column_indices.at(idx));
+  }
 };
 
 /**
