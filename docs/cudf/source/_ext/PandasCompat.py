@@ -1,10 +1,12 @@
 # This file is adapted from official sphinx tutorial for `todo` extension:
-# https://www.sphinx-doc.org/en/master/development/tutorials/PandasCompat.html
+# https://www.sphinx-doc.org/en/master/development/tutorials/todo.html
 
 from docutils import nodes
 from docutils.parsers.rst import Directive
-from sphinx.locale import _
+from sphinx.locale import get_translation
 from sphinx.util.docutils import SphinxDirective
+
+translator = get_translation("sphinx")
 
 
 class PandasCompat(nodes.Admonition, nodes.Element):
@@ -39,7 +41,8 @@ class PandasCompatDirective(SphinxDirective):
 
         PandasCompat_node = PandasCompat("\n".join(self.content))
         PandasCompat_node += nodes.title(
-            _("Pandas Compatibility Note"), _("Pandas Compatibility Note")
+            translator("Pandas Compatibility Note"),
+            translator("Pandas Compatibility Note"),
         )
         self.state.nested_parse(
             self.content, self.content_offset, PandasCompat_node
@@ -51,7 +54,6 @@ class PandasCompatDirective(SphinxDirective):
         self.env.PandasCompat_all_pandas_compat.append(
             {
                 "docname": self.env.docname,
-                "lineno": self.lineno,
                 "PandasCompat": PandasCompat_node.deepcopy(),
                 "target": targetnode,
             }
@@ -105,7 +107,9 @@ def process_PandasCompat_nodes(app, doctree, fromdocname):
 
             # Create a reference back to the original docstring
             newnode = nodes.reference("", "")
-            innernode = nodes.emphasis(_("[source]"), _("[source]"))
+            innernode = nodes.emphasis(
+                translator("[source]"), translator("[source]")
+            )
             newnode["refdocname"] = PandasCompat_info["docname"]
             newnode["refuri"] = app.builder.get_relative_uri(
                 fromdocname, PandasCompat_info["docname"]
