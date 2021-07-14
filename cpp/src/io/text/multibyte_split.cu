@@ -76,7 +76,7 @@ struct scan_tile_state {
 
 // keep ITEMS_PER_TILE below input size to force multi-tile execution.
 auto constexpr ITEMS_PER_THREAD = 32;
-auto constexpr THREADS_PER_TILE = 128;
+auto constexpr THREADS_PER_TILE = 512;
 auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
 auto constexpr TILES_PER_CHUNK  = 1024;
 auto constexpr BYTES_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
@@ -279,8 +279,6 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::string_scalar const& input,
   auto string_offsets = rmm::device_uvector<cudf::size_type>(num_results + 2, stream);
   auto const x        = string_offsets.size() - 1;
   auto const y        = input.size();
-
-  // std::cout << "num_results: " << num_results << std::endl;
 
   // first and last element are set manually to zero and size of input, respectively.
   // kernel is only responsible for determining delimiter offsets

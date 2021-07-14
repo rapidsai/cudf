@@ -65,14 +65,16 @@ TEST_F(MultibyteSplitTest, Simple)
     "and😎"
     "used😎"
     "as😎"
-    "delimeters.");
+    "delimeters.😎"
+    "::"
+    ","
+    "😀");
 
   auto expected = strings_column_wrapper{
-    "aaa😀",       "bbb😀",  "ccc😀",    "ddd😀",        "eee😀",     "fff::",     "ggg😀",
-    "hhh😀",       "___,",  "here,",   "is,",         "another,", "simple😀",   "text😎",
-    "seperated😎", "by😎",   "emojis,", "which,",      "are😎",     "multiple,", "bytes::",
-    "and😎",       "used😎", "as😎",     "delimeters.",
-  };
+    "aaa😀",         "bbb😀",   "ccc😀", "ddd😀",      "eee😀",    "fff::", "ggg😀",       "hhh😀",
+    "___,",         "here,",  "is,",  "another,",  "simple😀", "text😎", "seperated😎", "by😎",
+    "emojis,",      "which,", "are😎", "multiple,", "bytes::", "and😎",  "used😎",      "as😎",
+    "delimeters.😎", "::",     ",",    "😀",         ""};
 
   auto out = cudf::io::text::multibyte_split(input, delimiters);
 
