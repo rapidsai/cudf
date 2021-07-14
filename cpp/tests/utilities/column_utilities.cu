@@ -61,7 +61,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   // Length : 7
   // Offsets : 0, 3, 6, 8, 11, 14, 16, 19
   //                 |     |                        <-- non-null input rows
-  // Null count: 7
+  // Null count: 5
   // 0010100
   //    1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 7, 7, 7
   //                      |  |           |  |  |    <-- child rows of non-null rows
@@ -297,7 +297,7 @@ struct column_property_comparator {
     structs_column_view r_scv(rhs);
 
     std::for_each(thrust::make_counting_iterator(0),
-                  thrust::make_counting_iterator(0) + lhs.num_children(),
+                  thrust::make_counting_iterator(lhs.num_children()),
                   [&](auto i) {
                     column_view lhs_child = l_scv.get_sliced_child(i);
                     column_view rhs_child = r_scv.get_sliced_child(i);
@@ -700,10 +700,10 @@ std::unique_ptr<column> generate_all_row_indices(size_type num_rows)
 {
   auto indices =
     cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED);
-  thrust::tabulate(rmm::exec_policy(),
+  thrust::sequence(rmm::exec_policy(),
                    indices->mutable_view().begin<size_type>(),
                    indices->mutable_view().end<size_type>(),
-                   thrust::identity<size_type>());
+                   0);
   return indices;
 }
 
