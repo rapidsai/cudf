@@ -75,7 +75,7 @@ std::vector<std::string> make_template_types(column_view outcol_view, table_view
     cudf::jit::get_type_name(cudf::data_type(cudf::type_to_id<cudf::offset_type>()));
 
   std::vector<std::string> template_types;
-  template_types.reserve(data_view.num_columns() + 1);
+  template_types.reserve((3 * data_view.num_columns()) + 1);
 
   template_types.push_back(cudf::jit::get_type_name(outcol_view.type()));
   for (auto const& col : data_view) {
@@ -85,6 +85,14 @@ std::vector<std::string> make_template_types(column_view outcol_view, table_view
   }
   return template_types;
 }
+
+class Unpacker {
+  public:
+    thrust::tuple<const void*, cudf::bitmask_type const*, cudf::offset_type> operator() (column_view input) {
+      return thrust::make_tuple(cudf::jit::get_data_ptr(input), input.null_mask(), input.offset());
+    }
+};
+
 
 void generalized_operation(table_view data_view,
                            std::string const& udf,
@@ -103,7 +111,6 @@ void generalized_operation(table_view data_view,
   std::string generic_cuda_source = cudf::jit::parse_single_function_ptx(
     udf, "GENERIC_OP", cudf::jit::get_type_name(output_type), {0});
 
-  // {size, out_ptr, out_mask_ptr, col0_ptr, col0_mask_ptr, col0_offset, col1_ptr...}
   std::vector<void*> kernel_args;
   kernel_args.reserve((data_view.num_columns() * 3) + 3);
 
@@ -120,13 +127,16 @@ void generalized_operation(table_view data_view,
   mask_ptrs.reserve(data_view.num_columns());
   offsets.reserve(data_view.num_columns());
 
+  auto zipit_start = thrust::make_zip_iterator(
+    thrust::make_tuple(data_ptrs.begin(), 
+    mask_ptrs.begin(),
+    offsets.begin())
+  );
+
+  Unpacker unpacker;
+  thrust::transform(data_view.begin(), data_view.end(), zipit_start, unpacker);
+
   for (int col_idx = 0; col_idx < data_view.num_columns(); col_idx++) {
-    auto const& col = data_view.column(col_idx);
-
-    data_ptrs.push_back(cudf::jit::get_data_ptr(col));
-    mask_ptrs.push_back(col.null_mask());
-    offsets.push_back(col.offset());
-
     kernel_args.push_back(&data_ptrs[col_idx]);
     kernel_args.push_back(&mask_ptrs[col_idx]);
     kernel_args.push_back(&offsets[col_idx]);
@@ -167,7 +177,7 @@ std::unique_ptr<column> transform(column_view const& input,
   return output;
 }
 
-std::unique_ptr<column> generalized_masked_op(table_view data_view,
+std::unique_ptr<column> generalized_masked_op(table_view const& data_view,
                                               std::string const& udf,
                                               data_type output_type,
                                               rmm::cuda_stream_view stream,
@@ -181,8 +191,8 @@ std::unique_ptr<column> generalized_masked_op(table_view data_view,
   transformation::jit::generalized_operation(
     data_view, udf, output_type, *output, *output_mask, stream, mr);
 
-  auto [final_output_mask, out_something] = cudf::bools_to_mask(*output_mask);
-  output.get()->set_null_mask(std::move(final_output_mask));
+  auto final_output_mask = cudf::bools_to_mask(*output_mask);
+  output.get()->set_null_mask(std::move(*(final_output_mask.first)));
   return output;
 }
 
