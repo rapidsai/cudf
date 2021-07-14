@@ -75,7 +75,7 @@ struct scan_tile_state {
 };
 
 // keep ITEMS_PER_TILE below input size to force multi-tile execution.
-auto constexpr ITEMS_PER_THREAD = 4;
+auto constexpr ITEMS_PER_THREAD = 32;
 auto constexpr THREADS_PER_TILE = 32;
 auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
 auto constexpr TILES_PER_CHUNK  = 1024;
@@ -170,14 +170,15 @@ __global__ void multibyte_split_kernel(cudf::size_type num_tiles,
     };
   } temp_storage;
 
-  auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
-  auto const data_begin = thread_idx * ITEMS_PER_THREAD;
+  int32_t const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int32_t const data_begin = thread_idx * ITEMS_PER_THREAD;
+  int32_t const num_valid  = data.size() - data_begin;
 
   // STEP 1: Load inputs
 
   char thread_data[ITEMS_PER_THREAD];
 
-  for (auto i = 0; i < ITEMS_PER_THREAD; i++) {  //
+  for (int32_t i = 0; i < ITEMS_PER_THREAD and i < num_valid; i++) {  //
     thread_data[i] = data[data_begin + i];
   }
 
@@ -193,7 +194,7 @@ __global__ void multibyte_split_kernel(cudf::size_type num_tiles,
   uint32_t thread_offsets[ITEMS_PER_THREAD];
 
   for (int32_t i = 0; i < ITEMS_PER_THREAD; i++) {
-    thread_offsets[i] = trie.is_match(thread_states[i]);
+    thread_offsets[i] = i < num_valid and trie.is_match(thread_states[i]);
   }
 
   // STEP 4: Scan flags to determine absolute thread output offset
@@ -214,7 +215,7 @@ __global__ void multibyte_split_kernel(cudf::size_type num_tiles,
 
   // Step 5: Assign string_offsets from each thread using match offsets.
 
-  for (uint32_t i = 0; i < ITEMS_PER_THREAD; i++) {
+  for (int32_t i = 0; i < ITEMS_PER_THREAD and i < num_valid; i++) {
     auto const match_length = trie.get_match_length(thread_states[i]);
 
     if (match_length == 0) { continue; }
