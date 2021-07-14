@@ -220,6 +220,10 @@ class GroupBy(Serializable):
                     else:
                         raise
 
+        if libgroupby._is_all_scan_aggregate(normalized_aggs):
+            # Scan aggregations return rows in original index order
+            return self._mimic_pandas_order(result)
+
         # set index names to be group key names
         if len(result):
             result.index.names = self.grouping.names

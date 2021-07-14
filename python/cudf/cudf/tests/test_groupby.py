@@ -1702,7 +1702,6 @@ def test_groupby_2keys_scan(nelem, func):
     # pd.groupby.cumcount returns a series.
     if isinstance(expect_df, pd.Series):
         expect_df = expect_df.to_frame("val")
-    expect_df = expect_df.set_index([pdf["x"], pdf["y"]]).sort_index()
 
     check_dtype = False if func in _index_type_aggs else True
     assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
