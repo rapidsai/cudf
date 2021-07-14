@@ -427,6 +427,9 @@ class CategoricalAccessor(ColumnMethodsMixin):
         dtype: category
         Categories (2, int64): [1, 2]
         """
+        import pdb
+
+        pdb.set_trace()
         cats = self.categories.to_series()
         removals = cudf.Series(removals, dtype=cats.dtype)
         removals_mask = removals.isin(cats)
@@ -716,9 +719,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
             )
 
         cur_codes = self.codes
-        max_cat_size = (
-            len(cur_cats) if len(cur_cats) > len(new_cats) else len(new_cats)
-        )
+        max_cat_size = max(len(cur_cats), len(new_cats))
         out_code_dtype = min_unsigned_type(max_cat_size)
 
         cur_order = column.arange(len(cur_codes))
@@ -1176,12 +1177,17 @@ class CategoricalColumn(column.ColumnBase):
         to_replace_col = column.as_column(to_replace)
         replacement_col = column.as_column(replacement)
 
-        if type(to_replace_col) != type(replacement_col):
+        if replacement_col.null_count != len(replacement_col) and type(
+            to_replace_col
+        ) != type(replacement_col):
             raise TypeError(
                 f"to_replace and value should be of same types,"
                 f"got to_replace dtype: {to_replace_col.dtype} and "
                 f"value dtype: {replacement_col.dtype}"
             )
+        import pdb
+
+        pdb.set_trace()
 
         # create a dataframe containing the pre-replacement categories
         # and a copy of them to work with. The index of this dataframe
@@ -1230,10 +1236,29 @@ class CategoricalColumn(column.ColumnBase):
         replacement_col = catmap["index"]._column.astype(
             self.cat().codes.dtype
         )
+        # TODO: Properly handle replacements, right now it's buggy
+        cur_order = column.arange(len(self.codes))
+        old_codes = column.arange(len(self.dtype.categories), dtype="uint8")
+        new_codes = column.arange(len(new_cats["cats"]), dtype="uint8")
 
-        replaced = column.as_column(self.cat().codes)
+        new_df = cudf.DataFrame(
+            {"new_codes": new_codes, "cats": new_cats["cats"]}
+        )
+        old_df = cudf.DataFrame(
+            {"old_codes": old_codes, "cats": self.dtype.categories}
+        )
+        cur_df = cudf.DataFrame({"old_codes": self.codes, "order": cur_order})
+
+        # Join the old and new categories and line up their codes
+        df = old_df.merge(new_df, on="cats", how="left")
+        # Join the old and new codes to "recode" the codes data buffer
+        df = cur_df.merge(df, on="old_codes", how="left")
+        df = df.sort_values(by="order")
+        df.reset_index(drop=True, inplace=True)
+
+        # replaced = column.as_column(self.cat().codes)
         output = libcudf.replace.replace(
-            replaced, to_replace_col, replacement_col
+            df["new_codes"]._column, to_replace_col, replacement_col
         )
 
         return column.build_categorical_column(

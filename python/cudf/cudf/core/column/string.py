@@ -5360,8 +5360,19 @@ class StringColumn(column.ColumnBase):
             and replacement_col.dtype != self.dtype
         ):
             return self.copy()
+        df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
+        df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
+        if df._data["old"].null_count == 1:
+            import pdb
 
-        return libcudf.replace.replace(self, to_replace_col, replacement_col)
+            pdb.set_trace()
+            res = self.fillna(df._data["new"][df._data["old"].isna()][0])
+            df = df.dropna(subset=["old"])
+        else:
+            res = self
+        return libcudf.replace.replace(
+            res, df["old"]._column, df["new"]._column
+        )
 
     def fillna(
         self,
@@ -5372,6 +5383,9 @@ class StringColumn(column.ColumnBase):
         if fill_value is not None:
             if not is_scalar(fill_value):
                 fill_value = column.as_column(fill_value, dtype=self.dtype)
+            elif cudf._lib.scalar._is_null_host_scalar(fill_value):
+                # Trying to fill <NA> with <NA> value? Return copy.
+                return self.copy(deep=True)
             return super().fillna(value=fill_value, dtype="object")
         else:
             return super().fillna(method=method)
