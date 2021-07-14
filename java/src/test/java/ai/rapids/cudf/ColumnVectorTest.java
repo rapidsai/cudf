@@ -4459,6 +4459,31 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testStringCapitalize() {
+    try (ColumnVector cv = ColumnVector.fromStrings("s Park", "S\nqL", "lower \tcase",
+                                                    null, "", "UPPER\rCASE")) {
+      try (Scalar deli = Scalar.fromString("");
+           ColumnVector result = cv.capitalize(deli);
+           ColumnVector expected = ColumnVector.fromStrings("S park", "S\nql", "Lower \tcase",
+                                                            null, "", "Upper\rcase")) {
+        assertColumnsAreEqual(expected, result);
+      }
+      try (Scalar deli = Scalar.fromString(" ");
+           ColumnVector result = cv.capitalize(deli);
+           ColumnVector expected = ColumnVector.fromStrings("S Park", "S\nql", "Lower \tcase",
+                                                            null, "", "Upper\rcase")) {
+        assertColumnsAreEqual(expected, result);
+      }
+      try (Scalar deli = Scalar.fromString(" \t\n");
+           ColumnVector result = cv.capitalize(deli);
+           ColumnVector expected = ColumnVector.fromStrings("S Park", "S\nQl", "Lower \tCase",
+                                                             null, "", "Upper\rcase")) {
+        assertColumnsAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
   void testNansToNulls() {
     Float[] floats = new Float[]{1.2f, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY, null,
         Float.NaN, Float.MAX_VALUE, Float.MIN_VALUE, 435243.2323f, POSITIVE_FLOAT_NAN_LOWER_RANGE,

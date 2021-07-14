@@ -200,11 +200,7 @@ def test_string_astype(dtype):
     ps = pd.Series(data)
     gs = cudf.Series(data)
 
-    # Pandas str --> bool typecasting always returns True if there's a string
-    if dtype.startswith("bool"):
-        expect = ps == "True"
-    else:
-        expect = ps.astype(dtype)
+    expect = ps.astype(dtype)
     got = gs.astype(dtype)
 
     assert_eq(expect, got)

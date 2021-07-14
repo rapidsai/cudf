@@ -53,7 +53,7 @@ T get_distribution_mean(distribution_params<T> const& dist)
       auto const range_size = dist.lower_bound < dist.upper_bound
                                 ? dist.upper_bound - dist.lower_bound
                                 : dist.lower_bound - dist.upper_bound;
-      auto const p = geometric_dist_p(range_size);
+      auto const p          = geometric_dist_p(range_size);
       if (dist.lower_bound < dist.upper_bound)
         return dist.lower_bound + (1. / p);
       else
@@ -108,7 +108,8 @@ size_t avg_element_bytes(data_profile const& profile, cudf::type_id tid)
 /**
  * @brief Functor that computes a random column element with the given data profile.
  *
- * The implementation is SFINAEd for diffent type groups. Currently only used for fixed-width types.
+ * The implementation is SFINAEd for different type groups. Currently only used for fixed-width
+ * types.
  */
 template <typename T, typename Enable = void>
 struct random_value_fn;

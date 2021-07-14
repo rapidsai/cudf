@@ -21,6 +21,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/strings/string_view.hpp>
@@ -393,4 +394,39 @@ TYPED_TEST(ScanTest, LeadingNulls)
   // skipna = false
   this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
   this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE);
+}
+
+class ScanStringsTest : public ScanTest<cudf::string_view> {
+};
+
+TEST_F(ScanStringsTest, MoreStringsMinMax)
+{
+  int row_count = 512;
+
+  auto data_begin = cudf::detail::make_counting_transform_iterator(0, [](auto idx) {
+    char const s[] = {static_cast<char>('a' + (idx % 26)), 0};
+    return std::string(s);
+  });
+  auto validity   = cudf::detail::make_counting_transform_iterator(
+    0, [](auto idx) -> bool { return (idx % 23) != 22; });
+  cudf::test::strings_column_wrapper col(data_begin, data_begin + row_count, validity);
+
+  thrust::host_vector<std::string> v(data_begin, data_begin + row_count);
+  thrust::host_vector<bool> b(validity, validity + row_count);
+
+  this->scan_test(v, {}, cudf::make_min_aggregation(), scan_type::INCLUSIVE);
+  this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::INCLUSIVE);
+  this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::INCLUSIVE, null_policy::EXCLUDE);
+
+  this->scan_test(v, {}, cudf::make_min_aggregation(), scan_type::EXCLUSIVE);
+  this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::EXCLUSIVE);
+  this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE);
+
+  this->scan_test(v, {}, cudf::make_max_aggregation(), scan_type::INCLUSIVE);
+  this->scan_test(v, b, cudf::make_max_aggregation(), scan_type::INCLUSIVE);
+  this->scan_test(v, b, cudf::make_max_aggregation(), scan_type::INCLUSIVE, null_policy::EXCLUDE);
+
+  this->scan_test(v, {}, cudf::make_max_aggregation(), scan_type::EXCLUSIVE);
+  this->scan_test(v, b, cudf::make_max_aggregation(), scan_type::EXCLUSIVE);
+  this->scan_test(v, b, cudf::make_max_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE);
 }

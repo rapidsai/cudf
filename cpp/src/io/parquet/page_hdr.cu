@@ -45,9 +45,9 @@ static const __device__ __constant__ uint8_t g_list2struct[16] = {0,
                                                                   ST_FLD_LIST};
 
 struct byte_stream_s {
-  const uint8_t *cur;
-  const uint8_t *end;
-  const uint8_t *base;
+  const uint8_t* cur;
+  const uint8_t* end;
+  const uint8_t* base;
   // Parsed symbols
   PageType page_type;
   PageInfo page;
@@ -61,12 +61,12 @@ struct byte_stream_s {
  *
  * @return Current byte pointed to by the byte stream
  */
-inline __device__ unsigned int getb(byte_stream_s *bs)
+inline __device__ unsigned int getb(byte_stream_s* bs)
 {
   return (bs->cur < bs->end) ? *bs->cur++ : 0;
 }
 
-inline __device__ void skip_bytes(byte_stream_s *bs, size_t bytecnt)
+inline __device__ void skip_bytes(byte_stream_s* bs, size_t bytecnt)
 {
   bytecnt = min(bytecnt, (size_t)(bs->end - bs->cur));
   bs->cur += bytecnt;
@@ -83,7 +83,7 @@ inline __device__ void skip_bytes(byte_stream_s *bs, size_t bytecnt)
  *
  * @return Decoded 32 bit integer
  */
-__device__ uint32_t get_u32(byte_stream_s *bs)
+__device__ uint32_t get_u32(byte_stream_s* bs)
 {
   uint32_t v = 0, l = 0, c;
   do {
@@ -105,13 +105,13 @@ __device__ uint32_t get_u32(byte_stream_s *bs)
  *
  * @return Decoded 32 bit integer
  */
-inline __device__ int32_t get_i32(byte_stream_s *bs)
+inline __device__ int32_t get_i32(byte_stream_s* bs)
 {
   uint32_t u = get_u32(bs);
   return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
 }
 
-__device__ void skip_struct_field(byte_stream_s *bs, int field_type)
+__device__ void skip_struct_field(byte_stream_s* bs, int field_type)
 {
   int struct_depth = 0;
   int rep_cnt      = 0;
@@ -161,11 +161,11 @@ __device__ void skip_struct_field(byte_stream_s *bs, int field_type)
  */
 struct ParquetFieldInt32 {
   int field;
-  int32_t &val;
+  int32_t& val;
 
-  __device__ ParquetFieldInt32(int f, int32_t &v) : field(f), val(v) {}
+  __device__ ParquetFieldInt32(int f, int32_t& v) : field(f), val(v) {}
 
-  inline __device__ bool operator()(byte_stream_s *bs, int field_type)
+  inline __device__ bool operator()(byte_stream_s* bs, int field_type)
   {
     val = get_i32(bs);
     return (field_type != ST_FLD_I32);
@@ -180,11 +180,11 @@ struct ParquetFieldInt32 {
 template <typename Enum>
 struct ParquetFieldEnum {
   int field;
-  Enum &val;
+  Enum& val;
 
-  __device__ ParquetFieldEnum(int f, Enum &v) : field(f), val(v) {}
+  __device__ ParquetFieldEnum(int f, Enum& v) : field(f), val(v) {}
 
-  inline __device__ bool operator()(byte_stream_s *bs, int field_type)
+  inline __device__ bool operator()(byte_stream_s* bs, int field_type)
   {
     val = static_cast<Enum>(get_i32(bs));
     return (field_type != ST_FLD_I32);
@@ -204,7 +204,7 @@ struct ParquetFieldStruct {
 
   __device__ ParquetFieldStruct(int f) : field(f) {}
 
-  inline __device__ bool operator()(byte_stream_s *bs, int field_type)
+  inline __device__ bool operator()(byte_stream_s* bs, int field_type)
   {
     return ((field_type != ST_FLD_STRUCT) || !op(bs));
   }
@@ -226,10 +226,10 @@ struct ParquetFieldStruct {
 template <int index>
 struct FunctionSwitchImpl {
   template <typename... Operator>
-  static inline __device__ bool run(byte_stream_s *bs,
+  static inline __device__ bool run(byte_stream_s* bs,
                                     int field_type,
-                                    const int &field,
-                                    thrust::tuple<Operator...> &ops)
+                                    const int& field,
+                                    thrust::tuple<Operator...>& ops)
   {
     if (field == thrust::get<index>(ops).field) {
       return thrust::get<index>(ops)(bs, field_type);
@@ -242,10 +242,10 @@ struct FunctionSwitchImpl {
 template <>
 struct FunctionSwitchImpl<0> {
   template <typename... Operator>
-  static inline __device__ bool run(byte_stream_s *bs,
+  static inline __device__ bool run(byte_stream_s* bs,
                                     int field_type,
-                                    const int &field,
-                                    thrust::tuple<Operator...> &ops)
+                                    const int& field,
+                                    thrust::tuple<Operator...>& ops)
   {
     if (field == thrust::get<0>(ops).field) {
       return thrust::get<0>(ops)(bs, field_type);
@@ -267,7 +267,7 @@ struct FunctionSwitchImpl<0> {
  * byte stream. Otherwise true is returned.
  */
 template <typename... Operator>
-inline __device__ bool parse_header(thrust::tuple<Operator...> &op, byte_stream_s *bs)
+inline __device__ bool parse_header(thrust::tuple<Operator...>& op, byte_stream_s* bs)
 {
   constexpr int index = thrust::tuple_size<thrust::tuple<Operator...>>::value - 1;
   int field           = 0;
@@ -284,7 +284,7 @@ inline __device__ bool parse_header(thrust::tuple<Operator...> &op, byte_stream_
 }
 
 struct gpuParseDataPageHeader {
-  __device__ bool operator()(byte_stream_s *bs)
+  __device__ bool operator()(byte_stream_s* bs)
   {
     auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
                                  ParquetFieldEnum<Encoding>(2, bs->page.encoding),
@@ -295,7 +295,7 @@ struct gpuParseDataPageHeader {
 };
 
 struct gpuParseDictionaryPageHeader {
-  __device__ bool operator()(byte_stream_s *bs)
+  __device__ bool operator()(byte_stream_s* bs)
   {
     auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
                                  ParquetFieldEnum<Encoding>(2, bs->page.encoding));
@@ -304,7 +304,7 @@ struct gpuParseDictionaryPageHeader {
 };
 
 struct gpuParseDataPageHeaderV2 {
-  __device__ bool operator()(byte_stream_s *bs)
+  __device__ bool operator()(byte_stream_s* bs)
   {
     auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
                                  ParquetFieldInt32(3, bs->page.num_rows),
@@ -316,7 +316,7 @@ struct gpuParseDataPageHeaderV2 {
 };
 
 struct gpuParsePageHeader {
-  __device__ bool operator()(byte_stream_s *bs)
+  __device__ bool operator()(byte_stream_s* bs)
   {
     auto op = thrust::make_tuple(ParquetFieldEnum<PageType>(1, bs->page_type),
                                  ParquetFieldInt32(2, bs->page.uncompressed_page_size),
@@ -336,14 +336,14 @@ struct gpuParsePageHeader {
  */
 // blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128)
-  gpuDecodePageHeaders(ColumnChunkDesc *chunks, int32_t num_chunks)
+  gpuDecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks)
 {
   gpuParsePageHeader parse_page_header;
   __shared__ byte_stream_s bs_g[4];
 
   int lane_id             = threadIdx.x % 32;
   int chunk               = (blockIdx.x * 4) + (threadIdx.x / 32);
-  byte_stream_s *const bs = &bs_g[threadIdx.x / 32];
+  byte_stream_s* const bs = &bs_g[threadIdx.x / 32];
 
   if (chunk < num_chunks and lane_id == 0) bs->ck = chunks[chunk];
   __syncthreads();
@@ -354,7 +354,7 @@ extern "C" __global__ void __launch_bounds__(128)
     uint32_t dictionary_page_count = 0;
     int32_t max_num_pages;
     int32_t num_dict_pages = bs->ck.num_dict_pages;
-    PageInfo *page_info;
+    PageInfo* page_info;
 
     if (!lane_id) {
       bs->base = bs->cur      = bs->ck.compressed_data;
@@ -402,7 +402,7 @@ extern "C" __global__ void __launch_bounds__(128)
               break;
             default: index_out = -1; break;
           }
-          bs->page.page_data = const_cast<uint8_t *>(bs->cur);
+          bs->page.page_data = const_cast<uint8_t*>(bs->cur);
           bs->cur += bs->page.compressed_page_size;
         } else {
           bs->cur = bs->end;
@@ -434,21 +434,21 @@ extern "C" __global__ void __launch_bounds__(128)
  */
 // blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128)
-  gpuBuildStringDictionaryIndex(ColumnChunkDesc *chunks, int32_t num_chunks)
+  gpuBuildStringDictionaryIndex(ColumnChunkDesc* chunks, int32_t num_chunks)
 {
   __shared__ ColumnChunkDesc chunk_g[4];
 
   int lane_id               = threadIdx.x % 32;
   int chunk                 = (blockIdx.x * 4) + (threadIdx.x / 32);
-  ColumnChunkDesc *const ck = &chunk_g[threadIdx.x / 32];
+  ColumnChunkDesc* const ck = &chunk_g[threadIdx.x / 32];
   if (chunk < num_chunks and lane_id == 0) *ck = chunks[chunk];
   __syncthreads();
 
   if (chunk >= num_chunks) { return; }
   if (!lane_id && ck->num_dict_pages > 0 && ck->str_dict_index) {
     // Data type to describe a string
-    string_index_pair *dict_index = ck->str_dict_index;
-    const uint8_t *dict           = ck->page_info[0].page_data;
+    string_index_pair* dict_index = ck->str_dict_index;
+    const uint8_t* dict           = ck->page_info[0].page_data;
     int dict_size                 = ck->page_info[0].uncompressed_page_size;
     int num_entries               = ck->page_info[0].num_input_values;
     int pos = 0, cur = 0;
@@ -464,13 +464,13 @@ extern "C" __global__ void __launch_bounds__(128)
         }
       }
       // TODO: Could store 8 entries in shared mem, then do a single warp-wide store
-      dict_index[i].first  = reinterpret_cast<const char *>(dict + pos + 4);
+      dict_index[i].first  = reinterpret_cast<const char*>(dict + pos + 4);
       dict_index[i].second = len;
     }
   }
 }
 
-void __host__ DecodePageHeaders(ColumnChunkDesc *chunks,
+void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
                                 int32_t num_chunks,
                                 rmm::cuda_stream_view stream)
 {
@@ -479,7 +479,7 @@ void __host__ DecodePageHeaders(ColumnChunkDesc *chunks,
   gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
 }
 
-void __host__ BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
+void __host__ BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
                                          int32_t num_chunks,
                                          rmm::cuda_stream_view stream)
 {

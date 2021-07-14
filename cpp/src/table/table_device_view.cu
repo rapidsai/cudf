@@ -55,7 +55,7 @@ template class table_device_view_base<column_device_view, table_view>;
 template class table_device_view_base<mutable_column_device_view, mutable_table_view>;
 
 namespace {
-struct is_relationally_comparable_impl {
+struct is_relationally_comparable_functor {
   template <typename T>
   constexpr bool operator()()
   {
@@ -74,7 +74,7 @@ bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
                           // TODO: possible to implement without double type dispatcher.
                           return lhs.column(i).type() == rhs.column(i).type() and
                                  type_dispatcher(lhs.column(i).type(),
-                                                 is_relationally_comparable_impl{});
+                                                 is_relationally_comparable_functor{});
                         });
 }
 

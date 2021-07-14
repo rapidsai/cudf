@@ -40,10 +40,12 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
-option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
+option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
+option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
 option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
@@ -54,7 +56,7 @@ option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
-message(VERBOSE "CUDF: Configure CMake to build (google) benchmarks: ${BUILD_BENCHMARKS}")
+message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
 message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
@@ -153,6 +155,34 @@ add_library(cudf
     src/ast/transform.cu
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
+    src/binaryop/compiled/Add.cu
+    src/binaryop/compiled/ATan2.cu
+    src/binaryop/compiled/BitwiseAnd.cu
+    src/binaryop/compiled/BitwiseOr.cu
+    src/binaryop/compiled/BitwiseXor.cu
+    src/binaryop/compiled/Less.cu
+    src/binaryop/compiled/Greater.cu
+    src/binaryop/compiled/LessEqual.cu
+    src/binaryop/compiled/GreaterEqual.cu
+    src/binaryop/compiled/Div.cu
+    src/binaryop/compiled/equality_ops.cu
+    src/binaryop/compiled/FloorDiv.cu
+    src/binaryop/compiled/LogBase.cu
+    src/binaryop/compiled/LogicalAnd.cu
+    src/binaryop/compiled/LogicalOr.cu
+    src/binaryop/compiled/Mod.cu
+    src/binaryop/compiled/Mul.cu
+    src/binaryop/compiled/NullMax.cu
+    src/binaryop/compiled/NullMin.cu
+    src/binaryop/compiled/PMod.cu
+    src/binaryop/compiled/Pow.cu
+    src/binaryop/compiled/PyMod.cu
+    src/binaryop/compiled/ShiftLeft.cu
+    src/binaryop/compiled/ShiftRight.cu
+    src/binaryop/compiled/ShiftRightUnsigned.cu
+    src/binaryop/compiled/Sub.cu
+    src/binaryop/compiled/TrueDiv.cu
+    src/binaryop/compiled/util.cpp
     src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
     src/bitmask/is_element_valid.cpp
@@ -194,14 +224,16 @@ add_library(cudf
     src/filling/sequence.cu
     src/groupby/groupby.cu
     src/groupby/hash/groupby.cu
+    src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_argmax.cu
     src/groupby/sort/group_argmin.cu
-    src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_collect.cu
-    src/groupby/sort/group_merge_lists.cu
     src/groupby/sort/group_count.cu
+    src/groupby/sort/group_m2.cu
     src/groupby/sort/group_max.cu
     src/groupby/sort/group_min.cu
+    src/groupby/sort/group_merge_lists.cu
+    src/groupby/sort/group_merge_m2.cu
     src/groupby/sort/group_nth_element.cu
     src/groupby/sort/group_nunique.cu
     src/groupby/sort/group_product.cu
@@ -272,7 +304,7 @@ add_library(cudf
     src/join/join.cu
     src/join/semi_join.cu
     src/lists/contains.cu
-    src/lists/combine/concatenate_list_elements.cu		
+    src/lists/combine/concatenate_list_elements.cu
     src/lists/combine/concatenate_rows.cu
     src/lists/copying/concatenate.cu
     src/lists/copying/copying.cu
@@ -354,6 +386,7 @@ add_library(cudf
     src/strings/convert/convert_urls.cu
     src/strings/copying/concatenate.cu
     src/strings/copying/copying.cu
+    src/strings/copying/shift.cu
     src/strings/extract.cu
     src/strings/filling/fill.cu
     src/strings/filter_chars.cu
@@ -576,6 +609,8 @@ if(CUDF_BUILD_BENCHMARKS)
         GIT_SHALLOW     TRUE
         OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
                         "BENCHMARK_ENABLE_INSTALL OFF")
+    # Find or install NVBench
+    include(cmake/thirdparty/CUDF_GetNVBench.cmake)
     add_subdirectory(benchmarks)
 endif()
 

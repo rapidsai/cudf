@@ -38,7 +38,7 @@ namespace detail {
 template <typename Binop>
 __global__ void offset_bitmask_binop(Binop op,
                                      device_span<bitmask_type> destination,
-                                     device_span<bitmask_type const *> source,
+                                     device_span<bitmask_type const*> source,
                                      device_span<size_type const> source_begin_bits,
                                      size_type source_size_bits)
 {
@@ -73,16 +73,16 @@ __global__ void offset_bitmask_binop(Binop op,
 template <typename Binop>
 rmm::device_buffer bitmask_binop(
   Binop op,
-  host_span<bitmask_type const *> masks,
+  host_span<bitmask_type const*> masks,
   host_span<size_type const> masks_begin_bits,
   size_type mask_size_bits,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto dest_mask = rmm::device_buffer{bitmask_allocation_size_bytes(mask_size_bits), stream, mr};
 
   inplace_bitmask_binop(op,
-                        device_span<bitmask_type>(static_cast<bitmask_type *>(dest_mask.data()),
+                        device_span<bitmask_type>(static_cast<bitmask_type*>(dest_mask.data()),
                                                   num_bitmask_words(mask_size_bits)),
                         masks,
                         masks_begin_bits,
@@ -110,11 +110,11 @@ template <typename Binop>
 void inplace_bitmask_binop(
   Binop op,
   device_span<bitmask_type> dest_mask,
-  host_span<bitmask_type const *> masks,
+  host_span<bitmask_type const*> masks,
   host_span<size_type const> masks_begin_bits,
   size_type mask_size_bits,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(
     std::all_of(masks_begin_bits.begin(), masks_begin_bits.end(), [](auto b) { return b >= 0; }),
@@ -123,7 +123,7 @@ void inplace_bitmask_binop(
   CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
                "Mask pointer cannot be null");
 
-  rmm::device_uvector<bitmask_type const *> d_masks(masks.size(), stream, mr);
+  rmm::device_uvector<bitmask_type const*> d_masks(masks.size(), stream, mr);
   rmm::device_uvector<size_type> d_begin_bits(masks_begin_bits.size(), stream, mr);
 
   CUDA_TRY(cudaMemcpyAsync(

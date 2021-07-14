@@ -173,7 +173,7 @@ std::vector<std::unique_ptr<column>> generate_structs(bool include_validity)
   std::vector<bool> ages_validity = {1, 1, 1, 1, 0, 1, 0, 0, 1};
   auto ages_column                = include_validity ? fixed_width_column_wrapper<int>(
                                           ages.begin(), ages.end(), ages_validity.begin())
-                                      : fixed_width_column_wrapper<int>(ages.begin(), ages.end());
+                                                     : fixed_width_column_wrapper<int>(ages.begin(), ages.end());
 
   // 3. Boolean "is_human" column.
   std::vector<bool> is_human{true, true, false, false, false, false, true, true, true};
@@ -470,6 +470,24 @@ TEST_F(PackUnpackTest, NestedSliced)
 
   cudf::table_view t({col0, col1, col2, *col3});
   this->run_test(t);
+}
+
+TEST_F(PackUnpackTest, EmptyTable)
+{
+  // no columns
+  {
+    cudf::table_view t;
+    this->run_test(t);
+  }
+
+  // no rows
+  {
+    cudf::test::fixed_width_column_wrapper<int> a;
+    cudf::test::strings_column_wrapper b;
+    cudf::test::lists_column_wrapper<float> c;
+    cudf::table_view t({a, b, c});
+    this->run_test(t);
+  }
 }
 
 // clang-format on
