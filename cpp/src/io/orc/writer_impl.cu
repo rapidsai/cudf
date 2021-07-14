@@ -140,13 +140,13 @@ class orc_column_view {
    */
   explicit orc_column_view(uint32_t index,
                            uint32_t str_id,
-                           int root_index,
+                           std::optional<int> index_in_table,
                            column_view const& col,
                            const table_metadata* metadata)
     : cudf_column{col},
       _index{index},
       _str_id{str_id},
-      _is_child{root_index == -1},
+      _is_child{!index_in_table.has_value()},
       _type_width{cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : 0},
       _scale{(to_orc_type(col.type().id()) == TypeKind::DECIMAL) ? -col.type().scale()
                                                                  : to_clockscale(col.type().id())},
@@ -154,10 +154,12 @@ class orc_column_view {
       _type_kind{to_orc_type(col.type().id())}
   {
     // Generating default name if name isn't present in metadata
-    if (metadata && !_is_child && root_index < static_cast<int>(metadata->column_names.size())) {
-      _name = metadata->column_names[root_index];
-    } else {
-      _name = "_col" + std::to_string(root_index);
+    if (index_in_table.has_value()) {
+      if (metadata && *index_in_table < static_cast<int>(metadata->column_names.size())) {
+        _name = metadata->column_names[*index_in_table];
+      } else {
+        _name = "_col" + std::to_string(*index_in_table);
+      }
     }
   }
 
@@ -1130,7 +1132,7 @@ void writer::impl::init_state()
  * @brief Preorder append ORC device columns
  */
 void __device__ append_orc_device_column(uint32_t& idx,
-                                         int32_t parent_idx,
+                                         thrust::optional<uint32_t> parent_idx,
                                          device_span<orc_column_device_view> cols,
                                          column_device_view col)
 {
@@ -1152,16 +1154,16 @@ orc_table_view make_orc_table_view(table_view const& table,
   std::vector<orc_column_view> orc_columns;
   std::vector<int> str_col_indexes;
 
-  std::function<void(column_view const&, int)> append_orc_column = [&](column_view const& col,
-                                                                       int root_index) {
-    orc_columns.emplace_back(
-      orc_columns.size(), str_col_indexes.size(), root_index, col, user_metadata);
-    if (orc_columns.back().is_string()) { str_col_indexes.push_back(orc_columns.back().index()); }
-    if (col.type().id() == type_id::LIST) append_orc_column(col.child(1), -1);
-    if (col.type().id() == type_id::STRUCT)
-      for (auto child = col.child_begin(); child != col.child_end(); ++child)
-        append_orc_column(*child, -1);
-  };
+  std::function<void(column_view const&, std::optional<int>)> append_orc_column =
+    [&](column_view const& col, std::optional<int> index_in_table) {
+      orc_columns.emplace_back(
+        orc_columns.size(), str_col_indexes.size(), index_in_table, col, user_metadata);
+      if (orc_columns.back().is_string()) { str_col_indexes.push_back(orc_columns.back().index()); }
+      if (col.type().id() == type_id::LIST) append_orc_column(col.child(1), std::nullopt);
+      if (col.type().id() == type_id::STRUCT)
+        for (auto child = col.child_begin(); child != col.child_end(); ++child)
+          append_orc_column(*child, std::nullopt);
+    };
 
   for (auto col_idx = 0; col_idx < table.num_columns(); ++col_idx) {
     append_orc_column(table.column(col_idx), col_idx);
@@ -1174,7 +1176,7 @@ orc_table_view make_orc_table_view(table_view const& table,
      d_table    = d_table] __device__() mutable {
       uint32_t idx = 0;
       for (auto const& column : d_table) {
-        append_orc_device_column(idx, -1, d_orc_cols, column);
+        append_orc_device_column(idx, thrust::nullopt, d_orc_cols, column);
       }
     },
     stream);
@@ -1203,21 +1205,24 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
      rowgroup_size] __device__(auto rg_idx) mutable {
       thrust::transform(
         thrust::seq, cols.begin(), cols.end(), rg_bounds[rg_idx].begin(), [&](auto const& col) {
-          if (col.parent_index < 0) {
+          // Root column
+          if (!col.parent_index.has_value()) {
             size_type const rows_begin = rg_idx * rowgroup_size;
             auto const rows_end =
               thrust::min<size_type>((rg_idx + 1) * rowgroup_size, col.cudf_column.size());
             return rowgroup_rows{rows_begin, rows_end};
+          } else {
+            // Child column
+            auto const parent_index       = *col.parent_index;
+            column_device_view parent_col = cols[parent_index].cudf_column;
+            if (parent_col.type().id() != type_id::LIST) return rg_bounds[rg_idx][parent_index];
+
+            auto parent_offsets = parent_col.child(lists_column_view::offsets_column_index);
+            auto const& parent_rowgroup_rows = rg_bounds[rg_idx][parent_index];
+            auto const rows_begin = parent_offsets.element<size_type>(parent_rowgroup_rows.begin);
+            auto const rows_end   = parent_offsets.element<size_type>(parent_rowgroup_rows.end);
+            return rowgroup_rows{rows_begin, rows_end};
           }
-
-          column_device_view parent_col = cols[col.parent_index].cudf_column;
-          if (parent_col.type().id() != type_id::LIST) return rg_bounds[rg_idx][col.parent_index];
-
-          auto parent_offsets = parent_col.child(lists_column_view::offsets_column_index);
-          auto const& parent_rowgroup_rows = rg_bounds[rg_idx][col.parent_index];
-          auto const rows_begin = parent_offsets.element<size_type>(parent_rowgroup_rows.begin);
-          auto const rows_end   = parent_offsets.element<size_type>(parent_rowgroup_rows.end);
-          return rowgroup_rows{rows_begin, rows_end};
         });
     });
   rowgroup_bounds.device_to_host(stream, true);

@@ -613,7 +613,7 @@ class metadata {
 
 struct orc_column_device_view {
   column_device_view cudf_column;
-  int32_t parent_index = -1;
+  thrust::optional<uint32_t> parent_index;
 };
 
 struct rowgroup_rows {

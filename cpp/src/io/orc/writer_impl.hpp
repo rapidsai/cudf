@@ -249,7 +249,7 @@ class writer::impl {
    * @brief Builds up per-column streams.
    *
    * @param[in,out] columns List of columns
-   * @param[in] segmentation stripes and rowgroups ranges
+   * @param[in] segmentation stripe and rowgroup ranges
    * @param[in] decimal_column_sizes Sizes of encoded decimal columns
    * @return List of stream descriptors
    */
@@ -264,7 +264,7 @@ class writer::impl {
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
    * @param dec_chunk_sizes Information about size of encoded decimal columns
-   * @param segmentation stripes and rowgroups ranges
+   * @param segmentation stripe and rowgroup ranges
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Encoded data and per-chunk stream descriptors
    */
@@ -279,7 +279,7 @@ class writer::impl {
    * chunks into contiguous data streams.
    *
    * @param[in] num_index_streams Total number of index streams
-   * @param[in] segmentation stripes and rowgroups ranges
+   * @param[in] segmentation stripe and rowgroup ranges
    * @param[in,out] enc_streams List of encoder chunk streams [column][rowgroup]
    * @param[in,out] strm_desc List of stream descriptors [stripe][data_stream]
    *
@@ -297,7 +297,7 @@ class writer::impl {
    *
    * @param orc_table Table information to be written
    * @param columns List of columns
-   * @param segmentation stripes and rowgroups ranges
+   * @param segmentation stripe and rowgroup ranges
    * @return The statistic blobs
    */
   std::vector<std::vector<uint8_t>> gather_statistic_blobs(orc_table_view const& orc_table,
