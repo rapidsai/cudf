@@ -23,7 +23,6 @@ import os
 import sys
 
 from docutils.nodes import Text
-from recommonmark.transform import AutoStructify
 from sphinx.addnodes import pending_xref
 
 sys.path.insert(0, os.path.abspath("../.."))
@@ -48,7 +47,6 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "IPython.sphinxext.ipython_directive",
     "nbsphinx",
-    "recommonmark",
     "PandasCompat",
 ]
 
@@ -206,9 +204,6 @@ numpydoc_class_members_toctree = False
 
 autoclass_content = "init"
 
-# Config AutoStructify
-github_doc_root = "https://github.com/rtfd/recommonmark/tree/master/doc/"
-
 # Replace API shorthands with fullname
 _reftarget_aliases = {
     "cudf.Series": ("cudf.core.series.Series", "cudf.Series"),
@@ -244,14 +239,5 @@ def setup(app):
     app.add_js_file("copybutton_pydocs.js")
     app.add_css_file("params.css")
     app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")
-    app.add_config_value(
-        "recommonmark_config",
-        {
-            "url_resolver": lambda url: github_doc_root + url,
-            "auto_toc_tree_section": "Contents",
-        },
-        True,
-    )
-    app.add_transform(AutoStructify)
     app.connect("doctree-read", resolve_aliases)
     app.connect("missing-reference", ignore_internal_references)

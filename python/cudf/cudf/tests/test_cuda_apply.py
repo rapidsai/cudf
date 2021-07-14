@@ -9,7 +9,7 @@ import pytest
 from numba import cuda
 
 from cudf import DataFrame
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize("nelem", [1, 2, 64, 128, 129])

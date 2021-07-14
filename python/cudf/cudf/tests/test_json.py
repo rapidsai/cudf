@@ -12,7 +12,7 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
 def make_numeric_dataframe(nrows, dtype):

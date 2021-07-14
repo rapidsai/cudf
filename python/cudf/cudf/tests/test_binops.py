@@ -14,7 +14,7 @@ import pytest
 import cudf
 from cudf.core import Series
 from cudf.core.index import as_index
-from cudf.tests import utils
+from cudf.testing import _utils as utils
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
@@ -1742,12 +1742,6 @@ def test_binops_with_NA_consistent(dtype, op):
         assert result._column.null_count == len(data)
 
 
-def _decimal_series(input, dtype):
-    return cudf.Series(
-        [x if x is None else decimal.Decimal(x) for x in input], dtype=dtype,
-    )
-
-
 @pytest.mark.parametrize(
     "args",
     [
@@ -2080,10 +2074,10 @@ def _decimal_series(input, dtype):
 def test_binops_decimal(args):
     op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype = args
 
-    a = _decimal_series(lhs, l_dtype)
-    b = _decimal_series(rhs, r_dtype)
+    a = utils._decimal_series(lhs, l_dtype)
+    b = utils._decimal_series(rhs, r_dtype)
     expect = (
-        _decimal_series(expect, expect_dtype)
+        utils._decimal_series(expect, expect_dtype)
         if isinstance(expect_dtype, cudf.Decimal64Dtype)
         else cudf.Series(expect, dtype=expect_dtype)
     )
@@ -2242,7 +2236,7 @@ def test_binops_decimal(args):
         ),
     ],
 )
-@pytest.mark.parametrize("integer_dtype", cudf.tests.utils.INTEGER_TYPES)
+@pytest.mark.parametrize("integer_dtype", utils.INTEGER_TYPES)
 @pytest.mark.parametrize("reflected", [True, False])
 def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
     """
@@ -2258,7 +2252,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
     else:
         op, ldata, ldtype, rdata, _, expected = args
 
-    lhs = _decimal_series(ldata, ldtype)
+    lhs = utils._decimal_series(ldata, ldtype)
     rhs = cudf.Series(rdata, dtype=integer_dtype)
 
     if reflected:
@@ -2746,7 +2740,7 @@ def test_binops_decimal_scalar_compare(args, reflected):
     else:
         op, ldata, ldtype, rdata, _, expected = args
 
-    lhs = _decimal_series(ldata, ldtype)
+    lhs = utils._decimal_series(ldata, ldtype)
     rhs = rdata
 
     if reflected:

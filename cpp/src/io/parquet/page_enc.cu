@@ -59,8 +59,8 @@ struct frag_init_state_s {
 };
 
 struct page_enc_state_s {
-  uint8_t *cur;          //!< current output ptr
-  uint8_t *rle_out;      //!< current RLE write ptr
+  uint8_t* cur;          //!< current output ptr
+  uint8_t* rle_out;      //!< current RLE write ptr
   uint32_t rle_run;      //!< current RLE run
   uint32_t run_val;      //!< current RLE run value
   uint32_t rle_pos;      //!< RLE encoder positions
@@ -81,9 +81,9 @@ struct page_enc_state_s {
 /**
  * @brief Return a 12-bit hash from a byte sequence
  */
-inline __device__ uint32_t hash_string(const string_view &val)
+inline __device__ uint32_t hash_string(const string_view& val)
 {
-  char const *ptr = val.data();
+  char const* ptr = val.data();
   uint32_t len    = val.size_bytes();
   if (len != 0) {
     return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
@@ -130,7 +130,7 @@ __global__ void __launch_bounds__(block_size)
     typename block_scan::TempStorage scan_storage;
   } temp_storage;
 
-  frag_init_state_s *const s = &state_g;
+  frag_init_state_s* const s = &state_g;
   uint32_t t                 = threadIdx.x;
   uint32_t start_row, dtype_len, dtype_len_in, dtype;
 
@@ -190,9 +190,11 @@ __global__ void __launch_bounds__(block_size)
       s->frag.num_values = s->frag.num_rows;
     }
   }
-  dtype = s->col.physical_type;
-  dtype_len =
-    (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
+  dtype     = s->col.physical_type;
+  dtype_len = (dtype == INT96)                      ? 12
+              : (dtype == INT64 || dtype == DOUBLE) ? 8
+              : (dtype == BOOLEAN)                  ? 1
+                                                    : 4;
   if (dtype == INT32) {
     dtype_len_in = GetDtypeLogicalLen(s->col.leaf_column);
   } else if (dtype == INT96) {
@@ -224,11 +226,10 @@ __global__ void __launch_bounds__(block_size)
         } else if (dtype_len_in == 8) {
           hash = uint64_init_hash(s->col.leaf_column->element<uint64_t>(val_idx));
         } else {
-          hash = uint32_init_hash((dtype_len_in == 4)
-                                    ? s->col.leaf_column->element<uint32_t>(val_idx)
-                                    : (dtype_len_in == 2)
-                                        ? s->col.leaf_column->element<uint16_t>(val_idx)
-                                        : s->col.leaf_column->element<uint8_t>(val_idx));
+          hash =
+            uint32_init_hash((dtype_len_in == 4)   ? s->col.leaf_column->element<uint32_t>(val_idx)
+                             : (dtype_len_in == 2) ? s->col.leaf_column->element<uint16_t>(val_idx)
+                                                   : s->col.leaf_column->element<uint8_t>(val_idx));
         }
       }
     } else {
@@ -246,7 +247,7 @@ __global__ void __launch_bounds__(block_size)
     }
     __syncthreads();
     if (is_valid && dtype != BOOLEAN) {
-      uint32_t *dict_index = s->col.dict_index;
+      uint32_t* dict_index = s->col.dict_index;
       if (dict_index) {
         atomicAdd(&s->map.u32[hash >> 1], (hash & 1) ? 1 << 16 : 1);
         dict_index[start_value_idx + nz_pos] =
@@ -283,7 +284,7 @@ __global__ void __launch_bounds__(block_size)
   __syncthreads();
   // Put the indices back in hash order
   if (s->col.dict_index) {
-    uint32_t *dict_index = s->col.dict_index + start_row;
+    uint32_t* dict_index = s->col.dict_index + start_row;
     uint32_t nnz         = s->frag.non_nulls;
     for (uint32_t i = 0; i < nnz; i += block_size) {
       uint32_t pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row, val = 0;
@@ -393,7 +394,7 @@ __global__ void __launch_bounds__(128)
   uint32_t frag_id              = blockIdx.y * 4 + (threadIdx.x >> 5);
   uint32_t column_id            = blockIdx.x;
   auto num_fragments_per_column = fragments.size().second;
-  statistics_group *const g     = &group_g[threadIdx.x >> 5];
+  statistics_group* const g     = &group_g[threadIdx.x >> 5];
   if (!lane_id && frag_id < num_fragments_per_column) {
     g->col       = &col_desc[column_id];
     g->start_row = fragments[column_id][frag_id].start_value_idx;
@@ -408,8 +409,8 @@ __global__ void __launch_bounds__(128)
   gpuInitPages(device_2dspan<EncColumnChunk> chunks,
                device_span<gpu::EncPage> pages,
                device_span<parquet_column_device_view const> col_desc,
-               statistics_merge_group *page_grstats,
-               statistics_merge_group *chunk_grstats,
+               statistics_merge_group* page_grstats,
+               statistics_merge_group* chunk_grstats,
                int32_t num_columns)
 {
   // TODO: All writing seems to be done by thread 0. Could be replaced by thrust foreach
@@ -502,9 +503,9 @@ __global__ void __launch_bounds__(128)
         fragment_data_size = frag_g.fragment_data_size;
       }
       // TODO (dm): this convoluted logic to limit page size needs refactoring
-      max_page_size = (values_in_page * 2 >= ck_g.num_values)
-                        ? 256 * 1024
-                        : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024 : 512 * 1024;
+      max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
+                      : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
+                                                                : 512 * 1024;
       if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 &&
            (page_size + fragment_data_size > max_page_size ||
@@ -632,7 +633,7 @@ static __device__ __constant__ uint32_t kRleRunMask[16] = {
 /**
  * @brief Variable-length encode an integer
  */
-inline __device__ uint8_t *VlqEncode(uint8_t *p, uint32_t v)
+inline __device__ uint8_t* VlqEncode(uint8_t* p, uint32_t v)
 {
   while (v > 0x7f) {
     *p++ = (v | 0x80);
@@ -646,7 +647,7 @@ inline __device__ uint8_t *VlqEncode(uint8_t *p, uint32_t v)
  * @brief Pack literal values in output bitstream (1,2,4,8,12 or 16 bits per value)
  */
 inline __device__ void PackLiterals(
-  uint8_t *dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
+  uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
 {
   if (w == 1 || w == 2 || w == 4 || w == 8 || w == 12 || w == 16) {
     if (t <= (count | 0x1f)) {
@@ -713,7 +714,7 @@ inline __device__ void PackLiterals(
     // Copy scratch data to final destination
     auto available_bytes = (count * w + 7) / 8;
 
-    auto scratch_bytes = reinterpret_cast<char *>(&scratch[0]);
+    auto scratch_bytes = reinterpret_cast<char*>(&scratch[0]);
     if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
     if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
     __syncthreads();
@@ -730,7 +731,7 @@ inline __device__ void PackLiterals(
  * @param[in] t thread id (0..127)
  */
 static __device__ void RleEncode(
-  page_enc_state_s *s, uint32_t numvals, uint32_t nbits, uint32_t flush, uint32_t t)
+  page_enc_state_s* s, uint32_t numvals, uint32_t nbits, uint32_t flush, uint32_t t)
 {
   uint32_t rle_pos = s->rle_pos;
   uint32_t rle_run = s->rle_run;
@@ -759,7 +760,7 @@ static __device__ void RleEncode(
       if (rle_rpt_count < max_rpt_count || (flush && rle_pos == numvals)) {
         if (t == 0) {
           uint32_t const run_val = s->run_val;
-          uint8_t *dst           = VlqEncode(s->rle_out, rle_run);
+          uint8_t* dst           = VlqEncode(s->rle_out, rle_run);
           *dst++                 = run_val;
           if (nbits > 8) { *dst++ = run_val >> 8; }
           s->rle_out = dst;
@@ -823,7 +824,7 @@ static __device__ void RleEncode(
             rle_rpt_count = 0;                      // Defer repeat run
           }
           if (lit_div8 != 0) {
-            uint8_t *dst = s->rle_out + 1 + (rle_run >> 1) * nbits;
+            uint8_t* dst = s->rle_out + 1 + (rle_run >> 1) * nbits;
             PackLiterals(dst, (rle_pos + t < numvals) ? v0 : 0, lit_div8 * 8, nbits, t);
             rle_run = (rle_run + lit_div8 * 2) | 1;
             rle_pos = min(rle_pos + lit_div8 * 8, numvals);
@@ -833,7 +834,7 @@ static __device__ void RleEncode(
           __syncthreads();
           // Complete literal run
           if (!t) {
-            uint8_t *dst = s->rle_out;
+            uint8_t* dst = s->rle_out;
             dst[0]       = rle_run;  // At most 0x7f
             dst += 1 + nbits * (rle_run >> 1);
             s->rle_out = dst;
@@ -868,13 +869,13 @@ static __device__ void RleEncode(
  * @param[in] flush nonzero if last batch in block
  * @param[in] t thread id (0..127)
  */
-static __device__ void PlainBoolEncode(page_enc_state_s *s,
+static __device__ void PlainBoolEncode(page_enc_state_s* s,
                                        uint32_t numvals,
                                        uint32_t flush,
                                        uint32_t t)
 {
   uint32_t rle_pos = s->rle_pos;
-  uint8_t *dst     = s->rle_out;
+  uint8_t* dst     = s->rle_out;
 
   while (rle_pos < numvals) {
     uint32_t pos    = rle_pos + t;
@@ -935,7 +936,7 @@ __global__ void __launch_bounds__(128, 8)
   using block_scan = cub::BlockScan<uint32_t, block_size>;
   __shared__ typename block_scan::TempStorage temp_storage;
 
-  page_enc_state_s *const s = &state_g;
+  page_enc_state_s* const s = &state_g;
   uint32_t t                = threadIdx.x;
   uint32_t dtype, dtype_len_in, dtype_len_out;
   int32_t dict_bits;
@@ -1002,8 +1003,8 @@ __global__ void __launch_bounds__(128, 8)
         __syncthreads();
       }
       if (t < 32) {
-        uint8_t *cur     = s->cur;
-        uint8_t *rle_out = s->rle_out;
+        uint8_t* cur     = s->cur;
+        uint8_t* rle_out = s->rle_out;
         if (t < 4) {
           uint32_t rle_bytes = (uint32_t)(rle_out - cur) - 4;
           cur[t]             = rle_bytes >> (t * 8);
@@ -1015,7 +1016,7 @@ __global__ void __launch_bounds__(128, 8)
   } else if (s->page.page_type != PageType::DICTIONARY_PAGE &&
              s->col.num_rep_level_bits() != 0  // This means there ARE repetition levels (has list)
   ) {
-    auto encode_levels = [&](uint8_t const *lvl_val_data, uint32_t nbits) {
+    auto encode_levels = [&](uint8_t const* lvl_val_data, uint32_t nbits) {
       // For list types, the repetition and definition levels are pre-calculated. We just need to
       // encode and write them now.
       if (!t) {
@@ -1040,8 +1041,8 @@ __global__ void __launch_bounds__(128, 8)
         __syncthreads();
       }
       if (t < 32) {
-        uint8_t *cur     = s->cur;
-        uint8_t *rle_out = s->rle_out;
+        uint8_t* cur     = s->cur;
+        uint8_t* rle_out = s->rle_out;
         if (t < 4) {
           uint32_t rle_bytes = (uint32_t)(rle_out - cur) - 4;
           cur[t]             = rle_bytes >> (t * 8);
@@ -1056,9 +1057,11 @@ __global__ void __launch_bounds__(128, 8)
   }
   // Encode data values
   __syncthreads();
-  dtype = s->col.physical_type;
-  dtype_len_out =
-    (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
+  dtype         = s->col.physical_type;
+  dtype_len_out = (dtype == INT96)                      ? 12
+                  : (dtype == INT64 || dtype == DOUBLE) ? 8
+                  : (dtype == BOOLEAN)                  ? 1
+                                                        : 4;
   if (dtype == INT32) {
     dtype_len_in = GetDtypeLogicalLen(s->col.leaf_column);
   } else if (dtype == INT96) {
@@ -1068,7 +1071,7 @@ __global__ void __launch_bounds__(128, 8)
   }
   dict_bits = (dtype == BOOLEAN) ? 1 : (s->page.dict_bits_plus1 - 1);
   if (t == 0) {
-    uint8_t *dst   = s->cur;
+    uint8_t* dst   = s->cur;
     s->rle_run     = 0;
     s->rle_pos     = 0;
     s->rle_numvals = 0;
@@ -1138,7 +1141,7 @@ __global__ void __launch_bounds__(128, 8)
       __syncthreads();
     } else {
       // Non-dictionary encoding
-      uint8_t *dst = s->cur;
+      uint8_t* dst = s->cur;
 
       if (is_valid) {
         len = dtype_len_out;
@@ -1250,7 +1253,7 @@ __global__ void __launch_bounds__(128, 8)
     }
   }
   if (t == 0) {
-    uint8_t *base                = s->page.page_data + s->page.max_hdr_size;
+    uint8_t* base                = s->page.page_data + s->page.max_hdr_size;
     uint32_t actual_data_size    = static_cast<uint32_t>(s->cur - base);
     uint32_t compressed_bfr_size = GetMaxCompressedBfrSize(actual_data_size);
     s->page.max_data_size        = actual_data_size;
@@ -1298,7 +1301,7 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
   if (t < 32) {
     num_pages = ck_g.num_pages;
     for (uint32_t page = t; page < num_pages; page += 32) {
-      auto &curr_page         = ck_g.pages[page];
+      auto& curr_page         = ck_g.pages[page];
       uint32_t page_data_size = curr_page.max_data_size;
       uncompressed_data_size += page_data_size;
       if (auto comp_status = curr_page.comp_stat; comp_status != nullptr) {
@@ -1329,7 +1332,7 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
 /**
  * Minimal thrift compact protocol support
  */
-inline __device__ uint8_t *cpw_put_uint32(uint8_t *p, uint32_t v)
+inline __device__ uint8_t* cpw_put_uint32(uint8_t* p, uint32_t v)
 {
   while (v > 0x7f) {
     *p++ = v | 0x80;
@@ -1339,7 +1342,7 @@ inline __device__ uint8_t *cpw_put_uint32(uint8_t *p, uint32_t v)
   return p;
 }
 
-inline __device__ uint8_t *cpw_put_uint64(uint8_t *p, uint64_t v)
+inline __device__ uint8_t* cpw_put_uint64(uint8_t* p, uint64_t v)
 {
   while (v > 0x7f) {
     *p++ = v | 0x80;
@@ -1349,19 +1352,19 @@ inline __device__ uint8_t *cpw_put_uint64(uint8_t *p, uint64_t v)
   return p;
 }
 
-inline __device__ uint8_t *cpw_put_int32(uint8_t *p, int32_t v)
+inline __device__ uint8_t* cpw_put_int32(uint8_t* p, int32_t v)
 {
   int32_t s = (v < 0);
   return cpw_put_uint32(p, (v ^ -s) * 2 + s);
 }
 
-inline __device__ uint8_t *cpw_put_int64(uint8_t *p, int64_t v)
+inline __device__ uint8_t* cpw_put_int64(uint8_t* p, int64_t v)
 {
   int64_t s = (v < 0);
   return cpw_put_uint64(p, (v ^ -s) * 2 + s);
 }
 
-inline __device__ uint8_t *cpw_put_fldh(uint8_t *p, int f, int cur, int t)
+inline __device__ uint8_t* cpw_put_fldh(uint8_t* p, int f, int cur, int t)
 {
   if (f > cur && f <= cur + 15) {
     *p++ = ((f - cur) << 4) | t;
@@ -1373,11 +1376,11 @@ inline __device__ uint8_t *cpw_put_fldh(uint8_t *p, int f, int cur, int t)
 }
 
 class header_encoder {
-  uint8_t *current_header_ptr;
+  uint8_t* current_header_ptr;
   int current_field_index;
 
  public:
-  inline __device__ header_encoder(uint8_t *header_start)
+  inline __device__ header_encoder(uint8_t* header_start)
     : current_header_ptr(header_start), current_field_index(0)
   {
   }
@@ -1411,7 +1414,7 @@ class header_encoder {
     current_field_index = field;
   }
 
-  inline __device__ void field_binary(int field, const void *value, uint32_t length)
+  inline __device__ void field_binary(int field, const void* value, uint32_t length)
   {
     current_header_ptr =
       cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_BINARY);
@@ -1421,21 +1424,21 @@ class header_encoder {
     current_field_index = field;
   }
 
-  inline __device__ void end(uint8_t **header_end, bool termination_flag = true)
+  inline __device__ void end(uint8_t** header_end, bool termination_flag = true)
   {
     if (termination_flag == false) { *current_header_ptr++ = 0; }
     *header_end = current_header_ptr;
   }
 
-  inline __device__ uint8_t *get_ptr(void) { return current_header_ptr; }
+  inline __device__ uint8_t* get_ptr(void) { return current_header_ptr; }
 
-  inline __device__ void set_ptr(uint8_t *ptr) { current_header_ptr = ptr; }
+  inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
 
-__device__ uint8_t *EncodeStatistics(uint8_t *start,
-                                     const statistics_chunk *s,
+__device__ uint8_t* EncodeStatistics(uint8_t* start,
+                                     const statistics_chunk* s,
                                      uint8_t dtype,
-                                     float *fp_scratch)
+                                     float* fp_scratch)
 {
   uint8_t *end, dtype_len;
   switch (dtype) {
@@ -1488,7 +1491,7 @@ __global__ void __launch_bounds__(128)
   gpuEncodePageHeaders(device_span<EncPage> pages,
                        device_span<gpu_inflate_status_s const> comp_stat,
                        device_span<statistics_chunk const> page_stats,
-                       const statistics_chunk *chunk_stats)
+                       const statistics_chunk* chunk_stats)
 {
   // When this whole kernel becomes single thread, the following variables need not be __shared__
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -1579,7 +1582,7 @@ __global__ void __launch_bounds__(1024)
 
   uint32_t t = threadIdx.x;
   uint8_t *dst, *dst_base;
-  const EncPage *first_page;
+  const EncPage* first_page;
   uint32_t num_pages, uncompressed_size;
 
   if (t == 0) ck_g = chunks[blockIdx.x];
@@ -1592,7 +1595,7 @@ __global__ void __launch_bounds__(1024)
   dst_base          = dst;
   uncompressed_size = ck_g.bfr_size;
   for (uint32_t page = 0; page < num_pages; page++) {
-    const uint8_t *src;
+    const uint8_t* src;
     uint32_t hdr_len, data_len;
 
     if (t == 0) { page_g = first_page[page]; }
@@ -1625,8 +1628,8 @@ __global__ void __launch_bounds__(1024)
  *
  */
 struct def_level_fn {
-  column_device_view const *parent_col;
-  uint8_t const *d_nullability;
+  column_device_view const* parent_col;
+  uint8_t const* d_nullability;
   uint8_t sub_level_start;
   uint8_t curr_def_level;
 
@@ -1757,12 +1760,14 @@ struct def_level_fn {
  */
 dremel_data get_dremel_data(column_view h_col,
                             // TODO(cp): use device_span once it is converted to a single hd_vec
-                            rmm::device_uvector<uint8_t> const &d_nullability,
-                            std::vector<uint8_t> const &nullability,
+                            rmm::device_uvector<uint8_t> const& d_nullability,
+                            std::vector<uint8_t> const& nullability,
                             rmm::cuda_stream_view stream)
 {
   auto get_list_level = [](column_view col) {
-    while (col.type().id() == type_id::STRUCT) { col = col.child(0); }
+    while (col.type().id() == type_id::STRUCT) {
+      col = col.child(0);
+    }
     return col;
   };
 
@@ -1832,7 +1837,7 @@ dremel_data get_dremel_data(column_view h_col,
   }
 
   std::unique_ptr<rmm::device_buffer> device_view_owners;
-  column_device_view *d_nesting_levels;
+  column_device_view* d_nesting_levels;
   std::tie(device_view_owners, d_nesting_levels) =
     contiguous_copy_column_device_views<column_device_view>(nesting_levels, stream);
 
@@ -2147,8 +2152,8 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       device_span<gpu::EncPage> pages,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
-                      statistics_merge_group *page_grstats,
-                      statistics_merge_group *chunk_grstats,
+                      statistics_merge_group* page_grstats,
+                      statistics_merge_group* chunk_grstats,
                       rmm::cuda_stream_view stream)
 {
   auto num_rowgroups = chunks.size().first;
@@ -2199,7 +2204,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
 void EncodePageHeaders(device_span<EncPage> pages,
                        device_span<gpu_inflate_status_s const> comp_stat,
                        device_span<statistics_chunk const> page_stats,
-                       const statistics_chunk *chunk_stats,
+                       const statistics_chunk* chunk_stats,
                        rmm::cuda_stream_view stream)
 {
   // TODO: single thread task. No need for 128 threads/block. Earlier it used to employ rest of the

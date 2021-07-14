@@ -6,7 +6,8 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.core.dtypes import StructDtype
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -75,3 +76,46 @@ def test_serialize_struct_dtype(fields):
     dtype = cudf.StructDtype(fields)
     recreated = dtype.__class__.deserialize(*dtype.serialize())
     assert recreated == dtype
+
+
+@pytest.mark.parametrize(
+    "series, expected",
+    [
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": 1},
+                {},
+            ],
+            {"a": "Hello world", "b": [], "c": cudf.NA},
+        ),
+        ([{}], {}),
+        (
+            [{"b": True}, {"a": 1, "c": [1, 2, 3], "d": "1", "b": False}],
+            {"a": cudf.NA, "c": cudf.NA, "d": cudf.NA, "b": True},
+        ),
+    ],
+)
+def test_struct_getitem(series, expected):
+    sr = cudf.Series(series)
+    assert sr[0] == expected
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": 1, "b": "rapids", "c": [1, 2, 3, 4]},
+        {"a": 1, "b": "rapids", "c": [1, 2, 3, 4], "d": cudf.NA},
+        {"a": "Hello"},
+        {"b": [], "c": [1, 2, 3]},
+    ],
+)
+def test_struct_scalar_host_construction(data):
+    slr = cudf.Scalar(data)
+    assert slr.value == data
+    assert list(slr.device_value.value.values()) == list(data.values())
+
+
+def test_struct_scalar_null():
+    slr = cudf.Scalar(cudf.NA, dtype=StructDtype)
+    assert slr.device_value.value is cudf.NA

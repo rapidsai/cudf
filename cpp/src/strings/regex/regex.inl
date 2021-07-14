@@ -231,7 +231,8 @@ __device__ inline int32_t reprog_device::regexec(
     if (((eos < 0) || (pos < eos)) && match == 0) {
       int32_t i = 0;
       auto ids  = startinst_ids();
-      while (ids[i] >= 0) jnk.list1->activate(ids[i++], (group_id == 0 ? pos : -1), -1);
+      while (ids[i] >= 0)
+        jnk.list1->activate(ids[i++], (group_id == 0 ? pos : -1), -1);
     }
 
     c = static_cast<char32_t>(pos >= txtlen ? 0 : *itr);
