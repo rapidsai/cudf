@@ -611,11 +611,17 @@ class metadata {
   mutable std::vector<std::string> column_names;
 };
 
+/**
+ * @brief `column_device_view` and additional, ORC specific, information on the column.
+ */
 struct orc_column_device_view {
   column_device_view cudf_column;
   thrust::optional<uint32_t> parent_index;
 };
 
+/**
+ * @brief Range of rows within a single rowgroup.
+ */
 struct rowgroup_rows {
   size_type begin;
   size_type end;

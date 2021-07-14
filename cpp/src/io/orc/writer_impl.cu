@@ -139,13 +139,13 @@ class orc_column_view {
    * for building dictionaries for string columns
    */
   explicit orc_column_view(uint32_t index,
-                           uint32_t str_id,
+                           std::optional<uint32_t> str_idx,
                            std::optional<int> index_in_table,
                            column_view const& col,
                            const table_metadata* metadata)
     : cudf_column{col},
       _index{index},
-      _str_id{str_id},
+      _str_idx{str_idx},
       _is_child{!index_in_table.has_value()},
       _type_width{cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : 0},
       _scale{(to_orc_type(col.type().id()) == TypeKind::DECIMAL) ? -col.type().scale()
@@ -178,9 +178,8 @@ class orc_column_view {
   }
   auto host_dict_chunk(size_t rowgroup) const
   {
-    CUDF_EXPECTS(cudf_column.type().id() == type_id::STRING,
-                 "Dictionary chunks are only present in string columns.");
-    return &dict[rowgroup * dict_stride + _str_id];
+    CUDF_EXPECTS(is_string(), "Dictionary chunks are only present in string columns.");
+    return &dict[rowgroup * dict_stride + *_str_idx];
   }
   auto device_dict_chunk() const { return d_dict; }
 
@@ -198,9 +197,8 @@ class orc_column_view {
   }
   auto host_stripe_dict(size_t stripe) const
   {
-    CUDF_EXPECTS(cudf_column.type().id() == type_id::STRING,
-                 "Stripe dictionary is only present in string columns.");
-    return &stripe_dict[stripe * dict_stride + _str_id];
+    CUDF_EXPECTS(is_string(), "Stripe dictionary is only present in string columns.");
+    return &stripe_dict[stripe * dict_stride + *_str_idx];
   }
   auto device_stripe_dict() const { return d_stripe_dict; }
 
@@ -208,7 +206,6 @@ class orc_column_view {
   auto index() const noexcept { return _index; }
   // Id in the ORC file
   auto id() const noexcept { return _index + 1; }
-  auto str_id() const noexcept { return _str_id; }
   auto is_child() const noexcept { return _is_child; }
   auto type_width() const noexcept { return _type_width; }
   auto size() const noexcept { return cudf_column.size(); }
@@ -230,8 +227,8 @@ class orc_column_view {
   // Identifier within the set of columns
   uint32_t _index = 0;
   // Identifier within the set of string columns
-  uint32_t _str_id = 0;
-  bool _is_child   = false;
+  std::optional<uint32_t> _str_idx;
+  bool _is_child = false;
 
   size_t _type_width = 0;
   int32_t _scale     = 0;
@@ -1129,7 +1126,7 @@ void writer::impl::init_state()
 }
 
 /**
- * @brief Preorder append ORC device columns
+ * @brief pre-order append ORC device columns
  */
 void __device__ append_orc_device_column(uint32_t& idx,
                                          thrust::optional<uint32_t> parent_idx,
@@ -1156,9 +1153,11 @@ orc_table_view make_orc_table_view(table_view const& table,
 
   std::function<void(column_view const&, std::optional<int>)> append_orc_column =
     [&](column_view const& col, std::optional<int> index_in_table) {
-      orc_columns.emplace_back(
-        orc_columns.size(), str_col_indexes.size(), index_in_table, col, user_metadata);
-      if (orc_columns.back().is_string()) { str_col_indexes.push_back(orc_columns.back().index()); }
+      auto const str_idx =
+        (col.type().id() == type_id::STRING) ? std::optional{str_col_indexes.size()} : std::nullopt;
+      auto const& new_col =
+        orc_columns.emplace_back(orc_columns.size(), str_idx, index_in_table, col, user_metadata);
+      if (new_col.is_string()) { str_col_indexes.push_back(new_col.index()); }
       if (col.type().id() == type_id::LIST) append_orc_column(col.child(1), std::nullopt);
       if (col.type().id() == type_id::STRUCT)
         for (auto child = col.child_begin(); child != col.child_end(); ++child)
@@ -1593,7 +1592,7 @@ void writer::impl::write(table_view const& table)
         schema_type.scale     = static_cast<uint32_t>(column.scale());
         schema_type.precision = column.precision();
       }
-
+      // In preorder tracersal the column after a list column is always the child column
       if (column.orc_kind() == LIST) { schema_type.subtypes.emplace_back(column.id() + 1); }
     }
   } else {
@@ -1610,9 +1609,6 @@ void writer::impl::write(table_view const& table)
                     std::make_move_iterator(stripes.begin()),
                     std::make_move_iterator(stripes.end()));
   ff.numberOfRows += num_rows;
-
-  // stream.synchronize();
-  // CUDF_FAIL("stop.");
 }
 
 void writer::impl::close()

@@ -53,7 +53,7 @@ using cudf::detail::hostdevice_2dvector;
 /**
  * Non-owning view of a cuDF table that includes ORC-related information.
  *
- * Columns hierarchy is flattened and stored in preorder.
+ * Columns hierarchy is flattened and stored in pre-order.
  */
 struct orc_table_view {
   std::vector<orc_column_view> columns;
@@ -152,12 +152,12 @@ struct encoded_data {
 /**
  * @brief Dictionary data for string columns and their device views, per column.
  */
- struct string_dictionaries {
+struct string_dictionaries {
   std::vector<rmm::device_uvector<uint32_t>> data;
   std::vector<rmm::device_uvector<uint32_t>> index;
   rmm::device_uvector<device_span<uint32_t>> d_data_view;
   rmm::device_uvector<device_span<uint32_t>> d_index_view;
-   // Dictionaries are currently disabled for columns with a rowgroup larger than 2^15
+  // Dictionaries are currently disabled for columns with a rowgroup larger than 2^15
   thrust::host_vector<bool> dictionary_enabled;
 };
 
