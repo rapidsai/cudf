@@ -393,15 +393,35 @@ def test_pivot_multi_values():
     "level",
     [
         0,
-        1,
+        pytest.param(
+            1,
+            marks=pytest.mark.xfail(
+                reason="Categorical column indexes not supported"
+            ),
+        ),
         2,
         "foo",
-        "bar",
+        pytest.param(
+            "bar",
+            marks=pytest.mark.xfail(
+                reason="Categorical column indexes not supported"
+            ),
+        ),
         "baz",
         [],
-        [0, 1],
+        pytest.param(
+            [0, 1],
+            marks=pytest.mark.xfail(
+                reason="Categorical column indexes not supported"
+            ),
+        ),
         ["foo"],
-        ["foo", "bar"],
+        pytest.param(
+            ["foo", "bar"],
+            marks=pytest.mark.xfail(
+                reason="Categorical column indexes not supported"
+            ),
+        ),
         pytest.param(
             [0, 1, 2],
             marks=pytest.mark.xfail(reason="Pandas behaviour unclear"),
@@ -436,7 +456,12 @@ def test_unstack_multiindex(level):
     [
         pd.Index(range(0, 5), name=None),
         pd.Index(range(0, 5), name="row_index"),
-        pd.CategoricalIndex(["d", "e", "f", "g", "h"]),
+        pytest.param(
+            pd.CategoricalIndex(["d", "e", "f", "g", "h"]),
+            marks=pytest.mark.xfail(
+                reason="Categorical column indexes not supported"
+            ),
+        ),
     ],
 )
 @pytest.mark.parametrize(
