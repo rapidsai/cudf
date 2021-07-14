@@ -104,7 +104,7 @@ cdef binaryop_v_v(Column lhs, Column rhs,
 
     with nogil:
         c_result = move(
-            cpp_binaryop.binary_operation(
+            cpp_binaryop.compiled_binary_operation(
                 c_lhs,
                 c_rhs,
                 c_op,
@@ -124,7 +124,7 @@ cdef binaryop_v_s(Column lhs, DeviceScalar rhs,
 
     with nogil:
         c_result = move(
-            cpp_binaryop.binary_operation(
+            cpp_binaryop.compiled_binary_operation(
                 c_lhs,
                 c_rhs[0],
                 c_op,
@@ -143,7 +143,7 @@ cdef binaryop_s_v(DeviceScalar lhs, Column rhs,
 
     with nogil:
         c_result = move(
-            cpp_binaryop.binary_operation(
+            cpp_binaryop.compiled_binary_operation(
                 c_lhs[0],
                 c_rhs,
                 c_op,
