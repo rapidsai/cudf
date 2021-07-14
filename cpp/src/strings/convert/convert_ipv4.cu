@@ -146,7 +146,8 @@ struct integers_to_ipv4_fn {
       else {
         char digits[3];
         int num_digits = convert(value, digits);
-        while (num_digits-- > 0) *out_ptr++ = digits[num_digits];
+        while (num_digits-- > 0)
+          *out_ptr++ = digits[num_digits];
       }
       if ((n + 1) < 4) *out_ptr++ = '.';
       shift_bits -= 8;
@@ -192,7 +193,7 @@ std::unique_ptr<column> integers_to_ipv4(
   // build chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),

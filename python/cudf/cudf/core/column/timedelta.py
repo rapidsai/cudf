@@ -322,7 +322,7 @@ class TimeDeltaColumn(column.ColumnBase):
             return super().fillna(method=method)
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         return cast(
             "cudf.core.column.NumericalColumn", self.as_numerical.astype(dtype)
@@ -336,7 +336,7 @@ class TimeDeltaColumn(column.ColumnBase):
         )
 
     def as_string_column(
-        self, dtype: Dtype, format=None
+        self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
         if format is None:
             format = _dtype_to_format_conversion.get(

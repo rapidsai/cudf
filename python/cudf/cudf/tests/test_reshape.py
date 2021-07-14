@@ -9,7 +9,7 @@ import pytest
 import cudf
 from cudf import melt as cudf_melt
 from cudf.core._compat import PANDAS_GE_120
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,

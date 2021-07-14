@@ -47,15 +47,19 @@ using void_t = void;
  */
 #define CUDF_ENABLE_IF(...) std::enable_if_t<(__VA_ARGS__)>* = nullptr
 
-template <typename L, typename R, typename = void>
-struct is_relationally_comparable_impl : std::false_type {
-};
-
 template <typename L, typename R>
 using less_comparable = decltype(std::declval<L>() < std::declval<R>());
 
 template <typename L, typename R>
 using greater_comparable = decltype(std::declval<L>() > std::declval<R>());
+
+template <typename L, typename R>
+using equality_comparable = decltype(std::declval<L>() == std::declval<R>());
+
+namespace detail {
+template <typename L, typename R, typename = void>
+struct is_relationally_comparable_impl : std::false_type {
+};
 
 template <typename L, typename R>
 struct is_relationally_comparable_impl<L,
@@ -69,11 +73,24 @@ struct is_equality_comparable_impl : std::false_type {
 };
 
 template <typename L, typename R>
-using equality_comparable = decltype(std::declval<L>() == std::declval<R>());
-
-template <typename L, typename R>
 struct is_equality_comparable_impl<L, R, void_t<equality_comparable<L, R>>> : std::true_type {
 };
+
+// has common type
+template <typename AlwaysVoid, typename... Ts>
+struct has_common_type_impl : std::false_type {
+};
+
+template <typename... Ts>
+struct has_common_type_impl<void_t<std::common_type_t<Ts...>>, Ts...> : std::true_type {
+};
+}  // namespace detail
+
+template <typename... Ts>
+using has_common_type = typename detail::has_common_type_impl<void, Ts...>::type;
+
+template <typename... Ts>
+constexpr inline bool has_common_type_v = detail::has_common_type_impl<void, Ts...>::value;
 
 template <typename T>
 using is_timestamp_t = cuda::std::disjunction<std::is_same<cudf::timestamp_D, T>,
@@ -104,7 +121,7 @@ using is_duration_t = cuda::std::disjunction<std::is_same<cudf::duration_D, T>,
 template <typename L, typename R>
 constexpr inline bool is_relationally_comparable()
 {
-  return is_relationally_comparable_impl<L, R>::value;
+  return detail::is_relationally_comparable_impl<L, R>::value;
 }
 
 /**
@@ -122,7 +139,7 @@ constexpr inline bool is_relationally_comparable()
 template <typename L, typename R>
 constexpr inline bool is_equality_comparable()
 {
-  return is_equality_comparable_impl<L, R>::value;
+  return detail::is_equality_comparable_impl<L, R>::value;
 }
 
 /**

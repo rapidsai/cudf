@@ -25,6 +25,7 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
+from cudf.api.types import is_bool_dtype, is_dict_like
 from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
@@ -53,8 +54,6 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import GetAttrGetItemMixin
-
-from ..api.types import is_bool_dtype, is_dict_like
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -240,12 +239,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 self._index = as_index(index)
             if columns is not None:
                 self._data = ColumnAccessor(
-                    dict.fromkeys(
-                        columns,
-                        column.column_empty(
+                    {
+                        k: column.column_empty(
                             len(self), dtype="object", masked=True
-                        ),
-                    )
+                        )
+                        for k in columns
+                    }
                 )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
@@ -5653,11 +5652,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         out = super(DataFrame, data).to_arrow()
         metadata = pa.pandas_compat.construct_metadata(
-            self,
-            out.schema.names,
-            [self.index],
-            index_descr,
-            preserve_index,
+            columns_to_convert=[self[col] for col in self._data.names],
+            df=self,
+            column_names=out.schema.names,
+            index_levels=[self.index],
+            index_descriptors=index_descr,
+            preserve_index=preserve_index,
             types=out.schema.types,
         )
 

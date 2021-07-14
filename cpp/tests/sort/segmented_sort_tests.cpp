@@ -264,7 +264,7 @@ TEST_F(SegmentedSortInt, ErrorsMismatchArgSizes)
                                            {order::ASCENDING, order::ASCENDING},
                                            {null_order::AFTER, null_order::AFTER}),
                logic_error);
-  // segmented_offsets beyond num_rows - undefined behaviour, no throw.
+  // segmented_offsets beyond num_rows - undefined behavior, no throw.
   CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(input1, input1, col2));
 }
 

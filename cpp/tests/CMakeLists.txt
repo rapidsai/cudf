@@ -1,4 +1,4 @@
-﻿#=============================================================================
+#=============================================================================
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -62,11 +62,15 @@ ConfigureTest(GROUPBY_TEST
     groupby/count_tests.cpp
     groupby/groups_tests.cpp
     groupby/keys_tests.cpp
+    groupby/m2_tests.cpp
     groupby/min_tests.cpp
     groupby/max_scan_tests.cpp
     groupby/max_tests.cpp
     groupby/mean_tests.cpp
     groupby/median_tests.cpp
+    groupby/merge_m2_tests.cpp
+    groupby/merge_lists_tests.cpp
+    groupby/merge_sets_tests.cpp
     groupby/min_scan_tests.cpp
     groupby/nth_element_tests.cpp
     groupby/nunique_tests.cpp
@@ -159,6 +163,8 @@ ConfigureTest(BINARY_TEST
     binaryop/binop-verify-input-test.cpp
     binaryop/binop-null-test.cpp
     binaryop/binop-integration-test.cpp
+    binaryop/binop-compiled-test.cpp
+    binaryop/binop-compiled-fixed_point-test.cpp
     binaryop/binop-generic-ptx-test.cpp
     )
 
@@ -201,7 +207,7 @@ ConfigureTest(SORT_TEST
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
 ConfigureTest(COPYING_TEST
-    copying/concatenate_tests.cu
+    copying/concatenate_tests.cpp
     copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
     copying/copy_tests.cu
@@ -217,6 +223,7 @@ ConfigureTest(COPYING_TEST
     copying/scatter_list_tests.cpp
     copying/scatter_list_scalar_tests.cpp
     copying/scatter_struct_tests.cpp
+    copying/scatter_struct_scalar_tests.cpp
     copying/segmented_gather_list_tests.cpp
     copying/shift_tests.cpp
     copying/slice_tests.cpp
@@ -231,7 +238,8 @@ ConfigureTest(UTILITIES_TEST
     utilities_tests/column_utilities_tests.cpp
     utilities_tests/column_wrapper_tests.cpp
     utilities_tests/lists_column_wrapper_tests.cpp
-    utilities_tests/default_stream_tests.cpp)
+    utilities_tests/default_stream_tests.cpp
+    utilities_tests/type_check_tests.cpp)
 
 ###################################################################################################
 # - span tests -------------------------------------------------------------------------------

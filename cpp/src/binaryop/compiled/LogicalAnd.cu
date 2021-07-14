@@ -14,23 +14,13 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "binary_ops.cuh"
 
-#include <cudf/column/column.hpp>
-#include <rmm/cuda_stream_view.hpp>
-
-namespace cudf {
-
-namespace jni {
-
-/**
- * @brief compute the prefix sum of a column of longs
- */
-std::unique_ptr<column>
-prefix_sum(column_view const &value_column,
-           rmm::cuda_stream_view stream = rmm::cuda_stream_default,
-           rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
-
-} // namespace jni
-
-} // namespace cudf
+namespace cudf::binops::compiled {
+template void apply_binary_op<ops::LogicalAnd>(mutable_column_device_view&,
+                                               column_device_view const&,
+                                               column_device_view const&,
+                                               bool is_lhs_scalar,
+                                               bool is_rhs_scalar,
+                                               rmm::cuda_stream_view);
+}

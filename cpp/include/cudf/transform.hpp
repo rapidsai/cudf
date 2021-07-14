@@ -40,7 +40,7 @@ namespace cudf {
  *
  * @param input         An immutable view of the input column to transform
  * @param unary_udf     The PTX/CUDA string of the unary function to apply
- * @param outout_type   The output type that is compatible with the output type in the UDF
+ * @param output_type   The output type that is compatible with the output type in the UDF
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
  * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              The column resulting from applying the unary function to
@@ -133,7 +133,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
  * @param bitmask A device pointer to the bitmask which needs to be converted
  * @param begin_bit position of the bit from which the conversion should start
  * @param end_bit position of the bit before which the conversion should stop
- * @param mr Device memory resource used to allocate the returned columns's device memory
+ * @param mr Device memory resource used to allocate the returned columns' device memory
  * @return A boolean column representing the given mask from [begin_bit, end_bit).
  */
 std::unique_ptr<column> mask_to_bools(
@@ -164,7 +164,7 @@ std::unique_ptr<column> mask_to_bools(
  * row_bit_count(column(x)) >= row_bit_count(gather(column(x)))
  *
  * @param t The table view to perform the computation on.
- * @param mr Device memory resource used to allocate the returned columns's device memory
+ * @param mr Device memory resource used to allocate the returned columns' device memory
  * @return A 32-bit integer column containing the per-row bit counts.
  */
 std::unique_ptr<column> row_bit_count(
