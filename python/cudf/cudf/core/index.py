@@ -2360,7 +2360,7 @@ class DatetimeIndex(GenericIndex):
         Booleans indicating if dates belong to a leap year.
         """
         res = is_leap_year(self._values).fillna(False)
-        return cupy.array(res.to_gpu_array())
+        return cupy.asarray(res)
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
