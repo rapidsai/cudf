@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -30,7 +29,6 @@
 #include <jit/cache.hpp>
 #include <jit/parser.hpp>
 #include <jit/type.hpp>
-
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -87,12 +85,13 @@ std::vector<std::string> make_template_types(column_view outcol_view, table_view
 }
 
 class Unpacker {
-  public:
-    thrust::tuple<const void*, cudf::bitmask_type const*, cudf::offset_type> operator() (column_view input) {
-      return thrust::make_tuple(cudf::jit::get_data_ptr(input), input.null_mask(), input.offset());
-    }
+ public:
+  thrust::tuple<const void*, cudf::bitmask_type const*, cudf::offset_type> operator()(
+    column_view input)
+  {
+    return thrust::make_tuple(cudf::jit::get_data_ptr(input), input.null_mask(), input.offset());
+  }
 };
-
 
 void generalized_operation(table_view data_view,
                            std::string const& udf,
@@ -128,10 +127,7 @@ void generalized_operation(table_view data_view,
   offsets.reserve(data_view.num_columns());
 
   auto zipit_start = thrust::make_zip_iterator(
-    thrust::make_tuple(data_ptrs.begin(), 
-    mask_ptrs.begin(),
-    offsets.begin())
-  );
+    thrust::make_tuple(data_ptrs.begin(), mask_ptrs.begin(), offsets.begin()));
 
   Unpacker unpacker;
   thrust::transform(data_view.begin(), data_view.end(), zipit_start, unpacker);
@@ -183,7 +179,6 @@ std::unique_ptr<column> generalized_masked_op(table_view const& data_view,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-
   std::unique_ptr<column> output = make_fixed_width_column(output_type, data_view.num_rows());
   std::unique_ptr<column> output_mask =
     make_fixed_width_column(cudf::data_type{cudf::type_id::BOOL8}, data_view.num_rows());

@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <transform/jit/operation-udf.hpp>
 
 #include <cudf/types.hpp>
@@ -25,10 +24,8 @@
 #include <cuda/std/climits>
 #include <cuda/std/cstddef>
 #include <cuda/std/limits>
-#include <cuda/std/type_traits>
 #include <cuda/std/tuple>
-
-
+#include <cuda/std/type_traits>
 
 namespace cudf {
 namespace transformation {
