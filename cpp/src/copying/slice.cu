@@ -18,7 +18,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -36,21 +36,12 @@ std::vector<column_view> slice(column_view const& input,
 
   if (indices.empty()) return {};
 
-  auto null_counts = [&]() {
-    // need to shift incoming indices by the column offset to generate the correct bit ranges
-    // to count
-    if (input.offset() > 0) {
-      std::vector<size_type> shifted_indices;
-      shifted_indices.reserve(indices.size());
-      std::transform(indices.begin(),
-                     indices.end(),
-                     std::back_inserter(shifted_indices),
-                     [offset = input.offset()](size_type index) { return index + offset; });
-      return cudf::detail::segmented_count_unset_bits(input.null_mask(), shifted_indices, stream);
-    }
-    // can use the initial indices
-    return cudf::detail::segmented_count_unset_bits(input.null_mask(), indices, stream);
-  }();
+  // need to shift incoming indices by the column offset to generate the correct bit ranges
+  // to count
+  auto indices_iter = cudf::detail::make_counting_transform_iterator(
+    0, [offset = input.offset(), &indices](size_type index) { return indices[index] + offset; });
+  auto null_counts = cudf::detail::segmented_count_unset_bits(
+    input.null_mask(), indices_iter, indices_iter + indices.size(), stream);
 
   auto const children = std::vector<column_view>(input.child_begin(), input.child_end());
 
