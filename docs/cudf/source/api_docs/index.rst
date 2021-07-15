@@ -14,4 +14,6 @@ the left sidebar to see how various elements look on this theme.
     dataframe
     index_objects
     groupby
+    general_functions
+    general_utilities
 
