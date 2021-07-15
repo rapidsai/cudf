@@ -7477,7 +7477,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             "`.to_pandas().to_dict()` to construct a Python dictionary."
         )
 
-    def to_struct(self, name=None, index=None):
+    def to_struct(self, name=None):
         """
         Return a struct Series composed of the columns of the DataFrame.
         Note that no copies of the data are made.
@@ -7486,17 +7486,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         ----------
         name: optional
             Name of the resulting Series
-        index: optional
-            Index of the resulting Series. If not provided, the index
-            of the DataFrame is used.
         """
         col = cudf.core.column.build_struct_column(
             names=self._data.names, children=self._data.columns, size=len(self)
         )
-        index = index if index is not None else self.index
         return cudf.Series._from_data(
             cudf.core.column_accessor.ColumnAccessor({name: col}),
-            index=as_index(index),
+            index=self.index,
             name=name,
         )
 
