@@ -53,7 +53,7 @@ inline __device__ std::size_t _round_up_safe(std::size_t number_to_round, std::s
  * The definition of "buffer" used throughout this module is a component piece of a
  * cudf column. So for example, a fixed-width column with validity would have 2 associated
  * buffers : the data itself and the validity buffer.  contiguous_split operates by breaking
- * each column up into it's individual components and copying each one as a seperate kernel
+ * each column up into it's individual components and copying each one as a separate kernel
  * block.
  */
 struct src_buf_info {
@@ -188,7 +188,7 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
     }
 
     // if we're performing a value shift (offsets), or a bit shift (validity) the # of bytes and
-    // alignment must be a multiple of 4. value shifting and bit shifting are mututally exclusive
+    // alignment must be a multiple of 4. value shifting and bit shifting are mutually exclusive
     // and will never both be true at the same time.
     if (value_shift || bit_shift) {
       std::size_t idx = (num_bytes - remainder) / 4;
@@ -249,7 +249,7 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  *
  * @param num_src_bufs Total number of source buffers (N)
  * @param src_bufs Input source buffers (N)
- * @param dst_bufs Desination buffers (N*M)
+ * @param dst_bufs Destination buffers (N*M)
  * @param buf_info Information on the range of values to be copied for each destination buffer.
  */
 template <int block_size>
@@ -886,13 +886,15 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
       size_type* offset_stack  = &d_offset_stack[stack_pos];
       int parent_offsets_index = src_info.parent_offsets_index;
       int stack_size           = 0;
+      int root_column_offset   = src_info.column_offset;
       while (parent_offsets_index >= 0) {
         offset_stack[stack_size++] = parent_offsets_index;
+        root_column_offset         = d_src_buf_info[parent_offsets_index].column_offset;
         parent_offsets_index       = d_src_buf_info[parent_offsets_index].parent_offsets_index;
       }
-      // make sure to include the -column- offset in our calculations
-      int row_start = d_indices[split_index] + src_info.column_offset;
-      int row_end   = d_indices[split_index + 1] + src_info.column_offset;
+      // make sure to include the -column- offset on the root column in our calculation.
+      int row_start = d_indices[split_index] + root_column_offset;
+      int row_end   = d_indices[split_index + 1] + root_column_offset;
       while (stack_size > 0) {
         stack_size--;
         auto const offsets = d_src_buf_info[offset_stack[stack_size]].offsets;
@@ -923,6 +925,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
       int const element_size = cudf::type_dispatcher(data_type{src_info.type}, size_of_helper{});
       std::size_t const bytes =
         static_cast<std::size_t>(num_elements) * static_cast<std::size_t>(element_size);
+
       return dst_buf_info{_round_up_safe(bytes, 64),
                           num_elements,
                           element_size,

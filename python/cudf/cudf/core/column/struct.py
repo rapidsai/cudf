@@ -4,8 +4,10 @@ from __future__ import annotations
 import pyarrow as pa
 
 import cudf
-from cudf.core.column import ColumnBase
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf._typing import Dtype
+from cudf.core.column import ColumnBase, build_struct_column
+from cudf.core.column.methods import ColumnMethods
+from cudf.core.dtypes import StructDtype
 from cudf.utils.dtypes import is_struct_dtype
 
 
@@ -18,7 +20,7 @@ class StructColumn(ColumnBase):
 
     """
 
-    dtype: cudf.core.dtypes.StructDtype
+    dtype: StructDtype
 
     @property
     def base_size(self):
@@ -78,14 +80,29 @@ class StructColumn(ColumnBase):
             pa_type, len(self), buffers, children=children
         )
 
+    def __getitem__(self, args):
+        result = super().__getitem__(args)
+        if isinstance(result, dict):
+            return {
+                field: value
+                for field, value in zip(self.dtype.fields, result.values())
+            }
+        return result
+
+    def __setitem__(self, key, value):
+        if isinstance(value, dict):
+            # filling in fields not in dict
+            for field in self.dtype.fields:
+                value[field] = value.get(field, cudf.NA)
+
+            value = cudf.Scalar(value, self.dtype)
+        super().__setitem__(key, value)
+
     def copy(self, deep=True):
         result = super().copy(deep=deep)
         if deep:
             result = result._rename_fields(self.dtype.fields.keys())
         return result
-
-    def struct(self, parent=None):
-        return StructMethods(self, parent=parent)
 
     def _rename_fields(self, names):
         """
@@ -97,7 +114,7 @@ class StructColumn(ColumnBase):
         )
         return StructColumn(
             data=None,
-            size=self.base_size,
+            size=self.size,
             dtype=dtype,
             mask=self.base_mask,
             offset=self.offset,
@@ -111,31 +128,34 @@ class StructColumn(ColumnBase):
             "Structs are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _copy_type_metadata(self: ColumnBase, other: ColumnBase) -> ColumnBase:
-        """Copies type metadata from self onto other, returning a new column.
-
-        In addition to the default behavior, if `other` is a StructColumns we
-        rename the fields of `other` to the field names of `self`.
-        """
-        if isinstance(other, cudf.core.column.StructColumn):
-            other = other._rename_fields(
-                self.dtype.fields.keys()  # type: ignore
+    def _with_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
+        if isinstance(dtype, StructDtype):
+            return build_struct_column(
+                names=dtype.fields.keys(),
+                children=tuple(
+                    self.base_children[i]._with_type_metadata(dtype.fields[f])
+                    for i, f in enumerate(dtype.fields.keys())
+                ),
+                mask=self.base_mask,
+                size=self.size,
+                offset=self.offset,
+                null_count=self.null_count,
             )
-        # Have to ignore typing here because it misdiagnoses super().
-        return super()._copy_type_metadata(other)  # type: ignore
+
+        return self
 
 
-class StructMethods(ColumnMethodsMixin):
+class StructMethods(ColumnMethods):
     """
     Struct methods for Series
     """
 
-    def __init__(self, column, parent=None):
-        if not is_struct_dtype(column.dtype):
+    def __init__(self, parent=None):
+        if not is_struct_dtype(parent.dtype):
             raise AttributeError(
                 "Can only use .struct accessor with a 'struct' dtype"
             )
-        super().__init__(column=column, parent=parent)
+        super().__init__(parent=parent)
 
     def field(self, key):
         """

@@ -51,7 +51,9 @@ auto transpose_vectors(std::vector<std::vector<T>> const& input)
     transposed.begin(), transposed.end(), [=](std::vector<T>& col) { col.resize(ncols); });
 
   for (size_t col = 0; col < input.size(); ++col) {
-    for (size_t row = 0; row < nrows; ++row) { transposed[row][col] = input[col][row]; }
+    for (size_t row = 0; row < nrows; ++row) {
+      transposed[row][col] = input[col][row];
+    }
   }
 
   return transposed;
@@ -63,7 +65,9 @@ auto make_columns(std::vector<std::vector<T>> const& values)
   std::vector<fixed_width_column_wrapper<T>> columns;
   columns.reserve(values.size());
 
-  for (auto const& value_col : values) { columns.emplace_back(value_col.begin(), value_col.end()); }
+  for (auto const& value_col : values) {
+    columns.emplace_back(value_col.begin(), value_col.end());
+  }
 
   return columns;
 }

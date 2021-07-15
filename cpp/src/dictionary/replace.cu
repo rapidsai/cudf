@@ -90,7 +90,8 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   CUDF_EXPECTS(replacement.size() == input.size(), "column sizes must match");
 
   // first combine the keys so both input dictionaries have the same set
-  auto matched = match_dictionaries({input, replacement}, stream, mr);
+  auto matched =
+    match_dictionaries(std::vector<dictionary_column_view>({input, replacement}), stream, mr);
 
   // now build the new indices by doing replace-null using the updated input indices
   auto const input_indices =
@@ -122,7 +123,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   }
   CUDF_EXPECTS(input.keys().type() == replacement.type(), "keys must match scalar type");
 
-  // first add the replacment to the keys so only the indices need to be processed
+  // first add the replacement to the keys so only the indices need to be processed
   auto input_matched = dictionary::detail::add_keys(
     input, make_column_from_scalar(replacement, 1, stream)->view(), stream, mr);
   auto const input_view   = dictionary_column_view(input_matched->view());

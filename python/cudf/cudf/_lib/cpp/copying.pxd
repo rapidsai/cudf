@@ -3,7 +3,7 @@
 from rmm._lib.device_buffer cimport device_buffer
 
 from libcpp cimport bool
-from libc.stdint cimport int32_t, int64_t
+from libc.stdint cimport int32_t, int64_t, uint8_t
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
@@ -20,6 +20,12 @@ from cudf._lib.cpp.types cimport size_type
 
 ctypedef const scalar constscalar
 
+cdef extern from "cudf/copying.hpp" namespace "cudf::packed_columns" nogil:
+    cdef struct metadata:
+        metadata(vector[uint8_t]&& v)
+        const uint8_t* data () except +
+        size_type size () except +
+
 cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     ctypedef enum out_of_bounds_policy:
         NULLIFY 'cudf::out_of_bounds_policy::NULLIFY'
@@ -29,6 +35,14 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         const table_view& source_table,
         const column_view& gather_map,
         out_of_bounds_policy policy
+    ) except +
+
+    cdef unique_ptr[table] reverse (
+        const table_view& source_table
+    ) except +
+
+    cdef unique_ptr[column] reverse (
+        const column_view& source_column
     ) except +
 
     cdef unique_ptr[column] shift(
@@ -111,6 +125,10 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         vector[size_type] splits
     ) except +
 
+    cdef struct packed_columns:
+        unique_ptr[metadata] metadata_
+        unique_ptr[device_buffer] gpu_data
+
     cdef struct contiguous_split_result:
         table_view table
         vector[device_buffer] all_data
@@ -119,6 +137,10 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         table_view input_table,
         vector[size_type] splits
     ) except +
+
+    cdef packed_columns pack (const table_view& input) except +
+
+    cdef table_view unpack (const packed_columns& input) except +
 
     cdef unique_ptr[column] copy_if_else (
         column_view lhs,

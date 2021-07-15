@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
@@ -690,6 +690,13 @@ def test_series_round(arr, decimals):
 
     assert_eq(result, expected)
     np.array_equal(ser.nullmask.to_array(), result.to_array())
+
+
+def test_series_round_half_up():
+    s = cudf.Series([0.0, 1.0, 1.2, 1.7, 0.5, 1.5, 2.5, None])
+    expect = cudf.Series([0.0, 1.0, 1.0, 2.0, 1.0, 2.0, 3.0, None])
+    got = s.round(how="half_up")
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(

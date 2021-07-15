@@ -19,7 +19,6 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/strings/detail/copying.hpp>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -35,7 +34,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_strings_column(stream, mr);
+  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
   if (end < 0 || end > strings.size()) end = strings.size();
   CUDF_EXPECTS(((start >= 0) && (start < end)), "Invalid start parameter value.");
   auto const strings_count  = end - start;

@@ -49,7 +49,7 @@ class orc_reader_options {
   std::vector<std::string> _columns;
 
   // List of individual stripes to read (ignored if empty)
-  std::vector<size_type> _stripes;
+  std::vector<std::vector<size_type>> _stripes;
   // Rows to skip from the start;
   size_type _skip_rows = 0;
   // Rows to read; -1 is all
@@ -62,6 +62,9 @@ class orc_reader_options {
   bool _use_np_dtypes = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
+
+  // Columns that should be converted from Decimal to Float64
+  std::vector<std::string> _decimal_cols_as_float;
 
   friend orc_reader_options_builder;
 
@@ -99,9 +102,9 @@ class orc_reader_options {
   std::vector<std::string> const& get_columns() const { return _columns; }
 
   /**
-   * @brief Returns list of individual stripes to read.
+   * @brief Returns vector of vectors, stripes to read for each input source
    */
-  std::vector<size_type> const& get_stripes() const { return _stripes; }
+  std::vector<std::vector<size_type>> const& get_stripes() const { return _stripes; }
 
   /**
    * @brief Returns number of rows to skip from the start.
@@ -128,6 +131,14 @@ class orc_reader_options {
    */
   data_type get_timestamp_type() const { return _timestamp_type; }
 
+  /**
+   * @brief Columns that should be converted from Decimal to Float64.
+   */
+  std::vector<std::string> const& get_decimal_cols_as_float() const
+  {
+    return _decimal_cols_as_float;
+  }
+
   // Setters
 
   /**
@@ -138,11 +149,11 @@ class orc_reader_options {
   void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
   /**
-   * @brief Sets list of individual stripes to read.
+   * @brief Sets list of stripes to read for each input source
    *
-   * @param stripes Vector of individual stripes.
+   * @param stripes Vector of vectors, mapping stripes to read to input sources
    */
-  void set_stripes(std::vector<size_type> stripes)
+  void set_stripes(std::vector<std::vector<size_type>> stripes)
   {
     CUDF_EXPECTS(stripes.empty() or (_skip_rows == 0), "Can't set stripes along with skip_rows");
     CUDF_EXPECTS(stripes.empty() or (_num_rows == -1), "Can't set stripes along with num_rows");
@@ -191,6 +202,16 @@ class orc_reader_options {
    * @param type Type of timestamp.
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
+
+  /**
+   * @brief Set columns that should be converted from Decimal to Float64
+   *
+   * @param val Vector of column names.
+   */
+  void set_decimal_cols_as_float(std::vector<std::string> val)
+  {
+    _decimal_cols_as_float = std::move(val);
+  }
 };
 
 class orc_reader_options_builder {
@@ -224,12 +245,12 @@ class orc_reader_options_builder {
   }
 
   /**
-   * @brief Sets list of individual stripes to read.
+   * @brief Sets list of individual stripes to read per source
    *
-   * @param stripes Vector of individual stripes.
+   * @param stripes Vector of vectors, mapping stripes to read to input sources
    * @return this for chaining.
    */
-  orc_reader_options_builder& stripes(std::vector<size_type> stripes)
+  orc_reader_options_builder& stripes(std::vector<std::vector<size_type>> stripes)
   {
     options.set_stripes(std::move(stripes));
     return *this;
@@ -296,9 +317,21 @@ class orc_reader_options_builder {
   }
 
   /**
+   * @brief Columns that should be converted from decimals to float64.
+   *
+   * @param val Vector of column names.
+   * @return this for chaining.
+   */
+  orc_reader_options_builder& decimal_cols_as_float(std::vector<std::string> val)
+  {
+    options._decimal_cols_as_float = std::move(val);
+    return *this;
+  }
+
+  /**
    * @brief move orc_reader_options member once it's built.
    */
-  operator orc_reader_options &&() { return std::move(options); }
+  operator orc_reader_options&&() { return std::move(options); }
 
   /**
    * @brief move orc_reader_options member once it's built.
@@ -517,7 +550,7 @@ class orc_writer_options_builder {
   /**
    * @brief move orc_writer_options member once it's built.
    */
-  operator orc_writer_options &&() { return std::move(options); }
+  operator orc_writer_options&&() { return std::move(options); }
 
   /**
    * @brief move orc_writer_options member once it's built.
@@ -691,7 +724,7 @@ class chunked_orc_writer_options_builder {
   /**
    * @brief move chunked_orc_writer_options member once it's built.
    */
-  operator chunked_orc_writer_options &&() { return std::move(options); }
+  operator chunked_orc_writer_options&&() { return std::move(options); }
 
   /**
    * @brief move chunked_orc_writer_options member once it's built.

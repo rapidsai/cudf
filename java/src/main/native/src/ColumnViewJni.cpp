@@ -26,6 +26,7 @@
 #include <cudf/lists/count_elements.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/extract.hpp>
+#include <cudf/lists/sorting.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/reduction.hpp>
@@ -49,6 +50,7 @@
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/padding.hpp>
+#include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/split/split.hpp>
@@ -64,7 +66,6 @@
 #include <map_lookup.hpp>
 #include "cudf/types.hpp"
 
-#include "prefix_sum.hpp"
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 #include "jni.h"
@@ -155,6 +156,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceNullsColumn(JNIEnv
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceNullsPolicy(JNIEnv *env, jclass,
+                                                                          jlong j_col,
+                                                                          jboolean is_preceding) {
+  JNI_NULL_CHECK(env, j_col, "column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view col = *reinterpret_cast<cudf::column_view *>(j_col);
+    std::unique_ptr<cudf::column> result = cudf::replace_nulls(col,
+            is_preceding ? cudf::replace_policy::PRECEDING : cudf::replace_policy::FOLLOWING);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_ifElseVV(JNIEnv *env, jclass,
                                                                 jlong j_pred_vec,
                                                                 jlong j_true_vec,
@@ -228,6 +243,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_ifElseSS(JNIEnv *env, jcl
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getElement(JNIEnv *env, jclass,
+                                                                  jlong from,
+                                                                  jint index) {
+  JNI_NULL_CHECK(env, from, "from column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto from_vec = reinterpret_cast<cudf::column_view *>(from);
+    std::unique_ptr<cudf::scalar> result =
+        cudf::get_element(*from_vec, index);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reduce(JNIEnv *env, jclass,
                                                               jlong j_col_view,
                                                               jlong j_agg,
@@ -245,6 +274,28 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reduce(JNIEnv *env, jclas
   }
   CATCH_STD(env, 0);
 }
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_scan(JNIEnv *env, jclass,
+                                                            jlong j_col_view,
+                                                            jlong j_agg,
+                                                            jboolean is_inclusive,
+                                                            jboolean include_nulls) {
+  JNI_NULL_CHECK(env, j_col_view, "column view is null", 0);
+  JNI_NULL_CHECK(env, j_agg, "aggregation is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto col = reinterpret_cast<cudf::column_view *>(j_col_view);
+    auto agg = reinterpret_cast<cudf::aggregation *>(j_agg);
+
+    std::unique_ptr<cudf::column> result = cudf::scan(*col, agg->clone(), 
+            is_inclusive ? cudf::scan_type::INCLUSIVE : cudf::scan_type::EXCLUSIVE,
+            include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_quantile(JNIEnv *env, jclass clazz,
                                                                 jlong input_column,
@@ -387,6 +438,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContainsColumn(JNIEnv
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listSortRows(JNIEnv *env, jclass,
+                                                                    jlong column_view,
+                                                                    jboolean is_descending,
+                                                                    jboolean is_null_smallest) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto sort_order = is_descending ? cudf::order::DESCENDING : cudf::order::ASCENDING;
+    auto null_order = is_null_smallest ? cudf::null_order::BEFORE : cudf::null_order::AFTER;
+    auto *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    auto ret = cudf::lists::sort_lists(cudf::lists_column_view(*cv), sort_order, null_order);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *env, jclass,
                                                                         jlong column_view,
                                                                         jlong delimiter) {
@@ -439,14 +506,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_split(JNIEnv *env, j
     }
 
     std::vector<cudf::column_view> result = cudf::split(*n_column, indices);
+
     cudf::jni::native_jlongArray n_result(env, result.size());
-    std::vector<std::unique_ptr<cudf::column>> column_result(result.size());
     for (size_t i = 0; i < result.size(); i++) {
-      column_result[i].reset(new cudf::column(result[i]));
-      n_result[i] = reinterpret_cast<jlong>(column_result[i].get());
-    }
-    for (size_t i = 0; i < result.size(); i++) {
-      column_result[i].release();
+      cudf::column_view const * c = new cudf::column_view(result[i]);
+      n_result[i] = reinterpret_cast<jlong>(c);
     }
     return n_result.get_jArray();
   }
@@ -1729,6 +1793,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_title(JNIEnv *env, jobjec
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_capitalize(JNIEnv *env, jobject j_object,
+                                                                  jlong strs_handle,
+                                                                  jlong delimiters_handle) {
+
+  JNI_NULL_CHECK(env, strs_handle, "native view handle is null", 0)
+  JNI_NULL_CHECK(env, delimiters_handle, "delimiters scalar handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *view = reinterpret_cast<cudf::column_view *>(strs_handle);
+    cudf::string_scalar *deli = reinterpret_cast<cudf::string_scalar *>(delimiters_handle);
+    std::unique_ptr<cudf::column> result = cudf::strings::capitalize(*view, *deli);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeStructView(JNIEnv *env, jobject j_object,
                                                                       jlongArray handles,
                                                                       jlong row_count) {
@@ -1748,20 +1829,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeStructView(JNIEnv *en
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_prefixSum(JNIEnv *env, jobject j_object,
-                                                                 jlong handle) {
-
-  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
-
-  try {
-    cudf::jni::auto_set_device(env);
-    cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
-    std::unique_ptr<cudf::column> result = cudf::jni::prefix_sum(*view);
-    return reinterpret_cast<jlong>(result.release());
-  }
-  CATCH_STD(env, 0)
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_nansToNulls(JNIEnv *env, jobject j_object,
@@ -1927,6 +1994,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringConcatenationListEl
       cudf::strings::join_list_elements(lcv, separator_scalar, narep_scalar,
                                         null_policy, empty_list_output);
     return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_repeatStrings(JNIEnv *env, jclass,
+                                                                     jlong column_handle,
+                                                                     jint repeat_times) {
+  JNI_NULL_CHECK(env, column_handle, "column handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const cv = *reinterpret_cast<cudf::column_view *>(column_handle);
+    auto const strs_col = cudf::strings_column_view(cv);
+    return reinterpret_cast<jlong>(cudf::strings::repeat_strings(strs_col, repeat_times).release());
   }
   CATCH_STD(env, 0);
 }

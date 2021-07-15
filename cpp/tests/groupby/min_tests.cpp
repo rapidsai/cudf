@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,10 +18,13 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/dictionary/update_keys.hpp>
+
+using namespace cudf::test::iterators;
 
 namespace cudf {
 namespace test {
@@ -73,7 +76,7 @@ TYPED_TEST(groupby_min_test, zero_valid_keys)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::MIN>;
 
-  fixed_width_column_wrapper<K> keys({1, 2, 3}, all_null());
+  fixed_width_column_wrapper<K> keys({1, 2, 3}, all_nulls());
   fixed_width_column_wrapper<V> vals({3, 4, 5});
 
   fixed_width_column_wrapper<K> expect_keys{};
@@ -92,10 +95,10 @@ TYPED_TEST(groupby_min_test, zero_valid_values)
   using R = cudf::detail::target_type_t<V, aggregation::MIN>;
 
   fixed_width_column_wrapper<K> keys{1, 1, 1};
-  fixed_width_column_wrapper<V> vals({3, 4, 5}, all_null());
+  fixed_width_column_wrapper<V> vals({3, 4, 5}, all_nulls());
 
   fixed_width_column_wrapper<K> expect_keys{1};
-  fixed_width_column_wrapper<R> expect_vals({0}, all_null());
+  fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
   auto agg = cudf::make_min_aggregation();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -115,7 +118,7 @@ TYPED_TEST(groupby_min_test, null_keys_and_values)
                                      {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
   //  { 1, 1,     2, 2, 2,   3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, all_valid());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
   //  { 3, 6,     1, 4, 9,   2, 8,    -}
   fixed_width_column_wrapper<R> expect_vals({3, 1, 2, 0}, {1, 1, 1, 0});
 
@@ -147,16 +150,52 @@ TEST_F(groupby_min_string_test, basic)
 TEST_F(groupby_min_string_test, zero_valid_values)
 {
   fixed_width_column_wrapper<K> keys{1, 1, 1};
-  strings_column_wrapper vals({"año", "bit", "₹1"}, all_null());
+  strings_column_wrapper vals({"año", "bit", "₹1"}, all_nulls());
 
   fixed_width_column_wrapper<K> expect_keys{1};
-  strings_column_wrapper expect_vals({""}, all_null());
+  strings_column_wrapper expect_vals({""}, all_nulls());
 
   auto agg = cudf::make_min_aggregation();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
   auto agg2 = cudf::make_min_aggregation();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
+}
+
+TEST_F(groupby_min_string_test, min_sorted_strings)
+{
+  // testcase replicated in issue #8717
+  cudf::test::strings_column_wrapper keys(
+    {"",   "",   "",   "",   "",   "",   "06", "06", "06", "06", "10", "10", "10", "10", "14", "14",
+     "14", "14", "18", "18", "18", "18", "22", "22", "22", "22", "26", "26", "26", "26", "30", "30",
+     "30", "30", "34", "34", "34", "34", "38", "38", "38", "38", "42", "42", "42", "42"},
+    {0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::strings_column_wrapper vals(
+    {"", "", "",   "", "", "", "06", "", "", "", "10", "", "", "", "14", "",
+     "", "", "18", "", "", "", "22", "", "", "", "26", "", "", "", "30", "",
+     "", "", "34", "", "", "", "38", "", "", "", "42", "", "", ""},
+    {0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1,
+     0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0});
+  cudf::test::strings_column_wrapper expect_keys(
+    {"06", "10", "14", "18", "22", "26", "30", "34", "38", "42", ""},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  cudf::test::strings_column_wrapper expect_vals(
+    {"06", "10", "14", "18", "22", "26", "30", "34", "38", "42", ""},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+
+  // fixed_width_column_wrapper<size_type> expect_argmin(
+  // {6, 10, 14, 18, 22, 26, 30, 34, 38, 42, -1},
+  // {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  auto agg = cudf::make_min_aggregation();
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  std::move(agg),
+                  force_use_sort_impl::NO,
+                  null_policy::INCLUDE,
+                  sorted::YES);
 }
 
 struct groupby_dictionary_min_test : public cudf::test::BaseFixture {

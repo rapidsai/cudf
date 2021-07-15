@@ -18,10 +18,13 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/dictionary/update_keys.hpp>
+
+using namespace cudf::test::iterators;
 
 namespace cudf {
 namespace test {
@@ -77,7 +80,7 @@ TYPED_TEST(groupby_max_scan_test, zero_valid_keys)
   using result_wrapper = typename TestFixture::result_wrapper;
 
   // clang-format off
-  key_wrapper keys(  {1, 2, 3}, all_null());
+  key_wrapper keys(  {1, 2, 3}, all_nulls());
   value_wrapper vals({3, 4, 5});
 
   key_wrapper expect_keys{};
@@ -95,10 +98,10 @@ TYPED_TEST(groupby_max_scan_test, zero_valid_values)
 
   // clang-format off
   key_wrapper keys   {1, 1, 1};
-  value_wrapper vals({3, 4, 5}, all_null());
+  value_wrapper vals({3, 4, 5}, all_nulls());
 
   key_wrapper expect_keys    {1, 1, 1};
-  result_wrapper expect_vals({-1, -1, -1}, all_null());
+  result_wrapper expect_vals({-1, -1, -1}, all_nulls());
   // clang-format on
 
   auto agg = cudf::make_max_aggregation();
@@ -115,7 +118,7 @@ TYPED_TEST(groupby_max_scan_test, null_keys_and_values)
   value_wrapper vals({5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 4}, {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
                          //  {1, 1, 1, 2, 2, 2, 2, 3,   _, 3, 4}
-  key_wrapper expect_keys(   {1, 1, 1, 2, 2, 2, 2, 3,      3, 4}, all_valid());
+  key_wrapper expect_keys(   {1, 1, 1, 2, 2, 2, 2, 3,      3, 4}, no_nulls() );
                          //  { -, 3, 6, 1, 4,  -, 9, 2, _, 8, -}
   result_wrapper expect_vals({-1, 8, 8, 6, 9, -1, 9, 7,    7, -1},
                              { 0, 1, 1, 1, 1,  0, 1, 1,    1, 0});

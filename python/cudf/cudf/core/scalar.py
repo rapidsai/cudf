@@ -3,11 +3,12 @@ import decimal
 
 import numpy as np
 import pyarrow as pa
+from pandas._libs.missing import NAType as pd_NAType
 
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
-from cudf.core.dtypes import Decimal64Dtype
-from cudf.core.index import Index
+from cudf.core.dtypes import Decimal64Dtype, ListDtype, StructDtype
+from cudf.core.index import BaseIndex
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
@@ -116,6 +117,32 @@ class Scalar(object):
 
     def _preprocess_host_value(self, value, dtype):
         valid = not _is_null_host_scalar(value)
+
+        if isinstance(value, list):
+            if dtype is not None:
+                raise TypeError("Lists may not be cast to a different dtype")
+            else:
+                dtype = ListDtype.from_arrow(
+                    pa.infer_type([value], from_pandas=True)
+                )
+                return value, dtype
+        elif isinstance(dtype, ListDtype):
+            if value not in {None, NA}:
+                raise ValueError(f"Can not coerce {value} to ListDtype")
+            else:
+                return NA, dtype
+
+        if isinstance(value, dict):
+            if dtype is None:
+                dtype = StructDtype.from_arrow(
+                    pa.infer_type([value], from_pandas=True)
+                )
+            return value, dtype
+        elif isinstance(dtype, StructDtype):
+            if value not in {None, NA}:
+                raise ValueError(f"Can not coerce {value} to StructDType")
+            else:
+                return NA, dtype
 
         if isinstance(dtype, Decimal64Dtype):
             value = pa.scalar(
@@ -302,7 +329,7 @@ class Scalar(object):
         return np.dtype(out_dtype)
 
     def _scalar_binop(self, other, op):
-        if isinstance(other, (ColumnBase, Series, Index, np.ndarray)):
+        if isinstance(other, (ColumnBase, Series, BaseIndex, np.ndarray)):
             # dispatch to column implementation
             return NotImplemented
         other = to_cudf_compatible_scalar(other)
@@ -354,15 +381,11 @@ class Scalar(object):
         return Scalar(self.value, dtype)
 
 
-class _NAType(object):
-    def __init__(self):
-        pass
-
-    def __repr__(self):
-        return "<NA>"
-
-    def __bool__(self):
-        raise TypeError("boolean value of cudf.NA is ambiguous")
+class _NAType(pd_NAType):
+    # Pandas NAType enforces a single instance exists at a time
+    # instantiating this class will yield the existing instance
+    # of pandas._libs.missing.NAType, id(cudf.NA) == id(pd.NA).
+    pass
 
 
 NA = _NAType()

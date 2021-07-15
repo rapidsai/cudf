@@ -3,7 +3,7 @@
 from cudf._lib import interop as libdlpack
 from cudf.core.column import ColumnBase
 from cudf.core.dataframe import DataFrame
-from cudf.core.index import Index
+from cudf.core.index import BaseIndex
 from cudf.core.series import Series
 from cudf.utils import ioutils
 
@@ -71,7 +71,7 @@ def to_dlpack(cudf_obj):
     if len(cudf_obj) == 0:
         raise ValueError("Cannot create DLPack tensor of 0 size")
 
-    if isinstance(cudf_obj, (DataFrame, Series, Index)):
+    if isinstance(cudf_obj, (DataFrame, Series, BaseIndex)):
         gdf_cols = cudf_obj
     elif isinstance(cudf_obj, ColumnBase):
         gdf_cols = cudf_obj.as_frame()

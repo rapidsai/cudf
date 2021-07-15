@@ -23,7 +23,6 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -51,13 +50,13 @@ using found_range = thrust::pair<size_type, size_type>;
  * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
  * Longer patterns require global memory. Shorter patterns are common in data cleaning.
  */
-template <size_t stack_size>
+template <int stack_size>
 struct replace_multi_regex_fn {
   column_device_view const d_strings;
   reprog_device* progs;  // array of regex progs
   size_type number_of_patterns;
   found_range* d_found_ranges;       // working array matched (begin,end) values
-  column_device_view const d_repls;  // replacment strings
+  column_device_view const d_repls;  // replacement strings
   int32_t* d_offsets{};              // these are null when
   char* d_chars{};                   // only computing size
 
@@ -67,8 +66,6 @@ struct replace_multi_regex_fn {
       if (!d_chars) d_offsets[idx] = 0;
       return;
     }
-    u_char data1[stack_size];
-    u_char data2[stack_size];
     auto const d_str      = d_strings.element<string_view>(idx);
     auto const nchars     = d_str.length();      // number of characters in input string
     auto nbytes           = d_str.size_bytes();  // number of bytes in input string
@@ -87,10 +84,10 @@ struct replace_multi_regex_fn {
         if (d_ranges[ptn_idx].first >= ch_pos)  // previously matched here
           continue;                             // or later in the string
         reprog_device prog = progs[ptn_idx];
-        prog.set_stack_mem(data1, data2);
+
         auto begin = static_cast<int32_t>(ch_pos);
         auto end   = static_cast<int32_t>(nchars);
-        if (!prog.is_empty() && prog.find(idx, d_str, begin, end) > 0)
+        if (!prog.is_empty() && prog.find<stack_size>(idx, d_str, begin, end) > 0)
           d_ranges[ptn_idx] = found_range{begin, end};  // found a match
         else
           d_ranges[ptn_idx] = found_range{nchars, nchars};  // this pattern is done
@@ -108,8 +105,8 @@ struct replace_multi_regex_fn {
         size_type end      = d_ranges[ptn_idx].second;
         string_view d_repl = d_repls.size() > 1 ? d_repls.element<string_view>(ptn_idx)
                                                 : d_repls.element<string_view>(0);
-        auto spos = d_str.byte_offset(begin);
-        auto epos = d_str.byte_offset(end);
+        auto spos          = d_str.byte_offset(begin);
+        auto epos          = d_str.byte_offset(end);
         nbytes += d_repl.size_bytes() - (epos - spos);
         if (out_ptr) {  // copy unmodified content plus new replacement string
           out_ptr = copy_and_increment(out_ptr, in_ptr + lpos, spos - lpos);
@@ -137,7 +134,7 @@ std::unique_ptr<column> replace_re(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
   if (patterns.empty())  // no patterns; just return a copy
     return std::make_unique<column>(strings.parent(), stream, mr);
 
@@ -172,11 +169,10 @@ std::unique_ptr<column> replace_re(
   auto d_found_ranges = found_ranges.data();
 
   // create child columns
-  // std::pair<std::unique_ptr<column>, std::unique_ptr<column>> children(nullptr, nullptr);
   auto children = [&] {
     // Each invocation is predicated on the stack size which is dependent on the number of regex
     // instructions
-    if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
+    if (regex_insts <= RX_SMALL_INSTS)
       return make_strings_children(
         replace_multi_regex_fn<RX_STACK_SMALL>{
           *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
@@ -190,9 +186,16 @@ std::unique_ptr<column> replace_re(
         strings_count,
         stream,
         mr);
-    else
+    else if (regex_insts <= RX_LARGE_INSTS)
       return make_strings_children(
         replace_multi_regex_fn<RX_STACK_LARGE>{
+          *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
+        strings_count,
+        stream,
+        mr);
+    else
+      return make_strings_children(
+        replace_multi_regex_fn<RX_STACK_ANY>{
           *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
         strings_count,
         stream,
