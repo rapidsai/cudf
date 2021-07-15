@@ -17,7 +17,7 @@ from nvtx import annotate
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
-from cudf.api.types import is_dict_like, is_dtype_equal
+from cudf.api.types import is_dict_like, is_dtype_equal, issubdtype
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -3443,21 +3443,18 @@ class Frame(libcudf.table.Table):
                     raise TypeError(err_msg.format(type(None)))
 
                 try:
-                    left_is_bool = np.issubdtype(left_column.dtype, np.bool_)
-                    right_is_bool = np.issubdtype(right_column.dtype, np.bool_)
+                    left_is_bool = issubdtype(left_column.dtype, np.bool_)
+                    right_is_bool = issubdtype(right_column.dtype, np.bool_)
                 except TypeError:
                     raise TypeError(err_msg.format(type(right_column)))
 
                 coerce_to_bool = left_is_bool or right_is_bool
 
                 if not (
-                    (
-                        left_is_bool
-                        or np.issubdtype(left_column.dtype, np.integer)
-                    )
+                    (left_is_bool or issubdtype(left_column.dtype, np.integer))
                     and (
                         right_is_bool
-                        or np.issubdtype(right_column.dtype, np.integer)
+                        or issubdtype(right_column.dtype, np.integer)
                     )
                 ):
                     raise TypeError(

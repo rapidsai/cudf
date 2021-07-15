@@ -268,3 +268,7 @@ is_number = pd_types.is_number
 is_re = pd_types.is_re
 is_re_compilable = pd_types.is_re_compilable
 is_dtype_equal = pd_types.is_dtype_equal
+
+
+# Aliases of numpy dtype functionality.
+issubdtype = np.issubdtype
