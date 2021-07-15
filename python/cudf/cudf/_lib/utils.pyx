@@ -1,17 +1,17 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
-import cudf
-
 import pyarrow as pa
 
-from cudf._lib.column cimport Column
-from cudf._lib.table cimport Table
-from cudf._lib.cpp.column.column cimport column_view
-from cudf._lib.cpp.table.table cimport table_view
+import cudf
 
 from libc.stdint cimport uint8_t
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column_view
+from cudf._lib.cpp.table.table cimport table_view
+from cudf._lib.table cimport Table
 
 try:
     import ujson as json
@@ -19,11 +19,11 @@ except ImportError:
     import json
 
 from cudf.utils.dtypes import (
-    np_to_pa_dtype,
     is_categorical_dtype,
+    is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype,
-    is_decimal_dtype,
+    np_to_pa_dtype,
 )
 
 

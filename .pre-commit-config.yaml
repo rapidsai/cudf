@@ -1,12 +1,37 @@
 repos:
-      - repo: https://github.com/timothycrosley/isort
-        rev: 5.0.7
+      - repo: https://github.com/pycqa/isort
+        rev: 5.6.4
         hooks:
               - id: isort
+                alias: isort-cudf
+                name: isort-cudf
+                args: ["--settings-path=python/cudf/setup.cfg"]
+                files: python/cudf/.*
+                exclude: __init__.py$
+                types: [text]
+                types_or: [python, cython, pyi]
+              - id: isort
+                alias: isort-cudf-kafka
+                name: isort-cudf-kafka
+                args: ["--settings-path=python/cudf_kafka/setup.cfg"]
+                files: python/cudf_kafka/.*
+                types: [text]
+                types_or: [python, cython]
+              - id: isort
+                alias: isort-custreamz
+                name: isort-custreamz
+                args: ["--settings-path=python/custreamz/setup.cfg"]
+                files: python/custreamz/.*
+              - id: isort
+                alias: isort-dask-cudf
+                name: isort-dask-cudf
+                args: ["--settings-path=python/dask_cudf/setup.cfg"]
+                files: python/dask_cudf/.*
       - repo: https://github.com/ambv/black
         rev: 19.10b0
         hooks:
               - id: black
+                files: python/.*
       - repo: https://gitlab.com/pycqa/flake8
         rev: 3.8.3
         hooks:
@@ -14,10 +39,7 @@ repos:
                 alias: flake8
                 name: flake8
                 args: ["--config=python/.flake8"]
-                types: [python]
-      - repo: https://gitlab.com/pycqa/flake8
-        rev: 3.8.3
-        hooks:
+                files: python/.*\.py$
               - id: flake8
                 alias: flake8-cython
                 name: flake8-cython

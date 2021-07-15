@@ -5,12 +5,9 @@ from libcpp.memory cimport unique_ptr
 
 from rmm._lib.device_buffer cimport device_buffer
 
-from cudf._lib.cpp.types cimport size_type
-
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport (
-    column_view, mutable_column_view
-)
+from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
+from cudf._lib.cpp.types cimport size_type
 
 
 cdef class Column:

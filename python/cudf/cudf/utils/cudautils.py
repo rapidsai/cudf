@@ -4,11 +4,9 @@ from pickle import dumps
 import cachetools
 import numpy as np
 from numba import cuda
-
-import cudf
-
 from numba.np import numpy_support
 
+import cudf
 
 #
 # Misc kernels
