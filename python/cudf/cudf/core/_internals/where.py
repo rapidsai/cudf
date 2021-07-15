@@ -267,7 +267,7 @@ def where(
         (source_df, others,) = _normalize_columns_and_scalars_type(
             frame, other
         )
-        if isinstance(other, Frame):
+        if isinstance(others, Frame):
             others = others._data.columns
 
         out_df = DataFrame(index=frame.index)
