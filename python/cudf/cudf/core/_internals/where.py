@@ -156,14 +156,14 @@ def _normalize_columns_and_scalars_type(
 
             source_df = frame.copy(deep=False)
             others = []
-            for col_name, other_sclr in zip(frame._column_names, other):
+            for i, col_name in enumerate(frame._column_names):
 
                 (
                     source_col,
                     other_scalar,
                 ) = _check_and_cast_columns_with_other(
                     source_col=source_df._data[col_name],
-                    other=other_sclr,
+                    other=other[i],
                     inplace=inplace,
                 )
                 source_df._data[col_name] = source_col
