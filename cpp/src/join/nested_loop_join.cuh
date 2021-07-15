@@ -21,8 +21,6 @@
 
 #include <cudf/ast/detail/transform.cuh>
 #include <cudf/ast/nodes.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -30,10 +28,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
-
-#include <thrust/optional.h>
-
-#include <algorithm>
 
 namespace cudf {
 namespace detail {
