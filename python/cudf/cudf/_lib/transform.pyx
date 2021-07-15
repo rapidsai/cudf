@@ -1,33 +1,32 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-import cudf
 import numpy as np
+
+import cudf
 from cudf.utils import cudautils
 
 from libc.stdint cimport uintptr_t
-
-from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
 from libcpp.pair cimport pair
+from libcpp.string cimport string
+from libcpp.utility cimport move
+
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
-from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
+
 from cudf.core.buffer import Buffer
 
-from cudf._lib.cpp.types cimport (
-    bitmask_type,
-    data_type,
-    size_type,
-    type_id,
-)
+from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
+
 from cudf._lib.types import np_to_cudf_types
-from cudf._lib.types cimport underlying_type_t_type_id
+
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.types cimport underlying_type_t_type_id
 
 from numba.np import numpy_support
 

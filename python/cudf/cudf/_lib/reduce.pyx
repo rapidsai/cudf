@@ -1,20 +1,25 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import cudf
-from cudf.utils.dtypes import is_decimal_dtype
 from cudf.core.dtypes import Decimal64Dtype
-from cudf._lib.cpp.reduce cimport cpp_reduce, cpp_scan, scan_type, cpp_minmax
+from cudf.utils.dtypes import is_decimal_dtype
+
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.reduce cimport cpp_minmax, cpp_reduce, cpp_scan, scan_type
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport data_type, type_id
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.column.column cimport column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.column cimport Column
+
 from cudf._lib.types import np_to_cudf_types
-from cudf._lib.types cimport underlying_type_t_type_id, dtype_to_data_type
-from cudf._lib.aggregation cimport make_aggregation, Aggregation
+
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move, pair
+
+from cudf._lib.aggregation cimport Aggregation, make_aggregation
+from cudf._lib.types cimport dtype_to_data_type, underlying_type_t_type_id
+
 import numpy as np
 
 cimport cudf._lib.cpp.types as libcudf_types
