@@ -23,15 +23,15 @@ from cudf._lib.cpp.strings.combine cimport (
 
 
 def concatenate(Table source_strings,
-                object py_separator,
-                object py_narep):
+                object sep,
+                object na_rep):
     """
     Returns a Column by concatenating strings column-wise in `source_strings`
-    with the specified `py_separator` between each column and
-    `na`/`None` values are replaced by `py_narep`
+    with the specified `sep` between each column and
+    `na`/`None` values are replaced by `na_rep`
     """
-    cdef DeviceScalar separator = py_separator.device_value
-    cdef DeviceScalar narep = py_narep.device_value
+    cdef DeviceScalar separator = sep.device_value
+    cdef DeviceScalar narep = na_rep.device_value
 
     cdef unique_ptr[column] c_result
     cdef table_view source_view = source_strings.data_view()
@@ -53,16 +53,16 @@ def concatenate(Table source_strings,
 
 
 def join(Column source_strings,
-         object py_separator,
-         object py_narep):
+         object sep,
+         object na_rep):
     """
     Returns a Column by concatenating strings row-wise in `source_strings`
-    with the specified `py_separator` between each column and
-    `na`/`None` values are replaced by `py_narep`
+    with the specified `sep` between each column and
+    `na`/`None` values are replaced by `na_rep`
     """
 
-    cdef DeviceScalar separator = py_separator.device_value
-    cdef DeviceScalar narep = py_narep.device_value
+    cdef DeviceScalar separator = sep.device_value
+    cdef DeviceScalar narep = na_rep.device_value
 
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
