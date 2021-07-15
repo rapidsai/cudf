@@ -172,6 +172,7 @@ class logical_not {
  * @param is_left Predicate for picking rows from `lhs` on `true` or `rhs` on `false`
  * @param stream The stream on which to perform the allocation
  * @param mr The resource used to allocate the device storage
+ * @return Column with rows populated according to the `is_left` predicate
  */
 template <typename Filter>
 std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lhs,
