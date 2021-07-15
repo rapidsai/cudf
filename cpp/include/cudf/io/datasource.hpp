@@ -322,9 +322,9 @@ class arrow_io_source : public datasource {
     filesystem = result.ValueOrDie();
 
     // Parse the path from the URI
-    size_t start = arrow_uri.find(uri_start_delimiter) == std::string::npos
-                     ? 0
-                     : arrow_uri.find(uri_start_delimiter) + uri_start_delimiter.size();
+    size_t start          = arrow_uri.find(uri_start_delimiter) == std::string::npos
+                              ? 0
+                              : arrow_uri.find(uri_start_delimiter) + uri_start_delimiter.size();
     size_t end            = arrow_uri.find(uri_end_delimiter) - start;
     std::string_view path = arrow_uri.substr(start, end);
 

@@ -46,6 +46,8 @@ def extract_datetime_component(Column col, object field):
             c_result = move(libcudf_datetime.extract_minute(col_view))
         elif field == "second":
             c_result = move(libcudf_datetime.extract_second(col_view))
+        elif field == "day_of_year":
+            c_result = move(libcudf_datetime.day_of_year(col_view))
         else:
             raise ValueError(f"Invalid datetime field: '{field}'")
 
@@ -57,3 +59,13 @@ def extract_datetime_component(Column col, object field):
         result = result.binary_operator("sub", result.dtype.type(1))
 
     return result
+
+
+def is_leap_year(Column col):
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        c_result = move(libcudf_datetime.is_leap_year(col_view))
+
+    return Column.from_unique_ptr(move(c_result))

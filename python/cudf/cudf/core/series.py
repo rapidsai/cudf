@@ -32,7 +32,7 @@ from cudf.core.column import (
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
 )
-from cudf.core.column.column import _concat_columns
+from cudf.core.column.column import concat_columns
 from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
@@ -2350,22 +2350,22 @@ class Series(SingleColumnFrame, Serializable):
     @copy_docstring(CategoricalAccessor.__init__)  # type: ignore
     @property
     def cat(self):
-        return CategoricalAccessor(column=self._column, parent=self)
+        return CategoricalAccessor(parent=self)
 
     @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
-        return StringMethods(column=self._column, parent=self)
+        return StringMethods(parent=self)
 
     @copy_docstring(ListMethods.__init__)  # type: ignore
     @property
     def list(self):
-        return ListMethods(column=self._column, parent=self)
+        return ListMethods(parent=self)
 
     @copy_docstring(StructMethods.__init__)  # type: ignore
     @property
     def struct(self):
-        return StructMethods(column=self._column, parent=self)
+        return StructMethods(parent=self)
 
     @property
     def dtype(self):
@@ -2426,7 +2426,7 @@ class Series(SingleColumnFrame, Serializable):
                 common_dtype = find_common_type([obj.dtype for obj in objs])
                 objs = [obj.astype(common_dtype) for obj in objs]
 
-        col = _concat_columns([o._column for o in objs])
+        col = concat_columns([o._column for o in objs])
 
         if isinstance(col, cudf.core.column.Decimal64Column):
             col = col._with_type_metadata(objs[0]._column.dtype)
@@ -6305,6 +6305,102 @@ class DatetimeProperties(object):
         dtype: int16
         """
         return self._get_dt_field("weekday")
+
+    @property
+    def dayofyear(self):
+        """
+        The day of the year, from 1-365 in non-leap years and
+        from 1-366 in leap years.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range('2016-12-31',
+        ...     '2017-01-08', freq='D'))
+        >>> datetime_series
+        0   2016-12-31
+        1   2017-01-01
+        2   2017-01-02
+        3   2017-01-03
+        4   2017-01-04
+        5   2017-01-05
+        6   2017-01-06
+        7   2017-01-07
+        8   2017-01-08
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.dayofyear
+        0    366
+        1      1
+        2      2
+        3      3
+        4      4
+        5      5
+        6      6
+        7      7
+        8      8
+        dtype: int16
+        """
+        return self._get_dt_field("day_of_year")
+
+    @property
+    def day_of_year(self):
+        """
+        The day of the year, from 1-365 in non-leap years and
+        from 1-366 in leap years.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range('2016-12-31',
+        ...     '2017-01-08', freq='D'))
+        >>> datetime_series
+        0   2016-12-31
+        1   2017-01-01
+        2   2017-01-02
+        3   2017-01-03
+        4   2017-01-04
+        5   2017-01-05
+        6   2017-01-06
+        7   2017-01-07
+        8   2017-01-08
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.day_of_year
+        0    366
+        1      1
+        2      2
+        3      3
+        4      4
+        5      5
+        6      6
+        7      7
+        8      8
+        dtype: int16
+        """
+        return self._get_dt_field("day_of_year")
+
+    @property
+    def is_leap_year(self):
+        """
+        Boolean indicator if the date belongs to a leap year.
+
+        A leap year is a year, which has 366 days (instead of 365) including
+        29th of February as an intercalary day. Leap years are years which are
+        multiples of four with the exception of years divisible by 100 but not
+        by 400.
+
+        Returns
+        -------
+        Series
+        Booleans indicating if dates belong to a leap year.
+        """
+        res = libcudf.datetime.is_leap_year(self.series._column).fillna(False)
+        return Series._from_data(
+            ColumnAccessor({None: res}),
+            index=self.series._index,
+            name=self.series.name,
+        )
 
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)

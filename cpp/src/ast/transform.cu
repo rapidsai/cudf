@@ -49,37 +49,37 @@ namespace detail {
  * This evaluates an expression over a table to produce a new column. Also called an n-ary
  * transform.
  *
- * @tparam block_size
+ * @tparam max_block_size The size of the thread block, used to set launch
+ * bounds and minimize register usage.
+ * @tparam has_nulls whether or not the output column may contain nulls.
+ *
  * @param table The table device view used for evaluation.
- * @param literals Array of literal values used for evaluation.
- * @param output_column The output column where results are stored.
- * @param data_references Array of data references.
- * @param operators Array of operators to perform.
- * @param operator_source_indices Array of source indices for the operators.
- * @param num_operators Number of operators.
- * @param num_intermediates Number of intermediates, used to allocate a portion of shared memory to
- * each thread.
+ * @param plan Container of device data required to evaluate the desired expression.
+ * @param output_column The destination for the results of evaluating the expression.
  */
-template <cudf::size_type max_block_size>
-__launch_bounds__(max_block_size) __global__ void compute_column_kernel(
-  table_device_view const table,
-  device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals,
-  mutable_column_device_view output_column,
-  device_span<const detail::device_data_reference> data_references,
-  device_span<const ast_operator> operators,
-  device_span<const cudf::size_type> operator_source_indices,
-  cudf::size_type num_intermediates)
+template <cudf::size_type max_block_size, bool has_nulls>
+__launch_bounds__(max_block_size) __global__
+  void compute_column_kernel(table_device_view const table,
+                             device_ast_plan plan,
+                             mutable_column_device_view output_column)
 {
-  extern __shared__ std::int64_t intermediate_storage[];
-  auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * num_intermediates];
+  // The (required) extern storage of the shared memory array leads to
+  // conflicting declarations between different templates. The easiest
+  // workaround is to declare an arbitrary (here char) array type then cast it
+  // after the fact to the appropriate type.
+  extern __shared__ char raw_intermediate_storage[];
+  IntermediateDataType<has_nulls>* intermediate_storage =
+    reinterpret_cast<IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
+
+  auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * plan.num_intermediates];
   auto const start_idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
   auto const stride    = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
-  auto const evaluator =
-    cudf::ast::detail::row_evaluator(table, literals, thread_intermediate_storage, &output_column);
+  auto evaluator =
+    cudf::ast::detail::expression_evaluator<has_nulls>(table, plan, thread_intermediate_storage);
 
   for (cudf::size_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
-    evaluate_row_expression(
-      evaluator, data_references, operators, operator_source_indices, row_index);
+    auto output_dest = mutable_column_expression_result<has_nulls>(output_column);
+    evaluator.evaluate(output_dest, row_index);
   }
 }
 
@@ -88,22 +88,30 @@ std::unique_ptr<column> compute_column(table_view const table,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto const expr_linearizer = linearizer(expr, table);                // Linearize the AST
-  auto const plan            = ast_plan{expr_linearizer, stream, mr};  // Create ast_plan
+  // Prepare output column. Whether or not the output column is nullable is
+  // determined by whether any of the columns in the input table are nullable.
+  // If none of the input columns actually contain nulls, we can still use the
+  // non-nullable version of the expression evaluation code path for
+  // performance, so we capture that information as well.
+  auto const nullable =
+    std::any_of(table.begin(), table.end(), [](column_view c) { return c.nullable(); });
+  auto const has_nulls = nullable && std::any_of(table.begin(), table.end(), [](column_view c) {
+                           return c.nullable() && c.has_nulls();
+                         });
 
-  // Create table device view
-  auto table_device         = table_device_view::create(table, stream);
-  auto const table_num_rows = table.num_rows();
+  auto const plan = ast_plan{expr, table, has_nulls, stream, mr};
 
-  // Prepare output column
+  auto const output_column_mask_state =
+    nullable ? (has_nulls ? mask_state::UNINITIALIZED : mask_state::ALL_VALID)
+             : mask_state::UNALLOCATED;
+
   auto output_column = cudf::make_fixed_width_column(
-    expr_linearizer.root_data_type(), table_num_rows, mask_state::UNALLOCATED, stream, mr);
+    plan.output_type(), table.num_rows(), output_column_mask_state, stream, mr);
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   // Configure kernel parameters
-  auto const num_intermediates     = expr_linearizer.intermediate_count();
-  auto const shmem_size_per_thread = static_cast<int>(sizeof(std::int64_t) * num_intermediates);
+  auto const& dev_plan = plan.dev_plan;
   int device_id;
   CUDA_TRY(cudaGetDevice(&device_id));
   int shmem_limit_per_block;
@@ -111,22 +119,23 @@ std::unique_ptr<column> compute_column(table_view const table,
     cudaDeviceGetAttribute(&shmem_limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
   auto constexpr MAX_BLOCK_SIZE = 128;
   auto const block_size =
-    shmem_size_per_thread != 0
-      ? std::min(MAX_BLOCK_SIZE, shmem_limit_per_block / shmem_size_per_thread)
+    dev_plan.shmem_per_thread != 0
+      ? std::min(MAX_BLOCK_SIZE, shmem_limit_per_block / dev_plan.shmem_per_thread)
       : MAX_BLOCK_SIZE;
-  auto const config               = cudf::detail::grid_1d{table_num_rows, block_size};
-  auto const shmem_size_per_block = shmem_size_per_thread * config.num_threads_per_block;
+  auto const config          = cudf::detail::grid_1d{table.num_rows(), block_size};
+  auto const shmem_per_block = dev_plan.shmem_per_thread * config.num_threads_per_block;
 
   // Execute the kernel
-  cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
-    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-      *table_device,
-      plan._device_literals,
-      *mutable_output_device,
-      plan._device_data_references,
-      plan._device_operators,
-      plan._device_operator_source_indices,
-      num_intermediates);
+  auto table_device = table_device_view::create(table, stream);
+  if (has_nulls) {
+    cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE, true>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
+        *table_device, dev_plan, *mutable_output_device);
+  } else {
+    cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE, false>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
+        *table_device, dev_plan, *mutable_output_device);
+  }
   CHECK_CUDA(stream.value());
   return output_column;
 }

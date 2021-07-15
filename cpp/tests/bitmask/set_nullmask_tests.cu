@@ -38,7 +38,8 @@ struct valid_bit_functor {
 
 std::ostream& operator<<(std::ostream& stream, thrust::host_vector<bool> const& bits)
 {
-  for (auto _bit : bits) stream << int(_bit);
+  for (auto _bit : bits)
+    stream << int(_bit);
   return stream;
 }
 

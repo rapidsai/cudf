@@ -37,25 +37,7 @@ from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
-from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer
-from cudf.core.dtypes import (
-    CategoricalDtype,
-    IntervalDtype,
-    ListDtype,
-    StructDtype,
-)
-from cudf.utils import ioutils, utils
-from cudf.utils.dtypes import (
-    check_cast_unsupported_dtype,
-    cudf_dtype_from_pa_type,
-    get_time_unit,
-    min_unsigned_type,
-    np_to_pa_dtype,
-)
-from cudf.utils.utils import mask_dtype
-
-from ...api.types import (
+from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
     infer_dtype,
@@ -73,6 +55,23 @@ from ...api.types import (
     is_struct_dtype,
     pandas_dtype,
 )
+from cudf.core.abc import Serializable
+from cudf.core.buffer import Buffer
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    IntervalDtype,
+    ListDtype,
+    StructDtype,
+)
+from cudf.utils import ioutils, utils
+from cudf.utils.dtypes import (
+    check_cast_unsupported_dtype,
+    cudf_dtype_from_pa_type,
+    get_time_unit,
+    min_unsigned_type,
+    np_to_pa_dtype,
+)
+from cudf.utils.utils import mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 
@@ -678,7 +677,7 @@ class ColumnBase(Column, Serializable):
         return indices[-1]
 
     def append(self, other: ColumnBase) -> ColumnBase:
-        return _concat_columns([self, as_column(other)])
+        return concat_columns([self, as_column(other)])
 
     def quantile(
         self,
@@ -892,6 +891,12 @@ class ColumnBase(Column, Serializable):
             if not self.dtype == dtype:
                 raise NotImplementedError(
                     "Casting list columns not currently supported"
+                )
+            return self
+        elif is_struct_dtype(dtype):
+            if not self.dtype == dtype:
+                raise NotImplementedError(
+                    "Casting struct columns not currently supported"
                 )
             return self
         elif is_interval_dtype(self.dtype):
@@ -2294,7 +2299,7 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
 
 
-def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
+def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
         dtype = pandas_dtype(None)

@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,

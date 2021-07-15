@@ -1,15 +1,15 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import re
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
 import pytest
-from decimal import Decimal
 
 import cudf
 from cudf.core.dtypes import Decimal64Dtype
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
     assert_eq,
