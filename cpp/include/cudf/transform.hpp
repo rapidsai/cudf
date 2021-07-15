@@ -54,7 +54,7 @@ std::unique_ptr<column> transform(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> generalized_masked_op(
-  table_view data_view,
+  table_view const& data_view,
   std::string const& binary_udf,
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

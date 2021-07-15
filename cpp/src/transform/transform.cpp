@@ -65,7 +65,7 @@ void unary_operation(mutable_column_view output,
              cudf::jit::get_data_ptr(input));
 }
 
-std::vector<std::string> make_template_types(column_view outcol_view, table_view data_view)
+std::vector<std::string> make_template_types(column_view outcol_view, table_view const& data_view)
 {
   std::string mskptr_type =
     cudf::jit::get_type_name(cudf::data_type(cudf::type_to_id<cudf::bitmask_type>())) + "*";
@@ -93,7 +93,7 @@ class Unpacker {
   }
 };
 
-void generalized_operation(table_view data_view,
+void generalized_operation(table_view const& data_view,
                            std::string const& udf,
                            data_type output_type,
                            mutable_column_view outcol_view,
@@ -203,7 +203,7 @@ std::unique_ptr<column> transform(column_view const& input,
   return detail::transform(input, unary_udf, output_type, is_ptx, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> generalized_masked_op(table_view data_view,
+std::unique_ptr<column> generalized_masked_op(table_view const& data_view,
                                               std::string const& udf,
                                               data_type output_type,
                                               rmm::mr::device_memory_resource* mr)

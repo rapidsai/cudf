@@ -39,7 +39,7 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     ) except +
 
     cdef unique_ptr[column] generalized_masked_op(
-        table_view data_view,
+        const table_view& data_view,
         string udf,
         data_type output_type,
     ) except +
