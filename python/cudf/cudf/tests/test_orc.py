@@ -1090,7 +1090,7 @@ def test_orc_writer_list_multiple_stripes():
 
 
 def test_orc_writer_list_nulls():
-    num_rows = 1234
+    num_rows = 12345
     pdf_in = pd.DataFrame(
         {
             "ls": [
@@ -1115,7 +1115,7 @@ def test_orc_writer_list_nulls():
 
 
 def test_orc_writer_list_empty():
-    num_rows = 1234
+    num_rows = 12345
     pdf_in = pd.DataFrame(
         {
             "ls": [
@@ -1160,6 +1160,7 @@ def test_orc_writer_list_var_len():
 
     pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
     assert_eq(pdf_out, pdf_in)
+
 
 def test_chunked_orc_writer_lists():
     num_rows = 12345

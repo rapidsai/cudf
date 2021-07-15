@@ -670,8 +670,9 @@ __global__ void __launch_bounds__(block_size)
                            512 * 8 - (present_rows - (min(s->cur_row, s->present_out) & ~7)));
       uint32_t nrows_out;
       if (t * 8 < nrows) {
-        uint32_t row  = s->chunk.start_row + present_rows + t * 8;
-        uint8_t valid = 0;
+        auto const row_in_group = present_rows + t * 8;
+        auto const row          = s->chunk.start_row + row_in_group;
+        uint8_t valid           = 0;
         if (row < s->chunk.leaf_column->size()) {
           if (s->chunk.leaf_column->nullable()) {
             size_type current_valid_offset = row + s->chunk.leaf_column->offset();
@@ -688,7 +689,7 @@ __global__ void __launch_bounds__(block_size)
             valid = valid & ((1 << (s->chunk.leaf_column->size() - row)) - 1);
           }
         }
-        s->valid_buf[(row >> 3) & 0x1ff] = valid;
+        s->valid_buf[(row_in_group >> 3) & 0x1ff] = valid;
       }
       __syncthreads();
       present_rows += nrows;
@@ -702,9 +703,7 @@ __global__ void __launch_bounds__(block_size)
           uint32_t flush = (present_rows < s->chunk.num_rows) ? 0 : 7;
           nrows_out      = (nrows_out + flush) >> 3;
           nrows_out =
-            ByteRLE<CI_PRESENT, 0x1ff>(
-              s, s->valid_buf, (s->chunk.start_row + present_out) >> 3, nrows_out, flush, t) *
-            8;
+            ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, present_out >> 3, nrows_out, flush, t) * 8;
         }
         __syncthreads();
         if (!t) { s->present_out = min(present_out + nrows_out, present_rows); }
@@ -724,15 +723,15 @@ __global__ void __launch_bounds__(block_size)
       uint32_t maxnumvals = (s->chunk.type_kind == BOOLEAN) ? 2048 : 1024;
       uint32_t nrows =
         min(min(s->present_rows - s->cur_row, maxnumvals - max(s->numvals, s->numlengths)), 512);
-      uint32_t row = s->chunk.start_row + s->cur_row + t;
+      auto const row_in_group = s->cur_row + t;
       uint32_t valid =
-        (t < nrows) ? (s->valid_buf[(row >> 3) & 0x1ff] >> ((row - s->chunk.start_row) & 7)) & 1
-                    : 0;
+        (t < nrows) ? (s->valid_buf[(row_in_group >> 3) & 0x1ff] >> (row_in_group & 7)) & 1 : 0;
       s->buf.u32[t] = valid;
 
       // TODO: Could use a faster reduction relying on _popc() for the initial phase
       lengths_to_positions(s->buf.u32, 512, t);
       __syncthreads();
+      auto const row = s->chunk.start_row + row_in_group;
       if (valid) {
         int nz_idx = (s->nnz + s->buf.u32[t] - 1) & (maxnumvals - 1);
         switch (s->chunk.type_kind) {
