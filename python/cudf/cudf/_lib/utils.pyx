@@ -19,6 +19,7 @@ except ImportError:
     import json
 
 from cudf.utils.dtypes import (
+    cudf_dtypes_to_pandas_dtypes,
     np_to_pa_dtype,
     is_categorical_dtype,
     is_list_dtype,
@@ -153,7 +154,18 @@ cpdef generate_pandas_metadata(Table table, index):
     md_dict = json.loads(metadata[b"pandas"])
 
     # correct metadata for list and struct types
+    type_map = {
+        str(cudf_dtype): str(pandas_dtype)
+        for cudf_dtype, pandas_dtype in cudf_dtypes_to_pandas_dtypes.items()
+    }
+
     for col_meta in md_dict["columns"]:
+        if (
+            col_meta["name"] in table._column_names
+            and table._data[col_meta["name"]].nullable
+            and col_meta["numpy_type"] in type_map
+        ):
+            col_meta["numpy_type"] = type_map[col_meta["numpy_type"]]
         if col_meta["numpy_type"] in ("list", "struct"):
             col_meta["numpy_type"] = "object"
 
