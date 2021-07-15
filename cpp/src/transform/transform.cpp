@@ -84,15 +84,6 @@ std::vector<std::string> make_template_types(column_view outcol_view, table_view
   return template_types;
 }
 
-class Unpacker {
- public:
-  thrust::tuple<const void*, cudf::bitmask_type const*, cudf::offset_type> operator()(
-    column_view input)
-  {
-    return thrust::make_tuple(cudf::jit::get_data_ptr(input), input.null_mask(), input.offset());
-  }
-};
-
 void generalized_operation(table_view const& data_view,
                            std::string const& udf,
                            data_type output_type,
@@ -129,14 +120,14 @@ void generalized_operation(table_view const& data_view,
   auto zipit_start = thrust::make_zip_iterator(
     thrust::make_tuple(data_ptrs.begin(), mask_ptrs.begin(), offsets.begin()));
 
-  Unpacker unpacker;
-  thrust::transform(data_view.begin(), data_view.end(), zipit_start, unpacker);
-
-  for (int col_idx = 0; col_idx < data_view.num_columns(); col_idx++) {
+  int col_idx = 0;
+  std::transform(data_view.begin(), data_view.end(), zipit_start, [&](column_view col) {
     kernel_args.push_back(&data_ptrs[col_idx]);
     kernel_args.push_back(&mask_ptrs[col_idx]);
     kernel_args.push_back(&offsets[col_idx]);
-  }
+    col_idx++;
+    return thrust::make_tuple(cudf::jit::get_data_ptr(col), col.null_mask(), col.offset());
+  });
 
   cudf::jit::get_program_cache(*transform_jit_masked_udf_kernel_cu_jit)
     .get_kernel(generic_kernel_name,
