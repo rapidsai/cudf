@@ -19,9 +19,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
+#include <cudf/detail/datetime.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -124,6 +124,17 @@ struct extract_day_num_of_year {
 
     return days_until_month[date.year().is_leap()][unsigned{date.month()} - 1] +
            unsigned{date.day()};
+  }
+};
+
+struct is_leap_year_op {
+  template <typename Timestamp>
+  CUDA_DEVICE_CALLABLE bool operator()(Timestamp const ts) const
+  {
+    using namespace cuda::std::chrono;
+    auto const days_since_epoch = floor<days>(ts);
+    auto const date             = year_month_day(days_since_epoch);
+    return date.year().is_leap();
   }
 };
 
@@ -357,6 +368,14 @@ std::unique_ptr<column> day_of_year(column_view const& column,
   return detail::apply_datetime_op<detail::extract_day_num_of_year, cudf::type_id::INT16>(
     column, stream, mr);
 }
+
+std::unique_ptr<column> is_leap_year(column_view const& column,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  return apply_datetime_op<is_leap_year_op, type_id::BOOL8>(column, stream, mr);
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> extract_year(column_view const& column, rmm::mr::device_memory_resource* mr)
@@ -426,5 +445,12 @@ std::unique_ptr<cudf::column> add_calendrical_months(cudf::column_view const& ti
   return detail::add_calendrical_months(
     timestamp_column, months_column, rmm::cuda_stream_default, mr);
 }
+
+std::unique_ptr<column> is_leap_year(column_view const& column, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::is_leap_year(column, rmm::cuda_stream_default, mr);
+}
+
 }  // namespace datetime
 }  // namespace cudf
