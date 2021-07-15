@@ -151,19 +151,17 @@ def _normalize_columns_and_scalars_type(
             )
 
         elif isinstance(frame, DataFrame):
-            if cudf.utils.dtypes.is_scalar(other):
-                other = [other for i in range(len(frame._column_names))]
-
             source_df = frame.copy(deep=False)
             others = []
             for i, col_name in enumerate(frame._column_names):
-
                 (
                     source_col,
                     other_scalar,
                 ) = _check_and_cast_columns_with_other(
                     source_col=source_df._data[col_name],
-                    other=other[i],
+                    other=other
+                    if cudf.utils.dtypes.is_scalar(other)
+                    else other[i],
                     inplace=inplace,
                 )
                 source_df._data[col_name] = source_col
