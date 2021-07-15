@@ -787,14 +787,6 @@ struct single_dispatch_binary_operator_types {
   }
 };
 
-struct single_dispatch_binary_operator {
-  template <typename LHS, typename F, typename... Ts>
-  CUDA_DEVICE_CALLABLE auto operator()(F&& f, Ts&&... args)
-  {
-    f.template operator()<LHS, LHS>(std::forward<Ts>(args)...);
-  }
-};
-
 /**
  * @brief Functor performing a type dispatch for a binary operator.
  *
