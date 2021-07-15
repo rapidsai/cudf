@@ -329,14 +329,14 @@ void init_dictionaries(orc_table_view& orc_table,
                        device_2dspan<rowgroup_rows const> rowgroup_bounds,
                        device_span<device_span<uint32_t>> dict_data,
                        device_span<device_span<uint32_t>> dict_index,
-                       hostdevice_vector<gpu::DictionaryChunk>* dict,
+                       hostdevice_2dvector<gpu::DictionaryChunk>* dict,
                        rmm::cuda_stream_view stream)
 {
   // Setup per-rowgroup dictionary indexes for each dictionary-aware column
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column = orc_table.column(col_idx);
     str_column.set_dict_stride(orc_table.num_string_columns());
-    str_column.attach_dict_chunk(dict->host_ptr(), dict->device_ptr());
+    str_column.attach_dict_chunk(dict->base_host_ptr(), dict->base_device_ptr());
   }
 
   // Allocate temporary memory for dictionary indices
@@ -361,7 +361,7 @@ void init_dictionaries(orc_table_view& orc_table,
   auto d_dict_indices_views = cudf::detail::make_device_uvector_async(dict_indices_views, stream);
 
   gpu::InitDictionaryIndices(orc_table.d_columns,
-                             dict->device_ptr(),
+                             *dict,
                              dict_data,
                              dict_index,
                              d_dict_indices_views,
@@ -373,12 +373,12 @@ void init_dictionaries(orc_table_view& orc_table,
 
 void writer::impl::build_dictionaries(orc_table_view& orc_table,
                                       host_span<stripe_rowgroups const> stripe_bounds,
-                                      hostdevice_vector<gpu::DictionaryChunk> const& dict,
+                                      hostdevice_2dvector<gpu::DictionaryChunk> const& dict,
                                       host_span<rmm::device_uvector<uint32_t>> dict_index,
                                       host_span<bool const> dictionary_enabled,
                                       hostdevice_vector<gpu::StripeDictionary>& stripe_dict)
 {
-  const auto num_rowgroups = dict.size() / orc_table.num_string_columns();
+  const auto num_rowgroups = dict.size().first;
 
   for (size_t dict_idx = 0; dict_idx < orc_table.num_string_columns(); ++dict_idx) {
     auto& str_column = orc_table.string_column(dict_idx);
@@ -394,10 +394,10 @@ void writer::impl::build_dictionaries(orc_table_view& orc_table,
       sd.dict_char_count = 0;
       sd.num_strings =
         std::accumulate(stripe.cbegin(), stripe.cend(), 0, [&](auto dt_str_cnt, auto rg_idx) {
-          const auto& dt = dict[rg_idx * orc_table.num_string_columns() + dict_idx];
+          const auto& dt = dict[rg_idx][dict_idx];
           return dt_str_cnt + dt.num_dict_strings;
         });
-      sd.leaf_column = dict[dict_idx].leaf_column;
+      sd.leaf_column = dict[0][dict_idx].leaf_column;
     }
 
     if (enable_dictionary_) {
@@ -410,7 +410,7 @@ void writer::impl::build_dictionaries(orc_table_view& orc_table,
                         stripe_bounds.back().cend(),
                         string_column_cost{},
                         [&](auto cost, auto rg_idx) -> string_column_cost {
-                          const auto& dt = dict[rg_idx * orc_table.num_string_columns() + dict_idx];
+                          const auto& dt = dict[rg_idx][dict_idx];
                           return {cost.direct + dt.string_char_count,
                                   cost.dictionary + dt.dict_char_count + dt.num_dict_strings};
                         });
@@ -427,7 +427,7 @@ void writer::impl::build_dictionaries(orc_table_view& orc_table,
   stripe_dict.host_to_device(stream);
   gpu::BuildStripeDictionaries(stripe_dict.device_ptr(),
                                stripe_dict.host_ptr(),
-                               dict.device_ptr(),
+                               dict.base_device_ptr(),
                                stripe_bounds.size(),
                                num_rowgroups,
                                orc_table.string_column_indices.size(),
@@ -1389,9 +1389,9 @@ void writer::impl::write(table_view const& table)
   auto rowgroup_bounds = calculate_rowgroup_bounds(orc_table, row_index_stride_, stream);
 
   // Build per-column dictionary indices
-  auto dictionaries          = allocate_dictionaries(orc_table, rowgroup_bounds, stream);
-  const auto num_dict_chunks = rowgroup_bounds.size().first * orc_table.num_string_columns();
-  hostdevice_vector<gpu::DictionaryChunk> dict(num_dict_chunks, stream);
+  auto dictionaries = allocate_dictionaries(orc_table, rowgroup_bounds, stream);
+  hostdevice_2dvector<gpu::DictionaryChunk> dict(
+    rowgroup_bounds.size().first, orc_table.num_string_columns(), stream);
   if (orc_table.num_string_columns() != 0) {
     init_dictionaries(orc_table,
                       rowgroup_bounds,

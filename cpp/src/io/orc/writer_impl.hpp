@@ -236,14 +236,14 @@ class writer::impl {
    *
    * @param orc_table Non-owning view of a cuDF table w/ ORC-related info
    * @param stripe_bounds List of stripe boundaries
-   * @param dict List of dictionary chunks
+   * @param dict List of dictionary chunks  [rowgroup][column]
    * @param dict_index List of dictionary indices
    * @param dictionary_enabled Whether dictionary encoding is enabled for a given column
    * @param stripe_dict List of stripe dictionaries
    */
   void build_dictionaries(orc_table_view& orc_table,
                           host_span<stripe_rowgroups const> stripe_bounds,
-                          hostdevice_vector<gpu::DictionaryChunk> const& dict,
+                          hostdevice_2dvector<gpu::DictionaryChunk> const& dict,
                           host_span<rmm::device_uvector<uint32_t>> dict_index,
                           host_span<bool const> dictionary_enabled,
                           hostdevice_vector<gpu::StripeDictionary>& stripe_dict);

@@ -377,7 +377,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns,
-                           DictionaryChunk* chunks,
+                           device_2dspan<DictionaryChunk> chunks,
                            device_span<device_span<uint32_t>> dict_data,
                            device_span<device_span<uint32_t>> dict_index,
                            device_span<device_span<uint32_t>> tmp_indices,
