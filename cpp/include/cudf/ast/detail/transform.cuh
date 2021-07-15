@@ -358,6 +358,33 @@ struct ast_plan {
 };
 
 /**
+ * @brief Despite to a binary operator based on a single data type.
+ *
+ * This functor is a dispatcher for binary operations that assumes that both
+ * operands to a binary operation are of the same type. This assumption is
+ * encoded in the one non-deducible template parameter LHS, the type of the
+ * left-hand operand, which is then used as the template parameter for both the
+ * left and right operands to the binary operator f.
+ */
+struct single_dispatch_binary_operator {
+  /**
+   * @brief Single-type dispatch to a binary operation.
+   *
+   * @tparam LHS Left input type.
+   * @tparam F Type of forwarded binary operator functor.
+   * @tparam Ts Parameter pack of forwarded arguments.
+   *
+   * @param f Binary operator functor.
+   * @param args Forwarded arguments to `operator()` of `f`.
+   */
+  template <typename LHS, typename F, typename... Ts>
+  CUDA_DEVICE_CALLABLE auto operator()(F&& f, Ts&&... args)
+  {
+    f.template operator()<LHS, LHS>(std::forward<Ts>(args)...);
+  }
+};
+
+/**
  * @brief The principal object for evaluating AST expressions on device.
  *
  * This class is designed for n-ary transform evaluation. It operates on two
