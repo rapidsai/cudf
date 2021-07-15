@@ -1238,6 +1238,7 @@ class Series(SingleColumnFrame, Serializable):
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
             and not is_list_dtype(preprocess.dtype)
+            and not is_struct_dtype(preprocess.dtype)
             and not is_decimal_dtype(preprocess.dtype)
         ) or isinstance(
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
