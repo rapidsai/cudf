@@ -685,7 +685,7 @@ __global__ void __launch_bounds__(block_size)
             valid = 0xff;
           }
           if (row + 7 > s->chunk.leaf_column->size()) {
-            valid = valid & ((1 << (s->chunk.leaf_column->size() & 7)) - 1);
+            valid = valid & ((1 << (s->chunk.leaf_column->size() - row)) - 1);
           }
         }
         s->valid_buf[(row >> 3) & 0x1ff] = valid;
@@ -724,9 +724,11 @@ __global__ void __launch_bounds__(block_size)
       uint32_t maxnumvals = (s->chunk.type_kind == BOOLEAN) ? 2048 : 1024;
       uint32_t nrows =
         min(min(s->present_rows - s->cur_row, maxnumvals - max(s->numvals, s->numlengths)), 512);
-      uint32_t row   = s->chunk.start_row + s->cur_row + t;
-      uint32_t valid = (t < nrows) ? (s->valid_buf[(row >> 3) & 0x1ff] >> (row & 7)) & 1 : 0;
-      s->buf.u32[t]  = valid;
+      uint32_t row = s->chunk.start_row + s->cur_row + t;
+      uint32_t valid =
+        (t < nrows) ? (s->valid_buf[(row >> 3) & 0x1ff] >> ((row - s->chunk.start_row) & 7)) & 1
+                    : 0;
+      s->buf.u32[t] = valid;
 
       // TODO: Could use a faster reduction relying on _popc() for the initial phase
       lengths_to_positions(s->buf.u32, 512, t);

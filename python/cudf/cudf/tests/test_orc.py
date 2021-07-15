@@ -1047,19 +1047,21 @@ def test_orc_timestamp_read(datadir):
     assert_eq(pdf, gdf)
 
 
-def test_orc_writer_list(tmpdir):
+def dec(num):
+    return decimal.Decimal(str(num))
+
+
+def test_orc_writer_list():
     num_rows = 12345
     pdf_in = pd.DataFrame(
         {
             "lls": [[["a"], ["bb"]] * 5 for i in range(num_rows)],
-            "lls2": [[["cccc", "dddd"]] * 6 for i in range(num_rows)],
+            "lls2": [[["ccc", "dddd"]] * 6 for i in range(num_rows)],
             "ls_dict": [["X"] * 7 for i in range(num_rows)],
             "ls_direct": [[str(i)] * 9 for i in range(num_rows)],
-            "li": [[1] * 11 for i in range(num_rows)],
-            "lf": [[1 * 0.5] * 13 for i in range(num_rows)],
-            "ld": [
-                [decimal.Decimal(str(i / 2))] * 15 for i in range(num_rows)
-            ],
+            "li": [[i] * 11 for i in range(num_rows)],
+            "lf": [[i * 0.5] * 13 for i in range(num_rows)],
+            "ld": [[dec(i / 2)] * 15 for i in range(num_rows)],
         }
     )
 
@@ -1070,13 +1072,37 @@ def test_orc_writer_list(tmpdir):
     assert_eq(pdf_out, pdf_in)
 
 
-def test_orc_writer_list_multiple_stripes(tmpdir):
+@pytest.mark.skip
+def test_orc_writer_list_multiple_stripes():
     num_rows = 1_200_000
     pdf_in = pd.DataFrame(
         {
+            "ls": [[str(i), str(2 * i)] for i in range(num_rows)],
+            "ld": [[dec(elem / 2)] * 5 for elem in range(num_rows)],
+        }
+    )
+
+    buffer = BytesIO()
+    cudf.from_pandas(pdf_in).to_orc(buffer)
+
+    pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
+    assert_eq(pdf_out, pdf_in)
+
+
+def test_orc_writer_list_nulls():
+    num_rows = 1234
+    pdf_in = pd.DataFrame(
+        {
+            "ls": [
+                [str(i), str(2 * i)] if i % 2 else None
+                for i in range(num_rows)
+            ],
+            "li": [
+                [i, i * i, i % 2] if i % 3 else None for i in range(num_rows)
+            ],
             "ld": [
-                [decimal.Decimal(str(elem / 2))] * 5
-                for elem in range(num_rows)
+                [dec(i), dec(i / 2)] if i % 5 else None
+                for i in range(num_rows)
             ],
         }
     )
@@ -1086,3 +1112,72 @@ def test_orc_writer_list_multiple_stripes(tmpdir):
 
     pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
     assert_eq(pdf_out, pdf_in)
+
+
+def test_orc_writer_list_empty():
+    num_rows = 1234
+    pdf_in = pd.DataFrame(
+        {
+            "ls": [
+                [str(i), str(2 * i)] if i % 2 else [] for i in range(num_rows)
+            ],
+            "lls": [
+                [[str(i), str(2 * i)]] if i % 2 else [[], []]
+                for i in range(num_rows)
+            ],
+            "li": [
+                [i, i * i, i % 2] if i % 3 else [] for i in range(num_rows)
+            ],
+            "lli": [
+                [[i], [i * i], [i % 2]] if i % 3 else [[]]
+                for i in range(num_rows)
+            ],
+            "ld": [
+                [dec(i), dec(i / 2)] if i % 5 else [] for i in range(num_rows)
+            ],
+        }
+    )
+
+    buffer = BytesIO()
+    cudf.from_pandas(pdf_in).to_orc(buffer)
+
+    pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
+    assert_eq(pdf_out, pdf_in)
+
+
+def test_orc_writer_list_var_len():
+    num_rows = 123
+    pdf_in = pd.DataFrame(
+        {
+            "ls": [[str(i)] * i for i in range(num_rows)],
+            "li": [[i, i * i] * i for i in range(num_rows)],
+            "ld": [[dec(i), dec(i / 2)] * i for i in range(num_rows)],
+        }
+    )
+
+    buffer = BytesIO()
+    cudf.from_pandas(pdf_in).to_orc(buffer)
+
+    pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
+    assert_eq(pdf_out, pdf_in)
+
+def test_chunked_orc_writer_lists():
+    num_rows = 12345
+    pdf_in = pd.DataFrame(
+        {
+            "ls": [[str(i), str(2 * i)] for i in range(num_rows)],
+            "ld": [[dec(i / 2)] * 5 for i in range(num_rows)],
+        }
+    )
+
+    gdf = cudf.from_pandas(pdf_in)
+    expect = pd.concat([pdf_in, pdf_in]).reset_index(drop=True)
+
+    buffer = BytesIO()
+    writer = ORCWriter(buffer)
+    writer.write_table(gdf)
+    writer.write_table(gdf)
+    writer.close()
+
+    got = pa.orc.ORCFile(buffer).read().to_pandas()
+    assert_eq(expect, got)

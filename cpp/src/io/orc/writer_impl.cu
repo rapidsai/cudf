@@ -435,7 +435,7 @@ void writer::impl::build_dictionaries(orc_table_view& orc_table,
   stripe_dict.device_to_host(stream, true);
 }
 
-size_t RLE_stream_size(TypeKind kind, size_t count)
+constexpr size_t RLE_stream_size(TypeKind kind, size_t count)
 {
   using cudf::util::div_rounding_up_unsafe;
   switch (kind) {
@@ -466,8 +466,6 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
   std::vector<int32_t> ids(columns.size() * gpu::CI_NUM_STREAMS, -1);
 
   for (auto& column : columns) {
-    TypeKind const kind = column.orc_kind();
-
     auto const is_nullable = [&]() -> bool {
       if (single_write_mode) {
         return column.nullable();
@@ -490,6 +488,8 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
                  RLE_stream_size(type_kind, segmentation.rowgroups[rg_idx][column.index()].size());
         });
     };
+
+    auto const kind = column.orc_kind();
 
     auto add_stream =
       [&](gpu::StreamIndexType index_type, StreamKind kind, TypeKind type_kind, size_t size) {
@@ -1146,11 +1146,14 @@ void __device__ append_orc_device_column(uint32_t& idx,
   auto const current_idx = idx;
   cols[current_idx]      = orc_column_device_view{col, parent_idx};
   idx++;
-  if (col.type().id() == type_id::LIST)
+  if (col.type().id() == type_id::LIST) {
     append_orc_device_column(idx, current_idx, cols, col.child(1));
-  if (col.type().id() == type_id::STRUCT)
-    for (auto child_idx = 0; child_idx < col.num_child_columns(); ++child_idx)
+  }
+  if (col.type().id() == type_id::STRUCT) {
+    for (auto child_idx = 0; child_idx < col.num_child_columns(); ++child_idx) {
       append_orc_device_column(idx, current_idx, cols, col.child(child_idx));
+    }
+  }
 };
 
 orc_table_view make_orc_table_view(table_view const& table,
