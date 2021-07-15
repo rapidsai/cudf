@@ -21,10 +21,8 @@
 #include <cudf/ast/detail/linearizer.hpp>
 #include <cudf/ast/detail/transform.cuh>
 #include <cudf/ast/operators.hpp>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
+//#include <cudf/detail/null_mask.hpp>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/utilities/span.hpp>
 
 #include "join_common_utils.hpp"
 
