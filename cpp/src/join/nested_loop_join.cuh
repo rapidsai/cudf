@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include "hash_join.cuh"
+#include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 #include "join_kernels.cuh"
 

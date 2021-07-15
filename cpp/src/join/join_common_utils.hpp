@@ -33,9 +33,6 @@ constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
 constexpr int DEFAULT_JOIN_CACHE_SIZE = 128;
 constexpr size_type JoinNoneValue     = std::numeric_limits<size_type>::min();
 
-using VectorPair = std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-                             std::unique_ptr<rmm::device_uvector<size_type>>>;
-
 using multimap_type =
   concurrent_unordered_multimap<hash_value_type,
                                 size_type,
