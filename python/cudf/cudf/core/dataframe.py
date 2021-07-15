@@ -7477,6 +7477,25 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             "`.to_pandas().to_dict()` to construct a Python dictionary."
         )
 
+    def to_struct(self, name=None):
+        """
+        Return a struct Series composed of the columns of the DataFrame.
+        Note that no copies of the data are made.
+
+        Parameters
+        ----------
+        name: optional
+            Name of the resulting Series
+        """
+        col = cudf.core.column.build_struct_column(
+            names=self._data.names, children=self._data.columns, size=len(self)
+        )
+        return cudf.Series._from_data(
+            cudf.core.column_accessor.ColumnAccessor({name: col}),
+            index=self.index,
+            name=name,
+        )
+
     def keys(self):
         """
         Get the columns.
