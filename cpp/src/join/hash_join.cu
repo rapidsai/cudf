@@ -90,12 +90,11 @@ struct valid_range {
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-get_left_join_indices_complement(
-  std::unique_ptr<rmm::device_uvector<size_type>>& right_indices,
-  size_type left_table_row_count,
-  size_type right_table_row_count,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>& right_indices,
+                                 size_type left_table_row_count,
+                                 size_type right_table_row_count,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   // Get array of indices that do not appear in right_indices
 
@@ -342,7 +341,7 @@ std::size_t get_full_join_size(cudf::table_device_view build_table,
                                                                              right_indices->data(),
                                                                              write_index.data(),
                                                                              join_size);
-  // Rlease intermediate memory alloation
+  // Release intermediate memory allocation
   left_indices->resize(0, stream);
 
   auto const left_table_row_count  = probe_table.num_rows();

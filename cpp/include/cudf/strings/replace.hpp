@@ -36,7 +36,7 @@ namespace strings {
  * input string. If not found, the output entry is just a copy of the
  * corresponding input string.
  *
- * Specifing an empty string for repl will essentially remove the target
+ * Specifying an empty string for repl will essentially remove the target
  * string if found in each string.
  *
  * Null string entries will return null output string entries.

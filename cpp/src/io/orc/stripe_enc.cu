@@ -115,9 +115,9 @@ static inline __device__ uint32_t CountLeadingBytes64(uint64_t v) { return __clz
 /**
  * @brief Raw data output
  *
- * @param[in] cid stream type (strm_pos[cid] will be updated and output stored at
- *streams[cid]+strm_pos[cid])
- * @param[in] inmask input buffer position mask for circular buffers
+ * @tparam cid stream type (strm_pos[cid] will be updated and output stored at
+ * streams[cid]+strm_pos[cid])
+ * @tparam inmask input buffer position mask for circular buffers
  * @param[in] s encoder state
  * @param[in] inbuf base input buffer
  * @param[in] inpos position in input buffer
@@ -143,12 +143,12 @@ static __device__ void StoreBytes(
 /**
  * @brief ByteRLE encoder
  *
- * @param[in] cid stream type (strm_pos[cid] will be updated and output stored at
- *streams[cid]+strm_pos[cid])
+ * @tparam cid stream type (strm_pos[cid] will be updated and output stored at
+ * streams[cid]+strm_pos[cid])
+ * @tparam inmask input buffer position mask for circular buffers
  * @param[in] s encoder state
  * @param[in] inbuf base input buffer
  * @param[in] inpos position in input buffer
- * @param[in] inmask input buffer position mask for circular buffers
  * @param[in] numvals max number of values to encode
  * @param[in] flush encode all remaining values if nonzero
  * @param[in] t thread id
@@ -324,12 +324,12 @@ static inline __device__ void StoreBitsBigEndian(
 /**
  * @brief Integer RLEv2 encoder
  *
- * @param[in] cid stream type (strm_pos[cid] will be updated and output stored at
- *streams[cid]+strm_pos[cid])
+ * @tparam cid stream type (strm_pos[cid] will be updated and output stored at
+ * streams[cid]+strm_pos[cid])
+ * @tparam inmask input buffer position mask for circular buffers
  * @param[in] s encoder state
  * @param[in] inbuf base input buffer
  * @param[in] inpos position in input buffer
- * @param[in] inmask input buffer position mask for circular buffers
  * @param[in] numvals max number of values to encode
  * @param[in] flush encode all remaining values if nonzero
  * @param[in] t thread id
@@ -619,7 +619,7 @@ static const __device__ __constant__ int32_t kTimeScale[10] = {
  * @brief Encode column data
  *
  * @param[in] chunks encoder chunks device array [column][rowgroup]
- * @param[in, out] chunks cunk streams device array [column][rowgroup]
+ * @param[in, out] streams chunk streams device array [column][rowgroup]
  */
 // blockDim {512,1,1}
 template <int block_size>

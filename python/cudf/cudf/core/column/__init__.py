@@ -1,4 +1,8 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+"""
+isort: skip_file
+"""
+
 
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
@@ -12,6 +16,7 @@ from cudf.core.column.column import (
     column_empty,
     column_empty_like,
     column_empty_like_same_mask,
+    concat_columns,
     deserialize_columns,
     full,
     serialize_columns,
@@ -27,3 +32,4 @@ from cudf.core.column.decimal import (  # noqa: F401
     Decimal32Column,
     Decimal64Column,
 )
+from cudf.core.column.interval import IntervalColumn  # noqa: F401

@@ -171,7 +171,7 @@ void check_float_column(cudf::column_view const& col_lhs,
 }
 
 // timestamp column checker within tolerance
-// given by `tol_ms` (miliseconds)
+// given by `tol_ms` (milliseconds)
 void check_timestamp_column(cudf::column_view const& col_lhs,
                             cudf::column_view const& col_rhs,
                             long tol_ms = 1000l)

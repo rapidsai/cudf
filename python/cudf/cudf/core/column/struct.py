@@ -6,7 +6,7 @@ import pyarrow as pa
 import cudf
 from cudf._typing import Dtype
 from cudf.core.column import ColumnBase, build_struct_column
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
 from cudf.utils.dtypes import is_struct_dtype
 
@@ -20,7 +20,7 @@ class StructColumn(ColumnBase):
 
     """
 
-    dtype: cudf.core.dtypes.StructDtype
+    dtype: StructDtype
 
     @property
     def base_size(self):
@@ -89,14 +89,20 @@ class StructColumn(ColumnBase):
             }
         return result
 
+    def __setitem__(self, key, value):
+        if isinstance(value, dict):
+            # filling in fields not in dict
+            for field in self.dtype.fields:
+                value[field] = value.get(field, cudf.NA)
+
+            value = cudf.Scalar(value, self.dtype)
+        super().__setitem__(key, value)
+
     def copy(self, deep=True):
         result = super().copy(deep=deep)
         if deep:
             result = result._rename_fields(self.dtype.fields.keys())
         return result
-
-    def struct(self, parent=None):
-        return StructMethods(self, parent=parent)
 
     def _rename_fields(self, names):
         """
@@ -139,17 +145,17 @@ class StructColumn(ColumnBase):
         return self
 
 
-class StructMethods(ColumnMethodsMixin):
+class StructMethods(ColumnMethods):
     """
     Struct methods for Series
     """
 
-    def __init__(self, column, parent=None):
-        if not is_struct_dtype(column.dtype):
+    def __init__(self, parent=None):
+        if not is_struct_dtype(parent.dtype):
             raise AttributeError(
                 "Can only use .struct accessor with a 'struct' dtype"
             )
-        super().__init__(column=column, parent=parent)
+        super().__init__(parent=parent)
 
     def field(self, key):
         """
