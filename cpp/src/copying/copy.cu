@@ -159,7 +159,19 @@ class logical_not {
 /**
  * @brief Implementation of copy_if_else() with gather()/scatter().
  *
- * Handles nested-typed columns and scalars
+ * Handles nested-typed column views. Uses the iterator `is_left` to decide what row to pick for
+ * the output column.
+ *
+ * Uses `rhs` as the destination for scatter. First gathers indices of rows to copy from lhs.
+ *
+ * @tparam Filter Bool iterator producing `true` for indices of output rows to copy from `lhs` and
+ * `false` for indices of output rows to copy from `rhs`
+ * @param lhs Left-hand side input column view
+ * @param rhs Right-hand side input column view
+ * @param size The size of the output column, inputs rows are iterated from 0 to `size - 1`
+ * @param is_left Predicate for picking rows from `lhs` on `true` or `rhs` on `false`
+ * @param stream The stream on which to perform the allocation
+ * @param mr The resource used to allocate the device storage
  */
 template <typename Filter>
 std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lhs,
