@@ -51,7 +51,7 @@ dependencies:
   - hypothesis
   - sphinx-markdown-tables
   - sphinx-copybutton
-  - mimesis
+  - mimesis<4.1
   - packaging
   - protobuf
   - nvtx>=0.2.1

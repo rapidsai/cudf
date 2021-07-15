@@ -677,7 +677,7 @@ class ColumnBase(Column, Serializable):
         return indices[-1]
 
     def append(self, other: ColumnBase) -> ColumnBase:
-        return _concat_columns([self, as_column(other)])
+        return concat_columns([self, as_column(other)])
 
     def quantile(
         self,
@@ -2299,7 +2299,7 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
 
 
-def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
+def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
         dtype = pandas_dtype(None)
