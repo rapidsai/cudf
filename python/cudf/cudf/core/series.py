@@ -32,7 +32,7 @@ from cudf.core.column import (
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
 )
-from cudf.core.column.column import _concat_columns
+from cudf.core.column.column import concat_columns
 from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
@@ -2336,22 +2336,22 @@ class Series(SingleColumnFrame, Serializable):
     @copy_docstring(CategoricalAccessor.__init__)  # type: ignore
     @property
     def cat(self):
-        return CategoricalAccessor(column=self._column, parent=self)
+        return CategoricalAccessor(parent=self)
 
     @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
-        return StringMethods(column=self._column, parent=self)
+        return StringMethods(parent=self)
 
     @copy_docstring(ListMethods.__init__)  # type: ignore
     @property
     def list(self):
-        return ListMethods(column=self._column, parent=self)
+        return ListMethods(parent=self)
 
     @copy_docstring(StructMethods.__init__)  # type: ignore
     @property
     def struct(self):
-        return StructMethods(column=self._column, parent=self)
+        return StructMethods(parent=self)
 
     @property
     def dtype(self):
@@ -2412,7 +2412,7 @@ class Series(SingleColumnFrame, Serializable):
                 common_dtype = find_common_type([obj.dtype for obj in objs])
                 objs = [obj.astype(common_dtype) for obj in objs]
 
-        col = _concat_columns([o._column for o in objs])
+        col = concat_columns([o._column for o in objs])
 
         if isinstance(col, cudf.core.column.Decimal64Column):
             col = col._with_type_metadata(objs[0]._column.dtype)
