@@ -31,10 +31,13 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <rmm/device_uvector.hpp>
 
+#include <algorithm>
 #include <limits>
+#include <random>
 #include <type_traits>
+#include <vector>
 
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
@@ -405,6 +408,48 @@ TEST_F(TransformTest, PyMod)
 
   auto result   = cudf::ast::compute_column(table, expression);
   auto expected = column_wrapper<double>{1.0, 0.0, 1.0, 0.0};
+
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
+TEST_F(TransformTest, BasicAdditionNulls)
+{
+  auto c_0   = column_wrapper<int32_t>{{3, 20, 1, 50}, {0, 0, 1, 1}};
+  auto c_1   = column_wrapper<int32_t>{{10, 7, 20, 0}, {0, 1, 0, 1}};
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
+
+  auto expected = column_wrapper<int32_t>{{0, 0, 0, 50}, {0, 0, 0, 1}};
+  auto result   = cudf::ast::compute_column(table, expression);
+
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
+TEST_F(TransformTest, BasicAdditionLargeNulls)
+{
+  auto N = 2000;
+  auto a = thrust::make_counting_iterator(0);
+
+  auto validities = std::vector<int32_t>(N);
+  std::fill(validities.begin(), validities.begin() + N / 2, 0);
+  std::fill(validities.begin() + (N / 2), validities.end(), 0);
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::shuffle(validities.begin(), validities.end(), gen);
+
+  auto col   = column_wrapper<int32_t>(a, a + N, validities.begin());
+  auto table = cudf::table_view{{col}};
+
+  auto col_ref    = cudf::ast::column_reference(0);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::ADD, col_ref, col_ref);
+
+  auto b        = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
+  auto expected = column_wrapper<int32_t>(b, b + N, validities.begin());
+  auto result   = cudf::ast::compute_column(table, expression);
 
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }

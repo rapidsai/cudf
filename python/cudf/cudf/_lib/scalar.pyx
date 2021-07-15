@@ -326,7 +326,7 @@ cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
     else:
         pyarrow_table = pa.Table.from_arrays(
             [
-                pa.array([], from_pandas=True, type=f.type)
+                pa.array([cudf.NA], from_pandas=True, type=f.type)
                 for f in arrow_schema
             ],
             names=columns
