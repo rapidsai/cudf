@@ -164,11 +164,11 @@ namespace {
  * updated
  */
 template <typename OffsetIterator, typename OutputIterator>
-__global__ void subtract_set_bits_range_boundaries_kerenel(bitmask_type const* bitmask,
-                                                           size_type num_ranges,
-                                                           OffsetIterator first_bit_indices,
-                                                           OffsetIterator last_bit_indices,
-                                                           OutputIterator null_counts)
+__global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bitmask,
+                                                          size_type num_ranges,
+                                                          OffsetIterator first_bit_indices,
+                                                          OffsetIterator last_bit_indices,
+                                                          OutputIterator null_counts)
 {
   constexpr size_type const word_size_in_bits{detail::size_in_bits<bitmask_type>()};
 
@@ -357,10 +357,10 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
 
   cudf::detail::grid_1d grid(num_ranges, block_size);
 
-  subtract_set_bits_range_boundaries_kerenel<<<grid.num_blocks,
-                                               grid.num_threads_per_block,
-                                               0,
-                                               stream.value()>>>(
+  subtract_set_bits_range_boundaries_kernel<<<grid.num_blocks,
+                                              grid.num_threads_per_block,
+                                              0,
+                                              stream.value()>>>(
     bitmask, num_ranges, d_first_indices.begin(), d_last_indices.begin(), d_null_counts.begin());
 
   CHECK_CUDA(stream.value());
