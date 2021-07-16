@@ -31,35 +31,11 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/optional.h>
-
 namespace cudf {
 
 namespace ast {
 
 namespace detail {
-
-// Type trait for wrapping nullable types in a thrust::optional. Non-nullable
-// types are returned as is.
-template <typename T, bool has_nulls>
-struct possibly_null_value;
-
-template <typename T>
-struct possibly_null_value<T, true> {
-  using type = thrust::optional<T>;
-};
-
-template <typename T>
-struct possibly_null_value<T, false> {
-  using type = T;
-};
-
-template <typename T, bool has_nulls>
-using possibly_null_value_t = typename possibly_null_value<T, has_nulls>::type;
-
-// Type used for intermediate storage in expression evaluation.
-template <bool has_nulls>
-using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
 
 /**
  * @brief A container for capturing the output of an evaluated expression.
@@ -211,150 +187,6 @@ struct mutable_column_expression_result
   }
 
   mutable_column_device_view& _obj;  ///< The column to which the data is written.
-};
-
-/**
- * @brief A container of all device data required to evaluate an expression on tables.
- *
- * This struct should never be instantiated directly. It is created by the
- * `ast_plan` on construction, and the resulting member is publicly accessible
- * for passing to kernels for constructing an `expression_evaluator`.
- *
- */
-struct device_ast_plan {
-  device_span<const detail::device_data_reference> data_references;
-  device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals;
-  device_span<const ast_operator> operators;
-  device_span<const cudf::size_type> operator_source_indices;
-  cudf::size_type num_intermediates;
-  int shmem_per_thread;
-};
-
-/**
- * @brief Preprocessor for an expression acting on tables to generate data suitable for AST
- * expression evaluation on the GPU.
- *
- * On construction, an AST plan creates a single "packed" host buffer of all
- * data arrays that will be necessary to evaluate an expression on a pair of
- * tables. This data is copied to a single contiguous device buffer, and
- * pointers are generated to the individual components. Because the plan tends
- * to be small, this is the most efficient approach for low latency. All the
- * data required on the GPU can be accessed via the convenient `dev_plan`
- * member struct, which can be used to construct an `expression_evaluator` on
- * the device.
- *
- * Note that the resulting device data cannot be used once this class goes out of scope.
- */
-struct ast_plan {
-  /**
-   * @brief Construct an AST plan for an expression operating on two tables.
-   *
-   * @param expr The expression for which to construct a plan.
-   * @param left The left table on which the expression acts.
-   * @param right The right table on which the expression acts.
-   * @param has_nulls Boolean indicator of whether or not the data contains nulls.
-   * @param stream Stream view on which to allocate resources and queue execution.
-   * @param mr Device memory resource used to allocate the returned column's device.
-   */
-  ast_plan(detail::node const& expr,
-           cudf::table_view left,
-           cudf::table_view right,
-           bool has_nulls,
-           rmm::cuda_stream_view stream,
-           rmm::mr::device_memory_resource* mr)
-    : _linearizer(expr, left, right)
-  {
-    std::vector<cudf::size_type> sizes;
-    std::vector<const void*> data_pointers;
-
-    extract_size_and_pointer(_linearizer.data_references(), sizes, data_pointers);
-    extract_size_and_pointer(_linearizer.literals(), sizes, data_pointers);
-    extract_size_and_pointer(_linearizer.operators(), sizes, data_pointers);
-    extract_size_and_pointer(_linearizer.operator_source_indices(), sizes, data_pointers);
-
-    // Create device buffer
-    auto const buffer_size = std::accumulate(sizes.cbegin(), sizes.cend(), 0);
-    auto buffer_offsets    = std::vector<int>(sizes.size());
-    thrust::exclusive_scan(sizes.cbegin(), sizes.cend(), buffer_offsets.begin(), 0);
-
-    auto h_data_buffer = std::make_unique<char[]>(buffer_size);
-    for (unsigned int i = 0; i < data_pointers.size(); ++i) {
-      std::memcpy(h_data_buffer.get() + buffer_offsets[i], data_pointers[i], sizes[i]);
-    }
-
-    _device_data_buffer = rmm::device_buffer(h_data_buffer.get(), buffer_size, stream, mr);
-
-    stream.synchronize();
-
-    // Create device pointers to components of plan
-    auto device_data_buffer_ptr = static_cast<const char*>(_device_data_buffer.data());
-    dev_plan.data_references    = device_span<const detail::device_data_reference>(
-      reinterpret_cast<const detail::device_data_reference*>(device_data_buffer_ptr +
-                                                             buffer_offsets[0]),
-      _linearizer.data_references().size());
-    dev_plan.literals = device_span<const cudf::detail::fixed_width_scalar_device_view_base>(
-      reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
-        device_data_buffer_ptr + buffer_offsets[1]),
-      _linearizer.literals().size());
-    dev_plan.operators = device_span<const ast_operator>(
-      reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]),
-      _linearizer.operators().size());
-    dev_plan.operator_source_indices = device_span<const cudf::size_type>(
-      reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
-      _linearizer.operator_source_indices().size());
-    dev_plan.num_intermediates = _linearizer.intermediate_count();
-    dev_plan.shmem_per_thread  = static_cast<int>(
-      (has_nulls ? sizeof(IntermediateDataType<true>) : sizeof(IntermediateDataType<false>)) *
-      dev_plan.num_intermediates);
-  }
-
-  /**
-   * @brief Construct an AST plan for an expression operating on one table.
-   *
-   * @param expr The expression for which to construct a plan.
-   * @param table The table on which the expression acts.
-   * @param has_nulls Boolean indicator of whether or not the data contains nulls.
-   * @param stream Stream view on which to allocate resources and queue execution.
-   * @param mr Device memory resource used to allocate the returned column's device.
-   */
-  ast_plan(detail::node const& expr,
-           cudf::table_view table,
-           bool has_nulls,
-           rmm::cuda_stream_view stream,
-           rmm::mr::device_memory_resource* mr)
-    : ast_plan(expr, table, table, has_nulls, stream, mr)
-  {
-  }
-
-  cudf::data_type output_type() const { return _linearizer.root_data_type(); }
-
-  device_ast_plan
-    dev_plan;  ///< The collection of data required to evaluate the expression on the device.
-
- private:
-  /**
-   * @brief Helper function for adding components (operators, literals, etc) to AST plan
-   *
-   * @tparam T  The underlying type of the input `std::vector`
-   * @param[in]  v  The `std::vector` containing components (operators, literals, etc).
-   * @param[in,out]  sizes  The `std::vector` containing the size of each data buffer.
-   * @param[in,out]  data_pointers  The `std::vector` containing pointers to each data buffer.
-   */
-  template <typename T>
-  void extract_size_and_pointer(std::vector<T> const& v,
-                                std::vector<cudf::size_type>& sizes,
-                                std::vector<const void*>& data_pointers)
-  {
-    auto const data_size = sizeof(T) * v.size();
-    sizes.push_back(data_size);
-    data_pointers.push_back(v.data());
-  }
-
-  rmm::device_buffer
-    _device_data_buffer;  ///< The device-side data buffer containing the plan information, which is
-                          ///< owned by this class and persists until it is destroyed.
-  linearizer const _linearizer;  ///< The linearizer created from the provided expression that is
-                                 ///< used to construct device-side operators and references.
 };
 
 /**
