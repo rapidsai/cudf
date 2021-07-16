@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/ast/nodes.hpp>
 #include <cudf/transform.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -33,6 +34,24 @@ std::unique_ptr<column> transform(
   data_type output_type,
   bool is_ptx,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Compute a new column by evaluating an expression tree on a table.
+ *
+ * This evaluates an expression over a table to produce a new column. Also called an n-ary
+ * transform.
+ *
+ * @param table The table used for expression evaluation.
+ * @param expr The root of the expression tree.
+ * @param stream Stream on which to perform the computation.
+ * @param mr Device memory resource.
+ * @return std::unique_ptr<column> Output column.
+ */
+std::unique_ptr<column> compute_column(
+  table_view const table,
+  ast::expression const& expr,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
