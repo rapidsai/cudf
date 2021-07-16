@@ -20,7 +20,6 @@ except ImportError:
 
 from cudf.utils.dtypes import (
     cudf_dtypes_to_pandas_dtypes,
-    np_to_pa_dtype,
     is_categorical_dtype,
     is_decimal_dtype,
     is_list_dtype,
