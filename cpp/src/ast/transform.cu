@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/ast/detail/evaluator.cuh>
 #include <cudf/ast/detail/transform.cuh>
 #include <cudf/ast/nodes.hpp>
 #include <cudf/ast/operators.hpp>
