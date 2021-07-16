@@ -37,6 +37,8 @@ namespace cudf {
 namespace test {
 namespace binop {
 
+constexpr debug_output_level verbosity{debug_output_level::ALL_ERRORS};
+
 struct BinaryOperationIntegrationTest : public BinaryOperationTest {
 };
 
@@ -1089,7 +1091,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_SI32_SI32
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<bool>{{true, false, false, false}, {true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_ScalarInvalid_B8_SI32_SI32)
@@ -1112,7 +1114,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_ScalarInvalid_B8_SI
                                    {true, false, true, false, false, true},
                                    {true, true, true, true, true, true},
                                  },
-                                 true);
+                                 verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_tsD_tsD)
@@ -1144,7 +1146,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_tsD_tsD)
                                    {false, false, true, false, false, false, false, false},
                                    {true, true, true, true, true, true, true, true},
                                  },
-                                 true);
+                                 verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_string_EmptyString)
@@ -1164,7 +1166,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, false, true, false, false, false},
                                      {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_string_ValidString)
@@ -1184,7 +1186,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, true, false, false, false, false},
                                      {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_string_NoMatch)
@@ -1205,7 +1207,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, false, false, false, false, false},
                                      {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_string_NullNonNull)
@@ -1227,7 +1229,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, false, false, false, false, false},
                                      {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_string_NullNonNull)
@@ -1249,7 +1251,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, false, false, false, false, false},
                                      {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_string_NullNull)
@@ -1272,7 +1274,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
     *op_col,
     fixed_width_column_wrapper<bool>{{true, true, true, true, true, true, true},
                                      {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_string_MatchInvalid)
@@ -1292,7 +1294,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, false, false, false, false, false},
                                      {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_InvalidScalar_B8_string_string)
@@ -1313,7 +1315,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_InvalidScalar_B8_st
     *op_col,
     fixed_width_column_wrapper<bool>{{false, true, false, false, false, true, false},
                                      {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_tsD_tsD_NonNullable)
@@ -1347,7 +1349,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_tsD_tsD_N
                                    {true, false, true, false, true},
                                    {true, true, true, true, true},
                                  },
-                                 true);
+                                 verbosity);
 }
 
 // Both vectors with mixed validity
@@ -1370,7 +1372,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, true, true, false, true, true},
                                      {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_string_MixValid)
@@ -1391,7 +1393,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     *op_col,
     fixed_width_column_wrapper<bool>{{true, false, true, true, true, false, true},
                                      {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_string_MixInvalid)
@@ -1413,7 +1415,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     *op_col,
     fixed_width_column_wrapper<bool>{{false, true, false, false, false, true, false},
                                      {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_string_ValidValid)
@@ -1433,7 +1435,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     *op_col,
     fixed_width_column_wrapper<bool>{{true, true, true, true, true, true, true},
                                      {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_string_ValidInvalid)
@@ -1454,7 +1456,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, false, false, false, false, false},
                                      {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_string_InvalidInvalid)
@@ -1476,7 +1478,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     *op_col,
     fixed_width_column_wrapper<bool>{{true, true, true, true, true, true, true},
                                      {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_VectorAllInvalid_B8_SI32_SI32)
@@ -1498,7 +1500,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_VectorAllInvalid_B8
                                    {true, true, true, true, true, true},
                                    {true, true, true, true, true, true},
                                  },
-                                 true);
+                                 verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_SI64_SI32_SI8)
@@ -1517,7 +1519,9 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_SI64_SI32_SI8)
 
   // Every row has a value
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    *op_col, fixed_width_column_wrapper<TypeOut>{{77, -37, 0, 77}, {true, true, true, true}}, true);
+    *op_col,
+    fixed_width_column_wrapper<TypeOut>{{77, -37, 0, 77}, {true, true, true, true}},
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_FP64_SI32_SI64)
@@ -1540,7 +1544,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_FP64_SI32_SI64
     fixed_width_column_wrapper<TypeOut>{
       {INT32_MAX, INT32_MAX, INT32_MAX, INT32_MAX, INT32_MAX, INT32_MAX, INT32_MAX},
       {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_SI64_SI32_FP32)
@@ -1563,7 +1567,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_SI64_SI32_FP32
     *op_col,
     fixed_width_column_wrapper<TypeOut>{{0, -37, 0, INT32_MAX, 0, -4379, 0},
                                         {false, true, false, true, false, true, false}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_SI8_SI8_FP32)
@@ -1585,7 +1589,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_SI8_SI8_FP32)
     *op_col,
     fixed_width_column_wrapper<TypeOut>{{0, 0, 0, 0, 0, 0, 0},
                                         {false, false, false, false, false, false, false}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_SI64_SI32_SI8)
@@ -1607,7 +1611,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_SI64_SI32_SI8)
     *op_col,
     fixed_width_column_wrapper<TypeOut>{{0, 0, 0, 0, 0, 0, 0},
                                         {false, false, false, false, false, false, false}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI64_SI32_SI8)
@@ -1628,7 +1632,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI64_SI32_SI8)
     *op_col,
     fixed_width_column_wrapper<TypeOut>{{999, -37, 0, INT32_MAX, -INT32_MAX, -4379, 55},
                                         {true, true, true, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_tsD_tsD_tsD)
@@ -1660,7 +1664,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_tsD_tsD_tsD)
     *op_col,
     fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
       {0, 44380, 47695, 66068, 0}, {true, true, true, true, false}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI32_SI64_SI8)
@@ -1682,7 +1686,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI32_SI64_SI8)
     *op_col,
     fixed_width_column_wrapper<TypeOut>{{9, 0, 0, 0, -47, 0, 55},
                                         {true, false, true, false, true, false, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_string_string_string_Mix)
@@ -1701,7 +1705,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_string_string_
     {"", "invalid", "<null>", "", "", "", "ééé", "", "", "def", "def"},
     {false, true, true, true, true, true, true, false, false, true, true});
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*op_col, exp_col, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*op_col, exp_col, verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_string_string_string_Mix)
@@ -1719,7 +1723,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_string_string_
   auto exp_col = cudf::test::strings_column_wrapper(
     {"foo", "foo", "<null>", "foo", "", "", "foo", "foo", "foo", "abc", "foo"});
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*op_col, exp_col, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*op_col, exp_col, verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_string_string_string_Mix)
@@ -1738,7 +1742,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_string_string_
     {"", "invalid", "<null>", "", "", "", "ééé", "", "", "abc", "foo"},
     {false, true, true, false, true, true, true, false, false, true, true});
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*op_col, exp_col, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*op_col, exp_col, verbosity);
 }
 
 TEST_F(BinaryOperationIntegrationTest, CastAdd_Vector_Vector_SI32_float_float)
