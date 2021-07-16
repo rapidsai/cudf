@@ -339,7 +339,7 @@ class parquet_reader_options_builder {
   /**
    * @brief move parquet_reader_options member once it's built.
    */
-  operator parquet_reader_options &&() { return std::move(options); }
+  operator parquet_reader_options&&() { return std::move(options); }
 
   /**
    * @brief move parquet_reader_options member once it's built.
@@ -769,7 +769,7 @@ class parquet_writer_options_builder {
   /**
    * @brief move parquet_writer_options member once it's built.
    */
-  operator parquet_writer_options &&() { return std::move(options); }
+  operator parquet_writer_options&&() { return std::move(options); }
 
   /**
    * @brief move parquet_writer_options member once it's built.
@@ -973,7 +973,7 @@ class chunked_parquet_writer_options_builder {
    * @brief Set to true if timestamps should be written as
    * int96 types instead of int64 types. Even though int96 is deprecated and is
    * not an internal type for cudf, it needs to be written for backwards
-   * compatability reasons.
+   * compatibility reasons.
    *
    * @param enabled Boolean value to enable/disable int96 timestamps.
    * @return this for chaining.
@@ -987,7 +987,7 @@ class chunked_parquet_writer_options_builder {
   /**
    * @brief move chunked_parquet_writer_options member once it's built.
    */
-  operator chunked_parquet_writer_options &&() { return std::move(options); }
+  operator chunked_parquet_writer_options&&() { return std::move(options); }
 
   /**
    * @brief move chunked_parquet_writer_options member once it's is built.

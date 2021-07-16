@@ -251,9 +251,9 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
       }
     }
     if (null_or_empty[idx]) {
-      auto invalid_index = null_or_empty_offset_p[idx] == 0
-                             ? offsets[idx]
-                             : offsets[idx] + null_or_empty_offset_p[idx] - 1;
+      auto invalid_index          = null_or_empty_offset_p[idx] == 0
+                                      ? offsets[idx]
+                                      : offsets[idx] + null_or_empty_offset_p[idx] - 1;
       gather_map_p[invalid_index] = idx;
 
       explode_col_gather_map_p[invalid_index] = InvalidIndex;

@@ -52,7 +52,9 @@ __device__ inline size_type characters_in_string(const char* str, size_type byte
 #else
   size_type chars = 0;
   auto const end  = ptr + bytes;
-  while (ptr < end) { chars += is_begin_utf8_char(*ptr++); }
+  while (ptr < end) {
+    chars += is_begin_utf8_char(*ptr++);
+  }
   return chars;
 #endif
 }
@@ -133,7 +135,8 @@ __device__ inline string_view::const_iterator string_view::const_iterator::opera
 {
   const_iterator tmp(*this);
   size_type adjust = abs(offset);
-  while (adjust-- > 0) offset > 0 ? ++tmp : --tmp;
+  while (adjust-- > 0)
+    offset > 0 ? ++tmp : --tmp;
   return tmp;
 }
 
@@ -141,7 +144,8 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
   string_view::const_iterator::difference_type offset)
 {
   size_type adjust = abs(offset);
-  while (adjust-- > 0) offset > 0 ? operator++() : operator--();
+  while (adjust-- > 0)
+    offset > 0 ? operator++() : operator--();
   return *this;
 }
 
@@ -165,7 +169,8 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
   string_view::const_iterator::difference_type offset)
 {
   size_type adjust = abs(offset);
-  while (adjust-- > 0) offset > 0 ? operator--() : operator++();
+  while (adjust-- > 0)
+    offset > 0 ? operator--() : operator++();
   return *this;
 }
 
@@ -174,7 +179,8 @@ __device__ inline string_view::const_iterator string_view::const_iterator::opera
 {
   const_iterator tmp(*this);
   size_type adjust = abs(offset);
-  while (adjust-- > 0) offset > 0 ? --tmp : ++tmp;
+  while (adjust-- > 0)
+    offset > 0 ? --tmp : ++tmp;
   return tmp;
 }
 
@@ -268,7 +274,8 @@ __device__ inline int string_view::compare(const char* data, size_type bytes) co
   size_type const len1      = size_bytes();
   const unsigned char* ptr1 = reinterpret_cast<const unsigned char*>(this->data());
   const unsigned char* ptr2 = reinterpret_cast<const unsigned char*>(data);
-  size_type idx             = 0;
+  if ((ptr1 == ptr2) && (bytes == len1)) return 0;
+  size_type idx = 0;
   for (; (idx < len1) && (idx < bytes); ++idx) {
     if (*ptr1 != *ptr2) return static_cast<int32_t>(*ptr1) - static_cast<int32_t>(*ptr2);
     ++ptr1;
@@ -339,7 +346,8 @@ __device__ inline size_type string_view::find(const char* str,
   const char* ptr2 = str;
   for (size_type idx = 0; idx < len1; ++idx) {
     bool match = true;
-    for (size_type jdx = 0; match && (jdx < len2); ++jdx) match = (ptr1[jdx] == ptr2[jdx]);
+    for (size_type jdx = 0; match && (jdx < len2); ++jdx)
+      match = (ptr1[jdx] == ptr2[jdx]);
     if (match) return character_offset(idx + spos);
     ptr1++;
   }
@@ -380,7 +388,8 @@ __device__ inline size_type string_view::rfind(const char* str,
   const char* ptr2 = str;
   for (int idx = 0; idx < len1; ++idx) {
     bool match = true;
-    for (size_type jdx = 0; match && (jdx < len2); ++jdx) match = (ptr1[jdx] == ptr2[jdx]);
+    for (size_type jdx = 0; match && (jdx < len2); ++jdx)
+      match = (ptr1[jdx] == ptr2[jdx]);
     if (match) return character_offset(epos - len2 - idx);
     ptr1--;  // go backwards
   }

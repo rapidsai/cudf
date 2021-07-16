@@ -56,8 +56,8 @@ struct contains_fn {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str = d_strings.element<string_view>(idx);
     int32_t begin     = 0;
-    int32_t end       = bmatch ? 1  // match only the beginning of the string;
-                         : -1;      // this handles empty strings too
+    int32_t end       = bmatch ? 1    // match only the beginning of the string;
+                               : -1;  // this handles empty strings too
     return static_cast<bool>(prog.find<stack_size>(idx, d_str, begin, end));
   }
 };

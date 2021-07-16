@@ -1,18 +1,16 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libcpp.memory cimport unique_ptr
-from libcpp.vector cimport vector
-from libcpp.pair cimport pair
 from libcpp cimport bool
-from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr
+from libcpp.pair cimport pair
+from libcpp.vector cimport vector
+
+from rmm._lib.device_uvector cimport device_uvector
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from rmm._lib.device_uvector cimport device_uvector
-
 
 ctypedef unique_ptr[device_uvector[size_type]] gather_map_type
 
