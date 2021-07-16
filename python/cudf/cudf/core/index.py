@@ -13,6 +13,7 @@ from nvtx import annotate
 from pandas._config import get_option
 
 import cudf
+from cudf._lib.datetime import is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.table import Table
@@ -35,7 +36,7 @@ from cudf.core.column import (
     arange,
     column,
 )
-from cudf.core.column.column import _concat_columns, as_column
+from cudf.core.column.column import as_column, concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import SingleColumnFrame
@@ -587,7 +588,7 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
     @classmethod
     def _concat(cls, objs):
-        data = _concat_columns([o._values for o in objs])
+        data = concat_columns([o._values for o in objs])
         names = {obj.name for obj in objs}
         if len(names) == 1:
             [name] = names
@@ -2343,6 +2344,24 @@ class DatetimeIndex(GenericIndex):
         """
         return self._get_dt_field("day_of_year")
 
+    @property
+    def is_leap_year(self):
+        """
+        Boolean indicator if the date belongs to a leap year.
+
+        A leap year is a year, which has 366 days (instead of 365) including
+        29th of February as an intercalary day. Leap years are years which are
+        multiples of four with the exception of years divisible by 100 but not
+        by 400.
+
+        Returns
+        -------
+        ndarray
+        Booleans indicating if dates belong to a leap year.
+        """
+        res = is_leap_year(self._values).fillna(False)
+        return cupy.asarray(res)
+
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
@@ -2569,17 +2588,13 @@ class CategoricalIndex(GenericIndex):
             dtype = None
 
         if categories is not None:
-            data.cat().set_categories(
-                categories, ordered=ordered, inplace=True
-            )
+            data = data.set_categories(categories, ordered=ordered)
         elif isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
-            data.cat().set_categories(
-                dtype.categories, ordered=ordered, inplace=True
-            )
+            data = data.set_categories(dtype.categories, ordered=ordered)
         elif ordered is True and data.ordered is False:
-            data.cat().as_ordered(inplace=True)
+            data = data.as_ordered()
         elif ordered is False and data.ordered is True:
-            data.cat().as_unordered(inplace=True)
+            data = data.as_unordered()
 
         super().__init__(data, **kwargs)
 
@@ -2588,14 +2603,14 @@ class CategoricalIndex(GenericIndex):
         """
         The category codes of this categorical.
         """
-        return self._values.cat().codes
+        return as_index(self._values.codes)
 
     @property
     def categories(self):
         """
         The categories of this categorical.
         """
-        return self._values.cat().categories
+        return as_index(self._values.categories)
 
 
 def interval_range(
@@ -2871,7 +2886,7 @@ class StringIndex(GenericIndex):
     @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
-        return StringMethods(column=self._values, parent=self)
+        return StringMethods(parent=self)
 
     def _clean_nulls_from_index(self):
         """

@@ -113,7 +113,9 @@ static void CustomRanges(benchmark::internal::Benchmark* b)
   auto row_counts       = std::vector<cudf::size_type>{100'000, 1'000'000, 10'000'000, 100'000'000};
   auto operation_counts = std::vector<cudf::size_type>{1, 2, 5, 10};
   for (auto const& row_count : row_counts) {
-    for (auto const& operation_count : operation_counts) { b->Args({row_count, operation_count}); }
+    for (auto const& operation_count : operation_counts) {
+      b->Args({row_count, operation_count});
+    }
   }
 }
 

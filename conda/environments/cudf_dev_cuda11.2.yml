@@ -7,8 +7,8 @@ channels:
   - rapidsai-nightly
   - conda-forge
 dependencies:
-  - clang=8.0.1
-  - clang-tools=8.0.1
+  - clang=11.0.0
+  - clang-tools=11.0.0
   - cupy>7.1.0,<10.0.0a0
   - rmm=21.08.*
   - cmake>=3.20.1
@@ -31,7 +31,6 @@ dependencies:
   - nbsphinx
   - numpydoc
   - ipython
-  - recommonmark
   - pandoc=<2.0.0
   - cudatoolkit=11.2
   - pip
@@ -49,11 +48,10 @@ dependencies:
   - arrow-cpp-proc * cuda
   - double-conversion
   - rapidjson
-  - flatbuffers
   - hypothesis
   - sphinx-markdown-tables
   - sphinx-copybutton
-  - mimesis
+  - mimesis<4.1
   - packaging
   - protobuf
   - nvtx>=0.2.1

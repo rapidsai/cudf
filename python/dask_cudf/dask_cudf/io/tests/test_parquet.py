@@ -428,17 +428,19 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     p1 = os.path.join(tmpdir, "part.1.parquet")
     df1.to_parquet(p1, engine="pyarrow")
 
-    with pytest.raises(RuntimeError):
-        # Pyarrow will fail to aggregate metadata
-        # if gather_statistics=True
-        dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()
+    # New pyarrow-dataset base can handle an incosistent
+    # schema even without a _metadata file
+    ddf1 = dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()
 
     # Add global metadata file.
     # Dask-CuDF can do this without requiring schema
-    # consistency.  Once the _metadata file is avaible,
-    # parsing metadata should no longer be a problem
+    # consistency.
     dask_cudf.io.parquet.create_metadata_file([p0, p1])
 
-    # Check that we can now read the ddf
+    # Check that we can still read the ddf
     # with the _metadata file present
-    dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()
+    ddf2 = dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()
+
+    # Check that the result is the same with
+    # and without the _metadata file
+    dd.assert_eq(ddf1, ddf2)

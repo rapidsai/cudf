@@ -267,7 +267,8 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     }
     digits_idx = std::max(digits_idx, min_digits);
     // digits are backwards, reverse the string into the output
-    while (digits_idx-- > 0) *str++ = digits[digits_idx];
+    while (digits_idx-- > 0)
+      *str++ = digits[digits_idx];
     return str;
   }
 

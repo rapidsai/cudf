@@ -60,7 +60,7 @@ template <typename T>
 std::string type_name()
 {
   int status;
-  char *realname;
+  char* realname;
   realname = abi::__cxa_demangle(typeid(T).name(), 0, 0, &status);
   std::string name{realname};
   free(realname);
@@ -86,15 +86,14 @@ TEST(TypeList, GetType)
 TEST(TypeList, Concat)
 {
   EXPECT_SAME_TYPE(Concat<>, Types<>);
-  EXPECT_SAME_TYPE((Concat<Types<long, void *, char *>>), (Types<long, void *, char *>));
+  EXPECT_SAME_TYPE((Concat<Types<long, void*, char*>>), (Types<long, void*, char*>));
 
-  EXPECT_SAME_TYPE((Concat<Types<long, void *, char *>, Types<float, char, double>>),
-                   (Types<long, void *, char *, float, char, double>));
+  EXPECT_SAME_TYPE((Concat<Types<long, void*, char*>, Types<float, char, double>>),
+                   (Types<long, void*, char*, float, char, double>));
 
-  EXPECT_SAME_TYPE((Concat<Types<long, void *, char *>,
-                           Types<float, char, double>,
-                           Types<int *, long *, unsigned>>),
-                   (Types<long, void *, char *, float, char, double, int *, long *, unsigned>));
+  EXPECT_SAME_TYPE(
+    (Concat<Types<long, void*, char*>, Types<float, char, double>, Types<int*, long*, unsigned>>),
+    (Types<long, void*, char*, float, char, double, int*, long*, unsigned>));
 }
 
 TEST(TypeList, Flatten)

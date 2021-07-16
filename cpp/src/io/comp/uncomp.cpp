@@ -106,32 +106,32 @@ struct bz2_file_header_s {
 #pragma pack(pop)
 
 struct gz_archive_s {
-  const gz_file_header_s *fhdr;
+  const gz_file_header_s* fhdr;
   uint16_t hcrc16;  // header crc16 if present
   uint16_t xlen;
-  const uint8_t *fxtra;      // xlen bytes (optional)
-  const uint8_t *fname;      // zero-terminated original filename if present
-  const uint8_t *fcomment;   // zero-terminated comment if present
-  const uint8_t *comp_data;  // compressed data
+  const uint8_t* fxtra;      // xlen bytes (optional)
+  const uint8_t* fname;      // zero-terminated original filename if present
+  const uint8_t* fcomment;   // zero-terminated comment if present
+  const uint8_t* comp_data;  // compressed data
   size_t comp_len;           // Compressed data length
   uint32_t crc32;            // CRC32 of uncompressed data
   uint32_t isize;            // Input size modulo 2^32
 };
 
 struct zip_archive_s {
-  const zip_eocd_s *eocd;    // end of central directory
-  const zip64_eocdl *eocdl;  // end of central dir locator (optional)
-  const zip_cdfh_s *cdfh;    // start of central directory file headers
+  const zip_eocd_s* eocd;    // end of central directory
+  const zip64_eocdl* eocdl;  // end of central dir locator (optional)
+  const zip_cdfh_s* cdfh;    // start of central directory file headers
 };
 
-bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
+bool ParseGZArchive(gz_archive_s* dst, const uint8_t* raw, size_t len)
 {
-  const gz_file_header_s *fhdr;
+  const gz_file_header_s* fhdr;
 
   if (!dst) return false;
   memset(dst, 0, sizeof(gz_archive_s));
   if (len < sizeof(gz_file_header_s) + 8) return false;
-  fhdr = reinterpret_cast<gz_file_header_s const *>(raw);
+  fhdr = reinterpret_cast<gz_file_header_s const*>(raw);
   if (fhdr->id1 != 0x1f || fhdr->id2 != 0x8b) return false;
   dst->fhdr = fhdr;
   raw += sizeof(gz_file_header_s);
@@ -188,7 +188,7 @@ bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
   return (fhdr->comp_mthd == 8 && len > 0);
 }
 
-bool OpenZipArchive(zip_archive_s *dst, const uint8_t *raw, size_t len)
+bool OpenZipArchive(zip_archive_s* dst, const uint8_t* raw, size_t len)
 {
   memset(dst, 0, sizeof(zip_archive_s));
   // Find the end of central directory
@@ -196,17 +196,17 @@ bool OpenZipArchive(zip_archive_s *dst, const uint8_t *raw, size_t len)
     for (ptrdiff_t i = len - sizeof(zip_eocd_s) - 2;
          i + sizeof(zip_eocd_s) + 2 + 0xffff >= len && i >= 0;
          i--) {
-      const zip_eocd_s *eocd = reinterpret_cast<zip_eocd_s const *>(raw + i);
+      const zip_eocd_s* eocd = reinterpret_cast<zip_eocd_s const*>(raw + i);
       if (eocd->sig == 0x06054b50 &&
           eocd->disk_id == eocd->start_disk  // multi-file archives not supported
           && eocd->num_entries == eocd->total_entries &&
           eocd->cdir_size >= sizeof(zip_cdfh_s) * eocd->num_entries && eocd->cdir_offset < len &&
-          i + *reinterpret_cast<const uint16_t *>(eocd + 1) <= static_cast<ptrdiff_t>(len)) {
-        const zip_cdfh_s *cdfh = reinterpret_cast<const zip_cdfh_s *>(raw + eocd->cdir_offset);
+          i + *reinterpret_cast<const uint16_t*>(eocd + 1) <= static_cast<ptrdiff_t>(len)) {
+        const zip_cdfh_s* cdfh = reinterpret_cast<const zip_cdfh_s*>(raw + eocd->cdir_offset);
         dst->eocd              = eocd;
         if (i >= static_cast<ptrdiff_t>(sizeof(zip64_eocdl))) {
-          const zip64_eocdl *eocdl =
-            reinterpret_cast<const zip64_eocdl *>(raw + i - sizeof(zip64_eocdl));
+          const zip64_eocdl* eocdl =
+            reinterpret_cast<const zip64_eocdl*>(raw + i - sizeof(zip64_eocdl));
           if (eocdl->sig == 0x07064b50) { dst->eocdl = eocdl; }
         }
         // Start of central directory
@@ -217,13 +217,13 @@ bool OpenZipArchive(zip_archive_s *dst, const uint8_t *raw, size_t len)
   return (dst->eocd && dst->cdfh);
 }
 
-int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data, size_t comp_len)
+int cpu_inflate(uint8_t* uncomp_data, size_t* destLen, const uint8_t* comp_data, size_t comp_len)
 {
   int zerr;
   z_stream strm;
 
   memset(&strm, 0, sizeof(strm));
-  strm.next_in   = const_cast<Bytef *>(reinterpret_cast<Bytef const *>(comp_data));
+  strm.next_in   = const_cast<Bytef*>(reinterpret_cast<Bytef const*>(comp_data));
   strm.avail_in  = comp_len;
   strm.total_in  = 0;
   strm.next_out  = uncomp_data;
@@ -250,16 +250,16 @@ int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data,
  * @param comp_data[in] Raw compressed data
  * @param comp_len[in] Compressed data size
  */
-int cpu_inflate_vector(std::vector<char> &dst, const uint8_t *comp_data, size_t comp_len)
+int cpu_inflate_vector(std::vector<char>& dst, const uint8_t* comp_data, size_t comp_len)
 {
   int zerr;
   z_stream strm;
 
   memset(&strm, 0, sizeof(strm));
-  strm.next_in   = const_cast<Bytef *>(reinterpret_cast<Bytef const *>(comp_data));
+  strm.next_in   = const_cast<Bytef*>(reinterpret_cast<Bytef const*>(comp_data));
   strm.avail_in  = comp_len;
   strm.total_in  = 0;
-  strm.next_out  = reinterpret_cast<uint8_t *>(dst.data());
+  strm.next_out  = reinterpret_cast<uint8_t*>(dst.data());
   strm.avail_out = dst.size();
   strm.total_out = 0;
   zerr           = inflateInit2(&strm, -15);  // -15 for raw data without GZIP headers
@@ -271,7 +271,7 @@ int cpu_inflate_vector(std::vector<char> &dst, const uint8_t *comp_data, size_t 
     if (strm.avail_out == 0) {
       dst.resize(strm.total_out + (1 << 30));
       strm.avail_out = dst.size() - strm.total_out;
-      strm.next_out  = reinterpret_cast<uint8_t *>(dst.data()) + strm.total_out;
+      strm.next_out  = reinterpret_cast<uint8_t*>(dst.data()) + strm.total_out;
     }
     zerr = inflate(&strm, Z_SYNC_FLUSH);
   } while ((zerr == Z_BUF_ERROR || zerr == Z_OK) && strm.avail_out == 0 &&
@@ -293,10 +293,10 @@ int cpu_inflate_vector(std::vector<char> &dst, const uint8_t *comp_data, size_t 
  *
  * @return Vector containing the uncompressed output
  */
-std::vector<char> io_uncompress_single_h2d(const void *src, size_t src_size, int stream_type)
+std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int stream_type)
 {
-  const uint8_t *raw       = static_cast<const uint8_t *>(src);
-  const uint8_t *comp_data = nullptr;
+  const uint8_t* raw       = static_cast<const uint8_t*>(src);
+  const uint8_t* comp_data = nullptr;
   size_t comp_len          = 0;
   size_t uncomp_len        = 0;
 
@@ -320,8 +320,8 @@ std::vector<char> io_uncompress_single_h2d(const void *src, size_t src_size, int
       if (OpenZipArchive(&za, raw, src_size)) {
         size_t cdfh_ofs = 0;
         for (int i = 0; i < za.eocd->num_entries; i++) {
-          const zip_cdfh_s *cdfh = reinterpret_cast<const zip_cdfh_s *>(
-            reinterpret_cast<const uint8_t *>(za.cdfh) + cdfh_ofs);
+          const zip_cdfh_s* cdfh = reinterpret_cast<const zip_cdfh_s*>(
+            reinterpret_cast<const uint8_t*>(za.cdfh) + cdfh_ofs);
           int cdfh_len = sizeof(zip_cdfh_s) + cdfh->fname_len + cdfh->extra_len + cdfh->comment_len;
           if (cdfh_ofs + cdfh_len > za.eocd->cdir_size || cdfh->sig != 0x02014b50) {
             // Bad cdir
@@ -330,7 +330,7 @@ std::vector<char> io_uncompress_single_h2d(const void *src, size_t src_size, int
           // For now, only accept with non-zero file sizes and DEFLATE
           if (cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0) {
             size_t lfh_ofs       = cdfh->hdr_ofs;
-            const zip_lfh_s *lfh = reinterpret_cast<const zip_lfh_s *>(raw + lfh_ofs);
+            const zip_lfh_s* lfh = reinterpret_cast<const zip_lfh_s*>(raw + lfh_ofs);
             if (lfh_ofs + sizeof(zip_lfh_s) <= src_size && lfh->sig == 0x04034b50 &&
                 lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src_size) {
               if (lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0) {
@@ -354,7 +354,7 @@ std::vector<char> io_uncompress_single_h2d(const void *src, size_t src_size, int
       if (stream_type != IO_UNCOMP_STREAM_TYPE_INFER) break;  // Fall through for INFER
     case IO_UNCOMP_STREAM_TYPE_BZIP2:
       if (src_size > 4) {
-        const bz2_file_header_s *fhdr = reinterpret_cast<const bz2_file_header_s *>(raw);
+        const bz2_file_header_s* fhdr = reinterpret_cast<const bz2_file_header_s*>(raw);
         // Check for BZIP2 file signature "BZh1" to "BZh9"
         if (fhdr->sig[0] == 'B' && fhdr->sig[1] == 'Z' && fhdr->sig[2] == 'h' &&
             fhdr->blksz >= '1' && fhdr->blksz <= '9') {
@@ -392,7 +392,7 @@ std::vector<char> io_uncompress_single_h2d(const void *src, size_t src_size, int
     do {
       size_t dst_len = uncomp_len - dst_ofs;
       bz_err         = cpu_bz2_uncompress(
-        comp_data, comp_len, reinterpret_cast<uint8_t *>(dst.data()) + dst_ofs, &dst_len, &src_ofs);
+        comp_data, comp_len, reinterpret_cast<uint8_t*>(dst.data()) + dst_ofs, &dst_len, &src_ofs);
       if (bz_err == BZ_OUTBUFF_FULL) {
         // TBD: We could infer the compression ratio based on produced/consumed byte counts
         // in order to minimize realloc events and over-allocation
@@ -422,7 +422,7 @@ std::vector<char> io_uncompress_single_h2d(const void *src, size_t src_size, int
  * @return Vector containing the output uncompressed data
  */
 std::vector<char> get_uncompressed_data(host_span<char const> const data,
-                                        std::string const &compression)
+                                        std::string const& compression)
 {
   int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
   if (compression == "gzip")
@@ -443,9 +443,9 @@ std::vector<char> get_uncompressed_data(host_span<char const> const data,
 class HostDecompressor_ZLIB : public HostDecompressor {
  public:
   HostDecompressor_ZLIB(bool gz_hdr_) : gz_hdr(gz_hdr_) {}
-  size_t Decompress(uint8_t *dstBytes,
+  size_t Decompress(uint8_t* dstBytes,
                     size_t dstLen,
-                    const uint8_t *srcBytes,
+                    const uint8_t* srcBytes,
                     size_t srcLen) override
   {
     if (gz_hdr) {
@@ -471,14 +471,14 @@ class HostDecompressor_ZLIB : public HostDecompressor {
 class HostDecompressor_SNAPPY : public HostDecompressor {
  public:
   HostDecompressor_SNAPPY() {}
-  size_t Decompress(uint8_t *dstBytes,
+  size_t Decompress(uint8_t* dstBytes,
                     size_t dstLen,
-                    const uint8_t *srcBytes,
+                    const uint8_t* srcBytes,
                     size_t srcLen) override
   {
     uint32_t uncompressed_size, bytes_left, dst_pos;
-    const uint8_t *cur = srcBytes;
-    const uint8_t *end = srcBytes + srcLen;
+    const uint8_t* cur = srcBytes;
+    const uint8_t* end = srcBytes + srcLen;
 
     if (!dstBytes || srcLen < 1) { return 0; }
     // Read uncompressed length (varint)
@@ -510,12 +510,12 @@ class HostDecompressor_SNAPPY : public HostDecompressor {
         if (blen & 2) {
           // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
           if (cur + 2 > end) break;
-          offset = *reinterpret_cast<const uint16_t *>(cur);
+          offset = *reinterpret_cast<const uint16_t*>(cur);
           cur += 2;
           if (blen & 1)  // 4-byte offset
           {
             if (cur + 2 > end) break;
-            offset |= (*reinterpret_cast<const uint16_t *>(cur)) << 16;
+            offset |= (*reinterpret_cast<const uint16_t*>(cur)) << 16;
             cur += 2;
           }
           blen = (blen >> 2) + 1;

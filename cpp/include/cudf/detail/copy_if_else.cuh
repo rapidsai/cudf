@@ -46,7 +46,7 @@ __launch_bounds__(block_size) __global__
                            RightIter rhs,
                            Filter filter,
                            mutable_column_device_view out,
-                           size_type *__restrict__ const valid_count)
+                           size_type* __restrict__ const valid_count)
 {
   const size_type tid            = threadIdx.x + blockIdx.x * block_size;
   const int warp_id              = tid / warp_size;
@@ -166,7 +166,7 @@ std::unique_ptr<column> copy_if_else(
   FilterFn filter,
   cudf::data_type output_type,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   using Element =
     typename thrust::tuple_element<0, typename thrust::iterator_traits<LeftIter>::value_type>::type;

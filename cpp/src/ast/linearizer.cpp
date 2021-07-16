@@ -111,7 +111,9 @@ cudf::size_type linearizer::visit(column_reference const& expr)
   // Increment the node index
   _node_count++;
   // Resolve node type
-  auto const data_type = expr.get_data_type(_table);
+  auto const data_type = expr.get_table_source() == table_reference::LEFT
+                           ? expr.get_data_type(_left)
+                           : expr.get_data_type(_right);
   // Push data reference
   auto const source = detail::device_data_reference(detail::device_data_reference_type::COLUMN,
                                                     data_type,

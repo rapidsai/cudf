@@ -28,17 +28,17 @@ class temp_directory {
   std::string _path;
 
  public:
-  temp_directory(const std::string &base_name)
+  temp_directory(const std::string& base_name)
   {
     std::string dir_template("/tmp");
-    if (const char *env_p = std::getenv("WORKSPACE")) dir_template = env_p;
+    if (const char* env_p = std::getenv("WORKSPACE")) dir_template = env_p;
     dir_template += "/" + base_name + ".XXXXXX";
-    auto const tmpdirptr = mkdtemp(const_cast<char *>(dir_template.data()));
+    auto const tmpdirptr = mkdtemp(const_cast<char*>(dir_template.data()));
     if (tmpdirptr == nullptr) CUDF_FAIL("Temporary directory creation failure: " + dir_template);
     _path = dir_template + "/";
   }
 
-  static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
+  static int rm_files(const char* pathname, const struct stat* sbuf, int type, struct FTW* ftwb)
   {
     return std::remove(pathname);
   }
@@ -49,5 +49,5 @@ class temp_directory {
     nftw(_path.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
   }
 
-  const std::string &path() const { return _path; }
+  const std::string& path() const { return _path; }
 };

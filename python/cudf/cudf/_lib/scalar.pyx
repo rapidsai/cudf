@@ -30,7 +30,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.table cimport Table
-from cudf._lib.interop import to_arrow
+from cudf._lib.interop import to_arrow, from_arrow
 
 from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_s,
@@ -87,6 +87,8 @@ cdef class DeviceScalar:
         elif isinstance(dtype, cudf.ListDtype):
             _set_list_from_pylist(
                 self.c_value, value, dtype, valid)
+        elif isinstance(dtype, cudf.StructDtype):
+            _set_struct_from_pydict(self.c_value, value, dtype, valid)
         elif pd.api.types.is_string_dtype(dtype):
             _set_string_from_np_string(self.c_value, value, valid)
         elif pd.api.types.is_numeric_dtype(dtype):
@@ -172,7 +174,6 @@ cdef class DeviceScalar:
 
         s.c_value = move(ptr)
         cdtype = s.get_raw_ptr()[0].type()
-
         if cdtype.id() == libcudf_types.DECIMAL64 and dtype is None:
             raise TypeError(
                 "Must pass a dtype when constructing from a fixed-point scalar"
@@ -306,6 +307,36 @@ cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
         new fixed_point_scalar[decimal64](
             <int64_t>np.int64(value), scale_type(-dtype.scale), valid
         )
+    )
+
+cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
+                             object value,
+                             object dtype,
+                             bool valid=True):
+    arrow_schema = dtype.to_arrow()
+    columns = [str(i) for i in range(len(arrow_schema))]
+    if valid:
+        pyarrow_table = pa.Table.from_arrays(
+            [
+                pa.array([value[f.name]], from_pandas=True, type=f.type)
+                for f in arrow_schema
+            ],
+            names=columns
+        )
+    else:
+        pyarrow_table = pa.Table.from_arrays(
+            [
+                pa.array([cudf.NA], from_pandas=True, type=f.type)
+                for f in arrow_schema
+            ],
+            names=columns
+        )
+
+    cdef Table table = from_arrow(pyarrow_table, column_names=columns)
+    cdef table_view struct_view = table.view()
+
+    s.reset(
+        new struct_scalar(struct_view, valid)
     )
 
 cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):

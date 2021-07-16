@@ -40,7 +40,7 @@ void run_rank_test(table_view input,
                    bool debug = false)
 {
   int i = 0;
-  for (auto &&input_column : input) {
+  for (auto&& input_column : input) {
     // Rank
     auto got_rank_column =
       cudf::rank(input_column, method, column_order, null_handling, null_precedence, percentage);
@@ -77,7 +77,7 @@ struct Rank : public BaseFixture {
                      bool percentage = false)
   {
     if (std::is_same<T, bool>::value) return;
-    for (auto const &test_case : {
+    for (auto const& test_case : {
            // Non-null column
            test_case_t{table_view{{col1}}, table_view{{col1_rank}}},
            // Null column
