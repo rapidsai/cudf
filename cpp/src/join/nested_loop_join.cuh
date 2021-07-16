@@ -15,9 +15,9 @@
  */
 #pragma once
 
+#include "conditional_join_kernels.cuh"
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
-#include "join_kernels.cuh"
 
 #include <cudf/ast/detail/transform.cuh>
 #include <cudf/ast/nodes.hpp>
