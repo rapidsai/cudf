@@ -21,7 +21,7 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/io/text/host_input_stream.hpp>
+#include <cudf/io/text/host_device_istream.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 

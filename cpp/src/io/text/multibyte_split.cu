@@ -1,6 +1,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/io/text/input_stream.hpp>
+#include <cudf/io/text/device_istream.hpp>
 #include <cudf/io/text/superstate.hpp>
 #include <cudf/io/text/trie.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -29,26 +29,32 @@ using superstate = cudf::io::text::superstate<16>;
 
 template <typename T>
 struct scan_tile_state_view {
+  uint64_t num_tiles;
   bool* tile_status;
   T* tile_state;
 
-  __device__ void initialize(cudf::size_type num_tiles)
+  __device__ void initialize(cudf::size_type base_tile_idx, cudf::size_type count)
   {
     auto thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (thread_idx < num_tiles) { tile_status[thread_idx] = false; }
+    if (thread_idx < count) {  //
+      tile_status[(base_tile_idx + thread_idx) % num_tiles] = false;
+    }
   }
 
-  __device__ void set_state(cudf::size_type tile_idx, T value)
+  __device__ void set_inclusive_prefix(cudf::size_type tile_idx, T value)
   {
-    cub::ThreadStore<cub::STORE_CG>(tile_state + tile_idx, value);
+    cub::ThreadStore<cub::STORE_CG>(tile_state + ((tile_idx + num_tiles) % num_tiles), value);
     __threadfence();
-    cub::ThreadStore<cub::STORE_CG>(tile_status + tile_idx, true);
+    cub::ThreadStore<cub::STORE_CG>(tile_status + ((tile_idx + num_tiles) % num_tiles), true);
   }
 
-  __device__ T get_state_sync(cudf::size_type tile_idx)
+  __device__ T get_inclusive_prefix(cudf::size_type tile_idx)
   {
-    while (cub::ThreadLoad<cub::LOAD_CG>(tile_status + tile_idx) == false) { __threadfence(); }
-    return cub::ThreadLoad<cub::LOAD_CG>(tile_state + tile_idx);
+    while (cub::ThreadLoad<cub::LOAD_CG>(tile_status + ((tile_idx + num_tiles) % num_tiles)) ==
+           false) {
+      __threadfence();
+    }
+    return cub::ThreadLoad<cub::LOAD_CG>(tile_state + ((tile_idx + num_tiles) % num_tiles));
   }
 };
 
@@ -60,26 +66,33 @@ struct scan_tile_state {
   scan_tile_state(cudf::size_type num_tiles,
                   rmm::cuda_stream_view stream,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : tile_status(rmm::device_uvector<bool>(num_tiles + 1, stream, mr)),
-      tile_state(rmm::device_uvector<T>(num_tiles + 1, stream, mr))
-
+    : tile_status(rmm::device_uvector<bool>(num_tiles, stream, mr)),
+      tile_state(rmm::device_uvector<T>(num_tiles, stream, mr))
   {
   }
 
   operator scan_tile_state_view<T>()
   {
-    return scan_tile_state_view<T>{tile_status.data(), tile_state.data()};
+    return scan_tile_state_view<T>{tile_status.size(), tile_status.data(), tile_state.data()};
   }
 
-  T back_element(rmm::cuda_stream_view s) const { return tile_state.back_element(s); }
+  void set_seed_async(T const seed, rmm::cuda_stream_view stream)
+  {
+    auto x = tile_status.size();
+    bool y = true;
+    tile_state.set_element_async(x - 1, seed, stream);
+    tile_status.set_element_async(x - 1, y, stream);
+  }
+
+  T back_element(rmm::cuda_stream_view stream) const { return tile_state.back_element(stream); }
 };
 
 // keep ITEMS_PER_TILE below input size to force multi-tile execution.
-auto constexpr ITEMS_PER_THREAD = 32;
-auto constexpr THREADS_PER_TILE = 512;
+auto constexpr ITEMS_PER_THREAD = 4;
+auto constexpr THREADS_PER_TILE = 4;
 auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
-auto constexpr TILES_PER_CHUNK  = 1024;
-auto constexpr BYTES_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
+auto constexpr TILES_PER_CHUNK  = 4;
+auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 // multibyte_split works by splitting up inputs in to 32 inputs (bytes) per thread, and transforming
 // them in to data structures called "superstates". these superstates are created by searching a
 // trie, but instead of a tradition trie where the search begins at a single node at the beginning,
@@ -124,9 +137,14 @@ struct PatternScan {
     auto prefix_callback = [&] __device__(superstate const& block_aggregate) -> superstate {
       if (threadIdx.x == 0) {
         _temp_storage.block_aggregate  = block_aggregate;
-        _temp_storage.exclusive_prefix = tile_state.get_state_sync(blockIdx.x);
+        _temp_storage.exclusive_prefix = tile_state.get_inclusive_prefix(blockIdx.x - 1);
         _temp_storage.inclusive_prefix = _temp_storage.exclusive_prefix + block_aggregate;
-        tile_state.set_state(blockIdx.x + 1, _temp_storage.inclusive_prefix);
+        tile_state.set_inclusive_prefix(blockIdx.x, _temp_storage.inclusive_prefix);
+
+        printf("bid(%2u) tid(%2u): prefix = %2u %2u\n",
+               blockIdx.x,
+               threadIdx.x,
+               _temp_storage.exclusive_prefix);
       }
       return _temp_storage.exclusive_prefix;
     };
@@ -143,17 +161,17 @@ struct PatternScan {
   }
 };
 
-__global__ void multibyte_split_init_kernel(cudf::size_type num_tiles,
+__global__ void multibyte_split_init_kernel(cudf::size_type base_tile_idx,
+                                            cudf::size_type num_tiles,
                                             scan_tile_state_view<superstate> tile_superstates,
                                             scan_tile_state_view<uint32_t> tile_output_offsets)
 {
-  tile_superstates.initialize(num_tiles);
-  tile_superstates.set_state(0, superstate());
-  tile_output_offsets.initialize(num_tiles);
-  tile_output_offsets.set_state(0, 0);
+  tile_superstates.initialize(base_tile_idx, num_tiles);
+  tile_output_offsets.initialize(base_tile_idx, num_tiles);
 }
 
-__global__ void multibyte_split_kernel(cudf::size_type num_tiles,
+__global__ void multibyte_split_kernel(cudf::size_type base_tile_idx,
+                                       cudf::size_type num_tiles,
                                        scan_tile_state_view<superstate> tile_superstates,
                                        scan_tile_state_view<uint32_t> tile_output_offsets,
                                        cudf::io::text::trie_device_view trie,
@@ -186,6 +204,10 @@ __global__ void multibyte_split_kernel(cudf::size_type num_tiles,
 
   uint32_t thread_states[ITEMS_PER_THREAD];
 
+  // is first tile -> blockscan not prefix callback
+  // is last tile <- num valid < 32
+  // AliasTemporiaries
+
   PatternScan(temp_storage.pattern_scan)  //
     .Scan(tile_superstates, trie, thread_data, thread_states);
 
@@ -203,9 +225,10 @@ __global__ void multibyte_split_kernel(cudf::size_type num_tiles,
 
   auto prefix_callback = [&] __device__(uint32_t const& block_aggregate) -> uint32_t {
     if (threadIdx.x == 0) {
-      temp_storage.offset_scan_exclusive_prefix = tile_output_offsets.get_state_sync(blockIdx.x);
+      temp_storage.offset_scan_exclusive_prefix =
+        tile_output_offsets.get_inclusive_prefix(blockIdx.x - 1);
       auto inclusive_prefix = temp_storage.offset_scan_exclusive_prefix + block_aggregate;
-      tile_output_offsets.set_state(blockIdx.x + 1, inclusive_prefix);
+      tile_output_offsets.set_inclusive_prefix(blockIdx.x, inclusive_prefix);
     }
     return temp_storage.offset_scan_exclusive_prefix;
   };
@@ -261,11 +284,16 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::string_scalar const& input,
   auto num_init_blocks  = ceil_div(num_tiles, THREADS_PER_TILE);
 
   multibyte_split_init_kernel<<<num_init_blocks, THREADS_PER_TILE, 0, stream.value()>>>(  //
+    0,
     num_tiles,
     tile_superstates,
     tile_offsets);
 
+  tile_superstates.set_seed_async(superstate<16>(), stream);
+  tile_offsets.set_seed_async(0, stream);
+
   multibyte_split_kernel<<<num_tiles, THREADS_PER_TILE, 0, stream.value()>>>(  //
+    0,
     num_tiles,
     tile_superstates,
     tile_offsets,
@@ -285,10 +313,20 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::string_scalar const& input,
   string_offsets.set_element_to_zero_async(0, stream);
   string_offsets.set_element_async(x, y, stream);
 
+  multibyte_split_init_kernel<<<num_init_blocks, THREADS_PER_TILE, 0, stream.value()>>>(  //
+    0,
+    num_tiles,
+    tile_superstates,
+    tile_offsets);
+
+  tile_superstates.set_seed_async(superstate<16>(), stream);
+  tile_offsets.set_seed_async(0, stream);
+
   // pattern-match and materialize string offsets
 
   multibyte_split_kernel<<<num_tiles, THREADS_PER_TILE, 0, stream.value()>>>(  //
     num_tiles,
+    0,
     tile_superstates,
     tile_offsets,
     trie.view(),
@@ -304,6 +342,97 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::string_scalar const& input,
     mr);
 }
 
+std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::device_istream& input,
+                                              std::vector<std::string> const& delimeters,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
+{
+  auto const trie = cudf::io::text::trie::create(delimeters, stream);
+
+  // pattern-match and count delimiters
+
+  auto tile_superstates = scan_tile_state<superstate<16>>(TILES_PER_CHUNK * 2, stream);
+  auto tile_offsets     = scan_tile_state<uint32_t>(TILES_PER_CHUNK * 2, stream);
+
+  rmm::device_uvector<char> input_buffer(ITEMS_PER_CHUNK, stream);
+
+  uint32_t starting_position = input.tellg();
+  uint32_t bytes_read;
+
+  // TODO: Set seed state.
+
+  tile_superstates.set_seed_async(superstate<16>(), stream);
+  tile_offsets.set_seed_async(0, stream);
+
+  for (auto base_tile_idx = 0; bytes_read = input.readsome(input_buffer, stream) > 0;
+       base_tile_idx += TILES_PER_CHUNK) {
+    // reset the next chunk of tile state
+    multibyte_split_init_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, stream.value()>>>(  //
+      base_tile_idx,
+      TILES_PER_CHUNK,
+      tile_superstates,
+      tile_offsets);
+
+    multibyte_split_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, stream.value()>>>(  //
+      base_tile_idx,
+      TILES_PER_CHUNK,
+      tile_superstates,
+      tile_offsets,
+      trie.view(),
+      cudf::device_span<char const>(input_buffer).first(bytes_read),
+      cudf::device_span<cudf::size_type>(static_cast<size_type*>(nullptr), 0));
+  }
+
+  // allocate string offsets
+
+  auto num_results    = tile_offsets.back_element(stream);
+  auto string_offsets = rmm::device_uvector<cudf::size_type>(num_results + 2, stream);
+
+  // first and last element are set manually to zero and size of input, respectively.
+  // kernel is only responsible for determining delimiter offsets
+  // auto const x        = string_offsets.size() - 1;
+  // auto const y        = input.size();
+  // string_offsets.set_element_to_zero_async(0, stream);
+  // string_offsets.set_element_async(x, y, stream);
+
+  // pattern-match and materialize string offsets
+  input.seekg(starting_position);
+
+  // TODO: Set seed state.
+
+  tile_superstates.set_seed_async(superstate<16>(), stream);
+  tile_offsets.set_seed_async(0, stream);
+
+  for (auto base_tile_idx = 0; bytes_read = input.readsome(input_buffer, stream) > 0;
+       base_tile_idx += TILES_PER_CHUNK) {
+    // reset the next chunk of tile state
+    multibyte_split_init_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, stream.value()>>>(  //
+      base_tile_idx,
+      TILES_PER_CHUNK,
+      tile_superstates,
+      tile_offsets);
+
+    multibyte_split_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, stream.value()>>>(  //
+      base_tile_idx,
+      TILES_PER_CHUNK,
+      tile_superstates,
+      tile_offsets,
+      trie.view(),
+      cudf::device_span<char const>(input_buffer).first(bytes_read),
+      cudf::device_span<cudf::size_type>(string_offsets).subspan(1, num_results));
+  }
+
+  CUDF_FAIL();
+
+  // return cudf::make_strings_column(  //
+  //   cudf::device_span<char const>(input.data(), input.size()),
+  //   string_offsets,
+  //   {},
+  //   0,
+  //   stream,
+  //   mr);
+}  // namespace detail
+
 }  // namespace detail
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::string_scalar const& input,
@@ -312,6 +441,13 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::string_scalar const& input,
 {
   return detail::multibyte_split(input, delimeters, rmm::cuda_stream_default, mr);
 }
+
+// std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::device_istream& input,
+//                                               std::vector<std::string> const& delimeters,
+//                                               rmm::mr::device_memory_resource* mr)
+// {
+//   return detail::multibyte_split(input, delimeters, rmm::cuda_stream_default, mr);
+// }
 
 }  // namespace text
 }  // namespace io

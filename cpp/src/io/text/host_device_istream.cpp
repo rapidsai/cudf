@@ -1,4 +1,4 @@
-#include <cudf/io/text/host_input_stream.hpp>
+#include <cudf/io/text/host_device_istream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -11,8 +11,8 @@ namespace cudf {
 namespace io {
 namespace text {
 
-uint32_t host_input_stream::readsome(cudf::device_span<char> destination,
-                                     rmm::cuda_stream_view stream)
+uint32_t host_device_istream::readsome(cudf::device_span<char> destination,
+                                       rmm::cuda_stream_view stream)
 {
   auto read_size = destination.size();
 
@@ -29,6 +29,10 @@ uint32_t host_input_stream::readsome(cudf::device_span<char> destination,
 
   return read_size;
 }
+
+uint32_t host_device_istream::tellg() { return _source_stream.tellg(); }
+
+void host_device_istream::seekg(uint32_t pos) { _source_stream.seekg(pos); }
 
 }  // namespace text
 }  // namespace io
