@@ -29,8 +29,6 @@
 
 #include <cudf/io/parquet.hpp>
 
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
-
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
 constexpr int64_t data_size = 512 << 20;
