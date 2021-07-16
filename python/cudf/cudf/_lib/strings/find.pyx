@@ -1,21 +1,21 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from cudf._lib.cpp.types cimport size_type
 
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.strings.find cimport (
     contains as cpp_contains,
     ends_with as cpp_ends_with,
-    starts_with as cpp_starts_with,
     find as cpp_find,
-    rfind as cpp_rfind
+    rfind as cpp_rfind,
+    starts_with as cpp_starts_with,
 )
+from cudf._lib.cpp.types cimport size_type
+from cudf._lib.scalar cimport DeviceScalar
 
 
 def contains(Column source_strings, object py_target):

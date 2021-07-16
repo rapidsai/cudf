@@ -1,21 +1,20 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
 from libcpp.utility cimport move
-from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.cpp.types cimport size_type
 from libcpp.vector cimport vector
 
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
-
 from cudf._lib.cpp.strings.replace_re cimport (
     replace_re as cpp_replace_re,
-    replace_with_backrefs as cpp_replace_with_backrefs
+    replace_with_backrefs as cpp_replace_with_backrefs,
 )
-from libcpp.string cimport string
+from cudf._lib.cpp.types cimport size_type
+from cudf._lib.scalar cimport DeviceScalar
 
 
 def replace_re(Column source_strings,
