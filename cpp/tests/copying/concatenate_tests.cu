@@ -433,7 +433,7 @@ TEST_F(OverflowTest, OverflowTest)
   }
 }
 
-TEST_F(OverflowTest, SizeOverflowTestPresliced)
+TEST_F(OverflowTest, Presliced)
 {
   using namespace cudf;
 
@@ -648,7 +648,7 @@ TEST_F(OverflowTest, SizeOverflowTestPresliced)
   }
 }
 
-TEST_F(OverflowTest, SizeOverflowTestBigColumnsSmallSlices)
+TEST_F(OverflowTest, BigColumnsSmallSlices)
 {
   // test : many small slices of large columns. the idea is to make sure
   // that we are respecting the offset/sizes of the slices and not attempting to
