@@ -141,17 +141,9 @@ class CategoricalAccessor(ColumnMethods):
             if isinstance(self._parent, cudf.Series)
             else None
         )
-        codes = self._min_type_codes
+        codes = self._column._min_type_codes
         codes = codes.fillna(-1)
         return cudf.Series(codes, index=index)
-
-    @property
-    def _min_type_codes(self) -> NumericalColumn:
-        codes = self._column.codes
-        codes.set_base_mask(self._column.base_mask)
-        dtype = min_signed_type(codes.max(skipna=True))
-        codes = codes.astype(dtype=dtype)
-        return codes
 
     @property
     def ordered(self) -> Optional[bool]:
@@ -868,6 +860,14 @@ class CategoricalColumn(column.ColumnBase):
         return self.children[0]
 
     @property
+    def _min_type_codes(self) -> NumericalColumn:
+        codes = self._column.codes
+        codes.set_base_mask(self._column.base_mask)
+        dtype = min_signed_type(codes.max(skipna=True))
+        codes = codes.astype(dtype=dtype)
+        return codes
+
+    @property
     def ordered(self) -> Optional[bool]:
         return self.dtype.ordered
 
@@ -1002,9 +1002,8 @@ class CategoricalColumn(column.ColumnBase):
         return pd.Series(data, index=index)
 
     def to_arrow(self) -> pa.Array:
-        print("to_arrow")
         result = super().to_arrow()
-        min_type_codes = self.cat()._min_type_codes
+        min_type_codes = self._min_type_codes
         return pa.DictionaryArray.from_arrays(indices=min_type_codes.to_arrow(), dictionary=result.dictionary)
         
     @property
