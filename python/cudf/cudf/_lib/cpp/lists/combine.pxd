@@ -6,6 +6,7 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
 
+
 cdef extern from "cudf/lists/combine.hpp" namespace \
         "cudf::lists" nogil:
 

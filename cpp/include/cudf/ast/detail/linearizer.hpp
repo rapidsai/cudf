@@ -103,10 +103,24 @@ class linearizer {
   /**
    * @brief Construct a new linearizer object
    *
+   * @param expr The expression to create an evaluable linearizer for.
+   * @param left The left table used for evaluating the abstract syntax tree.
+   * @param right The right table used for evaluating the abstract syntax tree.
+   */
+  linearizer(detail::node const& expr, cudf::table_view left, cudf::table_view right)
+    : _left(left), _right(right), _node_count(0), _intermediate_counter()
+  {
+    expr.accept(*this);
+  }
+
+  /**
+   * @brief Construct a new linearizer object
+   *
+   * @param expr The expression to create an evaluable linearizer for.
    * @param table The table used for evaluating the abstract syntax tree.
    */
   linearizer(detail::node const& expr, cudf::table_view table)
-    : _table(table), _node_count(0), _intermediate_counter()
+    : _left(table), _right(table), _node_count(0), _intermediate_counter()
   {
     expr.accept(*this);
   }
@@ -217,7 +231,8 @@ class linearizer {
   cudf::size_type add_data_reference(detail::device_data_reference data_ref);
 
   // State information about the "linearized" GPU execution plan
-  cudf::table_view _table;
+  cudf::table_view const& _left;
+  cudf::table_view const& _right;
   cudf::size_type _node_count;
   intermediate_counter _intermediate_counter;
   std::vector<detail::device_data_reference> _data_references;
