@@ -1,18 +1,18 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
 from libcpp.utility cimport move
-from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.cpp.column.column cimport column
 
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.strings.contains cimport (
     contains_re as cpp_contains_re,
     count_re as cpp_count_re,
-    matches_re as cpp_matches_re
+    matches_re as cpp_matches_re,
 )
-from libcpp.string cimport string
+from cudf._lib.scalar cimport DeviceScalar
 
 
 def contains_re(Column source_strings, object reg_ex):

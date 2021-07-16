@@ -303,6 +303,8 @@ def test_series_fillna_numerical(psr, data_dtype, fill_value, inplace):
         [1, None, None, 2, 3, 4],
         [None, None, 1, 2, None, 3, 4],
         [1, 2, None, 3, 4, None, None],
+        [0] + [None] * 14,
+        [None] * 14 + [0],
     ],
 )
 @pytest.mark.parametrize("container", [pd.Series, pd.DataFrame])

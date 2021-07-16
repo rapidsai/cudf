@@ -37,7 +37,7 @@ from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import SingleColumnFrame, _drop_rows_by_labels
+from cudf.core.frame import Frame, SingleColumnFrame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
@@ -1330,16 +1330,29 @@ class Series(SingleColumnFrame, Serializable):
         return "\n".join(lines)
 
     def _binaryop(
-        self, other, fn, fill_value=None, reflect=False, can_reindex=False
+        self,
+        other: Frame,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
     ):
-        if isinstance(other, cudf.DataFrame):
-            return NotImplemented
-
-        if isinstance(other, Series):
+        if isinstance(other, SingleColumnFrame):
             if (
+                # TODO: The can_reindex logic also needs to be applied for
+                # DataFrame (the methods that need it just don't exist yet).
                 not can_reindex
                 and fn in cudf.utils.utils._EQUALITY_OPS
-                and not self.index.equals(other.index)
+                and (
+                    isinstance(other, Series)
+                    # TODO: mypy doesn't like this line because the index
+                    # property is not defined on SingleColumnFrame (or Index,
+                    # for that matter). Ignoring is the easy solution for now,
+                    # a cleaner fix requires reworking the type hierarchy.
+                    and not self.index.equals(other.index)  # type: ignore
+                )
             ):
                 raise ValueError(
                     "Can only compare identically-labeled " "Series objects"
@@ -1348,7 +1361,8 @@ class Series(SingleColumnFrame, Serializable):
         else:
             lhs = self
 
-        return super()._binaryop(other, fn, fill_value, reflect, lhs)
+        # Note that we call the super on lhs, not self.
+        return super(Series, lhs)._binaryop(other, fn, fill_value, reflect)
 
     def add(self, other, fill_value=None, axis=0):
         """

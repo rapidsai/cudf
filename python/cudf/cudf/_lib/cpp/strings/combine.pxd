@@ -1,10 +1,12 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from libcpp.memory cimport unique_ptr
+
 from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.scalar.scalar cimport string_scalar
+from cudf._lib.cpp.table.table_view cimport table_view
+
 
 cdef extern from "cudf/strings/combine.hpp" namespace "cudf::strings" nogil:
 
