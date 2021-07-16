@@ -18,45 +18,22 @@
 
 package ai.rapids.cudf;
 
-import ai.rapids.cudf.HostColumnVector.BasicType;
-import ai.rapids.cudf.HostColumnVector.Builder;
-import ai.rapids.cudf.HostColumnVector.DataType;
-import ai.rapids.cudf.HostColumnVector.ListType;
-import ai.rapids.cudf.HostColumnVector.StructData;
-import ai.rapids.cudf.HostColumnVector.StructType;
-
+import ai.rapids.cudf.HostColumnVector.*;
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static ai.rapids.cudf.ParquetWriterOptions.listBuilder;
 import static ai.rapids.cudf.ParquetWriterOptions.structBuilder;
 import static ai.rapids.cudf.Table.TestBuilder;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class TableTest extends CudfTestBase {
   private static final File TEST_PARQUET_FILE = new File("src/test/resources/acq.parquet");
@@ -873,7 +850,7 @@ public class TableTest extends CudfTestBase {
         .column(  2,   3,   9,   0,   1,   7,   4, null, null,   8)
         .column(100, 101, 102, 103, 104, 105, 106,  107,  108, 109)
         .build();
-         
+
          Table rightTable = new Table.TestBuilder()
              .column(null, null,   9,   8,  10,  32)
              .column( 201,  202, 203, 204, 205, 206)
@@ -4875,6 +4852,77 @@ public class TableTest extends CudfTestBase {
             expectedAggregateResult.put(key, count - 1);
           }
         }
+      }
+    }
+  }
+
+  @Test
+  void testGroupByM2() {
+    try (Table input = new Table.TestBuilder().column(1, 2, 3, 1, 2, 2, 1, 3, 3, 2)
+             .column(0, 1, -2, 3, -4, -5, -6, 7, -8, 9)
+             .build();
+         Table expected = new Table.TestBuilder().column(1, 2, 3)
+             .column(42.0, 122.75, 114.0)
+             .build()) {
+      try (Table results = input.groupBy(0).aggregate(Aggregation.M2()
+               .onColumn(1))) {
+        assertTablesAreEqual(expected, results);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByMergeM2() {
+    StructType nestedType = new StructType(false,
+        new BasicType(true, DType.INT32),
+        new BasicType(true, DType.FLOAT64),
+        new BasicType(true, DType.FLOAT64));
+
+    try (Table partialResults1 = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(nestedType,
+                 struct(1, 0.0, 0.0),
+                 struct(1, 1.0, 0.0),
+                 struct(0, null, null),
+                 struct(0, null, null))
+             .build();
+         Table partialResults2 = new Table.TestBuilder()
+             .column(1, 2, 3)
+             .column(nestedType,
+                 struct(1, 3.0, 0.0),
+                 struct(1, 4.0, 0.0),
+                 struct(1, 2.0, 0.0))
+             .build();
+         Table partialResults3 = new Table.TestBuilder()
+             .column(1, 2)
+             .column(nestedType,
+                 struct(1, 6.0, 0.0),
+                 struct(1, Double.NaN, Double.NaN))
+             .build();
+         Table partialResults4 = new Table.TestBuilder()
+             .column(2, 3, 4)
+             .column(nestedType,
+                 struct(1, 9.0, 0.0),
+                 struct(1, 8.0, 0.0),
+                 struct(2, Double.NaN, Double.NaN))
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(nestedType,
+                 struct(3, 3.0, 18.0),
+                 struct(4, Double.NaN, Double.NaN),
+                 struct(2, 5.0, 18.0),
+                 struct(2, Double.NaN, Double.NaN))
+             .build()) {
+      try (Table concatenatedResults = Table.concatenate(
+             partialResults1,
+             partialResults2,
+             partialResults3,
+             partialResults4);
+           Table finalResults = concatenatedResults.groupBy(0).aggregate(
+             Aggregation.mergeM2().onColumn(1))
+           ) {
+        assertTablesAreEqual(expected, finalResults);
       }
     }
   }
