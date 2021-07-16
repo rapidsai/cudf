@@ -1,14 +1,13 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp.string cimport string
+from libcpp.utility cimport move
+from libcpp.vector cimport vector
+
 from cudf._lib.cpp.io.avro cimport (
     avro_reader_options,
-    read_avro as libcudf_read_avro
+    read_avro as libcudf_read_avro,
 )
-
-from libcpp.string cimport string
-from libcpp.vector cimport vector
-from libcpp.utility cimport move
-
 from cudf._lib.cpp.io.types cimport table_with_metadata
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.io.utils cimport make_source_info

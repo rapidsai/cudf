@@ -330,12 +330,9 @@ std::shared_ptr<device_memory_resource> Initialized_resource{};
 
 extern "C" {
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, jclass clazz,
-                                                                  jint allocation_mode, jint log_to,
-                                                                  jstring jpath, jlong pool_size,
-                                                                  jlong max_pool_size,
-                                                                  jlong allocation_alignment,
-                                                                  jlong alignment_threshold) {
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(
+    JNIEnv *env, jclass clazz, jint allocation_mode, jint log_to, jstring jpath, jlong pool_size,
+    jlong max_pool_size, jlong allocation_alignment, jlong alignment_threshold) {
   try {
     // make sure the CUDA device is setup in the context
     cudaError_t cuda_status = cudaFree(0);

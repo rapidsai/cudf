@@ -3,27 +3,27 @@
 import cudf
 
 from libcpp cimport bool, int
-from libcpp.memory cimport unique_ptr, make_unique
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
-from libcpp.vector cimport vector
 from libcpp.utility cimport move
+from libcpp.vector cimport vector
+
 from cudf._lib.cpp.column.column cimport column
 
 from cudf.utils.dtypes import is_struct_dtype
 
 from cudf._lib.column cimport Column
-
+from cudf._lib.cpp.io.orc cimport (
+    chunked_orc_writer_options,
+    orc_chunked_writer,
+    orc_reader_options,
+    orc_writer_options,
+    read_orc as libcudf_read_orc,
+    write_orc as libcudf_write_orc,
+)
 from cudf._lib.cpp.io.orc_metadata cimport (
     raw_orc_statistics,
-    read_raw_orc_statistics as libcudf_read_raw_orc_statistics
-)
-from cudf._lib.cpp.io.orc cimport (
-    orc_reader_options,
-    read_orc as libcudf_read_orc,
-    orc_writer_options,
-    write_orc as libcudf_write_orc,
-    chunked_orc_writer_options,
-    orc_chunked_writer
+    read_raw_orc_statistics as libcudf_read_raw_orc_statistics,
 )
 from cudf._lib.cpp.io.types cimport (
     column_name_info,
@@ -32,31 +32,27 @@ from cudf._lib.cpp.io.types cimport (
     sink_info,
     source_info,
     table_metadata,
+    table_metadata_with_nullability,
     table_with_metadata,
-    table_metadata_with_nullability
 )
-
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport (
-    data_type, type_id, size_type
-)
-
+from cudf._lib.cpp.types cimport data_type, size_type, type_id
 from cudf._lib.io.utils cimport (
-    make_source_info,
     make_sink_info,
+    make_source_info,
     update_struct_field_names,
 )
 from cudf._lib.table cimport Table
+
 from cudf._lib.types import np_to_cudf_types
+
 from cudf._lib.types cimport underlying_type_t_type_id
+
 import numpy as np
 
 from cudf._lib.utils cimport get_column_names
 
-from cudf._lib.utils import (
-    _index_level_name,
-    generate_pandas_metadata,
-)
+from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
 
 cpdef read_raw_orc_statistics(filepath_or_buffer):

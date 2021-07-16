@@ -31,7 +31,6 @@ dependencies:
   - nbsphinx
   - numpydoc
   - ipython
-  - recommonmark
   - pandoc=<2.0.0
   - cudatoolkit=11.0
   - pip
@@ -52,7 +51,7 @@ dependencies:
   - hypothesis
   - sphinx-markdown-tables
   - sphinx-copybutton
-  - mimesis
+  - mimesis<4.1
   - packaging
   - protobuf
   - nvtx>=0.2.1
