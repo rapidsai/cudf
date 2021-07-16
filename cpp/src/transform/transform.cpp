@@ -120,10 +120,10 @@ void generalized_operation(table_view const& data_view,
   auto const iters = thrust::make_zip_iterator(
     thrust::make_tuple(data_ptrs.begin(), mask_ptrs.begin(), offsets.begin()));
 
-  std::for_each(iters, iters + data_view.num_columns(), [](auto const& tuple_vals) {
-    kernel_args.push_back(thrust::get<0>(tuple_vals));
-    kernel_args.push_back(thrust::get<1>(tuple_vals));
-    kernel_args.push_back(thrust::get<2>(tuple_vals));
+  std::for_each(iters, iters + data_view.num_columns(), [&](auto const& tuple_vals) {
+    kernel_args.push_back(&thrust::get<0>(tuple_vals));
+    kernel_args.push_back(&thrust::get<1>(tuple_vals));
+    kernel_args.push_back(&thrust::get<2>(tuple_vals));
   });
 
   std::transform(data_view.begin(), data_view.end(), iters, [&](column_view const& col) {
