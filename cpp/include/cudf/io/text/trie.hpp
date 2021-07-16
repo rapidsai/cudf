@@ -147,29 +147,29 @@ struct trie {
 
     // copy host buffers to device
 
-    RMM_CUDA_TRY(cudaMemcpyAsync(device_layer_offsets.data(),
-                                 layer_offsets.data(),
-                                 layer_offsets.size() * sizeof(uint16_t),
-                                 cudaMemcpyDefault,
-                                 stream.value()));
+    CUDA_TRY(cudaMemcpyAsync(device_layer_offsets.data(),
+                             layer_offsets.data(),
+                             layer_offsets.size() * sizeof(uint16_t),
+                             cudaMemcpyDefault,
+                             stream.value()));
 
-    RMM_CUDA_TRY(cudaMemcpyAsync(device_tokens.data(),
-                                 tokens.data(),
-                                 tokens.size() * sizeof(char),
-                                 cudaMemcpyDefault,
-                                 stream.value()));
+    CUDA_TRY(cudaMemcpyAsync(device_tokens.data(),
+                             tokens.data(),
+                             tokens.size() * sizeof(char),
+                             cudaMemcpyDefault,
+                             stream.value()));
 
-    RMM_CUDA_TRY(cudaMemcpyAsync(device_transitions.data(),
-                                 transitions.data(),
-                                 transitions.size() * sizeof(uint16_t),
-                                 cudaMemcpyDefault,
-                                 stream.value()));
+    CUDA_TRY(cudaMemcpyAsync(device_transitions.data(),
+                             transitions.data(),
+                             transitions.size() * sizeof(uint16_t),
+                             cudaMemcpyDefault,
+                             stream.value()));
 
-    RMM_CUDA_TRY(cudaMemcpyAsync(device_match_length.data(),
-                                 match_length.data(),
-                                 match_length.size() * sizeof(uint8_t),
-                                 cudaMemcpyDefault,
-                                 stream.value()));
+    CUDA_TRY(cudaMemcpyAsync(device_match_length.data(),
+                             match_length.data(),
+                             match_length.size() * sizeof(uint8_t),
+                             cudaMemcpyDefault,
+                             stream.value()));
 
     // create owning container
 

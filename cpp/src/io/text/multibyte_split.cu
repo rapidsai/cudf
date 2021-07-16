@@ -27,76 +27,90 @@ inline constexpr auto ceil_div(Dividend dividend, Divisor divisor)
 
 using superstate = cudf::io::text::superstate<16>;
 
+enum class scan_tile_status : uint8_t {
+  uninitialized,
+  partial,
+  inclusive,
+};
+
 template <typename T>
 struct scan_tile_state_view {
   uint64_t num_tiles;
-  bool* tile_status;
-  T* tile_state;
+  scan_tile_status* tile_status;
+  T* tile_partial;
+  T* tile_inclusive;
 
-  __device__ void initialize(cudf::size_type base_tile_idx, cudf::size_type count)
+  __device__ inline void initialize(cudf::size_type base_tile_idx, cudf::size_type count)
   {
     auto thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (thread_idx < count) {  //
-      tile_status[(base_tile_idx + thread_idx) % num_tiles] = false;
+      tile_status[(base_tile_idx + thread_idx) % num_tiles] = scan_tile_status::uninitialized;
     }
   }
 
-  __device__ void set_inclusive_prefix(cudf::size_type tile_idx, T value)
+  __device__ inline void set_inclusive_prefix(cudf::size_type tile_idx, T value)
   {
-    cub::ThreadStore<cub::STORE_CG>(tile_state + ((tile_idx + num_tiles) % num_tiles), value);
+    auto const offset = (tile_idx + num_tiles) % num_tiles;
+    cub::ThreadStore<cub::STORE_CG>(tile_inclusive + offset, value);
     __threadfence();
-    cub::ThreadStore<cub::STORE_CG>(tile_status + ((tile_idx + num_tiles) % num_tiles), true);
+    cub::ThreadStore<cub::STORE_CG>(tile_status + offset, scan_tile_status::inclusive);
   }
 
-  __device__ T get_inclusive_prefix(cudf::size_type tile_idx)
+  __device__ inline T get_inclusive_prefix(cudf::size_type tile_idx)
   {
-    while (cub::ThreadLoad<cub::LOAD_CG>(tile_status + ((tile_idx + num_tiles) % num_tiles)) ==
-           false) {
+    auto const offset = (tile_idx + num_tiles) % num_tiles;
+    while (cub::ThreadLoad<cub::LOAD_CG>(tile_status + offset) != scan_tile_status::inclusive) {
       __threadfence();
     }
-    return cub::ThreadLoad<cub::LOAD_CG>(tile_state + ((tile_idx + num_tiles) % num_tiles));
+    return cub::ThreadLoad<cub::LOAD_CG>(tile_inclusive + offset);
   }
 };
 
 template <typename T>
 struct scan_tile_state {
-  rmm::device_uvector<bool> tile_status;
-  rmm::device_uvector<T> tile_state;
+  rmm::device_uvector<scan_tile_status> tile_status;
+  rmm::device_uvector<T> tile_state_partial;
+  rmm::device_uvector<T> tile_state_inclusive;
 
   scan_tile_state(cudf::size_type num_tiles,
                   rmm::cuda_stream_view stream,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : tile_status(rmm::device_uvector<bool>(num_tiles, stream, mr)),
-      tile_state(rmm::device_uvector<T>(num_tiles, stream, mr))
+    : tile_status(rmm::device_uvector<scan_tile_status>(num_tiles, stream, mr)),
+      tile_state_partial(rmm::device_uvector<T>(num_tiles, stream, mr)),
+      tile_state_inclusive(rmm::device_uvector<T>(num_tiles, stream, mr))
   {
   }
 
   operator scan_tile_state_view<T>()
   {
-    return scan_tile_state_view<T>{tile_status.size(), tile_status.data(), tile_state.data()};
+    return scan_tile_state_view<T>{tile_status.size(),
+                                   tile_status.data(),
+                                   tile_state_partial.data(),
+                                   tile_state_inclusive.data()};
   }
 
-  void set_seed_async(T const seed, rmm::cuda_stream_view stream)
+  inline void set_seed_async(T const seed, rmm::cuda_stream_view stream)
   {
     auto x = tile_status.size();
-    bool y = true;
-    tile_state.set_element_async(x - 1, seed, stream);
+    auto y = scan_tile_status::inclusive;
+    tile_state_inclusive.set_element_async(x - 1, seed, stream);
     tile_status.set_element_async(x - 1, y, stream);
   }
 
   // T back_element(rmm::cuda_stream_view stream) const { return tile_state.back_element(stream); }
 
-  T get_inclusive_prefix(cudf::size_type tile_idx, rmm::cuda_stream_view stream)
+  inline T get_inclusive_prefix(cudf::size_type tile_idx, rmm::cuda_stream_view stream) const
   {
-    return tile_state.element((tile_idx + tile_status.size()) % tile_status.size(), stream);
+    auto const offset = (tile_idx + tile_status.size()) % tile_status.size();
+    return tile_state_inclusive.element(offset, stream);
   }
 };
 
 // keep ITEMS_PER_TILE below input size to force multi-tile execution.
-auto constexpr ITEMS_PER_THREAD = 2;
-auto constexpr THREADS_PER_TILE = 2;
+auto constexpr ITEMS_PER_THREAD = 32;
+auto constexpr THREADS_PER_TILE = 32;
 auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
-auto constexpr TILES_PER_CHUNK  = 2;
+auto constexpr TILES_PER_CHUNK  = 32;
 auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 // multibyte_split works by splitting up inputs in to 32 inputs (bytes) per thread, and transforming
 // them in to data structures called "superstates". these superstates are created by searching a
@@ -124,7 +138,7 @@ struct PatternScan {
 
   __device__ inline PatternScan(TempStorage& temp_storage) : _temp_storage(temp_storage.Alias()) {}
 
-  __device__ inline void Scan(cudf::size_type base_tile_idx,
+  __device__ inline void Scan(cudf::size_type tile_idx,
                               scan_tile_state_view<superstate> tile_state,
                               cudf::io::text::trie_device_view trie,
                               char (&thread_data)[ITEMS_PER_THREAD],
@@ -141,15 +155,16 @@ struct PatternScan {
     }
 
     auto prefix_callback = [&] __device__(superstate const& block_aggregate) -> superstate {
-      if (threadIdx.x == 0) {
-        _temp_storage.block_aggregate = block_aggregate;
-        _temp_storage.exclusive_prefix =
-          tile_state.get_inclusive_prefix(base_tile_idx + blockIdx.x - 1);
-        _temp_storage.inclusive_prefix = _temp_storage.exclusive_prefix + block_aggregate;
-        tile_state.set_inclusive_prefix(base_tile_idx + blockIdx.x, _temp_storage.inclusive_prefix);
+      if (threadIdx.x < THREADS_PER_TILE) {}
 
-        // printf("base_tile_idx(%2u) bid(%2u) tid(%2u): prefix = %2u %2u\n",
-        //        static_cast<uint32_t>(base_tile_idx),
+      if (threadIdx.x == 0) {
+        _temp_storage.block_aggregate  = block_aggregate;
+        _temp_storage.exclusive_prefix = tile_state.get_inclusive_prefix(tile_idx - 1);
+        _temp_storage.inclusive_prefix = _temp_storage.exclusive_prefix + block_aggregate;
+        tile_state.set_inclusive_prefix(tile_idx, _temp_storage.inclusive_prefix);
+
+        // printf("tile_idx(%2u) bid(%2u) tid(%2u): prefix = %2u %2u\n",
+        //        static_cast<uint32_t>(tile_idx),
         //        blockIdx.x,
         //        threadIdx.x,
         //        _temp_storage.exclusive_prefix);
@@ -196,6 +211,7 @@ __global__ void multibyte_split_kernel(cudf::size_type base_tile_idx,
     };
   } temp_storage;
 
+  int32_t const tile_idx   = base_tile_idx + blockIdx.x;
   int32_t const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
   int32_t const data_begin = thread_idx * ITEMS_PER_THREAD;
   int32_t const num_valid  = data.size() - data_begin;
@@ -214,7 +230,7 @@ __global__ void multibyte_split_kernel(cudf::size_type base_tile_idx,
   uint32_t thread_states[ITEMS_PER_THREAD];
 
   PatternScan(temp_storage.pattern_scan)  //
-    .Scan(base_tile_idx, tile_superstates, trie, thread_data, thread_states);
+    .Scan(tile_idx, tile_superstates, trie, thread_data, thread_states);
 
   // STEP 3: Flag matches
 
@@ -231,9 +247,9 @@ __global__ void multibyte_split_kernel(cudf::size_type base_tile_idx,
   auto prefix_callback = [&] __device__(uint32_t const& block_aggregate) -> uint32_t {
     if (threadIdx.x == 0) {
       temp_storage.offset_scan_exclusive_prefix =
-        tile_output_offsets.get_inclusive_prefix(base_tile_idx + blockIdx.x - 1);
+        tile_output_offsets.get_inclusive_prefix(tile_idx - 1);
       auto inclusive_prefix = temp_storage.offset_scan_exclusive_prefix + block_aggregate;
-      tile_output_offsets.set_inclusive_prefix(base_tile_idx + blockIdx.x, inclusive_prefix);
+      tile_output_offsets.set_inclusive_prefix(tile_idx, inclusive_prefix);
     }
     return temp_storage.offset_scan_exclusive_prefix;
   };
