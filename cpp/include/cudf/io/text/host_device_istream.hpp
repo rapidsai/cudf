@@ -16,11 +16,9 @@ class host_device_istream : public cudf::io::text::device_istream {
  public:
   host_device_istream(std::istream& source_stream) : _source_stream(source_stream) {}
 
-  uint32_t readsome(cudf::device_span<char> destination, rmm::cuda_stream_view stream) override;
+  uint32_t read(cudf::device_span<char> destination, rmm::cuda_stream_view stream) override;
 
-  uint32_t tellg() override;
-
-  void seekg(uint32_t pos) override;
+  void reset() override;
 
  private:
   std::istream& _source_stream;

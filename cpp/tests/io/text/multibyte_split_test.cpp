@@ -35,12 +35,12 @@ constexpr bool print_all{false};
 struct MultibyteSplitTest : public BaseFixture {
 };
 
-TEST_F(MultibyteSplitTest, Simple)
+TEST_F(MultibyteSplitTest, Simple1)
 {
   // 😀 | F0 9F 98 80 | 11110000 10011111 01100010 01010000
   // 😎 | F0 9F 98 8E | 11110000 10011111 01100010 11101000
   auto delimiters = std::vector<std::string>({"😀", "😎", ",", "::"});
-  cudf::string_scalar input(
+  auto host_input = std::string(
     "aaa😀"
     "bbb😀"
     "ccc😀"
@@ -76,7 +76,12 @@ TEST_F(MultibyteSplitTest, Simple)
     "emojis,",      "which,", "are😎", "multiple,", "bytes::", "and😎",  "used😎",      "as😎",
     "delimeters.😎", "::",     ",",    "😀",         ""};
 
-  auto out = cudf::io::text::multibyte_split(input, delimiters);
+  auto host_input_stream   = std::basic_stringstream(host_input);
+  auto device_input_stream = cudf::io::text::host_device_istream(host_input_stream);
+  // auto device_input        = cudf::string_scalar(host_input);
+
+  auto out = cudf::io::text::multibyte_split(device_input_stream, delimiters);
+  // auto out = cudf::io::text::multibyte_split(input, delimiters);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
 }
