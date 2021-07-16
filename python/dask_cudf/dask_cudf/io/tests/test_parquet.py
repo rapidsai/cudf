@@ -2,11 +2,11 @@
 import glob
 import math
 import os
-from packaging.version import parse as parse_version
 
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import parse as parse_version
 
 import dask
 from dask import dataframe as dd
@@ -357,6 +357,9 @@ def test_chunksize(tmpdir, chunksize, metadata):
             # one output partition
             assert ddf3.npartitions == 1
         else:
+            # Files can be aggregateed together, but
+            # chunksize is not large enough to produce
+            # a single output partition
             assert ddf3.npartitions < num_row_groups
 
 
