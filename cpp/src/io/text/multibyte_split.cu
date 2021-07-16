@@ -28,7 +28,7 @@ inline constexpr auto ceil_div(Dividend dividend, Divisor divisor)
 using superstate = cudf::io::text::superstate<16>;
 
 enum class scan_tile_status : uint8_t {
-  uninitialized,
+  invalid,
   partial,
   inclusive,
 };
@@ -44,8 +44,16 @@ struct scan_tile_state_view {
   {
     auto thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (thread_idx < count) {  //
-      tile_status[(base_tile_idx + thread_idx) % num_tiles] = scan_tile_status::uninitialized;
+      tile_status[(base_tile_idx + thread_idx) % num_tiles] = scan_tile_status::invalid;
     }
+  }
+
+  __device__ inline void set_partial_prefix(cudf::size_type tile_idx, T value)
+  {
+    auto const offset = (tile_idx + num_tiles) % num_tiles;
+    cub::ThreadStore<cub::STORE_CG>(tile_inclusive + offset, value);
+    __threadfence();
+    cub::ThreadStore<cub::STORE_CG>(tile_status + offset, scan_tile_status::partial);
   }
 
   __device__ inline void set_inclusive_prefix(cudf::size_type tile_idx, T value)
@@ -54,6 +62,22 @@ struct scan_tile_state_view {
     cub::ThreadStore<cub::STORE_CG>(tile_inclusive + offset, value);
     __threadfence();
     cub::ThreadStore<cub::STORE_CG>(tile_status + offset, scan_tile_status::inclusive);
+  }
+
+  __device__ inline T get_prefix(cudf::size_type tile_idx, scan_tile_status& status)
+  {
+    auto const offset = (tile_idx + num_tiles) % num_tiles;
+
+    while ((status = cub::ThreadLoad<cub::LOAD_CG>(tile_status + offset)) ==
+           scan_tile_status::invalid) {
+      __threadfence();
+    }
+
+    if (status == scan_tile_status::partial) {
+      return cub::ThreadLoad<cub::LOAD_CG>(tile_partial + offset);
+    } else {
+      return cub::ThreadLoad<cub::LOAD_CG>(tile_inclusive + offset);
+    }
   }
 
   __device__ inline T get_inclusive_prefix(cudf::size_type tile_idx)
@@ -106,11 +130,13 @@ struct scan_tile_state {
   }
 };
 
+auto constexpr DO_AGGREGATE_PARTIALS = false;
+
 // keep ITEMS_PER_TILE below input size to force multi-tile execution.
-auto constexpr ITEMS_PER_THREAD = 32;
-auto constexpr THREADS_PER_TILE = 32;
+auto constexpr ITEMS_PER_THREAD = 2;
+auto constexpr THREADS_PER_TILE = 2;
 auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
-auto constexpr TILES_PER_CHUNK  = 32;
+auto constexpr TILES_PER_CHUNK  = 2;
 auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 // multibyte_split works by splitting up inputs in to 32 inputs (bytes) per thread, and transforming
 // them in to data structures called "superstates". these superstates are created by searching a
@@ -122,14 +148,62 @@ auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 // it begins in. From there, each thread can then take deterministic action. In this case, the
 // deterministic action is counting and outputting delimiter offsets when a delimiter is found.
 
+template <typename T>
+struct scan_tile_state_callback {
+  struct _TempStorage {
+    T exclusive_prefix;
+  };
+
+  using TempStorage = cub::Uninitialized<_TempStorage>;
+
+  __device__ inline scan_tile_state_callback(TempStorage& temp_storage,
+                                             scan_tile_state_view<T>& tile_state,
+                                             cudf::size_type tile_idx)
+    : _temp_storage(temp_storage.Alias()), _tile_state(tile_state), _tile_idx(tile_idx)
+  {
+  }
+
+  __device__ inline T operator()(T const& block_aggregate)
+  {
+    if (threadIdx.x == 0) {
+      if constexpr (DO_AGGREGATE_PARTIALS) {
+        // scan partials to form prefix
+        auto predecessor_idx    = _tile_idx - 1;
+        auto predecessor_status = scan_tile_status::invalid;
+        auto window_partial     = T{};
+
+        do {
+          auto predecessor_prefix = _tile_state.get_prefix(predecessor_idx, predecessor_status);
+          window_partial          = predecessor_prefix + window_partial;
+        } while (predecessor_status != scan_tile_status::inclusive);
+
+        _temp_storage.exclusive_prefix = window_partial;
+      } else {
+        // wait for prefix
+        _temp_storage.exclusive_prefix = _tile_state.get_inclusive_prefix(_tile_idx - 1);
+      }
+
+      auto inclusive_prefix = _temp_storage.exclusive_prefix + block_aggregate;
+      _tile_state.set_inclusive_prefix(_tile_idx, inclusive_prefix);
+    }
+
+    __syncthreads();  // TODO: remove if unnecessary.
+
+    return _temp_storage.exclusive_prefix;
+  }
+
+  _TempStorage& _temp_storage;
+  scan_tile_state_view<T>& _tile_state;
+  cudf::size_type _tile_idx;
+};
+
 struct PatternScan {
   typedef cub::BlockScan<superstate, THREADS_PER_TILE> BlockScan;
+  typedef scan_tile_state_callback<superstate> BlockScanCallback;
 
   struct _TempStorage {
     typename BlockScan::TempStorage scan;
-    superstate block_aggregate;
-    superstate exclusive_prefix;
-    superstate inclusive_prefix;
+    typename BlockScanCallback::TempStorage scan_callback;
   };
 
   _TempStorage& _temp_storage;
@@ -154,23 +228,7 @@ struct PatternScan {
       });
     }
 
-    auto prefix_callback = [&] __device__(superstate const& block_aggregate) -> superstate {
-      if (threadIdx.x < THREADS_PER_TILE) {}
-
-      if (threadIdx.x == 0) {
-        _temp_storage.block_aggregate  = block_aggregate;
-        _temp_storage.exclusive_prefix = tile_state.get_inclusive_prefix(tile_idx - 1);
-        _temp_storage.inclusive_prefix = _temp_storage.exclusive_prefix + block_aggregate;
-        tile_state.set_inclusive_prefix(tile_idx, _temp_storage.inclusive_prefix);
-
-        // printf("tile_idx(%2u) bid(%2u) tid(%2u): prefix = %2u %2u\n",
-        //        static_cast<uint32_t>(tile_idx),
-        //        blockIdx.x,
-        //        threadIdx.x,
-        //        _temp_storage.exclusive_prefix);
-      }
-      return _temp_storage.exclusive_prefix;
-    };
+    auto prefix_callback = BlockScanCallback(_temp_storage.scan_callback, tile_state, tile_idx);
 
     BlockScan(_temp_storage.scan)
       .ExclusiveSum(thread_superstate, thread_superstate, prefix_callback);
@@ -202,12 +260,13 @@ __global__ void multibyte_split_kernel(cudf::size_type base_tile_idx,
                                        cudf::device_span<int32_t> string_offsets)
 {
   typedef cub::BlockScan<uint32_t, THREADS_PER_TILE> OffsetScan;
+  typedef scan_tile_state_callback<uint32_t> OffsetScanCallback;
 
   __shared__ union {
     typename PatternScan::TempStorage pattern_scan;
     struct {
       typename OffsetScan::TempStorage offset_scan;
-      uint32_t offset_scan_exclusive_prefix;
+      typename OffsetScanCallback::TempStorage offset_scan_callback;
     };
   } temp_storage;
 
@@ -244,15 +303,8 @@ __global__ void multibyte_split_kernel(cudf::size_type base_tile_idx,
 
   __syncthreads();  // required before temp_memory re-use
 
-  auto prefix_callback = [&] __device__(uint32_t const& block_aggregate) -> uint32_t {
-    if (threadIdx.x == 0) {
-      temp_storage.offset_scan_exclusive_prefix =
-        tile_output_offsets.get_inclusive_prefix(tile_idx - 1);
-      auto inclusive_prefix = temp_storage.offset_scan_exclusive_prefix + block_aggregate;
-      tile_output_offsets.set_inclusive_prefix(tile_idx, inclusive_prefix);
-    }
-    return temp_storage.offset_scan_exclusive_prefix;
-  };
+  auto prefix_callback =
+    OffsetScanCallback(temp_storage.offset_scan_callback, tile_output_offsets, tile_idx);
 
   OffsetScan(temp_storage.offset_scan)
     .ExclusiveSum(thread_offsets, thread_offsets, prefix_callback);
