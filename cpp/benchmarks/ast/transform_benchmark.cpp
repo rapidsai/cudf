@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <cudf/ast/transform.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -119,7 +119,7 @@ static void BM_ast_transform(benchmark::State& state)
   // Execute benchmark
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::ast::compute_column(table, expression_tree_root);
+    cudf::compute_column(table, expression_tree_root);
   }
 
   // Use the number of bytes read from global memory

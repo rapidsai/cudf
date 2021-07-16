@@ -37,16 +37,9 @@ std::unique_ptr<column> transform(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Compute a new column by evaluating an expression tree on a table.
+ * @copydoc cudf::compute_column
  *
- * This evaluates an expression over a table to produce a new column. Also called an n-ary
- * transform.
- *
- * @param table The table used for expression evaluation.
- * @param expr The root of the expression tree.
- * @param stream Stream on which to perform the computation.
- * @param mr Device memory resource.
- * @return std::unique_ptr<column> Output column.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> compute_column(
   table_view const table,
