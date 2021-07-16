@@ -39,6 +39,7 @@
 template <typename key_type,
           typename payload_type,
           bool Nullable,
+          bool is_conditional = false,
           typename state_type,
           typename Join>
 static void BM_join(state_type& state, Join JoinFunc)
@@ -115,11 +116,10 @@ static void BM_join(state_type& state, Join JoinFunc)
   cudf::table_view probe_table({probe_key_column->view(), probe_payload_column});
 
   // Setup join parameters and result table
-
-  std::vector<cudf::size_type> columns_to_join = {0};
+  [[maybe_unused]] std::vector<cudf::size_type> columns_to_join = {0};
 
   // Benchmark the inner join operation
-  if constexpr (std::is_same<state_type, benchmark::State>::value) {
+  if constexpr (std::is_same<state_type, benchmark::State>::value and (not is_conditional)) {
     for (auto _ : state) {
       cuda_event_timer raii(state, true, rmm::cuda_stream_default);
 
@@ -127,7 +127,7 @@ static void BM_join(state_type& state, Join JoinFunc)
         probe_table, build_table, columns_to_join, columns_to_join, cudf::null_equality::UNEQUAL);
     }
   }
-  if constexpr (std::is_same<state_type, nvbench::state>::value) {
+  if constexpr (std::is_same<state_type, nvbench::state>::value and (not is_conditional)) {
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       rmm::cuda_stream_view stream_view{launch.get_stream()};
       JoinFunc(probe_table,
@@ -137,5 +137,21 @@ static void BM_join(state_type& state, Join JoinFunc)
                cudf::null_equality::UNEQUAL,
                stream_view);
     });
+  }
+
+  // Benchmark conditional join
+  if constexpr (std::is_same<state_type, benchmark::State>::value and is_conditional) {
+    // Common column references.
+    const auto col_ref_left_0  = cudf::ast::column_reference(0);
+    const auto col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+    auto left_zero_eq_right_zero =
+      cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
+
+    for (auto _ : state) {
+      cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+
+      auto result =
+        JoinFunc(probe_table, build_table, left_zero_eq_right_zero, cudf::null_equality::UNEQUAL);
+    }
   }
 }
