@@ -109,7 +109,18 @@ class cufile_input : public cufile_io_base {
    */
   virtual size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) = 0;
 
-  // TODO: docs
+  /**
+   * @brief Asynchronously reads into existing device memory.
+   *
+   *  @throws cudf::logic_error on cuFile error
+   *
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to read
+   * @param dst Address of the existing device memory
+   * @param stream CUDA stream to use
+   *
+   * @return The number of bytes read as an std::future
+   */
   virtual std::future<size_t> read_async(size_t offset,
                                          size_t size,
                                          uint8_t* dst,

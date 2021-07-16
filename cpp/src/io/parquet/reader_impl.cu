@@ -855,14 +855,12 @@ void reader::impl::read_column_chunks(
     if (io_size != 0) {
       auto& source = _sources[chunk_source_map[chunk]];
       if (source->is_device_read_preferred(io_size)) {
-        std::cout << "cufile read" << std::endl;
         auto buffer        = rmm::device_buffer(io_size, stream);
         auto fut_read_size = source->device_read_async(
           io_offset, io_size, static_cast<uint8_t*>(buffer.data()), stream);
         fut_read_tasks.emplace_back(std::move(fut_read_size));
         page_data[chunk] = datasource::buffer::create(std::move(buffer));
       } else {
-        std::cout << "normal read" << std::endl;
         auto const buffer = source->host_read(io_offset, io_size);
         page_data[chunk] =
           datasource::buffer::create(rmm::device_buffer(buffer->data(), buffer->size(), stream));
@@ -876,8 +874,6 @@ void reader::impl::read_column_chunks(
       chunk = next_chunk;
     }
   }
-  // Time to synchronize all async device reads
-  // TODO: Add error checking. Actual read size should be same as expected.
   for (auto& task : fut_read_tasks) {
     task.wait();
   }
