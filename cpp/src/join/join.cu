@@ -13,9 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <join/conditional_join.cuh>
 #include <join/hash_join.cuh>
 #include <join/join_common_utils.hpp>
-#include <join/nested_loop_join.cuh>
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
