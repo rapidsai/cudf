@@ -37,7 +37,7 @@ namespace detail {
 
 // logical-and scan of the null mask of the input view
 rmm::device_buffer mask_scan(column_view const& input_view,
-                             cudf::scan_type inclusive,
+                             scan_type inclusive,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
@@ -56,13 +56,9 @@ rmm::device_buffer mask_scan(column_view const& input_view,
     return std::min(input_view.size(), first_null + exclusive_offset);
   }();
 
-  cudf::detail::set_null_mask(
-    static_cast<cudf::bitmask_type*>(mask.data()), 0, first_null_position, true, stream);
-  cudf::detail::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()),
-                              first_null_position,
-                              input_view.size(),
-                              false,
-                              stream);
+  set_null_mask(static_cast<bitmask_type*>(mask.data()), 0, first_null_position, true, stream);
+  set_null_mask(
+    static_cast<bitmask_type*>(mask.data()), first_null_position, input_view.size(), false, stream);
   return mask;
 }
 
@@ -80,7 +76,7 @@ struct scan_dispatcher {
   static constexpr bool is_string_supported()
   {
     return std::is_same<T, string_view>::value &&
-           (std::is_same<Op, cudf::DeviceMin>::value || std::is_same<Op, cudf::DeviceMax>::value);
+           (std::is_same<Op, DeviceMin>::value || std::is_same<Op, DeviceMax>::value);
   }
 
   template <typename T>
@@ -91,7 +87,7 @@ struct scan_dispatcher {
 
   // for arithmetic types
   template <typename T, std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
-  auto inclusive_scan(const column_view& input_view,
+  auto inclusive_scan(column_view const& input_view,
                       null_policy,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource* mr)
@@ -112,7 +108,7 @@ struct scan_dispatcher {
 
   // for string type: only MIN and MAX are supported
   template <typename T, std::enable_if_t<is_string_supported<T>()>* = nullptr>
-  std::unique_ptr<column> inclusive_scan(const column_view& input_view,
+  std::unique_ptr<column> inclusive_scan(column_view const& input_view,
                                          null_policy,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
@@ -126,7 +122,7 @@ struct scan_dispatcher {
       rmm::exec_policy(stream), begin, begin + input_view.size(), result.data(), Op{});
 
     CHECK_CUDA(stream.value());
-    return cudf::make_strings_column(result, Op::template identity<string_view>(), stream, mr);
+    return make_strings_column(result, Op::template identity<string_view>(), stream, mr);
   }
 
  public:
@@ -142,7 +138,7 @@ struct scan_dispatcher {
    * @tparam T type of input column
    */
   template <typename T, typename std::enable_if_t<is_supported<T>()>* = nullptr>
-  std::unique_ptr<column> operator()(const column_view& input,
+  std::unique_ptr<column> operator()(column_view const& input,
                                      null_policy null_handling,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -157,17 +153,17 @@ struct scan_dispatcher {
   }
 };
 
-bool has_nested_nulls(column_view const& struct_col)
+bool struct_has_nested_nulls(column_view const& struct_col)
 {
-  return struct_col.has_nulls() || std::any_of(struct_col.child_begin(),
-                                               struct_col.child_end(),
-                                               [](auto col) { return has_nested_nulls(col); });
+  return std::any_of(struct_col.child_begin(), struct_col.child_end(), [](auto const& col) {
+    return has_nested_nulls(table_view{{col}});
+  });
 }
 
 bool has_nested_children(column_view const& struct_col)
 {
   return std::any_of(struct_col.child_begin(), struct_col.child_end(), [](auto const& col) {
-    return col.type().id() == type_id::STRUCT || col.type().id() == type_id::LIST;
+    return is_nested(col.type());
   });
 }
 
@@ -176,12 +172,12 @@ void generate_rank_struct_comparisons(column_view const& order_by,
                                       mutable_column_view out,
                                       rmm::cuda_stream_view stream)
 {
+  auto const d_order_by = column_device_view::create(order_by, stream);
   thrust::tabulate(
     rmm::exec_policy(stream),
     out.begin<size_type>(),
     out.end<size_type>(),
-    [d_order_by = *column_device_view::create(order_by, stream),
-     has_nulls  = order_by.has_nulls()] __device__(size_type row_index) {
+    [d_order_by = *d_order_by, has_nulls = order_by.has_nulls()] __device__(size_type row_index) {
       if (row_index == 0) {
         return row_index + 1;
       } else if (has_nulls) {
@@ -199,10 +195,9 @@ void generate_rank_struct_comparisons(column_view const& order_by,
                thrust::make_counting_iterator<size_type>(0),
                thrust::make_counting_iterator<size_type>(0) + d_order_by.num_child_columns(),
                [row_index, d_order_by] __device__(size_type child_index) {
-                 column_device_view col = d_order_by.child(child_index);
+                 column_device_view const& col = d_order_by.child(child_index);
                  element_equality_comparator<nested_nulls> element_comparator{col, col, true};
-                 return cudf::type_dispatcher(
-                   col.type(), element_comparator, row_index, row_index - 1);
+                 return type_dispatcher(col.type(), element_comparator, row_index, row_index - 1);
                })
                ? 0
                : row_index + 1;
@@ -214,18 +209,17 @@ void generate_rank_comparisons(column_view const& order_by,
                                mutable_column_view out,
                                rmm::cuda_stream_view stream)
 {
-  auto d_order_by = column_device_view::create(order_by, stream);
+  auto const d_order_by = column_device_view::create(order_by, stream);
   element_equality_comparator<has_nulls> element_comparator(*d_order_by, *d_order_by, true);
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    out.begin<size_type>(),
-    out.end<size_type>(),
-    [type = d_order_by->type(), element_comparator] __device__(size_type row_index) {
-      return (row_index == 0 ||
-              !cudf::type_dispatcher(type, element_comparator, row_index, row_index - 1))
-               ? row_index + 1
-               : 0;
-    });
+  thrust::tabulate(rmm::exec_policy(stream),
+                   out.begin<size_type>(),
+                   out.end<size_type>(),
+                   [type = d_order_by->type(), element_comparator] __device__(size_type row_index) {
+                     return (row_index == 0 ||
+                             !type_dispatcher(type, element_comparator, row_index, row_index - 1))
+                              ? row_index + 1
+                              : 0;
+                   });
 }
 
 template <bool nested_nulls>
@@ -233,36 +227,33 @@ void generate_dense_rank_struct_comparisons(column_view const& order_by,
                                             mutable_column_view out,
                                             rmm::cuda_stream_view stream)
 {
+  auto const d_order_by = column_device_view::create(order_by, stream);
   thrust::tabulate(
     rmm::exec_policy(stream),
     out.begin<size_type>(),
     out.end<size_type>(),
-    [d_order_by = *column_device_view::create(order_by, stream),
-     has_nulls  = order_by.has_nulls()] __device__(size_type row_index) {
+    [d_order_by = *d_order_by, has_nulls = order_by.has_nulls()] __device__(size_type row_index) {
       if (row_index == 0) {
-        return 1;
+        return true;
       } else if (has_nulls) {
         bool const lhs_is_null{d_order_by.is_null_nocheck(row_index)};
         bool const rhs_is_null{d_order_by.is_null_nocheck(row_index - 1)};
         if (lhs_is_null and rhs_is_null) {
-          return 0;
+          return false;
         } else if (lhs_is_null != rhs_is_null) {
-          return 1;
+          return true;
         }
       }
 
-      return thrust::all_of(
-               thrust::seq,
-               thrust::make_counting_iterator<size_type>(0),
-               thrust::make_counting_iterator<size_type>(0) + d_order_by.num_child_columns(),
-               [row_index, d_order_by] __device__(size_type child_index) {
-                 column_device_view col = d_order_by.child(child_index);
-                 element_equality_comparator<nested_nulls> element_comparator{col, col, true};
-                 return cudf::type_dispatcher(
-                   col.type(), element_comparator, row_index, row_index - 1);
-               })
-               ? 0
-               : 1;
+      return !thrust::all_of(
+        thrust::seq,
+        thrust::make_counting_iterator<size_type>(0),
+        thrust::make_counting_iterator<size_type>(0) + d_order_by.num_child_columns(),
+        [row_index, d_order_by] __device__(size_type child_index) {
+          column_device_view const& col = d_order_by.child(child_index);
+          element_equality_comparator<nested_nulls> element_comparator{col, col, true};
+          return type_dispatcher(col.type(), element_comparator, row_index, row_index - 1);
+        });
     });
 }
 
@@ -271,18 +262,15 @@ void generate_dense_rank_comparisons(column_view const& order_by,
                                      mutable_column_view out,
                                      rmm::cuda_stream_view stream)
 {
-  auto d_order_by = column_device_view::create(order_by, stream);
+  auto const d_order_by = column_device_view::create(order_by, stream);
   element_equality_comparator<has_nulls> element_comparator(*d_order_by, *d_order_by, true);
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    out.begin<size_type>(),
-    out.end<size_type>(),
-    [type = d_order_by->type(), element_comparator] __device__(size_type row_index) {
-      return (row_index == 0 ||
-              !cudf::type_dispatcher(type, element_comparator, row_index, row_index - 1))
-               ? 1
-               : 0;
-    });
+  thrust::tabulate(rmm::exec_policy(stream),
+                   out.begin<size_type>(),
+                   out.end<size_type>(),
+                   [type = d_order_by->type(), element_comparator] __device__(size_type row_index) {
+                     return (row_index == 0 ||
+                             !type_dispatcher(type, element_comparator, row_index, row_index - 1));
+                   });
 }
 
 }  // namespace
@@ -291,16 +279,14 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  auto ranks         = make_fixed_width_column(cudf::data_type{cudf::type_to_id<size_type>()},
-                                       order_by.size(),
-                                       mask_state::ALL_VALID,
-                                       stream,
-                                       mr);
+  auto ranks = make_fixed_width_column(
+    data_type{type_to_id<size_type>()}, order_by.size(), mask_state::ALL_VALID, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
-  if (order_by.type().id() == type_id::STRUCT) {
-    bool nested_nulls = std::any_of(
-      order_by.child_begin(), order_by.child_end(), [](auto col) { return has_nested_nulls(col); });
-    bool is_nested = has_nested_children(order_by);
+  if (order_by.type().id() == type_id::LIST) {
+    CUDF_FAIL("List types not supported");
+  } else if (order_by.type().id() == type_id::STRUCT) {
+    bool nested_nulls = struct_has_nested_nulls(order_by);
+    bool is_nested    = has_nested_children(order_by);
 
     if (is_nested) {
       CUDF_FAIL("Nested struct and list types not supported");
@@ -327,16 +313,14 @@ std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
-  auto ranks         = make_fixed_width_column(cudf::data_type{cudf::type_to_id<size_type>()},
-                                       order_by.size(),
-                                       mask_state::ALL_VALID,
-                                       stream,
-                                       mr);
+  auto ranks = make_fixed_width_column(
+    data_type{type_to_id<size_type>()}, order_by.size(), mask_state::ALL_VALID, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
-  if (order_by.type().id() == type_id::STRUCT) {
-    bool nested_nulls = std::any_of(
-      order_by.child_begin(), order_by.child_end(), [](auto col) { return has_nested_nulls(col); });
-    bool is_nested = has_nested_children(order_by);
+  if (order_by.type().id() == type_id::LIST) {
+    CUDF_FAIL("List types not supported");
+  } else if (order_by.type().id() == type_id::STRUCT) {
+    bool nested_nulls = struct_has_nested_nulls(order_by);
+    bool is_nested    = has_nested_children(order_by);
 
     if (is_nested) {
       CUDF_FAIL("Nested struct and list types not supported");
@@ -359,7 +343,7 @@ std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
 }
 
 std::unique_ptr<column> scan_inclusive(
-  const column_view& input,
+  column_view const& input,
   std::unique_ptr<aggregation> const& agg,
   null_policy null_handling,
   rmm::cuda_stream_view stream,
@@ -372,8 +356,7 @@ std::unique_ptr<column> scan_inclusive(
   } else if (null_handling == null_policy::EXCLUDE) {
     output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
   } else if (input.nullable()) {
-    output->set_null_mask(mask_scan(input, scan_type::INCLUSIVE, stream, mr),
-                          cudf::UNKNOWN_NULL_COUNT);
+    output->set_null_mask(mask_scan(input, scan_type::INCLUSIVE, stream, mr), UNKNOWN_NULL_COUNT);
   }
 
   return output;

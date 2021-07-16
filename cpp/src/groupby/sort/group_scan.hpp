@@ -38,7 +38,7 @@ namespace detail {
  */
 std::unique_ptr<column> sum_scan(column_view const& values,
                                  size_type num_groups,
-                                 cudf::device_span<size_type const> group_labels,
+                                 device_span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr);
 
@@ -53,7 +53,7 @@ std::unique_ptr<column> sum_scan(column_view const& values,
  */
 std::unique_ptr<column> min_scan(column_view const& values,
                                  size_type num_groups,
-                                 cudf::device_span<size_type const> group_labels,
+                                 device_span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr);
 
@@ -68,7 +68,7 @@ std::unique_ptr<column> min_scan(column_view const& values,
  */
 std::unique_ptr<column> max_scan(column_view const& values,
                                  size_type num_groups,
-                                 cudf::device_span<size_type const> group_labels,
+                                 device_span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr);
 
@@ -80,7 +80,7 @@ std::unique_ptr<column> max_scan(column_view const& values,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Column of type INT32 of count values
  */
-std::unique_ptr<column> count_scan(cudf::device_span<size_type const> group_labels,
+std::unique_ptr<column> count_scan(device_span<size_type const> group_labels,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr);
 
@@ -92,11 +92,11 @@ std::unique_ptr<column> count_scan(cudf::device_span<size_type const> group_labe
  * @param group_offsets group index offsets with group ID indices
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Column of type cudf::size_type of rank values
+ * @return Column of type size_type of rank values
  */
 std::unique_ptr<column> rank_scan(column_view const& order_by,
-                                  cudf::device_span<size_type const> group_labels,
-                                  cudf::device_span<size_type const> group_offsets,
+                                  device_span<size_type const> group_labels,
+                                  device_span<size_type const> group_offsets,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr);
 
@@ -108,11 +108,11 @@ std::unique_ptr<column> rank_scan(column_view const& order_by,
  * @param group_offsets group index offsets with group ID indices
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Column of type cudf::size_type of dense rank values
+ * @return Column of type size_type of dense rank values
  */
 std::unique_ptr<column> dense_rank_scan(column_view const& order_by,
-                                        cudf::device_span<size_type const> group_labels,
-                                        cudf::device_span<size_type const> group_offsets,
+                                        device_span<size_type const> group_labels,
+                                        device_span<size_type const> group_offsets,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr);
 

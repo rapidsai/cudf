@@ -46,20 +46,18 @@ inline void test_pair_rank_scans(column_view const& keys,
     keys, order, keys, expected_rank, make_rank_aggregation(), null_policy::INCLUDE, sorted::YES);
 }
 
-struct groupby_rank_scan_test : public cudf::test::BaseFixture {
+struct groupby_rank_scan_test : public BaseFixture {
 };
 
-struct groupby_rank_scan_test_failures : public cudf::test::BaseFixture {
+struct groupby_rank_scan_test_failures : public BaseFixture {
 };
 
 template <typename T>
-struct typed_groupby_rank_scan_test : public cudf::test::BaseFixture {
+struct typed_groupby_rank_scan_test : public BaseFixture {
 };
 
-using testing_type_set = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
-                                            cudf::test::FloatingPointTypes,
-                                            cudf::test::FixedPointTypes,
-                                            cudf::test::ChronoTypes>;
+using testing_type_set =
+  Concat<IntegralTypesNotBool, FloatingPointTypes, FixedPointTypes, ChronoTypes>;
 
 TYPED_TEST_CASE(typed_groupby_rank_scan_test, testing_type_set);
 
@@ -260,12 +258,12 @@ TYPED_TEST(typed_groupby_rank_scan_test, nestedStructs)
 
 /* List support dependent on https://github.com/rapidsai/cudf/issues/8683
 template <typename T>
-struct list_groupby_rank_scan_test : public cudf::test::BaseFixture {
+struct list_groupby_rank_scan_test : public BaseFixture {
 };
 
-using list_test_type_set = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
-                                              cudf::test::FloatingPointTypes,
-                                              cudf::test::FixedPointTypes>;
+using list_test_type_set = Concat<IntegralTypesNotBool,
+                                              FloatingPointTypes,
+                                              FixedPointTypes>;
 
 TYPED_TEST_CASE(list_groupby_rank_scan_test, list_test_type_set);
 

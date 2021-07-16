@@ -263,8 +263,10 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * appear in the ranking sequence. `RANK` aggregations are not compatible with exclusive
  * scans and will return a fully valid column regardless of null_handling policy specified.
  *
+ * @code{.pseudo}
  * order_by              = {{0, 0, 0, 1, 1, 1}, {0, 0, 1, 0, 1, 1}}
  * ungrouped_scan_result = {1, 1, 3, 4, 5, 5}
+ * @endcode
  *
  * @param order_by table that the rows are sorted on, assumed to be presorted. If running a grouped
  *        aggregation, the first columns in the table should be the partition columns in order.
@@ -280,8 +282,10 @@ std::unique_ptr<Base> make_rank_aggregation();
  * sequence (unlike RANK aggregations). `DENSE_RANK` aggregations are not compatible with exclusive
  * scans and will return a fully valid column regardless of null_handling policy specified.
  *
+ * @code{.pseudo}
  * order_by              = {{0, 0, 0, 1, 1, 1}, {0, 0, 1, 0, 1, 1}}
  * ungrouped_scan_result = {1, 1, 2, 3, 4, 4}
+ * @endcode
  *
  * @param order_by table that the rows are sorted on, assumed to be presorted. If running a grouped
  *        aggregation, the first columns in the table should be the partition columns in order.

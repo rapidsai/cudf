@@ -135,7 +135,7 @@ struct sort_groupby_helper {
   size_type num_groups(rmm::cuda_stream_view stream) { return group_offsets(stream).size() - 1; }
 
   /**
-   * @brief check if the groupby is presorted
+   * @brief check if the groupby keys are presorted
    */
   bool is_presorted() { return _keys_pre_sorted == sorted::YES; }
 
