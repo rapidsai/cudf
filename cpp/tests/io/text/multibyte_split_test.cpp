@@ -84,4 +84,5 @@ TEST_F(MultibyteSplitTest, Simple1)
   // auto out = cudf::io::text::multibyte_split(input, delimiters);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
+  CUDF_FAIL();
 }

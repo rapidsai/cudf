@@ -12,6 +12,7 @@
 
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
+#include <cub/warp/warp_reduce.cuh>
 
 #include <bitset>
 #include <iostream>
@@ -133,8 +134,8 @@ struct scan_tile_state {
 auto constexpr DO_AGGREGATE_PARTIALS = false;
 
 // keep ITEMS_PER_TILE below input size to force multi-tile execution.
-auto constexpr ITEMS_PER_THREAD = 2;
-auto constexpr THREADS_PER_TILE = 2;
+auto constexpr ITEMS_PER_THREAD = 1;
+auto constexpr THREADS_PER_TILE = 32;
 auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
 auto constexpr TILES_PER_CHUNK  = 2;
 auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
@@ -150,7 +151,10 @@ auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 
 template <typename T>
 struct scan_tile_state_callback {
+  using WarpReduce = cub::WarpReduce<T>;
+
   struct _TempStorage {
+    typename WarpReduce::TempStorage reduce;
     T exclusive_prefix;
   };
 
@@ -165,26 +169,49 @@ struct scan_tile_state_callback {
 
   __device__ inline T operator()(T const& block_aggregate)
   {
-    if (threadIdx.x == 0) {
-      if constexpr (DO_AGGREGATE_PARTIALS) {
-        // scan partials to form prefix
-        auto predecessor_idx    = _tile_idx - 1;
-        auto predecessor_status = scan_tile_status::invalid;
-        auto window_partial     = T{};
+    auto predecessor_idx    = _tile_idx - 1 - threadIdx.x;
+    auto predecessor_status = scan_tile_status::invalid;
 
+    if constexpr (DO_AGGREGATE_PARTIALS) {
+      // scan partials to form prefix
+      auto window_partial = T{};
+
+      if (threadIdx.x == 0) {
         do {
           auto predecessor_prefix = _tile_state.get_prefix(predecessor_idx, predecessor_status);
           window_partial          = predecessor_prefix + window_partial;
+          predecessor_idx--;
         } while (predecessor_status != scan_tile_status::inclusive);
 
         _temp_storage.exclusive_prefix = window_partial;
-      } else {
-        // wait for prefix
-        _temp_storage.exclusive_prefix = _tile_state.get_inclusive_prefix(_tile_idx - 1);
+      }
+    } else {
+      // wait for prefix
+      if (threadIdx.x == 0) {
+        _temp_storage.exclusive_prefix = _tile_state.get_inclusive_prefix(predecessor_idx);
       }
 
-      auto inclusive_prefix = _temp_storage.exclusive_prefix + block_aggregate;
-      _tile_state.set_inclusive_prefix(_tile_idx, inclusive_prefix);
+      if (threadIdx.x < 1) {  // setting this to 2 hangs. 1 is fine. :(
+
+        auto predecessor_prefix = _tile_state.get_prefix(predecessor_idx, predecessor_status);
+        // auto fun_value          = WarpReduce(_temp_storage.reduce)  //
+        //                    .TailSegmentedReduce(predecessor_prefix,
+        //                                           predecessor_status ==
+        //                                           scan_tile_status::inclusive,
+        //                                           [](T const& lhs, T const& rhs) { return rhs +
+        //                                           lhs; });
+
+        //   printf("tile_idx(%2lu) bid(%2u) tid(%2u) pred_status(%2u) fun(%2u %2u)\n",
+        //          _tile_idx,
+        //          blockIdx.x,
+        //          threadIdx.x,
+        //          static_cast<uint32_t>(predecessor_status),
+        //          fun_value);
+      }
+    }
+
+    if (threadIdx.x == 0) {
+      _tile_state.set_inclusive_prefix(_tile_idx, _temp_storage.exclusive_prefix + block_aggregate);
     }
 
     __syncthreads();  // TODO: remove if unnecessary.
