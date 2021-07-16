@@ -10,7 +10,8 @@ from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+from rmm._lib.device_buffer cimport DeviceBuffer
+from cudf.core.buffer import Buffer
 
 from cudf._lib.column cimport Column
 
@@ -822,12 +823,10 @@ cdef class _CPackedColumns:
 
     def serialize(self):
         header = {}
-        frames = []
+        frames = [Buffer(self.gpu_data_ptr, self.gpu_data_size, self)]
 
         header["column-names"] = self.column_names
         header["index-names"] = self.index_names
-        header["gpu-data-ptr"] = self.gpu_data_ptr
-        header["gpu-data-size"] = self.gpu_data_size
         header["metadata"] = list(
             <uint8_t[:self.c_obj.metadata_.get()[0].size()]>
             self.c_obj.metadata_.get()[0].data()
@@ -850,8 +849,8 @@ cdef class _CPackedColumns:
         cdef _CPackedColumns p = _CPackedColumns.__new__(_CPackedColumns)
 
         dbuf = DeviceBuffer(
-            ptr=header["gpu-data-ptr"],
-            size=header["gpu-data-size"]
+            ptr=frames[0].ptr,
+            size=frames[0].nbytes
         )
 
         cdef cpp_copying.packed_columns data
