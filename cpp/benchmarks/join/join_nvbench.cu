@@ -14,40 +14,15 @@
  * limitations under the License.
  */
 
-#include "join_benchmark_common.hpp"
-
-class rmm_pool_raii {
- private:
-  // memory resource factory helpers
-  inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
-
-  inline auto make_pool()
-  {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda());
-  }
-
-  std::shared_ptr<rmm::mr::device_memory_resource> mr;
-
- public:
-  rmm_pool_raii()
-  {
-    mr = make_pool();
-    rmm::mr::set_current_device_resource(mr.get());  // set default resource to pool
-  }
-
-  ~rmm_pool_raii()
-  {
-    rmm::mr::set_current_device_resource(nullptr);
-    mr.reset();
-  }
-};
+#include <benchmarks/fixture/rmm_pool_raii.hpp>
+#include <benchmarks/join/join_benchmark_common.hpp>
 
 template <typename key_type, typename payload_type, bool Nullable>
 void nvbench_join(nvbench::state& state,
                   nvbench::type_list<key_type, payload_type, nvbench::enum_type<Nullable>>)
 {
   // TODO: to be replaced by nvbench fixture once it's ready
-  rmm_pool_raii pool_raii;
+  cudf::rmm_pool_raii pool_raii;
 
   auto join = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
