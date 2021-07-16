@@ -21,6 +21,7 @@
 
 #include <cudf/ast/detail/transform.cuh>
 #include <cudf/ast/nodes.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
