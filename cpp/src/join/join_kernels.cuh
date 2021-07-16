@@ -21,40 +21,15 @@
 #include <cudf/ast/detail/linearizer.hpp>
 #include <cudf/ast/detail/transform.cuh>
 #include <cudf/ast/operators.hpp>
-//#include <cudf/detail/null_mask.hpp>
 #include <cudf/table/table_device_view.cuh>
 
+#include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 
 #include <thrust/pair.h>
 
 namespace cudf {
 namespace detail {
-/**
- * @brief Adds a pair of indices to the shared memory cache
- *
- * @param[in] first The first index in the pair
- * @param[in] second The second index in the pair
- * @param[in,out] current_idx_shared Pointer to shared index that determines
- * where in the shared memory cache the pair will be written
- * @param[in] warp_id The ID of the warp of the calling the thread
- * @param[out] joined_shared_l Pointer to the shared memory cache for left indices
- * @param[out] joined_shared_r Pointer to the shared memory cache for right indices
- */
-__inline__ __device__ void add_pair_to_cache(const size_type first,
-                                             const size_type second,
-                                             size_type* current_idx_shared,
-                                             const int warp_id,
-                                             size_type* joined_shared_l,
-                                             size_type* joined_shared_r)
-{
-  size_type my_current_idx{atomicAdd(current_idx_shared + warp_id, size_type(1))};
-
-  // its guaranteed to fit into the shared cache
-  joined_shared_l[my_current_idx] = first;
-  joined_shared_r[my_current_idx] = second;
-}
-
 /**
  * @brief Remaps a hash value to a new value if it is equal to the specified sentinel value.
  *
@@ -272,36 +247,6 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
 
   // Add block counter to global counter
   if (threadIdx.x == 0) atomicAdd(output_size, block_counter);
-}
-
-template <int num_warps, cudf::size_type output_cache_size>
-__device__ void flush_output_cache(const unsigned int activemask,
-                                   const cudf::size_type max_size,
-                                   const int warp_id,
-                                   const int lane_id,
-                                   cudf::size_type* current_idx,
-                                   cudf::size_type current_idx_shared[num_warps],
-                                   size_type join_shared_l[num_warps][output_cache_size],
-                                   size_type join_shared_r[num_warps][output_cache_size],
-                                   size_type* join_output_l,
-                                   size_type* join_output_r)
-{
-  // count how many active threads participating here which could be less than warp_size
-  int num_threads               = __popc(activemask);
-  cudf::size_type output_offset = 0;
-
-  if (0 == lane_id) { output_offset = atomicAdd(current_idx, current_idx_shared[warp_id]); }
-
-  output_offset = cub::ShuffleIndex<detail::warp_size>(output_offset, 0, activemask);
-
-  for (int shared_out_idx = lane_id; shared_out_idx < current_idx_shared[warp_id];
-       shared_out_idx += num_threads) {
-    cudf::size_type thread_offset = output_offset + shared_out_idx;
-    if (thread_offset < max_size) {
-      join_output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
-      join_output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
-    }
-  }
 }
 
 /**
