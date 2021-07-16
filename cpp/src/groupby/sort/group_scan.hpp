@@ -87,7 +87,7 @@ std::unique_ptr<column> count_scan(cudf::device_span<size_type const> group_labe
 /**
  * @brief Internal API to calculate groupwise rank value
  *
- * @param order_by table of columns that rows within a group are sorted by
+ * @param order_by column or struct column that rows within a group are sorted by
  * @param group_labels ID of group that the corresponding value belongs to
  * @param group_offsets group index offsets with group ID indices
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -103,7 +103,7 @@ std::unique_ptr<column> rank_scan(column_view const& order_by,
 /**
  * @brief Internal API to calculate groupwise dense rank value
  *
- * @param order_by table of columns that rows within a group are sorted by
+ * @param order_by column or struct column that rows within a group are sorted by
  * @param group_labels ID of group that the corresponding value belongs to
  * @param group_offsets group index offsets with group ID indices
  * @param stream CUDA stream used for device memory operations and kernel launches.

@@ -15,7 +15,6 @@
  */
 
 #include "scan.cuh"
-#include "thrust/iterator/counting_iterator.h"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>

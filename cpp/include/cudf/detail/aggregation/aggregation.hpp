@@ -18,7 +18,6 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
