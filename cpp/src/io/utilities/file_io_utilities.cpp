@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 #include "file_io_utilities.hpp"
-#include <cudf/detail/nvtx/ranges.hpp>  // TODO: remove
 #include <cudf/detail/utilities/integer_utils.hpp>
 
-#include <future>  // TODO: Move to appropriate location. try removing
 #include <rmm/device_buffer.hpp>
 
 #include <dlfcn.h>
 
 #include <fstream>
+#include <numeric>
 
 namespace cudf {
 namespace io {
@@ -178,7 +177,6 @@ std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
                                                             size_t size,
                                                             rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();  // TODO: remove
   rmm::device_buffer out_data(size, stream);
   read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
   // TODO: make use of the returned size to shrink out_data
@@ -193,13 +191,14 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
   int device;
   cudaGetDevice(&device);
 
-  auto read_slice = [=](void* dst, size_t size, size_t offset) -> int {
-    // TODO: we can now throw exceptions inside future functions.
+  auto read_slice = [=](void* dst, size_t size, size_t offset) -> ssize_t {
     cudaSetDevice(device);
-    return shim->read(cf_file.handle(), dst, size, offset, 0);
+    auto read_size = shim->read(cf_file.handle(), dst, size, offset, 0);
+    CUDF_EXPECTS(read_size != -1, "cuFile error reading from a file");
+    return read_size;
   };
 
-  std::vector<std::future<int>> slice_tasks;
+  std::vector<std::future<ssize_t>> slice_tasks;
   constexpr size_t four_MB = 1 << 22;
   size_t n_slices          = util::div_rounding_up_safe(size, four_MB);
   size_t slice_size        = four_MB;
@@ -212,13 +211,10 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
 
     slice_offset += slice_size;
   }
-  auto waiter = [=](decltype(slice_tasks) slice_tasks) {
-    for (auto& thread : slice_tasks) {
-      thread.wait();
-      CUDF_EXPECTS(thread.get() != -1, "cuFile error reading from a file");
-      // TODO: calculate size inside this loop and move exception to inside read_slice
-    }
-    return size;
+  auto waiter = [](decltype(slice_tasks) slice_tasks) -> size_t {
+    return std::accumulate(slice_tasks.begin(), slice_tasks.end(), 0, [](auto sum, auto& task) {
+      return sum + task.get();
+    });
   };
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }

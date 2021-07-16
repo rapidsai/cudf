@@ -858,7 +858,7 @@ void reader::impl::read_column_chunks(
         std::cout << "cufile read" << std::endl;
         auto buffer        = rmm::device_buffer(io_size, stream);
         auto fut_read_size = source->device_read_async(
-          io_offset, io_size, static_cast<uint8_t *>(buffer.data()), stream);
+          io_offset, io_size, static_cast<uint8_t*>(buffer.data()), stream);
         fut_read_tasks.emplace_back(std::move(fut_read_size));
         page_data[chunk] = datasource::buffer::create(std::move(buffer));
       } else {
@@ -878,7 +878,9 @@ void reader::impl::read_column_chunks(
   }
   // Time to synchronize all async device reads
   // TODO: Add error checking. Actual read size should be same as expected.
-  for (auto &task : fut_read_tasks) { task.wait(); }
+  for (auto& task : fut_read_tasks) {
+    task.wait();
+  }
 }
 
 /**
