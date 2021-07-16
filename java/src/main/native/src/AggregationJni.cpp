@@ -81,8 +81,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
       case 17: // ROW_NUMBER
         ret = cudf::make_row_number_aggregation();
         break;
-      // case 18: RANK
-      // case 19: DENSE_RANK
+      case 18: // RANK
+        ret = cudf::make_rank_aggregation();
+        break;
+      case 19: // DENSE_RANK
+        ret = cudf::make_dense_rank_aggregation();
+        break;
       // case 20: COLLECT_LIST
       // case 21: COLLECT_SET
       // case 22: MERGE_LISTS
@@ -97,32 +101,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
       default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
     }
 
-    return reinterpret_cast<jlong>(ret.release());
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createRankAgg(JNIEnv *env,
-                                                                     jclass class_object,
-                                                                     jlong order_by_table) {
-  JNI_NULL_CHECK(env, order_by_table, "order_by_table is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    auto order_by = reinterpret_cast<cudf::table_view const *>(order_by_table);
-    std::unique_ptr<cudf::aggregation> ret = cudf::make_rank_aggregation(*order_by);
-    return reinterpret_cast<jlong>(ret.release());
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createDenseRankAgg(JNIEnv *env,
-                                                                     jclass class_object,
-                                                                     jlong order_by_table) {
-  JNI_NULL_CHECK(env, order_by_table, "order_by_table is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    auto order_by = reinterpret_cast<cudf::table_view const *>(order_by_table);
-    std::unique_ptr<cudf::aggregation> ret = cudf::make_dense_rank_aggregation(*order_by);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
@@ -220,10 +198,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createLeadLagAgg(JNIEnv 
     std::unique_ptr<cudf::aggregation> ret;
     // These numbers come from Aggregation.java and must stay in sync
     switch (kind) {
-      case 22: // LEAD
+      case 24: // LEAD
         ret = cudf::make_lead_aggregation(offset);
         break;
-      case 23: // LAG
+      case 25: // LAG
         ret = cudf::make_lag_aggregation(offset);
         break;
       default: throw std::logic_error("Unsupported Lead/Lag Aggregation Operation");

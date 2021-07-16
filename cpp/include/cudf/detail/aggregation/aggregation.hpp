@@ -585,32 +585,7 @@ class row_number_aggregation final : public rolling_aggregation {
  */
 class rank_aggregation final : public rolling_aggregation {
  public:
-  rank_aggregation(table_view order_by) : aggregation{RANK}, _order_by{order_by} {}
-
-  table_view _order_by;
-
-  bool is_equal(aggregation const& _other) const override
-  {
-    if (!this->aggregation::is_equal(_other)) { return false; }
-    auto const& other = dynamic_cast<rank_aggregation const&>(_other);
-
-    if ((_order_by.num_rows() != other._order_by.num_rows()) ||
-        _order_by.num_columns() != other._order_by.num_columns()) {
-      return false;
-    }
-    for (int i = 0; i < _order_by.num_columns(); i++) {
-      column_view lhs = _order_by.column(i);
-      column_view rhs = other._order_by.column(i);
-      if (lhs.type() != rhs.type() || lhs.offset() != rhs.offset() ||
-          lhs.data<size_type>() != rhs.data<size_type>() ||
-          (lhs.null_mask() != rhs.null_mask() && lhs.null_count() != rhs.null_count())) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+  rank_aggregation() : aggregation{RANK} {}
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -622,19 +597,6 @@ class rank_aggregation final : public rolling_aggregation {
     return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
-
- private:
-  size_t hash_impl() const
-  {
-    size_t result = std::hash<int>{}(_order_by.num_rows());
-    for_each(_order_by.begin(), _order_by.end(), [&](column_view col) {
-      result ^= std::hash<size_t>{}(static_cast<size_t>(col.type().id())) ^
-                std::hash<size_t>{}(static_cast<size_t>(col.offset())) ^
-                std::hash<size_t>{}(reinterpret_cast<size_t>(col.data<size_type>())) ^
-                std::hash<size_t>{}(reinterpret_cast<size_t>(col.null_mask()));
-    });
-    return result;
-  }
 };
 
 /**
@@ -642,32 +604,7 @@ class rank_aggregation final : public rolling_aggregation {
  */
 class dense_rank_aggregation final : public rolling_aggregation {
  public:
-  dense_rank_aggregation(table_view order_by) : aggregation{DENSE_RANK}, _order_by{order_by} {}
-
-  table_view _order_by;
-
-  bool is_equal(aggregation const& _other) const override
-  {
-    if (!this->aggregation::is_equal(_other)) { return false; }
-    auto const& other = dynamic_cast<dense_rank_aggregation const&>(_other);
-
-    if ((_order_by.num_rows() != other._order_by.num_rows()) ||
-        _order_by.num_columns() != other._order_by.num_columns()) {
-      return false;
-    }
-    for (int i = 0; i < _order_by.num_columns(); i++) {
-      column_view lhs = _order_by.column(i);
-      column_view rhs = other._order_by.column(i);
-      if (lhs.type() != rhs.type() || lhs.offset() != rhs.offset() ||
-          lhs.data<size_type>() != rhs.data<size_type>() ||
-          (lhs.null_mask() != rhs.null_mask() && lhs.null_count() != rhs.null_count())) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+  dense_rank_aggregation() : aggregation{DENSE_RANK} {}
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -679,19 +616,6 @@ class dense_rank_aggregation final : public rolling_aggregation {
     return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
-
- private:
-  size_t hash_impl() const
-  {
-    size_t result = std::hash<int>{}(_order_by.num_rows());
-    for_each(_order_by.begin(), _order_by.end(), [&](column_view col) {
-      result ^= std::hash<size_t>{}(static_cast<size_t>(col.type().id())) ^
-                std::hash<size_t>{}(static_cast<size_t>(col.offset())) ^
-                std::hash<size_t>{}(reinterpret_cast<size_t>(col.data<size_type>())) ^
-                std::hash<size_t>{}(reinterpret_cast<size_t>(col.null_mask()));
-    });
-    return result;
-  }
 };
 
 /**

@@ -380,66 +380,6 @@ public abstract class Aggregation {
         }
     }
 
-    public static final class RankAggregation extends Aggregation {
-        private final Table orderBy;
-
-        private RankAggregation(Table orderBy) {
-            super(Kind.RANK);
-            this.orderBy = orderBy;
-        }
-
-        @Override
-        public int hashCode() {
-            return 31 * kind.hashCode() + (int)orderBy.getNativeView() + (int)(orderBy.getNativeView()>>32);
-        }
-
-        @Override
-        long createNativeInstance() {
-            return Aggregation.createRankAgg(orderBy.getNativeView());
-        }
-
-        @Override
-        public boolean equals(Object other) {
-            if (this == other) {
-                return true;
-            } else if (other instanceof RankAggregation) {
-                RankAggregation o = (RankAggregation) other;
-                return o.orderBy == this.orderBy;
-            }
-            return false;
-        }
-    }
-
-    public static final class DenseRankAggregation extends Aggregation {
-        private final Table orderBy;
-
-        private DenseRankAggregation(Table orderBy) {
-            super(Kind.DENSE_RANK);
-            this.orderBy = orderBy;
-        }
-
-        @Override
-        public int hashCode() {
-            return 31 * kind.hashCode() + (int)orderBy.getNativeView() + (int)(orderBy.getNativeView()>>32);
-        }
-
-        @Override
-        long createNativeInstance() {
-            return Aggregation.createDenseRankAgg(orderBy.getNativeView());
-        }
-
-        @Override
-        public boolean equals(Object other) {
-            if (this == other) {
-                return true;
-            } else if (other instanceof DenseRankAggregation) {
-                DenseRankAggregation o = (DenseRankAggregation) other;
-                return o.orderBy == this.orderBy;
-            }
-            return false;
-        }
-    }
-
     protected final Kind kind;
 
     protected Aggregation(Kind kind) {
@@ -790,18 +730,32 @@ public abstract class Aggregation {
         return new RowNumberAggregation();
     }
 
+    public static class RankAggregation extends NoParamAggregation
+        implements RollingAggregation<RankAggregation>{
+        private RankAggregation() {
+            super(Kind.RANK);
+        }
+    }
+
     /**
      * Get the row's ranking.
      */
-    public static RankAggregation rank(Table orderBy) {
-        return new RankAggregation(orderBy);
+    public static RankAggregation rank() {
+        return new RankAggregation();
+    }
+
+    public static class DenseRankAggregation extends NoParamAggregation
+        implements RollingAggregation<DenseRankAggregation>{
+        private DenseRankAggregation() {
+            super(Kind.DENSE_RANK);
+        }
     }
 
     /**
      * Get the row's dense ranking.
      */
-    public static DenseRankAggregation denseRank(Table orderBy) {
-        return new DenseRankAggregation(orderBy);
+    public static DenseRankAggregation denseRank() {
+        return new DenseRankAggregation();
     }
 
     /**
@@ -967,14 +921,4 @@ public abstract class Aggregation {
      * Create a merge sets aggregation.
      */
     private static native long createMergeSetsAgg(boolean nullsEqual, boolean nansEqual);
-
-    /**
-     * Create a rank aggregation.
-     */
-    private static native long createRankAgg(long orderBy);
-
-    /**
-     * Create a dense rank aggregation.
-     */
-    private static native long createDenseRankAgg(long orderBy);
 }

@@ -2928,22 +2928,20 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testScanRank() {
-    try (ColumnVector v1 = ColumnVector.fromBoxedInts(1, 4, 8, 6, 10, 9, 7, 9, 5, 0, 7, 7);
-         Table orderBy = new Table.TestBuilder()
-                                  .column(-97, -97, -97, null, -16, 5, null, null, 6, 6, 34, null)
-                                  .column(3, 3, 4, 7, 7, 7, 7, 7, 8, 8, 8, 9)
-                                  .build()) {
-      try (ColumnVector result = v1.scan(Aggregation.rank(orderBy),
-              ScanType.INCLUSIVE, NullPolicy.INCLUDE);
-           ColumnVector expected = ColumnVector.fromBoxedInts(
-              1, 1, 3, 4, 5, 6, 7, 7, 9, 9, 11, 12)) {
+    try (ColumnVector col1 = ColumnVector.fromBoxedInts(-97, -97, -97, null, -16, 5, null, null, 6, 6, 34, null);
+         ColumnVector col2 = ColumnVector.fromBoxedInts(3, 3, 4, 7, 7, 7, 7, 7, 8, 8, 8, 9);
+         ColumnVector struct_order = ColumnVector.makeStruct(col1, col2);
+         ColumnVector expected = ColumnVector.fromBoxedInts(
+            1, 1, 3, 4, 5, 6, 7, 7, 9, 9, 11, 12)) {
+      try (ColumnVector result = struct_order.scan(Aggregation.rank(),
+              ScanType.INCLUSIVE, NullPolicy.INCLUDE)) {
         assertColumnsAreEqual(expected, result);
       }
 
-      try (ColumnVector result = v1.scan(Aggregation.rank(orderBy),
-              ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
-           ColumnVector expected = ColumnVector.fromBoxedInts(
-              1, 1, 3, 4, 5, 6, 7, 7, 9, 9, 11, 12)) {
+      // Exclude should have identical results
+      try (ColumnVector result = struct_order.scan(Aggregation.rank(),
+              ScanType.INCLUSIVE, NullPolicy.EXCLUDE)
+              ) {
         assertColumnsAreEqual(expected, result);
       }
 
@@ -2953,23 +2951,19 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testScanDenseRank() {
-    try (ColumnVector v1 = ColumnVector.fromBoxedInts(1, 4, 8, 6, 10, 9, 7, 9, 5, 0, 7, 7);
-         Table orderBy = new Table.TestBuilder()
-                                  .column(-97, -97, -97, null, -16, 5, null, null, 6, 6, 34, null)
-                                  .column(3, 3, 4, 7, 7, 7, 7, 7, 8, 8, 8, 9)
-                                  .build()) {
-      try (ColumnVector result = v1.scan(Aggregation.denseRank(orderBy),
-              ScanType.INCLUSIVE, NullPolicy.INCLUDE);
-           ColumnVector expected = ColumnVector.fromBoxedInts(
-              1, 1, 2, 3, 4, 5, 6, 6, 7, 7, 8, 9)) {
+    try (ColumnVector col1 = ColumnVector.fromBoxedInts(-97, -97, -97, null, -16, 5, null, null, 6, 6, 34, null);
+         ColumnVector col2 = ColumnVector.fromBoxedInts(3, 3, 4, 7, 7, 7, 7, 7, 8, 8, 8, 9);
+         ColumnVector struct_order = ColumnVector.makeStruct(col1, col2);
+         ColumnVector expected = ColumnVector.fromBoxedInts(
+            1, 1, 2, 3, 4, 5, 6, 6, 7, 7, 8, 9)) {
+      try (ColumnVector result = struct_order.scan(Aggregation.denseRank(),
+              ScanType.INCLUSIVE, NullPolicy.INCLUDE)) {
         assertColumnsAreEqual(expected, result);
       }
 
       // Exclude should have identical results
-      try (ColumnVector result = v1.scan(Aggregation.denseRank(orderBy),
-              ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
-           ColumnVector expected = ColumnVector.fromBoxedInts(
-            1, 1, 2, 3, 4, 5, 6, 6, 7, 7, 8, 9)) {
+      try (ColumnVector result = struct_order.scan(Aggregation.denseRank(),
+              ScanType.INCLUSIVE, NullPolicy.EXCLUDE)) {
         assertColumnsAreEqual(expected, result);
       }
 

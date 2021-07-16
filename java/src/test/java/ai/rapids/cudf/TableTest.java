@@ -2675,8 +2675,8 @@ public class TableTest extends CudfTestBase {
               Aggregation.count(NullPolicy.INCLUDE).onColumn(2),
               Aggregation.min().onColumn(2),
               Aggregation.max().onColumn(2),
-              Aggregation.rank(new Table(t1.getColumn(3))).onColumn(2),
-              Aggregation.denseRank(new Table(t1.getColumn(3))).onColumn(2));
+              Aggregation.rank().onColumn(3),
+              Aggregation.denseRank().onColumn(3));
            Table expected = new Table.TestBuilder()
                .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
                .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)

@@ -260,9 +260,8 @@ std::unique_ptr<Base> make_row_number_aggregation();
  *
  * `RANK` returns a non-nullable column of size_type ranks, the number of rows preceding
  * or equal to the current row plus one. As a result, ranks are not unique and gaps will
- * appear in the ranking sequence. `RANK` aggregations ignore the input values in scan and
- * groupby scan. Additionally, they are not compatible with exclusive scans and will return
- * a fully valid column regardless of null_handling policy specified.
+ * appear in the ranking sequence. `RANK` aggregations are not compatible with exclusive
+ * scans and will return a fully valid column regardless of null_handling policy specified.
  *
  * order_by              = {{0, 0, 0, 1, 1, 1}, {0, 0, 1, 0, 1, 1}}
  * ungrouped_scan_result = {1, 1, 3, 4, 5, 5}
@@ -271,16 +270,15 @@ std::unique_ptr<Base> make_row_number_aggregation();
  *        aggregation, the first columns in the table should be the partition columns in order.
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_rank_aggregation(table_view order_by);
+std::unique_ptr<Base> make_rank_aggregation();
 
 /**
  * @brief Factory to create a DENSE_RANK aggregation
  *
  * `DENSE_RANK` returns a non-nullable column of dense size_type ranks, the preceding unique
- * value's rank plus one. As a result, ranks are not unique but there are no gaps in the
- * ranking sequence (unlike RANK aggregations). `DENSE_RANK` aggregations ignore the input
- * values in scan and groupby scan. Additionally, they are not compatible with exclusive scans
- * and will return a fully valid column regardless of null_handling policy specified.
+ * value's rank plus one. As a result, ranks are not unique but there are no gaps in the ranking
+ * sequence (unlike RANK aggregations). `DENSE_RANK` aggregations are not compatible with exclusive
+ * scans and will return a fully valid column regardless of null_handling policy specified.
  *
  * order_by              = {{0, 0, 0, 1, 1, 1}, {0, 0, 1, 0, 1, 1}}
  * ungrouped_scan_result = {1, 1, 2, 3, 4, 4}
@@ -289,7 +287,7 @@ std::unique_ptr<Base> make_rank_aggregation(table_view order_by);
  *        aggregation, the first columns in the table should be the partition columns in order.
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_dense_rank_aggregation(table_view order_by);
+std::unique_ptr<Base> make_dense_rank_aggregation();
 
 /**
  * @brief Factory to create a COLLECT_LIST aggregation

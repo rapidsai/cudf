@@ -94,7 +94,7 @@ std::unique_ptr<column> count_scan(cudf::device_span<size_type const> group_labe
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Column of type cudf::size_type of rank values
  */
-std::unique_ptr<column> rank_scan(table_view const& order_by,
+std::unique_ptr<column> rank_scan(column_view const& order_by,
                                   cudf::device_span<size_type const> group_labels,
                                   cudf::device_span<size_type const> group_offsets,
                                   rmm::cuda_stream_view stream,
@@ -110,7 +110,7 @@ std::unique_ptr<column> rank_scan(table_view const& order_by,
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Column of type cudf::size_type of dense rank values
  */
-std::unique_ptr<column> dense_rank_scan(table_view const& order_by,
+std::unique_ptr<column> dense_rank_scan(column_view const& order_by,
                                         cudf::device_span<size_type const> group_labels,
                                         cudf::device_span<size_type const> group_offsets,
                                         rmm::cuda_stream_view stream,

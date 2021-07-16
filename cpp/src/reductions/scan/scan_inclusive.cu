@@ -15,6 +15,7 @@
  */
 
 #include "scan.cuh"
+#include "thrust/iterator/counting_iterator.h"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -29,6 +30,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/logical.h>
 #include <thrust/scan.h>
 
 namespace cudf {
@@ -156,52 +158,162 @@ struct scan_dispatcher {
   }
 };
 
-template <typename Comparator>
-void generate_rank_comparisons(mutable_column_view out,
-                               Comparator comp,
-                               rmm::cuda_stream_view stream)
+bool has_nested_nulls(column_view const& struct_col)
 {
-  thrust::tabulate(rmm::exec_policy(stream),
-                   out.begin<size_type>(),
-                   out.end<size_type>(),
-                   [comp] __device__(size_type row_index) {
-                     return (row_index == 0 || !comp(row_index, row_index - 1)) ? row_index + 1 : 0;
-                   });
+  return struct_col.has_nulls() || std::any_of(struct_col.child_begin(),
+                                               struct_col.child_end(),
+                                               [](auto col) { return has_nested_nulls(col); });
 }
 
-template <typename Comparator>
-void generate_dense_rank_comparisons(mutable_column_view out,
-                                     Comparator comp,
+bool has_nested_children(column_view const& struct_col)
+{
+  return std::any_of(struct_col.child_begin(), struct_col.child_end(), [](auto const& col) {
+    return col.type().id() == type_id::STRUCT || col.type().id() == type_id::LIST;
+  });
+}
+
+template <bool nested_nulls>
+void generate_rank_struct_comparisons(column_view const& order_by,
+                                      mutable_column_view out,
+                                      rmm::cuda_stream_view stream)
+{
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    out.begin<size_type>(),
+    out.end<size_type>(),
+    [d_order_by = *column_device_view::create(order_by, stream),
+     has_nulls  = order_by.has_nulls()] __device__(size_type row_index) {
+      if (row_index == 0) {
+        return row_index + 1;
+      } else if (has_nulls) {
+        bool const lhs_is_null{d_order_by.is_null_nocheck(row_index)};
+        bool const rhs_is_null{d_order_by.is_null_nocheck(row_index - 1)};
+        if (lhs_is_null and rhs_is_null) {
+          return 0;
+        } else if (lhs_is_null != rhs_is_null) {
+          return row_index + 1;
+        }
+      }
+
+      return thrust::all_of(
+               thrust::seq,
+               thrust::make_counting_iterator<size_type>(0),
+               thrust::make_counting_iterator<size_type>(0) + d_order_by.num_child_columns(),
+               [row_index, d_order_by] __device__(size_type child_index) {
+                 column_device_view col = d_order_by.child(child_index);
+                 element_equality_comparator<nested_nulls> element_comparator{col, col, true};
+                 return cudf::type_dispatcher(
+                   col.type(), element_comparator, row_index, row_index - 1);
+               })
+               ? 0
+               : row_index + 1;
+    });
+}
+
+template <bool has_nulls>
+void generate_rank_comparisons(column_view const& order_by,
+                               mutable_column_view out,
+                               rmm::cuda_stream_view stream)
+{
+  auto d_order_by = column_device_view::create(order_by, stream);
+  element_equality_comparator<has_nulls> element_comparator(*d_order_by, *d_order_by, true);
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    out.begin<size_type>(),
+    out.end<size_type>(),
+    [type = d_order_by->type(), element_comparator] __device__(size_type row_index) {
+      return (row_index == 0 ||
+              !cudf::type_dispatcher(type, element_comparator, row_index, row_index - 1))
+               ? row_index + 1
+               : 0;
+    });
+}
+
+template <bool nested_nulls>
+void generate_dense_rank_struct_comparisons(column_view const& order_by,
+                                            mutable_column_view out,
+                                            rmm::cuda_stream_view stream)
+{
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    out.begin<size_type>(),
+    out.end<size_type>(),
+    [d_order_by = *column_device_view::create(order_by, stream),
+     has_nulls  = order_by.has_nulls()] __device__(size_type row_index) {
+      if (row_index == 0) {
+        return 1;
+      } else if (has_nulls) {
+        bool const lhs_is_null{d_order_by.is_null_nocheck(row_index)};
+        bool const rhs_is_null{d_order_by.is_null_nocheck(row_index - 1)};
+        if (lhs_is_null and rhs_is_null) {
+          return 0;
+        } else if (lhs_is_null != rhs_is_null) {
+          return 1;
+        }
+      }
+
+      return thrust::all_of(
+               thrust::seq,
+               thrust::make_counting_iterator<size_type>(0),
+               thrust::make_counting_iterator<size_type>(0) + d_order_by.num_child_columns(),
+               [row_index, d_order_by] __device__(size_type child_index) {
+                 column_device_view col = d_order_by.child(child_index);
+                 element_equality_comparator<nested_nulls> element_comparator{col, col, true};
+                 return cudf::type_dispatcher(
+                   col.type(), element_comparator, row_index, row_index - 1);
+               })
+               ? 0
+               : 1;
+    });
+}
+
+template <bool has_nulls>
+void generate_dense_rank_comparisons(column_view const& order_by,
+                                     mutable_column_view out,
                                      rmm::cuda_stream_view stream)
 {
-  thrust::tabulate(rmm::exec_policy(stream),
-                   out.begin<size_type>(),
-                   out.end<size_type>(),
-                   [comp] __device__(size_type row_index) {
-                     return row_index == 0 || !comp(row_index, row_index - 1);
-                   });
+  auto d_order_by = column_device_view::create(order_by, stream);
+  element_equality_comparator<has_nulls> element_comparator(*d_order_by, *d_order_by, true);
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    out.begin<size_type>(),
+    out.end<size_type>(),
+    [type = d_order_by->type(), element_comparator] __device__(size_type row_index) {
+      return (row_index == 0 ||
+              !cudf::type_dispatcher(type, element_comparator, row_index, row_index - 1))
+               ? 1
+               : 0;
+    });
 }
 
 }  // namespace
 
-std::unique_ptr<column> inclusive_rank_scan(aggregation const& agg,
+std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  auto const& rank_agg = dynamic_cast<rank_aggregation const&>(agg);
-  auto d_order_by      = table_device_view::create(rank_agg._order_by);
-  auto ranks           = make_fixed_width_column(cudf::data_type{cudf::type_to_id<size_type>()},
-                                       rank_agg._order_by.num_rows(),
+  auto ranks         = make_fixed_width_column(cudf::data_type{cudf::type_to_id<size_type>()},
+                                       order_by.size(),
                                        mask_state::ALL_VALID,
                                        stream,
                                        mr);
-  auto mutable_ranks   = ranks->mutable_view();
-  if (has_nested_nulls(rank_agg._order_by)) {
-    row_equality_comparator<true> row_comparator(*d_order_by, *d_order_by, true);
-    generate_rank_comparisons(mutable_ranks, row_comparator, stream);
+  auto mutable_ranks = ranks->mutable_view();
+  if (order_by.type().id() == type_id::STRUCT) {
+    bool nested_nulls = std::any_of(
+      order_by.child_begin(), order_by.child_end(), [](auto col) { return has_nested_nulls(col); });
+    bool is_nested = has_nested_children(order_by);
+
+    if (is_nested) {
+      CUDF_FAIL("Nested struct and list types not supported");
+    } else if (nested_nulls) {
+      generate_rank_struct_comparisons<true>(order_by, mutable_ranks, stream);
+    } else {
+      generate_rank_struct_comparisons<false>(order_by, mutable_ranks, stream);
+    }
+  } else if (order_by.has_nulls()) {
+    generate_rank_comparisons<true>(order_by, mutable_ranks, stream);
   } else {
-    row_equality_comparator<false> row_comparator(*d_order_by, *d_order_by, true);
-    generate_rank_comparisons(mutable_ranks, row_comparator, stream);
+    generate_rank_comparisons<false>(order_by, mutable_ranks, stream);
   }
 
   thrust::inclusive_scan(rmm::exec_policy(stream),
@@ -212,25 +324,34 @@ std::unique_ptr<column> inclusive_rank_scan(aggregation const& agg,
   return ranks;
 }
 
-std::unique_ptr<column> inclusive_dense_rank_scan(aggregation const& agg,
+std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
-  auto const& dense_agg = dynamic_cast<dense_rank_aggregation const&>(agg);
-  auto d_order_by       = table_device_view::create(dense_agg._order_by);
-  auto ranks         = make_fixed_width_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
-                                       dense_agg._order_by.num_rows(),
+  auto ranks         = make_fixed_width_column(cudf::data_type{cudf::type_to_id<size_type>()},
+                                       order_by.size(),
                                        mask_state::ALL_VALID,
                                        stream,
                                        mr);
   auto mutable_ranks = ranks->mutable_view();
-  if (has_nested_nulls(dense_agg._order_by)) {
-    row_equality_comparator<true> row_comparator(*d_order_by, *d_order_by, true);
-    generate_dense_rank_comparisons(mutable_ranks, row_comparator, stream);
+  if (order_by.type().id() == type_id::STRUCT) {
+    bool nested_nulls = std::any_of(
+      order_by.child_begin(), order_by.child_end(), [](auto col) { return has_nested_nulls(col); });
+    bool is_nested = has_nested_children(order_by);
+
+    if (is_nested) {
+      CUDF_FAIL("Nested struct and list types not supported");
+    } else if (nested_nulls) {
+      generate_dense_rank_struct_comparisons<true>(order_by, mutable_ranks, stream);
+    } else {
+      generate_dense_rank_struct_comparisons<false>(order_by, mutable_ranks, stream);
+    }
+  } else if (order_by.has_nulls()) {
+    generate_dense_rank_comparisons<true>(order_by, mutable_ranks, stream);
   } else {
-    row_equality_comparator<false> row_comparator(*d_order_by, *d_order_by, true);
-    generate_dense_rank_comparisons(mutable_ranks, row_comparator, stream);
+    generate_dense_rank_comparisons<false>(order_by, mutable_ranks, stream);
   }
+
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          mutable_ranks.begin<size_type>(),
                          mutable_ranks.end<size_type>(),

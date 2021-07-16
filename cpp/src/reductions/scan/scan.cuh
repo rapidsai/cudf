@@ -33,11 +33,11 @@ rmm::device_buffer mask_scan(column_view const& input_view,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> inclusive_rank_scan(aggregation const& agg,
+std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> inclusive_dense_rank_scan(aggregation const& agg,
+std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr);
 
@@ -48,9 +48,13 @@ std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(
-    is_numeric(input.type()) || is_compound(input.type()) || is_fixed_point(input.type()),
-    "Unexpected non-numeric or non-string type.");
+  if (agg->kind == aggregation::RANK || agg->kind == aggregation::DENSE_RANK) {
+    CUDF_EXPECTS(input.type().id() != type_id::LIST, "Unsupported list type in rank aggregation.");
+  } else {
+    CUDF_EXPECTS(
+      is_numeric(input.type()) || is_compound(input.type()) || is_fixed_point(input.type()),
+      "Unexpected non-numeric or non-string type.");
+  }
 
   switch (agg->kind) {
     case aggregation::SUM:
@@ -68,8 +72,8 @@ std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
       if (is_fixed_point(input.type())) CUDF_FAIL("decimal32/64 cannot support product scan");
       return cudf::type_dispatcher<dispatch_storage_type>(
         input.type(), DispatchFn<cudf::DeviceProduct>(), input, null_handling, stream, mr);
-    case aggregation::RANK: return inclusive_rank_scan(*agg, stream, mr);
-    case aggregation::DENSE_RANK: return inclusive_dense_rank_scan(*agg, stream, mr);
+    case aggregation::RANK: return inclusive_rank_scan(input, stream, mr);
+    case aggregation::DENSE_RANK: return inclusive_dense_rank_scan(input, stream, mr);
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
 }
