@@ -1077,7 +1077,7 @@ def test_orc_writer_list_multiple_stripes():
     pdf_in = pd.DataFrame(
         {
             "ls": [[str(i), str(2 * i)] for i in range(num_rows)],
-            "ld": [[dec(elem / 2)] * 5 for elem in range(num_rows)],
+            "ld": [[dec(i / 2)] * 5 for i in range(num_rows)],
         }
     )
 
@@ -1185,7 +1185,7 @@ def test_chunked_orc_writer_lists():
 
 def test_orc_writer_list_many_child_rows():
     num_rows = 11000
-    pdf_in = pd.DataFrame({"li": [[i] * 1100 for i in range(num_rows)],})
+    pdf_in = pd.DataFrame({"li": [[i] * 1100 for i in range(num_rows)]})
 
     buffer = BytesIO()
     cudf.from_pandas(pdf_in).to_orc(buffer)
