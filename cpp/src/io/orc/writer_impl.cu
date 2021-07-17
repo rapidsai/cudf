@@ -139,14 +139,14 @@ class orc_column_view {
    * for building dictionaries for string columns
    */
   explicit orc_column_view(uint32_t index,
-                           std::optional<uint32_t> str_idx,
-                           std::optional<uint32_t> index_in_table,
+                           int str_idx,
+                           int index_in_table,
                            column_view const& col,
                            const table_metadata* metadata)
     : cudf_column{col},
       _index{index},
       _str_idx{str_idx},
-      _is_child{!index_in_table.has_value()},
+      _is_child{index_in_table < 0},
       _type_width{cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : 0},
       _scale{(to_orc_type(col.type().id()) == TypeKind::DECIMAL) ? -col.type().scale()
                                                                  : to_clockscale(col.type().id())},
@@ -154,12 +154,12 @@ class orc_column_view {
       _type_kind{to_orc_type(col.type().id())}
   {
     // Don't assign names to child columns
-    if (index_in_table.has_value()) {
-      if (metadata != nullptr && *index_in_table < metadata->column_names.size()) {
-        _name = metadata->column_names[*index_in_table];
+    if (index_in_table >= 0) {
+      if (metadata != nullptr && index_in_table < static_cast<int>(metadata->column_names.size())) {
+        _name = metadata->column_names[index_in_table];
       } else {
         // Generating default name if name isn't present in metadata
-        _name = "_col" + std::to_string(*index_in_table);
+        _name = "_col" + std::to_string(index_in_table);
       }
     }
   }
@@ -180,7 +180,7 @@ class orc_column_view {
   auto host_dict_chunk(size_t rowgroup) const
   {
     CUDF_EXPECTS(is_string(), "Dictionary chunks are only present in string columns.");
-    return &dict[rowgroup * dict_stride + *_str_idx];
+    return &dict[rowgroup * dict_stride + _str_idx];
   }
   auto device_dict_chunk() const { return d_dict; }
 
@@ -199,7 +199,7 @@ class orc_column_view {
   auto host_stripe_dict(size_t stripe) const
   {
     CUDF_EXPECTS(is_string(), "Stripe dictionary is only present in string columns.");
-    return &stripe_dict[stripe * dict_stride + *_str_idx];
+    return &stripe_dict[stripe * dict_stride + _str_idx];
   }
   auto device_stripe_dict() const { return d_stripe_dict; }
 
@@ -228,7 +228,7 @@ class orc_column_view {
   // Identifier within the set of columns
   uint32_t _index = 0;
   // Identifier within the set of string columns
-  std::optional<uint32_t> _str_idx;
+  int _str_idx;
   bool _is_child = false;
 
   size_t _type_width = 0;
@@ -1164,18 +1164,18 @@ orc_table_view make_orc_table_view(table_view const& table,
   std::vector<orc_column_view> orc_columns;
   std::vector<uint32_t> str_col_indexes;
 
-  std::function<void(column_view const&, std::optional<int>)> append_orc_column =
-    [&](column_view const& col, std::optional<int> index_in_table) {
-      auto const str_idx =
-        (col.type().id() == type_id::STRING) ? std::optional{str_col_indexes.size()} : std::nullopt;
-      auto const& new_col =
-        orc_columns.emplace_back(orc_columns.size(), str_idx, index_in_table, col, user_metadata);
-      if (new_col.is_string()) { str_col_indexes.push_back(new_col.index()); }
-      if (col.type().id() == type_id::LIST) append_orc_column(col.child(1), std::nullopt);
-      if (col.type().id() == type_id::STRUCT)
-        for (auto child = col.child_begin(); child != col.child_end(); ++child)
-          append_orc_column(*child, std::nullopt);
-    };
+  std::function<void(column_view const&, int)> append_orc_column = [&](column_view const& col,
+                                                                       int index_in_table) {
+    int const str_idx =
+      (col.type().id() == type_id::STRING) ? static_cast<int>(str_col_indexes.size()) : -1;
+    auto const& new_col =
+      orc_columns.emplace_back(orc_columns.size(), str_idx, index_in_table, col, user_metadata);
+    if (new_col.is_string()) { str_col_indexes.push_back(new_col.index()); }
+    if (col.type().id() == type_id::LIST) append_orc_column(col.child(1), -1);
+    if (col.type().id() == type_id::STRUCT)
+      for (auto child = col.child_begin(); child != col.child_end(); ++child)
+        append_orc_column(*child, -1);
+  };
 
   for (auto col_idx = 0; col_idx < table.num_columns(); ++col_idx) {
     append_orc_column(table.column(col_idx), col_idx);
