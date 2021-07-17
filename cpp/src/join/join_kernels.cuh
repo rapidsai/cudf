@@ -16,7 +16,6 @@
 
 #pragma once
 
-//#include <cstddef>
 #include <cub/cub.cuh>
 #include <cudf/table/table_device_view.cuh>
 
