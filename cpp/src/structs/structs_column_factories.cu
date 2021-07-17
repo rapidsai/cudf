@@ -40,7 +40,11 @@ std::unique_ptr<cudf::column> make_structs_column(
 
   CUDF_EXPECTS(std::all_of(child_columns.begin(),
                            child_columns.end(),
-                           [&](auto const& child_col) { return num_rows == child_col->size(); }),
+                           [&](auto const& child_col) {
+                             // printf("RGSL : num_rows is %d and child_col->size() is %d \n",
+                             // num_rows, child_col->size());
+                             return num_rows == child_col->size();
+                           }),
                "Child columns must have the same number of rows as the Struct column.");
 
   if (!null_mask.is_empty()) {

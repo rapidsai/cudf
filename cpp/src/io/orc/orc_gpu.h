@@ -85,6 +85,11 @@ struct DictionaryEntry {
  */
 constexpr int orc_decimal2float64_scale = 0x80;
 
+struct ParentColumnData {
+  uint32_t* valid_map_base;
+  uint32_t null_count;
+};
+
 /**
  * @brief Struct to describe per stripe's column information
  */
@@ -109,6 +114,7 @@ struct ColumnDesc {
   uint8_t dtype_len;      // data type length (for types that can be mapped to different sizes)
   int32_t decimal_scale;  // number of fractional decimal digits for decimal type
   int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
+  ParentColumnData parent_data;  // consists of parent column valid_map and null count
 };
 
 /**

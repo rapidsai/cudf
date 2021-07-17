@@ -1152,7 +1152,7 @@ __global__ void __launch_bounds__(block_size)
 
   if (t == 0) s->chunk = chunks[chunk_id];
   __syncthreads();
-  const size_t max_num_rows = s->chunk.column_num_rows;
+  const size_t max_num_rows = s->chunk.column_num_rows - s->chunk.parent_data.null_count;
 
   if (is_nulldec) {
     uint32_t null_count = 0;
@@ -1422,13 +1422,14 @@ __global__ void __launch_bounds__(block_size)
   } else {
     chunk_id = blockIdx.x;
   }
+  // Struct doesn't have any data in itself, so skip
+  const bool is_valid = s->chunk.type_kind != STRUCT;
   if (t == 0) {
     s->chunk          = chunks[chunk_id];
     s->num_child_rows = 0;
+    if (not is_valid) chunks[chunk_id].num_child_rows = chunks[chunk_id].num_rows;
   }
   __syncthreads();
-  // Struct doesn't have any data in itself, so skip
-  const bool is_valid       = s->chunk.type_kind != STRUCT;
   const size_t max_num_rows = s->chunk.column_num_rows;
   if (t == 0 and is_valid) {
     // If we have an index, seek to the initial run and update row positions
