@@ -29,7 +29,7 @@ uint32_t host_device_istream::read(cudf::device_span<char> destination,
     cudaMemcpyHostToDevice,
     stream.value()));
 
-  std::cout << "tried to read: " << read_size << ", and got: " << read_size_actual << std::endl;
+  // std::cout << "tried to read: " << read_size << ", and got: " << read_size_actual << std::endl;
 
   return read_size_actual;
 }

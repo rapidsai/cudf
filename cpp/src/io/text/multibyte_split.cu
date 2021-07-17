@@ -29,6 +29,7 @@ inline constexpr auto ceil_div(Dividend dividend, Divisor divisor)
 using superstate = cudf::io::text::superstate<16>;
 
 enum class scan_tile_status : uint8_t {
+  oob,
   invalid,
   partial,
   inclusive,
@@ -41,18 +42,20 @@ struct scan_tile_state_view {
   T* tile_partial;
   T* tile_inclusive;
 
-  __device__ inline void initialize(cudf::size_type base_tile_idx, cudf::size_type count)
+  __device__ inline void initialize_status(cudf::size_type base_tile_idx,
+                                           cudf::size_type count,
+                                           scan_tile_status status)
   {
     auto thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (thread_idx < count) {  //
-      tile_status[(base_tile_idx + thread_idx) % num_tiles] = scan_tile_status::invalid;
+      tile_status[(base_tile_idx + thread_idx) % num_tiles] = status;
     }
   }
 
   __device__ inline void set_partial_prefix(cudf::size_type tile_idx, T value)
   {
     auto const offset = (tile_idx + num_tiles) % num_tiles;
-    cub::ThreadStore<cub::STORE_CG>(tile_inclusive + offset, value);
+    cub::ThreadStore<cub::STORE_CG>(tile_partial + offset, value);
     __threadfence();
     cub::ThreadStore<cub::STORE_CG>(tile_status + offset, scan_tile_status::partial);
   }
@@ -131,13 +134,13 @@ struct scan_tile_state {
   }
 };
 
-auto constexpr DO_AGGREGATE_PARTIALS = false;
+auto constexpr PARTIAL_AGGRIGATION_STRATEGY = 2;
 
 // keep ITEMS_PER_TILE below input size to force multi-tile execution.
-auto constexpr ITEMS_PER_THREAD = 1;
-auto constexpr THREADS_PER_TILE = 32;
+auto constexpr ITEMS_PER_THREAD = 32;
+auto constexpr THREADS_PER_TILE = 128;
 auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
-auto constexpr TILES_PER_CHUNK  = 2;
+auto constexpr TILES_PER_CHUNK  = 1024;
 auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 // multibyte_split works by splitting up inputs in to 32 inputs (bytes) per thread, and transforming
 // them in to data structures called "superstates". these superstates are created by searching a
@@ -169,11 +172,22 @@ struct scan_tile_state_callback {
 
   __device__ inline T operator()(T const& block_aggregate)
   {
+    if (threadIdx.x == 0) {
+      _tile_state.set_partial_prefix(_tile_idx, block_aggregate);  //
+    }
+
     auto predecessor_idx    = _tile_idx - 1 - threadIdx.x;
     auto predecessor_status = scan_tile_status::invalid;
 
-    if constexpr (DO_AGGREGATE_PARTIALS) {
+    if constexpr (PARTIAL_AGGRIGATION_STRATEGY == 0) {
+      if (threadIdx.x == 0) {
+        _temp_storage.exclusive_prefix = _tile_state.get_inclusive_prefix(predecessor_idx);
+      }
+    }
+
+    if constexpr (PARTIAL_AGGRIGATION_STRATEGY == 1) {
       // scan partials to form prefix
+
       auto window_partial = T{};
 
       if (threadIdx.x == 0) {
@@ -185,28 +199,26 @@ struct scan_tile_state_callback {
 
         _temp_storage.exclusive_prefix = window_partial;
       }
-    } else {
-      // wait for prefix
-      if (threadIdx.x == 0) {
-        _temp_storage.exclusive_prefix = _tile_state.get_inclusive_prefix(predecessor_idx);
+    }
+
+    if constexpr (PARTIAL_AGGRIGATION_STRATEGY == 2) {
+      auto window_partial = T{};
+      if (threadIdx.x < 32) {
+        do {
+          auto predecessor_prefix = _tile_state.get_prefix(predecessor_idx, predecessor_status);
+
+          window_partial =
+            WarpReduce(_temp_storage.reduce)  //
+              .TailSegmentedReduce(predecessor_prefix,
+                                   predecessor_status == scan_tile_status::inclusive,
+                                   [](T const& lhs, T const& rhs) { return rhs + lhs; }) +
+            window_partial;
+          predecessor_idx -= 32;
+        } while (__all_sync(0xffffffff, predecessor_status != scan_tile_status::inclusive));
       }
 
-      if (threadIdx.x < 1) {  // setting this to 2 hangs. 1 is fine. :(
-
-        auto predecessor_prefix = _tile_state.get_prefix(predecessor_idx, predecessor_status);
-        // auto fun_value          = WarpReduce(_temp_storage.reduce)  //
-        //                    .TailSegmentedReduce(predecessor_prefix,
-        //                                           predecessor_status ==
-        //                                           scan_tile_status::inclusive,
-        //                                           [](T const& lhs, T const& rhs) { return rhs +
-        //                                           lhs; });
-
-        //   printf("tile_idx(%2lu) bid(%2u) tid(%2u) pred_status(%2u) fun(%2u %2u)\n",
-        //          _tile_idx,
-        //          blockIdx.x,
-        //          threadIdx.x,
-        //          static_cast<uint32_t>(predecessor_status),
-        //          fun_value);
+      if (threadIdx.x == 0) {
+        _temp_storage.exclusive_prefix = window_partial;  //
       }
     }
 
@@ -272,10 +284,11 @@ struct PatternScan {
 __global__ void multibyte_split_init_kernel(cudf::size_type base_tile_idx,
                                             cudf::size_type num_tiles,
                                             scan_tile_state_view<superstate> tile_superstates,
-                                            scan_tile_state_view<uint32_t> tile_output_offsets)
+                                            scan_tile_state_view<uint32_t> tile_output_offsets,
+                                            scan_tile_status status = scan_tile_status::invalid)
 {
-  tile_superstates.initialize(base_tile_idx, num_tiles);
-  tile_output_offsets.initialize(base_tile_idx, num_tiles);
+  tile_superstates.initialize_status(base_tile_idx, num_tiles, status);
+  tile_output_offsets.initialize_status(base_tile_idx, num_tiles, status);
 }
 
 __global__ void multibyte_split_kernel(cudf::size_type base_tile_idx,
@@ -370,9 +383,9 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::string_scalar const& input,
 
   // pattern-match and count delimiters
 
-  auto tile_superstates = scan_tile_state<superstate<16>>(num_tiles, stream);
-  auto tile_offsets     = scan_tile_state<uint32_t>(num_tiles, stream);
-  auto num_init_blocks  = ceil_div(num_tiles, THREADS_PER_TILE);
+  auto tile_superstates = scan_tile_state<superstate<16>>(num_tiles + 1, stream);
+  auto tile_offsets     = scan_tile_state<uint32_t>(num_tiles + 1, stream);
+  auto num_init_blocks  = ceil_div(num_tiles + 1, THREADS_PER_TILE);
 
   multibyte_split_init_kernel<<<num_init_blocks, THREADS_PER_TILE, 0, stream.value()>>>(  //
     0,
@@ -447,6 +460,16 @@ cudf::size_type scan_full_stream(cudf::io::text::device_istream& input,
 
   // this function can be updated to interleave two kernel executions, such that two input buffers
 
+  multibyte_split_init_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, stream.value()>>>(  //
+    -TILES_PER_CHUNK,
+    TILES_PER_CHUNK,
+    tile_superstates,
+    tile_offsets,
+    scan_tile_status::oob);
+
+  tile_superstates.set_seed_async(superstate<16>(), stream);
+  tile_offsets.set_seed_async(0, stream);
+
   for (auto base_tile_idx = 0; (bytes_read = input.read(input_buffer, stream)) > 0;
        base_tile_idx += TILES_PER_CHUNK) {
     bytes_total += bytes_read;
@@ -457,11 +480,6 @@ cudf::size_type scan_full_stream(cudf::io::text::device_istream& input,
       TILES_PER_CHUNK,
       tile_superstates,
       tile_offsets);
-
-    if (base_tile_idx == 0) {
-      tile_superstates.set_seed_async(superstate<16>(), stream);
-      tile_offsets.set_seed_async(0, stream);
-    }
 
     multibyte_split_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, stream.value()>>>(  //
       base_tile_idx,
