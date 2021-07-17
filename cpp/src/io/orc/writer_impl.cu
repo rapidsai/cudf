@@ -165,8 +165,8 @@ class orc_column_view {
   }
 
   auto is_string() const noexcept { return cudf_column.type().id() == type_id::STRING; }
-  void set_dict_stride(size_t stride) noexcept { dict_stride = stride; }
-  auto get_dict_stride() const noexcept { return dict_stride; }
+  void set_dict_stride(size_t stride) noexcept { _dict_stride = stride; }
+  auto dict_stride() const noexcept { return _dict_stride; }
 
   /**
    * @brief Function that associates an existing dictionary chunk allocation
@@ -180,7 +180,7 @@ class orc_column_view {
   auto host_dict_chunk(size_t rowgroup) const
   {
     CUDF_EXPECTS(is_string(), "Dictionary chunks are only present in string columns.");
-    return &dict[rowgroup * dict_stride + _str_idx];
+    return &dict[rowgroup * _dict_stride + _str_idx];
   }
   auto device_dict_chunk() const { return d_dict; }
 
@@ -199,7 +199,7 @@ class orc_column_view {
   auto host_stripe_dict(size_t stripe) const
   {
     CUDF_EXPECTS(is_string(), "Stripe dictionary is only present in string columns.");
-    return &stripe_dict[stripe * dict_stride + _str_idx];
+    return &stripe_dict[stripe * _dict_stride + _str_idx];
   }
   auto device_stripe_dict() const { return d_stripe_dict; }
 
@@ -241,7 +241,7 @@ class orc_column_view {
   ColumnEncodingKind _encoding_kind;
 
   // String dictionary-related members
-  size_t dict_stride                         = 0;
+  size_t _dict_stride                        = 0;
   gpu::DictionaryChunk const* dict           = nullptr;
   gpu::StripeDictionary const* stripe_dict   = nullptr;
   gpu::DictionaryChunk const* d_dict         = nullptr;
@@ -727,7 +727,7 @@ encoded_data writer::impl::encode_columns(orc_table_view const& orc_table,
             if ((strm_type == gpu::CI_DICTIONARY) ||
                 (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
               if (rg_idx_it == stripe.cbegin()) {
-                const int32_t dict_stride = column.get_dict_stride();
+                const int32_t dict_stride = column.dict_stride();
                 const auto stripe_dict    = column.host_stripe_dict(stripe.id);
                 strm.lengths[strm_type] =
                   (strm_type == gpu::CI_DICTIONARY)

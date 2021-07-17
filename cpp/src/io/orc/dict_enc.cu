@@ -213,8 +213,11 @@ __global__ void __launch_bounds__(block_size, 2)
   }
   // Put the indices back in hash order
   for (uint32_t i = 0; i < nnz; i += block_size) {
-    uint32_t ck_row = 0, pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row;
-    bool collision;
+    uint32_t ck_row  = 0;
+    uint32_t hash    = 0;
+    uint32_t pos     = 0;
+    uint32_t pos_old = 0;
+    uint32_t sh      = 0;
     if (i + t < nnz) {
       ck_row                 = t_dict_data[i + t] - start_row;
       string_view string_val = s->chunk.leaf_column->element<string_view>(ck_row + start_row);
@@ -230,7 +233,9 @@ __global__ void __launch_bounds__(block_size, 2)
       s->dict[pos] = ck_row;
     }
     __syncthreads();
-    collision = false;
+    bool collision         = false;
+    uint32_t colliding_row = 0;
+    uint32_t pos_new       = 0;
     if (i + t < nnz) {
       pos_new   = s->map.u16[hash];
       collision = (pos != pos_old && pos_new > pos_old + 1);
