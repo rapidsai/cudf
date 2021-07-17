@@ -4,15 +4,13 @@ import functools
 from typing import Any, Dict
 
 from numba import cuda
+from numba.core.utils import pysignature
 
 import cudf
 from cudf import _lib as libcudf
 from cudf.core.column import column
 from cudf.utils import utils
 from cudf.utils.docutils import docfmt_partial
-
-from numba.core.utils import pysignature
-
 
 _doc_applyparams = """
 df : DataFrame

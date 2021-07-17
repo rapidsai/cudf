@@ -188,7 +188,9 @@ def _match_categorical_dtypes_both(
     if how == "inner":
         # cast to category types -- we must cast them back later
         return _match_join_keys(
-            lcol.cat()._decategorize(), rcol.cat()._decategorize(), how,
+            lcol._get_decategorized_column(),
+            rcol._get_decategorized_column(),
+            how,
         )
     elif how in {"left", "leftanti", "leftsemi"}:
         # always cast to left type
