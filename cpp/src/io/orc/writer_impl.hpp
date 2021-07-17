@@ -236,7 +236,7 @@ class writer::impl {
    *
    * @param orc_table Non-owning view of a cuDF table w/ ORC-related info
    * @param stripe_bounds List of stripe boundaries
-   * @param dict List of dictionary chunks  [rowgroup][column]
+   * @param dict List of dictionary chunks [rowgroup][column]
    * @param dict_index List of dictionary indices
    * @param dictionary_enabled Whether dictionary encoding is enabled for a given column
    * @param stripe_dict List of stripe dictionaries
