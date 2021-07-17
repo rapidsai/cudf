@@ -4,11 +4,9 @@ from pickle import dumps
 import cachetools
 import numpy as np
 from numba import cuda
-
-import cudf
-
 from numba.np import numpy_support
 
+import cudf
 
 #
 # Misc kernels
@@ -262,10 +260,13 @@ def compile_udf(udf, type_signature):
     ptx_code, return_type = cuda.compile_ptx_for_current_device(
         udf, type_signature, device=True
     )
-    output_type = numpy_support.as_dtype(return_type)
+    if not isinstance(return_type, cudf.core.udf.typing.MaskedType):
+        output_type = numpy_support.as_dtype(return_type).type
+    else:
+        output_type = return_type
 
     # Populate the cache for this function
-    res = (ptx_code, output_type.type)
+    res = (ptx_code, output_type)
     _udf_code_cache[key] = res
 
     return res
