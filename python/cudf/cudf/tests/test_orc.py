@@ -1072,7 +1072,6 @@ def test_orc_writer_list():
     assert_eq(pdf_out, pdf_in)
 
 
-@pytest.mark.skip
 def test_orc_writer_list_multiple_stripes():
     num_rows = 1_200_000
     pdf_in = pd.DataFrame(
@@ -1182,3 +1181,14 @@ def test_chunked_orc_writer_lists():
 
     got = pa.orc.ORCFile(buffer).read().to_pandas()
     assert_eq(expect, got)
+
+
+def test_orc_writer_list_many_child_rows():
+    num_rows = 11000
+    pdf_in = pd.DataFrame({"li": [[i] * 1100 for i in range(num_rows)],})
+
+    buffer = BytesIO()
+    cudf.from_pandas(pdf_in).to_orc(buffer)
+
+    pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
+    assert_eq(pdf_out, pdf_in)
