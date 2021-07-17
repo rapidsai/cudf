@@ -16,6 +16,7 @@
 #include <join/conditional_join.cuh>
 #include <join/join_common_utils.hpp>
 
+#include <cudf/ast/nodes.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
