@@ -22,7 +22,6 @@
 #include <cub/cub.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/transform.cuh>
-#include <cudf/ast/operators.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
 
