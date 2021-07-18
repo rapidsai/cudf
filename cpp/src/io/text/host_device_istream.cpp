@@ -1,3 +1,4 @@
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/text/host_device_istream.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -14,6 +15,7 @@ namespace text {
 uint32_t host_device_istream::read(cudf::device_span<char> destination,
                                    rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE()
   auto read_size = destination.size();
 
   if (_host_buffer.size() < read_size) { _host_buffer.resize(read_size); }

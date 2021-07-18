@@ -39,13 +39,13 @@ static void BM_multibyte_split(benchmark::State& state)
 
   auto delimiters = std::vector<std::string>({"😀", "😎", ",", "::"});
 
-  // auto host_input_stream   = std::basic_stringstream(host_input);
-  // auto device_input_stream = cudf::io::text::host_device_istream(host_input_stream);
+  auto host_input_stream   = std::basic_stringstream(host_input);
+  auto device_input_stream = cudf::io::text::host_device_istream(host_input_stream);
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
-    // auto output = cudf::io::text::multibyte_split(device_input_stream, delimiters);
-    auto output = cudf::io::text::multibyte_split(input, delimiters);
+    auto output = cudf::io::text::multibyte_split(device_input_stream, delimiters);
+    // auto output = cudf::io::text::multibyte_split(input, delimiters);
   }
 
   state.SetBytesProcessed(state.iterations() * num_chars);
@@ -60,7 +60,7 @@ class MultibyteSplitBenchmark : public cudf::benchmark {
     BM_multibyte_split(state);                                                  \
   }                                                                             \
   BENCHMARK_REGISTER_F(MultibyteSplitBenchmark, name)                           \
-    ->Range(1 << 15, 1 << 30)                                                   \
+    ->Range(1 << 30, 1 << 30)                                                   \
     ->UseManualTime()                                                           \
     ->Unit(benchmark::kMillisecond);
 

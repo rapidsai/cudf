@@ -140,7 +140,7 @@ auto constexpr PARTIAL_AGGRIGATION_STRATEGY = 2;
 auto constexpr ITEMS_PER_THREAD = 32;
 auto constexpr THREADS_PER_TILE = 128;
 auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
-auto constexpr TILES_PER_CHUNK  = 1024;
+auto constexpr TILES_PER_CHUNK  = 256;
 auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 // multibyte_split works by splitting up inputs in to 32 inputs (bytes) per thread, and transforming
 // them in to data structures called "superstates". these superstates are created by searching a
@@ -457,8 +457,24 @@ cudf::size_type scan_full_stream(cudf::io::text::device_istream& input,
   cudf::size_type bytes_total = 0;
 
   rmm::device_uvector<char> input_buffer(ITEMS_PER_CHUNK, stream);
+  rmm::device_uvector<char> input_buffer_next(ITEMS_PER_CHUNK, stream);
+  rmm::device_uvector<char> input_buffer_next_next(ITEMS_PER_CHUNK, stream);
 
-  // this function can be updated to interleave two kernel executions, such that two input buffers
+  cudaEvent_t my_event;
+  cudaEvent_t my_event_next;
+  cudaEvent_t my_event_next_next;
+  cudaEventCreate(&my_event);
+  cudaEventCreate(&my_event_next);
+  cudaEventCreate(&my_event_next_next);
+
+  cudaStream_t my_stream;
+  cudaStream_t my_stream_next;
+  cudaStream_t my_stream_next_next;
+  cudaStreamCreate(&my_stream);
+  cudaStreamCreate(&my_stream_next);
+  cudaStreamCreate(&my_stream_next_next);
+
+  // this function interleaves three kernel executions
 
   multibyte_split_init_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, stream.value()>>>(  //
     -TILES_PER_CHUNK,
@@ -470,18 +486,18 @@ cudf::size_type scan_full_stream(cudf::io::text::device_istream& input,
   tile_superstates.set_seed_async(superstate<16>(), stream);
   tile_offsets.set_seed_async(0, stream);
 
-  for (auto base_tile_idx = 0; (bytes_read = input.read(input_buffer, stream)) > 0;
+  for (auto base_tile_idx = 0; (bytes_read = input.read(input_buffer, my_stream)) > 0;
        base_tile_idx += TILES_PER_CHUNK) {
     bytes_total += bytes_read;
 
     // reset the next chunk of tile state
-    multibyte_split_init_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, stream.value()>>>(  //
+    multibyte_split_init_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, my_stream>>>(  //
       base_tile_idx,
       TILES_PER_CHUNK,
       tile_superstates,
       tile_offsets);
 
-    multibyte_split_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, stream.value()>>>(  //
+    multibyte_split_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, my_stream>>>(  //
       base_tile_idx,
       TILES_PER_CHUNK,
       tile_superstates,
@@ -490,8 +506,37 @@ cudf::size_type scan_full_stream(cudf::io::text::device_istream& input,
       device_span<char>(input_buffer).first(bytes_read),
       output_buffer);
 
-    stream.synchronize();
+    cudaEventRecord(my_event, my_stream);
+
+    std::swap(my_event_next_next, my_event_next);
+    std::swap(my_event_next, my_event);
+
+    std::swap(my_stream_next_next, my_stream_next);
+    std::swap(my_stream_next, my_stream);
+
+    std::swap(input_buffer_next_next, input_buffer_next);
+    std::swap(input_buffer_next, input_buffer);
+
+    // std::swap(my_event, my_event_next);
+    // std::swap(my_stream, my_stream_next);
+    // std::swap(input_buffer, input_buffer_next);
+
+    cudaStreamSynchronize(my_stream);
+
+    // cudaStreamWaitEvent(my_stream, my_event, 0);
   }
+
+  cudaStreamWaitEvent(stream.value(), my_event, 0);
+  cudaStreamWaitEvent(stream.value(), my_event_next, 0);
+  cudaStreamWaitEvent(stream.value(), my_event_next_next, 0);
+
+  cudaEventDestroy(my_event);
+  cudaEventDestroy(my_event_next);
+  cudaEventDestroy(my_event_next_next);
+
+  cudaStreamDestroy(my_stream);
+  cudaStreamDestroy(my_stream_next);
+  cudaStreamDestroy(my_stream_next_next);
 
   return bytes_total;
 }
@@ -501,9 +546,11 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::device_istream& in
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  auto const trie       = cudf::io::text::trie::create(delimeters, stream);
-  auto tile_superstates = scan_tile_state<superstate<16>>(TILES_PER_CHUNK * 2, stream);
-  auto tile_offsets     = scan_tile_state<uint32_t>(TILES_PER_CHUNK * 2, stream);
+  auto const trie = cudf::io::text::trie::create(delimeters, stream);
+  // probaly only need to b (n * 3 + 1), where 1 is the seed, but 4 makes the reads align better,
+  // maybe?
+  auto tile_superstates = scan_tile_state<superstate<16>>(TILES_PER_CHUNK * 4, stream);
+  auto tile_offsets     = scan_tile_state<uint32_t>(TILES_PER_CHUNK * 4, stream);
 
   auto bytes_total =
     scan_full_stream(input,
