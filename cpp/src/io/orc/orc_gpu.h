@@ -266,6 +266,7 @@ void DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                       uint32_t num_columns,
                                       uint32_t num_stripes,
                                       size_t first_row             = 0,
+                                      size_t level                 = 0,
                                       rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**

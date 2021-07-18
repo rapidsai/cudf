@@ -1133,7 +1133,8 @@ __global__ void __launch_bounds__(block_size)
                                       DictionaryEntry* global_dictionary,
                                       uint32_t num_columns,
                                       uint32_t num_stripes,
-                                      size_t first_row)
+                                      size_t first_row,
+                                      size_t level)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
   using warp_reduce  = cub::WarpReduce<uint32_t>;
@@ -1422,13 +1423,15 @@ __global__ void __launch_bounds__(block_size)
   } else {
     chunk_id = blockIdx.x;
   }
-  // Struct doesn't have any data in itself, so skip
-  const bool is_valid = s->chunk.type_kind != STRUCT;
   if (t == 0) {
     s->chunk          = chunks[chunk_id];
     s->num_child_rows = 0;
-    if (not is_valid) chunks[chunk_id].num_child_rows = chunks[chunk_id].num_rows;
   }
+  // Struct doesn't have any data in itself, so skip
+  const bool is_valid = (s->chunk.type_kind != STRUCT);
+  // if(t == 0 and not is_valid){
+  //    chunks[chunk_id].num_child_rows = chunks[chunk_id].num_rows;
+  //}
   __syncthreads();
   const size_t max_num_rows = s->chunk.column_num_rows;
   if (t == 0 and is_valid) {
@@ -1834,12 +1837,13 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                                uint32_t num_columns,
                                                uint32_t num_stripes,
                                                size_t first_row,
+                                               size_t level,
                                                rmm::cuda_stream_view stream)
 {
   dim3 dim_block(block_size, 1);
   dim3 dim_grid(num_columns, num_stripes * 2);  // 1024 threads per chunk
   gpuDecodeNullsAndStringDictionaries<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
-    chunks, global_dictionary, num_columns, num_stripes, first_row);
+    chunks, global_dictionary, num_columns, num_stripes, first_row, level);
 }
 
 /**

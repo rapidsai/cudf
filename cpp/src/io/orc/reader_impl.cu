@@ -692,19 +692,20 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
                       size_t level)
 {
   auto num_columns = chunks.size().second;
-  if (level == 2) printf("RGSL :Coming to update mask and number of columns is %lu\n", num_columns);
+  // if (level == 2) printf("RGSL :Coming to update mask and number of columns is %lu\n",
+  // num_columns);
 
   for (size_t j = 0; j < num_columns; ++j) {
     if (chunks[0][j].parent_data.valid_map_base) {
       auto parent_valid_map_base = chunks[0][j].parent_data.valid_map_base;
       auto child_valid_map_base  = out_buffers[j].null_mask();
-      if (level == 2)
+      if (level == 2 and false)
         printf("RGSL : chunks[0][j].parent_data.null_count  %u\n",
                chunks[0][j].parent_data.null_count);
-      if (level == 2) printf("RGSL : null count is %u\n", chunks[0][j].null_count);
+      if (level == 2 and false) printf("RGSL : null count is %u\n", chunks[0][j].null_count);
       auto child_mask_len  = chunks[0][j].column_num_rows - chunks[0][j].parent_data.null_count;
       auto parent_mask_len = chunks[0][j].column_num_rows;
-      if (level == 2)
+      if (level == 2 and false)
         printf(
           "RGSL : child mask len %u and parent mask len %u \n", child_mask_len, parent_mask_len);
       if (child_valid_map_base) {
@@ -715,32 +716,38 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
                         dst_idx.begin(),
                         [parent_valid_map_base] __device__(auto idx) {
                           auto val = bit_is_set(parent_valid_map_base, idx);
-                          // printf("RGSL : Returning %u for idx %u\n", val, idx);
+                          // if(val) printf("RGSL : Returning %u for idx %u\n", val, idx);
                           return val;
                         });
 
         // thrust::for_each(rmm::exec_policy(stream), dst_idx.begin(), dst_idx.end(), []
         // __device__(auto idx) {printf("RGSL :idx has value %u \n", idx);});
+#if 0
+        thrust::for_each(rmm::exec_policy(stream),
+                         thrust::make_counting_iterator(0),
+                         thrust::make_counting_iterator(0) + dst_idx.size(), [child_valid_map_base, level]
+         __device__(auto idx) {if(level == 2 and bit_is_set(child_valid_map_base, idx)) printf("RGSL :bit is set idx at  %u \n", idx);});
+#endif
         auto merged_null_mask = cudf::detail::create_null_mask(
           parent_mask_len, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
         bitmask_type* merged_mask = static_cast<bitmask_type*>(merged_null_mask.data());
         uint32_t* dst_idx_ptr     = dst_idx.data();
-        if (level == 2) printf("RGSL : dst_idx.size() is %lu \n", dst_idx.size());
+        // if (level == 2) printf("RGSL : dst_idx.size() is %lu \n", dst_idx.size());
         thrust::for_each(
           rmm::exec_policy(stream),
           thrust::make_counting_iterator(0),
           thrust::make_counting_iterator(0) + dst_idx.size(),
           [child_valid_map_base, dst_idx_ptr, merged_mask, level] __device__(auto idx) {
             if (bit_is_set(child_valid_map_base, idx)) {
-              if (level == 2)
-                printf("RGSL: Setting bit dst_idx_ptr[idx] %u at idx %u\n", dst_idx_ptr[idx], idx);
+              // if (level == 2) printf("RGSL: Setting bit dst_idx_ptr[idx] %u at idx %u\n",
+              // dst_idx_ptr[idx], idx);
               cudf::set_bit(merged_mask, dst_idx_ptr[idx]);
             };
           });
 
         out_buffers[j]._null_mask = std::move(merged_null_mask);
       } else {
-        if (level == 2) printf("RGSL: Coming to copy bitmask \n");
+        // if (level == 2) printf("RGSL: Coming to copy bitmask \n");
         auto mask_size = bitmask_allocation_size_bytes(parent_mask_len);
         out_buffers[j]._null_mask =
           rmm::device_buffer(parent_valid_map_base, mask_size, stream, mr);
@@ -765,7 +772,9 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
   // Update chunks with pointers to column data
   for (size_t i = 0; i < num_stripes; ++i) {
     for (size_t j = 0; j < num_columns; ++j) {
-      auto& chunk            = chunks[i][j];
+      auto& chunk = chunks[i][j];
+      // if(level == 2) printf("RGSL: number of rows %u and null count %u \n",
+      // chunk.column_num_rows, chunk.parent_data.null_count);
       chunk.column_data_base = out_buffers[j].data();
       chunk.valid_map_base   = out_buffers[j].null_mask();
     }
@@ -775,8 +784,13 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
   rmm::device_uvector<gpu::DictionaryEntry> global_dict(num_dicts, stream);
 
   chunks.host_to_device(stream);
-  gpu::DecodeNullsAndStringDictionaries(
-    chunks.base_device_ptr(), global_dict.data(), num_columns, num_stripes, skip_rows, stream);
+  gpu::DecodeNullsAndStringDictionaries(chunks.base_device_ptr(),
+                                        global_dict.data(),
+                                        num_columns,
+                                        num_stripes,
+                                        skip_rows,
+                                        level,
+                                        stream);
 
   if (level > 0) {
     chunks.device_to_host(stream, true);
@@ -787,10 +801,11 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
       for (size_t j = 0; j < num_columns; ++j) {
         auto& chunk          = chunks[i][j];
         chunk.valid_map_base = out_buffers[j].null_mask();
-        if (level == 2)
-          printf("RGSL : number of values is %u and null count is %u \n",
+        if (level == 2 and false)
+          printf("RGSL : number of values is %u and null count is %u and chunk kind is %u\n",
                  chunk.column_num_rows,
-                 chunk.parent_data.null_count);
+                 chunk.parent_data.null_count,
+                 static_cast<uint32_t>(chunk.type_kind));
       }
     }
 
@@ -812,6 +827,7 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
 
   for (size_t i = 0; i < num_columns; ++i) {
     for (size_t j = 0; j < num_stripes; ++j) {
+      // if(level == 2) printf("Null count at index %lu is %u  \n", i, chunks[j][i].null_count);
       out_buffers[i].null_count() += chunks[j][i].null_count;
     }
     out_buffers[i].null_count() += chunks[0][i].parent_data.null_count;
@@ -876,6 +892,8 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
 
       // Aggregate start row, number of rows per chunk and total number of rows in a column
       const auto child_rows = chunks[stripe_id][parent_col_idx].num_child_rows;
+      // if(level == 1 and parent_col_idx == 1) printf("RGSL : num_child_rows is %u \n",
+      // child_rows);
       for (uint32_t id = 0; id < p_col.num_children; id++) {
         const auto child_col_idx = index + id;
 
@@ -1046,6 +1064,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // list column children will be 1 level down compared to parent.
   for (size_t level = 0; level < _selected_columns.size(); level++) {
     auto& selected_columns = _selected_columns[level];
+    // for(auto col : selected_columns){
+    //  printf("RGSL : At level %lu selected columns are %u \n", level, col.id);
+    //}
     // Association between each ORC column and its cudf::column
     _col_meta.orc_col_map.emplace_back(_metadata->get_num_cols(), -1);
     std::vector<orc_column_meta> nested_col;
@@ -1195,7 +1216,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
               (level == 0)
                 ? stripe_info->numberOfRows
                 : _col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
-            // chunk.num_child_rows  = chunk.num_rows;
             chunk.column_num_rows = (level == 0) ? num_rows : _col_meta.num_child_rows[col_idx];
             chunk.parent_data.valid_map_base =
               (level == 0) ? nullptr : _col_meta.parent_column_data[col_idx].valid_map_base;
@@ -1205,6 +1225,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             chunk.type_kind     = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
                                 .ff.types[selected_columns[col_idx].id]
                                 .kind;
+            chunk.num_child_rows = (chunk.type_kind != orc::STRUCT) ? 0 : chunk.num_rows;
+            // if(level ==1 ) printf("RGSL : chunk.type_kind is %u \n",
+            // static_cast<uint32_t>(chunk.type_kind));
             auto const decimal_as_float64 =
               should_convert_decimal_column_to_float(_decimal_cols_as_float,
                                                      _metadata->per_file_metadata[0],
@@ -1240,6 +1263,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       if (stripe_data.size() != 0) {
         auto row_groups =
           cudf::detail::hostdevice_2dvector<gpu::RowGroup>(num_rowgroups, num_columns, stream);
+        memset(row_groups.base_host_ptr(), 0, row_groups.memory_size());
         if (level > 0 and row_groups.size().first) {
           cudf::host_span<gpu::RowGroup> row_groups_span(row_groups.base_host_ptr(),
                                                          num_rowgroups * num_columns);
@@ -1305,6 +1329,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           auto n_rows       = (level == 0) ? num_rows : _col_meta.num_child_rows[i];
           // For list column, offset column will be always size + 1
           if (is_list_type) n_rows++;
+          // if(level == 2) printf("RGSL : Is nullable ? %u \n", is_nullable);
           out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, stream, _mr);
         }
 
