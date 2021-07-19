@@ -4,37 +4,36 @@ import pickle
 
 import pandas as pd
 
-from libcpp cimport bool
-from libcpp.memory cimport make_unique, unique_ptr, shared_ptr, make_shared
-from libcpp.vector cimport vector
-from libcpp.utility cimport move
 from libc.stdint cimport int32_t, int64_t, uint8_t, uintptr_t
+from libcpp cimport bool
+from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
+from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf._lib.column cimport Column
+
 from cudf._lib.scalar import as_device_scalar
+
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
-from cudf._lib.reduce import minmax
 
+from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
 
+cimport cudf._lib.cpp.copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport (
-    column_view,
-    mutable_column_view
-)
+from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
+from cudf._lib.cpp.lists.gather cimport (
+    segmented_gather as cpp_segmented_gather,
+)
+from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
-from cudf._lib.cpp.lists.gather cimport (
-    segmented_gather as cpp_segmented_gather
-)
-cimport cudf._lib.cpp.copying as cpp_copying
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar

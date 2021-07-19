@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ void BM_csv_write_varying_inout(benchmark::State& state)
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(sink_type);
+  auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::csv_writer_options options =
@@ -52,6 +53,7 @@ void BM_csv_write_varying_inout(benchmark::State& state)
   }
 
   state.SetBytesProcessed(data_size * state.iterations());
+  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
 }
 
 void BM_csv_write_varying_options(benchmark::State& state)
@@ -69,6 +71,7 @@ void BM_csv_write_varying_options(benchmark::State& state)
 
   std::string const na_per(na_per_len, '#');
   std::vector<char> csv_data;
+  auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::csv_writer_options options =
@@ -80,6 +83,7 @@ void BM_csv_write_varying_options(benchmark::State& state)
   }
 
   state.SetBytesProcessed(data_size * state.iterations());
+  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
 }
 
 #define CSV_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)       \
