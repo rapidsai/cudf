@@ -280,7 +280,7 @@ class ListColumn(ColumnBase):
             return self.elements
 
     @classmethod
-    def from_sequences(cls, arbitrary: Sequence[ColumnLike]):
+    def from_sequences(cls, arbitrary: Sequence[ColumnLike]) -> ListColumn: 
         """
         Create a list column for list of column-like sequences
         """
