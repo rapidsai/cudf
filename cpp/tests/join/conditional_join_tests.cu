@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table_view.hpp>
