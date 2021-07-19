@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/ast/detail/linearizer.hpp>
+#include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -40,12 +40,15 @@ expression::expression(ast_operator op, detail::node const& left, detail::node c
   }
 }
 
-cudf::size_type literal::accept(detail::linearizer& visitor) const { return visitor.visit(*this); }
-cudf::size_type column_reference::accept(detail::linearizer& visitor) const
+cudf::size_type literal::accept(detail::expression_parser& visitor) const
 {
   return visitor.visit(*this);
 }
-cudf::size_type expression::accept(detail::linearizer& visitor) const
+cudf::size_type column_reference::accept(detail::expression_parser& visitor) const
+{
+  return visitor.visit(*this);
+}
+cudf::size_type expression::accept(detail::expression_parser& visitor) const
 {
   return visitor.visit(*this);
 }

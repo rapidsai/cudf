@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/ast/detail/linearizer.hpp>
+#include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -274,7 +274,7 @@ struct expression_evaluator {
    *
    * Only input columns (COLUMN), literal values (LITERAL), and intermediates (INTERMEDIATE) are
    * supported as input data references. Intermediates must be of fixed width less than or equal to
-   * sizeof(std::int64_t). This requirement on intermediates is enforced by the linearizer.
+   * sizeof(std::int64_t). This requirement on intermediates is enforced by the expression_parser.
    *
    * @tparam Element Type of element to return.
    * @tparam has_nulls Whether or not the result data is nullable.
@@ -514,7 +514,7 @@ struct expression_evaluator {
      *
      * Only output columns (COLUMN) and intermediates (INTERMEDIATE) are supported as output
      * reference types. Intermediates must be of fixed width less than or equal to
-     * sizeof(std::int64_t). This requirement on intermediates is enforced by the linearizer.
+     * sizeof(std::int64_t). This requirement on intermediates is enforced by the expression_parser.
      *
      * @tparam Element Type of result element.
      * @tparam OutputType The container type that data will be inserted into.

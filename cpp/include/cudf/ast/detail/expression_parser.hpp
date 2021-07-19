@@ -27,13 +27,6 @@
 
 namespace cudf {
 namespace ast {
-
-// Forward declaration
-enum class table_reference;
-class literal;
-class column_reference;
-class expression;
-
 namespace detail {
 
 /**
@@ -78,7 +71,8 @@ struct alignas(8) device_data_reference {
 };
 
 /**
- * @brief The linearizer traverses an abstract syntax tree to prepare for execution on the device.
+ * @brief The expression_parser traverses an expression and converts it into a form suitable for
+ * execution on the device.
  *
  * This class is part of a "visitor" pattern with the `node` class.
  *
@@ -88,28 +82,28 @@ struct alignas(8) device_data_reference {
  * evaluating the abstract syntax tree as a "linear" list of operators whose input dependencies are
  * resolved into intermediate data storage in shared memory.
  */
-class linearizer {
+class expression_parser {
  public:
   /**
-   * @brief Construct a new linearizer object
+   * @brief Construct a new expression_parser object
    *
-   * @param expr The expression to create an evaluable linearizer for.
+   * @param expr The expression to create an evaluable expression_parser for.
    * @param left The left table used for evaluating the abstract syntax tree.
    * @param right The right table used for evaluating the abstract syntax tree.
    */
-  linearizer(node const& expr, cudf::table_view left, cudf::table_view right)
+  expression_parser(node const& expr, cudf::table_view left, cudf::table_view right)
     : _left{left}, _right{right}, _node_count{0}, _intermediate_counter{}
   {
     expr.accept(*this);
   }
 
   /**
-   * @brief Construct a new linearizer object
+   * @brief Construct a new expression_parser object
    *
-   * @param expr The expression to create an evaluable linearizer for.
+   * @param expr The expression to create an evaluable expression_parser for.
    * @param table The table used for evaluating the abstract syntax tree.
    */
-  linearizer(node const& expr, cudf::table_view table)
+  expression_parser(node const& expr, cudf::table_view table)
     : _left{table}, _right{table}, _node_count{0}, _intermediate_counter{}
   {
     expr.accept(*this);
@@ -302,15 +296,15 @@ struct ast_plan {
            bool has_nulls,
            rmm::cuda_stream_view stream,
            rmm::mr::device_memory_resource* mr)
-    : _linearizer(expr, left, right)
+    : _expression_parser(expr, left, right)
   {
     std::vector<cudf::size_type> sizes;
     std::vector<const void*> data_pointers;
 
-    extract_size_and_pointer(_linearizer.data_references(), sizes, data_pointers);
-    extract_size_and_pointer(_linearizer.literals(), sizes, data_pointers);
-    extract_size_and_pointer(_linearizer.operators(), sizes, data_pointers);
-    extract_size_and_pointer(_linearizer.operator_source_indices(), sizes, data_pointers);
+    extract_size_and_pointer(_expression_parser.data_references(), sizes, data_pointers);
+    extract_size_and_pointer(_expression_parser.literals(), sizes, data_pointers);
+    extract_size_and_pointer(_expression_parser.operators(), sizes, data_pointers);
+    extract_size_and_pointer(_expression_parser.operator_source_indices(), sizes, data_pointers);
 
     // Create device buffer
     auto const buffer_size = std::accumulate(sizes.cbegin(), sizes.cend(), 0);
@@ -331,18 +325,18 @@ struct ast_plan {
     dev_plan.data_references    = device_span<const detail::device_data_reference>(
       reinterpret_cast<const detail::device_data_reference*>(device_data_buffer_ptr +
                                                              buffer_offsets[0]),
-      _linearizer.data_references().size());
+      _expression_parser.data_references().size());
     dev_plan.literals = device_span<const cudf::detail::fixed_width_scalar_device_view_base>(
       reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
         device_data_buffer_ptr + buffer_offsets[1]),
-      _linearizer.literals().size());
+      _expression_parser.literals().size());
     dev_plan.operators = device_span<const ast_operator>(
       reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]),
-      _linearizer.operators().size());
+      _expression_parser.operators().size());
     dev_plan.operator_source_indices = device_span<const cudf::size_type>(
       reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
-      _linearizer.operator_source_indices().size());
-    dev_plan.num_intermediates = _linearizer.intermediate_count();
+      _expression_parser.operator_source_indices().size());
+    dev_plan.num_intermediates = _expression_parser.intermediate_count();
     dev_plan.shmem_per_thread  = static_cast<int>(
       (has_nulls ? sizeof(IntermediateDataType<true>) : sizeof(IntermediateDataType<false>)) *
       dev_plan.num_intermediates);
@@ -366,7 +360,7 @@ struct ast_plan {
   {
   }
 
-  cudf::data_type output_type() const { return _linearizer.root_data_type(); }
+  cudf::data_type output_type() const { return _expression_parser.root_data_type(); }
 
   device_ast_plan
     dev_plan;  ///< The collection of data required to evaluate the expression on the device.
@@ -393,8 +387,9 @@ struct ast_plan {
   rmm::device_buffer
     _device_data_buffer;  ///< The device-side data buffer containing the plan information, which is
                           ///< owned by this class and persists until it is destroyed.
-  linearizer const _linearizer;  ///< The linearizer created from the provided expression that is
-                                 ///< used to construct device-side operators and references.
+  expression_parser const
+    _expression_parser;  ///< The expression_parser created from the provided expression that is
+                         ///< used to construct device-side operators and references.
 };
 
 }  // namespace detail

@@ -146,7 +146,7 @@ class literal : public detail::node {
    * @param visitor Visitor.
    * @return cudf::size_type Index of device data reference for this instance.
    */
-  cudf::size_type accept(detail::linearizer& visitor) const override;
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
 
  private:
   const cudf::detail::fixed_width_scalar_device_view_base value;
@@ -222,7 +222,7 @@ class column_reference : public detail::node {
    * @param visitor Visitor.
    * @return cudf::size_type Index of device data reference for this instance.
    */
-  cudf::size_type accept(detail::linearizer& visitor) const override;
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
 
  private:
   cudf::size_type column_index;
@@ -278,7 +278,7 @@ class expression : public detail::node {
    * @param visitor Visitor.
    * @return cudf::size_type Index of device data reference for this instance.
    */
-  cudf::size_type accept(detail::linearizer& visitor) const override;
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
 
  private:
   const ast_operator op;
