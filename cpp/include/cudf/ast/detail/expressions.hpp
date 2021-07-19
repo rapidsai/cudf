@@ -24,12 +24,24 @@ namespace detail {
 class expression_parser;
 
 /**
- * @brief A generic node that can be evaluated to return a value.
+ * @brief A generic expression node that can be evaluated to return a value.
  *
- * This class is a part of a "visitor" pattern with the `expression_parser` class.
- * Nodes inheriting from this class can accept visitors.
+ * An expression is composed of operands acting on constants or variables.
+ * Since an expression's components are themselves expressions, they must be
+ * treated as defining an abstract syntax tree and parsed accordingly.
+ * Expressions support parsing using the `expression_parser` class. The
+ * recursive parsing of an expression tree is accomplished via the visitor
+ * pattern, so all expressions must implement the `accept` method to enable the
+ * necessary multiple-dispatch in conjunction with the `expression_parser`.
  */
 struct node {
+  /**
+   * @brief Accepts a visitor class.
+   *
+   * @param visitor Visitor.
+   * @return cudf::size_type The index of this expression in the array of device data references
+   * stored by the `expression_parser`.
+   */
   virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
 };
 

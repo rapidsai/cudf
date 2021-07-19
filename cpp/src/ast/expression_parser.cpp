@@ -71,17 +71,6 @@ void expression_parser::intermediate_counter::give(cudf::size_type value)
     used_values.erase(lower_bound);
 }
 
-/**
- * @brief Find the first missing value in a contiguous sequence of integers.
- *
- * From a sorted container of integers, find the first "missing" value.
- * For example, {0, 1, 2, 4, 5} is missing 3, and {1, 2, 3} is missing 0.
- * If there are no missing values, return the size of the container.
- *
- * @param start Starting index.
- * @param end Ending index.
- * @return cudf::size_type Smallest value not already in the container.
- */
 cudf::size_type expression_parser::intermediate_counter::find_first_missing() const
 {
   if (used_values.empty() || (used_values.front() != 0)) { return 0; }
