@@ -47,6 +47,7 @@ void PQ_write(benchmark::State& state)
   auto tbl = create_random_table({cudf::type_id::INT32}, num_cols, table_size_bytes{data_size});
   cudf::table_view view = tbl->view();
 
+  auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::parquet_writer_options opts =
@@ -55,6 +56,7 @@ void PQ_write(benchmark::State& state)
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0));
+  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
 }
 
 void PQ_write_chunked(benchmark::State& state)
@@ -68,6 +70,7 @@ void PQ_write_chunked(benchmark::State& state)
       {cudf::type_id::INT32}, num_cols, table_size_bytes{size_t(data_size / num_tables)}));
   }
 
+  auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::chunked_parquet_writer_options opts =
@@ -80,6 +83,7 @@ void PQ_write_chunked(benchmark::State& state)
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0));
+  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
 }
 
 #define PWBM_BENCHMARK_DEFINE(name, size, num_columns)                                    \

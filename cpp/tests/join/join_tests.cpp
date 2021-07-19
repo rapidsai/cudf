@@ -265,7 +265,7 @@ TEST_F(JoinTest, FullJoinOnNulls)
   cols_gold.push_back(col_gold_3.release());
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
-  
+
   Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
@@ -549,7 +549,7 @@ TEST_F(JoinTest, LeftJoinOnNulls)
                                      {   1,     1,    0});
   column_wrapper<int32_t> col_gold_5{{   2,     8,   -1},
                                      {   1,     1,    0}};
-  
+
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
@@ -579,7 +579,7 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   result_sort_order = cudf::sorted_order(result->view());
   sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  
+
   col_gold_0 = {{   3,    -1,    2},
                 {   1,     0,    1}};
   col_gold_1 = {{ "s0",  "s1", "s2"},
@@ -782,7 +782,7 @@ TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-// // Test to check join behaviour when join keys are null.
+// // Test to check join behavior when join keys are null.
 TEST_F(JoinTest, InnerJoinOnNulls)
 {
   // clang-format off
@@ -826,7 +826,7 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   cols_gold.push_back(col_gold_3.release());
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
-  
+
   Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());

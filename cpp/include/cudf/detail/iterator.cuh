@@ -177,7 +177,7 @@ auto make_null_replacement_iterator(column_device_view const& column,
  *
  * make_optional_iterator with mode `DYNAMIC` defers the assumption of nullability to
  * runtime, with the user stating on construction of the iterator if column has nulls.
- * `DYNAMIC` mode is nice when an algorithm is going to execute on mutliple
+ * `DYNAMIC` mode is nice when an algorithm is going to execute on multiple
  * iterators and you don't want to compile all the combinations of iterator types
  *
  * Example:
@@ -819,7 +819,7 @@ auto inline make_pair_iterator(scalar const& scalar_value)
  *
  * Else, if the scalar is null, then the value of `p.first` is undefined and `p.second == false`.
  *
- * The behaviour is undefined if the scalar is destroyed before iterator dereferencing.
+ * The behavior is undefined if the scalar is destroyed before iterator dereferencing.
  *
  * @throws cudf::logic_error if scalar datatype and Element type mismatch.
  * @throws cudf::logic_error if the returned iterator is dereferenced in host

@@ -94,7 +94,7 @@ namespace {
  */
 struct dispatch_to_cudf_column {
   /**
-   * @brief Returns mask from an array withut any offsets.
+   * @brief Returns mask from an array without any offsets.
    */
   std::unique_ptr<rmm::device_buffer> get_mask_buffer(arrow::Array const& array,
                                                       rmm::cuda_stream_view stream,

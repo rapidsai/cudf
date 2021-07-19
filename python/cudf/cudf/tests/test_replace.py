@@ -1,15 +1,15 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import re
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
 import pytest
-from decimal import Decimal
 
 import cudf
 from cudf.core.dtypes import Decimal64Dtype
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
     assert_eq,
@@ -303,6 +303,8 @@ def test_series_fillna_numerical(psr, data_dtype, fill_value, inplace):
         [1, None, None, 2, 3, 4],
         [None, None, 1, 2, None, 3, 4],
         [1, 2, None, 3, 4, None, None],
+        [0] + [None] * 14,
+        [None] * 14 + [0],
     ],
 )
 @pytest.mark.parametrize("container", [pd.Series, pd.DataFrame])

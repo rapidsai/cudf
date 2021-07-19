@@ -4,18 +4,30 @@ from enum import IntEnum
 
 import numpy as np
 
-from libcpp.memory cimport shared_ptr, make_shared
+from libcpp.memory cimport make_shared, shared_ptr
 
-from cudf._lib.types cimport (
-    underlying_type_t_order,
-    underlying_type_t_null_order,
-    underlying_type_t_sorted,
-    underlying_type_t_interpolation
-)
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
-from cudf.core.dtypes import ListDtype, StructDtype, Decimal64Dtype
-from cudf.utils.dtypes import is_decimal_dtype, is_list_dtype, is_struct_dtype
+from cudf._lib.types cimport (
+    underlying_type_t_interpolation,
+    underlying_type_t_null_order,
+    underlying_type_t_order,
+    underlying_type_t_sorted,
+)
+
+from cudf.core.dtypes import (
+    Decimal32Dtype,
+    Decimal64Dtype,
+    ListDtype,
+    StructDtype,
+)
+from cudf.utils.dtypes import (
+    is_decimal32_dtype,
+    is_decimal64_dtype,
+    is_decimal_dtype,
+    is_list_dtype,
+    is_struct_dtype,
+)
 
 cimport cudf._lib.cpp.types as libcudf_types
 
@@ -191,10 +203,6 @@ cdef dtype_from_structs_column_view(column_view cv):
     }
     return StructDtype(fields)
 
-cdef dtype_from_decimal_column_view(column_view cv):
-    scale = -cv.type().scale()
-    return Decimal64Dtype(precision=Decimal64Dtype.MAX_PRECISION, scale=scale)
-
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()
     if tid == libcudf_types.type_id.LIST:
@@ -202,10 +210,15 @@ cdef dtype_from_column_view(column_view cv):
     elif tid == libcudf_types.type_id.STRUCT:
         return dtype_from_structs_column_view(cv)
     elif tid == libcudf_types.type_id.DECIMAL64:
-        return dtype_from_decimal_column_view(cv)
+        return Decimal64Dtype(
+            precision=Decimal64Dtype.MAX_PRECISION,
+            scale=-cv.type().scale()
+        )
     elif tid == libcudf_types.type_id.DECIMAL32:
-        raise NotImplementedError("decimal32 types are not supported yet. "
-                                  "Use decimal64 instead")
+        return Decimal32Dtype(
+            precision=Decimal32Dtype.MAX_PRECISION,
+            scale=-cv.type().scale()
+        )
     else:
         return cudf_to_np_types[<underlying_type_t_type_id>(tid)]
 
@@ -214,14 +227,19 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
         tid = libcudf_types.type_id.LIST
     elif is_struct_dtype(dtype):
         tid = libcudf_types.type_id.STRUCT
-    elif is_decimal_dtype(dtype):
+    elif is_decimal64_dtype(dtype):
         tid = libcudf_types.type_id.DECIMAL64
+    elif is_decimal32_dtype(dtype):
+        tid = libcudf_types.type_id.DECIMAL32
     else:
         tid = <libcudf_types.type_id> (
             <underlying_type_t_type_id> (
                 np_to_cudf_types[np.dtype(dtype)]))
 
-    if tid == libcudf_types.type_id.DECIMAL64:
+    if tid in (
+        libcudf_types.type_id.DECIMAL64,
+        libcudf_types.type_id.DECIMAL32
+    ):
         return libcudf_types.data_type(tid, -dtype.scale)
     else:
         return libcudf_types.data_type(tid)

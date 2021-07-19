@@ -39,8 +39,8 @@ constexpr unsigned int init_groups_per_block  = 4;
 constexpr unsigned int init_threads_per_block = init_threads_per_group * init_groups_per_block;
 
 __global__ void __launch_bounds__(init_threads_per_block)
-  gpu_init_statistics_groups(statistics_group *groups,
-                             const stats_column_desc *cols,
+  gpu_init_statistics_groups(statistics_group* groups,
+                             const stats_column_desc* cols,
                              uint32_t num_columns,
                              uint32_t num_rowgroups,
                              uint32_t row_index_stride)
@@ -49,7 +49,7 @@ __global__ void __launch_bounds__(init_threads_per_block)
   uint32_t col_id         = blockIdx.y;
   uint32_t chunk_id       = (blockIdx.x * init_groups_per_block) + threadIdx.y;
   uint32_t t              = threadIdx.x;
-  statistics_group *group = &group_g[threadIdx.y];
+  statistics_group* group = &group_g[threadIdx.y];
   if (chunk_id < num_rowgroups and t == 0) {
     uint32_t num_rows = cols[col_id].leaf_column->size();
     group->col        = &cols[col_id];
@@ -78,8 +78,8 @@ constexpr unsigned int pb_fldlen_common  = 2 * pb_fld_hdrlen + pb_fldlen_int64;
 
 template <unsigned int block_size>
 __global__ void __launch_bounds__(block_size, 1)
-  gpu_init_statistics_buffersize(statistics_merge_group *groups,
-                                 const statistics_chunk *chunks,
+  gpu_init_statistics_buffersize(statistics_merge_group* groups,
+                                 const statistics_chunk* chunks,
                                  uint32_t statistics_count)
 {
   using block_scan = cub::BlockScan<uint32_t, block_size, cub::BLOCK_SCAN_WARP_SCANS>;
@@ -91,7 +91,7 @@ __global__ void __launch_bounds__(block_size, 1)
     uint32_t stats_len = 0, stats_pos;
     uint32_t idx       = start + t;
     if (idx < statistics_count) {
-      const stats_column_desc *col = groups[idx].col;
+      const stats_column_desc* col = groups[idx].col;
       statistics_dtype dtype       = col->stats_dtype;
       switch (dtype) {
         case dtype_bool: stats_len = pb_fldlen_common + pb_fld_hdrlen + pb_fldlen_bucket1; break;
@@ -131,8 +131,8 @@ __global__ void __launch_bounds__(block_size, 1)
 }
 
 struct stats_state_s {
-  uint8_t *base;  ///< Output buffer start
-  uint8_t *end;   ///< Output buffer end
+  uint8_t* base;  ///< Output buffer start
+  uint8_t* end;   ///< Output buffer end
   statistics_chunk chunk;
   statistics_merge_group group;
   stats_column_desc col;
@@ -146,7 +146,7 @@ struct stats_state_s {
  * https://developers.google.com/protocol-buffers/docs/encoding
  */
 // Protobuf varint encoding for unsigned int
-__device__ inline uint8_t *pb_encode_uint(uint8_t *p, uint64_t v)
+__device__ inline uint8_t* pb_encode_uint(uint8_t* p, uint64_t v)
 {
   while (v > 0x7f) {
     *p++ = ((uint32_t)v | 0x80);
@@ -157,30 +157,30 @@ __device__ inline uint8_t *pb_encode_uint(uint8_t *p, uint64_t v)
 }
 
 // Protobuf field encoding for unsigned int
-__device__ inline uint8_t *pb_put_uint(uint8_t *p, uint32_t id, uint64_t v)
+__device__ inline uint8_t* pb_put_uint(uint8_t* p, uint32_t id, uint64_t v)
 {
   p[0] = id * 8 + PB_TYPE_VARINT;  // NOTE: Assumes id < 16
   return pb_encode_uint(p + 1, v);
 }
 
 // Protobuf field encoding for signed int
-__device__ inline uint8_t *pb_put_int(uint8_t *p, uint32_t id, int64_t v)
+__device__ inline uint8_t* pb_put_int(uint8_t* p, uint32_t id, int64_t v)
 {
   int64_t s = (v < 0);
   return pb_put_uint(p, id, (v ^ -s) * 2 + s);
 }
 
 // Protobuf field encoding for 'packed' unsigned int (single value)
-__device__ inline uint8_t *pb_put_packed_uint(uint8_t *p, uint32_t id, uint64_t v)
+__device__ inline uint8_t* pb_put_packed_uint(uint8_t* p, uint32_t id, uint64_t v)
 {
-  uint8_t *p2 = pb_encode_uint(p + 2, v);
+  uint8_t* p2 = pb_encode_uint(p + 2, v);
   p[0]        = id * 8 + PB_TYPE_FIXEDLEN;
   p[1]        = static_cast<uint8_t>(p2 - (p + 2));
   return p2;
 }
 
 // Protobuf field encoding for binary/string
-__device__ inline uint8_t *pb_put_binary(uint8_t *p, uint32_t id, const void *bytes, uint32_t len)
+__device__ inline uint8_t* pb_put_binary(uint8_t* p, uint32_t id, const void* bytes, uint32_t len)
 {
   p[0] = id * 8 + PB_TYPE_FIXEDLEN;
   p    = pb_encode_uint(p + 1, len);
@@ -189,7 +189,7 @@ __device__ inline uint8_t *pb_put_binary(uint8_t *p, uint32_t id, const void *by
 }
 
 // Protobuf field encoding for 64-bit raw encoding (double)
-__device__ inline uint8_t *pb_put_fixed64(uint8_t *p, uint32_t id, const void *raw64)
+__device__ inline uint8_t* pb_put_fixed64(uint8_t* p, uint32_t id, const void* raw64)
 {
   p[0] = id * 8 + PB_TYPE_FIXED64;
   memcpy(p + 1, raw64, 8);
@@ -226,15 +226,15 @@ constexpr unsigned int encode_threads_per_block =
   encode_threads_per_chunk * encode_chunks_per_block;
 
 __global__ void __launch_bounds__(encode_threads_per_block)
-  gpu_encode_statistics(uint8_t *blob_bfr,
-                        statistics_merge_group *groups,
-                        const statistics_chunk *chunks,
+  gpu_encode_statistics(uint8_t* blob_bfr,
+                        statistics_merge_group* groups,
+                        const statistics_chunk* chunks,
                         uint32_t statistics_count)
 {
   __shared__ __align__(8) stats_state_s state_g[encode_chunks_per_block];
   uint32_t t             = threadIdx.x;
   uint32_t idx           = blockIdx.x * encode_chunks_per_block + threadIdx.y;
-  stats_state_s *const s = &state_g[threadIdx.y];
+  stats_state_s* const s = &state_g[threadIdx.y];
 
   // Encode and update actual bfr size
   if (idx < statistics_count && t == 0) {
@@ -243,8 +243,8 @@ __global__ void __launch_bounds__(encode_threads_per_block)
     s->col             = *(s->group.col);
     s->base            = blob_bfr + s->group.start_chunk;
     s->end             = blob_bfr + s->group.start_chunk + s->group.num_chunks;
-    uint8_t *cur       = pb_put_uint(s->base, 1, s->chunk.non_nulls);
-    uint8_t *fld_start = cur;
+    uint8_t* cur       = pb_put_uint(s->base, 1, s->chunk.non_nulls);
+    uint8_t* fld_start = cur;
     switch (s->col.stats_dtype) {
       case dtype_int8:
       case dtype_int16:
@@ -373,8 +373,8 @@ __global__ void __launch_bounds__(encode_threads_per_block)
  * @param[in] row_index_stride Rowgroup size in rows
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void orc_init_statistics_groups(statistics_group *groups,
-                                const stats_column_desc *cols,
+void orc_init_statistics_groups(statistics_group* groups,
+                                const stats_column_desc* cols,
                                 uint32_t num_columns,
                                 uint32_t num_rowgroups,
                                 uint32_t row_index_stride,
@@ -394,8 +394,8 @@ void orc_init_statistics_groups(statistics_group *groups,
  * @param[in] statistics_count Number of statistics buffers to encode
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void orc_init_statistics_buffersize(statistics_merge_group *groups,
-                                    const statistics_chunk *chunks,
+void orc_init_statistics_buffersize(statistics_merge_group* groups,
+                                    const statistics_chunk* chunks,
                                     uint32_t statistics_count,
                                     rmm::cuda_stream_view stream)
 {
@@ -411,9 +411,9 @@ void orc_init_statistics_buffersize(statistics_merge_group *groups,
  * @param[in,out] chunks Statistics data
  * @param[in] statistics_count Number of statistics buffers
  */
-void orc_encode_statistics(uint8_t *blob_bfr,
-                           statistics_merge_group *groups,
-                           const statistics_chunk *chunks,
+void orc_encode_statistics(uint8_t* blob_bfr,
+                           statistics_merge_group* groups,
+                           const statistics_chunk* chunks,
                            uint32_t statistics_count,
                            rmm::cuda_stream_view stream)
 {

@@ -339,6 +339,9 @@ num_rows : int, default None
     If not None, the total number of rows to read.
 use_index : bool, default True
     If True, use row index if available for faster seeking.
+decimal_cols_as_float: list, default None
+    If specified, names of the columns that should be converted from
+    Decimal to Float64 in the resulting dataframe.
 kwargs are passed to the engine
 
 Returns

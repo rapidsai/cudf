@@ -192,7 +192,7 @@ namespace {
  * @brief Calculate the size of the each string required for
  * converting each value in base-10 format.
  *
- * ouput format is [-]integer.fraction
+ * output format is [-]integer.fraction
  */
 template <typename DecimalType>
 struct decimal_to_string_size_fn {

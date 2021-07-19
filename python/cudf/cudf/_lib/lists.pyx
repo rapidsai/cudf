@@ -1,52 +1,47 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr, shared_ptr, make_shared
+from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp.lists.count_elements cimport (
-    count_elements as cpp_count_elements
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.lists.combine cimport (
+    concatenate_list_elements as cpp_concatenate_list_elements,
+    concatenate_null_policy,
+    concatenate_rows as cpp_concatenate_rows,
 )
-from cudf._lib.cpp.lists.explode cimport (
-    explode_outer as cpp_explode_outer
+from cudf._lib.cpp.lists.count_elements cimport (
+    count_elements as cpp_count_elements,
 )
 from cudf._lib.cpp.lists.drop_list_duplicates cimport (
-    drop_list_duplicates as cpp_drop_list_duplicates
+    drop_list_duplicates as cpp_drop_list_duplicates,
 )
-from cudf._lib.cpp.lists.sorting cimport (
-    sort_lists as cpp_sort_lists
-)
-from cudf._lib.cpp.lists.combine cimport (
-    concatenate_rows as cpp_concatenate_rows
-)
+from cudf._lib.cpp.lists.explode cimport explode_outer as cpp_explode_outer
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.column.column cimport column
-
-from cudf._lib.scalar cimport DeviceScalar
+from cudf._lib.cpp.lists.sorting cimport sort_lists as cpp_sort_lists
 from cudf._lib.cpp.scalar.scalar cimport scalar
-
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport (
-    size_type,
+    nan_equality,
     null_equality,
+    null_order,
     null_policy,
     order,
-    null_order,
-    nan_equality
+    size_type,
 )
-
-from cudf._lib.column cimport Column
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
-
 from cudf._lib.types cimport (
-    underlying_type_t_null_order, underlying_type_t_order
+    underlying_type_t_null_order,
+    underlying_type_t_order,
 )
+
 from cudf.core.dtypes import ListDtype
 
 from cudf._lib.cpp.lists.contains cimport contains
-
 from cudf._lib.cpp.lists.extract cimport extract_list_element
 
 
@@ -181,3 +176,20 @@ def concatenate_rows(Table tbl):
 
     result = Column.from_unique_ptr(move(c_result))
     return result
+
+
+def concatenate_list_elements(Column input_column, dropna=False):
+    cdef concatenate_null_policy policy = (
+        concatenate_null_policy.IGNORE if dropna
+        else concatenate_null_policy.NULLIFY_OUTPUT_ROW
+    )
+    cdef column_view c_input = input_column.view()
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(cpp_concatenate_list_elements(
+            c_input,
+            policy
+        ))
+
+    return Column.from_unique_ptr(move(c_result))

@@ -13,6 +13,7 @@ from nvtx import annotate
 from pandas._config import get_option
 
 import cudf
+from cudf._lib.datetime import is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.table import Table
@@ -35,7 +36,7 @@ from cudf.core.column import (
     arange,
     column,
 )
-from cudf.core.column.column import _concat_columns, as_column
+from cudf.core.column.column import as_column, concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import SingleColumnFrame
@@ -587,7 +588,7 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
     @classmethod
     def _concat(cls, objs):
-        data = _concat_columns([o._values for o in objs])
+        data = concat_columns([o._values for o in objs])
         names = {obj.name for obj in objs}
         if len(names) == 1:
             [name] = names
@@ -723,17 +724,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         return difference
 
-    def _binaryop(self, other, fn, fill_value=None, reflect=False):
-        # TODO: Rather than including an allowlist of acceptable types, we
-        # should instead return NotImplemented for __all__ other types. That
-        # will allow other types to support binops with cudf objects if they so
-        # choose, and just as importantly will allow better error messages if
-        # they don't support it.
-        if isinstance(other, (cudf.DataFrame, cudf.Series)):
-            return NotImplemented
-
-        return super()._binaryop(other, fn, fill_value, reflect)
-
     def _copy_construct(self, **kwargs):
         # Need to override the parent behavior because pandas allows operations
         # on unsigned types to return signed values, forcing us to choose the
@@ -760,16 +750,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
                     cls = CategoricalIndex
             elif cls is RangeIndex:
                 # RangeIndex must convert to other numerical types for ops
-
-                # TODO: The one exception to the output type selected here is
-                # that scalar multiplication of a RangeIndex in pandas results
-                # in another RangeIndex. Propagating that information through
-                # cudf with the current internals is possible, but requires
-                # significant hackery since we'd need _copy_construct or some
-                # other constructor to be intrinsically capable of processing
-                # operations. We should fix this behavior once we've completed
-                # a more thorough refactoring of the various Index classes that
-                # makes it easier to propagate this logic.
                 try:
                     cls = _dtype_to_index[data.dtype.type]
                 except KeyError:
@@ -1785,6 +1765,22 @@ class RangeIndex(BaseIndex):
         # RangeIndex always has unique values
         return self
 
+    def __mul__(self, other):
+        # Multiplication by raw ints must return a RangeIndex to match pandas.
+        if isinstance(other, cudf.Scalar) and other.dtype.kind in "iu":
+            other = other.value
+        elif (
+            isinstance(other, (np.ndarray, cupy.ndarray))
+            and other.ndim == 0
+            and other.dtype.kind in "iu"
+        ):
+            other = other.item()
+        if isinstance(other, (int, np.integer)):
+            return RangeIndex(
+                self.start * other, self.stop * other, self.step * other
+            )
+        return super().__mul__(other)
+
 
 class GenericIndex(BaseIndex):
     """An array of orderable values that represent the indices of another Column
@@ -2123,6 +2119,15 @@ class DatetimeIndex(GenericIndex):
         if yearfirst is not False:
             raise NotImplementedError("yearfirst == True is not yet supported")
 
+        valid_dtypes = tuple(
+            f"datetime64[{res}]" for res in ("s", "ms", "us", "ns")
+        )
+        if dtype is None:
+            # nanosecond default matches pandas
+            dtype = "datetime64[ns]"
+        elif dtype not in valid_dtypes:
+            raise TypeError("Invalid dtype")
+
         if copy:
             data = column.as_column(data).copy()
         kwargs = _setdefault_name(data, name=name)
@@ -2131,7 +2136,7 @@ class DatetimeIndex(GenericIndex):
         elif isinstance(data, pd.DatetimeIndex):
             data = column.as_column(data.values)
         elif isinstance(data, (list, tuple)):
-            data = column.as_column(np.array(data, dtype="datetime64[ms]"))
+            data = column.as_column(np.array(data, dtype=dtype))
         super().__init__(data, **kwargs)
 
     @property
@@ -2289,6 +2294,68 @@ class DatetimeIndex(GenericIndex):
         Int16Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
         return self._get_dt_field("weekday")
+
+    @property
+    def dayofyear(self):
+        """
+        The day of the year, from 1-365 in non-leap years and
+        from 1-366 in leap years.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2016-12-31",
+        ...     "2017-01-08", freq="D"))
+        >>> datetime_index
+        DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
+                    '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                    '2017-01-08'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.dayofyear
+        Int16Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
+        """
+        return self._get_dt_field("day_of_year")
+
+    @property
+    def day_of_year(self):
+        """
+        The day of the year, from 1-365 in non-leap years and
+        from 1-366 in leap years.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2016-12-31",
+        ...     "2017-01-08", freq="D"))
+        >>> datetime_index
+        DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
+                    '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                    '2017-01-08'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.day_of_year
+        Int16Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
+        """
+        return self._get_dt_field("day_of_year")
+
+    @property
+    def is_leap_year(self):
+        """
+        Boolean indicator if the date belongs to a leap year.
+
+        A leap year is a year, which has 366 days (instead of 365) including
+        29th of February as an intercalary day. Leap years are years which are
+        multiples of four with the exception of years divisible by 100 but not
+        by 400.
+
+        Returns
+        -------
+        ndarray
+        Booleans indicating if dates belong to a leap year.
+        """
+        res = is_leap_year(self._values).fillna(False)
+        return cupy.asarray(res)
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
@@ -2516,17 +2583,13 @@ class CategoricalIndex(GenericIndex):
             dtype = None
 
         if categories is not None:
-            data.cat().set_categories(
-                categories, ordered=ordered, inplace=True
-            )
+            data = data.set_categories(categories, ordered=ordered)
         elif isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
-            data.cat().set_categories(
-                dtype.categories, ordered=ordered, inplace=True
-            )
+            data = data.set_categories(dtype.categories, ordered=ordered)
         elif ordered is True and data.ordered is False:
-            data.cat().as_ordered(inplace=True)
+            data = data.as_ordered()
         elif ordered is False and data.ordered is True:
-            data.cat().as_unordered(inplace=True)
+            data = data.as_unordered()
 
         super().__init__(data, **kwargs)
 
@@ -2535,14 +2598,14 @@ class CategoricalIndex(GenericIndex):
         """
         The category codes of this categorical.
         """
-        return self._values.cat().codes
+        return as_index(self._values.codes)
 
     @property
     def categories(self):
         """
         The categories of this categorical.
         """
-        return self._values.cat().categories
+        return as_index(self._values.categories)
 
 
 def interval_range(
@@ -2818,7 +2881,7 @@ class StringIndex(GenericIndex):
     @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
-        return StringMethods(column=self._values, parent=self)
+        return StringMethods(parent=self)
 
     def _clean_nulls_from_index(self):
         """

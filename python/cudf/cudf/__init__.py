@@ -1,5 +1,5 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
-from cudf.utils.gpu_utils import validate_setup  # isort:skip
+from cudf.utils.gpu_utils import validate_setup
 
 validate_setup()
 
@@ -47,6 +47,7 @@ from cudf.core.algorithms import factorize
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal64Dtype,
+    Decimal32Dtype,
     IntervalDtype,
     ListDtype,
     StructDtype,

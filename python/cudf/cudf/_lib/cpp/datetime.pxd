@@ -16,3 +16,5 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
         const column_view& timestamps,
         const column_view& months
     ) except +
+    cdef unique_ptr[column] day_of_year(const column_view& column) except +
+    cdef unique_ptr[column] is_leap_year(const column_view& column) except +
