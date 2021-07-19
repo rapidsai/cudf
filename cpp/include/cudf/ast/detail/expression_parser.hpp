@@ -156,51 +156,7 @@ class expression_parser {
    *
    * @return cudf::data_type
    */
-  cudf::data_type root_data_type() const;
-
-  /**
-   * @brief Get the maximum number of intermediates stored by the abstract syntax tree.
-   *
-   * @return cudf::size_type
-   */
-  cudf::size_type intermediate_count() const { return _intermediate_counter.get_max_used(); }
-
-  /**
-   * @brief Get the device data references.
-   *
-   * @return std::vector<detail::device_data_reference>
-   */
-  std::vector<detail::device_data_reference> const& data_references() const
-  {
-    return _data_references;
-  }
-
-  /**
-   * @brief Get the operators.
-   *
-   * @return std::vector<ast_operator>
-   */
-  std::vector<ast_operator> const& operators() const { return _operators; }
-
-  /**
-   * @brief Get the operator source indices.
-   *
-   * @return std::vector<cudf::size_type>
-   */
-  std::vector<cudf::size_type> const& operator_source_indices() const
-  {
-    return _operator_source_indices;
-  }
-
-  /**
-   * @brief Get the literal device views.
-   *
-   * @return std::vector<cudf::detail::fixed_width_scalar_device_view_base>
-   */
-  std::vector<cudf::detail::fixed_width_scalar_device_view_base> const& literals() const
-  {
-    return _literals;
-  }
+  cudf::data_type output_type() const;
 
   /**
    * @brief Visit a literal node.
