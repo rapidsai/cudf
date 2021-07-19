@@ -7,11 +7,11 @@ import pytest
 import dask
 from dask import dataframe as dd
 
-import dask_cudf
-from dask_cudf.groupby import _is_supported
-
 import cudf
 from cudf.core._compat import PANDAS_GE_120
+
+import dask_cudf
+from dask_cudf.groupby import _is_supported
 
 
 @pytest.mark.parametrize("aggregation", ["sum", "mean", "count", "min", "max"])
@@ -590,4 +590,7 @@ def test_groupby_unique_lists():
     dd.assert_eq(
         ddf.groupby("a").b.unique().compute(),
         gddf.groupby("a").b.unique().compute(),
+    )
+    dd.assert_eq(
+        gdf.groupby("a").b.unique(), gddf.groupby("a").b.unique().compute(),
     )
