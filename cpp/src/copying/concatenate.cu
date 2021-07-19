@@ -335,13 +335,12 @@ void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_v
 /**
  * @brief Functor for traversing child columns and recursively verifying concatenation
  * bounds and types.
- *
  */
 class traverse_children {
  public:
   // nothing to do for simple types.
   template <typename T>
-  void operator()(host_span<column_view const> cols, rmm::cuda_stream_view stream)
+  void operator()(host_span<column_view const>, rmm::cuda_stream_view)
   {
   }
 
