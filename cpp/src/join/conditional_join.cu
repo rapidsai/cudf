@@ -15,7 +15,7 @@
  */
 
 #include <cudf/ast/detail/expression_parser.hpp>
-#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>

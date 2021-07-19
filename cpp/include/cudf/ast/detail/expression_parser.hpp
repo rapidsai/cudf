@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>

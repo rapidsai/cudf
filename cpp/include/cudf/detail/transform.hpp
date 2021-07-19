@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/transform.hpp>
 
 #include <rmm/cuda_stream_view.hpp>

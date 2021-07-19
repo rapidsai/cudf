@@ -21,7 +21,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
