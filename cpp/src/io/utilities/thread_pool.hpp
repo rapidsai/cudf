@@ -55,7 +55,7 @@ class thread_pool {
    * will be twice the number of CPU cores. If the argument is zero, the default value will be used
    * instead.
    */
-  thread_pool(const ui32 &_thread_count = std::thread::hardware_concurrency())
+  thread_pool(const ui32& _thread_count = std::thread::hardware_concurrency())
     : thread_count(_thread_count ? _thread_count : std::thread::hardware_concurrency()),
       threads(new std::thread[_thread_count ? _thread_count : std::thread::hardware_concurrency()])
   {
@@ -121,7 +121,7 @@ class thread_pool {
    * number of threads in the pool.
    */
   template <typename T, typename F>
-  void parallelize_loop(T first_index, T last_index, const F &loop, ui32 num_tasks = 0)
+  void parallelize_loop(T first_index, T last_index, const F& loop, ui32 num_tasks = 0)
   {
     if (num_tasks == 0) num_tasks = thread_count;
     if (last_index < first_index) std::swap(last_index, first_index);
@@ -137,11 +137,14 @@ class thread_pool {
       T end   = (t == num_tasks - 1) ? last_index : (T)((t + 1) * block_size + first_index - 1);
       blocks_running++;
       push_task([start, end, &loop, &blocks_running] {
-        for (T i = start; i <= end; i++) loop(i);
+        for (T i = start; i <= end; i++)
+          loop(i);
         blocks_running--;
       });
     }
-    while (blocks_running != 0) { sleep_or_yield(); }
+    while (blocks_running != 0) {
+      sleep_or_yield();
+    }
   }
 
   /**
@@ -151,7 +154,7 @@ class thread_pool {
    * @param task The function to push.
    */
   template <typename F>
-  void push_task(const F &task)
+  void push_task(const F& task)
   {
     tasks_total++;
     {
@@ -173,7 +176,7 @@ class thread_pool {
    * @param args The arguments to pass to the function.
    */
   template <typename F, typename... A>
-  void push_task(const F &task, const A &... args)
+  void push_task(const F& task, const A&... args)
   {
     push_task([task, args...] { task(args...); });
   }
@@ -190,7 +193,7 @@ class thread_pool {
    * will be twice the number of CPU cores. If the argument is zero, the default value will be used
    * instead.
    */
-  void reset(const ui32 &_thread_count = std::thread::hardware_concurrency())
+  void reset(const ui32& _thread_count = std::thread::hardware_concurrency())
   {
     bool was_paused = paused;
     paused          = true;
@@ -218,7 +221,7 @@ class thread_pool {
             typename... A,
             typename = std::enable_if_t<
               std::is_void_v<std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>>>>
-  std::future<bool> submit(const F &task, const A &... args)
+  std::future<bool> submit(const F& task, const A&... args)
   {
     std::shared_ptr<std::promise<bool>> promise(new std::promise<bool>);
     std::future<bool> future = promise->get_future();
@@ -249,7 +252,7 @@ class thread_pool {
             typename... A,
             typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>,
             typename   = std::enable_if_t<!std::is_void_v<R>>>
-  std::future<R> submit(const F &task, const A &... args)
+  std::future<R> submit(const F& task, const A&... args)
   {
     std::shared_ptr<std::promise<R>> promise(new std::promise<R>);
     std::future<R> future = promise->get_future();
@@ -313,7 +316,9 @@ class thread_pool {
    */
   void destroy_threads()
   {
-    for (ui32 i = 0; i < thread_count; i++) { threads[i].join(); }
+    for (ui32 i = 0; i < thread_count; i++) {
+      threads[i].join();
+    }
   }
 
   /**
@@ -323,7 +328,7 @@ class thread_pool {
    * empty.
    * @return true if a task was found, false if the queue is empty.
    */
-  bool pop_task(std::function<void()> &task)
+  bool pop_task(std::function<void()>& task)
   {
     const std::scoped_lock lock(queue_mutex);
     if (tasks.empty())

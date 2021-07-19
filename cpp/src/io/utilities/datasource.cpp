@@ -69,7 +69,7 @@ class file_source : public datasource {
 
   std::future<size_t> device_read_async(size_t offset,
                                         size_t size,
-                                        uint8_t *dst,
+                                        uint8_t* dst,
                                         rmm::cuda_stream_view stream) override
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
