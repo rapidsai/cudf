@@ -21,16 +21,16 @@ namespace cudf {
 namespace ast {
 namespace detail {
 // Forward declaration.
-class linearizer;
+class expression_parser;
 
 /**
  * @brief A generic node that can be evaluated to return a value.
  *
- * This class is a part of a "visitor" pattern with the `linearizer` class.
+ * This class is a part of a "visitor" pattern with the `expression_parser` class.
  * Nodes inheriting from this class can accept visitors.
  */
 struct node {
-  virtual cudf::size_type accept(detail::linearizer& visitor) const = 0;
+  virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
 };
 
 }  // namespace detail

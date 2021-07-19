@@ -21,7 +21,7 @@
 
 #include <cub/cub.cuh>
 #include <cudf/ast/detail/evaluator.cuh>
-#include <cudf/ast/detail/linearizer.hpp>
+#include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
 
