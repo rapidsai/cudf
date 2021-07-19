@@ -89,6 +89,15 @@ class StructColumn(ColumnBase):
             }
         return result
 
+    def __setitem__(self, key, value):
+        if isinstance(value, dict):
+            # filling in fields not in dict
+            for field in self.dtype.fields:
+                value[field] = value.get(field, cudf.NA)
+
+            value = cudf.Scalar(value, self.dtype)
+        super().__setitem__(key, value)
+
     def copy(self, deep=True):
         result = super().copy(deep=deep)
         if deep:

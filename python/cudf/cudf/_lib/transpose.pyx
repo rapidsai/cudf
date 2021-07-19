@@ -4,19 +4,16 @@ import cudf
 from cudf.utils.dtypes import is_categorical_dtype
 
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
 from libcpp.pair cimport pair
+from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-from cudf._lib.table cimport Table
-
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.transpose cimport (
-    transpose as cpp_transpose
-)
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.transpose cimport transpose as cpp_transpose
+from cudf._lib.table cimport Table
 
 
 def transpose(Table source):

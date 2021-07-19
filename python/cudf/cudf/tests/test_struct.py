@@ -102,6 +102,51 @@ def test_struct_getitem(series, expected):
 
 
 @pytest.mark.parametrize(
+    "data, item",
+    [
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": cudf.NA},
+                {"a": "abcde", "b": [4, 5, 6], "c": 9},
+            ],
+            {"a": "Hello world", "b": [], "c": cudf.NA},
+        ),
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": cudf.NA},
+                {"a": "abcde", "b": [4, 5, 6], "c": 9},
+            ],
+            {},
+        ),
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": cudf.NA},
+                {"a": "abcde", "b": [4, 5, 6], "c": 9},
+            ],
+            cudf.NA,
+        ),
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": cudf.NA},
+                {"a": "abcde", "b": [4, 5, 6], "c": 9},
+            ],
+            {"a": "Second element", "b": [1, 2], "c": 1000},
+        ),
+    ],
+)
+def test_struct_setitem(data, item):
+    sr = cudf.Series(data)
+    sr[1] = item
+    data[1] = item
+    expected = cudf.Series(data)
+    assert sr.to_arrow() == expected.to_arrow()
+
+
+@pytest.mark.parametrize(
     "data",
     [
         {"a": 1, "b": "rapids", "c": [1, 2, 3, 4]},
@@ -136,3 +181,17 @@ def test_struct_explode():
     )
     expect = cudf.DataFrame({"a": [1, 2, 3, 4], "b": ["x", "y", "z", "a"]})
     assert_eq(expect, s.struct.explode())
+
+
+def test_dataframe_to_struct():
+    df = cudf.DataFrame()
+    expect = cudf.Series(dtype=cudf.StructDtype({}))
+    got = df.to_struct()
+    assert_eq(expect, got)
+
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
+    expect = cudf.Series(
+        [{"a": 1, "b": "x"}, {"a": 2, "b": "y"}, {"a": 3, "b": "z"}]
+    )
+    got = df.to_struct()
+    assert_eq(expect, got)
