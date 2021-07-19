@@ -96,7 +96,7 @@ get_conditional_join_indices(table_view const& left,
   CHECK_CUDA(stream.value());
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(left_table->num_rows(), block_size);
-  auto const shmem_size_per_block = parser.dev_plan.shmem_per_thread * config.num_threads_per_block;
+  auto const shmem_size_per_block = parser.device_expression_data.shmem_per_thread * config.num_threads_per_block;
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
@@ -104,11 +104,11 @@ get_conditional_join_indices(table_view const& left,
   if (has_nulls) {
     compute_conditional_join_output_size<block_size, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_table, *right_table, KernelJoinKind, compare_nulls, parser.dev_plan, size.data());
+        *left_table, *right_table, KernelJoinKind, compare_nulls, parser.device_expression_data, size.data());
   } else {
     compute_conditional_join_output_size<block_size, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_table, *right_table, KernelJoinKind, compare_nulls, parser.dev_plan, size.data());
+        *left_table, *right_table, KernelJoinKind, compare_nulls, parser.device_expression_data, size.data());
   }
   CHECK_CUDA(stream.value());
 
@@ -137,7 +137,7 @@ get_conditional_join_indices(table_view const& left,
         join_output_l,
         join_output_r,
         write_index.data(),
-        parser.dev_plan,
+        parser.device_expression_data,
         join_size);
   } else {
     conditional_join<block_size, DEFAULT_JOIN_CACHE_SIZE, false>
@@ -149,7 +149,7 @@ get_conditional_join_indices(table_view const& left,
         join_output_l,
         join_output_r,
         write_index.data(),
-        parser.dev_plan,
+        parser.device_expression_data,
         join_size);
   }
 

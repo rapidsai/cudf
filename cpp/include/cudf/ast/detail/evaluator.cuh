@@ -229,7 +229,8 @@ struct expression_evaluator {
    *
    * @param left View of the left table view used for evaluation.
    * @param right View of the right table view used for evaluation.
-   * @param plan The collection of device references representing the expression to evaluate.
+   * @param expression_data The collection of device references representing the expression to
+   evaluate.
    * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
    * storing intermediates.
    * @param compare_nulls Whether the equality operator returns true or false for two nulls.
@@ -237,12 +238,12 @@ struct expression_evaluator {
    */
   __device__ expression_evaluator(table_device_view const& left,
                                   table_device_view const& right,
-                                  device_ast_plan const& plan,
+                                  expression_device_view const& expression_data,
                                   IntermediateDataType<has_nulls>* thread_intermediate_storage,
                                   null_equality compare_nulls = null_equality::EQUAL)
     : left(left),
       right(right),
-      plan(plan),
+      expression_data(expression_data),
       thread_intermediate_storage(thread_intermediate_storage),
       compare_nulls(compare_nulls)
   {
@@ -252,18 +253,19 @@ struct expression_evaluator {
    * @brief Construct an expression evaluator acting on one table.
    *
    * @param table View of the table view used for evaluation.
-   * @param plan The collection of device references representing the expression to evaluate.
+   * @param expression_data The collection of device references representing the expression to
+   * evaluate.
    * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
    * storing intermediates.
    * @param compare_nulls Whether the equality operator returns true or false for two nulls.
    */
   __device__ expression_evaluator(table_device_view const& table,
-                                  device_ast_plan const& plan,
+                                  expression_device_view const& expression_data,
                                   IntermediateDataType<has_nulls>* thread_intermediate_storage,
                                   null_equality compare_nulls = null_equality::EQUAL)
     : left(table),
       right(table),
-      plan(plan),
+      expression_data(expression_data),
       thread_intermediate_storage(thread_intermediate_storage),
       compare_nulls(compare_nulls)
   {
@@ -304,7 +306,7 @@ struct expression_evaluator {
         return ReturnType(table.column(data_index).element<Element>(row_index));
       }
     } else if (ref_type == detail::device_data_reference_type::LITERAL) {
-      return ReturnType(plan.literals[data_index].value<Element>());
+      return ReturnType(expression_data.literals[data_index].value<Element>());
     } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
       // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
       // Using a temporary variable ensures that the compiler knows the result is aligned
@@ -446,17 +448,19 @@ struct expression_evaluator {
                            cudf::size_type const output_row_index)
   {
     auto operator_source_index = static_cast<cudf::size_type>(0);
-    for (cudf::size_type operator_index = 0; operator_index < plan.operators.size();
+    for (cudf::size_type operator_index = 0; operator_index < expression_data.operators.size();
          operator_index++) {
       // Execute operator
-      auto const op    = plan.operators[operator_index];
+      auto const op    = expression_data.operators[operator_index];
       auto const arity = ast_operator_arity(op);
       if (arity == 1) {
         // Unary operator
         auto const input =
-          plan.data_references[plan.operator_source_indices[operator_source_index]];
+          expression_data
+            .data_references[expression_data.operator_source_indices[operator_source_index]];
         auto const output =
-          plan.data_references[plan.operator_source_indices[operator_source_index + 1]];
+          expression_data
+            .data_references[expression_data.operator_source_indices[operator_source_index + 1]];
         operator_source_index += arity + 1;
         auto input_row_index =
           input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
@@ -470,11 +474,15 @@ struct expression_evaluator {
                         op);
       } else if (arity == 2) {
         // Binary operator
-        auto const lhs = plan.data_references[plan.operator_source_indices[operator_source_index]];
+        auto const lhs =
+          expression_data
+            .data_references[expression_data.operator_source_indices[operator_source_index]];
         auto const rhs =
-          plan.data_references[plan.operator_source_indices[operator_source_index + 1]];
+          expression_data
+            .data_references[expression_data.operator_source_indices[operator_source_index + 1]];
         auto const output =
-          plan.data_references[plan.operator_source_indices[operator_source_index + 2]];
+          expression_data
+            .data_references[expression_data.operator_source_indices[operator_source_index + 2]];
         operator_source_index += arity + 1;
         type_dispatcher(lhs.data_type,
                         detail::single_dispatch_binary_operator{},
@@ -701,8 +709,8 @@ struct expression_evaluator {
 
   table_device_view const& left;   ///< The left table to operate on.
   table_device_view const& right;  ///< The right table to operate on.
-  device_ast_plan const&
-    plan;  ///< The container of device data representing the expression to evaluate.
+  expression_device_view const&
+    expression_data;  ///< The container of device data representing the expression to evaluate.
   IntermediateDataType<has_nulls>*
     thread_intermediate_storage;  ///< The shared memory store of intermediates produced during
                                   ///< evaluation.
