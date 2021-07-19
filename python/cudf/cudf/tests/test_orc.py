@@ -1093,14 +1093,14 @@ def test_orc_writer_list_nulls():
     pdf_in = pd.DataFrame(
         {
             "ls": [
-                [str(i), str(2 * i)] if i % 2 else None
+                [str(i) if i % 5 else None, str(2 * i)] if i % 2 else None
                 for i in range(num_rows)
             ],
             "li": [
                 [i, i * i, i % 2] if i % 3 else None for i in range(num_rows)
             ],
             "ld": [
-                [dec(i), dec(i / 2)] if i % 5 else None
+                [dec(i), dec(i / 2) if i % 7 else None] if i % 5 else None
                 for i in range(num_rows)
             ],
         }
