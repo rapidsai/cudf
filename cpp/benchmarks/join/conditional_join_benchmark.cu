@@ -19,7 +19,6 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <cudf/ast/nodes.hpp>
-#include <cudf/ast/operators.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
