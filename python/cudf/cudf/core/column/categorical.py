@@ -861,8 +861,8 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def _min_type_codes(self) -> NumericalColumn:
-        codes = self._column.codes
-        codes.set_base_mask(self._column.base_mask)
+        codes = self.codes
+        codes.set_base_mask(self.base_mask)
         dtype = min_signed_type(codes.max(skipna=True))
         codes = codes.astype(dtype=dtype)
         return codes
@@ -1270,8 +1270,8 @@ class CategoricalColumn(column.ColumnBase):
         if self.null_count == len(self):
             # self.categories is empty; just return codes
             return self.codes
-        gather_map = self.codes.astype("int32").fillna(0)
-        out = self.categories.take(gather_map)
+        gather_map = self.codes
+        out = self.categories.take(gather_map, nullify=True)
         out = out.set_mask(self.mask)
         return out
 
@@ -1418,7 +1418,7 @@ class CategoricalColumn(column.ColumnBase):
         #              new_categories [3, 2, 1]
         # The codes for "1.0" in old categories should point to "1" in the new
         # categories.
-        col = self._column
+        col = self
         new_categories_as_common_type = new_categories
         if isinstance(new_categories, cudf.core.column.NumericalColumn) and not new_categories.dtype == col.children[1].dtype:
             common_type = find_common_type([col.children[1].dtype, new_categories.dtype])
@@ -1461,7 +1461,7 @@ class CategoricalColumn(column.ColumnBase):
         # Ignore order for comparison because we're only interested
         # in whether new_categories has all the same values as the
         # current set of categories.
-        if not self._categories_equal(new_categories, ordered=False):
+        if not contains(new_categories, self._column.categories).all():
             raise ValueError(
                 "items in new_categories are not the same as in "
                 "old categories"
