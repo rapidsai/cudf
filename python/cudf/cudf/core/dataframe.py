@@ -5891,36 +5891,18 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         return cls(data=data, index=index,)
 
+    @copy_docstring(Frame._interpolate)
     def interpolate(
         self,
         method='linear',
-        axis=0
+        axis=0,
+        limit=None,
+        inplace=False,
+        limit_direction=None,
+        limit_area=None,
+        downcast=None,
+        **kwargs
     ):
-        """
-        Interpolate data values between some points.
-
-        Parameters
-        ----------
-        method : str, default 'linear'
-            Interpolation technique to use. Currently,
-            only 'linear` is supported.
-            * 'linear': Ignore the index and treat the values as
-            equally spaced. This is the only method supported on MultiIndexes.
-            * 'index', 'values': linearly interpolate using the index as 
-            an x-axis. Note that unsorted indices can lead to erroneous results.  
-        axis : int, default 0
-            Axis to interpolate along. Currently,
-            only 'axis=0' is supprted.
-        inplace : bool, default False
-            Update the data in place if possible.
-
-        Returns
-        -------
-        Series or DataFrame
-            Returns the same object type as the caller, interpolated at
-            some or all ``NaN`` values
-
-        """
 
         if method not in {'linear', 'index', 'values'}:
             raise ValueError(
@@ -5930,8 +5912,16 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             warnings.warn(
                 "Unsorted Index..."
             )
-
-        return super()._interpolate(method)
+        return super()._interpolate(
+            method=method, 
+            axis=axis, 
+            limit=limit, 
+            inplace=inplace, 
+            limit_direction=limit_direction, 
+            limit_area=limit_area, 
+            downcast=downcast, 
+            **kwargs
+        )
 
     def quantile(
         self,
