@@ -136,12 +136,18 @@ class expression_parser {
                     bool has_nulls,
                     rmm::cuda_stream_view stream,
                     rmm::mr::device_memory_resource* mr)
-    : _left{left}, _right{right}, _node_count{0}, _intermediate_counter{}
+    : _left{left}, _right{right}, _node_count{0}, _intermediate_counter{}, _has_nulls(has_nulls)
   {
     expr.accept(*this);
-    move_to_device(has_nulls, stream, mr);
+    move_to_device(stream, mr);
   }
 
+  /**
+   * @brief Construct a new expression_parser object
+   *
+   * @param expr The expression to create an evaluable expression_parser for.
+   * @param table The table used for evaluating the abstract syntax tree.
+   */
   expression_parser(node const& expr,
                     cudf::table_view table,
                     bool has_nulls,
@@ -229,9 +235,7 @@ class expression_parser {
     data_pointers.push_back(v.data());
   }
 
-  void move_to_device(bool has_nulls,
-                      rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr)
+  void move_to_device(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
   {
     std::vector<cudf::size_type> sizes;
     std::vector<const void*> data_pointers;
@@ -273,7 +277,7 @@ class expression_parser {
       _operator_source_indices.size());
     dev_plan.num_intermediates = _intermediate_counter.get_max_used();
     dev_plan.shmem_per_thread  = static_cast<int>(
-      (has_nulls ? sizeof(IntermediateDataType<true>) : sizeof(IntermediateDataType<false>)) *
+      (_has_nulls ? sizeof(IntermediateDataType<true>) : sizeof(IntermediateDataType<false>)) *
       dev_plan.num_intermediates);
   }
 
@@ -290,6 +294,7 @@ class expression_parser {
   cudf::table_view const& _right;
   cudf::size_type _node_count;
   intermediate_counter _intermediate_counter;
+  bool _has_nulls;
   std::vector<detail::device_data_reference> _data_references;
   std::vector<ast_operator> _operators;
   std::vector<cudf::size_type> _operator_source_indices;
