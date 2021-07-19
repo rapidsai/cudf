@@ -529,6 +529,7 @@ struct packed_columns {
    * @ingroup copy_split
    */
   struct metadata {
+    metadata() = default;
     metadata(std::vector<uint8_t>&& v) : data_(std::move(v)) {}
     uint8_t const* data() const { return data_.data(); }
     size_t size() const { return data_.size(); }
@@ -536,6 +537,15 @@ struct packed_columns {
    private:
     std::vector<uint8_t> data_;
   };
+
+  packed_columns()
+    : metadata_(std::make_unique<metadata>()), gpu_data(std::make_unique<rmm::device_buffer>())
+  {
+  }
+  packed_columns(std::unique_ptr<metadata>&& md, std::unique_ptr<rmm::device_buffer>&& gd)
+    : metadata_(std::move(md)), gpu_data(std::move(gd))
+  {
+  }
 
   std::unique_ptr<metadata> metadata_;
   std::unique_ptr<rmm::device_buffer> gpu_data;
