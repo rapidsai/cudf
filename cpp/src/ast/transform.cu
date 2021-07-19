@@ -90,19 +90,19 @@ std::unique_ptr<column> compute_column(table_view const table,
   auto const nullable  = cudf::nullable(table);
   auto const has_nulls = nullable && cudf::has_nulls(table);
 
-  auto const plan = ast::detail::expression_parser{expr, table, has_nulls, stream, mr};
+  auto const parser = ast::detail::expression_parser{expr, table, has_nulls, stream, mr};
 
   auto const output_column_mask_state =
     nullable ? (has_nulls ? mask_state::UNINITIALIZED : mask_state::ALL_VALID)
              : mask_state::UNALLOCATED;
 
   auto output_column = cudf::make_fixed_width_column(
-    plan.output_type(), table.num_rows(), output_column_mask_state, stream, mr);
+    parser.output_type(), table.num_rows(), output_column_mask_state, stream, mr);
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   // Configure kernel parameters
-  auto const& dev_plan = plan.dev_plan;
+  auto const& dev_plan = parser.dev_plan;
   int device_id;
   CUDA_TRY(cudaGetDevice(&device_id));
   int shmem_limit_per_block;
