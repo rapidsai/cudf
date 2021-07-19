@@ -128,7 +128,7 @@ struct calculate_group_statistics_functor {
       auto const is_valid = (r < s.group.num_rows) ? s.col.leaf_column->is_valid(row) : 0;
       chunk.non_nulls += is_valid;
     }
-    chunk = block_reduce(chunk, storage);
+    cub::BlockReduce<uint32_t, block_size>(storage.template get<uint32_t>()).Sum(chunk.non_nulls);
 
     if (t == 0) { s.ck = get_untyped_chunk(chunk); }
   }
