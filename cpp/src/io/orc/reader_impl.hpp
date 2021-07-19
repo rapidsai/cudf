@@ -55,12 +55,14 @@ struct reader_column_meta {
   std::vector<std::vector<int32_t>>
     orc_col_map;                         // Mapping between column id in orc to processing order.
   std::vector<uint32_t> num_child_rows;  // number of rows in child columns
+
   struct ParentColumnData {
     cudf::bitmask_type* valid_map_base = nullptr;
     uint32_t null_count;
   };
   std::vector<ParentColumnData>
-    parent_column_data;                   // consists of parent column valid_map and null count
+    parent_column_data;  // consists of parent column valid_map and null count
+
   std::vector<uint32_t> child_start_row;  // start row of child columns [stripe][column]
   std::vector<uint32_t>
     num_child_rows_per_stripe;  // number of rows of child columns [stripe][column]

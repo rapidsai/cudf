@@ -989,6 +989,16 @@ def test_lists_struct_nests(
         assert_eq(pyarrow_tbl.to_pandas(), gdf)
 
 
+@pytest.mark.parametrize("columns", [None, ["lvl1_struct"], ["lvl1_list"]])
+def test_skip_rows_for_nested_types(columns):
+    with pytest.raises(
+        RuntimeError, match="skip_rows is not supported by nested column"
+    ):
+        cudf.read_orc(
+            list_struct_buff, columns=columns, use_index=True, skiprows=5,
+        )
+
+
 @pytest.mark.parametrize(
     "data", [["_col0"], ["FakeName", "_col0", "TerriblyFakeColumnName"]]
 )
