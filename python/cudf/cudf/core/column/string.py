@@ -5284,9 +5284,7 @@ class StringColumn(column.ColumnBase):
             df = df.dropna(subset=["old"])
         else:
             res = self
-        return libcudf.replace.replace(
-            res, df["old"]._column, df["new"]._column
-        )
+        return libcudf.replace.replace(res, df._data["old"], df._data["new"])
 
     def fillna(
         self,

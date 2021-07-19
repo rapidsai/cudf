@@ -1091,8 +1091,8 @@ class CategoricalColumn(column.ColumnBase):
                 replaced = replaced._set_categories(new_categories)
                 replaced = replaced.fillna(fill_value)
             df = df.dropna(subset=["old"])
-            to_replace_col = df["old"]._column
-            replacement_col = df["new"]._column
+            to_replace_col = df._data["old"]
+            replacement_col = df._data["new"]
         else:
             replaced = self
         if df._data["new"].null_count > 0:
@@ -1103,8 +1103,8 @@ class CategoricalColumn(column.ColumnBase):
             ]
             replaced = replaced._set_categories(new_categories)
             df = df.dropna(subset=["new"])
-            to_replace_col = df["old"]._column
-            replacement_col = df["new"]._column
+            to_replace_col = df._data["old"]
+            replacement_col = df._data["new"]
 
         # create a dataframe containing the pre-replacement categories
         # and a copy of them to work with. The index of this dataframe
@@ -1132,9 +1132,9 @@ class CategoricalColumn(column.ColumnBase):
         # those categories don't exist anymore
         # Resetting the index creates a column 'index' that associates
         # the original integers to the new labels
-        bmask = new_cats["cats"]._column.notna()
+        bmask = new_cats._data["cats"].notna()
         new_cats = cudf.DataFrame(
-            {"cats": new_cats["cats"]._column.apply_boolean_mask(bmask)}
+            {"cats": new_cats._data["cats"].apply_boolean_mask(bmask)}
         ).reset_index()
 
         # old_cats contains replaced categories and the ints that
@@ -1150,7 +1150,7 @@ class CategoricalColumn(column.ColumnBase):
         to_replace_col = column.as_column(catmap.index).astype(
             replaced.codes.dtype
         )
-        replacement_col = catmap["index"]._column.astype(replaced.codes.dtype)
+        replacement_col = catmap._data["index"].astype(replaced.codes.dtype)
 
         replaced = column.as_column(replaced.codes)
         output = libcudf.replace.replace(
