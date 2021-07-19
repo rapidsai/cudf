@@ -32,12 +32,12 @@ from cudf.core.column import (
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
 )
-from cudf.core.column.column import _concat_columns
+from cudf.core.column.column import concat_columns
 from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import SingleColumnFrame, _drop_rows_by_labels
+from cudf.core.frame import Frame, SingleColumnFrame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
@@ -1238,6 +1238,7 @@ class Series(SingleColumnFrame, Serializable):
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
             and not is_list_dtype(preprocess.dtype)
+            and not is_struct_dtype(preprocess.dtype)
             and not is_decimal_dtype(preprocess.dtype)
         ) or isinstance(
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
@@ -1329,16 +1330,29 @@ class Series(SingleColumnFrame, Serializable):
         return "\n".join(lines)
 
     def _binaryop(
-        self, other, fn, fill_value=None, reflect=False, can_reindex=False
+        self,
+        other: Frame,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
     ):
-        if isinstance(other, cudf.DataFrame):
-            return NotImplemented
-
-        if isinstance(other, Series):
+        if isinstance(other, SingleColumnFrame):
             if (
+                # TODO: The can_reindex logic also needs to be applied for
+                # DataFrame (the methods that need it just don't exist yet).
                 not can_reindex
                 and fn in cudf.utils.utils._EQUALITY_OPS
-                and not self.index.equals(other.index)
+                and (
+                    isinstance(other, Series)
+                    # TODO: mypy doesn't like this line because the index
+                    # property is not defined on SingleColumnFrame (or Index,
+                    # for that matter). Ignoring is the easy solution for now,
+                    # a cleaner fix requires reworking the type hierarchy.
+                    and not self.index.equals(other.index)  # type: ignore
+                )
             ):
                 raise ValueError(
                     "Can only compare identically-labeled " "Series objects"
@@ -1347,7 +1361,8 @@ class Series(SingleColumnFrame, Serializable):
         else:
             lhs = self
 
-        return super()._binaryop(other, fn, fill_value, reflect, lhs)
+        # Note that we call the super on lhs, not self.
+        return super(Series, lhs)._binaryop(other, fn, fill_value, reflect)
 
     def add(self, other, fill_value=None, axis=0):
         """
@@ -2336,22 +2351,22 @@ class Series(SingleColumnFrame, Serializable):
     @copy_docstring(CategoricalAccessor.__init__)  # type: ignore
     @property
     def cat(self):
-        return CategoricalAccessor(column=self._column, parent=self)
+        return CategoricalAccessor(parent=self)
 
     @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
-        return StringMethods(column=self._column, parent=self)
+        return StringMethods(parent=self)
 
     @copy_docstring(ListMethods.__init__)  # type: ignore
     @property
     def list(self):
-        return ListMethods(column=self._column, parent=self)
+        return ListMethods(parent=self)
 
     @copy_docstring(StructMethods.__init__)  # type: ignore
     @property
     def struct(self):
-        return StructMethods(column=self._column, parent=self)
+        return StructMethods(parent=self)
 
     @property
     def dtype(self):
@@ -2412,7 +2427,7 @@ class Series(SingleColumnFrame, Serializable):
                 common_dtype = find_common_type([obj.dtype for obj in objs])
                 objs = [obj.astype(common_dtype) for obj in objs]
 
-        col = _concat_columns([o._column for o in objs])
+        col = concat_columns([o._column for o in objs])
 
         if isinstance(col, cudf.core.column.Decimal64Column):
             col = col._with_type_metadata(objs[0]._column.dtype)
@@ -6365,6 +6380,28 @@ class DatetimeProperties(object):
         dtype: int16
         """
         return self._get_dt_field("day_of_year")
+
+    @property
+    def is_leap_year(self):
+        """
+        Boolean indicator if the date belongs to a leap year.
+
+        A leap year is a year, which has 366 days (instead of 365) including
+        29th of February as an intercalary day. Leap years are years which are
+        multiples of four with the exception of years divisible by 100 but not
+        by 400.
+
+        Returns
+        -------
+        Series
+        Booleans indicating if dates belong to a leap year.
+        """
+        res = libcudf.datetime.is_leap_year(self.series._column).fillna(False)
+        return Series._from_data(
+            ColumnAccessor({None: res}),
+            index=self.series._index,
+            name=self.series.name,
+        )
 
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)

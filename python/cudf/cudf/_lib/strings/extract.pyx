@@ -1,19 +1,16 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.table cimport Table
-
-from cudf._lib.cpp.column.column cimport column
-
-from cudf._lib.cpp.strings.extract cimport (
-    extract as cpp_extract
-)
 from libcpp.string cimport string
+from libcpp.utility cimport move
+
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.strings.extract cimport extract as cpp_extract
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.scalar cimport DeviceScalar
+from cudf._lib.table cimport Table
 
 
 def extract(Column source_strings, object pattern):

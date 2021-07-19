@@ -88,6 +88,7 @@ ConfigureTest(GROUPBY_TEST
 # - join tests ------------------------------------------------------------------------------------
 ConfigureTest(JOIN_TEST
     join/join_tests.cpp
+    join/conditional_join_tests.cu
     join/cross_join_tests.cpp
     join/semi_anti_join_tests.cpp)
 
@@ -163,6 +164,8 @@ ConfigureTest(BINARY_TEST
     binaryop/binop-verify-input-test.cpp
     binaryop/binop-null-test.cpp
     binaryop/binop-integration-test.cpp
+    binaryop/binop-compiled-test.cpp
+    binaryop/binop-compiled-fixed_point-test.cpp
     binaryop/binop-generic-ptx-test.cpp
     )
 
@@ -221,6 +224,7 @@ ConfigureTest(COPYING_TEST
     copying/scatter_list_tests.cpp
     copying/scatter_list_scalar_tests.cpp
     copying/scatter_struct_tests.cpp
+    copying/scatter_struct_scalar_tests.cpp
     copying/segmented_gather_list_tests.cpp
     copying/shift_tests.cpp
     copying/slice_tests.cpp
