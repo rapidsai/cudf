@@ -45,24 +45,24 @@ public abstract class Aggregation {
         ALL(6),
         SUM_OF_SQUARES(7),
         MEAN(8),
-        M2(9),
-        VARIANCE(10), // This can take a delta degrees of freedom
-        STD(11), // This can take a delta degrees of freedom
-        MEDIAN(12),
-        QUANTILE(13),
-        ARGMAX(14),
-        ARGMIN(15),
-        NUNIQUE(16),
-        NTH_ELEMENT(17),
-        ROW_NUMBER(18),
-        COLLECT_LIST(19),
-        COLLECT_SET(20),
-        LEAD(21),
-        LAG(22),
-        PTX(23),
-        CUDA(24),
-        MERGE_LISTS(25),
-        MERGE_SETS(26),
+        VARIANCE(9), // This can take a delta degrees of freedom
+        STD(10), // This can take a delta degrees of freedom
+        MEDIAN(11),
+        QUANTILE(12),
+        ARGMAX(13),
+        ARGMIN(14),
+        NUNIQUE(15),
+        NTH_ELEMENT(16),
+        ROW_NUMBER(17),
+        COLLECT_LIST(18),
+        COLLECT_SET(19),
+        MERGE_LISTS(20),
+        MERGE_SETS(21),
+        LEAD(22),
+        LAG(23),
+        PTX(24),
+        CUDA(25),
+        M2(26),
         MERGE_M2(27);
 
         final int nativeId;

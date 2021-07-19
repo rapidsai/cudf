@@ -55,30 +55,31 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
           return cudf::make_sum_of_squares_aggregation();
         case 8: // MEAN
           return cudf::make_mean_aggregation();
-        case 9: // M2
-          return cudf::make_m2_aggregation();
-        // case 10: VARIANCE
-        // case 11: STD
-        case 12: // MEDIAN
+        // case 9: VARIANCE
+        // case 10: STD
+        case 11: // MEDIAN
           return cudf::make_median_aggregation();
-        // case 13: QUANTILE
-        case 14: // ARGMAX
+        // case 12: QUANTILE
+        case 13: // ARGMAX
           return cudf::make_argmax_aggregation();
-        case 15: // ARGMIN
+        case 14: // ARGMIN
           return cudf::make_argmin_aggregation();
-        // case 16: NUNIQUE
-        // case 17: NTH_ELEMENT
-        case 18: // ROW_NUMBER
+        // case 15: NUNIQUE
+        // case 16: NTH_ELEMENT
+        case 17: // ROW_NUMBER
           return cudf::make_row_number_aggregation();
-        // case 19: COLLECT_LIST
-        // case 20: COLLECT_SET
-        // case 21: LEAD
-        // case 22: LAG
-        // case 23: PTX
-        // case 24: CUDA
-        case 25: // MERGE_LISTS
+        // case 18: COLLECT_LIST
+        // case 19: COLLECT_SET
+        // case 20: MERGE_LISTS
+        case 20:
           return cudf::make_merge_lists_aggregation();
-          // case 26: MERGE_SETS
+          // case 21: MERGE_SETS
+          // case 22: LEAD
+          // case 23: LAG
+          // case 24: PTX
+          // case 25: CUDA
+        case 26: // M2
+          return cudf::make_m2_aggregation();
         case 27: // MERGE_M2
           return cudf::make_merge_m2_aggregation();
 
@@ -114,10 +115,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createDdofAgg(JNIEnv *en
     std::unique_ptr<cudf::aggregation> ret;
     // These numbers come from Aggregation.java and must stay in sync
     switch (kind) {
-      case 10: // VARIANCE
+      case 9: // VARIANCE
         ret = cudf::make_variance_aggregation(ddof);
         break;
-      case 11: // STD
+      case 10: // STD
         ret = cudf::make_std_aggregation(ddof);
         break;
       default: throw std::logic_error("Unsupported DDOF Aggregation Operation");
@@ -142,7 +143,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCountLikeAgg(JNIEn
       case 4: // COUNT
         ret = cudf::make_count_aggregation(policy);
         break;
-      case 16: // NUNIQUE
+      case 15: // NUNIQUE
         ret = cudf::make_nunique_aggregation(policy);
         break;
       default: throw std::logic_error("Unsupported Count Like Aggregation Operation");
@@ -180,10 +181,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createLeadLagAgg(JNIEnv 
     std::unique_ptr<cudf::aggregation> ret;
     // These numbers come from Aggregation.java and must stay in sync
     switch (kind) {
-      case 21: // LEAD
+      case 22: // LEAD
         ret = cudf::make_lead_aggregation(offset);
         break;
-      case 22: // LAG
+      case 23: // LAG
         ret = cudf::make_lag_aggregation(offset);
         break;
       default: throw std::logic_error("Unsupported Lead/Lag Aggregation Operation");
