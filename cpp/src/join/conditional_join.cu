@@ -68,8 +68,9 @@ conditional_join(table_view const& left,
   auto const nullable  = cudf::nullable(left) || cudf::nullable(right);
   auto const has_nulls = nullable && (cudf::has_nulls(left) || cudf::has_nulls(right));
 
-  auto const plan = ast::detail::ast_plan{binary_predicate, left, right, has_nulls, stream, mr};
-  CUDF_EXPECTS(plan.output_type().id() == type_id::BOOL8,
+  auto const plan =
+    ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
+  CUDF_EXPECTS(plan.root_data_type().id() == type_id::BOOL8,
                "The expression must produce a boolean output.");
 
   auto left_table  = table_device_view::create(left, stream);
