@@ -308,9 +308,117 @@ class StructDtype(_BaseDtype):
         return cls(fields)
 
 
+class Decimal32Dtype(_BaseDtype):
+
+    name = "decimal32"
+    _metadata = ("precision", "scale")
+    MAX_PRECISION = np.floor(np.log10(np.iinfo("int32").max))
+
+    def __init__(self, precision, scale=0):
+        """
+        Parameters
+        ----------
+        precision : int
+            The total number of digits in each value of this dtype
+        scale : int, optional
+            The scale of the Decimal32Dtype. See Notes below.
+
+        Notes
+        -----
+            When the scale is positive:
+              - numbers with fractional parts (e.g., 0.0042) can be represented
+              - the scale is the total number of digits to the right of the
+                decimal point
+            When the scale is negative:
+              - only multiples of powers of 10 (including 10**0) can be
+                represented (e.g., 1729, 4200, 1000000)
+              - the scale represents the number of trailing zeros in the value.
+            For example, 42 is representable with precision=2 and scale=0.
+            13.0051 is representable with precision=6 and scale=4,
+            and *not* representable with precision<6 or scale<4.
+        """
+        self._validate(precision, scale)
+        self._typ = pa.decimal128(precision, scale)
+
+    @property
+    def str(self):
+        return f"decimal32({self.precision}, {self.scale})"
+
+    @property
+    def precision(self):
+        return self._typ.precision
+
+    @precision.setter
+    def precision(self, value):
+        self._validate(value, self.scale)
+        self._typ = pa.decimal128(precision=value, scale=self.scale)
+
+    @property
+    def scale(self):
+        return self._typ.scale
+
+    @property
+    def type(self):
+        # might need to account for precision and scale here
+        return decimal.Decimal
+
+    def to_arrow(self):
+        return self._typ
+
+    @classmethod
+    def from_arrow(cls, typ):
+        return cls(typ.precision, typ.scale)
+
+    @property
+    def itemsize(self):
+        return 4
+
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}"
+            f"(precision={self.precision}, scale={self.scale})"
+        )
+
+    def __hash__(self):
+        return hash(self._typ)
+
+    @classmethod
+    def _validate(cls, precision, scale=0):
+        if precision > Decimal32Dtype.MAX_PRECISION:
+            raise ValueError(
+                f"Cannot construct a {cls.__name__}"
+                f" with precision > {cls.MAX_PRECISION}"
+            )
+        if abs(scale) > precision:
+            raise ValueError(f"scale={scale} exceeds precision={precision}")
+
+    @classmethod
+    def _from_decimal(cls, decimal):
+        """
+        Create a cudf.Decimal32Dtype from a decimal.Decimal object
+        """
+        metadata = decimal.as_tuple()
+        precision = max(len(metadata.digits), -metadata.exponent)
+        return cls(precision, -metadata.exponent)
+
+    def serialize(self) -> Tuple[dict, list]:
+        return (
+            {
+                "type-serialized": pickle.dumps(type(self)),
+                "precision": self.precision,
+                "scale": self.scale,
+            },
+            [],
+        )
+
+    @classmethod
+    def deserialize(cls, header: dict, frames: list):
+        return cls(header["precision"], header["scale"])
+
+
 class Decimal64Dtype(_BaseDtype):
 
-    name = "decimal"
+    name = "decimal64"
     _metadata = ("precision", "scale")
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
 
@@ -578,15 +686,7 @@ def is_decimal_dtype(obj):
     bool
         Whether or not the array-like or dtype is of the decimal dtype.
     """
-    return (
-        type(obj) is cudf.core.dtypes.Decimal64Dtype
-        or obj is cudf.core.dtypes.Decimal64Dtype
-        or (
-            isinstance(obj, str)
-            and obj == cudf.core.dtypes.Decimal64Dtype.name
-        )
-        or (hasattr(obj, "dtype") and is_decimal_dtype(obj.dtype))
-    )
+    return is_decimal32_dtype(obj) or is_decimal64_dtype(obj)
 
 
 def is_interval_dtype(obj):
@@ -612,4 +712,28 @@ def is_interval_dtype(obj):
             isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
         )
         or (hasattr(obj, "dtype") and is_interval_dtype(obj.dtype))
+    )
+
+
+def is_decimal32_dtype(obj):
+    return (
+        type(obj) is cudf.core.dtypes.Decimal32Dtype
+        or obj is cudf.core.dtypes.Decimal32Dtype
+        or (
+            isinstance(obj, str)
+            and obj == cudf.core.dtypes.Decimal32Dtype.name
+        )
+        or (hasattr(obj, "dtype") and is_decimal32_dtype(obj.dtype))
+    )
+
+
+def is_decimal64_dtype(obj):
+    return (
+        type(obj) is cudf.core.dtypes.Decimal64Dtype
+        or obj is cudf.core.dtypes.Decimal64Dtype
+        or (
+            isinstance(obj, str)
+            and obj == cudf.core.dtypes.Decimal64Dtype.name
+        )
+        or (hasattr(obj, "dtype") and is_decimal64_dtype(obj.dtype))
     )

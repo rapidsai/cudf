@@ -15,9 +15,11 @@ from pandas.api import types as pd_types
 
 import cudf
 from cudf._lib.scalar import DeviceScalar
-from cudf.core.dtypes import (
+from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
     is_categorical_dtype,
+    is_decimal32_dtype,
+    is_decimal64_dtype,
     is_decimal_dtype,
     is_interval_dtype,
     is_list_dtype,
@@ -39,11 +41,15 @@ def is_numeric_dtype(obj):
         Whether or not the array or dtype is of a numeric dtype.
     """
     if isclass(obj):
-        if issubclass(obj, cudf.Decimal64Dtype):
+        if issubclass(obj, (cudf.Decimal32Dtype, cudf.Decimal64Dtype)):
             return True
         if issubclass(obj, _BaseDtype):
             return False
     else:
+        if isinstance(obj, cudf.Decimal32Dtype) or isinstance(
+            getattr(obj, "dtype", None), cudf.Decimal32Dtype
+        ):
+            return True
         if isinstance(obj, cudf.Decimal64Dtype) or isinstance(
             getattr(obj, "dtype", None), cudf.Decimal64Dtype
         ):
@@ -120,6 +126,7 @@ def is_scalar(val):
     return (
         isinstance(val, DeviceScalar)
         or isinstance(val, cudf.Scalar)
+        or isinstance(val, cudf.core.tools.datetimes.DateOffset)
         or pd_types.is_scalar(val)
     )
 
@@ -212,7 +219,7 @@ def _union_categoricals(
         sorted_categories = result_col.categories.sort_by_values(
             ascending=True
         )[0]
-        result_col = result_col.cat().reorder_categories(
+        result_col = result_col.reorder_categories(
             new_categories=sorted_categories
         )
 
@@ -261,3 +268,7 @@ is_number = pd_types.is_number
 is_re = pd_types.is_re
 is_re_compilable = pd_types.is_re_compilable
 is_dtype_equal = pd_types.is_dtype_equal
+
+
+# Aliases of numpy dtype functionality.
+issubdtype = np.issubdtype
