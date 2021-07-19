@@ -823,7 +823,12 @@ cdef class _CPackedColumns:
 
     def serialize(self):
         header = {}
-        frames = [Buffer(self.gpu_data_ptr, self.gpu_data_size, self)]
+        frames = []
+
+        gpu_data = Buffer(self.gpu_data_ptr, self.gpu_data_size, self)
+        data_header, data_frames = gpu_data.serialize()
+        header["data"] = data_header
+        frames.extend(data_frames)
 
         header["column-names"] = self.column_names
         header["index-names"] = self.index_names
@@ -848,9 +853,11 @@ cdef class _CPackedColumns:
     def deserialize(header, frames):
         cdef _CPackedColumns p = _CPackedColumns.__new__(_CPackedColumns)
 
+        gpu_data = Buffer.deserialize(header["data"], frames)
+
         dbuf = DeviceBuffer(
-            ptr=frames[0].ptr,
-            size=frames[0].nbytes
+            ptr=gpu_data.ptr,
+            size=gpu_data.nbytes
         )
 
         cdef cpp_copying.packed_columns data
