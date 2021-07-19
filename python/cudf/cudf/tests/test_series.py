@@ -1221,6 +1221,10 @@ def test_explode(data, ignore_index, p_index):
             [cp.array([5, 6]), cudf.NA, cp.array([1])],
             cudf.Series([[5, 6], None, [1]]),
         ),
+        (
+            [None, None, None, None, None, cudf.Series([10, 20])],
+            cudf.Series([None, None, None, None, None, [10, 20]]),
+        ),
     ],
 )
 def test_nested_series_from_sequence_data(data, expected):

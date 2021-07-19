@@ -2026,12 +2026,6 @@ def as_column(
         mask = bools_to_mask(as_column(mask).unary_operator("not"))
 
         data = data.set_mask(mask)
-    elif (
-        isinstance(arbitrary, list)
-        and len(arbitrary) > 0
-        and cudf.utils.dtypes.is_column_like(arbitrary[0])
-    ):
-        return _create_list_column_from_sequences_list(arbitrary)
     else:
         try:
             data = as_column(
@@ -2103,6 +2097,15 @@ def as_column(
                 elif is_interval_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="interval")
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
+                elif (
+                    isinstance(arbitrary, list)
+                    and len(arbitrary) > 0
+                    and any(
+                        cudf.utils.dtypes.is_column_like(arb)
+                        for arb in arbitrary
+                    )
+                ):
+                    return _create_list_column_from_sequences_list(arbitrary)
                 else:
                     data = as_column(
                         _construct_array(arbitrary, dtype),
@@ -2382,9 +2385,14 @@ def _create_list_column_from_sequences_list(arbitrary: List[ColumnLike]):
     """
     Create a list column for list of column-like sequences
     """
-    data_col = as_column(arbitrary[0])
+    if cudf.utils.dtypes.is_column_like(arbitrary[0]):
+        data_col = as_column(arbitrary[0])
+        mask_col = [True]
+    else:
+        data_col = column_empty(row_count=0)
+        mask_col = [False]
+
     lengths_col = [len(data_col)]
-    mask_col = [True]
 
     # Build Data & Mask
     for data in arbitrary[1:]:
@@ -2397,9 +2405,7 @@ def _create_list_column_from_sequences_list(arbitrary: List[ColumnLike]):
             lengths_col.append(len(data))
 
     # Build offsets
-    offset_col = cudf.core.column.column_empty(
-        row_count=len(arbitrary) + 1, dtype="int32"
-    )
+    offset_col = column_empty(row_count=len(arbitrary) + 1, dtype="int32")
     offset_col[0] = 0
     offset_col[1:] = lengths_col
     offset_col = cast(
