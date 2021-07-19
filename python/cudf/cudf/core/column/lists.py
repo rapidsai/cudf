@@ -280,7 +280,9 @@ class ListColumn(ColumnBase):
             return self.elements
 
     @classmethod
-    def from_sequences(cls, arbitrary: Sequence[ColumnLike]) -> ListColumn: 
+    def from_sequences(
+        cls, arbitrary: Sequence[ColumnLike]
+    ) -> "cudf.core.column.ListColumn":
         """
         Create a list column for list of column-like sequences
         """
