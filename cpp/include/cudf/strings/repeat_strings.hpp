@@ -71,10 +71,8 @@ std::unique_ptr<string_scalar> repeat_string(
  *  - A null input string will always result in a null output string regardless of the value of the
  *    @p `repeat_times` parameter.
  *
- * Note that this function cannot handle the cases when the size of the output column exceeds the
- * maximum value that can be indexed by size_type (offset_type). In such situations, an exception
- * may be thrown, or the output result is undefined. As such, the caller is responsible for checking
- * output overflow to prevent runtime exception and data corruption.
+ * The caller is responsible for checking the output column size will not exceed the maximum size of
+ * a strings column (number of total characters is less than the max size_type value).
  *
  * @code{.pseudo}
  * Example:
@@ -107,10 +105,8 @@ std::unique_ptr<column> repeat_strings(
  *  - If any value in the `repeat_times` column is not a positive number and its corresponding input
  *    string is not null, the output string will be an empty string.
  *
- * Note that this function cannot handle the cases when the size of the output column exceeds the
- * maximum value that can be indexed by size_type (offset_type). In such situations, an exception
- * may be thrown, or the output result is undefined. As such, the caller is responsible for checking
- * output overflow to prevent runtime exception and data corruption.
+ * The caller is responsible for checking the output column size will not exceed the maximum size of
+ * a strings column (number of total characters is less than the max size_type value).
  *
  * @code{.pseudo}
  * Example:
@@ -141,16 +137,16 @@ std::unique_ptr<column> repeat_strings(
  * @brief Compute sizes of the output strings if each string in the input strings column
  * is repeated by the numbers of times given in another numeric column.
  *
- * During calculating the string output sizes, these sizes are also sum up (stored in an int64_t
- * number) and returned, which can be used to detect if the input strings column can be safely
- * repeated without data corruption due to overflow in string indexing.
+ * The output column storing string output sizes is not nullable. These string sizes are
+ * also summed up and returned (in an `int64_t` value), which can be used to detect if the input
+ * strings column can be safely repeated without data corruption due to overflow in string indexing.
  *
  * @code{.pseudo}
  * Example:
  * strs         = ['aa', null, '', 'bbc-']
  * repeat_times = [ 1,   2,     3,  4   ]
- * out          = repeat_strings_output_sizes(strs, repeat_times)
- * out is [2, 0, 0, 16]
+ * [output_sizes, total_size] = repeat_strings_output_sizes(strs, repeat_times)
+ * out is [2, 0, 0, 16], and total_size = 18
  * @endcode
  *
  * @throw cudf::logic_error if the input `repeat_times` column has data type other than integer.

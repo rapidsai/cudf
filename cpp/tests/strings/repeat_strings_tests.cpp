@@ -684,6 +684,7 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithColumnRepeatT
   }
 
   // Sliced the second half of the column, output does not have null.
+  // Since the input has nulls, the output column is nullable (but doesn't have nulls).
   {
     auto const sliced_strs    = cudf::slice(strs, {8, 10})[0];
     auto const sliced_rtimes  = cudf::slice(repeat_times, {8, 10})[0];
@@ -691,7 +692,7 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithColumnRepeatT
     auto const expected_strs  = strs_col{"", ""};
 
     auto results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_strs, *results, print_all);
 
     auto const expected_sizes = int32s_col{0, 0};
     auto const [sizes, total_bytes] =
@@ -700,6 +701,6 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithColumnRepeatT
     EXPECT_EQ(0, total_bytes);
 
     results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes, *sizes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_strs, *results, print_all);
   }
 }

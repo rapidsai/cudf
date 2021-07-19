@@ -211,16 +211,13 @@ struct compute_size_and_repeat_separately_fn {
     if (!d_chars) {
       // If overflow happen, the stored value of output string size will be incorrect due to
       // downcasting. In such cases, the entire output string size array should be discarded.
-      d_offsets[idx] = static_cast<size_type>(output_size);
-    } else if (repeat_times > 0) {
-      auto const d_str    = strings_dv.element<string_view>(idx);
-      auto const str_size = d_str.size_bytes();
-      if (str_size > 0) {
-        auto const input_ptr = d_str.data();
-        auto output_ptr      = d_chars + d_offsets[idx];
-        for (size_type repeat_idx = 0; repeat_idx < repeat_times; ++repeat_idx) {
-          output_ptr = copy_and_increment(output_ptr, input_ptr, str_size);
-        }
+      d_offsets[idx] = static_cast<offset_type>(output_size);
+    } else if (repeat_times > 0 && string_size > 0) {
+      auto const d_str     = strings_dv.element<string_view>(idx);
+      auto const input_ptr = d_str.data();
+      auto output_ptr      = d_chars + d_offsets[idx];
+      for (size_type repeat_idx = 0; repeat_idx < repeat_times; ++repeat_idx) {
+        output_ptr = copy_and_increment(output_ptr, input_ptr, string_size);
       }
     }
 
@@ -324,24 +321,16 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   auto [offsets_column, chars_column] =
     make_strings_children(fn, strings_count, strings_count, output_strings_sizes, stream, mr);
 
-  // If only one input column has nulls, we just copy its null mask and null count.
-  // If both input columns have nulls, we generate new bitmask by AND their bitmasks.
-  auto [null_mask, null_count] = [&] {
-    if (strings_has_nulls ^ rtimes_has_nulls) {
-      auto const& col = strings_has_nulls ? input.parent() : repeat_times;
-      return std::make_pair(cudf::detail::copy_bitmask(col, stream, mr), col.null_count());
-    } else if (strings_has_nulls && rtimes_has_nulls) {
-      return std::make_pair(
-        cudf::detail::bitmask_and(table_view{{input.parent(), repeat_times}}, stream, mr),
-        UNKNOWN_NULL_COUNT);
-    }
-    return std::make_pair(rmm::device_buffer{0, stream, mr}, 0);
-  }();
+  // We generate new bitmask by AND of the input columns' bitmasks.
+  // Note that if the input columns are nullable, the output column will also be nullable (which may
+  // not have nulls).
+  auto null_mask =
+    cudf::detail::bitmask_and(table_view{{input.parent(), repeat_times}}, stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
-                             null_count,
+                             UNKNOWN_NULL_COUNT,
                              std::move(null_mask),
                              stream,
                              mr);
