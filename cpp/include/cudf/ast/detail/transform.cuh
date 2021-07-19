@@ -238,7 +238,7 @@ struct expression_evaluator {
    */
   __device__ expression_evaluator(table_device_view const& left,
                                   table_device_view const& right,
-                                  device_ast_plan const& plan,
+                                  expression_device_view const& plan,
                                   IntermediateDataType<has_nulls>* thread_intermediate_storage,
                                   null_equality compare_nulls = null_equality::EQUAL)
     : left(left),
@@ -259,7 +259,7 @@ struct expression_evaluator {
    * @param compare_nulls Whether the equality operator returns true or false for two nulls.
    */
   __device__ expression_evaluator(table_device_view const& table,
-                                  device_ast_plan const& plan,
+                                  expression_device_view const& plan,
                                   IntermediateDataType<has_nulls>* thread_intermediate_storage,
                                   null_equality compare_nulls = null_equality::EQUAL)
     : left(table),
@@ -702,7 +702,7 @@ struct expression_evaluator {
 
   table_device_view const& left;   ///< The left table to operate on.
   table_device_view const& right;  ///< The right table to operate on.
-  device_ast_plan const&
+  expression_device_view const&
     plan;  ///< The container of device data representing the expression to evaluate.
   IntermediateDataType<has_nulls>*
     thread_intermediate_storage;  ///< The shared memory store of intermediates produced during
