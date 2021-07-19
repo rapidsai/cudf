@@ -30,7 +30,7 @@
 using namespace cudf;
 using namespace test;
 
-constexpr bool print_all{false};
+constexpr bool print_all{true};
 
 struct MultibyteSplitTest : public BaseFixture {
 };

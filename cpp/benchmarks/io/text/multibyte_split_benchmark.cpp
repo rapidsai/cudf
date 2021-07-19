@@ -30,22 +30,21 @@ using cudf::test::fixed_width_column_wrapper;
 
 static void BM_multibyte_split(benchmark::State& state)
 {
-  std::string host_input = "";
-  int32_t num_chars      = state.range(0);
-
-  for (auto i = 0; i < num_chars; i++) { host_input += "x"; }
-
-  cudf::string_scalar input(host_input);
-
   auto delimiters = std::vector<std::string>({"😀", "😎", ",", "::"});
+
+  int32_t num_chars = state.range(0);
+  auto host_input   = std::string(num_chars, 'x');
+  auto device_input = cudf::string_scalar(host_input);
 
   auto host_input_stream   = std::basic_stringstream(host_input);
   auto device_input_stream = cudf::io::text::host_device_istream(host_input_stream);
 
+  cudaDeviceSynchronize();
+
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
-    auto output = cudf::io::text::multibyte_split(device_input_stream, delimiters);
-    // auto output = cudf::io::text::multibyte_split(input, delimiters);
+    // auto output = cudf::io::text::multibyte_split(device_input_stream, delimiters);
+    auto output = cudf::io::text::multibyte_split(device_input, delimiters);
   }
 
   state.SetBytesProcessed(state.iterations() * num_chars);
