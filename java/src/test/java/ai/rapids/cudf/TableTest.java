@@ -4858,16 +4858,74 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testGroupByM2() {
+    // A trivial test:
     try (Table input = new Table.TestBuilder().column(1, 2, 3, 1, 2, 2, 1, 3, 3, 2)
              .column(0, 1, -2, 3, -4, -5, -6, 7, -8, 9)
              .build();
+         Table results = input.groupBy(0).aggregate(Aggregation.M2()
+               .onColumn(1));
          Table expected = new Table.TestBuilder().column(1, 2, 3)
              .column(42.0, 122.75, 114.0)
              .build()) {
-      try (Table results = input.groupBy(0).aggregate(Aggregation.M2()
-               .onColumn(1))) {
-        assertTablesAreEqual(expected, results);
-      }
+      assertTablesAreEqual(expected, results);
+    }
+
+    // Test with values have nulls (the values associated with key=2 has both nulls and non-nulls,
+    // while the values associated with key=5 are all nulls):
+    try (Table input = new Table.TestBuilder().column(1, 2, 5, 3, 4, 5, 2, 3, 2, 5)
+             .column(0, null, null, 2, 3, null, 5, 6, 7, null)
+             .build();
+         Table results = input.groupBy(0).aggregate(Aggregation.M2()
+             .onColumn(1));
+         Table expected = new Table.TestBuilder().column(1, 2, 3, 4, 5)
+             .column(0.0, 2.0, 8.0, 0.0, null)
+             .build()) {
+      assertTablesAreEqual(expected, results);
+    }
+
+    // Test with floating-point values having NaN:
+    try (Table input = new Table.TestBuilder().column(4, 3, 1, 2, 3, 1, 2, 2, 1, null, 3, 2, 4, 4)
+             .column(null, null, 0.0, 1.0, 2.0, 3.0, 4.0, Double.NaN, 6.0, 7.0, 8.0, 9.0, 10.0, Double.NaN)
+             .build();
+         Table results = input.groupBy(0).aggregate(Aggregation.M2()
+             .onColumn(1));
+         Table expected = new Table.TestBuilder().column(1, 2, 3, 4, null)
+             .column(18.0, Double.NaN, 18.0, Double.NaN, 0.0)
+             .build()) {
+      assertTablesAreEqual(expected, results);
+    }
+
+    // Test with floating-point values having NaN and +/- Inf
+    // (The values associated with:
+    //   key=1: have only NaN
+    //   key=2: have only +Inf
+    //   key=3: have only -Inf
+    //   key=4: have NaN and +/- Inf,
+    //   key=5: have normal numbers):
+    try (Table input = new Table.TestBuilder().column(1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4)
+             .column(Double.NaN,
+                     Double.POSITIVE_INFINITY,
+                     Double.NEGATIVE_INFINITY,
+                     Double.POSITIVE_INFINITY,
+                     5.0,
+                     //
+                     Double.NaN,
+                     Double.POSITIVE_INFINITY,
+                     Double.NEGATIVE_INFINITY,
+                     Double.NEGATIVE_INFINITY,
+                     10.0,
+                     //
+                     Double.NaN,
+                     Double.POSITIVE_INFINITY,
+                     Double.NEGATIVE_INFINITY,
+                     Double.POSITIVE_INFINITY)
+             .build();
+         Table results = input.groupBy(0).aggregate(Aggregation.M2()
+             .onColumn(1));
+         Table expected = new Table.TestBuilder().column(1, 2, 3, 4, 5)
+             .column(Double.NaN, Double.NaN, Double.NaN, Double.NaN, 12.5)
+             .build()) {
+      assertTablesAreEqual(expected, results);
     }
   }
 
