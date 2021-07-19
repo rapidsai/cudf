@@ -950,10 +950,15 @@ list_struct_buff = generate_list_struct_buff()
 
 
 @pytest.mark.parametrize(
-    "columns", [None, ["lvl1_struct"], ["lvl3_list", "lvl2_struct"]],
+    "columns",
+    [
+        None,
+        ["lvl3_list", "list_nests_struct", "lvl2_struct", "struct_nests_list"],
+        ["lvl2_struct", "lvl1_struct"],
+    ],
 )
-@pytest.mark.parametrize("num_rows", [10003, 28000])
-@pytest.mark.parametrize("use_index", [False, True])
+@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 28000])
+@pytest.mark.parametrize("use_index", [True, False])
 def test_lists_struct_nests(
     columns, num_rows, use_index,
 ):

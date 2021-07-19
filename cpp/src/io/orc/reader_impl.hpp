@@ -218,6 +218,7 @@ class reader::impl {
   std::vector<std::string> _decimal_cols_as_float;
   data_type _timestamp_type{type_id::EMPTY};
   reader_column_meta _col_meta;
+  bool check = false;
 };
 
 }  // namespace orc

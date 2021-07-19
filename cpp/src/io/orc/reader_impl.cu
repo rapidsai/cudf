@@ -783,7 +783,8 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
   // Allocate global dictionary for deserializing
   rmm::device_uvector<gpu::DictionaryEntry> global_dict(num_dicts, stream);
 
-  chunks.host_to_device(stream);
+  // printf("RGSL : before DecodeNullsAndStringDictionaries %lu \n", level);
+  chunks.host_to_device(stream, true);
   gpu::DecodeNullsAndStringDictionaries(chunks.base_device_ptr(),
                                         global_dict.data(),
                                         num_columns,
@@ -791,6 +792,7 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
                                         skip_rows,
                                         level,
                                         stream);
+  // printf("RGSL : after DecodeNullsAndStringDictionaries %lu \n", level);
 
   if (level > 0) {
     chunks.device_to_host(stream, true);
@@ -801,7 +803,7 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
       for (size_t j = 0; j < num_columns; ++j) {
         auto& chunk          = chunks[i][j];
         chunk.valid_map_base = out_buffers[j].null_mask();
-        if (level == 2 and false)
+        if (level == 1 and false)
           printf("RGSL : number of values is %u and null count is %u and chunk kind is %u\n",
                  chunk.column_num_rows,
                  chunk.parent_data.null_count,
@@ -811,6 +813,7 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
 
     chunks.host_to_device(stream, true);
   }
+  // printf("RGSL : after update_null_mask %lu \n", level);
   // Update the null map for child columns
   gpu::DecodeOrcColumnData(chunks.base_device_ptr(),
                            global_dict.data(),
@@ -824,6 +827,7 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
                            level,
                            stream);
   chunks.device_to_host(stream, true);
+  // printf("RGSL : after DecodeOrcColumnData %lu \n", level);
 
   for (size_t i = 0; i < num_columns; ++i) {
     for (size_t j = 0; j < num_stripes; ++j) {
@@ -901,6 +905,11 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
         num_child_rows_per_stripe[stripe_id][child_col_idx] = child_rows;
         // start row could be different for each column when there is nesting at each stripe level
         child_start_row[stripe_id][child_col_idx] = (stripe_id == 0) ? 0 : start_row;
+        // if(check) printf("RGSL : at child id %u num_child_rows[child_col_idx]%u
+        // num_child_rows_per_stripe[stripe_id][child_col_idx] %u
+        // child_start_row[stripe_id][child_col_idx] %u \n", child_col_idx,
+        // num_child_rows[child_col_idx], num_child_rows_per_stripe[stripe_id][child_col_idx],
+        // child_start_row[stripe_id][child_col_idx]);
       }
       start_row += child_rows;
     }
@@ -1056,6 +1065,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // There are no columns in the table
   if (_selected_columns.size() == 0) return {std::make_unique<table>(), std::move(out_metadata)};
 
+  // RGSL remove this
+  if (_selected_columns[0].size() == 2) check = true;
+
   // Select only stripes required (aka row groups)
   const auto selected_stripes = _metadata->select_stripes(stripes, skip_rows, num_rows);
 
@@ -1063,6 +1075,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // in the same level since child column also have same number of rows,
   // list column children will be 1 level down compared to parent.
   for (size_t level = 0; level < _selected_columns.size(); level++) {
+    // printf("RGSL : Started with level %lu   ------------------------------------\n", level);
     auto& selected_columns = _selected_columns[level];
     // for(auto col : selected_columns){
     //  printf("RGSL : At level %lu selected columns are %u \n", level, col.id);
@@ -1333,6 +1346,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, stream, _mr);
         }
 
+        // printf("RGSL : Before decode at level %lu \n", level);
         decode_stream_data(chunks,
                            num_dict_entries,
                            skip_rows,
@@ -1343,6 +1357,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                            level,
                            stream);
 
+        // printf("RGSL : After decode at level %lu \n", level);
         // Extract information to process list child columns
         if (nested_col.size()) {
           row_groups.device_to_host(stream, true);
