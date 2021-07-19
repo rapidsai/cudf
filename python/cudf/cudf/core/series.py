@@ -5418,6 +5418,7 @@ class Series(SingleColumnFrame, Serializable):
         mod_vals = hashed_values % stop
         return Series(mod_vals._column, index=self.index, name=self.name)
 
+    @copy_docstring(DataFrame.interpolate)
     def interpolate(
         self,
         method='linear'
