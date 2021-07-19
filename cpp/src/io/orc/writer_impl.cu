@@ -201,7 +201,7 @@ class orc_column_view {
     CUDF_EXPECTS(is_string(), "Stripe dictionary is only present in string columns.");
     return &stripe_dict[stripe * _dict_stride + _str_idx];
   }
-  auto device_stripe_dict() const { return d_stripe_dict; }
+  auto device_stripe_dict() const noexcept { return d_stripe_dict; }
 
   // Index in the table
   auto index() const noexcept { return _index; }
