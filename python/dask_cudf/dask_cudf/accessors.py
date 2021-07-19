@@ -18,11 +18,12 @@ class StructMethods:
         Examples
         --------
         >>> s = cudf.Series([{'a': 1, 'b': 2}, {'a': 3, 'b': 4}])
-        >>> s.struct.field(0)
+        >>> ds = dask_cudf.from_cudf(s, 2)
+        >>> ds.struct.field(0).compute()
         0    1
         1    3
         dtype: int64
-        >>> s.struct.field('a')
+        >>> ds.struct.field('a')
         0    1
         1    3
         dtype: int64
