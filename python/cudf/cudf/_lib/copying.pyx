@@ -921,7 +921,10 @@ class PackedColumns(Serializable):
         }
 
     def serialize(self):
-        return self._data.serialize()
+        header, frames = self._data.serialize()
+        header["type-serialized"] = pickle.dumps(type(self))
+
+        return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
