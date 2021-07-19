@@ -196,7 +196,7 @@ class StructMethods(ColumnMethods):
     def explode(self):
         """
         Return a DataFrame whose columns are the fields of this struct Series.
-        No columns are copied during this operation.
+        Note that a copy of the columns is made.
 
         Examples
         --------
@@ -217,7 +217,7 @@ class StructMethods(ColumnMethods):
         return cudf.DataFrame._from_data(
             cudf.core.column_accessor.ColumnAccessor(
                 {
-                    name: col
+                    name: col.copy()
                     for name, col in zip(
                         self._column.dtype.fields, self._column.children
                     )
