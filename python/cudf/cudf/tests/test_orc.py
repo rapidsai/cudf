@@ -844,8 +844,8 @@ def test_orc_string_stream_offset_issue():
 
 
 def generate_list_struct_buff(size=28000):
-    rd = random.Random(0)
-    np.random.seed(seed=0)
+    rd = random.Random(1)
+    np.random.seed(seed=1)
 
     buff = BytesIO()
 
@@ -875,16 +875,21 @@ def generate_list_struct_buff(size=28000):
     schema = po.Struct(**schema)
 
     lvl3_list = [
-        [
+        rd.choice(
             [
+                None,
                 [
-                    rd.choice([None, np.random.randint(1, 3)])
-                    for z in range(np.random.randint(1, 3))
-                ]
-                for z in range(np.random.randint(0, 3))
+                    [
+                        [
+                            rd.choice([None, np.random.randint(1, 3)])
+                            for z in range(np.random.randint(1, 3))
+                        ]
+                        for z in range(np.random.randint(0, 3))
+                    ]
+                    for y in range(np.random.randint(0, 3))
+                ],
             ]
-            for y in range(np.random.randint(0, 3))
-        ]
+        )
         for x in range(size)
     ]
     lvl1_list = [
