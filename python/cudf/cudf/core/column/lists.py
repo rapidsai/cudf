@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import pickle
+from typing import Sequence, cast
 
 import numpy as np
 import pyarrow as pa
@@ -277,6 +278,46 @@ class ListColumn(ColumnBase):
             return self.elements.leaves()
         else:
             return self.elements
+
+    @classmethod
+    def from_sequences(cls, arbitrary: Sequence[ColumnLike]):
+        """
+        Create a list column for list of column-like sequences
+        """
+        data_col = column.column_empty(0)
+        mask_col = []
+        lengths_col = []
+
+        # Build Data & Mask
+        for data in arbitrary:
+            if cudf._lib.scalar._is_null_host_scalar(data):
+                mask_col.append(False)
+                lengths_col.append(0)
+            else:
+                mask_col.append(True)
+                data_col = data_col.append(as_column(data))
+                lengths_col.append(len(data))
+
+        # Build offsets
+        offset_col = column.column_empty(
+            row_count=len(arbitrary) + 1, dtype="int32"
+        )
+        offset_col[0] = 0
+        offset_col[1:] = lengths_col
+        offset_col = cast(
+            cudf.core.column.NumericalColumn, offset_col
+        )._apply_scan_op("sum")
+
+        # Build ListColumn
+        res = cls(
+            size=len(arbitrary),
+            dtype=cudf.ListDtype(data_col.dtype),
+            mask=cudf._lib.transform.bools_to_mask(as_column(mask_col)),
+            offset=0,
+            null_count=0,
+            children=(offset_col, data_col),
+        )
+        return res
 
 
 class ListMethods(ColumnMethods):

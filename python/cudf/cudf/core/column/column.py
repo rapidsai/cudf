@@ -2098,14 +2098,16 @@ def as_column(
                     sr = pd.Series(arbitrary, dtype="interval")
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
                 elif (
-                    isinstance(arbitrary, list)
+                    isinstance(arbitrary, Sequence)
                     and len(arbitrary) > 0
                     and any(
                         cudf.utils.dtypes.is_column_like(arb)
                         for arb in arbitrary
                     )
                 ):
-                    return _create_list_column_from_sequences_list(arbitrary)
+                    return cudf.core.column.ListColumn.from_sequences(
+                        arbitrary
+                    )
                 else:
                     data = as_column(
                         _construct_array(arbitrary, dtype),
@@ -2379,46 +2381,3 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
                 ) from e
             raise
     return col
-
-
-def _create_list_column_from_sequences_list(arbitrary: List[ColumnLike]):
-    """
-    Create a list column for list of column-like sequences
-    """
-    if cudf.utils.dtypes.is_column_like(arbitrary[0]):
-        data_col = as_column(arbitrary[0])
-        mask_col = [True]
-    else:
-        data_col = column_empty(row_count=0)
-        mask_col = [False]
-
-    lengths_col = [len(data_col)]
-
-    # Build Data & Mask
-    for data in arbitrary[1:]:
-        if cudf._lib.scalar._is_null_host_scalar(data):
-            mask_col.append(False)
-            lengths_col.append(0)
-        else:
-            mask_col.append(True)
-            data_col = data_col.append(as_column(data))
-            lengths_col.append(len(data))
-
-    # Build offsets
-    offset_col = column_empty(row_count=len(arbitrary) + 1, dtype="int32")
-    offset_col[0] = 0
-    offset_col[1:] = lengths_col
-    offset_col = cast(
-        cudf.core.column.NumericalColumn, offset_col
-    )._apply_scan_op("sum")
-
-    # Build ListColumn
-    res = cudf.core.column.ListColumn(
-        size=len(arbitrary),
-        dtype=cudf.ListDtype(data_col.dtype),
-        mask=cudf._lib.transform.bools_to_mask(as_column(mask_col)),
-        offset=0,
-        null_count=0,
-        children=(offset_col, data_col),
-    )
-    return res
