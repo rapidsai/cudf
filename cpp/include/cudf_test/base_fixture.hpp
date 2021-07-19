@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,10 +56,13 @@ template <typename T, typename Enable = void>
 struct uniform_distribution_impl {
 };
 template <typename T>
-struct uniform_distribution_impl<
-  T,
-  std::enable_if_t<std::is_integral<T>::value && not cudf::is_boolean<T>()>> {
+struct uniform_distribution_impl<T, std::enable_if_t<std::is_integral<T>::value>> {
   using type = std::uniform_int_distribution<T>;
+};
+
+template <>
+struct uniform_distribution_impl<bool> {
+  using type = std::bernoulli_distribution;
 };
 
 template <typename T>
@@ -68,12 +71,9 @@ struct uniform_distribution_impl<T, std::enable_if_t<std::is_floating_point<T>::
 };
 
 template <typename T>
-struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_boolean<T>()>> {
-  using type = std::bernoulli_distribution;
-};
-
-template <typename T>
-struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_chrono<T>()>> {
+struct uniform_distribution_impl<
+  T,
+  std::enable_if_t<cudf::is_chrono<T>() or cudf::is_fixed_point<T>()>> {
   using type = std::uniform_int_distribution<typename T::rep>;
 };
 
@@ -131,11 +131,20 @@ class UniformRandomGenerator {
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
    */
-  template <typename TL = T, std::enable_if_t<!cudf::is_chrono<TL>()>* = nullptr>
+  template <typename TL                                                          = T,
+            std::enable_if_t<cudf::is_numeric<TL>() && !cudf::is_boolean<TL>()>* = nullptr>
   UniformRandomGenerator(T lower,
                          T upper,
                          uint64_t seed = detail::random_generator_incrementing_seed())
     : dist{lower, upper}, rng{std::mt19937_64{seed}()}
+  {
+  }
+
+  template <typename TL = T, std::enable_if_t<cudf::is_boolean<TL>()>* = nullptr>
+  UniformRandomGenerator(T lower,
+                         T upper,
+                         uint64_t seed = detail::random_generator_incrementing_seed())
+    : dist{0.5}, rng{std::mt19937_64{seed}()}
   {
   }
 
@@ -146,7 +155,8 @@ class UniformRandomGenerator {
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
    */
-  template <typename TL = T, std::enable_if_t<cudf::is_chrono<TL>()>* = nullptr>
+  template <typename TL                                                            = T,
+            std::enable_if_t<cudf::is_chrono<TL>() or cudf::is_fixed_point<TL>()>* = nullptr>
   UniformRandomGenerator(typename TL::rep lower,
                          typename TL::rep upper,
                          uint64_t seed = detail::random_generator_incrementing_seed())

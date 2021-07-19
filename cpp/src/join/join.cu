@@ -15,6 +15,7 @@
  */
 #include <join/hash_join.cuh>
 #include <join/join_common_utils.hpp>
+#include <join/nested_loop_join.cuh>
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
@@ -219,6 +220,21 @@ std::unique_ptr<table> full_join(table_view const& left_input,
   return combine_table_pair(std::move(left_result), std::move(right_result));
 }
 
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+conditional_join(table_view left,
+                 table_view right,
+                 ast::expression binary_predicate,
+                 null_equality compare_nulls,
+                 join_kind JoinKind,
+                 rmm::cuda_stream_view stream,
+                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return get_conditional_join_indices(
+    left, right, JoinKind, binary_predicate, compare_nulls, stream, mr);
+}
+
 }  // namespace detail
 
 hash_join::~hash_join() = default;
@@ -356,4 +372,88 @@ std::unique_ptr<table> full_join(table_view const& left,
     left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
 }
 
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+conditional_inner_join(table_view left,
+                       table_view right,
+                       ast::expression binary_predicate,
+                       null_equality compare_nulls,
+                       rmm::mr::device_memory_resource* mr)
+{
+  return detail::conditional_join(left,
+                                  right,
+                                  binary_predicate,
+                                  compare_nulls,
+                                  detail::join_kind::INNER_JOIN,
+                                  rmm::cuda_stream_default,
+                                  mr);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+conditional_left_join(table_view left,
+                      table_view right,
+                      ast::expression binary_predicate,
+                      null_equality compare_nulls,
+                      rmm::mr::device_memory_resource* mr)
+{
+  return detail::conditional_join(left,
+                                  right,
+                                  binary_predicate,
+                                  compare_nulls,
+                                  detail::join_kind::LEFT_JOIN,
+                                  rmm::cuda_stream_default,
+                                  mr);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+conditional_full_join(table_view left,
+                      table_view right,
+                      ast::expression binary_predicate,
+                      null_equality compare_nulls,
+                      rmm::mr::device_memory_resource* mr)
+{
+  return detail::conditional_join(left,
+                                  right,
+                                  binary_predicate,
+                                  compare_nulls,
+                                  detail::join_kind::FULL_JOIN,
+                                  rmm::cuda_stream_default,
+                                  mr);
+}
+
+std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
+  table_view left,
+  table_view right,
+  ast::expression binary_predicate,
+  null_equality compare_nulls,
+  rmm::mr::device_memory_resource* mr)
+{
+  return std::move(detail::conditional_join(left,
+                                            right,
+                                            binary_predicate,
+                                            compare_nulls,
+                                            detail::join_kind::LEFT_SEMI_JOIN,
+                                            rmm::cuda_stream_default,
+                                            mr)
+                     .first);
+}
+
+std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
+  table_view left,
+  table_view right,
+  ast::expression binary_predicate,
+  null_equality compare_nulls,
+  rmm::mr::device_memory_resource* mr)
+{
+  return std::move(detail::conditional_join(left,
+                                            right,
+                                            binary_predicate,
+                                            compare_nulls,
+                                            detail::join_kind::LEFT_ANTI_JOIN,
+                                            rmm::cuda_stream_default,
+                                            mr)
+                     .first);
+}
 }  // namespace cudf
