@@ -18,7 +18,6 @@
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/nodes.hpp>
-#include <cudf/ast/operators.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/assert.cuh>

@@ -145,11 +145,6 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_32bit)
   ->Args({100'000, 100'000})
   ->Args({100'000, 400'000})
   ->Args({100'000, 1'000'000})
-  // TODO: The below benchmark is slow, but can be useful to validate that the
-  // code works for large data sets. This benchmark was used to compare to the
-  // otherwise equivalent nullable benchmark below, which has memory errors for
-  // sufficiently large data sets.
-  //->Args({1'000'000, 1'000'000})
   ->UseManualTime();
 
 BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_64bit)
