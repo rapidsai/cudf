@@ -300,8 +300,6 @@ class NumericalColumn(NumericalBaseColumn):
         """
         to_replace_col = as_column(to_replace)
         replacement_col = as_column(replacement)
-        print(to_replace_col)
-        print(replacement_col)
 
         if type(to_replace_col) != type(replacement_col):
             raise TypeError(
@@ -339,7 +337,6 @@ class NumericalColumn(NumericalBaseColumn):
         df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
-            # import pdb;pdb.set_trace()
             replaced = replaced.fillna(
                 df._data["new"][df._data["old"].isna()][0]
             )
@@ -618,7 +615,6 @@ def _safe_cast_to_int(col: ColumnBase, dtype: DtypeObj) -> ColumnBase:
 def _normalize_find_and_replace_input(
     input_column_dtype: DtypeObj, col_to_normalize: Union[ColumnBase, list]
 ) -> ColumnBase:
-    # import pdb;pdb.set_trace()
     normalized_column = column.as_column(
         col_to_normalize,
         dtype=input_column_dtype if len(col_to_normalize) <= 0 else None,
