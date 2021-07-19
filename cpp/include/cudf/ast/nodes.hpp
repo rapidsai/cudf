@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/ast/detail/operators.hpp>
+#include <cudf/ast/detail/nodes.hpp>
 #include <cudf/ast/operators.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -25,21 +25,6 @@
 
 namespace cudf {
 namespace ast {
-namespace detail {
-
-// Forward declaration
-class expression_parser;
-/**
- * @brief A generic node that can be evaluated to return a value.
- *
- * This class is a part of a "visitor" pattern with the `linearizer` class.
- * Nodes inheriting from this class can accept visitors.
- */
-struct node {
-  virtual cudf::size_type accept(expression_parser& visitor) const = 0;
-};
-
-}  // namespace detail
 
 /**
  * @brief Enum of table references.
@@ -204,12 +189,7 @@ class expression : public detail::node {
    * @param op Operator
    * @param input Input node (operand)
    */
-  expression(ast_operator op, node const& input) : op(op), operands({input})
-  {
-    if (cudf::ast::detail::ast_operator_arity(op) != 1) {
-      CUDF_FAIL("The provided operator is not a unary operator.");
-    }
-  }
+  expression(ast_operator op, detail::node const& input);
 
   /**
    * @brief Construct a new binary expression object.
@@ -218,19 +198,14 @@ class expression : public detail::node {
    * @param left Left input node (left operand)
    * @param right Right input node (right operand)
    */
-  expression(ast_operator op, node const& left, node const& right) : op(op), operands({left, right})
-  {
-    if (cudf::ast::detail::ast_operator_arity(op) != 2) {
-      CUDF_FAIL("The provided operator is not a binary operator.");
-    }
-  }
+  expression(ast_operator op, detail::node const& left, detail::node const& right);
 
   // expression only stores references to nodes, so it does not accept r-value
   // references: the calling code must own the nodes.
-  expression(ast_operator op, node&& input)                   = delete;
-  expression(ast_operator op, node&& left, node&& right)      = delete;
-  expression(ast_operator op, node&& left, node const& right) = delete;
-  expression(ast_operator op, node const& left, node&& right) = delete;
+  expression(ast_operator op, detail::node&& input)                           = delete;
+  expression(ast_operator op, detail::node&& left, detail::node&& right)      = delete;
+  expression(ast_operator op, detail::node&& left, detail::node const& right) = delete;
+  expression(ast_operator op, detail::node const& left, detail::node&& right) = delete;
 
   /**
    * @brief Get the operator.
@@ -244,7 +219,7 @@ class expression : public detail::node {
    *
    * @return std::vector<std::reference_wrapper<const node>>
    */
-  std::vector<std::reference_wrapper<node const>> get_operands() const { return operands; }
+  std::vector<std::reference_wrapper<detail::node const>> get_operands() const { return operands; }
 
   /**
    * @brief Accepts a visitor class.
@@ -256,7 +231,7 @@ class expression : public detail::node {
 
  private:
   ast_operator const op;
-  std::vector<std::reference_wrapper<node const>> const operands;
+  std::vector<std::reference_wrapper<detail::node const>> const operands;
 };
 
 }  // namespace ast

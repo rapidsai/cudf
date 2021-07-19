@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/ast/detail/expression_parser.hpp>
+#include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/nodes.hpp>
 #include <cudf/ast/operators.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -213,19 +214,6 @@ cudf::size_type expression_parser::add_data_reference(detail::device_data_refere
 }
 
 }  // namespace detail
-
-cudf::size_type literal::accept(detail::expression_parser& visitor) const
-{
-  return visitor.visit(*this);
-}
-cudf::size_type column_reference::accept(detail::expression_parser& visitor) const
-{
-  return visitor.visit(*this);
-}
-cudf::size_type expression::accept(detail::expression_parser& visitor) const
-{
-  return visitor.visit(*this);
-}
 
 }  // namespace ast
 
