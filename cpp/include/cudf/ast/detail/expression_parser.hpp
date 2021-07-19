@@ -208,7 +208,17 @@ class expression_parser {
     cudf::size_type get_max_used() const { return max_used; }
 
    private:
+    /**
+     * @brief Find the first missing value in a contiguous sequence of integers.
+     *
+     * From a sorted container of integers, find the first "missing" value.
+     * For example, {0, 1, 2, 4, 5} is missing 3, and {1, 2, 3} is missing 0.
+     * If there are no missing values, return the size of the container.
+     *
+     * @return cudf::size_type Smallest value not already in the container.
+     */
     cudf::size_type find_first_missing() const;
+
     std::vector<cudf::size_type> used_values;
     cudf::size_type max_used;
   };
@@ -282,15 +292,35 @@ class expression_parser {
       device_expression_data.num_intermediates);
   }
 
+  /**
+   * @brief Helper function for recursive traversal of expressions.
+   *
+   * When parsing an expression composed of subexpressions, all subexpressions
+   * must be evaluated before an operator can be applied to them. This method
+   * performs that recursive traversal (in conjunction with the
+   * `expression_parser.visit` and `expression.accept` methods if necessary to
+   * descend deeper into an expression tree).
+   *
+   * @param  operands  The operands to visit.
+   *
+   * @return The indices of the operands stored in the data references.
+   */
+  std::vector<cudf::size_type> visit_operands(
+    std::vector<std::reference_wrapper<const node>> operands);
+
+  /**
+   * @brief Add a data reference to the internal list.
+   *
+   * @param  data_ref  The data reference to add.
+   *
+   * @return The index of the added data reference in the internal data references list.
+   */
+  cudf::size_type add_data_reference(detail::device_data_reference data_ref);
+
   rmm::device_buffer
     _device_data_buffer;  ///< The device-side data buffer containing the plan information, which is
                           ///< owned by this class and persists until it is destroyed.
 
-  std::vector<cudf::size_type> visit_operands(
-    std::vector<std::reference_wrapper<const node>> operands);
-  cudf::size_type add_data_reference(detail::device_data_reference data_ref);
-
-  // State information about the "linearized" GPU execution plan
   cudf::table_view const& _left;
   cudf::table_view const& _right;
   cudf::size_type _node_count;
