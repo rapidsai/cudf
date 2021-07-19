@@ -30,12 +30,11 @@ namespace test {
 
 /**
  * @brief Verbosity level of output from column and table comparison functions.
- *
  */
 enum class debug_output_level {
   FIRST_ERROR = 0,  // print first error only
   ALL_ERRORS,       // print all errors
-  QUIET,            // no debug output
+  QUIET             // no debug output
 };
 
 /**
