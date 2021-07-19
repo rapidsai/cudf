@@ -499,6 +499,24 @@ TEST_F(PackUnpackTest, NestedSliced)
   }
 }
 
+TEST_F(PackUnpackTest, EmptyTable)
+{
+  // no columns
+  {
+    cudf::table_view t;
+    this->run_test(t);
+  }
+
+  // no rows
+  {
+    cudf::test::fixed_width_column_wrapper<int> a;
+    cudf::test::strings_column_wrapper b;
+    cudf::test::lists_column_wrapper<float> c;
+    cudf::table_view t({a, b, c});
+    this->run_test(t);
+  }
+}
+
 // clang-format on
 
 }  // namespace test

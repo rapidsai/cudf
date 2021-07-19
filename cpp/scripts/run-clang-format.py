@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,10 +29,10 @@ VERSION_REGEX = re.compile(r"clang-format version ([0-9.]+)")
 DEFAULT_DIRS = [
     "cpp/benchmarks",
     "cpp/include",
-    "cpp/include/cudf",
-    "cpp/include/nvtext",
+    "cpp/libcudf_kafka",
     "cpp/src",
     "cpp/tests",
+    "java/src/main/native",
 ]
 
 

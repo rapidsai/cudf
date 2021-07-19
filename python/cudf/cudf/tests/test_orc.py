@@ -953,7 +953,7 @@ list_struct_buff = generate_list_struct_buff()
 )
 @pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 28000])
 @pytest.mark.parametrize("use_index", [True, False])
-@pytest.mark.parametrize("skip_rows", [0, 101, 1007])
+@pytest.mark.parametrize("skip_rows", [0, 101, 1007, 27000])
 def test_lists_struct_nests(
     columns, num_rows, use_index, skip_rows,
 ):
@@ -1033,4 +1033,15 @@ def test_orc_reader_decimal_invalid_column(datadir, data):
 
     # Since the `decimal_cols_as_float` column name
     # is invalid, this should be a decimal
+    assert_eq(pdf, gdf)
+
+
+# This test case validates the issue raised in #8665,
+# please check the issue for more details.
+def test_orc_timestamp_read(datadir):
+    path = datadir / "TestOrcFile.timestamp.issue.orc"
+
+    pdf = pd.read_orc(path)
+    gdf = cudf.read_orc(path)
+
     assert_eq(pdf, gdf)
