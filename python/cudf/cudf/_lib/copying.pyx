@@ -832,10 +832,11 @@ cdef class _CPackedColumns:
 
         header["column-names"] = self.column_names
         header["index-names"] = self.index_names
-        header["metadata"] = list(
-            <uint8_t[:self.c_obj.metadata_.get()[0].size()]>
-            self.c_obj.metadata_.get()[0].data()
-        )
+        if self.c_obj.metadata_.get()[0].data() != NULL:
+            header["metadata"] = list(
+                <uint8_t[:self.c_obj.metadata_.get()[0].size()]>
+                self.c_obj.metadata_.get()[0].data()
+            )
 
         column_dtypes = {}
         for name, dtype in self.column_dtypes.items():
@@ -863,7 +864,7 @@ cdef class _CPackedColumns:
         cdef cpp_copying.packed_columns data
         data.metadata_ = move(
             make_unique[cpp_copying.metadata](
-                move(<vector[uint8_t]>header["metadata"])
+                move(<vector[uint8_t]>header.get("metadata", []))
             )
         )
         data.gpu_data = move(dbuf.c_obj)
