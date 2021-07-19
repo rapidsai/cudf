@@ -199,7 +199,7 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
   };
 
   std::vector<std::future<ssize_t>> slice_tasks;
-  constexpr size_t four_MB = 1 << 22;
+  constexpr size_t four_MB = 4 * 1024 * 1024;
   size_t n_slices          = util::div_rounding_up_safe(size, four_MB);
   size_t slice_size        = four_MB;
   size_t slice_offset      = 0;
