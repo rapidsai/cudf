@@ -96,11 +96,11 @@ using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
  * @brief A container of all device data required to evaluate an expression on tables.
  *
  * This struct should never be instantiated directly. It is created by the
- * `ast_plan` on construction, and the resulting member is publicly accessible
+ * `expression_parser` on construction, and the resulting member is publicly accessible
  * for passing to kernels for constructing an `expression_evaluator`.
  *
  */
-struct device_ast_plan {
+struct expression_device_view {
   device_span<const detail::device_data_reference> data_references;
   device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals;
   device_span<const ast_operator> operators;
@@ -213,8 +213,8 @@ class expression_parser {
     cudf::size_type max_used;
   };
 
-  device_ast_plan
-    dev_plan;  ///< The collection of data required to evaluate the expression on the device.
+  expression_device_view device_expression_data;  ///< The collection of data required to evaluate
+                                                  ///< the expression on the device.
 
  private:
   /**
@@ -260,25 +260,26 @@ class expression_parser {
     stream.synchronize();
 
     // Create device pointers to components of plan
-    auto device_data_buffer_ptr = static_cast<const char*>(_device_data_buffer.data());
-    dev_plan.data_references    = device_span<const detail::device_data_reference>(
+    auto device_data_buffer_ptr            = static_cast<const char*>(_device_data_buffer.data());
+    device_expression_data.data_references = device_span<const detail::device_data_reference>(
       reinterpret_cast<const detail::device_data_reference*>(device_data_buffer_ptr +
                                                              buffer_offsets[0]),
       _data_references.size());
-    dev_plan.literals = device_span<const cudf::detail::fixed_width_scalar_device_view_base>(
-      reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
-        device_data_buffer_ptr + buffer_offsets[1]),
-      _literals.size());
-    dev_plan.operators = device_span<const ast_operator>(
+    device_expression_data.literals =
+      device_span<const cudf::detail::fixed_width_scalar_device_view_base>(
+        reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
+          device_data_buffer_ptr + buffer_offsets[1]),
+        _literals.size());
+    device_expression_data.operators = device_span<const ast_operator>(
       reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]),
       _operators.size());
-    dev_plan.operator_source_indices = device_span<const cudf::size_type>(
+    device_expression_data.operator_source_indices = device_span<const cudf::size_type>(
       reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
       _operator_source_indices.size());
-    dev_plan.num_intermediates = _intermediate_counter.get_max_used();
-    dev_plan.shmem_per_thread  = static_cast<int>(
+    device_expression_data.num_intermediates = _intermediate_counter.get_max_used();
+    device_expression_data.shmem_per_thread  = static_cast<int>(
       (_has_nulls ? sizeof(IntermediateDataType<true>) : sizeof(IntermediateDataType<false>)) *
-      dev_plan.num_intermediates);
+      device_expression_data.num_intermediates);
   }
 
   rmm::device_buffer
