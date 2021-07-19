@@ -1,24 +1,22 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-import cudf
-
 from itertools import chain
 
-from libcpp.memory cimport unique_ptr, make_unique
+import cudf
+
+from libcpp cimport bool
+from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-from libcpp.pair cimport pair
-from libcpp cimport bool
 
+cimport cudf._lib.cpp.join as cpp_join
 from cudf._lib.column cimport Column
-from cudf._lib.table cimport Table, columns_from_ptr
-
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.types cimport size_type, data_type, type_id
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-cimport cudf._lib.cpp.join as cpp_join
-
+from cudf._lib.cpp.types cimport data_type, size_type, type_id
+from cudf._lib.table cimport Table, columns_from_ptr
 
 # The functions below return the *gathermaps* that represent
 # the join result when joining on the keys `lhs` and `rhs`.

@@ -1,8 +1,9 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
-from transformers import BertTokenizer
-import pytest
 import os
+
 import numpy as np
+import pytest
+from transformers import BertTokenizer
 
 import cudf
 from cudf.core.subword_tokenizer import SubwordTokenizer
