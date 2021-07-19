@@ -97,7 +97,7 @@ std::unique_ptr<column> compute_column(table_view const table,
              : mask_state::UNALLOCATED;
 
   auto output_column = cudf::make_fixed_width_column(
-    plan.root_data_type(), table.num_rows(), output_column_mask_state, stream, mr);
+    plan.output_type(), table.num_rows(), output_column_mask_state, stream, mr);
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 

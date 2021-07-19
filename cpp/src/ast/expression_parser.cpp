@@ -129,7 +129,7 @@ cudf::size_type expression_parser::visit(expression const& expr)
   // Visit children (operands) of this node
   auto const operand_data_ref_indices = visit_operands(expr.get_operands());
   // Resolve operand types
-  auto data_ref = [this](auto const& index) { return data_references()[index].data_type; };
+  auto data_ref = [this](auto const& index) { return _data_references[index].data_type; };
   auto begin    = thrust::make_transform_iterator(operand_data_ref_indices.cbegin(), data_ref);
   auto end      = begin + operand_data_ref_indices.size();
   auto const operand_types = std::vector<cudf::data_type>(begin, end);
@@ -145,7 +145,7 @@ cudf::size_type expression_parser::visit(expression const& expr)
     operand_data_ref_indices.cbegin(),
     operand_data_ref_indices.cend(),
     [this](auto const& data_reference_index) {
-      auto const operand_source = data_references()[data_reference_index];
+      auto const operand_source = _data_references[data_reference_index];
       if (operand_source.reference_type == detail::device_data_reference_type::INTERMEDIATE) {
         auto const intermediate_index = operand_source.data_index;
         _intermediate_counter.give(intermediate_index);
@@ -183,10 +183,10 @@ cudf::size_type expression_parser::visit(expression const& expr)
   return index;
 }
 
-cudf::data_type expression_parser::root_data_type() const
+cudf::data_type expression_parser::output_type() const
 {
-  return data_references().empty() ? cudf::data_type(cudf::type_id::EMPTY)
-                                   : data_references().back().data_type;
+  return _data_references.empty() ? cudf::data_type(cudf::type_id::EMPTY)
+                                  : _data_references.back().data_type;
 }
 
 std::vector<cudf::size_type> expression_parser::visit_operands(
