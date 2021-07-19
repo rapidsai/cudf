@@ -18,7 +18,6 @@
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/nodes.hpp>
-#include <cudf/ast/operators.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/assert.cuh>
@@ -275,7 +274,7 @@ struct expression_evaluator {
    *
    * Only input columns (COLUMN), literal values (LITERAL), and intermediates (INTERMEDIATE) are
    * supported as input data references. Intermediates must be of fixed width less than or equal to
-   * sizeof(std::int64_t). This requirement on intermediates is enforced by the linearizer.
+   * sizeof(std::int64_t). This requirement on intermediates is enforced by the expression_parser.
    *
    * @tparam Element Type of element to return.
    * @tparam has_nulls Whether or not the result data is nullable.
@@ -515,7 +514,7 @@ struct expression_evaluator {
      *
      * Only output columns (COLUMN) and intermediates (INTERMEDIATE) are supported as output
      * reference types. Intermediates must be of fixed width less than or equal to
-     * sizeof(std::int64_t). This requirement on intermediates is enforced by the linearizer.
+     * sizeof(std::int64_t). This requirement on intermediates is enforced by the expression_parser.
      *
      * @tparam Element Type of result element.
      * @tparam OutputType The container type that data will be inserted into.
@@ -711,23 +710,6 @@ struct expression_evaluator {
     compare_nulls;  ///< Whether the equality operator returns true or false for two nulls.
 };
 
-/**
- * @brief Compute a new column by evaluating an expression tree on a table.
- *
- * This evaluates an expression over a table to produce a new column. Also called an n-ary
- * transform.
- *
- * @param table The table used for expression evaluation.
- * @param expr The root of the expression tree.
- * @param stream Stream on which to perform the computation.
- * @param mr Device memory resource.
- * @return std::unique_ptr<column> Output column.
- */
-std::unique_ptr<column> compute_column(
-  table_view const table,
-  expression const& expr,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 
 }  // namespace ast
