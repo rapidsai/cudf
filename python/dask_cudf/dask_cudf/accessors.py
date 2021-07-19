@@ -1,5 +1,35 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
+class StructMethods:
+    def __init__(self, d_series):
+        self.d_series = d_series
+    def field(self, key):
+        """
+        Extract children of the specified struct column
+        in the Series
+        Parameters
+        ----------
+        key: int or str
+            index/position or field name of the respective
+            struct column
+        Returns
+        -------
+        Series
+        Examples
+        --------
+        >>> s = cudf.Series([{'a': 1, 'b': 2}, {'a': 3, 'b': 4}])
+        >>> s.struct.field(0)
+        0    1
+        1    3
+        dtype: int64
+        >>> s.struct.field('a')
+        0    1
+        1    3
+        dtype: int64
+        """
+        return self.d_series.map_partitions(
+            lambda s: s.struct.field(key), meta=self.d_series._meta
+        )
 
 class ListMethods:
     def __init__(self, d_series):
