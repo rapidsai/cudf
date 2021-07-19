@@ -298,8 +298,8 @@ class NumericalColumn(NumericalBaseColumn):
         """
         Return col with *to_replace* replaced with *value*.
         """
-        to_replace_col = as_column(to_replace)
-        replacement_col = as_column(replacement)
+        to_replace_col = column.as_column(to_replace)
+        replacement_col = column.as_column(replacement)
 
         if type(to_replace_col) != type(replacement_col):
             raise TypeError(
