@@ -1380,6 +1380,10 @@ class Frame(libcudf.table.Table):
             )
         )
         result._copy_type_metadata(frame)
+        if self._index is not None:
+            result._index.name = self._index.name
+            if isinstance(self._index, cudf.MultiIndex):
+                result._index.names = self._index.names
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -1454,6 +1458,17 @@ class Frame(libcudf.table.Table):
         )
 
         result._copy_type_metadata(self)
+        return result
+
+    @annotate("APPLY", color="purple", domain="cudf_python")
+    def _apply(self, func):
+        """
+        Apply `func` across the rows of the frame.
+        """
+        output_dtype, ptx = cudf.core.udf.pipeline.compile_masked_udf(
+            func, self.dtypes
+        )
+        result = cudf._lib.transform.masked_udf(self, ptx, output_dtype)
         return result
 
     def rank(
