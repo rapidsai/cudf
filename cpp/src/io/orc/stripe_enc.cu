@@ -661,6 +661,17 @@ __global__ void __launch_bounds__(block_size)
       s->strm_pos[CI_DICTIONARY] = s->stream.lengths[CI_DICTIONARY];
     }
   }
+
+  auto validity_byte = [&] __device__(int row) -> uint8_t& {
+    // valid_buf is a circular buffer where validitiy of 8 rows is stored in each element
+    return s->valid_buf[(row / 8) % 512];
+  };
+
+  auto validity = [&] __device__(int row) -> uint32_t {
+    // Check if the specific bit is set in the validity buffer
+    return (validity_byte(row) >> (row % 8)) & 1;
+  };
+
   __syncthreads();
   while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
     // Encode valid map
@@ -689,7 +700,7 @@ __global__ void __launch_bounds__(block_size)
             valid = valid & ((1 << (s->chunk.leaf_column->size() - row)) - 1);
           }
         }
-        s->valid_buf[(row_in_group >> 3) & 0x1ff] = valid;
+        validity_byte(row_in_group) = valid;
       }
       __syncthreads();
       present_rows += nrows;
@@ -724,9 +735,8 @@ __global__ void __launch_bounds__(block_size)
       uint32_t nrows =
         min(min(s->present_rows - s->cur_row, maxnumvals - max(s->numvals, s->numlengths)), 512);
       auto const row_in_group = s->cur_row + t;
-      uint32_t valid =
-        (t < nrows) ? (s->valid_buf[(row_in_group >> 3) & 0x1ff] >> (row_in_group & 7)) & 1 : 0;
-      s->buf.u32[t] = valid;
+      uint32_t const valid    = (t < nrows) ? validity(row_in_group) : 0;
+      s->buf.u32[t]           = valid;
 
       // TODO: Could use a faster reduction relying on _popc() for the initial phase
       lengths_to_positions(s->buf.u32, 512, t);
