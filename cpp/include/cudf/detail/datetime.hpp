@@ -135,6 +135,11 @@ std::unique_ptr<cudf::column> is_leap_year(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+std::unique_ptr<cudf::column> extract_quarter(
+  cudf::column_view const& column,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 }  // namespace detail
 }  // namespace datetime
 }  // namespace cudf

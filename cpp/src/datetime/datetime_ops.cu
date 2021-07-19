@@ -127,6 +127,25 @@ struct extract_day_num_of_year {
   }
 };
 
+// Extract the day number of the year present in the timestamp
+struct extract_quarter_op {
+  template <typename Timestamp>
+  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
+  {
+    using namespace cuda::std::chrono;
+
+    // Only has the days - time component is chopped off, which is what we want
+    auto const days_since_epoch = floor<days>(ts);
+    auto const date             = year_month_day(days_since_epoch);
+    auto const month            = unsigned{date.month()};
+
+    if (month <= 3) return 1;
+    if (month <= 6) return 2;
+    if (month <= 9) return 3;
+    return 4;
+  }
+};
+
 struct is_leap_year_op {
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE bool operator()(Timestamp const ts) const
@@ -376,6 +395,13 @@ std::unique_ptr<column> is_leap_year(column_view const& column,
   return apply_datetime_op<is_leap_year_op, type_id::BOOL8>(column, stream, mr);
 }
 
+std::unique_ptr<column> extract_quarter(column_view const& column,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  return apply_datetime_op<extract_quarter_op, type_id::INT16>(column, stream, mr);
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> extract_year(column_view const& column, rmm::mr::device_memory_resource* mr)
@@ -450,6 +476,13 @@ std::unique_ptr<column> is_leap_year(column_view const& column, rmm::mr::device_
 {
   CUDF_FUNC_RANGE();
   return detail::is_leap_year(column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> extract_quarter(column_view const& column,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::extract_quarter(column, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace datetime

@@ -550,7 +550,7 @@ TEST_F(BasicDatetimeOpsTest, TestIsLeapYear)
         915148800L,     // 1999-01-01 00:00:00 GMT - non leap year
         -11663029161L,  // 1600-5-31 05:40:39 GMT - leap year
         707904541L,     // 1992-06-07 08:09:01 GMT - leap year
-        2181048447L,    // 1900-11-20 09:12:33 GMT - non leap year
+        -2181005247L,   // 1900-11-20 09:12:33 GMT - non leap year
         0L,             // UNIX EPOCH 1970-01-01 00:00:00 GMT - non leap year
         -12212553600L,  // First full year of Gregorian Calandar 1583-01-01 00:00:00 - non-leap-year
         0L,             // null
@@ -565,6 +565,39 @@ TEST_F(BasicDatetimeOpsTest, TestIsLeapYear)
     cudf::test::fixed_width_column_wrapper<bool>{
       {true, XXX, false, true, true, false, false, false, XXX, true, false, XXX},
       {true, false, true, true, true, true, true, true, false, true, true, false}});
+}
+
+TEST_F(BasicDatetimeOpsTest, TestQuarter)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace cuda::std::chrono;
+
+  // Time in seconds since epoch
+  // Dates converted using epochconverter.com
+  auto timestamps_s =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      {
+        1594332839L,    // 2020-07-09 10:13:59 GMT - leap year
+        0L,             // null
+        915148800L,     // 1999-01-01 00:00:00 GMT - non leap year
+        -11663029161L,  // 1600-5-31 05:40:39 GMT - leap year
+        707904541L,     // 1992-06-07 08:09:01 GMT - leap year
+        -2181005247L,   // 1900-11-20 09:12:33 GMT - non leap year
+        0L,             // UNIX EPOCH 1970-01-01 00:00:00 GMT - non leap year
+        -12212553600L,  // First full year of Gregorian Calandar 1583-01-01 00:00:00 - non-leap-year
+        0L,             // null
+        13591632822L,   // 2400-09-13 13:33:42 GMT - leap year
+        4539564243L,    // 2113-11-08 06:04:03 GMT - non leap year
+        0L              // null
+      },
+      {true, false, true, true, true, true, true, true, false, true, true, false}};
+
+  auto quarter = cudf::test::fixed_width_column_wrapper<int16_t>{
+    {3, 6, 1, 2, 2, 4, 1, 1, 1, 3, 4, 3},
+    {true, false, true, true, true, true, true, true, false, true, true, false}};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_quarter(timestamps_s), quarter);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
