@@ -243,21 +243,13 @@ public:
     return data_ptr;
   }
 
-  const N_TYPE *const begin() const {
-    return data();
-  }
+  const N_TYPE *const begin() const { return data(); }
 
-  N_TYPE *begin() {
-    return data();
-  }
+  N_TYPE *begin() { return data(); }
 
-  const N_TYPE *const end() const {
-    return data() + size();
-  }
+  const N_TYPE *const end() const { return data() + size(); }
 
-  N_TYPE *end() {
-    return data() + size();
-  }
+  N_TYPE *end() { return data() + size(); }
 
   const J_ARRAY_TYPE get_jArray() const { return orig; }
 
@@ -315,7 +307,7 @@ public:
 
   int size() const noexcept { return wrapped.size(); }
 
-  T *operator[](int index) const { 
+  T *operator[](int index) const {
     if (data() == NULL) {
       throw_java_exception(env, NPE_CLASS, "pointer is NULL");
     }
@@ -754,8 +746,8 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     if (cudaErrorMemoryAllocation == cudaPeekAtLastError()) {                                      \
       cudaGetLastError();                                                                          \
     }                                                                                              \
-    auto what = std::string("Could not allocate native memory: ") +                                \
-      (e.what() == nullptr ? "" : e.what());                                                       \
+    auto what =                                                                                    \
+        std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
@@ -763,5 +755,4 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     JNI_CHECK_THROW_NEW(env, class_name, e.what(), ret_val);                                       \
   }
 
-#define CATCH_STD(env, ret_val)                                                                    \
-    CATCH_STD_CLASS(env, cudf::jni::CUDF_ERROR_CLASS, ret_val)
+#define CATCH_STD(env, ret_val) CATCH_STD_CLASS(env, cudf::jni::CUDF_ERROR_CLASS, ret_val)
