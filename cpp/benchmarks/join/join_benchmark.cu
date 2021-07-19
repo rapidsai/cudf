@@ -20,25 +20,6 @@ template <typename key_type, typename payload_type>
 class Join : public cudf::benchmark {
 };
 
-#define JOIN_BENCHMARK_DEFINE(name, key_type, payload_type, nullable)         \
-  BENCHMARK_TEMPLATE_DEFINE_F(Join, name, key_type, payload_type)             \
-  (::benchmark::State & st)                                                   \
-  {                                                                           \
-    auto join = [](cudf::table_view const& left,                              \
-                   cudf::table_view const& right,                             \
-                   std::vector<cudf::size_type> const& left_on,               \
-                   std::vector<cudf::size_type> const& right_on,              \
-                   cudf::null_equality compare_nulls) {                       \
-      return cudf::inner_join(left, right, left_on, right_on, compare_nulls); \
-    };                                                                        \
-    BM_join<key_type, payload_type, nullable>(st, join);                      \
-  }
-
-JOIN_BENCHMARK_DEFINE(join_32bit, int32_t, int32_t, false);
-JOIN_BENCHMARK_DEFINE(join_64bit, int64_t, int64_t, false);
-JOIN_BENCHMARK_DEFINE(join_32bit_nulls, int32_t, int32_t, true);
-JOIN_BENCHMARK_DEFINE(join_64bit_nulls, int64_t, int64_t, true);
-
 #define LEFT_ANTI_JOIN_BENCHMARK_DEFINE(name, key_type, payload_type, nullable)   \
   BENCHMARK_TEMPLATE_DEFINE_F(Join, name, key_type, payload_type)                 \
   (::benchmark::State & st)                                                       \
@@ -76,43 +57,6 @@ LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_32bit, int32_t, int32_t, false);
 LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_64bit, int64_t, int64_t, false);
 LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_32bit_nulls, int32_t, int32_t, true);
 LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_64bit_nulls, int64_t, int64_t, true);
-
-// join -----------------------------------------------------------------------
-BENCHMARK_REGISTER_F(Join, join_32bit)
-  ->Unit(benchmark::kMillisecond)
-  ->Args({100'000, 100'000})
-  ->Args({100'000, 400'000})
-  ->Args({100'000, 1'000'000})
-  ->Args({10'000'000, 10'000'000})
-  ->Args({10'000'000, 40'000'000})
-  ->Args({10'000'000, 100'000'000})
-  ->Args({100'000'000, 100'000'000})
-  ->Args({80'000'000, 240'000'000})
-  ->UseManualTime();
-
-BENCHMARK_REGISTER_F(Join, join_64bit)
-  ->Unit(benchmark::kMillisecond)
-  ->Args({50'000'000, 50'000'000})
-  ->Args({40'000'000, 120'000'000})
-  ->UseManualTime();
-
-BENCHMARK_REGISTER_F(Join, join_32bit_nulls)
-  ->Unit(benchmark::kMillisecond)
-  ->Args({100'000, 100'000})
-  ->Args({100'000, 400'000})
-  ->Args({100'000, 1'000'000})
-  ->Args({10'000'000, 10'000'000})
-  ->Args({10'000'000, 40'000'000})
-  ->Args({10'000'000, 100'000'000})
-  ->Args({100'000'000, 100'000'000})
-  ->Args({80'000'000, 240'000'000})
-  ->UseManualTime();
-
-BENCHMARK_REGISTER_F(Join, join_64bit_nulls)
-  ->Unit(benchmark::kMillisecond)
-  ->Args({50'000'000, 50'000'000})
-  ->Args({40'000'000, 120'000'000})
-  ->UseManualTime();
 
 // left anti-join -------------------------------------------------------------
 BENCHMARK_REGISTER_F(Join, left_anti_join_32bit)
