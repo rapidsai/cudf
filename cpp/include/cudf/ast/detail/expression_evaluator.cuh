@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/nodes.hpp>
 #include <cudf/ast/operators.hpp>

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+#include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
-#include <cudf/ast/detail/evaluator.cuh>
 #include <cudf/ast/nodes.hpp>
 #include <cudf/ast/operators.hpp>
 #include <cudf/ast/transform.hpp>
