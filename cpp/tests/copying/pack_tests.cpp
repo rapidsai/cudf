@@ -517,6 +517,28 @@ TEST_F(PackUnpackTest, EmptyTable)
   }
 }
 
+TEST_F(PackUnpackTest, SlicedEmpty)
+{
+  // empty sliced column. this is specifically testing the corner case:
+  // - a sliced column of size 0
+  // - having children that are of size > 0
+  //
+  cudf::test::strings_column_wrapper a{"abc", "def", "ghi", "jkl", "mno", "", "st", "uvwx"};
+  cudf::test::lists_column_wrapper<int> b{
+    {0, 1}, {2}, {3, 4, 5}, {6, 7}, {8, 9}, {10}, {11, 12}, {13, 14}};
+  cudf::test::fixed_width_column_wrapper<float> c{0, 1, 2, 3, 4, 5, 6, 7};
+  cudf::test::strings_column_wrapper _a{"abc", "def", "ghi", "jkl", "mno", "", "st", "uvwx"};
+  cudf::test::lists_column_wrapper<float> _b{
+    {0, 1}, {2}, {3, 4, 5}, {6, 7}, {8, 9}, {10}, {11, 12}, {13, 14}};
+  cudf::test::fixed_width_column_wrapper<float> _c{0, 1, 2, 3, 4, 5, 6, 7};
+  cudf::test::structs_column_wrapper d({_a, _b, _c});
+
+  cudf::table_view t({a, b, c, d});
+
+  auto sliced = cudf::split(t, {0});
+  this->run_test(sliced[0]);
+}
+
 // clang-format on
 
 }  // namespace test
