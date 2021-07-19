@@ -20,7 +20,7 @@
 #include <join/join_common_utils.hpp>
 
 #include <cudf/ast/detail/evaluator.cuh>
-#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>

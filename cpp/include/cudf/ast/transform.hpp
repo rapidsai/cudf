@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/table/table_view.hpp>
 
 namespace cudf {
