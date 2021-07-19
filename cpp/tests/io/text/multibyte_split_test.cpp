@@ -78,10 +78,7 @@ TEST_F(MultibyteSplitTest, SimpleStreaming)
 
   auto host_input_stream   = std::basic_stringstream(host_input);
   auto device_input_stream = cudf::io::text::host_device_istream(host_input_stream);
-  // auto device_input        = cudf::string_scalar(host_input);
-
-  auto out = cudf::io::text::multibyte_split(device_input_stream, delimiters);
-  // auto out = cudf::io::text::multibyte_split(input, delimiters);
+  auto out                 = cudf::io::text::multibyte_split(device_input_stream, delimiters);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
   // CUDF_FAIL();
@@ -132,5 +129,4 @@ TEST_F(MultibyteSplitTest, SimplePreloaded)
   auto out          = cudf::io::text::multibyte_split(device_input, delimiters);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
-  // CUDF_FAIL();
 }

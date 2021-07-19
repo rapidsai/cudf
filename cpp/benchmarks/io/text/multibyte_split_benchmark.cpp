@@ -43,8 +43,8 @@ static void BM_multibyte_split(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
-    // auto output = cudf::io::text::multibyte_split(device_input_stream, delimiters);
-    auto output = cudf::io::text::multibyte_split(device_input, delimiters);
+    auto output = cudf::io::text::multibyte_split(device_input_stream, delimiters);
+    // auto output = cudf::io::text::multibyte_split(device_input, delimiters);
   }
 
   state.SetBytesProcessed(state.iterations() * num_chars);

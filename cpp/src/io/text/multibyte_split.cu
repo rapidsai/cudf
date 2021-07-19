@@ -14,7 +14,6 @@
 #include <cub/block/block_scan.cuh>
 #include <cub/warp/warp_reduce.cuh>
 
-#include <bitset>
 #include <iostream>
 #include <memory>
 
@@ -143,15 +142,6 @@ auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
 auto constexpr TILES_PER_CHUNK  = 256;  // blocks in streaming launch
 auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 auto constexpr TILES_PER_PASS   = 512;  // blocks in non-streaming launch
-// multibyte_split works by splitting up inputs in to 32 inputs (bytes) per thread, and transforming
-// them in to data structures called "superstates". these superstates are created by searching a
-// trie, but instead of a tradition trie where the search begins at a single node at the beginning,
-// we allow our search to begin anywhere within the trie tree. The position within the trie tree is
-// stored as a "partial match path", which indicates "we can get from here to there by a set of
-// specific transitions". By scanning together superstates, we effectively know "we can get here
-// from the beginning by following the inputs". By doing this, each thread knows exactly what state
-// it begins in. From there, each thread can then take deterministic action. In this case, the
-// deterministic action is counting and outputting delimiter offsets when a delimiter is found.
 
 template <typename T>
 struct scan_tile_state_callback {
@@ -281,6 +271,16 @@ struct PatternScan {
     }
   }
 };
+
+// multibyte_split works by splitting up inputs in to 32 inputs (bytes) per thread, and transforming
+// them in to data structures called "superstates". these superstates are created by searching a
+// trie, but instead of a tradition trie where the search begins at a single node at the beginning,
+// we allow our search to begin anywhere within the trie tree. The position within the trie tree is
+// stored as a "partial match path", which indicates "we can get from here to there by a set of
+// specific transitions". By scanning together superstates, we effectively know "we can get here
+// from the beginning by following the inputs". By doing this, each thread knows exactly what state
+// it begins in. From there, each thread can then take deterministic action. In this case, the
+// deterministic action is counting and outputting delimiter offsets when a delimiter is found.
 
 __global__ void multibyte_split_init_kernel(cudf::size_type base_tile_idx,
                                             cudf::size_type num_tiles,
@@ -420,12 +420,15 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::string_scalar const& input,
   auto const trie = cudf::io::text::trie::create(delimeters, stream);
 
   auto num_tiles = ceil_div(input.size(), ITEMS_PER_TILE);
+  // must be at least 32 when using warp-reduce on partials
+  // must be at least 1 more than max possible concurrent tiles
+  // best when at least 32 more than max possible concurrent tiles, due to rolling `invalid`s
+  auto num_tile_states = std::max(32, TILES_PER_PASS + 32);
 
   // pattern-match and count delimiters
 
-  auto tile_superstates =
-    scan_tile_state<superstate<16>>(num_tiles + 1, stream);  // CHECK IF THIS IS TOO BIG
-  auto tile_offsets = scan_tile_state<uint32_t>(num_tiles + 1, stream);
+  auto tile_superstates = scan_tile_state<superstate<16>>(num_tile_states, stream);
+  auto tile_offsets     = scan_tile_state<uint32_t>(num_tile_states, stream);
 
   multibyte_split_init_kernel<<<TILES_PER_PASS, THREADS_PER_TILE, 0, stream.value()>>>(  //
     -TILES_PER_PASS,
@@ -637,10 +640,12 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::device_istream& in
                                               rmm::mr::device_memory_resource* mr)
 {
   auto const trie = cudf::io::text::trie::create(delimeters, stream);
-  // probaly only need to b (n * 3 + 1), where 1 is the seed, but 4 makes the reads align better,
-  // maybe?
-  auto tile_superstates = scan_tile_state<superstate<16>>(TILES_PER_CHUNK * 4, stream);
-  auto tile_offsets     = scan_tile_state<uint32_t>(TILES_PER_CHUNK * 4, stream);
+  // must be at least 32 when using warp-reduce on partials
+  // must be at least 1 more than max possible concurrent tiles
+  // best when at least 32 more than max possible concurrent tiles, due to rolling `invalid`s
+  auto num_tile_states  = std::max(32, TILES_PER_CHUNK * 3 + 32);
+  auto tile_superstates = scan_tile_state<superstate<16>>(num_tile_states, stream);
+  auto tile_offsets     = scan_tile_state<uint32_t>(num_tile_states, stream);
 
   auto bytes_total = scan_full_stream(input,
                                       trie,
