@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <cudf/ast/detail/operators.hpp>
+#include <cudf/ast/nodes.hpp>
 #include <cudf/ast/operators.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -76,19 +78,6 @@ struct alignas(8) device_data_reference {
   }
 };
 
-// Forward declaration
-class linearizer;
-
-/**
- * @brief A generic node that can be evaluated to return a value.
- *
- * This class is a part of a "visitor" pattern with the `linearizer` class.
- * Nodes inheriting from this class can accept visitors.
- */
-struct node {
-  virtual cudf::size_type accept(detail::linearizer& visitor) const = 0;
-};
-
 /**
  * @brief The linearizer traverses an abstract syntax tree to prepare for execution on the device.
  *
@@ -109,7 +98,7 @@ class linearizer {
    * @param left The left table used for evaluating the abstract syntax tree.
    * @param right The right table used for evaluating the abstract syntax tree.
    */
-  linearizer(detail::node const& expr, cudf::table_view left, cudf::table_view right)
+  linearizer(node const& expr, cudf::table_view left, cudf::table_view right)
     : _left{left}, _right{right}, _node_count{0}, _intermediate_counter{}
   {
     expr.accept(*this);
@@ -121,7 +110,7 @@ class linearizer {
    * @param expr The expression to create an evaluable linearizer for.
    * @param table The table used for evaluating the abstract syntax tree.
    */
-  linearizer(detail::node const& expr, cudf::table_view table)
+  linearizer(node const& expr, cudf::table_view table)
     : _left{table}, _right{table}, _node_count{0}, _intermediate_counter{}
   {
     expr.accept(*this);
@@ -308,7 +297,7 @@ struct ast_plan {
    * @param stream Stream view on which to allocate resources and queue execution.
    * @param mr Device memory resource used to allocate the returned column's device.
    */
-  ast_plan(detail::node const& expr,
+  ast_plan(node const& expr,
            cudf::table_view left,
            cudf::table_view right,
            bool has_nulls,
@@ -369,7 +358,7 @@ struct ast_plan {
    * @param stream Stream view on which to allocate resources and queue execution.
    * @param mr Device memory resource used to allocate the returned column's device.
    */
-  ast_plan(detail::node const& expr,
+  ast_plan(node const& expr,
            cudf::table_view table,
            bool has_nulls,
            rmm::cuda_stream_view stream,

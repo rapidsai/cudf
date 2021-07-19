@@ -153,6 +153,7 @@ add_library(cudf
     src/aggregation/result_cache.cpp
     src/ast/linearizer.cpp
     src/ast/transform.cu
+    src/ast/nodes.cpp
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
     src/binaryop/compiled/Add.cu

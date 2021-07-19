@@ -190,7 +190,7 @@ cudf::data_type linearizer::root_data_type() const
 }
 
 std::vector<cudf::size_type> linearizer::visit_operands(
-  std::vector<std::reference_wrapper<const node>> operands)
+  std::vector<std::reference_wrapper<const detail::node>> operands)
 {
   auto operand_data_reference_indices = std::vector<cudf::size_type>();
   for (auto const& operand : operands) {
@@ -214,16 +214,6 @@ cudf::size_type linearizer::add_data_reference(detail::device_data_reference dat
 }
 
 }  // namespace detail
-
-cudf::size_type literal::accept(detail::linearizer& visitor) const { return visitor.visit(*this); }
-cudf::size_type column_reference::accept(detail::linearizer& visitor) const
-{
-  return visitor.visit(*this);
-}
-cudf::size_type expression::accept(detail::linearizer& visitor) const
-{
-  return visitor.visit(*this);
-}
 
 }  // namespace ast
 
