@@ -18,7 +18,7 @@ import fastavro
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 def cudf_from_avro_util(schema, records):

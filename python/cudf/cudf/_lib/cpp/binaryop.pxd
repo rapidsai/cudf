@@ -4,11 +4,10 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.types cimport (
-    data_type
-)
+from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.cpp.types cimport data_type
+
 
 cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
     ctypedef enum binary_operator:
@@ -33,7 +32,6 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         BITWISE_XOR "cudf::binary_operator::BITWISE_XOR"
         LOGICAL_AND "cudf::binary_operator::LOGICAL_AND"
         LOGICAL_OR "cudf::binary_operator::LOGICAL_OR"
-        COALESCE "cudf::binary_operator::COALESCE"
         GENERIC_BINARY "cudf::binary_operator::GENERIC_BINARY"
 
     cdef unique_ptr[column] binary_operation (

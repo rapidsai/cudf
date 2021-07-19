@@ -320,7 +320,7 @@ class GroupBy(Serializable):
 
         # Convert all values to list-like:
         for col, agg in out.items():
-            if not pd.api.types.is_list_like(agg):
+            if not is_list_like(agg):
                 out[col] = [agg]
             else:
                 out[col] = list(agg)
@@ -1157,7 +1157,7 @@ class SeriesGroupBy(GroupBy):
 
         # downcast the result to a Series:
         if len(result._data):
-            if result.shape[1] == 1 and not pd.api.types.is_list_like(func):
+            if result.shape[1] == 1 and not is_list_like(func):
                 return result.iloc[:, 0]
 
         # drop the first level if we have a multiindex
@@ -1341,7 +1341,7 @@ def _is_multi_agg(aggs):
     on any of the columns as specified in `aggs`.
     """
     if isinstance(aggs, collections.abc.Mapping):
-        return any(pd.api.types.is_list_like(agg) for agg in aggs.values())
-    if pd.api.types.is_list_like(aggs):
+        return any(is_list_like(agg) for agg in aggs.values())
+    if is_list_like(aggs):
         return True
     return False

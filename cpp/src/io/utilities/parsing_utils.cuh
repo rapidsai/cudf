@@ -335,7 +335,9 @@ __device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* 
   // Remove preceding zeros
   if (digit_count >= (sizeof(int64_max_abs) - 1)) {
     // Trim zeros at the beginning of raw_data
-    while (*data_begin == '0' && (data_begin < data_end)) { data_begin++; }
+    while (*data_begin == '0' && (data_begin < data_end)) {
+      data_begin++;
+    }
   }
   digit_count = data_end - data_begin;
 

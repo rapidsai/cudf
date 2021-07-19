@@ -32,13 +32,13 @@ size_t get_file_size(int file_descriptor)
   return static_cast<size_t>(st.st_size);
 }
 
-file_wrapper::file_wrapper(std::string const &filepath, int flags)
+file_wrapper::file_wrapper(std::string const& filepath, int flags)
   : fd(open(filepath.c_str(), flags)), _size{get_file_size(fd)}
 {
   CUDF_EXPECTS(fd != -1, "Cannot open file " + filepath);
 }
 
-file_wrapper::file_wrapper(std::string const &filepath, int flags, mode_t mode)
+file_wrapper::file_wrapper(std::string const& filepath, int flags, mode_t mode)
   : fd(open(filepath.c_str(), flags, mode)), _size{get_file_size(fd)}
 {
   CUDF_EXPECTS(fd != -1, "Cannot open file " + filepath);
@@ -46,7 +46,7 @@ file_wrapper::file_wrapper(std::string const &filepath, int flags, mode_t mode)
 
 file_wrapper::~file_wrapper() { close(fd); }
 
-std::string getenv_or(std::string const &env_var_name, std::string const &default_val)
+std::string getenv_or(std::string const& env_var_name, std::string const& default_val)
 {
   auto const env_val = std::getenv(env_var_name.c_str());
   return (env_val == nullptr) ? default_val : std::string(env_val);
@@ -81,7 +81,7 @@ cufile_config::cufile_config() : policy{getenv_or("LIBCUDF_CUFILE_POLICY", defau
     }
   }
 }
-cufile_config const *cufile_config::instance()
+cufile_config const* cufile_config::instance()
 {
   static cufile_config _instance;
   return &_instance;
@@ -94,18 +94,18 @@ class cufile_shim {
  private:
   cufile_shim();
 
-  void *cf_lib                              = nullptr;
-  decltype(cuFileDriverOpen) *driver_open   = nullptr;
-  decltype(cuFileDriverClose) *driver_close = nullptr;
+  void* cf_lib                              = nullptr;
+  decltype(cuFileDriverOpen)* driver_open   = nullptr;
+  decltype(cuFileDriverClose)* driver_close = nullptr;
 
   std::unique_ptr<cudf::logic_error> init_error;
   auto is_valid() const noexcept { return init_error == nullptr; }
 
  public:
-  cufile_shim(cufile_shim const &) = delete;
-  cufile_shim &operator=(cufile_shim const &) = delete;
+  cufile_shim(cufile_shim const&) = delete;
+  cufile_shim& operator=(cufile_shim const&) = delete;
 
-  static cufile_shim const *instance();
+  static cufile_shim const* instance();
 
   ~cufile_shim()
   {
@@ -113,10 +113,10 @@ class cufile_shim {
     dlclose(cf_lib);
   }
 
-  decltype(cuFileHandleRegister) *handle_register     = nullptr;
-  decltype(cuFileHandleDeregister) *handle_deregister = nullptr;
-  decltype(cuFileRead) *read                          = nullptr;
-  decltype(cuFileWrite) *write                        = nullptr;
+  decltype(cuFileHandleRegister)* handle_register     = nullptr;
+  decltype(cuFileHandleDeregister)* handle_deregister = nullptr;
+  decltype(cuFileRead)* read                          = nullptr;
+  decltype(cuFileWrite)* write                        = nullptr;
 };
 
 cufile_shim::cufile_shim()
@@ -140,12 +140,12 @@ cufile_shim::cufile_shim()
     CUDF_EXPECTS(write != nullptr, "could not find cuFile cuFileWrite symbol");
 
     CUDF_EXPECTS(driver_open().err == CU_FILE_SUCCESS, "Failed to initialize cuFile driver");
-  } catch (cudf::logic_error const &err) {
+  } catch (cudf::logic_error const& err) {
     init_error = std::make_unique<cudf::logic_error>(err);
   }
 }
 
-cufile_shim const *cufile_shim::instance()
+cufile_shim const* cufile_shim::instance()
 {
   static cufile_shim _instance;
   // Defer throwing to avoid repeated attempts to load the library
@@ -165,7 +165,7 @@ void cufile_registered_file::register_handle()
 
 cufile_registered_file::~cufile_registered_file() { shim->handle_deregister(cf_handle); }
 
-cufile_input_impl::cufile_input_impl(std::string const &filepath)
+cufile_input_impl::cufile_input_impl(std::string const& filepath)
   : shim{cufile_shim::instance()}, cf_file(shim, filepath, O_RDONLY | O_DIRECT)
 {
 }
@@ -183,7 +183,7 @@ std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
 
 size_t cufile_input_impl::read(size_t offset,
                                size_t size,
-                               uint8_t *dst,
+                               uint8_t* dst,
                                rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(shim->read(cf_file.handle(), dst, size, offset, 0) != -1,
@@ -192,19 +192,19 @@ size_t cufile_input_impl::read(size_t offset,
   return size;
 }
 
-cufile_output_impl::cufile_output_impl(std::string const &filepath)
+cufile_output_impl::cufile_output_impl(std::string const& filepath)
   : shim{cufile_shim::instance()}, cf_file(shim, filepath, O_CREAT | O_RDWR | O_DIRECT, 0664)
 {
 }
 
-void cufile_output_impl::write(void const *data, size_t offset, size_t size)
+void cufile_output_impl::write(void const* data, size_t offset, size_t size)
 {
   CUDF_EXPECTS(shim->write(cf_file.handle(), data, size, offset, 0) != -1,
                "cuFile error writing to a file");
 }
 #endif
 
-std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath)
+std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath)
 {
 #ifdef CUFILE_FOUND
   if (cufile_config::instance()->is_enabled()) {
@@ -218,7 +218,7 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath
   return nullptr;
 }
 
-std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const &filepath)
+std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepath)
 {
 #ifdef CUFILE_FOUND
   if (cufile_config::instance()->is_enabled()) {

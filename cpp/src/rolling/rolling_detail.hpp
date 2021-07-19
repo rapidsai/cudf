@@ -29,30 +29,30 @@ namespace detail {
 // store functor
 template <typename T, bool is_mean = false>
 struct rolling_store_output_functor {
-  CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count) { out = val; }
+  CUDA_HOST_DEVICE_CALLABLE void operator()(T& out, T& val, size_type count) { out = val; }
 };
 
 // Specialization for MEAN
 template <typename _T>
 struct rolling_store_output_functor<_T, true> {
   // SFINAE for non-bool types
-  template <typename T                                                              = _T,
-            std::enable_if_t<!(cudf::is_boolean<T>() || cudf::is_timestamp<T>())> * = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
+  template <typename T                                                             = _T,
+            std::enable_if_t<!(cudf::is_boolean<T>() || cudf::is_timestamp<T>())>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(T& out, T& val, size_type count)
   {
     out = val / count;
   }
 
   // SFINAE for bool type
-  template <typename T = _T, std::enable_if_t<cudf::is_boolean<T>()> * = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
+  template <typename T = _T, std::enable_if_t<cudf::is_boolean<T>()>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(T& out, T& val, size_type count)
   {
     out = static_cast<int32_t>(val) / count;
   }
 
   // SFINAE for timestamp types
-  template <typename T = _T, std::enable_if_t<cudf::is_timestamp<T>()> * = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
+  template <typename T = _T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(T& out, T& val, size_type count)
   {
     out = static_cast<T>(val.time_since_epoch() / count);
   }

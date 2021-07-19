@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 nelems = [0, 3, 10]
 dtype = [np.uint16, np.int32, np.float64]

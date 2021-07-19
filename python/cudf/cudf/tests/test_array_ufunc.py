@@ -1,9 +1,10 @@
-import cudf
-import numpy as np
 import cupy as cp
+import numpy as np
 import pandas as pd
 import pytest
-from cudf.tests.utils import assert_eq
+
+import cudf
+from cudf.testing._utils import assert_eq
 
 
 @pytest.fixture

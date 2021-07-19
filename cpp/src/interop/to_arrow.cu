@@ -96,7 +96,7 @@ std::shared_ptr<arrow::Buffer> fetch_mask_buffer(column_view input_view,
  */
 struct dispatch_to_arrow {
   /**
-   * @brief Creates vector Arrays from given cudf column childrens
+   * @brief Creates vector Arrays from given cudf column children
    */
   std::vector<std::shared_ptr<arrow::Array>> fetch_child_array(
     column_view input_view,

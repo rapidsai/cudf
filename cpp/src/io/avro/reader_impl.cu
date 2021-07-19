@@ -46,7 +46,7 @@ namespace {
 /**
  * @brief Function that translates Avro data kind to cuDF type enum
  */
-type_id to_type_id(const avro::schema_entry *col)
+type_id to_type_id(const avro::schema_entry* col)
 {
   switch (col->kind) {
     case avro::type_boolean: return type_id::BOOL8;
@@ -69,7 +69,7 @@ type_id to_type_id(const avro::schema_entry *col)
  */
 class metadata : public file_metadata {
  public:
-  explicit metadata(datasource *const src) : source(src) {}
+  explicit metadata(datasource* const src) : source(src) {}
 
   /**
    * @brief Initializes the parser and filters down to a subset of rows
@@ -77,7 +77,7 @@ class metadata : public file_metadata {
    * @param[in,out] row_start Starting row of the selection
    * @param[in,out] row_count Total number of rows selected
    */
-  void init_and_select_rows(int &row_start, int &row_count)
+  void init_and_select_rows(int& row_start, int& row_count)
   {
     const auto buffer = source->host_read(0, source->size());
     avro::container pod(buffer->data(), buffer->size());
@@ -100,7 +100,7 @@ class metadata : public file_metadata {
     const auto num_avro_columns = static_cast<int>(columns.size());
     if (!use_names.empty()) {
       int index = 0;
-      for (const auto &use_name : use_names) {
+      for (const auto& use_name : use_names) {
         for (int i = 0; i < num_avro_columns; ++i, ++index) {
           if (index >= num_avro_columns) { index = 0; }
           if (columns[index].name == use_name &&
@@ -135,10 +135,10 @@ class metadata : public file_metadata {
   }
 
  private:
-  datasource *const source;
+  datasource* const source;
 };
 
-rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_block_data,
+rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer& comp_block_data,
                                                  rmm::cuda_stream_view stream)
 {
   size_t uncompressed_data_size = 0;
@@ -149,12 +149,14 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
     // Guess an initial maximum uncompressed block size
     uint32_t initial_blk_len = (_metadata->max_block_size * 2 + 0xfff) & ~0xfff;
     uncompressed_data_size   = initial_blk_len * _metadata->block_list.size();
-    for (size_t i = 0; i < inflate_in.size(); ++i) { inflate_in[i].dstSize = initial_blk_len; }
+    for (size_t i = 0; i < inflate_in.size(); ++i) {
+      inflate_in[i].dstSize = initial_blk_len;
+    }
   } else if (_metadata->codec == "snappy") {
     // Extract the uncompressed length from the snappy stream
     for (size_t i = 0; i < _metadata->block_list.size(); i++) {
       const auto buffer  = _source->host_read(_metadata->block_list[i].offset, 4);
-      const uint8_t *blk = buffer->data();
+      const uint8_t* blk = buffer->data();
       uint32_t blk_len   = blk[0];
       if (blk_len > 0x7f) {
         blk_len = (blk_len & 0x7f) | (blk[1] << 7);
@@ -176,9 +178,9 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
   for (size_t i = 0, dst_pos = 0; i < _metadata->block_list.size(); i++) {
     const auto src_pos = _metadata->block_list[i].offset - base_offset;
 
-    inflate_in[i].srcDevice = static_cast<const uint8_t *>(comp_block_data.data()) + src_pos;
+    inflate_in[i].srcDevice = static_cast<const uint8_t*>(comp_block_data.data()) + src_pos;
     inflate_in[i].srcSize   = _metadata->block_list[i].size;
-    inflate_in[i].dstDevice = static_cast<uint8_t *>(decomp_block_data.data()) + dst_pos;
+    inflate_in[i].dstDevice = static_cast<uint8_t*>(decomp_block_data.data()) + dst_pos;
 
     // Update blocks offsets & sizes to refer to uncompressed data
     _metadata->block_list[i].offset = dst_pos;
@@ -215,7 +217,7 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
       if (actual_uncompressed_size > uncompressed_data_size) {
         decomp_block_data.resize(actual_uncompressed_size, stream);
         for (size_t i = 0, dst_pos = 0; i < _metadata->block_list.size(); i++) {
-          auto dst_base           = static_cast<uint8_t *>(decomp_block_data.data());
+          auto dst_base           = static_cast<uint8_t*>(decomp_block_data.data());
           inflate_in[i].dstDevice = dst_base + dst_pos;
 
           _metadata->block_list[i].offset = dst_pos;
@@ -233,12 +235,12 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
   return decomp_block_data;
 }
 
-void reader::impl::decode_data(const rmm::device_buffer &block_data,
-                               const std::vector<std::pair<uint32_t, uint32_t>> &dict,
+void reader::impl::decode_data(const rmm::device_buffer& block_data,
+                               const std::vector<std::pair<uint32_t, uint32_t>>& dict,
                                device_span<string_index_pair> global_dictionary,
                                size_t num_rows,
                                std::vector<std::pair<int, std::string>> selection,
-                               std::vector<column_buffer> &out_buffers,
+                               std::vector<column_buffer>& out_buffers,
                                rmm::cuda_stream_view stream)
 {
   // Build gpu schema
@@ -277,7 +279,7 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
                                                     _metadata->schema[i + 2].kind == type_null)),
       "Union with non-null type not currently supported");
   }
-  std::vector<void *> valid_alias(out_buffers.size(), nullptr);
+  std::vector<void*> valid_alias(out_buffers.size(), nullptr);
   for (size_t i = 0; i < out_buffers.size(); i++) {
     const auto col_idx  = selection[i].first;
     int schema_data_idx = _metadata->columns[col_idx].schema_data_idx;
@@ -302,10 +304,10 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
     _metadata->block_list.data(), _metadata->block_list.size() * sizeof(block_desc_s), stream);
   schema_desc.host_to_device(stream);
 
-  gpu::DecodeAvroColumnData(static_cast<block_desc_s *>(block_list.data()),
+  gpu::DecodeAvroColumnData(static_cast<block_desc_s*>(block_list.data()),
                             schema_desc.device_ptr(),
                             global_dictionary,
-                            static_cast<const uint8_t *>(block_data.data()),
+                            static_cast<const uint8_t*>(block_data.data()),
                             static_cast<uint32_t>(_metadata->block_list.size()),
                             static_cast<uint32_t>(schema_desc.size()),
                             _metadata->num_rows,
@@ -333,15 +335,15 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
 }
 
 reader::impl::impl(std::unique_ptr<datasource> source,
-                   avro_reader_options const &options,
-                   rmm::mr::device_memory_resource *mr)
+                   avro_reader_options const& options,
+                   rmm::mr::device_memory_resource* mr)
   : _mr(mr), _source(std::move(source)), _columns(options.get_columns())
 {
   // Open the source Avro dataset metadata
   _metadata = std::make_unique<metadata>(_source.get());
 }
 
-table_with_metadata reader::impl::read(avro_reader_options const &options,
+table_with_metadata reader::impl::read(avro_reader_options const& options,
                                        rmm::cuda_stream_view stream)
 {
   auto skip_rows = options.get_skip_rows();
@@ -358,8 +360,8 @@ table_with_metadata reader::impl::read(avro_reader_options const &options,
   if (selected_columns.size() != 0) {
     // Get a list of column data types
     std::vector<data_type> column_types;
-    for (const auto &col : selected_columns) {
-      auto &col_schema = _metadata->schema[_metadata->columns[col.first].schema_data_idx];
+    for (const auto& col : selected_columns) {
+      auto& col_schema = _metadata->schema[_metadata->columns[col.first].schema_data_idx];
 
       auto col_type = to_type_id(&col_schema);
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
@@ -372,7 +374,7 @@ table_with_metadata reader::impl::read(avro_reader_options const &options,
         block_data      = rmm::device_buffer{_metadata->total_data_size, stream};
         auto read_bytes = _source->device_read(_metadata->block_list[0].offset,
                                                _metadata->total_data_size,
-                                               static_cast<uint8_t *>(block_data.data()),
+                                               static_cast<uint8_t*>(block_data.data()),
                                                stream);
         block_data.resize(read_bytes, stream);
       } else {
@@ -396,11 +398,13 @@ table_with_metadata reader::impl::read(avro_reader_options const &options,
       std::vector<std::pair<uint32_t, uint32_t>> dict(column_types.size());
       for (size_t i = 0; i < column_types.size(); ++i) {
         auto col_idx     = selected_columns[i].first;
-        auto &col_schema = _metadata->schema[_metadata->columns[col_idx].schema_data_idx];
+        auto& col_schema = _metadata->schema[_metadata->columns[col_idx].schema_data_idx];
         dict[i].first    = static_cast<uint32_t>(total_dictionary_entries);
         dict[i].second   = static_cast<uint32_t>(col_schema.symbols.size());
         total_dictionary_entries += dict[i].second;
-        for (const auto &sym : col_schema.symbols) { dictionary_data_size += sym.length(); }
+        for (const auto& sym : col_schema.symbols) {
+          dictionary_data_size += sym.length();
+        }
       }
 
       rmm::device_uvector<string_index_pair> d_global_dict(total_dictionary_entries, stream);
@@ -411,10 +415,10 @@ table_with_metadata reader::impl::read(avro_reader_options const &options,
         size_t dict_pos = 0;
         for (size_t i = 0; i < column_types.size(); ++i) {
           auto const col_idx     = selected_columns[i].first;
-          auto const &col_schema = _metadata->schema[_metadata->columns[col_idx].schema_data_idx];
+          auto const& col_schema = _metadata->schema[_metadata->columns[col_idx].schema_data_idx];
           auto const col_dict_entries = &(h_global_dict[dict[i].first]);
           for (size_t j = 0; j < dict[i].second; j++) {
-            auto const &symbols = col_schema.symbols[j];
+            auto const& symbols = col_schema.symbols[j];
 
             auto const data_dst        = h_global_dict_data.data() + dict_pos;
             auto const len             = symbols.length();
@@ -471,20 +475,20 @@ table_with_metadata reader::impl::read(avro_reader_options const &options,
 }
 
 // Forward to implementation
-reader::reader(std::vector<std::string> const &filepaths,
-               avro_reader_options const &options,
+reader::reader(std::vector<std::string> const& filepaths,
+               avro_reader_options const& options,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource *mr)
+               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
   _impl = std::make_unique<impl>(datasource::create(filepaths[0]), options, mr);
 }
 
 // Forward to implementation
-reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-               avro_reader_options const &options,
+reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+               avro_reader_options const& options,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource *mr)
+               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
   _impl = std::make_unique<impl>(std::move(sources[0]), options, mr);
@@ -494,7 +498,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read(avro_reader_options const &options, rmm::cuda_stream_view stream)
+table_with_metadata reader::read(avro_reader_options const& options, rmm::cuda_stream_view stream)
 {
   return _impl->read(options, stream);
 }

@@ -8,6 +8,7 @@ from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 import fsspec
 import fsspec.implementations.local
 import pandas as pd
+from fsspec.core import get_fs_token_paths
 
 from cudf.utils.docutils import docfmt_partial
 
@@ -338,6 +339,9 @@ num_rows : int, default None
     If not None, the total number of rows to read.
 use_index : bool, default True
     If True, use row index if available for faster seeking.
+decimal_cols_as_float: list, default None
+    If specified, names of the columns that should be converted from
+    Decimal to Float64 in the resulting dataframe.
 kwargs are passed to the engine
 
 Returns
@@ -390,11 +394,13 @@ Load a JSON dataset into a DataFrame
 
 Parameters
 ----------
-path_or_buf : str, path object, or file-like object
+path_or_buf : list, str, path object, or file-like object
     Either JSON data in a `str`, path to a file (a `str`, `pathlib.Path`, or
     `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
     or any object with a `read()` method (such as builtin `open()` file handler
-    function or `StringIO`).
+    function or `StringIO`). Multiple inputs may be provided as a list. If a
+    list is specified each list entry may be of a different input type as long
+    as each input is of a valid type and all input JSON schema(s) match.
 engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the engine will be
     automatically selected based on the other parameters.
@@ -1086,7 +1092,7 @@ def is_directory(path_or_data, **kwargs):
             )
         except ValueError as e:
             if str(e).startswith("Protocol not known"):
-                return True
+                return False
             else:
                 raise e
 
@@ -1371,3 +1377,11 @@ def _prepare_filters(filters):
         filters = [filters]
 
     return filters
+
+
+def _ensure_filesystem(passed_filesystem, path):
+    if passed_filesystem is None:
+        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
+            0
+        ]
+    return passed_filesystem
