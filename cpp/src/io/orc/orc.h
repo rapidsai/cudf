@@ -83,8 +83,7 @@ struct FileFooter {
 struct Stream {
   StreamKind kind = INVALID_STREAM_KIND;
   std::optional<uint32_t> column_id;  // ORC column id (different from column index in the table!)
-  uint64_t length    = 0;             // the number of bytes in the stream
-  TypeKind type_kind = INVALID_TYPE_KIND;  // primitive type of the stream
+  uint64_t length = 0;                // the number of bytes in the stream
 
   // Returns index of the column in the table, if any
   // Stream of the 'column 0' does not have a corresponding column in the table

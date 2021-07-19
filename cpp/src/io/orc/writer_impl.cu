@@ -464,6 +464,7 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
   });
 
   std::vector<int32_t> ids(columns.size() * gpu::CI_NUM_STREAMS, -1);
+  std::vector<TypeKind> types(streams.size(), INVALID_TYPE_KIND);
 
   for (auto& column : columns) {
     auto const is_nullable = [&]() -> bool {
@@ -495,7 +496,8 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
       [&](gpu::StreamIndexType index_type, StreamKind kind, TypeKind type_kind, size_t size) {
         const auto base        = column.index() * gpu::CI_NUM_STREAMS;
         ids[base + index_type] = streams.size();
-        streams.push_back(orc::Stream{kind, column.id(), size, type_kind});
+        streams.push_back(orc::Stream{kind, column.id(), size});
+        types.push_back(type_kind);
       };
 
     auto add_RLE_stream = [&](
@@ -590,7 +592,7 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
       default: CUDF_FAIL("Unsupported ORC type kind");
     }
   }
-  return {std::move(streams), std::move(ids)};
+  return {std::move(streams), std::move(ids), std::move(types)};
 }
 
 orc_streams::orc_stream_offsets orc_streams::compute_offsets(
@@ -768,7 +770,7 @@ encoded_data writer::impl::encode_columns(orc_table_view const& orc_table,
                                             : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
                                                col_streams[rg_idx - 1].lengths[strm_type]);
             } else {
-              strm.lengths[strm_type] = RLE_stream_size(streams[strm_id].type_kind, ck.num_rows);
+              strm.lengths[strm_type] = RLE_stream_size(streams.type(strm_id), ck.num_rows);
               // RLE encoded streams are stored after all non-RLE streams
               strm.data_ptrs[strm_type] =
                 (rg_idx == 0) ? (encoded_data.data() + stream_offsets.non_rle_data_size +

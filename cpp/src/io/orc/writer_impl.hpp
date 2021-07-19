@@ -105,14 +105,15 @@ struct encoder_decimal_info {
  */
 class orc_streams {
  public:
-  orc_streams(std::vector<Stream> streams, std::vector<int32_t> ids)
-    : streams{std::move(streams)}, ids{std::move(ids)}
+  orc_streams(std::vector<Stream> streams, std::vector<int32_t> ids, std::vector<TypeKind> types)
+    : streams{std::move(streams)}, ids{std::move(ids)}, types{std::move(types)}
   {
   }
   Stream const& operator[](int idx) const { return streams[idx]; }
   Stream& operator[](int idx) { return streams[idx]; }
   auto id(int idx) const { return ids[idx]; }
   auto& id(int idx) { return ids[idx]; }
+  auto type(int idx) const { return types[idx]; }
   auto size() const { return streams.size(); }
 
   /**
@@ -132,6 +133,7 @@ class orc_streams {
  private:
   std::vector<Stream> streams;
   std::vector<int32_t> ids;
+  std::vector<TypeKind> types;
 };
 /**
  * @brief Description of how the ORC file is segmented into stripes and rowgroups.
