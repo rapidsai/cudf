@@ -103,14 +103,31 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
     gdf = cudf.from_pandas(pdf)
 
     got = gdf.stack()
-
     expect = pdf.stack()
-    if {None} == set(expect.index.names):
-        expect.rename_axis(
-            list(range(0, len(expect.index.names))), inplace=True
-        )
 
     assert_eq(expect, got)
+
+
+def test_df_stack_reset_index():
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4],
+            "b": [10, 11, 12, 13],
+            "c": ["ab", "cd", None, "gh"],
+        }
+    )
+    df = df.set_index(["a", "b"])
+    pdf = df.to_pandas()
+
+    expected = pdf.stack()
+    actual = df.stack()
+
+    assert_eq(expected, actual)
+
+    expected = expected.reset_index()
+    actual = actual.reset_index()
+
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("num_rows", [1, 2, 10, 1000])
