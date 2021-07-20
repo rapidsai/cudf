@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import pickle
-from typing import Sequence, cast
+from typing import Sequence
 
 import numpy as np
 import pyarrow as pa
@@ -288,27 +288,21 @@ class ListColumn(ColumnBase):
         """
         data_col = column.column_empty(0)
         mask_col = []
-        lengths_col = []
+        offset_col = [0]
+        offset = 0
 
-        # Build Data & Mask
+        # Build Data, Mask & Offsets
         for data in arbitrary:
             if cudf._lib.scalar._is_null_host_scalar(data):
                 mask_col.append(False)
-                lengths_col.append(0)
+                offset_col.append(offset)
             else:
                 mask_col.append(True)
                 data_col = data_col.append(as_column(data))
-                lengths_col.append(len(data))
+                offset += len(data)
+                offset_col.append(offset)
 
-        # Build offsets
-        offset_col = column.column_empty(
-            row_count=len(arbitrary) + 1, dtype="int32"
-        )
-        offset_col[0] = 0
-        offset_col[1:] = lengths_col
-        offset_col = cast(
-            cudf.core.column.NumericalColumn, offset_col
-        )._apply_scan_op("sum")
+        offset_col = column.as_column(offset_col, dtype="int32")
 
         # Build ListColumn
         res = cls(
