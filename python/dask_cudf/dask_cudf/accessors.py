@@ -23,13 +23,15 @@ class StructMethods:
         0    1
         1    3
         dtype: int64
-        >>> ds.struct.field('a')
+        >>> ds.struct.field('a').compute()
         0    1
         1    3
         dtype: int64
         """
+        typ = self.d_series._meta.dtype.fields[key]
         return self.d_series.map_partitions(
-            lambda s: s.struct.field(key), meta=self.d_series._meta
+            lambda s: s.struct.field(key),
+            meta=self.d_series._meta._constructor([], dtype=typ),
         )
 
 class ListMethods:
