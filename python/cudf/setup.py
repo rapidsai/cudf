@@ -218,7 +218,7 @@ setup(
         extensions,
         nthreads=nthreads,
         compiler_directives=dict(
-            profile=False, language_level=3, embedsignature=True, binding=True
+            profile=False, language_level=3, embedsignature=True
         ),
     ),
     packages=find_packages(include=["cudf", "cudf.*"]),
