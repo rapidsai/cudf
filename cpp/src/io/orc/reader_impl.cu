@@ -1045,6 +1045,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           auto dst_base = static_cast<uint8_t*>(stripe_data.back().data());
 
           // Coalesce consecutive streams into one read
+          std::vector<std::pair<std::future<size_t>, size_t>> read_tasks;
           while (stream_count < stream_info.size()) {
             const auto d_dst  = dst_base + stream_info[stream_count].dst_pos;
             const auto offset = stream_info[stream_count].offset;
@@ -1058,10 +1059,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             }
             if (_metadata->per_file_metadata[stripe_source_mapping.source_idx]
                   .source->is_device_read_preferred(len)) {
-              CUDF_EXPECTS(
-                _metadata->per_file_metadata[stripe_source_mapping.source_idx].source->device_read(
-                  offset, len, d_dst, stream) == len,
-                "Unexpected discrepancy in bytes read.");
+              read_tasks.push_back(
+                std::make_pair(_metadata->per_file_metadata[stripe_source_mapping.source_idx]
+                                 .source->device_read_async(offset, len, d_dst, stream),
+                               len));
+
             } else {
               const auto buffer =
                 _metadata->per_file_metadata[stripe_source_mapping.source_idx].source->host_read(
@@ -1071,6 +1073,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                 d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
               stream.synchronize();
             }
+          }
+          for (auto& task : read_tasks) {
+            CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
           }
 
           const auto num_rows_per_stripe = stripe_info->numberOfRows;
