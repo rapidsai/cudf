@@ -204,3 +204,57 @@ def test_dataframe_to_struct():
     # check that a copy was made:
     df["a"][0] = 5
     assert_eq(got, expect)
+
+
+@pytest.mark.parametrize(
+    "series, start, end",
+    [
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": 1},
+                {},
+                None,
+            ],
+            1,
+            None,
+        ),
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": 1},
+                {},
+                None,
+                {"d": ["Hello", "rapids"]},
+                None,
+                cudf.NA,
+            ],
+            1,
+            5,
+        ),
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": 1},
+                {},
+                None,
+                {"c": 5},
+                None,
+                cudf.NA,
+            ],
+            None,
+            4,
+        ),
+    ],
+)
+def test_struct_slice(series, start, end):
+    sr = cudf.Series(series)
+    if not end:
+        expected = cudf.Series(series[start:])
+        assert sr[start:].to_arrow() == expected.to_arrow()
+    elif not start:
+        expected = cudf.Series(series[:end])
+        assert sr[:end].to_arrow() == expected.to_arrow()
+    else:
+        expected = cudf.Series(series[start:end])
+        assert sr[start:end].to_arrow() == expected.to_arrow()
