@@ -212,7 +212,7 @@ Data Type                   Accessor
 Datetime, Timedelta         :ref:`dt <api.series.dt>`
 String                      :ref:`str <api.series.str>`
 Categorical                 :ref:`cat <api.series.cat>`
-Sparse                      :ref:`sparse <api.series.sparse>`
+List                        :ref:`list <api.series.list>`
 =========================== =================================
 
 .. _api.series.dt:
@@ -395,6 +395,27 @@ the ``Series.cat`` accessor.
    as_ordered
    as_unordered
 
+
+.. _api.series.list:
+
+List handling
+~~~~~~~~~~~~~
+
+``Series.list`` can be used to access the values of the series as
+lists and apply list methods to it. These can be accessed like
+``Series.list.<function/property>``.
+
+.. currentmodule:: cudf.core.column.lists.ListMethods
+.. autosummary::
+   :toctree: api/
+
+   concat
+   contains
+   get
+   len
+   sort_values
+   take
+   unique
 
 
 Serialization / IO / conversion
