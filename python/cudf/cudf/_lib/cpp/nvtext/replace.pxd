@@ -2,10 +2,10 @@
 
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.cpp.types cimport size_type
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
+from cudf._lib.cpp.types cimport size_type
 
 
 cdef extern from "nvtext/replace.hpp" namespace "nvtext" nogil:

@@ -2,13 +2,13 @@
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-from cudf._lib.cpp.column.column_view cimport column_view
+
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
-
+from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.strings.convert.convert_urls cimport (
-    url_encode as cpp_url_encode,
     url_decode as cpp_url_decode,
+    url_encode as cpp_url_encode,
 )
 
 

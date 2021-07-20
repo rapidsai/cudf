@@ -34,6 +34,8 @@
 #include <numeric>
 #include <random>
 
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
+
 template <typename T>
 class RepeatTypedTestFixture : public cudf::test::BaseFixture,
                                cudf::test::UniformRandomGenerator<cudf::size_type> {
@@ -67,7 +69,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
   auto const p_ret = cudf::repeat(input_table, repeat_count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected, verbosity);
 }
 
 TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
