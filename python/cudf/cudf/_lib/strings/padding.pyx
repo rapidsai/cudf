@@ -2,19 +2,22 @@
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from enum import IntEnum
-from libcpp.string cimport string
-from cudf._lib.cpp.column.column cimport column
 
+from enum import IntEnum
+
+from libcpp.string cimport string
+
+from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.strings.padding cimport (
     pad as cpp_pad,
+    pad_side as pad_side,
     zfill as cpp_zfill,
-    pad_side as pad_side
 )
 from cudf._lib.strings.padding cimport underlying_type_t_pad_side
 

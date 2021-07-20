@@ -1,25 +1,24 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from cudf._lib.cpp.types cimport size_type
-from cudf._lib.column cimport Column
-from libcpp.memory cimport unique_ptr
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.scalar cimport DeviceScalar
 from libcpp.string cimport string
-from cudf._lib.table cimport Table
+from libcpp.utility cimport move
 
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.strings.combine cimport (
     concatenate as cpp_concatenate,
-    join_strings as cpp_join_strings,
     join_list_elements as cpp_join_list_elements,
+    join_strings as cpp_join_strings,
+    output_if_empty_list as output_if_empty_list,
     separator_on_nulls as separator_on_nulls,
-    output_if_empty_list as output_if_empty_list
 )
+from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.types cimport size_type
+from cudf._lib.scalar cimport DeviceScalar
+from cudf._lib.table cimport Table
 
 
 def concatenate(Table source_strings,

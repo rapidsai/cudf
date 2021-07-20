@@ -1430,6 +1430,7 @@ def build_column(
             data=data,
             dtype=dtype,
             size=size,
+            offset=offset,
             mask=mask,
             null_count=null_count,
             children=children,

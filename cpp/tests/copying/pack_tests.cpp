@@ -444,32 +444,59 @@ TEST_F(PackUnpackTest, NestedEmpty)
 
 TEST_F(PackUnpackTest, NestedSliced)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  // list
+  {
+    auto valids =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
-  using LCW = cudf::test::lists_column_wrapper<int>;
+    using LCW = cudf::test::lists_column_wrapper<int>;
 
-  cudf::test::lists_column_wrapper<int> col0{{{{1, 2, 3}, valids}, {4, 5}},
-                                             {{LCW{}, LCW{}, {7, 8}, LCW{}}, valids},
-                                             {{6, 12}},
-                                             {{{7, 8}, {{9, 10, 11}, valids}, LCW{}}, valids},
-                                             {{LCW{}, {-1, -2, -3, -4, -5}}, valids},
-                                             {LCW{}},
-                                             {{-10}, {-100, -200}}};
+    cudf::test::lists_column_wrapper<int> col0{{{{1, 2, 3}, valids}, {4, 5}},
+                                               {{LCW{}, LCW{}, {7, 8}, LCW{}}, valids},
+                                               {{6, 12}},
+                                               {{{7, 8}, {{9, 10, 11}, valids}, LCW{}}, valids},
+                                               {{LCW{}, {-1, -2, -3, -4, -5}}, valids},
+                                               {LCW{}},
+                                               {{-10}, {-100, -200}}};
 
-  cudf::test::strings_column_wrapper col1{
-    "Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant", "Fred"};
-  cudf::test::fixed_width_column_wrapper<float> col2{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f};
+    cudf::test::strings_column_wrapper col1{
+      "Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant", "Fred"};
+    cudf::test::fixed_width_column_wrapper<float> col2{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f};
 
-  std::vector<std::unique_ptr<cudf::column>> children;
-  children.push_back(std::make_unique<cudf::column>(col2));
-  children.push_back(std::make_unique<cudf::column>(col0));
-  children.push_back(std::make_unique<cudf::column>(col1));
-  auto col3 = cudf::make_structs_column(
-    static_cast<cudf::column_view>(col0).size(), std::move(children), 0, rmm::device_buffer{});
+    std::vector<std::unique_ptr<cudf::column>> children;
+    children.push_back(std::make_unique<cudf::column>(col2));
+    children.push_back(std::make_unique<cudf::column>(col0));
+    children.push_back(std::make_unique<cudf::column>(col1));
+    auto col3 = cudf::make_structs_column(
+      static_cast<cudf::column_view>(col0).size(), std::move(children), 0, rmm::device_buffer{});
 
-  cudf::table_view t({col0, col1, col2, *col3});
-  this->run_test(t);
+    cudf::table_view t({col0, col1, col2, *col3});
+    this->run_test(t);
+  }
+
+  // struct
+  {
+    cudf::test::fixed_width_column_wrapper<int> a{0, 1, 2, 3, 4, 5, 6, 7};
+    cudf::test::fixed_width_column_wrapper<float> b{{0, -1, -2, -3, -4, -5, -6, -7},
+                                                    {1, 1, 1, 0, 0, 0, 0, 1}};
+    cudf::test::strings_column_wrapper c{{"abc", "def", "ghi", "jkl", "mno", "", "st", "uvwx"},
+                                         {0, 0, 1, 1, 1, 1, 1, 1}};
+    std::vector<bool> list_validity{1, 0, 1, 0, 1, 0, 1, 1};
+    cudf::test::lists_column_wrapper<int16_t> d{
+      {{0, 1}, {2, 3, 4}, {5, 6}, {7}, {8, 9, 10}, {11, 12}, {}, {15, 16, 17}},
+      list_validity.begin()};
+    cudf::test::fixed_width_column_wrapper<int> _a{10, 20, 30, 40, 50, 60, 70, 80};
+    cudf::test::fixed_width_column_wrapper<float> _b{-10, -20, -30, -40, -50, -60, -70, -80};
+    cudf::test::strings_column_wrapper _c{"aa", "", "ccc", "dddd", "eeeee", "f", "gg", "hhh"};
+    cudf::test::structs_column_wrapper e({_a, _b, _c}, {1, 1, 1, 0, 1, 1, 1, 0});
+    cudf::test::structs_column_wrapper s({a, b, c, d, e}, {1, 1, 0, 1, 1, 1, 1, 1});
+
+    auto split = cudf::split(s, {2, 5});
+
+    this->run_test(cudf::table_view({split[0]}));
+    this->run_test(cudf::table_view({split[1]}));
+    this->run_test(cudf::table_view({split[2]}));
+  }
 }
 
 TEST_F(PackUnpackTest, EmptyTable)
@@ -488,6 +515,28 @@ TEST_F(PackUnpackTest, EmptyTable)
     cudf::table_view t({a, b, c});
     this->run_test(t);
   }
+}
+
+TEST_F(PackUnpackTest, SlicedEmpty)
+{
+  // empty sliced column. this is specifically testing the corner case:
+  // - a sliced column of size 0
+  // - having children that are of size > 0
+  //
+  cudf::test::strings_column_wrapper a{"abc", "def", "ghi", "jkl", "mno", "", "st", "uvwx"};
+  cudf::test::lists_column_wrapper<int> b{
+    {0, 1}, {2}, {3, 4, 5}, {6, 7}, {8, 9}, {10}, {11, 12}, {13, 14}};
+  cudf::test::fixed_width_column_wrapper<float> c{0, 1, 2, 3, 4, 5, 6, 7};
+  cudf::test::strings_column_wrapper _a{"abc", "def", "ghi", "jkl", "mno", "", "st", "uvwx"};
+  cudf::test::lists_column_wrapper<float> _b{
+    {0, 1}, {2}, {3, 4, 5}, {6, 7}, {8, 9}, {10}, {11, 12}, {13, 14}};
+  cudf::test::fixed_width_column_wrapper<float> _c{0, 1, 2, 3, 4, 5, 6, 7};
+  cudf::test::structs_column_wrapper d({_a, _b, _c});
+
+  cudf::table_view t({a, b, c, d});
+
+  auto sliced = cudf::split(t, {0});
+  this->run_test(sliced[0]);
 }
 
 // clang-format on

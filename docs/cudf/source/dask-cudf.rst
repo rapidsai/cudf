@@ -39,9 +39,9 @@ What works
    -  Like ``sum``, ``mean``, ``max``, ``count``, and so on on
       ``Series`` objects
    -  Support for reductions on full dataframes
-   -  \ ``std``\ 
+   -  \ ``std``\
    -  Custom reductions with
-      `dask.dataframe.reduction <http://docs.dask.org/en/latest/dataframe-api.html#dask.dataframe.Series.reduction>`__
+      `dask.dataframe.reduction <http://docs.dask.org/en/latest/generated/dask.dataframe.Series.reduction.html>`__
 
 -  Groupby aggregations
 

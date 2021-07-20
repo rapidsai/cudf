@@ -2975,17 +2975,22 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             result = self
         else:
             result = self.copy()
-        if all(name is None for name in self.index.names):
-            if isinstance(self.index, cudf.MultiIndex):
-                names = tuple(
-                    f"level_{i}" for i, _ in enumerate(self.index.names)
-                )
-            else:
-                names = ("index",)
-        else:
-            names = self.index.names
 
         if not drop:
+            if isinstance(self.index, cudf.MultiIndex):
+                names = tuple(
+                    name if name is not None else f"level_{i}"
+                    for i, name in enumerate(self.index.names)
+                )
+            else:
+                if self.index.name is None:
+                    if "index" in self._data.names:
+                        names = ("level_0",)
+                    else:
+                        names = ("index",)
+                else:
+                    names = (self.index.name,)
+
             index_columns = self.index._data.columns
             for name, index_column in zip(
                 reversed(names), reversed(index_columns)
@@ -4588,6 +4593,177 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # Run query
             boolmask = queryutils.query_execute(self, expr, callenv)
             return self._apply_boolean_mask(boolmask)
+
+    def apply(self, func, axis=1):
+        """
+        Apply a function along an axis of the DataFrame.
+
+        Designed to mimic `pandas.DataFrame.apply`. Applies a user
+        defined function row wise over a dataframe, with true null
+        handling. Works with UDFs using `core.udf.pipeline.nulludf`
+        and returns a single series. Uses numba to jit compile the
+        function to PTX via LLVM.
+
+        Parameters
+        ----------
+        func : function
+            Function to apply to each row.
+
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Axis along which the function is applied:
+            * 0 or 'index': apply function to each column.
+              Note: axis=0 is not yet supported.
+            * 1 or 'columns': apply function to each row.
+
+        Examples
+        --------
+
+        Simple function of a single variable which could be NA
+
+        >>> from cudf.core.udf.pipeline import nulludf
+        >>> @nulludf
+        ... def f(x):
+        ...     if x is cudf.NA:
+        ...             return 0
+        ...     else:
+        ...             return x + 1
+        ...
+        >>> df = cudf.DataFrame({'a': [1, cudf.NA, 3]})
+        >>> df.apply(lambda row: f(row['a']))
+        0    2
+        1    0
+        2    4
+        dtype: int64
+
+        Function of multiple variables will operate in
+        a null aware manner
+
+        >>> @nulludf
+        ... def f(x, y):
+        ...     return x - y
+        ...
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, cudf.NA, 3, cudf.NA],
+        ...     'b': [5, 6, cudf.NA, cudf.NA]
+        ... })
+        >>> df.apply(lambda row: f(row['a'], row['b']))
+        0      -4
+        1    <NA>
+        2    <NA>
+        3    <NA>
+        dtype: int64
+
+        Functions may conditionally return NA as in pandas
+
+        >>> @nulludf
+        ... def f(x, y):
+        ...     if x + y > 3:
+        ...             return cudf.NA
+        ...     else:
+        ...             return x + y
+        ...
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [2, 1, 1]
+        ... })
+        >>> df.apply(lambda row: f(row['a'], row['b']))
+        0       3
+        1       3
+        2    <NA>
+        dtype: int64
+
+        Mixed types are allowed, but will return the common
+        type, rather than object as in pandas
+
+        >>> @nulludf
+        ... def f(x, y):
+        ...     return x + y
+        ...
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [0.5, cudf.NA, 3.14]
+        ... })
+        >>> df.apply(lambda row: f(row['a'], row['b']))
+        0     1.5
+        1    <NA>
+        2    6.14
+        dtype: float64
+
+        Functions may also return scalar values, however the
+        result will be promoted to a safe type regardless of
+        the data
+
+        >>> @nulludf
+        ... def f(x):
+        ...     if x > 3:
+        ...             return x
+        ...     else:
+        ...             return 1.5
+        ...
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, 3, 5]
+        ... })
+        >>> df.apply(lambda row: f(row['a']))
+        0    1.5
+        1    1.5
+        2    5.0
+        dtype: float64
+
+        Ops against N columns are supported generally
+
+        >>> @nulludf
+        ... def f(v, w, x, y, z):
+        ...     return x + (y - (z / w)) % v
+        ...
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [cudf.NA, 4, 4],
+        ...     'd': [8, 7, 8],
+        ...     'e': [7, 1, 6]
+        ... })
+        >>> df.apply(
+        ...     lambda row: f(
+        ...             row['a'],
+        ...             row['b'],
+        ...             row['c'],
+        ...             row['d'],
+        ...             row['e']
+        ...     )
+        ... )
+        0    <NA>
+        1     4.8
+        2     5.0
+        dtype: float64
+
+        Notes
+        -----
+        Available only using cuda 11.1+ due to particular required
+        runtime compilation features
+        """
+
+        # libcudacxx tuples are not compatible with nvrtc 11.0
+        runtime = cuda.cudadrv.runtime.Runtime()
+        mjr, mnr = runtime.get_version()
+        if mjr < 11 or (mjr == 11 and mnr < 1):
+            raise RuntimeError("DataFrame.apply requires CUDA 11.1+")
+
+        for dtype in self.dtypes:
+            if (
+                isinstance(dtype, cudf.core.dtypes._BaseDtype)
+                or dtype == "object"
+            ):
+                raise TypeError(
+                    "DataFrame.apply currently only "
+                    "supports non decimal numeric types"
+                )
+
+        if axis != 1:
+            raise ValueError(
+                "DataFrame.apply currently only supports row wise ops"
+            )
+
+        return cudf.Series(func(self))
 
     @applyutils.doc_apply()
     def apply_rows(
@@ -7312,8 +7488,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         repeated_index = self.index.repeat(self.shape[1])
         name_index = Frame({0: self._column_names}).tile(self.shape[0])
         new_index = list(repeated_index._columns) + [name_index._columns[0]]
+        if isinstance(self._index, cudf.MultiIndex):
+            index_names = self._index.names + [None]
+        else:
+            index_names = [None] * len(new_index)
         new_index = cudf.core.multiindex.MultiIndex.from_frame(
-            DataFrame(dict(zip(range(0, len(new_index)), new_index)))
+            DataFrame(dict(zip(range(0, len(new_index)), new_index))),
+            names=index_names,
         )
 
         # Collect datatypes and cast columns as that type

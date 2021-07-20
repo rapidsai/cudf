@@ -1388,6 +1388,10 @@ class Frame(libcudf.table.Table):
             )
         )
         result._copy_type_metadata(frame)
+        if self._index is not None:
+            result._index.name = self._index.name
+            if isinstance(self._index, cudf.MultiIndex):
+                result._index.names = self._index.names
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -1462,6 +1466,17 @@ class Frame(libcudf.table.Table):
         )
 
         result._copy_type_metadata(self)
+        return result
+
+    @annotate("APPLY", color="purple", domain="cudf_python")
+    def _apply(self, func):
+        """
+        Apply `func` across the rows of the frame.
+        """
+        output_dtype, ptx = cudf.core.udf.pipeline.compile_masked_udf(
+            func, self.dtypes
+        )
+        result = cudf._lib.transform.masked_udf(self, ptx, output_dtype)
         return result
 
     def rank(
@@ -3245,6 +3260,8 @@ class Frame(libcudf.table.Table):
 
     def _encode(self):
         data, index, indices = libcudf.transform.table_encode(self)
+        for name, col in data.items():
+            data[name] = col._with_type_metadata(self._data[name].dtype)
         keys = self.__class__._from_data(data, index)
         return keys, indices
 
@@ -3375,6 +3392,30 @@ class Frame(libcudf.table.Table):
             col,
             (left_column, right_column, reflect, fill_value),
         ) in operands.items():
+
+            # Handle object columns that are empty or
+            # all nulls when performing binary operations
+            if (
+                left_column.dtype == "object"
+                and left_column.null_count == len(left_column)
+                and fill_value is None
+            ):
+                if fn in (
+                    "add",
+                    "sub",
+                    "mul",
+                    "mod",
+                    "pow",
+                    "truediv",
+                    "floordiv",
+                ):
+                    output[col] = left_column
+                elif fn in ("eq", "lt", "le", "gt", "ge"):
+                    output[col] = left_column.notnull()
+                elif fn == "ne":
+                    output[col] = left_column.isnull()
+                continue
+
             if right_column is cudf.NA:
                 right_column = cudf.Scalar(
                     right_column, dtype=left_column.dtype
