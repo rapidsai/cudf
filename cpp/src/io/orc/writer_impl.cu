@@ -432,15 +432,24 @@ void writer::impl::build_dictionaries(orc_table_view& orc_table,
 constexpr size_t RLE_stream_size(TypeKind kind, size_t count)
 {
   using cudf::util::div_rounding_up_unsafe;
+  constexpr auto byte_rle_max_len = 128;
   switch (kind) {
-    case TypeKind::BOOLEAN: return div_rounding_up_unsafe(count, 1024) * (128 + 1);
-    case TypeKind::BYTE: return div_rounding_up_unsafe(count, 128) * (128 + 1);
-    case TypeKind::SHORT: return div_rounding_up_unsafe(count, 512) * (512 * 2 + 2);
+    case TypeKind::BOOLEAN:
+      return div_rounding_up_unsafe(count, byte_rle_max_len * 8) * (byte_rle_max_len + 1);
+    case TypeKind::BYTE:
+      return div_rounding_up_unsafe(count, byte_rle_max_len) * (byte_rle_max_len + 1);
+    case TypeKind::SHORT:
+      return div_rounding_up_unsafe(count, gpu::encode_block_size) *
+             (gpu::encode_block_size * sizeof(int16_t) + 2);
     case TypeKind::FLOAT:
     case TypeKind::INT:
-    case TypeKind::DATE: return div_rounding_up_unsafe(count, 512) * (512 * 4 + 2);
+    case TypeKind::DATE:
+      return div_rounding_up_unsafe(count, gpu::encode_block_size) *
+             (gpu::encode_block_size * sizeof(int32_t) + 2);
     case TypeKind::LONG:
-    case TypeKind::DOUBLE: return div_rounding_up_unsafe(count, 512) * (512 * 8 + 2);
+    case TypeKind::DOUBLE:
+      return div_rounding_up_unsafe(count, gpu::encode_block_size) *
+             (gpu::encode_block_size * sizeof(int64_t) + 2);
     default: CUDF_FAIL("Unsupported ORC type for RLE stream size");
   }
 }
@@ -1143,7 +1152,8 @@ void __device__ append_orc_device_column(uint32_t& idx,
   cols[current_idx]      = orc_column_device_view{col, parent_idx};
   idx++;
   if (col.type().id() == type_id::LIST) {
-    append_orc_device_column(idx, current_idx, cols, col.child(1));
+    append_orc_device_column(
+      idx, current_idx, cols, col.child(lists_column_view::child_column_index));
   }
   if (col.type().id() == type_id::STRUCT) {
     for (auto child_idx = 0; child_idx < col.num_child_columns(); ++child_idx) {
@@ -1167,7 +1177,8 @@ orc_table_view make_orc_table_view(table_view const& table,
     auto const& new_col =
       orc_columns.emplace_back(orc_columns.size(), str_idx, index_in_table, col, user_metadata);
     if (new_col.is_string()) { str_col_indexes.push_back(new_col.index()); }
-    if (col.type().id() == type_id::LIST) append_orc_column(col.child(1), -1);
+    if (col.type().id() == type_id::LIST)
+      append_orc_column(col.child(lists_column_view::child_column_index), -1);
     if (col.type().id() == type_id::STRUCT)
       for (auto child = col.child_begin(); child != col.child_end(); ++child)
         append_orc_column(*child, -1);

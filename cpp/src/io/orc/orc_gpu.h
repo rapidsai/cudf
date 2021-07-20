@@ -196,6 +196,8 @@ struct StripeDictionary {
   column_device_view const* leaf_column;  //!< Pointer to string column
 };
 
+constexpr uint32_t encode_block_size = 512;
+
 /**
  * @brief Launches kernel for parsing the compressed stripe data
  *

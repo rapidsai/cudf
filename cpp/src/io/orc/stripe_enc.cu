@@ -624,7 +624,7 @@ static const __device__ __constant__ int32_t kTimeScale[10] = {
  * @param[in] chunks encoder chunks device array [column][rowgroup]
  * @param[in, out] streams chunk streams device array [column][rowgroup]
  */
-// blockDim {512,1,1}
+// blockDim {`encode_block_size`,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
   gpuEncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
@@ -664,7 +664,7 @@ __global__ void __launch_bounds__(block_size)
 
   auto validity_byte = [&] __device__(int row) -> uint8_t& {
     // valid_buf is a circular buffer where validitiy of 8 rows is stored in each element
-    return s->valid_buf[(row / 8) % 512];
+    return s->valid_buf[(row / 8) % encode_block_size];
   };
 
   auto validity = [&] __device__(int row) -> uint32_t {
@@ -677,8 +677,9 @@ __global__ void __launch_bounds__(block_size)
     // Encode valid map
     if (s->present_rows < s->chunk.num_rows) {
       uint32_t present_rows = s->present_rows;
-      uint32_t nrows        = min(s->chunk.num_rows - present_rows,
-                           512 * 8 - (present_rows - (min(s->cur_row, s->present_out) & ~7)));
+      uint32_t nrows =
+        min(s->chunk.num_rows - present_rows,
+            encode_block_size * 8 - (present_rows - (min(s->cur_row, s->present_out) & ~7)));
       uint32_t nrows_out;
       if (t * 8 < nrows) {
         auto const row_in_group = present_rows + t * 8;
@@ -733,13 +734,14 @@ __global__ void __launch_bounds__(block_size)
     } else if (s->cur_row < s->present_rows) {
       uint32_t maxnumvals = (s->chunk.type_kind == BOOLEAN) ? 2048 : 1024;
       uint32_t nrows =
-        min(min(s->present_rows - s->cur_row, maxnumvals - max(s->numvals, s->numlengths)), 512);
+        min(min(s->present_rows - s->cur_row, maxnumvals - max(s->numvals, s->numlengths)),
+            encode_block_size);
       auto const row_in_group = s->cur_row + t;
       uint32_t const valid    = (t < nrows) ? validity(row_in_group) : 0;
       s->buf.u32[t]           = valid;
 
       // TODO: Could use a faster reduction relying on _popc() for the initial phase
-      lengths_to_positions(s->buf.u32, 512, t);
+      lengths_to_positions(s->buf.u32, encode_block_size, t);
       __syncthreads();
       auto const row = s->chunk.start_row + row_in_group;
       if (valid) {
@@ -1227,9 +1229,10 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
                          device_2dspan<encoder_chunk_streams> streams,
                          rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(512, 1);  // 512 threads per chunk
+  dim3 dim_block(encode_block_size, 1);  // `encode_block_size` threads per chunk
   dim3 dim_grid(chunks.size().first, chunks.size().second);
-  gpuEncodeOrcColumnData<512><<<dim_grid, dim_block, 0, stream.value()>>>(chunks, streams);
+  gpuEncodeOrcColumnData<encode_block_size>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, streams);
 }
 
 void EncodeStripeDictionaries(StripeDictionary const* stripes,
