@@ -8,14 +8,6 @@
     content: ":";
 }
 
-.highlight:hover span#strike_button {
-    color:#767676;
-}
-
-span#strike_button {
-    color :#d0ced7;
-}
-
 /* Fix for text wrap in sphinx tables:
  * https://rackerlabs.github.io/docs-rackspace/tools/rtd-tables.html 
  */
