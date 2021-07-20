@@ -200,3 +200,7 @@ def test_dataframe_to_struct():
     )
     got = df.to_struct()
     assert_eq(expect, got)
+
+    # check that a copy was made:
+    df["a"][0] = 5
+    assert_eq(got, expect)
