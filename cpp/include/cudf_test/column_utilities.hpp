@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,13 +27,28 @@
 
 namespace cudf {
 namespace test {
+
+/**
+ * @brief Verbosity level of output from column and table comparison functions.
+ */
+enum class debug_output_level {
+  FIRST_ERROR = 0,  // print first error only
+  ALL_ERRORS,       // print all errors
+  QUIET             // no debug output
+};
+
 /**
  * @brief Verifies the property equality of two columns.
  *
  * @param lhs The first column
  * @param rhs The second column
+ * @param verbosity Level of debug output verbosity
+ *
+ * @returns True if the column properties are equal, false otherwise
  */
-void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_view const& rhs);
+bool expect_column_properties_equal(cudf::column_view const& lhs,
+                                    cudf::column_view const& rhs,
+                                    debug_output_level verbosity = debug_output_level::FIRST_ERROR);
 
 /**
  * @brief Verifies the property equivalence of two columns.
@@ -44,22 +59,29 @@ void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_v
  *
  * @param lhs The first column
  * @param rhs The second column
+ * @param verbosity Level of debug output verbosity
+ *
+ * @returns True if the column properties are equivalent, false otherwise
  */
-void expect_column_properties_equivalent(cudf::column_view const& lhs,
-                                         cudf::column_view const& rhs);
+bool expect_column_properties_equivalent(
+  cudf::column_view const& lhs,
+  cudf::column_view const& rhs,
+  debug_output_level verbosity = debug_output_level::FIRST_ERROR);
 
 /**
  * @brief Verifies the element-wise equality of two columns.
  *
  * Treats null elements as equivalent.
  *
- * @param lhs                   The first column
- * @param rhs                   The second column
- * @param print_all_differences If true display all differences
+ * @param lhs The first column
+ * @param rhs The second column
+ * @param verbosity Level of debug output verbosity
+ *
+ * @returns True if the columns (and their properties) are equal, false otherwise
  */
-void expect_columns_equal(cudf::column_view const& lhs,
+bool expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
-                          bool print_all_differences = false);
+                          debug_output_level verbosity = debug_output_level::FIRST_ERROR);
 
 /**
  * @brief Verifies the element-wise equivalence of two columns.
@@ -67,13 +89,15 @@ void expect_columns_equal(cudf::column_view const& lhs,
  * Uses machine epsilon to compare floating point types.
  * Treats null elements as equivalent.
  *
- * @param lhs                   The first column
- * @param rhs                   The second column
- * @param print_all_differences If true display all differences
+ * @param lhs The first column
+ * @param rhs The second column
+ * @param verbosity Level of debug output verbosity
+ *
+ * @returns True if the columns (and their properties) are equivalent, false otherwise
  */
-void expect_columns_equivalent(cudf::column_view const& lhs,
+bool expect_columns_equivalent(cudf::column_view const& lhs,
                                cudf::column_view const& rhs,
-                               bool print_all_differences = false);
+                               debug_output_level verbosity = debug_output_level::FIRST_ERROR);
 
 /**
  * @brief Verifies the bitwise equality of two device memory buffers.
