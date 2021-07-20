@@ -358,9 +358,8 @@ class traverse_children {
                       [](size_t a, auto const& b) -> size_t { return a + b.size(); }) +
       1;
     // note:  output text must include "exceeds size_type range" for python error handling
-    CUDF_EXPECTS(
-      total_offset_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-      "Total number of concatenated offsets exceeds size_type range");
+    CUDF_EXPECTS(total_offset_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
+                 "Total number of concatenated offsets exceeds size_type range");
   }
 };
 
@@ -382,7 +381,7 @@ void traverse_children::operator()<cudf::string_view>(host_span<column_view cons
                         cudf::detail::get_value<offset_type>(scv.offsets(), scv.offset(), stream));
     });
   // note:  output text must include "exceeds size_type range" for python error handling
-  CUDF_EXPECTS(total_char_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+  CUDF_EXPECTS(total_char_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
                "Total number of concatenated chars exceeds size_type range");
 }
 
@@ -453,7 +452,7 @@ void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_v
       return a + static_cast<size_t>(b.size());
     });
   // note:  output text must include "exceeds size_type range" for python error handling
-  CUDF_EXPECTS(total_row_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+  CUDF_EXPECTS(total_row_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
                "Total number of concatenated rows exceeds size_type range");
 
   // traverse children
