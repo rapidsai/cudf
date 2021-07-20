@@ -142,8 +142,6 @@ void inplace_bitmask_binop(
   stream.synchronize();
 }
 
-namespace {
-
 /**
  * For each range `[first_bit_indices[i], last_bit_indices[i])`
  * (where 0 <= i < `num_ranges`), count the number of bits set outside the range
@@ -247,8 +245,6 @@ struct word_num_set_bits_functor {
   }
   bitmask_type const* bitmask;
 };
-
-}  // anonymous namespace
 
 /**
  * @brief Given a bitmask, counts the number of set (1) bits in every range

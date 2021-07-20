@@ -1065,7 +1065,11 @@ class CategoricalColumn(column.ColumnBase):
         Return col with *to_replace* replaced with *replacement*.
         """
         to_replace_col = column.as_column(to_replace)
+        if len(to_replace_col) == to_replace_col.null_count:
+            to_replace_col = to_replace_col.astype(self.categories.dtype)
         replacement_col = column.as_column(replacement)
+        if len(replacement_col) == replacement_col.null_count:
+            replacement_col = replacement_col.astype(self.categories.dtype)
 
         if type(to_replace_col) != type(replacement_col):
             raise TypeError(
@@ -1073,12 +1077,40 @@ class CategoricalColumn(column.ColumnBase):
                 f"got to_replace dtype: {to_replace_col.dtype} and "
                 f"value dtype: {replacement_col.dtype}"
             )
+        df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
+        df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
+        if df._data["old"].null_count == 1:
+            fill_value = df._data["new"][df._data["old"].isna()][0]
+            if fill_value in self.categories:
+                replaced = self.fillna(fill_value)
+            else:
+                new_categories = self.categories.append(
+                    column.as_column([fill_value])
+                )
+                replaced = self.copy()
+                replaced = replaced._set_categories(new_categories)
+                replaced = replaced.fillna(fill_value)
+            df = df.dropna(subset=["old"])
+            to_replace_col = df._data["old"]
+            replacement_col = df._data["new"]
+        else:
+            replaced = self
+        if df._data["new"].null_count > 0:
+            drop_values = df._data["old"][df._data["new"].isna()]
+            cur_categories = replaced.categories
+            new_categories = cur_categories[
+                ~cudf.Series(cur_categories.isin(drop_values))
+            ]
+            replaced = replaced._set_categories(new_categories)
+            df = df.dropna(subset=["new"])
+            to_replace_col = df._data["old"]
+            replacement_col = df._data["new"]
 
         # create a dataframe containing the pre-replacement categories
         # and a copy of them to work with. The index of this dataframe
         # represents the original ints that map to the categories
         old_cats = cudf.DataFrame()
-        old_cats["cats"] = column.as_column(self.dtype.categories)
+        old_cats["cats"] = column.as_column(replaced.dtype.categories)
         new_cats = old_cats.copy(deep=True)
 
         # Create a column with the appropriate labels replaced
@@ -1100,9 +1132,9 @@ class CategoricalColumn(column.ColumnBase):
         # those categories don't exist anymore
         # Resetting the index creates a column 'index' that associates
         # the original integers to the new labels
-        bmask = new_cats["cats"]._column.notna()
+        bmask = new_cats._data["cats"].notna()
         new_cats = cudf.DataFrame(
-            {"cats": new_cats["cats"]._column.apply_boolean_mask(bmask)}
+            {"cats": new_cats._data["cats"].apply_boolean_mask(bmask)}
         ).reset_index()
 
         # old_cats contains replaced categories and the ints that
@@ -1116,11 +1148,11 @@ class CategoricalColumn(column.ColumnBase):
         # named 'index', which came from the filtered categories,
         # contains the new ints that we need to map to
         to_replace_col = column.as_column(catmap.index).astype(
-            self.codes.dtype
+            replaced.codes.dtype
         )
-        replacement_col = catmap["index"]._column.astype(self.codes.dtype)
+        replacement_col = catmap._data["index"].astype(replaced.codes.dtype)
 
-        replaced = column.as_column(self.codes)
+        replaced = column.as_column(replaced.codes)
         output = libcudf.replace.replace(
             replaced, to_replace_col, replacement_col
         )

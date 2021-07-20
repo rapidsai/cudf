@@ -241,7 +241,7 @@ class Series(SingleColumnFrame, Serializable):
         if isinstance(data, dict):
             index = data.keys()
             data = column.as_column(
-                data.values(), nan_as_null=nan_as_null, dtype=dtype
+                list(data.values()), nan_as_null=nan_as_null, dtype=dtype
             )
 
         if data is None:
@@ -1240,6 +1240,7 @@ class Series(SingleColumnFrame, Serializable):
             and not is_list_dtype(preprocess.dtype)
             and not is_struct_dtype(preprocess.dtype)
             and not is_decimal_dtype(preprocess.dtype)
+            and not is_struct_dtype(preprocess.dtype)
         ) or isinstance(
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
