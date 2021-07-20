@@ -43,7 +43,7 @@ template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };
 
-using RepresentationTypes = ::testing::Types<int32_t, int64_t>;
+using RepresentationTypes = ::testing::Types<int32_t, int64_t, __int128_t>;
 
 TYPED_TEST_CASE(FixedPointTestBothReps, RepresentationTypes);
 

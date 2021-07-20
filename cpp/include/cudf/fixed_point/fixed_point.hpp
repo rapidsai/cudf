@@ -48,7 +48,9 @@ enum class Radix : int32_t { BASE_2 = 2, BASE_10 = 10 };
 template <typename T>
 constexpr inline auto is_supported_representation_type()
 {
-  return cuda::std::is_same<T, int32_t>::value || cuda::std::is_same<T, int64_t>::value;
+  return cuda::std::is_same<T, int32_t>::value ||
+         cuda::std::is_same<T, int64_t>::value ||
+         cuda::std::is_same<T, __int128_t>::value;
 }
 
 template <typename T>
@@ -750,8 +752,9 @@ CUDA_HOST_DEVICE_CALLABLE bool operator>(fixed_point<Rep1, Rad1> const& lhs,
   return lhs.rescaled(scale)._value > rhs.rescaled(scale)._value;
 }
 
-using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
-using decimal64 = fixed_point<int64_t, Radix::BASE_10>;
+using decimal32  = fixed_point<int32_t, Radix::BASE_10>;
+using decimal64  = fixed_point<int64_t, Radix::BASE_10>;
+using decimal128 = fixed_point<__int128_t, Radix::BASE_10>;
 
 /** @} */  // end of group
 }  // namespace numeric
