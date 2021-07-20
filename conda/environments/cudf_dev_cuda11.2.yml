@@ -26,7 +26,6 @@ dependencies:
   - pytest-benchmark
   - pytest-xdist
   - sphinx
-  - sphinx_rtd_theme
   - sphinxcontrib-websupport
   - nbsphinx
   - numpydoc

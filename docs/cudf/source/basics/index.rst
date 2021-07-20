@@ -8,7 +8,6 @@ Basics
 
    basics
    io.rst
-   groupby.md
-   dask-cudf.md
-   internals.md
-
+   groupby.rst
+   dask-cudf.rst
+   internals.rst
