@@ -24,6 +24,7 @@ Operations that support the use of GPUDirect Storage:
 - `read_avro`
 - `read_parquet`
 - `read_orc`
+- `to_csv`
 - `to_parquet`
 - `to_orc`
 
