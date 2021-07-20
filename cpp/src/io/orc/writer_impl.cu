@@ -376,16 +376,16 @@ void writer::impl::build_dictionaries(orc_table_view& orc_table,
                                       hostdevice_2dvector<gpu::DictionaryChunk> const& dict,
                                       host_span<rmm::device_uvector<uint32_t>> dict_index,
                                       host_span<bool const> dictionary_enabled,
-                                      hostdevice_vector<gpu::StripeDictionary>& stripe_dict)
+                                      hostdevice_2dvector<gpu::StripeDictionary>& stripe_dict)
 {
   const auto num_rowgroups = dict.size().first;
 
   for (size_t dict_idx = 0; dict_idx < orc_table.num_string_columns(); ++dict_idx) {
     auto& str_column = orc_table.string_column(dict_idx);
-    str_column.attach_stripe_dict(stripe_dict.host_ptr(), stripe_dict.device_ptr());
+    str_column.attach_stripe_dict(stripe_dict.base_host_ptr(), stripe_dict.base_device_ptr());
 
     for (auto const& stripe : stripe_bounds) {
-      auto& sd           = stripe_dict[stripe.id * orc_table.num_string_columns() + dict_idx];
+      auto& sd           = stripe_dict[stripe.id][dict_idx];
       sd.dict_data       = str_column.host_dict_chunk(stripe.first)->dict_data;
       sd.dict_index      = dict_index[dict_idx].data();  // Indexed by abs row
       sd.column_id       = orc_table.string_column_indices[dict_idx];
@@ -418,20 +418,14 @@ void writer::impl::build_dictionaries(orc_table_view& orc_table,
       if (!dictionary_enabled[orc_table.string_column(dict_idx).index()] ||
           col_cost.dictionary >= col_cost.direct) {
         for (auto const& stripe : stripe_bounds) {
-          stripe_dict[stripe.id * orc_table.num_string_columns() + dict_idx].dict_data = nullptr;
+          stripe_dict[stripe.id][dict_idx].dict_data = nullptr;
         }
       }
     }
   }
 
   stripe_dict.host_to_device(stream);
-  gpu::BuildStripeDictionaries(stripe_dict.device_ptr(),
-                               stripe_dict.host_ptr(),
-                               dict.base_device_ptr(),
-                               stripe_bounds.size(),
-                               num_rowgroups,
-                               orc_table.string_column_indices.size(),
-                               stream);
+  gpu::BuildStripeDictionaries(stripe_dict, stripe_dict, dict, stream);
   stripe_dict.device_to_host(stream, true);
 }
 
@@ -1408,8 +1402,8 @@ void writer::impl::write(table_view const& table)
     calculate_segmentation(orc_table.columns, std::move(rowgroup_bounds), max_stripe_size_);
 
   // Build stripe-level dictionaries
-  const auto num_stripe_dict = segmentation.num_stripes() * orc_table.num_string_columns();
-  hostdevice_vector<gpu::StripeDictionary> stripe_dict(num_stripe_dict, stream);
+  hostdevice_2dvector<gpu::StripeDictionary> stripe_dict(
+    segmentation.num_stripes(), orc_table.num_string_columns(), stream);
   if (orc_table.num_string_columns() != 0) {
     build_dictionaries(orc_table,
                        segmentation.stripes,

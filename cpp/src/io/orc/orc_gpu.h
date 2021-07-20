@@ -35,6 +35,7 @@ namespace orc {
 namespace gpu {
 
 using cudf::detail::device_2dspan;
+using cudf::detail::host_2dspan;
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
@@ -388,20 +389,14 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns
 /**
  * @brief Launches kernel for building stripe dictionaries
  *
- * @param[in] stripes_dev StripeDictionary device array [stripe][column]
- * @param[in] stripes_host StripeDictionary host array [stripe][column]
+ * @param[in] d_stripes StripeDictionary device 2D array [stripe][column]
+ * @param[in] h_stripes StripeDictionary host 2D array [stripe][column]
  * @param[in] chunks DictionaryChunk device array [rowgroup][column]
- * @param[in] num_stripes Number of stripes
- * @param[in] num_rowgroups Number of row groups
- * @param[in] num_columns Number of columns
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
-void BuildStripeDictionaries(StripeDictionary* stripes_dev,
-                             StripeDictionary* stripes_host,
-                             DictionaryChunk const* chunks,
-                             uint32_t num_stripes,
-                             uint32_t num_rowgroups,
-                             uint32_t num_columns,
+void BuildStripeDictionaries(device_2dspan<StripeDictionary> d_stripes,
+                             host_2dspan<StripeDictionary const> h_stripes,
+                             device_2dspan<DictionaryChunk const> chunks,
                              rmm::cuda_stream_view stream);
 
 /**

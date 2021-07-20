@@ -248,7 +248,7 @@ class writer::impl {
                           hostdevice_2dvector<gpu::DictionaryChunk> const& dict,
                           host_span<rmm::device_uvector<uint32_t>> dict_index,
                           host_span<bool const> dictionary_enabled,
-                          hostdevice_vector<gpu::StripeDictionary>& stripe_dict);
+                          hostdevice_2dvector<gpu::StripeDictionary>& stripe_dict);
 
   /**
    * @brief Builds up per-column streams.

@@ -1109,7 +1109,7 @@ def dec(num):
         {"li": [[i] * 1100 for i in range(11000)]},
     ],
 )
-def test_orc_writer_list_merged(data):
+def test_orc_writer_lists(data):
     pdf_in = pd.DataFrame(data)
 
     buffer = BytesIO()

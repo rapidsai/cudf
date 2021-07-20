@@ -307,9 +307,8 @@ __global__ void __launch_bounds__(block_size, 2)
  */
 // blockDim {1024,1,1}
 extern "C" __global__ void __launch_bounds__(1024)
-  gpuCompactChunkDictionaries(StripeDictionary* stripes,
-                              DictionaryChunk const* chunks,
-                              uint32_t num_columns)
+  gpuCompactChunkDictionaries(device_2dspan<StripeDictionary> stripes,
+                              device_2dspan<DictionaryChunk const> chunks)
 {
   __shared__ __align__(16) StripeDictionary stripe_g;
   __shared__ __align__(16) DictionaryChunk chunk_g;
@@ -323,16 +322,16 @@ extern "C" __global__ void __launch_bounds__(1024)
   const uint32_t* src;
   uint32_t* dst;
 
-  if (t == 0) stripe_g = stripes[stripe_id * num_columns + col_id];
+  if (t == 0) stripe_g = stripes[stripe_id][col_id];
   __syncthreads();
   if (!stripe_g.dict_data) { return; }
-  if (t == 0) chunk_g = chunks[stripe_g.start_chunk * num_columns + col_id];
+  if (t == 0) chunk_g = chunks[stripe_g.start_chunk][col_id];
   __syncthreads();
   dst = stripe_g.dict_data + chunk_g.num_dict_strings;
   for (uint32_t g = 1; g < stripe_g.num_chunks; g++) {
     if (!t) {
-      src         = chunks[(stripe_g.start_chunk + g) * num_columns + col_id].dict_data;
-      chunk_len   = chunks[(stripe_g.start_chunk + g) * num_columns + col_id].num_dict_strings;
+      src         = chunks[stripe_g.start_chunk + g][col_id].dict_data;
+      chunk_len   = chunks[stripe_g.start_chunk + g][col_id].num_dict_strings;
       ck_curptr_g = src;
       ck_curlen_g = chunk_len;
     }
@@ -367,7 +366,7 @@ struct build_state_s {
 // blockDim {1024,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuBuildStripeDictionaries(StripeDictionary* stripes, uint32_t num_columns)
+  gpuBuildStripeDictionaries(device_2dspan<StripeDictionary> stripes)
 {
   __shared__ __align__(16) build_state_s state_g;
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
@@ -385,7 +384,7 @@ __global__ void __launch_bounds__(block_size)
   uint32_t dict_char_count;
   int t = threadIdx.x;
 
-  if (t == 0) s->stripe = stripes[stripe_id * num_columns + col_id];
+  if (t == 0) s->stripe = stripes[stripe_id][col_id];
   if (t == 31 * 32) { s->total_dupes = 0; }
   __syncthreads();
   num_strings = s->stripe.num_strings;
@@ -421,8 +420,8 @@ __global__ void __launch_bounds__(block_size)
   }
   dict_char_count = block_reduce(temp_storage.reduce_storage).Sum(dict_char_count);
   if (t == 0) {
-    stripes[stripe_id * num_columns + col_id].num_strings     = num_strings - s->total_dupes;
-    stripes[stripe_id * num_columns + col_id].dict_char_count = dict_char_count;
+    stripes[stripe_id][col_id].num_strings     = num_strings - s->total_dupes;
+    stripes[stripe_id][col_id].dict_char_count = dict_char_count;
   }
 }
 
@@ -445,35 +444,36 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns
 /**
  * @copydoc cudf::io::orc::gpu::BuildStripeDictionaries
  */
-void BuildStripeDictionaries(StripeDictionary* stripes,
-                             StripeDictionary* stripes_host,
-                             DictionaryChunk const* chunks,
-                             uint32_t num_stripes,
-                             uint32_t num_rowgroups,
-                             uint32_t num_columns,
+void BuildStripeDictionaries(device_2dspan<StripeDictionary> d_stripes_dicts,
+                             host_2dspan<StripeDictionary const> h_stripe_dicts,
+                             device_2dspan<DictionaryChunk const> chunks,
                              rmm::cuda_stream_view stream)
 {
+  auto const num_stripes = h_stripe_dicts.size().first;
+  auto const num_columns = h_stripe_dicts.size().second;
+
   dim3 dim_block(1024, 1);  // 1024 threads per chunk
   dim3 dim_grid_build(num_columns, num_stripes);
-  gpuCompactChunkDictionaries<<<dim_grid_build, dim_block, 0, stream.value()>>>(
-    stripes, chunks, num_columns);
-  for (uint32_t i = 0; i < num_stripes * num_columns; i++) {
-    if (stripes_host[i].dict_data != nullptr) {
-      thrust::device_ptr<uint32_t> dict_data_ptr =
-        thrust::device_pointer_cast(stripes_host[i].dict_data);
-      auto const string_column = stripes_host[i].leaf_column;
-      // NOTE: Requires the --expt-extended-lambda nvcc flag
-      thrust::sort(rmm::exec_policy(stream),
-                   dict_data_ptr,
-                   dict_data_ptr + stripes_host[i].num_strings,
-                   [string_column] __device__(const uint32_t& lhs, const uint32_t& rhs) {
-                     return string_column->element<string_view>(lhs) <
-                            string_column->element<string_view>(rhs);
-                   });
+  gpuCompactChunkDictionaries<<<dim_grid_build, dim_block, 0, stream.value()>>>(d_stripes_dicts,
+                                                                                chunks);
+  for (uint32_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
+    for (auto const& stripe_dict : h_stripe_dicts[stripe_idx]) {
+      if (stripe_dict.dict_data != nullptr) {
+        auto const dict_data_ptr = thrust::device_pointer_cast(stripe_dict.dict_data);
+        auto const string_column = stripe_dict.leaf_column;
+        // NOTE: Requires the --expt-extended-lambda nvcc flag
+        thrust::sort(rmm::exec_policy(stream),
+                     dict_data_ptr,
+                     dict_data_ptr + stripe_dict.num_strings,
+                     [string_column] __device__(const uint32_t& lhs, const uint32_t& rhs) {
+                       return string_column->element<string_view>(lhs) <
+                              string_column->element<string_view>(rhs);
+                     });
+      }
     }
   }
   gpuBuildStripeDictionaries<1024>
-    <<<dim_grid_build, dim_block, 0, stream.value()>>>(stripes, num_columns);
+    <<<dim_grid_build, dim_block, 0, stream.value()>>>(d_stripes_dicts);
 }
 
 }  // namespace gpu
