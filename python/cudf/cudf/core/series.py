@@ -1342,16 +1342,6 @@ class Series(SingleColumnFrame, Serializable):
         if isinstance(other, cudf.DataFrame):
             return NotImplemented
 
-        # Ignore empty object columns when performing arithmetic operations
-        if (
-            self.dtype == "object"
-            and self.isnull().all()
-            and fill_value is None
-            and fn
-            in ("add", "sub", "mul", "mod", "pow", "truediv", "floordiv")
-        ):
-            return self
-
         if isinstance(other, SingleColumnFrame):
             if (
                 # TODO: The can_reindex logic also needs to be applied for

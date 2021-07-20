@@ -37,6 +37,15 @@ _binops = [
     operator.pow,
 ]
 
+_binops_compare = [
+    operator.eq,
+    operator.ne,
+    operator.lt,
+    operator.le,
+    operator.gt,
+    operator.ge,
+]
+
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("binop", _binops)
@@ -2867,22 +2876,6 @@ def test_null_equals_columnops(lcol, rcol, ans, case):
     assert lcol._null_equals(rcol).all() == ans
 
 
-@pytest.mark.parametrize("binop", _binops)
-@pytest.mark.parametrize("data", [None, [-9, 7], [5, -2], [12, 18]])
-@pytest.mark.parametrize("scalar", [1, 3, 12, np.nan])
-def test_empty_column(binop, data, scalar):
-    gdf = cudf.DataFrame(columns=["a", "b"])
-    if data is not None:
-        gdf["a"] = data
-
-    pdf = gdf.to_pandas()
-
-    got = binop(gdf, scalar)
-    expected = binop(pdf, scalar)
-
-    utils.assert_eq(expected, got)
-
-
 def test_add_series_to_dataframe():
     """Verify that missing columns result in NaNs, not NULLs."""
     assert cp.all(
@@ -2904,3 +2897,19 @@ def test_binops_non_cudf_types(obj_class, binop, other_type):
     lhs = obj_class(data)
     rhs = other_type(data)
     assert cp.all((binop(lhs, rhs) == binop(lhs, lhs)).values)
+
+
+@pytest.mark.parametrize("binop", _binops + _binops_compare)
+@pytest.mark.parametrize("data", [None, [-9, 7], [5, -2], [12, 18]])
+@pytest.mark.parametrize("scalar", [1, 3, 12, np.nan])
+def test_empty_column(binop, data, scalar):
+    gdf = cudf.DataFrame(columns=["a", "b"])
+    if data is not None:
+        gdf["a"] = data
+
+    pdf = gdf.to_pandas()
+
+    got = binop(gdf, scalar)
+    expected = binop(pdf, scalar)
+
+    utils.assert_eq(expected, got)
