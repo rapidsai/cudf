@@ -426,7 +426,7 @@ struct typesAtomicCASImpl<T, 8> {
  * @returns The old value at `address`
  */
 template <typename T, typename BinaryOp>
-typename std::enable_if_t<cudf::is_numeric<T>() && not std::is_same<T, __int128_t>::value, T> __forceinline__ __device__
+typename std::enable_if_t<cudf::is_numeric<T>(), T> __forceinline__ __device__
 genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
 {
   auto fun = cudf::detail::genericAtomicOperationImpl<T, BinaryOp>{};

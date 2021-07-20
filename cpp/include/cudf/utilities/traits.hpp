@@ -152,7 +152,7 @@ constexpr inline bool is_equality_comparable()
 template <typename T>
 constexpr inline bool is_numeric()
 {
-  return std::is_integral<T>::value or std::is_floating_point<T>::value || std::is_same<T, __int128_t>::value;
+  return std::is_integral<T>::value or std::is_floating_point<T>::value or std::is_same<T, __int128_t>::value;
 }
 
 struct is_numeric_impl {
