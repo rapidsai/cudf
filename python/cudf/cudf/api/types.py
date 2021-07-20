@@ -162,7 +162,7 @@ def is_list_like(obj):
         Return True if given object is list-like.
     """
     return isinstance(
-        obj, (Sequence, np.ndarray, cp.ndarray)
+        obj, (Sequence, np.ndarray)
     ) and not isinstance(obj, (str, bytes))
 
 
