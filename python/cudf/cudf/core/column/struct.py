@@ -220,7 +220,7 @@ class StructMethods(ColumnMethods):
         return cudf.DataFrame._from_data(
             cudf.core.column_accessor.ColumnAccessor(
                 {
-                    name: col.copy()
+                    name: col.copy(deep=True)
                     for name, col in zip(
                         self._column.dtype.fields, self._column.children
                     )
