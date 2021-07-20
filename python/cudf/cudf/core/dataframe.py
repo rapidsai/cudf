@@ -7563,7 +7563,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     def to_struct(self, name=None):
         """
         Return a struct Series composed of the columns of the DataFrame.
-        Note that no copies of the data are made.
+        Note that a copy of the columns is made.
 
         Parameters
         ----------
@@ -7574,7 +7574,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             names=self._data.names, children=self._data.columns, size=len(self)
         )
         return cudf.Series._from_data(
-            cudf.core.column_accessor.ColumnAccessor({name: col}),
+            cudf.core.column_accessor.ColumnAccessor({name: col.copy()}),
             index=self.index,
             name=name,
         )
