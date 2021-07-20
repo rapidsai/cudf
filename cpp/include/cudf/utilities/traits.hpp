@@ -489,7 +489,7 @@ constexpr inline bool is_chrono(data_type type)
 template <typename T>
 constexpr bool is_rep_layout_compatible()
 {
-  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>() || std::is_same<T, __int128_t>::value;
+  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>();
 }
 
 /**
