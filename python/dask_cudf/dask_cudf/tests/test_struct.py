@@ -28,6 +28,14 @@ import dask_cudf
             },
             "b",
         ),
+        (
+            {
+                "a": [{}, {}, {}, None],
+                "b": [{"a": 1}, {"b": 5}, {"c": "Hello"}, None],
+                "c": ["rapids", "cudf", "hi", "cool"],
+            },
+            "b",
+        ),
     ],
 )
 def test_select_struct(data, column):
