@@ -133,15 +133,13 @@ class Scalar(object):
                 return NA, dtype
 
         if isinstance(value, dict):
-            if dtype is not None:
-                raise TypeError("dict may not be cast to a different dtype")
-            else:
+            if dtype is None:
                 dtype = StructDtype.from_arrow(
                     pa.infer_type([value], from_pandas=True)
                 )
-                return value, dtype
+            return value, dtype
         elif isinstance(dtype, StructDtype):
-            if value is not None:
+            if value not in {None, NA}:
                 raise ValueError(f"Can not coerce {value} to StructDType")
             else:
                 return NA, dtype

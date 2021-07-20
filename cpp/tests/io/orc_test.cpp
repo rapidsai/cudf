@@ -634,7 +634,9 @@ TEST_F(OrcWriterTest, negTimestampsNano)
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
   auto result = cudf_io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view().column(0), result.tbl->view().column(0), true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view().column(0),
+                                 result.tbl->view().column(0),
+                                 cudf::test::debug_output_level::ALL_ERRORS);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
