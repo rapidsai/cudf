@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,24 @@ using multimap_type =
 using row_hash = cudf::row_hasher<default_hash>;
 
 using row_equality = cudf::row_equality_comparator<true>;
+
+class pair_equality {
+ public:
+  pair_equality(table_device_view lhs, table_device_view rhs, bool nulls_are_equal = true)
+    : row_equality{lhs, rhs, nulls_are_equal}
+  {
+  }
+
+  __device__ __inline__ bool operator()(
+    const cuco::pair_type<hash_value_type, size_type>& lhs,
+    const cuco::pair_type<hash_value_type, size_type>& rhs) const noexcept
+  {
+    return lhs.first == rhs.first and row_equality(rhs.second, lhs.second);
+  }
+
+ private:
+  cudf::row_equality_comparator<true> row_equality;
+};
 
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
 
