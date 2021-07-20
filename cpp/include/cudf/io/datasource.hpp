@@ -210,7 +210,26 @@ class datasource {
     CUDF_FAIL("datasource classes that support device_read must override it.");
   }
 
-  // TODO: Docs
+  /**
+   * @brief Asynchronously reads a selected range into a preallocated device buffer
+   *
+   * Returns a future value that contains the number of bytes read. Calling `get()` method of the
+   * return value synchronizes this function.
+   *
+   * For optimal performance, should only be called when `is_device_read_preferred` returns `true`.
+   * Data source implementations that don't support direct device reads don't need to override this
+   * function.
+   *
+   *  @throws cudf::logic_error when the object does not support direct device reads, i.e.
+   * `supports_device_read` returns `false`.
+   *
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to read
+   * @param dst Address of the existing device memory
+   * @param stream CUDA stream to use
+   *
+   * @return The number of bytes read as a future value (can be smaller than size)
+   */
   virtual std::future<size_t> device_read_async(size_t offset,
                                                 size_t size,
                                                 uint8_t* dst,

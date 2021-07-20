@@ -833,7 +833,7 @@ void reader::impl::read_column_chunks(
   rmm::cuda_stream_view stream)
 {
   // Transfer chunk data, coalescing adjacent chunks
-  std::vector<std::future<size_t>> fut_read_tasks;
+  std::vector<std::future<size_t>> read_tasks;
   for (size_t chunk = begin_chunk; chunk < end_chunk;) {
     const size_t io_offset   = column_chunk_offsets[chunk];
     size_t io_size           = chunks[chunk].compressed_size;
@@ -858,7 +858,7 @@ void reader::impl::read_column_chunks(
         auto buffer        = rmm::device_buffer(io_size, stream);
         auto fut_read_size = source->device_read_async(
           io_offset, io_size, static_cast<uint8_t*>(buffer.data()), stream);
-        fut_read_tasks.emplace_back(std::move(fut_read_size));
+        read_tasks.emplace_back(std::move(fut_read_size));
         page_data[chunk] = datasource::buffer::create(std::move(buffer));
       } else {
         auto const buffer = source->host_read(io_offset, io_size);
@@ -874,7 +874,7 @@ void reader::impl::read_column_chunks(
       chunk = next_chunk;
     }
   }
-  for (auto& task : fut_read_tasks) {
+  for (auto& task : read_tasks) {
     task.wait();
   }
 }

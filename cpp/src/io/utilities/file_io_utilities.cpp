@@ -168,7 +168,9 @@ void cufile_registered_file::register_handle()
 cufile_registered_file::~cufile_registered_file() { shim->handle_deregister(cf_handle); }
 
 cufile_input_impl::cufile_input_impl(std::string const& filepath)
-  : shim{cufile_shim::instance()}, cf_file(shim, filepath, O_RDONLY | O_DIRECT), pool(16)
+  : shim{cufile_shim::instance()},
+    cf_file(shim, filepath, O_RDONLY | O_DIRECT),
+    pool(16)  // The benefit from multithreaded read plateaus around 16 threads
 {
   pool.sleep_duration = 10;
 }
@@ -199,14 +201,14 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
   };
 
   std::vector<std::future<ssize_t>> slice_tasks;
-  constexpr size_t four_MB = 4 * 1024 * 1024;
-  size_t n_slices          = util::div_rounding_up_safe(size, four_MB);
-  size_t slice_size        = four_MB;
-  size_t slice_offset      = 0;
+  constexpr size_t max_slice_bytes = 4 * 1024 * 1024;
+  size_t n_slices                  = util::div_rounding_up_safe(size, max_slice_bytes);
+  size_t slice_size                = max_slice_bytes;
+  size_t slice_offset              = 0;
   for (size_t t = 0; t < n_slices; ++t) {
     void* dst_slice = dst + slice_offset;
 
-    if (t == n_slices - 1) { slice_size = size % four_MB; }
+    if (t == n_slices - 1) { slice_size = size % max_slice_bytes; }
     slice_tasks.push_back(pool.submit(read_slice, dst_slice, slice_size, offset + slice_offset));
 
     slice_offset += slice_size;
@@ -216,6 +218,8 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
       return sum + task.get();
     });
   };
+  // The future returned from this function is deferred, not async becasue we want to avoid creating
+  // threads for each read_async call. This overhead is significant in case of multiple small reads.
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
 
@@ -248,7 +252,6 @@ void cufile_output_impl::write(void const* data, size_t offset, size_t size)
 std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath)
 {
 #ifdef CUFILE_FOUND
-  std::cout << "using GDS" << std::endl;
   if (cufile_config::instance()->is_enabled()) {
     try {
       return std::make_unique<cufile_input_impl>(filepath);
