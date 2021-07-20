@@ -196,6 +196,9 @@ class StructMethods(ColumnMethods):
     def explode(self):
         """
         Return a DataFrame whose columns are the fields of this struct Series.
+
+        Notes
+        -----
         Note that a copy of the columns is made.
 
         Examples
