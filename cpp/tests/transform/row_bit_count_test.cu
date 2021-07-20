@@ -453,7 +453,7 @@ TEST_F(RowBitCount, NestedTypes)
   }
 }
 
-TEST_F(RowBitCount, ListOfStrings)
+TEST_F(RowBitCount, NullsInStringsList)
 {
   using namespace cudf;
   using namespace cudf::test;
@@ -477,7 +477,7 @@ TEST_F(RowBitCount, ListOfStrings)
                                       fixed_width_column_wrapper<offset_type>{138, 106, 130, 130});
 }
 
-TEST_F(RowBitCount, NullsInStringList)
+TEST_F(RowBitCount, EmptyChildColumnInListOfStrings)
 {
   using namespace cudf;
   using namespace cudf::test;
@@ -493,7 +493,7 @@ TEST_F(RowBitCount, NullsInStringList)
                                       fixed_width_column_wrapper<offset_type>{32, 32, 32, 32});
 }
 
-TEST_F(RowBitCount, NullsInListOfLists)
+TEST_F(RowBitCount, EmptyChildColumnInListOfLists)
 {
   using namespace cudf;
   using namespace cudf::test;
