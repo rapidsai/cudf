@@ -155,6 +155,34 @@ add_library(cudf
     src/ast/transform.cu
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
+    src/binaryop/compiled/Add.cu
+    src/binaryop/compiled/ATan2.cu
+    src/binaryop/compiled/BitwiseAnd.cu
+    src/binaryop/compiled/BitwiseOr.cu
+    src/binaryop/compiled/BitwiseXor.cu
+    src/binaryop/compiled/Less.cu
+    src/binaryop/compiled/Greater.cu
+    src/binaryop/compiled/LessEqual.cu
+    src/binaryop/compiled/GreaterEqual.cu
+    src/binaryop/compiled/Div.cu
+    src/binaryop/compiled/equality_ops.cu
+    src/binaryop/compiled/FloorDiv.cu
+    src/binaryop/compiled/LogBase.cu
+    src/binaryop/compiled/LogicalAnd.cu
+    src/binaryop/compiled/LogicalOr.cu
+    src/binaryop/compiled/Mod.cu
+    src/binaryop/compiled/Mul.cu
+    src/binaryop/compiled/NullMax.cu
+    src/binaryop/compiled/NullMin.cu
+    src/binaryop/compiled/PMod.cu
+    src/binaryop/compiled/Pow.cu
+    src/binaryop/compiled/PyMod.cu
+    src/binaryop/compiled/ShiftLeft.cu
+    src/binaryop/compiled/ShiftRight.cu
+    src/binaryop/compiled/ShiftRightUnsigned.cu
+    src/binaryop/compiled/Sub.cu
+    src/binaryop/compiled/TrueDiv.cu
+    src/binaryop/compiled/util.cpp
     src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
     src/bitmask/is_element_valid.cpp
@@ -176,7 +204,7 @@ add_library(cudf
     src/copying/sample.cu
     src/copying/scatter.cu
     src/copying/shift.cu
-    src/copying/slice.cpp
+    src/copying/slice.cu
     src/copying/split.cpp
     src/copying/segmented_shift.cu
     src/datetime/datetime_ops.cu
@@ -358,6 +386,7 @@ add_library(cudf
     src/strings/convert/convert_urls.cu
     src/strings/copying/concatenate.cu
     src/strings/copying/copying.cu
+    src/strings/copying/shift.cu
     src/strings/extract.cu
     src/strings/filling/fill.cu
     src/strings/filter_chars.cu
@@ -497,12 +526,12 @@ if(CUDA_STATIC_RUNTIME)
     # Tell CMake what CUDA language runtime to use
     set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Static)
     # Make sure to export to consumers what runtime we used
-    target_link_libraries(cudf PUBLIC CUDA::cudart_static CUDA::cuda_driver)
+    target_link_libraries(cudf PUBLIC CUDA::cudart_static)
 else()
     # Tell CMake what CUDA language runtime to use
     set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
     # Make sure to export to consumers what runtime we used
-    target_link_libraries(cudf PUBLIC CUDA::cudart CUDA::cuda_driver)
+    target_link_libraries(cudf PUBLIC CUDA::cudart)
 endif()
 
 # Add cuFile interface if available

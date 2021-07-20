@@ -949,8 +949,11 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
       break;
 
     case type_id::DECIMAL64:
-      scale = -static_cast<int32_t>(_metadata->get_types()[orc_col_id].scale.value_or(0));
-    default: out_col = make_empty_column(data_type(type, scale));
+      scale   = -static_cast<int32_t>(_metadata->get_types()[orc_col_id].scale.value_or(0));
+      out_col = make_empty_column(data_type(type, scale));
+      break;
+
+    default: out_col = make_empty_column(data_type(type));
   }
 
   return out_col;
