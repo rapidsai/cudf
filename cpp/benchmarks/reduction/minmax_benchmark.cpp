@@ -48,7 +48,7 @@ void BM_reduction(benchmark::State& state)
 }
 
 #define concat(a, b, c) a##b##c
-#define get_agg(op) concat(cudf::make_, op, _aggregation())
+#define get_agg(op)     concat(cudf::make_, op, _aggregation())
 
 // TYPE, OP
 #define RBM_BENCHMARK_DEFINE(name, type, aggregation)                                            \

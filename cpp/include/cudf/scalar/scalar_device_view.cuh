@@ -21,7 +21,7 @@
 
 /**
  * @file scalar_device_view.cuh
- * @brief Scalar device view class definitons
+ * @brief Scalar device view class definitions
  */
 
 namespace cudf {

@@ -61,7 +61,7 @@ inline auto reduce_by_cub(OutputIterator result, InputIterator d_in, int num_ite
 
 // -----------------------------------------------------------------------------
 template <typename T>
-void raw_stream_bench_cub(cudf::column_view &col, rmm::device_uvector<T> &result)
+void raw_stream_bench_cub(cudf::column_view& col, rmm::device_uvector<T>& result)
 {
   // std::cout << "raw stream cub: " << "\t";
 
@@ -73,7 +73,7 @@ void raw_stream_bench_cub(cudf::column_view &col, rmm::device_uvector<T> &result
 };
 
 template <typename T, bool has_null>
-void iterator_bench_cub(cudf::column_view &col, rmm::device_uvector<T> &result)
+void iterator_bench_cub(cudf::column_view& col, rmm::device_uvector<T>& result)
 {
   // std::cout << "iterator cub " << ( (has_null) ? "<true>: " : "<false>: " ) << "\t";
 
@@ -91,7 +91,7 @@ void iterator_bench_cub(cudf::column_view &col, rmm::device_uvector<T> &result)
 
 // -----------------------------------------------------------------------------
 template <typename T>
-void raw_stream_bench_thrust(cudf::column_view &col, rmm::device_uvector<T> &result)
+void raw_stream_bench_thrust(cudf::column_view& col, rmm::device_uvector<T>& result)
 {
   // std::cout << "raw stream thust: " << "\t\t";
 
@@ -102,7 +102,7 @@ void raw_stream_bench_thrust(cudf::column_view &col, rmm::device_uvector<T> &res
 }
 
 template <typename T, bool has_null>
-void iterator_bench_thrust(cudf::column_view &col, rmm::device_uvector<T> &result)
+void iterator_bench_thrust(cudf::column_view& col, rmm::device_uvector<T>& result)
 {
   // std::cout << "iterator thust " << ( (has_null) ? "<true>: " : "<false>: " ) << "\t";
 
@@ -124,7 +124,7 @@ class Iterator : public cudf::benchmark {
 };
 
 template <class TypeParam, bool cub_or_thrust, bool raw_or_iterator>
-void BM_iterator(benchmark::State &state)
+void BM_iterator(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   using T      = TypeParam;
@@ -165,8 +165,8 @@ __device__ thrust::pair<T, bool> operator+(thrust::pair<T, bool> lhs, thrust::pa
 }
 // -----------------------------------------------------------------------------
 template <typename T, bool has_null>
-void pair_iterator_bench_cub(cudf::column_view &col,
-                             rmm::device_uvector<thrust::pair<T, bool>> &result)
+void pair_iterator_bench_cub(cudf::column_view& col,
+                             rmm::device_uvector<thrust::pair<T, bool>>& result)
 {
   thrust::pair<T, bool> init{0, false};
   auto d_col    = cudf::column_device_view::create(col);
@@ -176,8 +176,8 @@ void pair_iterator_bench_cub(cudf::column_view &col,
 }
 
 template <typename T, bool has_null>
-void pair_iterator_bench_thrust(cudf::column_view &col,
-                                rmm::device_uvector<thrust::pair<T, bool>> &result)
+void pair_iterator_bench_thrust(cudf::column_view& col,
+                                rmm::device_uvector<thrust::pair<T, bool>>& result)
 {
   thrust::pair<T, bool> init{0, false};
   auto d_col = cudf::column_device_view::create(col);
@@ -187,7 +187,7 @@ void pair_iterator_bench_thrust(cudf::column_view &col,
 }
 
 template <class TypeParam, bool cub_or_thrust>
-void BM_pair_iterator(benchmark::State &state)
+void BM_pair_iterator(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   using T      = TypeParam;

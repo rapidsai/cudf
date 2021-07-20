@@ -4,19 +4,16 @@ import cudf
 from cudf.utils.dtypes import is_categorical_dtype
 
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
 from libcpp.pair cimport pair
+from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-from cudf._lib.table cimport Table
-
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.transpose cimport (
-    transpose as cpp_transpose
-)
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.transpose cimport transpose as cpp_transpose
+from cudf._lib.table cimport Table
 
 
 def transpose(Table source):
@@ -36,11 +33,10 @@ def transpose(Table source):
     if is_categorical_dtype(dtype):
         if any(not is_categorical_dtype(c.dtype) for c in source._columns):
             raise ValueError('Columns must all have the same dtype')
-        cats = list(c.cat().categories for c in source._columns)
-        cats = cudf.Series(cudf.concat(cats)).drop_duplicates()._column
+        cats = list(c.categories for c in source._columns)
+        cats = cudf.core.column.concat_columns(cats).unique()
         source = Table(index=source._index, data=[
-            (name, col.cat()._set_categories(
-                col.cat().categories, cats, is_unique=True).codes)
+            (name, col._set_categories(cats, is_unique=True).codes)
             for name, col in source._data.items()
         ])
     elif dtype.kind in 'OU':

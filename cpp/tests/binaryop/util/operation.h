@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -210,6 +210,11 @@ struct Equal {
 };
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct NotEqual {
+  TypeOut operator()(TypeLhs x, TypeRhs y) { return (x != y); }
+};
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Less {
   TypeOut operator()(TypeLhs x, TypeRhs y) { return (x < y); }
 };
@@ -287,8 +292,8 @@ struct PMod {
 
   TypeOut operator()(TypeLhs x, TypeRhs y) const
   {
-    CommonArgsT xconv{x};
-    CommonArgsT yconv{y};
+    CommonArgsT xconv{static_cast<CommonArgsT>(x)};
+    CommonArgsT yconv{static_cast<CommonArgsT>(y)};
     auto rem = std::fmod(xconv, yconv);
     if (rem < 0) rem = std::fmod(rem + yconv, yconv);
     return static_cast<TypeOut>(rem);
@@ -300,6 +305,61 @@ struct ATan2 {
   TypeOut operator()(TypeLhs x, TypeRhs y) const
   {
     return static_cast<TypeOut>(std::atan2(static_cast<double>(x), static_cast<double>(y)));
+  }
+};
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct PyMod {
+  TypeOut operator()(TypeLhs x, TypeRhs y) const
+  {
+    if constexpr (std::is_floating_point_v<TypeLhs> or std::is_floating_point_v<TypeRhs>) {
+      double x1 = static_cast<double>(x);
+      double y1 = static_cast<double>(y);
+      return fmod(fmod(x1, y1) + y1, y1);
+    } else {
+      return ((x % y) + y) % y;
+    }
+    return {};
+  }
+};
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct NullEquals {
+  TypeOut operator()(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) const
+  {
+    output_valid = true;
+    if (!lhs_valid && !rhs_valid) return true;
+    using common_t = std::common_type_t<TypeLhs, TypeRhs>;
+    if (lhs_valid && rhs_valid) return static_cast<common_t>(x) == static_cast<common_t>(y);
+    return false;
+  }
+};
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct NullMax {
+  TypeOut operator()(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) const
+  {
+    output_valid = lhs_valid or rhs_valid;
+    if (lhs_valid or rhs_valid) {
+      return (lhs_valid and (!rhs_valid or static_cast<TypeOut>(x) > static_cast<TypeOut>(y)))
+               ? static_cast<TypeOut>(x)
+               : static_cast<TypeOut>(y);
+    } else
+      return TypeOut{};
+  }
+};
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct NullMin {
+  TypeOut operator()(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) const
+  {
+    output_valid = lhs_valid or rhs_valid;
+    if (lhs_valid or rhs_valid) {
+      return (lhs_valid and (!rhs_valid or static_cast<TypeOut>(x) < static_cast<TypeOut>(y)))
+               ? static_cast<TypeOut>(x)
+               : static_cast<TypeOut>(y);
+    } else
+      return TypeOut{};
   }
 };
 

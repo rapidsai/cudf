@@ -64,10 +64,10 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * @returns Output scalar with reduce result.
  */
 std::unique_ptr<scalar> reduce(
-  column_view const &col,
-  std::unique_ptr<aggregation> const &agg,
+  column_view const& col,
+  std::unique_ptr<aggregation> const& agg,
   data_type output_dtype,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Computes the scan of a column.
@@ -88,11 +88,11 @@ std::unique_ptr<scalar> reduce(
  * @returns unique pointer to new output column
  */
 std::unique_ptr<column> scan(
-  const column_view &input,
-  std::unique_ptr<aggregation> const &agg,
+  const column_view& input,
+  std::unique_ptr<aggregation> const& agg,
   scan_type inclusive,
   null_policy null_handling           = null_policy::EXCLUDE,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Determines the minimum and maximum values of a column.
@@ -104,8 +104,8 @@ std::unique_ptr<column> scan(
  *         and the second scalar being the maximum value of the input column.
  */
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
-  column_view const &col,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+  column_view const& col,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 

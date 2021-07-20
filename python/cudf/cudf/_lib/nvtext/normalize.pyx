@@ -4,13 +4,13 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.nvtext.normalize cimport (
     normalize_characters as cpp_normalize_characters,
-    normalize_spaces as cpp_normalize_spaces
+    normalize_spaces as cpp_normalize_spaces,
 )
-from cudf._lib.column cimport Column
 
 
 def normalize_spaces(Column strings):

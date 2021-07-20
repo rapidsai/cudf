@@ -1,20 +1,21 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.types cimport size_type
 from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.types cimport size_type
+
 import numpy as np
 
-from cudf._lib.cpp.strings.substring cimport (
-    slice_strings as cpp_slice_strings
-)
+from cudf._lib.cpp.strings.substring cimport slice_strings as cpp_slice_strings
 
 from cudf._lib.scalar import as_device_scalar
-from cudf._lib.scalar cimport DeviceScalar
+
 from cudf._lib.cpp.scalar.scalar cimport numeric_scalar
+from cudf._lib.scalar cimport DeviceScalar
 
 
 def slice_strings(Column source_strings,

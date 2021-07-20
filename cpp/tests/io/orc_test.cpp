@@ -526,7 +526,7 @@ TEST_F(OrcWriterTest, Strings)
 
 TEST_F(OrcWriterTest, SlicedTable)
 {
-  // This test checks for writing zero copy, offseted views into existing cudf tables
+  // This test checks for writing zero copy, offsetted views into existing cudf tables
 
   std::vector<const char*> strings{
     "Monday", "Monday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
@@ -609,7 +609,7 @@ TEST_F(OrcWriterTest, HostBuffer)
 TEST_F(OrcWriterTest, negTimestampsNano)
 {
   // This is a separate test because ORC format has a bug where writing a timestamp between -1 and 0
-  // seconds from UNIX epoch is read as that timestamp + 1 second. We mimic that behaviour and so
+  // seconds from UNIX epoch is read as that timestamp + 1 second. We mimic that behavior and so
   // this test has to hardcode test values which are < -1 second.
   // Details: https://github.com/rapidsai/cudf/pull/5529#issuecomment-648768925
   using namespace cudf::test;
@@ -634,7 +634,9 @@ TEST_F(OrcWriterTest, negTimestampsNano)
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
   auto result = cudf_io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view().column(0), result.tbl->view().column(0), true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view().column(0),
+                                 result.tbl->view().column(0),
+                                 cudf::test::debug_output_level::ALL_ERRORS);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
