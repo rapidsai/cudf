@@ -1339,9 +1339,6 @@ class Series(SingleColumnFrame, Serializable):
         *args,
         **kwargs,
     ):
-        if isinstance(other, cudf.DataFrame):
-            return NotImplemented
-
         if isinstance(other, SingleColumnFrame):
             if (
                 # TODO: The can_reindex logic also needs to be applied for
