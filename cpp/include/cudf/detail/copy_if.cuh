@@ -223,6 +223,11 @@ struct DeviceType<T, std::enable_if_t<std::is_same<numeric::decimal64, T>::value
   using type = typename cudf::device_storage_type_t<T>;
 };
 
+template <typename T>
+struct DeviceType<T, std::enable_if_t<std::is_same<numeric::decimal128, T>::value>> {
+  using type = typename cudf::device_storage_type_t<T>;
+};
+
 // Dispatch functor which performs the scatter for fixed column types and gather for other
 template <typename Filter, int block_size>
 struct scatter_gather_functor {

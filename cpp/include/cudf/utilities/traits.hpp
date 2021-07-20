@@ -152,7 +152,7 @@ constexpr inline bool is_equality_comparable()
 template <typename T>
 constexpr inline bool is_numeric()
 {
-  return std::is_integral<T>::value or std::is_floating_point<T>::value;
+  return std::is_integral<T>::value or std::is_floating_point<T>::value || std::is_same<T, __int128_t>::value;
 }
 
 struct is_numeric_impl {
@@ -489,7 +489,7 @@ constexpr inline bool is_chrono(data_type type)
 template <typename T>
 constexpr bool is_rep_layout_compatible()
 {
-  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>();
+  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>() || std::is_same<T, __int128_t>::value;
 }
 
 /**

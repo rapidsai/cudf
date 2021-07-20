@@ -139,9 +139,11 @@ struct update_target_element<
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
-    using Target = target_type_t<Source, aggregation::MIN>;
-    atomicMin(&target.element<Target>(target_index),
-              static_cast<Target>(source.element<Source>(source_index)));
+    if constexpr (not std::is_same<Source, __int128_t>::value) {
+      using Target = target_type_t<Source, aggregation::MIN>;
+      atomicMin(&target.element<Target>(target_index),
+                static_cast<Target>(source.element<Source>(source_index)));
+    }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -164,8 +166,10 @@ struct update_target_element<Source,
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    atomicMin(&target.element<DeviceTarget>(target_index),
-              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    if constexpr (not std::is_same<DeviceSource, __int128_t>::value) {
+      atomicMin(&target.element<DeviceTarget>(target_index),
+                static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -185,9 +189,11 @@ struct update_target_element<
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
-    using Target = target_type_t<Source, aggregation::MAX>;
-    atomicMax(&target.element<Target>(target_index),
-              static_cast<Target>(source.element<Source>(source_index)));
+    if constexpr (not std::is_same<Source, __int128_t>::value) {
+      using Target = target_type_t<Source, aggregation::MAX>;
+      atomicMax(&target.element<Target>(target_index),
+                static_cast<Target>(source.element<Source>(source_index)));
+    }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -210,8 +216,10 @@ struct update_target_element<Source,
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    atomicMax(&target.element<DeviceTarget>(target_index),
-              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    if constexpr (not std::is_same<DeviceSource, __int128_t>::value) {
+      atomicMax(&target.element<DeviceTarget>(target_index),
+                static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -231,9 +239,11 @@ struct update_target_element<
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
-    using Target = target_type_t<Source, aggregation::SUM>;
-    atomicAdd(&target.element<Target>(target_index),
-              static_cast<Target>(source.element<Source>(source_index)));
+    if constexpr (not std::is_same<Source, __int128_t>::value) {
+      using Target = target_type_t<Source, aggregation::SUM>;
+      atomicAdd(&target.element<Target>(target_index),
+                static_cast<Target>(source.element<Source>(source_index)));
+    }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -256,8 +266,10 @@ struct update_target_element<Source,
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    atomicAdd(&target.element<DeviceTarget>(target_index),
-              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    if constexpr (not std::is_same<DeviceSource, __int128_t>::value) {
+      atomicAdd(&target.element<DeviceTarget>(target_index),
+                static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }

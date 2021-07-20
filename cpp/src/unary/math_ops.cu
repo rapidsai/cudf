@@ -271,7 +271,10 @@ struct fixed_point_floor {
 template <typename T>
 struct fixed_point_abs {
   T n;
-  __device__ T operator()(T data) { return std::abs(data); }
+  __device__ T operator()(T data) { 
+    // std::abs does not work for __int128_t
+    return data > 0 ? data : data * -1; 
+  }
 };
 
 template <typename T, template <typename> typename FixedPointFunctor>

@@ -550,19 +550,24 @@ class fixed_point {
    */
   explicit operator std::string() const
   {
-    if (_scale < 0) {
-      auto const av   = std::abs(_value);
-      int64_t const n = std::pow(10, -_scale);
-      int64_t const f = av % n;
-      auto const num_zeros =
-        std::max(0, (-_scale - static_cast<int32_t>(std::to_string(f).size())));
-      auto const zeros = std::string(num_zeros, '0');
-      auto const sign  = _value < 0 ? std::string("-") : std::string();
-      return sign + std::to_string(av / n) + std::string(".") + zeros + std::to_string(av % n);
-    } else {
-      auto const zeros = std::string(_scale, '0');
-      return std::to_string(_value) + zeros;
+    if constexpr (not std::is_same<Rep, __int128_t>::value) {
+      if (_scale < 0) {
+        auto const av   = std::abs(_value); 
+        int64_t const n = std::pow(10, -_scale);
+        int64_t const f = av % n;
+        auto const num_zeros =
+          std::max(0, (-_scale - static_cast<int32_t>(std::to_string(f).size())));
+        auto const zeros = std::string(num_zeros, '0');
+        auto const sign  = _value < 0 ? std::string("-") : std::string();
+        return sign + std::to_string(av / n) + std::string(".") + zeros + std::to_string(av % n);
+      } else {
+        auto const zeros = std::string(_scale, '0');
+        return std::to_string(_value) + zeros;
+      }
     }
+
+    // std::abs and std::to_string don't work on __int128_t
+    return "TODO";
   }
 };
 
