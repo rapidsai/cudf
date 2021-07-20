@@ -10,6 +10,8 @@ Welcome to cuDF's documentation!
    user_guide/index
    basics/index
    api_docs/index
+   dask-cudf.rst
+   internals.rst
 
 
 Indices and tables
