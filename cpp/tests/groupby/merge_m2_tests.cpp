@@ -28,7 +28,7 @@
 using namespace cudf::test::iterators;
 
 namespace {
-constexpr bool print_all{false};                                 // For debugging
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::FIRST_ERROR};
 constexpr int32_t null{0};                                       // Mark for null elements
 constexpr double NaN{std::numeric_limits<double>::quiet_NaN()};  // Mark for NaN double elements
 
@@ -148,8 +148,8 @@ TYPED_TEST(GroupbyMergeM2TypedTest, EmptyInput)
   auto const vals = structs_col{vals_count, vals_mean, vals_M2};
 
   auto const [out_keys, out_vals] = merge_M2({keys}, {vals});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(vals, *out_vals, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(vals, *out_vals, verbosity);
 }
 
 TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInput)
@@ -196,8 +196,8 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInput)
       merge_M2(vcol_views{*out3_keys, *out4_keys}, vcol_views{*out3_vals, *out4_vals});
 
     auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
   }
 
   // One step merging:
@@ -206,8 +206,8 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInput)
                                                    vcol_views{*out1_vals, *out2_vals, *out3_vals});
 
     auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
   }
 }
 
@@ -255,8 +255,8 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInputHavingNegativeValues)
       merge_M2(vcol_views{*out3_keys, *out4_keys}, vcol_views{*out3_vals, *out4_vals});
 
     auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
   }
 
   // One step merging:
@@ -265,8 +265,8 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInputHavingNegativeValues)
                                                    vcol_views{*out1_vals, *out2_vals, *out3_vals});
 
     auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
   }
 }
 
@@ -315,8 +315,8 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHasNulls)
       merge_M2(vcol_views{*out3_keys, *out4_keys}, vcol_views{*out3_vals, *out4_vals});
 
     auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
   }
 
   // One step merging:
@@ -325,8 +325,8 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHasNulls)
                                                    vcol_views{*out1_vals, *out2_vals, *out3_vals});
 
     auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
   }
 }
 
@@ -380,8 +380,8 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHaveNullsAndNaNs)
       merge_M2(vcol_views{*out5_keys, *out6_keys}, vcol_views{*out5_vals, *out6_vals});
 
     auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
   }
 
   // One step merging:
@@ -391,8 +391,8 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHaveNullsAndNaNs)
                vcol_views{*out1_vals, *out2_vals, *out3_vals, *out4_vals});
 
     auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
   }
 }
 
@@ -462,8 +462,8 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SlicedColumnsInput)
       merge_M2(vcol_views{*out5_keys, *out6_keys}, vcol_views{*out5_vals, *out6_vals});
 
     auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
   }
 
   // One step merging:
@@ -473,7 +473,7 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SlicedColumnsInput)
                vcol_views{*out1_vals, *out2_vals, *out3_vals, *out4_vals});
 
     auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
   }
 }
