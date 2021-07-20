@@ -18,12 +18,13 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include "cudf/utilities/traits.hpp"
-#include "thrust/iterator/transform_iterator.h"
+
+#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace test {
@@ -222,15 +223,14 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
 template <>
 inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c)
 {
-  auto strings_data = cudf::strings::create_offsets(strings_column_view(c));
-  thrust::host_vector<char> h_chars(strings_data.first.size());
-  thrust::host_vector<size_type> h_offsets(strings_data.second.size());
-  CUDA_TRY(
-    cudaMemcpy(h_chars.data(), strings_data.first.data(), h_chars.size(), cudaMemcpyDeviceToHost));
-  CUDA_TRY(cudaMemcpy(h_offsets.data(),
-                      strings_data.second.data(),
-                      h_offsets.size() * sizeof(cudf::size_type),
-                      cudaMemcpyDeviceToHost));
+  auto const scv     = strings_column_view(c);
+  auto const h_chars = cudf::detail::make_std_vector_sync<char>(
+    cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
+    rmm::cuda_stream_default);
+  auto const h_offsets = cudf::detail::make_std_vector_sync(
+    cudf::device_span<cudf::offset_type const>(
+      scv.offsets().data<cudf::offset_type>() + scv.offset(), scv.size() + 1),
+    rmm::cuda_stream_default);
 
   // build std::string vector from chars and offsets
   std::vector<std::string> host_data;
