@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Union
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 
 import cudf
+from cudf.api.types import is_numeric_dtype
 from cudf.core._compat import PANDAS_GE_110
 from cudf.utils.dtypes import is_categorical_dtype
 
@@ -162,8 +164,8 @@ def assert_column_equal(
 
     if check_exact and check_categorical:
         if is_categorical_dtype(left) and is_categorical_dtype(right):
-            left_cat = left.cat().categories
-            right_cat = right.cat().categories
+            left_cat = left.categories
+            right_cat = right.categories
 
             if check_category_order:
                 assert_index_equal(
@@ -203,7 +205,17 @@ def assert_column_equal(
 
     columns_equal = False
     try:
-        columns_equal = left.equals(right)
+        columns_equal = (
+            (
+                cp.all(left.isnull().values == right.isnull().values)
+                and cp.allclose(
+                    left[left.isnull().unary_operator("not")].values,
+                    right[right.isnull().unary_operator("not")].values,
+                )
+            )
+            if not check_exact and is_numeric_dtype(left)
+            else left.equals(right)
+        )
     except TypeError as e:
         if str(e) != "Categoricals can only compare with the same type":
             raise e

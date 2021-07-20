@@ -54,7 +54,7 @@ static inline __device__ uint32_t hash_string(const string_view val)
   if (val.empty()) {
     return 0;
   } else {
-    char const *ptr = val.data();
+    char const* ptr = val.data();
     uint32_t len    = val.size_bytes();
     return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
   }
@@ -68,13 +68,13 @@ static inline __device__ uint32_t hash_string(const string_view val)
  * @param[in] temp_storage shared memory storage to scan non-null positions
  */
 template <int block_size, typename Storage>
-static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
+static __device__ void LoadNonNullIndices(volatile dictinit_state_s* s,
                                           int t,
-                                          Storage &temp_storage)
+                                          Storage& temp_storage)
 {
   if (t == 0) { s->nnz = 0; }
   for (uint32_t i = 0; i < s->chunk.num_rows; i += block_size) {
-    const uint32_t *valid_map = s->chunk.leaf_column->null_mask();
+    const uint32_t* valid_map = s->chunk.leaf_column->null_mask();
     auto column_offset        = s->chunk.leaf_column->offset();
     uint32_t is_valid, nz_pos;
     if (t < block_size / 32) {
@@ -120,12 +120,12 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
 // blockDim {block_size,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 2)
-  gpuInitDictionaryIndices(DictionaryChunk *chunks,
+  gpuInitDictionaryIndices(DictionaryChunk* chunks,
                            const table_device_view view,
-                           uint32_t *dict_data,
-                           uint32_t *dict_index,
+                           uint32_t* dict_data,
+                           uint32_t* dict_index,
                            size_t row_index_stride,
-                           size_type *str_col_ids,
+                           size_type* str_col_ids,
                            uint32_t num_columns)
 {
   __shared__ __align__(16) dictinit_state_s state_g;
@@ -138,14 +138,14 @@ __global__ void __launch_bounds__(block_size, 2)
     typename block_scan::TempStorage scan_storage;
   } temp_storage;
 
-  dictinit_state_s *const s = &state_g;
+  dictinit_state_s* const s = &state_g;
   uint32_t col_id           = blockIdx.x;
   uint32_t group_id         = blockIdx.y;
   uint32_t nnz, start_row, dict_char_count;
   int t = threadIdx.x;
 
   if (t == 0) {
-    column_device_view *leaf_column_view = view.begin() + str_col_ids[col_id];
+    column_device_view* leaf_column_view = view.begin() + str_col_ids[col_id];
     s->chunk                             = chunks[group_id * num_columns + col_id];
     s->chunk.leaf_column                 = leaf_column_view;
     s->chunk.dict_data =
@@ -305,21 +305,21 @@ __global__ void __launch_bounds__(block_size, 2)
  */
 // blockDim {1024,1,1}
 extern "C" __global__ void __launch_bounds__(1024)
-  gpuCompactChunkDictionaries(StripeDictionary *stripes,
-                              DictionaryChunk const *chunks,
+  gpuCompactChunkDictionaries(StripeDictionary* stripes,
+                              DictionaryChunk const* chunks,
                               uint32_t num_columns)
 {
   __shared__ __align__(16) StripeDictionary stripe_g;
   __shared__ __align__(16) DictionaryChunk chunk_g;
-  __shared__ const uint32_t *volatile ck_curptr_g;
+  __shared__ const uint32_t* volatile ck_curptr_g;
   __shared__ uint32_t volatile ck_curlen_g;
 
   uint32_t col_id    = blockIdx.x;
   uint32_t stripe_id = blockIdx.y;
   uint32_t chunk_len;
   int t = threadIdx.x;
-  const uint32_t *src;
-  uint32_t *dst;
+  const uint32_t* src;
+  uint32_t* dst;
 
   if (t == 0) stripe_g = stripes[stripe_id * num_columns + col_id];
   __syncthreads();
@@ -365,7 +365,7 @@ struct build_state_s {
 // blockDim {1024,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns)
+  gpuBuildStripeDictionaries(StripeDictionary* stripes, uint32_t num_columns)
 {
   __shared__ __align__(16) build_state_s state_g;
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
@@ -375,7 +375,7 @@ __global__ void __launch_bounds__(block_size)
     typename block_scan::TempStorage scan_storage;
   } temp_storage;
 
-  build_state_s *const s = &state_g;
+  build_state_s* const s = &state_g;
   uint32_t col_id        = blockIdx.x;
   uint32_t stripe_id     = blockIdx.y;
   uint32_t num_strings;
@@ -427,12 +427,12 @@ __global__ void __launch_bounds__(block_size)
 /**
  * @copydoc cudf::io::orc::gpu::InitDictionaryIndices
  */
-void InitDictionaryIndices(const table_device_view &view,
-                           DictionaryChunk *chunks,
-                           uint32_t *dict_data,
-                           uint32_t *dict_index,
+void InitDictionaryIndices(const table_device_view& view,
+                           DictionaryChunk* chunks,
+                           uint32_t* dict_data,
+                           uint32_t* dict_index,
                            size_t row_index_stride,
-                           size_type *str_col_ids,
+                           size_type* str_col_ids,
                            uint32_t num_columns,
                            uint32_t num_rowgroups,
                            rmm::cuda_stream_view stream)
@@ -447,9 +447,9 @@ void InitDictionaryIndices(const table_device_view &view,
 /**
  * @copydoc cudf::io::orc::gpu::BuildStripeDictionaries
  */
-void BuildStripeDictionaries(StripeDictionary *stripes,
-                             StripeDictionary *stripes_host,
-                             DictionaryChunk const *chunks,
+void BuildStripeDictionaries(StripeDictionary* stripes,
+                             StripeDictionary* stripes_host,
+                             DictionaryChunk const* chunks,
                              uint32_t num_stripes,
                              uint32_t num_rowgroups,
                              uint32_t num_columns,
@@ -463,12 +463,12 @@ void BuildStripeDictionaries(StripeDictionary *stripes,
     if (stripes_host[i].dict_data != nullptr) {
       thrust::device_ptr<uint32_t> dict_data_ptr =
         thrust::device_pointer_cast(stripes_host[i].dict_data);
-      column_device_view *string_column = stripes_host[i].leaf_column;
+      column_device_view* string_column = stripes_host[i].leaf_column;
       // NOTE: Requires the --expt-extended-lambda nvcc flag
       thrust::sort(rmm::exec_policy(stream),
                    dict_data_ptr,
                    dict_data_ptr + stripes_host[i].num_strings,
-                   [string_column] __device__(const uint32_t &lhs, const uint32_t &rhs) {
+                   [string_column] __device__(const uint32_t& lhs, const uint32_t& rhs) {
                      return string_column->element<string_view>(lhs) <
                             string_column->element<string_view>(rhs);
                    });

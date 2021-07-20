@@ -410,7 +410,7 @@ CUDA_HOST_DEVICE_CALLABLE size_type to_char_utf8(const char* str, char_utf8& cha
  * @brief Place a char_utf8 value into a char array.
  *
  * @param character Single character
- * @param[out] str Allocated char array with enough space to hold the encoded characer.
+ * @param[out] str Allocated char array with enough space to hold the encoded character.
  * @return The number of bytes in the character
  */
 CUDA_HOST_DEVICE_CALLABLE size_type from_char_utf8(char_utf8 character, char* str)

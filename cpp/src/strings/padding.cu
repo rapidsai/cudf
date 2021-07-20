@@ -95,7 +95,8 @@ std::unique_ptr<column> pad(
         string_view d_str = d_strings.element<string_view>(idx);
         auto length       = d_str.length();
         char* ptr         = d_chars + d_offsets[idx];
-        while (length++ < width) ptr += from_char_utf8(d_fill_char, ptr);
+        while (length++ < width)
+          ptr += from_char_utf8(d_fill_char, ptr);
         copy_string(ptr, d_str);
       });
   } else if (side == pad_side::RIGHT) {
@@ -109,7 +110,8 @@ std::unique_ptr<column> pad(
         auto length       = d_str.length();
         char* ptr         = d_chars + d_offsets[idx];
         ptr               = copy_string(ptr, d_str);
-        while (length++ < width) ptr += from_char_utf8(d_fill_char, ptr);
+        while (length++ < width)
+          ptr += from_char_utf8(d_fill_char, ptr);
       });
   } else if (side == pad_side::BOTH) {
     thrust::for_each_n(
@@ -124,9 +126,11 @@ std::unique_ptr<column> pad(
         auto right_pad    = (width & 1) ? pad / 2 : (pad - pad / 2);  // odd width = right-justify
         auto left_pad =
           pad - right_pad;  // e.g. width=7 gives "++foxx+" while width=6 gives "+fox++"
-        while (left_pad-- > 0) ptr += from_char_utf8(d_fill_char, ptr);
+        while (left_pad-- > 0)
+          ptr += from_char_utf8(d_fill_char, ptr);
         ptr = copy_string(ptr, d_str);
-        while (right_pad-- > 0) ptr += from_char_utf8(d_fill_char, ptr);
+        while (right_pad-- > 0)
+          ptr += from_char_utf8(d_fill_char, ptr);
       });
   }
 
@@ -181,7 +185,8 @@ std::unique_ptr<column> zfill(
                        string_view d_str = d_strings.element<string_view>(idx);
                        auto length       = d_str.length();
                        char* out_ptr     = d_chars + d_offsets[idx];
-                       while (length++ < width) *out_ptr++ = '0';  // prepend zero char
+                       while (length++ < width)
+                         *out_ptr++ = '0';  // prepend zero char
                        copy_string(out_ptr, d_str);
                      });
 

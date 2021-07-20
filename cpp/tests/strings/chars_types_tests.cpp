@@ -73,7 +73,8 @@ TEST_P(StringsCharsTestTypes, AllTypes)
   int x             = static_cast<int>(is_parm);
   int index         = 0;
   int strings_count = static_cast<int>(h_strings.size());
-  while (x >>= 1) ++index;
+  while (x >>= 1)
+    ++index;
   bool* sub_expected = &expecteds[index * strings_count];
 
   cudf::test::fixed_width_column_wrapper<bool> expected(

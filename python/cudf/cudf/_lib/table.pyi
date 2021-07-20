@@ -1,6 +1,6 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-from typing import List, Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, List, Optional
 
 import cudf
 

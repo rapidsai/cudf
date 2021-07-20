@@ -4,13 +4,14 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
-from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
+from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
 
+cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-cimport cudf._lib.cpp.types as libcudf_types
+
 
 cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
     ctypedef enum rank_method:

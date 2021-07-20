@@ -3,24 +3,25 @@
 # cython: boundscheck = False
 
 
-import cudf
 import collections.abc as abc
 import io
 import os
 
+import cudf
+
 from libcpp cimport bool
 from libcpp.string cimport string
-from libcpp.vector cimport vector
 from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
+cimport cudf._lib.cpp.io.types as cudf_io_types
 from cudf._lib.cpp.io.json cimport (
+    json_reader_options,
     read_json as libcudf_read_json,
-    json_reader_options
 )
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.io.utils cimport make_source_info
 from cudf._lib.table cimport Table
-cimport cudf._lib.cpp.io.types as cudf_io_types
 
 
 cpdef read_json(object filepaths_or_buffers,
