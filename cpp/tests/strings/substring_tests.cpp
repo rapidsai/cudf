@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@
 #include <thrust/sequence.h>
 #include <string>
 #include <vector>
+
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
 struct StringsSubstringsTest : public cudf::test::BaseFixture {
 };
@@ -292,7 +294,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, AllEmpty)
   auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", ""});
 
   auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("e"), -1);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
 }
 
 TEST_F(StringsSubstringsScalarDelimiterTest, EmptyDelimiter)
@@ -305,7 +307,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, EmptyDelimiter)
   auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
                                                         {true, true, false, true, true, true});
   auto results     = cudf::strings::slice_strings(strings_view, cudf::string_scalar(""), 1);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
 }
 
 TEST_F(StringsSubstringsScalarDelimiterTest, ZeroCount)
@@ -319,7 +321,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, ZeroCount)
                                                         {true, true, false, true, true, true});
 
   auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), 0);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
 }
 
 TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
@@ -334,7 +336,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
                                                           {true, true, false, true, true, true});
 
     auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), 1);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
   }
 
   {
@@ -342,17 +344,17 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
       {"llo", "", "", "lease", "st strings", ""}, {true, true, false, true, true, true});
 
     auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), -1);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
   }
 
   {
     auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), 2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings_view.parent(), true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings_view.parent(), verbosity);
   }
 
   {
     auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), -2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings_view.parent(), true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings_view.parent(), verbosity);
   }
 
   {
@@ -365,7 +367,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
 
     auto results =
       cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("o"), 2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
   }
 
   {
@@ -378,7 +380,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
 
     auto results =
       cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("o"), -2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
   }
 
   {
@@ -392,7 +394,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
 
     auto results =
       cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("éé"), 3);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
   }
 
   {
@@ -406,7 +408,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
 
     auto results =
       cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("éé"), -3);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
   }
 
   {
@@ -422,7 +424,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
 
     auto results =
       cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("."), 3);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
   }
 
   {
@@ -439,7 +441,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
 
     auto results =
       cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar(".."), -2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
   }
 }
 
@@ -475,7 +477,7 @@ TEST_F(StringsSubstringsColumnDelimiterTest, ColumnAllEmpty)
 
   auto results = cudf::strings::slice_strings(
     cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, -1);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
 }
 
 TEST_F(StringsSubstringsColumnDelimiterTest, DelimiterAllEmptyAndInvalid)
@@ -490,7 +492,7 @@ TEST_F(StringsSubstringsColumnDelimiterTest, DelimiterAllEmptyAndInvalid)
 
   auto results = cudf::strings::slice_strings(
     cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, 1);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
 }
 
 TEST_F(StringsSubstringsColumnDelimiterTest, ZeroDelimiterCount)
@@ -505,7 +507,7 @@ TEST_F(StringsSubstringsColumnDelimiterTest, ZeroDelimiterCount)
 
   auto results = cudf::strings::slice_strings(
     cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, 0);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
 }
 
 TEST_F(StringsSubstringsColumnDelimiterTest, SearchDelimiter)
@@ -521,7 +523,7 @@ TEST_F(StringsSubstringsColumnDelimiterTest, SearchDelimiter)
 
     auto results = cudf::strings::slice_strings(
       cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, 1);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
   }
 
   {
@@ -539,7 +541,7 @@ TEST_F(StringsSubstringsColumnDelimiterTest, SearchDelimiter)
 
     auto results = cudf::strings::slice_strings(
       cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, -1);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
   }
 
   {
@@ -563,7 +565,7 @@ TEST_F(StringsSubstringsColumnDelimiterTest, SearchDelimiter)
 
     auto results = cudf::strings::slice_strings(
       cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, 3);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
   }
 
   {
@@ -585,6 +587,6 @@ TEST_F(StringsSubstringsColumnDelimiterTest, SearchDelimiter)
 
     auto results = cudf::strings::slice_strings(
       cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, -3);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
   }
 }

@@ -27,6 +27,8 @@ using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 using namespace cudf::test;
 
+constexpr debug_output_level verbosity{debug_output_level::ALL_ERRORS};
+
 class HashTest : public cudf::test::BaseFixture {
 };
 
@@ -216,16 +218,16 @@ TYPED_TEST(HashTestFloatTyped, TestExtremes)
   auto const hash_col_neg_zero = cudf::hash(table_col_neg_zero);
   auto const hash_col_neg_nan  = cudf::hash(table_col_neg_nan);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_col, *hash_col_neg_zero, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_col, *hash_col_neg_nan, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_col, *hash_col_neg_zero, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_col, *hash_col_neg_nan, verbosity);
 
   constexpr auto serial_hasher   = cudf::hash_id::HASH_SERIAL_MURMUR3;
   auto const serial_col          = cudf::hash(table_col, serial_hasher, {}, 0);
   auto const serial_col_neg_zero = cudf::hash(table_col_neg_zero, serial_hasher);
   auto const serial_col_neg_nan  = cudf::hash(table_col_neg_nan, serial_hasher);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*serial_col, *serial_col_neg_zero, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*serial_col, *serial_col_neg_nan, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*serial_col, *serial_col_neg_zero, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*serial_col, *serial_col_neg_nan, verbosity);
 
   // Spark hash is sensitive to 0 and -0
   constexpr auto spark_hasher  = cudf::hash_id::HASH_SPARK_MURMUR3;
@@ -273,11 +275,11 @@ TEST_F(SerialMurmurHash3Test, MultiValueWithSeeds)
   auto const combo2_hash  = cudf::hash(combo2, hasher, {});
   auto const structs_hash = cudf::hash(cudf::table_view({structs_col}), hasher, {});
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*strings_hash, strings_col_result, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ints_hash, ints_col_result, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*strings_hash, strings_col_result, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ints_hash, ints_col_result, verbosity);
   EXPECT_EQ(combo1.num_rows(), combo1_hash->size());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*combo1_hash, *combo2_hash, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*structs_hash, *combo1_hash, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*combo1_hash, *combo2_hash, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*structs_hash, *combo1_hash, verbosity);
 }
 
 TEST_F(SerialMurmurHash3Test, ListThrows)
@@ -409,20 +411,20 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
   auto const hash_bools1     = cudf::hash(cudf::table_view({bools_col1}), hasher, {}, 42);
   auto const hash_bools2     = cudf::hash(cudf::table_view({bools_col2}), hasher, {}, 42);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_structs, hash_structs_expected, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_strings, hash_strings_expected, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_doubles, hash_doubles_expected, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_timestamps, hash_timestamps_expected, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_decimal64, hash_decimal64_expected, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_longs, hash_longs_expected, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_floats, hash_floats_expected, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_dates, hash_dates_expected, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_decimal32, hash_decimal32_expected, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_ints, hash_ints_expected, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_shorts, hash_shorts_expected, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_bytes, hash_bytes_expected, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_bools1, hash_bools_expected, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_bools2, hash_bools_expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_structs, hash_structs_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_strings, hash_strings_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_doubles, hash_doubles_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_timestamps, hash_timestamps_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_decimal64, hash_decimal64_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_longs, hash_longs_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_floats, hash_floats_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_dates, hash_dates_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_decimal32, hash_decimal32_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_ints, hash_ints_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_shorts, hash_shorts_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_bytes, hash_bytes_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_bools1, hash_bools_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_bools2, hash_bools_expected, verbosity);
 
   auto const combined_table = cudf::table_view({structs_col,
                                                 strings_col,
@@ -438,7 +440,7 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
                                                 bytes_col,
                                                 bools_col2});
   auto const hash_combined  = cudf::hash(combined_table, hasher, {}, 42);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_combined, hash_combined_expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_combined, hash_combined_expected, verbosity);
 }
 
 TEST_F(SparkMurmurHash3Test, ListThrows)
@@ -687,7 +689,7 @@ TYPED_TEST(MD5HashTestFloatTyped, TestExtremes)
   auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), verbosity);
 }
 
 TYPED_TEST(MD5HashTestFloatTyped, TestListExtremes)
@@ -709,7 +711,7 @@ TYPED_TEST(MD5HashTestFloatTyped, TestListExtremes)
   auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), verbosity);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

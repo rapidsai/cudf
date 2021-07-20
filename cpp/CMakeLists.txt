@@ -204,7 +204,7 @@ add_library(cudf
     src/copying/sample.cu
     src/copying/scatter.cu
     src/copying/shift.cu
-    src/copying/slice.cpp
+    src/copying/slice.cu
     src/copying/split.cpp
     src/copying/segmented_shift.cu
     src/datetime/datetime_ops.cu
