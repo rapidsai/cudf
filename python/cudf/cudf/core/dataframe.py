@@ -5912,6 +5912,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             warnings.warn(
                 "Unsorted Index..."
             )
+        if all(dt == np.dtype('object') for dt in self.dtypes):
+            raise TypeError(
+                "Cannot interpolate with all object-dtype columns in the DataFrame. "
+                "Try setting at least one column to a numeric dtype."
+            )
         return super()._interpolate(
             method=method, 
             axis=axis, 

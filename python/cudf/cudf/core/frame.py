@@ -1424,7 +1424,17 @@ class Frame(libcudf.table.Table):
         result._copy_type_metadata(self)
         return result
 
-    def _interpolate(self, method='linear'):
+    def _interpolate(
+        self, 
+        method='linear', 
+        axis=0, 
+        limit=None, 
+        inplace=False, 
+        limit_direction=None, 
+        limit_area=None, 
+        downcast=None, 
+        **kwargs
+    ):
         """
         Interpolate data values between some points.
 
