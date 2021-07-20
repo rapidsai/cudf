@@ -161,4 +161,4 @@ dask-worker-space/
 **/*_pb2.py
 
 # Sphinx docs & build artifacts
-docs/cudf/source/api_docs/generated
+docs/cudf/source/api_docs/generated/*
