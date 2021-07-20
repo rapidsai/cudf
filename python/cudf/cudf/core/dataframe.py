@@ -2987,17 +2987,22 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             result = self
         else:
             result = self.copy()
-        if all(name is None for name in self.index.names):
-            if isinstance(self.index, cudf.MultiIndex):
-                names = tuple(
-                    f"level_{i}" for i, _ in enumerate(self.index.names)
-                )
-            else:
-                names = ("index",)
-        else:
-            names = self.index.names
 
         if not drop:
+            if isinstance(self.index, cudf.MultiIndex):
+                names = tuple(
+                    name if name is not None else f"level_{i}"
+                    for i, name in enumerate(self.index.names)
+                )
+            else:
+                if self.index.name is None:
+                    if "index" in self._data.names:
+                        names = ("level_0",)
+                    else:
+                        names = ("index",)
+                else:
+                    names = (self.index.name,)
+
             index_columns = self.index._data.columns
             for name, index_column in zip(
                 reversed(names), reversed(index_columns)
@@ -7493,8 +7498,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         repeated_index = self.index.repeat(self.shape[1])
         name_index = Frame({0: self._column_names}).tile(self.shape[0])
         new_index = list(repeated_index._columns) + [name_index._columns[0]]
+        if isinstance(self._index, cudf.MultiIndex):
+            index_names = self._index.names + [None]
+        else:
+            index_names = [None] * len(new_index)
         new_index = cudf.core.multiindex.MultiIndex.from_frame(
-            DataFrame(dict(zip(range(0, len(new_index)), new_index)))
+            DataFrame(dict(zip(range(0, len(new_index)), new_index))),
+            names=index_names,
         )
 
         # Collect datatypes and cast columns as that type

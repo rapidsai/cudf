@@ -15,7 +15,7 @@ LANG=C.UTF-8
 conda activate rapids
 
 # Run isort-cudf and get results/return code
-ISORT_CUDF=`isort python/cudf --check-only --skip-glob *.pyx --settings-path=python/cudf/setup.cfg 2>&1`
+ISORT_CUDF=`isort python/cudf --check-only --settings-path=python/cudf/setup.cfg 2>&1`
 ISORT_CUDF_RETVAL=$?
 
 # Run isort-cudf-kafka and get results/return code
