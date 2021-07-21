@@ -348,7 +348,7 @@ std::unique_ptr<Base> make_rank_aggregation();
  *   input orderby column: struct_column{num_overtakes, lap_number}
  *  result: column<size_type>{1, 2, 2, 3, 4, 1, 1, 2, 3}
  *
- * A grouped rank aggregation scan with:
+ * A grouped dense rank aggregation scan with:
  *   groupby column      : driver_name
  *   input orderby column: num_overtakes
  *  result: column<size_type>{1, 1, 1, 2, 2, 1, 1, 2, 3}

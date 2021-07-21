@@ -201,16 +201,14 @@ std::unique_ptr<column> generate_dense_ranks(column_view const& order_by,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  table_view flat_order;
-  if (order_by.type().id() == type_id::STRUCT) {
-    flat_order = table_view{std::vector<column_view>{order_by.child_begin(), order_by.child_end()}};
-  } else {
-    flat_order = table_view{{order_by}};
-  }
+  auto const flat_order =
+    order_by.type().id() == type_id::STRUCT
+      ? table_view{std::vector<column_view>{order_by.child_begin(), order_by.child_end()}}
+      : table_view{{order_by}};
   auto const d_flat_order = table_device_view::create(flat_order, stream);
   row_equality_comparator<has_nested_nulls> comparator(*d_flat_order, *d_flat_order, true);
   auto ranks = make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, order_by.size(), mask_state::ALL_VALID, stream, mr);
+    data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
 
   if (order_by.type().id() == type_id::STRUCT && order_by.has_nulls()) {
@@ -250,16 +248,14 @@ std::unique_ptr<column> generate_ranks(column_view const& order_by,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  table_view flat_order;
-  if (order_by.type().id() == type_id::STRUCT) {
-    flat_order = table_view{std::vector<column_view>{order_by.child_begin(), order_by.child_end()}};
-  } else {
-    flat_order = table_view{{order_by}};
-  }
+  auto const flat_order =
+    order_by.type().id() == type_id::STRUCT
+      ? table_view{std::vector<column_view>{order_by.child_begin(), order_by.child_end()}}
+      : table_view{{order_by}};
   auto const d_flat_order = table_device_view::create(flat_order, stream);
   row_equality_comparator<has_nested_nulls> comparator(*d_flat_order, *d_flat_order, true);
   auto ranks = make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, order_by.size(), mask_state::ALL_VALID, stream, mr);
+    data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
 
   if (order_by.type().id() == type_id::STRUCT && order_by.has_nulls()) {
@@ -302,13 +298,10 @@ std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
-  if (order_by.type().id() == type_id::STRUCT) {
-    bool nested_nulls =
-      std::any_of(order_by.child_begin(), order_by.child_end(), [](auto const& col) {
-        return has_nested_nulls(table_view{{col}});
-      });
-    if (nested_nulls) { return generate_dense_ranks<true>(order_by, stream, mr); }
-  } else if (order_by.has_nulls()) {
+  if ((order_by.type().id() == type_id::STRUCT &&
+       has_nested_nulls(
+         table_view{std::vector<column_view>{order_by.child_begin(), order_by.child_end()}})) ||
+      (order_by.type().id() != type_id::STRUCT && order_by.has_nulls())) {
     return generate_dense_ranks<true>(order_by, stream, mr);
   }
   return generate_dense_ranks<false>(order_by, stream, mr);
@@ -318,13 +311,10 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  if (order_by.type().id() == type_id::STRUCT) {
-    bool nested_nulls =
-      std::any_of(order_by.child_begin(), order_by.child_end(), [](auto const& col) {
-        return has_nested_nulls(table_view{{col}});
-      });
-    if (nested_nulls) { return generate_ranks<true>(order_by, stream, mr); }
-  } else if (order_by.has_nulls()) {
+  if ((order_by.type().id() == type_id::STRUCT &&
+       has_nested_nulls(
+         table_view{std::vector<column_view>{order_by.child_begin(), order_by.child_end()}})) ||
+      (order_by.type().id() != type_id::STRUCT && order_by.has_nulls())) {
     return generate_ranks<true>(order_by, stream, mr);
   }
   return generate_ranks<false>(order_by, stream, mr);

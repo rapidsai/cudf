@@ -436,7 +436,7 @@ struct TypedRankScanTest : ScanTest<T> {
                                        null_policy null_handling)
   {
     auto col_out = scan(input, agg, scan_type::INCLUSIVE, null_handling);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, col_out->view(), true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, col_out->view());
   }
 };
 
@@ -551,8 +551,8 @@ TYPED_TEST(TypedRankScanTest, nestedStructs)
     scan(flat_col, make_rank_aggregation(), scan_type::INCLUSIVE,
     null_policy::INCLUDE);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(dense_out->view(), dense_expected->view(), true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(rank_out->view(), rank_expected->view(), true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(dense_out->view(), dense_expected->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(rank_out->view(), rank_expected->view());
 }
 */
 
@@ -596,8 +596,8 @@ TYPED_TEST(ListRankScanTest, ListRank)
   auto rank_expected = scan(
     struct_col, make_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(dense_out->view(), dense_expected->view(), true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(rank_out->view(), rank_expected->view(), true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(dense_out->view(), dense_expected->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(rank_out->view(), rank_expected->view());
 }
 */
 
@@ -613,8 +613,8 @@ TEST(RankScanTest, BoolRank)
   auto dense_out =
     scan(vals, make_dense_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
   auto rank_out = scan(vals, make_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_dense_vals, dense_out->view(), true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_rank_vals, rank_out->view(), true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_dense_vals, dense_out->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_rank_vals, rank_out->view());
 }
 
 TEST(RankScanTest, BoolRankWithNull)
@@ -629,8 +629,8 @@ TEST(RankScanTest, BoolRankWithNull)
     scan(vals, make_dense_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
   auto nullable_rank_out =
     scan(vals, make_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_dense_vals, nullable_dense_out->view(), true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_rank_vals, nullable_rank_out->view(), true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_dense_vals, nullable_dense_out->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_rank_vals, nullable_rank_out->view());
 }
 
 TEST(RankScanTest, ExclusiveScan)

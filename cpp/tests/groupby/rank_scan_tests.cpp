@@ -211,8 +211,8 @@ TYPED_TEST(typed_groupby_rank_scan_test, mixedStructs)
   auto result = gb_obj.scan(requests);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({keys}), result.first->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result.second[0].results[0], expected_dense_vals, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result.second[0].results[1], expected_rank_vals, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result.second[0].results[0], expected_dense_vals);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result.second[0].results[1], expected_rank_vals);
 }
 
 /* Nested struct support dependent on https://github.com/rapidsai/cudf/issues/8683
@@ -250,9 +250,9 @@ TYPED_TEST(typed_groupby_rank_scan_test, nestedStructs)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({keys}), result.first->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    *result.second[0].results[0], *result.second[1].results[0], true);
+    *result.second[0].results[0], *result.second[1].results[0]);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    *result.second[0].results[2], *result.second[1].results[2], true);
+    *result.second[0].results[2], *result.second[1].results[2]);
 }
 */
 
@@ -306,9 +306,9 @@ TYPED_TEST(list_groupby_rank_scan_test, lists)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({keys}), result.first->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    *result.second[0].results[0], *result.second[1].results[0], true);
+    *result.second[0].results[0], *result.second[1].results[0]);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    *result.second[0].results[2], *result.second[1].results[2], true);
+    *result.second[0].results[2], *result.second[1].results[2]);
 }
 */
 
