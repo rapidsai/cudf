@@ -180,8 +180,8 @@ std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
                                                             rmm::cuda_stream_view stream)
 {
   rmm::device_buffer out_data(size, stream);
-  read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
-  // TODO: make use of the returned size to shrink out_data
+  auto read_size = read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
+  out_data.resize(read_size, stream);
   return datasource::buffer::create(std::move(out_data));
 }
 
@@ -228,13 +228,8 @@ size_t cufile_input_impl::read(size_t offset,
                                uint8_t* dst,
                                rmm::cuda_stream_view stream)
 {
-  // TODO: Figure out what to do. Perhaps this would suit avro where you want the multithreading but
-  // also sync
   auto result = read_async(offset, size, dst, stream);
-  result.get();
-
-  // always read the requested size for now
-  return size;
+  return result.get();
 }
 
 cufile_output_impl::cufile_output_impl(std::string const& filepath)
