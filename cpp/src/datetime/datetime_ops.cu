@@ -29,6 +29,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cmath>
+
 namespace cudf {
 namespace datetime {
 namespace detail {
@@ -127,7 +129,7 @@ struct extract_day_num_of_year {
   }
 };
 
-// Extract the day number of the year present in the timestamp
+// Extract the the quarter to which the timestamp belongs to
 struct extract_quarter_op {
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
@@ -139,10 +141,8 @@ struct extract_quarter_op {
     auto const date             = year_month_day(days_since_epoch);
     auto const month            = unsigned{date.month()};
 
-    if (month <= 3) return 1;
-    if (month <= 6) return 2;
-    if (month <= 9) return 3;
-    return 4;
+    return (month + 2) /
+           3;  // (x + y - 1) / y = ceil(x/y), where x and y are unsigned. x = month, y = 3
   }
 };
 
