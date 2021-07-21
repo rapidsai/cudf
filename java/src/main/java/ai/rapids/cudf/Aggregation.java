@@ -62,8 +62,10 @@ public abstract class Aggregation {
         LAG(23),
         PTX(24),
         CUDA(25),
-        RANK(26),
-        DENSE_RANK(27);
+        M2(26),
+        MERGE_M2(27),
+        RANK(28),
+        DENSE_RANK(29);;
 
         final int nativeId;
 
@@ -567,6 +569,19 @@ public abstract class Aggregation {
         return new MeanAggregation();
     }
 
+    public static class M2Aggregation extends NoParamAggregation {
+        private M2Aggregation() {
+            super(Kind.M2);
+        }
+    }
+
+    /**
+     * Sum of square of differences from mean.
+     */
+    public static M2Aggregation M2() {
+        return new M2Aggregation();
+    }
+
     public static class VarianceAggregation extends DdofAggregation {
         private VarianceAggregation(int ddof) {
             super(Kind.VARIANCE, ddof);
@@ -874,6 +889,19 @@ public abstract class Aggregation {
      */
     public static LagAggregation lag(int offset, ColumnVector defaultOutput) {
         return new LagAggregation(offset, defaultOutput);
+    }
+
+    public static final class MergeM2Aggregation extends NoParamAggregation {
+        private MergeM2Aggregation() {
+            super(Kind.MERGE_M2);
+        }
+    }
+
+    /**
+     * Merge the partial M2 values produced by multiple instances of M2Aggregation.
+     */
+    public static MergeM2Aggregation mergeM2() {
+        return new MergeM2Aggregation();
     }
 
     /**

@@ -42,6 +42,8 @@
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
+
 struct TransformTest : public cudf::test::BaseFixture {
 };
 
@@ -58,7 +60,7 @@ TEST_F(TransformTest, BasicAddition)
   auto expected = column_wrapper<int32_t>{13, 27, 21, 50};
   auto result   = cudf::ast::compute_column(table, expression);
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, BasicAdditionLarge)
@@ -74,7 +76,7 @@ TEST_F(TransformTest, BasicAdditionLarge)
   auto expected = column_wrapper<int32_t>(b, b + 2000);
   auto result   = cudf::ast::compute_column(table, expression);
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, LessComparator)
@@ -90,7 +92,7 @@ TEST_F(TransformTest, LessComparator)
   auto expected = column_wrapper<bool>{true, false, true, false};
   auto result   = cudf::ast::compute_column(table, expression);
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, LessComparatorLarge)
@@ -109,7 +111,7 @@ TEST_F(TransformTest, LessComparatorLarge)
   auto expected = column_wrapper<bool>(c, c + 2000);
   auto result   = cudf::ast::compute_column(table, expression);
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, MultiLevelTreeArithmetic)
@@ -135,7 +137,7 @@ TEST_F(TransformTest, MultiLevelTreeArithmetic)
   auto result   = cudf::ast::compute_column(table, expression_tree);
   auto expected = column_wrapper<int32_t>{7, 73, 22, -99};
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, MultiLevelTreeArithmeticLarge)
@@ -163,7 +165,7 @@ TEST_F(TransformTest, MultiLevelTreeArithmeticLarge)
   auto d      = cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return calc(i); });
   auto expected = column_wrapper<int32_t>(d, d + 2000);
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, ImbalancedTreeArithmetic)
@@ -187,7 +189,7 @@ TEST_F(TransformTest, ImbalancedTreeArithmetic)
   auto expected =
     column_wrapper<double>{0.6, std::numeric_limits<double>::infinity(), -3.201, -2099.18};
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, MultiLevelTreeComparator)
@@ -213,7 +215,7 @@ TEST_F(TransformTest, MultiLevelTreeComparator)
   auto result   = cudf::ast::compute_column(table, expression_tree);
   auto expected = column_wrapper<bool>{false, true, false, false};
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, MultiTypeOperationFailure)
@@ -249,7 +251,7 @@ TEST_F(TransformTest, LiteralComparison)
   auto result   = cudf::ast::compute_column(table, expression);
   auto expected = column_wrapper<bool>{false, false, false, true};
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, UnaryNot)
@@ -264,7 +266,7 @@ TEST_F(TransformTest, UnaryNot)
   auto result   = cudf::ast::compute_column(table, expression);
   auto expected = column_wrapper<bool>{false, true, false, false};
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, UnaryTrigonometry)
@@ -277,17 +279,17 @@ TEST_F(TransformTest, UnaryTrigonometry)
   auto expected_sin   = column_wrapper<double>{0.0, std::sqrt(2) / 2, std::sqrt(3.0) / 2.0};
   auto expression_sin = cudf::ast::expression(cudf::ast::ast_operator::SIN, col_ref_0);
   auto result_sin     = cudf::ast::compute_column(table, expression_sin);
-  cudf::test::expect_columns_equivalent(expected_sin, result_sin->view(), true);
+  cudf::test::expect_columns_equivalent(expected_sin, result_sin->view(), verbosity);
 
   auto expected_cos   = column_wrapper<double>{1.0, std::sqrt(2) / 2, 0.5};
   auto expression_cos = cudf::ast::expression(cudf::ast::ast_operator::COS, col_ref_0);
   auto result_cos     = cudf::ast::compute_column(table, expression_cos);
-  cudf::test::expect_columns_equivalent(expected_cos, result_cos->view(), true);
+  cudf::test::expect_columns_equivalent(expected_cos, result_cos->view(), verbosity);
 
   auto expected_tan   = column_wrapper<double>{0.0, 1.0, std::sqrt(3.0)};
   auto expression_tan = cudf::ast::expression(cudf::ast::ast_operator::TAN, col_ref_0);
   auto result_tan     = cudf::ast::compute_column(table, expression_tan);
-  cudf::test::expect_columns_equivalent(expected_tan, result_tan->view(), true);
+  cudf::test::expect_columns_equivalent(expected_tan, result_tan->view(), verbosity);
 }
 
 TEST_F(TransformTest, ArityCheckFailure)
@@ -311,7 +313,7 @@ TEST_F(TransformTest, StringComparison)
   auto expected = column_wrapper<bool>{true, false, true, false};
   auto result   = cudf::ast::compute_column(table, expression);
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, CopyColumn)
@@ -325,7 +327,7 @@ TEST_F(TransformTest, CopyColumn)
   auto result   = cudf::ast::compute_column(table, expression);
   auto expected = column_wrapper<int32_t>{3, 0, 1, 50};
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, CopyLiteral)
@@ -341,7 +343,7 @@ TEST_F(TransformTest, CopyLiteral)
   auto result   = cudf::ast::compute_column(table, expression);
   auto expected = column_wrapper<int32_t>{-123, -123, -123, -123};
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, TrueDiv)
@@ -358,7 +360,7 @@ TEST_F(TransformTest, TrueDiv)
   auto result   = cudf::ast::compute_column(table, expression);
   auto expected = column_wrapper<double>{1.5, 0.0, 0.5, 25.0};
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, FloorDiv)
@@ -375,7 +377,7 @@ TEST_F(TransformTest, FloorDiv)
   auto result   = cudf::ast::compute_column(table, expression);
   auto expected = column_wrapper<double>{1.0, 0.0, 0.0, 25.0};
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, Mod)
@@ -392,7 +394,7 @@ TEST_F(TransformTest, Mod)
   auto result   = cudf::ast::compute_column(table, expression);
   auto expected = column_wrapper<double>{1.0, 0.0, -1.0, 0.0};
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, PyMod)
@@ -409,7 +411,7 @@ TEST_F(TransformTest, PyMod)
   auto result   = cudf::ast::compute_column(table, expression);
   auto expected = column_wrapper<double>{1.0, 0.0, 1.0, 0.0};
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, BasicAdditionNulls)
@@ -425,7 +427,7 @@ TEST_F(TransformTest, BasicAdditionNulls)
   auto expected = column_wrapper<int32_t>{{0, 0, 0, 50}, {0, 0, 0, 1}};
   auto result   = cudf::ast::compute_column(table, expression);
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, BasicAdditionLargeNulls)
@@ -451,7 +453,7 @@ TEST_F(TransformTest, BasicAdditionLargeNulls)
   auto expected = column_wrapper<int32_t>(b, b + N, validities.begin());
   auto result   = cudf::ast::compute_column(table, expression);
 
-  cudf::test::expect_columns_equal(expected, result->view(), true);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -40,42 +40,82 @@ class CudfEngine(ArrowEngine):
 
         return (new_meta, stats, parts, index)
 
+    @classmethod
+    def multi_support(cls):
+        # Assert that this class is CudfEngine
+        # and that multi-part reading is supported
+        return cls == CudfEngine
+
     @staticmethod
     def read_partition(
-        fs, piece, columns, index, categories=(), partitions=(), **kwargs
+        fs, pieces, columns, index, categories=(), partitions=(), **kwargs
     ):
         if columns is not None:
             columns = [c for c in columns]
         if isinstance(index, list):
             columns += index
 
-        if isinstance(piece, str):
-            path = piece
-            row_group = None
-            partition_keys = []
-        else:
-            (path, row_group, partition_keys) = piece
+        if not isinstance(pieces, list):
+            pieces = [pieces]
 
         strings_to_cats = kwargs.get("strings_to_categorical", False)
-        if cudf.utils.ioutils._is_local_filesystem(fs):
+
+        if len(pieces) > 1:
+
+            paths = []
+            rgs = []
+            partition_keys = []
+
+            for piece in pieces:
+                if isinstance(piece, str):
+                    paths.append(piece)
+                    rgs.append(None)
+                else:
+                    (path, row_group, partition_keys) = piece
+                    paths.append(path)
+                    rgs.append(
+                        [row_group]
+                        if not isinstance(row_group, list)
+                        else row_group
+                    )
+
             df = cudf.read_parquet(
-                path,
+                paths,
                 engine="cudf",
                 columns=columns,
-                row_groups=row_group,
+                row_groups=rgs if rgs else None,
                 strings_to_categorical=strings_to_cats,
                 **kwargs.get("read", {}),
             )
+
         else:
-            with fs.open(path, mode="rb") as f:
+            # Single-piece read
+            if isinstance(pieces[0], str):
+                path = pieces[0]
+                row_group = None
+                partition_keys = []
+            else:
+                (path, row_group, partition_keys) = pieces[0]
+
+            if cudf.utils.ioutils._is_local_filesystem(fs):
                 df = cudf.read_parquet(
-                    f,
+                    path,
                     engine="cudf",
                     columns=columns,
                     row_groups=row_group,
                     strings_to_categorical=strings_to_cats,
                     **kwargs.get("read", {}),
                 )
+            else:
+                with fs.open(path, mode="rb") as f:
+                    df = cudf.read_parquet(
+                        f,
+                        engine="cudf",
+                        columns=columns,
+                        row_groups=row_group,
+                        strings_to_categorical=strings_to_cats,
+                        **kwargs.get("read", {}),
+                    )
 
         if index and (index[0] in df.columns):
             df = df.set_index(index[0])
