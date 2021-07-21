@@ -63,6 +63,11 @@ struct TypeParam_to_host_type<numeric::decimal64> {
   using type = numeric::decimal64::rep;
 };
 
+template <>
+struct TypeParam_to_host_type<numeric::decimal128> {
+  using type = numeric::decimal128::rep;
+};
+
 template <typename TypeParam, typename T>
 typename std::enable_if<std::is_same_v<TypeParam, cudf::string_view>,
                         thrust::host_vector<std::string>>::type
@@ -408,7 +413,7 @@ TEST_F(ScanStringsTest, MoreStringsMinMax)
     return std::string(s);
   });
   auto validity   = cudf::detail::make_counting_transform_iterator(
-    0, [](auto idx) -> bool { return (idx % 23) != 22; });
+      0, [](auto idx) -> bool { return (idx % 23) != 22; });
   cudf::test::strings_column_wrapper col(data_begin, data_begin + row_count, validity);
 
   thrust::host_vector<std::string> v(data_begin, data_begin + row_count);

@@ -52,10 +52,12 @@ constexpr inline auto is_supported_representation_type()
          cuda::std::is_same<T, __int128_t>::value;
 }
 
+// TODO make a temporary::is_integral function
 template <typename T>
 constexpr inline auto is_supported_construction_value_type()
 {
-  return cuda::std::is_integral<T>::value || cuda::std::is_floating_point<T>::value;
+  return cuda::std::is_integral<T>::value || cuda::std::is_floating_point<T>::value ||
+         cuda::std::is_same<T, __int128_t>::value;
 }
 
 // Helper functions for `fixed_point` type
@@ -277,7 +279,8 @@ class fixed_point {
    * @return The `fixed_point` number in base 10 (aka human readable format)
    */
   template <typename U,
-            typename cuda::std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
+            typename cuda::std::enable_if_t<cuda::std::is_integral<U>::value or
+                                            std::is_same<U, __int128_t>::value>* = nullptr>
   explicit constexpr operator U() const
   {
     // Don't cast to U until converting to Rep because in certain cases casting to U before shifting
