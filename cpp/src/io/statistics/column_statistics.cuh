@@ -73,7 +73,7 @@ struct calculate_group_statistics_functor {
   }
 
   template <typename T,
-            std::enable_if_t<detail::statistics_type_category<T, IO>::is_ignored>* = nullptr>
+            std::enable_if_t<detail::statistics_type_category<T, IO>::ignore>* = nullptr>
   __device__ void operator()(stats_state_s& s, uint32_t t)
   {
     // No-op for unsupported aggregation types
@@ -88,14 +88,14 @@ struct calculate_group_statistics_functor {
    * @param t thread id
    */
   template <typename T,
-            std::enable_if_t<not detail::statistics_type_category<T, IO>::is_ignored>* = nullptr>
+            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema>* = nullptr>
   __device__ void operator()(stats_state_s& s, uint32_t t)
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
 
     using type_convert = detail::type_conversion<detail::conversion_map<IO>>;
     using CT           = typename type_convert::template type<T>;
-    typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::is_aggregated> chunk(
+    typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::include_aggregate> chunk(
       s.group.num_rows);
 
     for (uint32_t i = 0; i < s.group.num_rows; i += block_size) {
@@ -109,6 +109,26 @@ struct calculate_group_statistics_functor {
     }
 
     chunk = block_reduce(chunk, storage);
+
+    if (t == 0) { s.ck = get_untyped_chunk(chunk); }
+  }
+
+  template <
+    typename T,
+    std::enable_if_t<detail::statistics_type_category<T, IO>::include_count and
+                     not detail::statistics_type_category<T, IO>::include_extrema>* = nullptr>
+  __device__ void operator()(stats_state_s& s, uint32_t t)
+  {
+    detail::storage_wrapper<block_size> storage(temp_storage);
+    typed_statistics_chunk<uint32_t, false> chunk(s.group.num_rows);
+
+    for (uint32_t i = 0; i < s.group.num_rows; i += block_size) {
+      uint32_t r          = i + t;
+      uint32_t row        = r + s.group.start_row;
+      auto const is_valid = (r < s.group.num_rows) ? s.col.leaf_column->is_valid(row) : 0;
+      chunk.non_nulls += is_valid;
+    }
+    cub::BlockReduce<uint32_t, block_size>(storage.template get<uint32_t>()).Sum(chunk.non_nulls);
 
     if (t == 0) { s.ck = get_untyped_chunk(chunk); }
   }
@@ -131,7 +151,7 @@ struct merge_group_statistics_functor {
   }
 
   template <typename T,
-            std::enable_if_t<detail::statistics_type_category<T, IO>::is_ignored>* = nullptr>
+            std::enable_if_t<detail::statistics_type_category<T, IO>::ignore>* = nullptr>
   __device__ void operator()(merge_state_s& s,
                              const statistics_chunk* chunks,
                              const uint32_t num_chunks,
@@ -141,7 +161,7 @@ struct merge_group_statistics_functor {
   }
 
   template <typename T,
-            std::enable_if_t<not detail::statistics_type_category<T, IO>::is_ignored>* = nullptr>
+            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema>* = nullptr>
   __device__ void operator()(merge_state_s& s,
                              const statistics_chunk* chunks,
                              const uint32_t num_chunks,
@@ -149,12 +169,33 @@ struct merge_group_statistics_functor {
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
 
-    typed_statistics_chunk<T, detail::statistics_type_category<T, IO>::is_aggregated> chunk;
+    typed_statistics_chunk<T, detail::statistics_type_category<T, IO>::include_aggregate> chunk;
 
     for (uint32_t i = t; i < num_chunks; i += block_size) {
       chunk.reduce(chunks[i]);
     }
     chunk.has_minmax = (chunk.minimum_value <= chunk.maximum_value);
+
+    chunk = block_reduce(chunk, storage);
+
+    if (t == 0) { s.ck = get_untyped_chunk(chunk); }
+  }
+
+  template <
+    typename T,
+    std::enable_if_t<detail::statistics_type_category<T, IO>::include_count and
+                     not detail::statistics_type_category<T, IO>::include_extrema>* = nullptr>
+  __device__ void operator()(merge_state_s& s,
+                             const statistics_chunk* chunks,
+                             const uint32_t num_chunks,
+                             uint32_t t)
+  {
+    detail::storage_wrapper<block_size> storage(temp_storage);
+    typed_statistics_chunk<uint32_t, false> chunk;
+
+    for (uint32_t i = t; i < num_chunks; i += block_size) {
+      chunk.reduce(chunks[i]);
+    }
 
     chunk = block_reduce(chunk, storage);
 

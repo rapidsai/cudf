@@ -103,6 +103,7 @@ WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, integral, type_group_id::
 WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
 WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
 WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, string, cudf::type_id::STRING);
+WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, list, cudf::type_id::LIST);
 
 BENCHMARK_DEFINE_F(OrcWrite, writer_options)
 (::benchmark::State& state) { BM_orc_write_varying_options(state); }

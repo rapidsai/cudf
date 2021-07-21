@@ -53,8 +53,8 @@ struct stats_column_desc {
                         //!< nested columns
   int32_t ts_scale;     //!< timestamp scale (>0: multiply by scale, <0: divide by -scale)
 
-  column_device_view* leaf_column;    //!< Pointer to leaf column
-  column_device_view* parent_column;  //!< Pointer to parent column. Is nullptr if not list type.
+  column_device_view const* leaf_column;    //!< Pointer to leaf column
+  column_device_view const* parent_column;  //!< Pointer to parent column; nullptr if not list type
 };
 
 struct string_stats {
