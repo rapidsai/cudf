@@ -28,11 +28,21 @@ class StructMethods:
         1    3
         dtype: int64
         """
-        typ = self.d_series._meta.dtype.fields[key]
-        return self.d_series.map_partitions(
-            lambda s: s.struct.field(key),
-            meta=self.d_series._meta._constructor([], dtype=typ),
+        if key in self.d_series._meta.dtype.fields.keys():
+            typ = self.d_series._meta.dtype.fields[key]
+            return self.d_series.map_partitions(
+                lambda s: s.struct.field(key),
+                meta=self.d_series._meta._constructor([], dtype=typ),
+            )
+        elif isinstance(key, int):
+            key_list = [dict_key for dict_key in self.d_series._meta.dtype.fields.keys()]
+            typ_key = key_list[key]
+            typ = self.d_series._meta.dtype.fields[typ_key]
+            return self.d_series.map_partitions(
+                lambda s: s.struct.field(key), 
+                meta=self.d_series._meta._constructor([], dtype=typ),
         )
+        
 
 class ListMethods:
     def __init__(self, d_series):
