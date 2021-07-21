@@ -1432,7 +1432,7 @@ __global__ void __launch_bounds__(block_size)
   }
   __syncthreads();
   // Struct doesn't have any data in itself, so skip
-  const bool is_valid       = (s->chunk.type_kind != STRUCT);
+  const bool is_valid       = s->chunk.type_kind != STRUCT;
   const size_t max_num_rows = s->chunk.column_num_rows;
   if (t == 0 and is_valid) {
     // If we have an index, seek to the initial run and update row positions

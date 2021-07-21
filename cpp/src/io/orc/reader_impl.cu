@@ -492,7 +492,7 @@ class aggregate_orc_metadata {
       case orc::STRUCT: {
         has_nested_column = true;
         for (const auto child_id : types[id].subtypes) {
-          // Since struct column needs to be processed before its child can be processed,
+          // Since nested column needs to be processed before its child can be processed,
           // child column is being added to next level
           add_column(
             selection, types, level + 1, child_id, has_timestamp_column, has_nested_column);
@@ -677,8 +677,8 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
  *        skipped while writing child column in ORC, so we need to insert the missing null
  *        elements in child column.
  *        There is another behavior from pyspark, where if the child column doesn't have any null
- * elements, it will not have present stream, so in that case parent null mask need to be copied to
- * child column.
+ *        elements, it will not have present stream, so in that case parent null mask need to be
+ *        copied to child column.
  *
  * @param chunks Vector of list of column chunk descriptors
  * @param out_buffers Output columns' device buffers
@@ -719,8 +719,8 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
           parent_mask_len, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
         bitmask_type* merged_mask = static_cast<bitmask_type*>(merged_null_mask.data());
         uint32_t* dst_idx_ptr     = dst_idx.data();
-        // Copy the child valid bits to valid indexes, this will merge both child and parent null
-        // masks
+        // Copy child valid bits from child column to valid indexes, this will merge both child and
+        // parent null masks
         thrust::for_each(rmm::exec_policy(stream),
                          thrust::make_counting_iterator(0),
                          thrust::make_counting_iterator(0) + dst_idx.size(),
@@ -733,7 +733,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
         out_buffers[j]._null_mask = std::move(merged_null_mask);
 
       } else {
-        // Since child column doesn't have mask, copy parent null mask
+        // Since child column doesn't have a mask, copy parent null mask
         auto mask_size            = bitmask_allocation_size_bytes(parent_mask_len);
         out_buffers[j]._null_mask = std::move(
           rmm::device_buffer(static_cast<void*>(parent_valid_map_base), mask_size, stream, mr));
