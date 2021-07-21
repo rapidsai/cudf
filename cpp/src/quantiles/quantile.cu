@@ -47,7 +47,8 @@ struct quantile_functor {
   rmm::mr::device_memory_resource* mr;
 
   template <typename T>
-  std::enable_if_t<not std::is_arithmetic<T>::value and not cudf::is_fixed_point<T>() or std::is_same<T, numeric::decimal128>::value, // TODO 
+  std::enable_if_t<not std::is_arithmetic<T>::value and not cudf::is_fixed_point<T>() or
+                     std::is_same<T, numeric::decimal128>::value,  // TODO
                    std::unique_ptr<column>>
   operator()(column_view const& input)
   {
@@ -55,7 +56,9 @@ struct quantile_functor {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_arithmetic<T>::value or cudf::is_fixed_point<T>() and not std::is_same<T, numeric::decimal128>::value, // TODO
+  std::enable_if_t<std::is_arithmetic<T>::value or
+                     cudf::is_fixed_point<T>() and
+                       not std::is_same<T, numeric::decimal128>::value,  // TODO
                    std::unique_ptr<column>>
   operator()(column_view const& input)
   {

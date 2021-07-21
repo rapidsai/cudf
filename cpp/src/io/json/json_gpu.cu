@@ -63,9 +63,9 @@ __device__ std::pair<char const*, char const*> limit_range_to_brackets(char cons
   auto const data_begin = thrust::next(thrust::find_if(
     thrust::seq, begin, end, [] __device__(auto c) { return c == '[' || c == '{'; }));
   auto const data_end   = thrust::next(thrust::find_if(thrust::seq,
-                                                     thrust::make_reverse_iterator(end),
-                                                     thrust::make_reverse_iterator(data_begin),
-                                                     [](auto c) { return c == ']' || c == '}'; }))
+                                                       thrust::make_reverse_iterator(end),
+                                                       thrust::make_reverse_iterator(data_begin),
+                                                       [](auto c) { return c == ']' || c == '}'; }))
                           .base();
   return {data_begin, data_end};
 }
@@ -287,8 +287,8 @@ __inline__ __device__ numeric::decimal64 decode_value(const char*,
 
 template <>
 __inline__ __device__ numeric::decimal128 decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&)
+                                                       const char*,
+                                                       parse_options_view const&)
 {
   return numeric::decimal128{};
 }
@@ -655,7 +655,7 @@ __global__ void detect_data_types_kernel(
       bool is_negative       = (*desc.value_begin == '-');
       char const* data_begin = desc.value_begin + (is_negative || (*desc.value_begin == '+'));
       cudf::size_type* ptr   = cudf::io::gpu::infer_integral_field_counter(
-        data_begin, data_begin + digit_count, is_negative, column_infos[desc.column]);
+          data_begin, data_begin + digit_count, is_negative, column_infos[desc.column]);
       atomicAdd(ptr, 1);
     } else if (is_like_float(
                  value_len, digit_count, decimal_count, dash_count + plus_count, exponent_count)) {

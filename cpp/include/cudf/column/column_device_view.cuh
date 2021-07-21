@@ -465,13 +465,13 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired element
    * @return numeric::decimal128 representing the element at this index
    */
-   template <typename T, CUDF_ENABLE_IF(std::is_same<T, numeric::decimal128>::value)>
-   __device__ T element(size_type element_index) const noexcept
-   {
-     using namespace numeric;
-     auto const scale = scale_type{_type.scale()};
-     return decimal128{scaled_integer<__int128_t>{data<__int128_t>()[element_index], scale}};
-   }
+  template <typename T, CUDF_ENABLE_IF(std::is_same<T, numeric::decimal128>::value)>
+  __device__ T element(size_type element_index) const noexcept
+  {
+    using namespace numeric;
+    auto const scale = scale_type{_type.scale()};
+    return decimal128{scaled_integer<__int128_t>{data<__int128_t>()[element_index], scale}};
+  }
 
   /**
    * @brief For a given `T`, indicates if `column_device_view::element<T>()` has a valid overload.
