@@ -241,7 +241,7 @@ class Series(SingleColumnFrame, Serializable):
         if isinstance(data, dict):
             index = data.keys()
             data = column.as_column(
-                data.values(), nan_as_null=nan_as_null, dtype=dtype
+                list(data.values()), nan_as_null=nan_as_null, dtype=dtype
             )
 
         if data is None:
@@ -2432,6 +2432,9 @@ class Series(SingleColumnFrame, Serializable):
 
         if isinstance(col, cudf.core.column.Decimal64Column):
             col = col._with_type_metadata(objs[0]._column.dtype)
+
+        if isinstance(col, cudf.core.column.StructColumn):
+            col = col._with_type_metadata(objs[0].dtype)
 
         return cls(data=col, index=index, name=name)
 

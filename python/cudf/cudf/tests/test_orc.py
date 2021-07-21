@@ -1045,3 +1045,97 @@ def test_orc_timestamp_read(datadir):
     gdf = cudf.read_orc(path)
 
     assert_eq(pdf, gdf)
+
+
+def dec(num):
+    return decimal.Decimal(str(num))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # basic + nested strings
+        {
+            "lls": [[["a"], ["bb"]] * 5 for i in range(12345)],
+            "lls2": [[["ccc", "dddd"]] * 6 for i in range(12345)],
+            "ls_dict": [["X"] * 7 for i in range(12345)],
+            "ls_direct": [[str(i)] * 9 for i in range(12345)],
+            "li": [[i] * 11 for i in range(12345)],
+            "lf": [[i * 0.5] * 13 for i in range(12345)],
+            "ld": [[dec(i / 2)] * 15 for i in range(12345)],
+        },
+        # multiple stripes
+        {
+            "ls": [[str(i), str(2 * i)] for i in range(1_200_000)],
+            "ld": [[dec(i / 2)] * 5 for i in range(1_200_000)],
+        },
+        # with nulls
+        {
+            "ls": [
+                [str(i) if i % 5 else None, str(2 * i)] if i % 2 else None
+                for i in range(12345)
+            ],
+            "li": [[i, i * i, i % 2] if i % 3 else None for i in range(12345)],
+            "ld": [
+                [dec(i), dec(i / 2) if i % 7 else None] if i % 5 else None
+                for i in range(12345)
+            ],
+        },
+        # with empty elements
+        {
+            "ls": [
+                [str(i), str(2 * i)] if i % 2 else [] for i in range(12345)
+            ],
+            "lls": [
+                [[str(i), str(2 * i)]] if i % 2 else [[], []]
+                for i in range(12345)
+            ],
+            "li": [[i, i * i, i % 2] if i % 3 else [] for i in range(12345)],
+            "lli": [
+                [[i], [i * i], [i % 2]] if i % 3 else [[]]
+                for i in range(12345)
+            ],
+            "ld": [
+                [dec(i), dec(i / 2)] if i % 5 else [] for i in range(12345)
+            ],
+        },
+        # variable list lengths
+        {
+            "ls": [[str(i)] * i for i in range(123)],
+            "li": [[i, i * i] * i for i in range(123)],
+            "ld": [[dec(i), dec(i / 2)] * i for i in range(123)],
+        },
+        # many child elements (more that max_stripe_rows)
+        {"li": [[i] * 1100 for i in range(11000)]},
+    ],
+)
+def test_orc_writer_lists(data):
+    pdf_in = pd.DataFrame(data)
+
+    buffer = BytesIO()
+    cudf.from_pandas(pdf_in).to_orc(buffer)
+
+    pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
+    assert_eq(pdf_out, pdf_in)
+
+
+def test_chunked_orc_writer_lists():
+    num_rows = 12345
+    pdf_in = pd.DataFrame(
+        {
+            "ls": [[str(i), str(2 * i)] for i in range(num_rows)],
+            "ld": [[dec(i / 2)] * 5 for i in range(num_rows)],
+        }
+    )
+
+    gdf = cudf.from_pandas(pdf_in)
+    expect = pd.concat([pdf_in, pdf_in]).reset_index(drop=True)
+
+    buffer = BytesIO()
+    writer = ORCWriter(buffer)
+    writer.write_table(gdf)
+    writer.write_table(gdf)
+    writer.close()
+
+    got = pa.orc.ORCFile(buffer).read().to_pandas()
+    assert_eq(expect, got)
