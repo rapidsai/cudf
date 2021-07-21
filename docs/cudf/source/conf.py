@@ -42,7 +42,6 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_copybutton",
     "numpydoc",
-    "sphinx_markdown_tables",
     "IPython.sphinxext.ipython_console_highlighting",
     "IPython.sphinxext.ipython_directive",
     "nbsphinx",
@@ -50,7 +49,7 @@ extensions = [
 
 
 copybutton_prompt_text = ">>> "
-
+autosummary_generate = True
 ipython_mplbackend = "str"
 
 # Add any paths that contain templates here, relative to this directory.
@@ -60,7 +59,7 @@ templates_path = ["_templates"]
 # You can specify multiple suffix as a list of string:
 #
 # source_suffix = ['.rst', '.md']
-source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
+source_suffix = {".rst": "restructuredtext"}
 
 # The master toctree document.
 master_doc = "index"
@@ -97,15 +96,21 @@ pygments_style = "sphinx"
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = False
 
+html_theme_options = {
+    "external_links": [],
+    "github_url": "https://github.com/rapidsai/cudf",
+    "twitter_url": "https://twitter.com/rapidsai",
+    "show_toc_level": 1,
+    "navbar_align": "right",
+}
 
-# -- Options for HTML output ----------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
 
-html_theme = "sphinx_rtd_theme"
-
+html_theme = "pydata_sphinx_theme"
+html_logo = "_static/RAPIDS-logo-purple.png"
 # on_rtd is whether we are on readthedocs.org
 on_rtd = os.environ.get("READTHEDOCS", None) == "True"
 
@@ -113,10 +118,10 @@ if not on_rtd:
     # only import and set the theme if we're building docs locally
     # otherwise, readthedocs.org uses their theme by default,
     # so no need to specify it
-    import sphinx_rtd_theme
+    import pydata_sphinx_theme
 
-    html_theme = "sphinx_rtd_theme"
-    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+    html_theme = "pydata_sphinx_theme"
+    html_theme_path = pydata_sphinx_theme.get_html_theme_path()
 
 
 # Theme options are theme-specific and customize the look and feel of a theme
@@ -237,8 +242,6 @@ def ignore_internal_references(app, env, node, contnode):
 
 
 def setup(app):
-    app.add_js_file("copybutton_pydocs.js")
     app.add_css_file("params.css")
-    app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")
     app.connect("doctree-read", resolve_aliases)
     app.connect("missing-reference", ignore_internal_references)
