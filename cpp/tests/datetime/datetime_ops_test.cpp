@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/timestamp_utilities.cuh>
 #include <cudf_test/type_lists.hpp>
 
@@ -574,6 +575,7 @@ TEST_F(BasicDatetimeOpsTest, TestQuarter)
   using namespace cudf::test;
   using namespace cudf::datetime;
   using namespace cuda::std::chrono;
+  using namespace cudf::test::iterators;
 
   // Time in seconds since epoch
   // Dates converted using epochconverter.com
@@ -595,11 +597,10 @@ TEST_F(BasicDatetimeOpsTest, TestQuarter)
         1608581568L,    // 2020-12-21 08:12:48 GMT
         1584821568L,    // 2020-03-21 08:12:48 GMT
       },
-      {true, false, true, true, true, true, true, true, false, true, true, false, true, true}};
+      nulls_at({1, 8, 11})};
 
   auto quarter = cudf::test::fixed_width_column_wrapper<int16_t>{
-    {3, 6, 1, 2, 2, 4, 1, 1, 1, 3, 4, 3, 4, 4, 1},
-    {true, false, true, true, true, true, true, true, false, true, true, false, true, true}};
+    {3, 6, 1, 2, 2, 4, 1, 1, 1, 3, 4, 3, 4, 1}, nulls_at({1, 8, 11})};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_quarter(timestamps_s), quarter);
 }
