@@ -1,5 +1,4 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
-import numpy as np
 
 
 class Reducible:
@@ -53,17 +52,14 @@ class Reducible:
     def sum_of_squares(self, *args, **kwargs):
         return self._reduce("sum_of_squares", *args, **kwargs)
 
-    # TODO: Need a better way of setting a default dtype. If nothing else, I
-    # guess we'll just need to override this parameter in the relevant column
-    # types (numerical_base).
-    def mean(self, dtype=np.float64, *args, **kwargs):
-        return self._reduce("mean", dtype=dtype, *args, **kwargs)
+    def mean(self, *args, **kwargs):
+        return self._reduce("mean", *args, **kwargs)
 
-    def var(self, dtype=np.float64, *args, **kwargs):
-        return self._reduce("var", dtype=dtype, *args, **kwargs)
+    def var(self, *args, **kwargs):
+        return self._reduce("var", *args, **kwargs)
 
-    def std(self, dtype=np.float64, *args, **kwargs):
-        return self._reduce("std", dtype=dtype, *args, **kwargs)
+    def std(self, *args, **kwargs):
+        return self._reduce("std", *args, **kwargs)
 
     # def median(self, *args, **kwargs):
     #     return self._reduce("median", *args, **kwargs)

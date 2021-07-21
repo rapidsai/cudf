@@ -116,6 +116,15 @@ class NumericalBaseColumn(Reducible, ColumnBase):
             )
         return result
 
+    def mean(self, dtype=np.float64, *args, **kwargs):
+        return super().mean(dtype=dtype, *args, **kwargs)
+
+    def var(self, dtype=np.float64, *args, **kwargs):
+        return super().var(dtype=dtype, *args, **kwargs)
+
+    def std(self, dtype=np.float64, *args, **kwargs):
+        return super().std(dtype=dtype, *args, **kwargs)
+
     def median(self, skipna: bool = None) -> NumericalBaseColumn:
         skipna = True if skipna is None else skipna
 
