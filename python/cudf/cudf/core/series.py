@@ -241,7 +241,7 @@ class Series(SingleColumnFrame, Serializable):
         if isinstance(data, dict):
             index = data.keys()
             data = column.as_column(
-                data.values(), nan_as_null=nan_as_null, dtype=dtype
+                list(data.values()), nan_as_null=nan_as_null, dtype=dtype
             )
 
         if data is None:
