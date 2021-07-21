@@ -999,6 +999,15 @@ def test_skip_rows_for_nested_types(columns):
         )
 
 
+def test_pyspark_struct(datadir):
+    path = datadir / "TestOrcFile.testPySparkStruct.orc"
+
+    pdf = pa.orc.ORCFile(path).read().to_pandas()
+    gdf = cudf.read_orc(path)
+
+    assert_eq(pdf, gdf)
+
+
 @pytest.mark.parametrize(
     "data", [["_col0"], ["FakeName", "_col0", "TerriblyFakeColumnName"]]
 )

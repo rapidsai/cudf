@@ -181,7 +181,8 @@ size_t gather_stream_info(const size_t stripe_index,
                           bool use_index,
                           size_t* num_dictionary_entries,
                           cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-                          std::vector<orc_stream_info>& stream_info)
+                          std::vector<orc_stream_info>& stream_info,
+                          size_t level)
 {
   uint64_t src_offset = 0;
   uint64_t dst_offset = 0;
@@ -194,7 +195,7 @@ size_t gather_stream_info(const size_t stripe_index,
     auto const column_id = *stream.column_id;
     auto col             = orc2gdf[column_id];
 
-    if (col == -1) {
+    if (col == -1 and level == 0) {
       // A struct-type column has no data itself, but rather child columns
       // for each of its fields. There is only a PRESENT stream, which
       // needs to be included for the reader.
@@ -710,7 +711,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
 
   for (size_t j = 0; j < num_columns; ++j) {
     if (chunks[0][j].parent_data.valid_map_base) {
-      if (not is_mask_updated) chunks.device_to_host(stream);
+      if (not is_mask_updated) chunks.device_to_host(stream, true);
       auto parent_valid_map_base = chunks[0][j].parent_data.valid_map_base;
       auto child_valid_map_base  = out_buffers[j].null_mask();
       auto child_mask_len  = chunks[0][j].column_num_rows - chunks[0][j].parent_data.null_count;
@@ -740,10 +741,11 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
                          });
 
         out_buffers[j]._null_mask = std::move(merged_null_mask);
+
       } else {
-        auto mask_size = bitmask_allocation_size_bytes(parent_mask_len);
-        out_buffers[j]._null_mask =
-          rmm::device_buffer(parent_valid_map_base, mask_size, stream, mr);
+        auto mask_size            = bitmask_allocation_size_bytes(parent_mask_len);
+        out_buffers[j]._null_mask = std::move(
+          rmm::device_buffer(static_cast<void*>(parent_valid_map_base), mask_size, stream, mr));
       }
       if (not is_mask_updated) is_mask_updated = true;
     }
@@ -756,7 +758,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
         chunk.valid_map_base = out_buffers[j].null_mask();
       }
     }
-    chunks.host_to_device(stream);
+    chunks.host_to_device(stream, true);
   }
 }
 
@@ -786,17 +788,12 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
   rmm::device_uvector<gpu::DictionaryEntry> global_dict(num_dicts, stream);
 
   chunks.host_to_device(stream, true);
-  gpu::DecodeNullsAndStringDictionaries(chunks.base_device_ptr(),
-                                        global_dict.data(),
-                                        num_columns,
-                                        num_stripes,
-                                        skip_rows,
-                                        level,
-                                        stream);
+  gpu::DecodeNullsAndStringDictionaries(
+    chunks.base_device_ptr(), global_dict.data(), num_columns, num_stripes, skip_rows, stream);
 
   if (level > 0) {
     // Update nullmasks if parent was a struct and had null mask
-    update_null_mask(chunks, out_buffers, stream, _mr);
+    update_null_mask(chunks, out_buffers, strr);
   }
 
   // Update the null map for child columns
@@ -1144,7 +1141,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                                           use_index,
                                                           &num_dict_entries,
                                                           chunks,
-                                                          stream_info);
+                                                          stream_info,
+                                                          level);
 
           CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
 

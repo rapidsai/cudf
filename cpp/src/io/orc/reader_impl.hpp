@@ -159,7 +159,8 @@ class reader::impl {
    * @brief Aggregate child metadata from parent column chunks.
    *
    * @param chunks Vector of list of parent column chunks.
-   * @param chunks Vector of list of parent column row groups.
+   * @param row_groups Vector of list of row index descriptors
+   * @param out_buffers Column buffers for columns.
    * @param list_col Vector of column metadata of list type parent columns.
    * @param level Current nesting level being processed.
    */

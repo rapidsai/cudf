@@ -1133,8 +1133,7 @@ __global__ void __launch_bounds__(block_size)
                                       DictionaryEntry* global_dictionary,
                                       uint32_t num_columns,
                                       uint32_t num_stripes,
-                                      size_t first_row,
-                                      size_t level)
+                                      size_t first_row)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
   using warp_reduce  = cub::WarpReduce<uint32_t>;
@@ -1187,6 +1186,7 @@ __global__ void __launch_bounds__(block_size)
         nrows = nrows_max;
       }
       __syncthreads();
+
       row_in = s->chunk.start_row + s->top.nulls_desc_row;
       if (row_in + nrows > first_row && row_in < first_row + max_num_rows &&
           s->chunk.valid_map_base != NULL) {
@@ -1335,7 +1335,10 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
          s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row) {
     uint32_t nrows = min(s->top.data.end_row - (s->top.data.cur_row + s->top.data.nrows),
                          min((row_decoder_buffer_size - s->u.rowdec.nz_count) * 2, blockDim.x));
-    if (s->chunk.strm_len[CI_PRESENT] > 0) {
+    // Even though s->chunk.strm_len is zero, there is possibility that there is null mask.
+    // This happens in a struct column with nulls which has child column which doesn't have any
+    // nulls.
+    if (s->chunk.strm_len[CI_PRESENT] > 0 or s->chunk.valid_map_base) {
       // We have a present stream
       uint32_t rmax  = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
       uint32_t r     = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
@@ -1427,11 +1430,8 @@ __global__ void __launch_bounds__(block_size)
     s->chunk          = chunks[chunk_id];
     s->num_child_rows = 0;
   }
-  // Struct doesn't have any data in itself, so skip
-  // if(t == 0 and not is_valid){
-  //    chunks[chunk_id].num_child_rows = chunks[chunk_id].num_rows;
-  //}
   __syncthreads();
+  // Struct doesn't have any data in itself, so skip
   const bool is_valid       = (s->chunk.type_kind != STRUCT);
   const size_t max_num_rows = s->chunk.column_num_rows;
   if (t == 0 and is_valid) {
@@ -1837,13 +1837,12 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                                uint32_t num_columns,
                                                uint32_t num_stripes,
                                                size_t first_row,
-                                               size_t level,
                                                rmm::cuda_stream_view stream)
 {
   dim3 dim_block(block_size, 1);
   dim3 dim_grid(num_columns, num_stripes * 2);  // 1024 threads per chunk
   gpuDecodeNullsAndStringDictionaries<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
-    chunks, global_dictionary, num_columns, num_stripes, first_row, level);
+    chunks, global_dictionary, num_columns, num_stripes, first_row);
 }
 
 /**
