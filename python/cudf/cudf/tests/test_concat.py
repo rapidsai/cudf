@@ -1462,6 +1462,77 @@ def test_concat_decimal_numeric_series(s1, s2, s3, expected):
     "s1, s2, expected",
     [
         (
+            gd.Series(
+                [Decimal("955.22"), Decimal("8.2")], dtype=Decimal64Dtype(5, 2)
+            ),
+            gd.Series(["2007-06-12", "2006-03-14"], dtype="datetime64"),
+            gd.Series(
+                [
+                    "955.22",
+                    "8.20",
+                    "2007-06-12 00:00:00",
+                    "2006-03-14 00:00:00",
+                ],
+                index=[0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("-52.44"), Decimal("365.22")],
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.Series(
+                np.arange(
+                    "2005-02-01T12", "2005-02-01T15", dtype="datetime64[h]"
+                ),
+                dtype="datetime64[s]",
+            ),
+            gd.Series(
+                [
+                    "-52.44",
+                    "365.22",
+                    "2005-02-01 12:00:00",
+                    "2005-02-01 13:00:00",
+                    "2005-02-01 14:00:00",
+                ],
+                index=[0, 1, 0, 1, 2],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("753.0"), Decimal("94.22")],
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.Series([np.timedelta64(111, "s"), np.timedelta64(509, "s")]),
+            gd.Series(
+                ["753.00", "94.22", "0 days 00:01:51", "0 days 00:08:29"],
+                index=[0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("753.0"), Decimal("94.22")],
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.Series(
+                [np.timedelta64(940252, "s"), np.timedelta64(758385, "s")]
+            ),
+            gd.Series(
+                ["753.00", "94.22", "10 days 21:10:52", "8 days 18:39:45"],
+                index=[0, 1, 0, 1],
+            ),
+        ),
+    ],
+)
+def test_concat_decimal_non_numeric(s1, s2, expected):
+    s = gd.concat([s1, s2])
+    assert_eq(s, expected)
+
+
+@pytest.mark.parametrize(
+    "s1, s2, expected",
+    [
+        (
             gd.Series([{"a": 5}, {"c": "hello"}, {"b": 7}]),
             gd.Series([{"a": 5, "c": "hello", "b": 7}]),
             gd.Series(
