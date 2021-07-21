@@ -86,7 +86,7 @@ struct DictionaryEntry {
 constexpr int orc_decimal2float64_scale = 0x80;
 
 /**
- * Holds parent column mask and null count
+ * Struct to store parent column mask and null count
  */
 struct ParentColumnData {
   uint32_t* valid_map_base;
