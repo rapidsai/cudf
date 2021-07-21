@@ -15,6 +15,7 @@ Welcome to cuDF's documentation!
    guide-to-udfs.ipynb
    internals.rst
    Working-with-missing-data.ipynb
+   PandasCompat.rst
 
 Indices and tables
 ==================

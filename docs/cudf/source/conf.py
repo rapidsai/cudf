@@ -26,6 +26,7 @@ from docutils.nodes import Text
 from sphinx.addnodes import pending_xref
 
 sys.path.insert(0, os.path.abspath("../.."))
+sys.path.append(os.path.abspath("./_ext"))
 
 # -- General configuration ------------------------------------------------
 
@@ -46,8 +47,8 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "IPython.sphinxext.ipython_directive",
     "nbsphinx",
+    "PandasCompat",
 ]
-
 
 copybutton_prompt_text = ">>> "
 
@@ -94,9 +95,7 @@ exclude_patterns = []
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"
 
-# If true, `todo` and `todoList` produce output, else they produce nothing.
-todo_include_todos = False
-
+include_pandas_compat = True
 
 # -- Options for HTML output ----------------------------------------------
 

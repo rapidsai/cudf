@@ -420,6 +420,30 @@ class GroupBy(Serializable):
           4    2    4    8
           5    2    5   10
           6    2    6   12
+
+        .. pandas-compat::
+            **groupby.apply**
+
+            cuDF's ``groupby.apply`` is limited compared to pandas.
+            In some situations, Pandas returns the grouped keys as part of
+            the index while cudf does not due to redundancy. For example:
+
+            .. code-block::
+
+                >>> df = pd.DataFrame({
+                    'a': [1, 1, 2, 2],
+                    'b': [1, 2, 1, 2],
+                    'c': [1, 2, 3, 4]})
+                >>> gdf = cudf.from_pandas(df)
+                >>> df.groupby('a').apply(lambda x: x.iloc[[0]])
+                        a  b  c
+                    a
+                    1 0  1  1  1
+                    2 2  2  1  3
+                >>> gdf.groupby('a').apply(lambda x: x.iloc[[0]])
+                        a  b  c
+                    0  1  1  1
+                    2  2  1  3
         """
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
@@ -866,6 +890,28 @@ class GroupBy(Serializable):
         Returns
         -------
         DataFrame or Series
+
+        .. pandas-compat::
+            **groupby.fillna**
+
+            This function may return result in different format to the method
+            Pandas supports. For example:
+
+            .. code-block::
+
+                >>> df = pd.DataFrame({'k': [1, 1, 2], 'v': [2, None, 4]})
+                >>> gdf = cudf.from_pandas(df)
+                >>> df.groupby('k').fillna({'v': 4}) # pandas
+                        v
+                k
+                1 0  2.0
+                    1  4.0
+                2 2  4.0
+                >>> gdf.groupby('k').fillna({'v': 4}) # cudf
+                        v
+                0  2.0
+                1  4.0
+                2  4.0
         """
         if inplace:
             raise NotImplementedError("Does not support inplace yet.")
