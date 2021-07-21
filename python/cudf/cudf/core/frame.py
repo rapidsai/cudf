@@ -1460,34 +1460,30 @@ class Frame(libcudf.table.Table):
             some or all ``NaN`` values
 
         """
+
+        if method in {'pad', 'ffill'} and limit_direction != 'forward':
+            raise ValueError(
+                f"`limit_direction` must be 'forward' for method `{method}`"
+            )
+        if method in {'backfill', 'bfill'} and limit_direction != 'backward':
+            raise ValueError(
+                f"`limit_direction` must be 'backward' for method `{method}`"
+            )
+
+
         columns = ColumnAccessor()
 
-        if method == 'linear':
+        if method in 'linear':
             xax = as_column(cupy.arange(len(self)))
         elif method in {'index', 'values'}:
             xax = self.index
+        interpolator = cudf.core.algorithms.get_column_interpolator(method)
 
         for colname, col in self._data.items():
             if col.nullable:
-                not_null = col.notnull()
-                known_x = cupy.asarray(
-                    xax.apply_boolean_mask(not_null)
-                )
-                known_y = cupy.asarray(
-                    col.apply_boolean_mask(not_null)
-                ).astype(np.dtype('float64'))
-
-                result = cupy.interp(
-                    cupy.asarray(xax), 
-                    known_x, 
-                    known_y, 
-                    left=np.nan, 
-                    right=np.nan)
-            else:
-                # The trivial case
-                result = col
+                col = col.fillna(np.nan)
+            result = interpolator(col, xax)            
             columns[colname] = result
-
 
         return self.__class__(columns)
 

@@ -5904,10 +5904,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         **kwargs
     ):
 
-        if method not in {'linear', 'index', 'values'}:
-            raise ValueError(
-                f"method {method} is not supported."
-            )
         if method in {'index', 'values'} and not self.index.is_monotonic_increasing:
             warnings.warn(
                 "Unsorted Index..."

@@ -10,12 +10,12 @@ from cudf.testing._utils import assert_eq, assert_exceptions_equal
         'B': [4, 5, 6]
     },
     {
-        'A': [1, None, 3],
-        'B': [4, None, 6]
+        'A': [1.0, None, 3.0],
+        'B': [4.0, None, 6.0]
     },
     {
-        'A': [None, 2, 3],
-        'B': [4, 5, None]
+        'A': [None, 2.0, 3.0],
+        'B': [4.0, 5.0, None]
     }
 ])
 @pytest.mark.parametrize("method", ['linear'])
@@ -30,10 +30,10 @@ def test_interpolate_dataframe(data, method, axis):
     assert_eq(expect, got)
 
 @pytest.mark.parametrize("data", [
-    [1,2,3],
-    [1, None, 3],
-    [None, 2, None, 4],
-    [1, None, 3, None],
+    [1.0,2.0,3.0],
+    [1.0, None, 3.0],
+    [None, 2.0, None, 4.0],
+    [1.0, None, 3.0, None],
     [0.1, 0.2, 0.3]
 ])
 @pytest.mark.parametrize("method", ['linear'])
@@ -54,7 +54,31 @@ def test_interpolate_series(data, method, axis):
             'B': ['d','e','f']
         },
         {'axis': 0, 'method': 'linear'},
-    )
+    ),
+    (
+        {
+            'A': [1,2,3]
+        },
+        {'method': 'pad', 'limit_direction': 'backward'}
+    ),
+    (
+        {
+            'A': [1,2,3]
+        },
+        {'method': 'ffill', 'limit_direction': 'backward'}
+    ),
+    (
+        {
+            'A': [1,2,3]
+        },
+        {'method': 'bfill', 'limit_direction': 'forward'}
+    ),
+    (
+        {
+            'A': [1,2,3]
+        },
+        {'method': 'backfill', 'limit_direction': 'forward'}
+    ),
 ])
 def test_interpolate_dataframe_error_cases(data, kwargs):
     gsr = cudf.DataFrame(data)

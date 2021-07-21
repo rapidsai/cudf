@@ -1,10 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 from warnings import warn
-
+import numpy as np
 import cupy as cp
 
 from cudf.core.series import Index, Series
-
+from cudf.core.column import as_column
 
 def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
     """Encode the input values as integer labels
@@ -59,3 +59,34 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
     values.name = name
 
     return labels, cats.values if return_cupy_array else Index(cats)
+
+def linear_interpolation(col, xax):
+    # fill all NAs with NaNs
+    col = col.astype('float64').fillna(np.nan)
+
+    # figure out where the nans are
+    not_nan_mask = ~cp.isnan(col)
+
+    # find the first nan
+    first_nan_idx = as_column(not_nan_mask).find_first_value(1)
+
+    known_x = cp.asarray(xax.apply_boolean_mask(not_nan_mask))
+    known_y = cp.asarray(col.apply_boolean_mask(not_nan_mask)).astype(np.dtype('float64'))
+
+    result = cp.interp(
+        cp.asarray(xax), 
+        known_x, 
+        known_y
+    )
+
+    result[:first_nan_idx] = np.nan
+
+    return result
+
+def get_column_interpolator(method):
+    if method == 'linear':
+        return linear_interpolation
+    else:
+        raise ValueError(
+            f"Interpolation method `{method}` not found"
+        )        
