@@ -6,7 +6,7 @@ import pyarrow as pa
 import cudf
 from cudf._typing import Dtype
 from cudf.core.column import ColumnBase, build_struct_column
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
 from cudf.utils.dtypes import is_struct_dtype
 
@@ -20,7 +20,7 @@ class StructColumn(ColumnBase):
 
     """
 
-    dtype: cudf.core.dtypes.StructDtype
+    dtype: StructDtype
 
     @property
     def base_size(self):
@@ -87,16 +87,22 @@ class StructColumn(ColumnBase):
                 field: value
                 for field, value in zip(self.dtype.fields, result.values())
             }
-        return result
+        return result._rename_fields(self.dtype.fields.keys())
+
+    def __setitem__(self, key, value):
+        if isinstance(value, dict):
+            # filling in fields not in dict
+            for field in self.dtype.fields:
+                value[field] = value.get(field, cudf.NA)
+
+            value = cudf.Scalar(value, self.dtype)
+        super().__setitem__(key, value)
 
     def copy(self, deep=True):
         result = super().copy(deep=deep)
         if deep:
             result = result._rename_fields(self.dtype.fields.keys())
         return result
-
-    def struct(self, parent=None):
-        return StructMethods(self, parent=parent)
 
     def _rename_fields(self, names):
         """
@@ -139,17 +145,19 @@ class StructColumn(ColumnBase):
         return self
 
 
-class StructMethods(ColumnMethodsMixin):
+class StructMethods(ColumnMethods):
     """
     Struct methods for Series
     """
 
-    def __init__(self, column, parent=None):
-        if not is_struct_dtype(column.dtype):
+    _column: StructColumn
+
+    def __init__(self, parent=None):
+        if not is_struct_dtype(parent.dtype):
             raise AttributeError(
                 "Can only use .struct accessor with a 'struct' dtype"
             )
-        super().__init__(column=column, parent=parent)
+        super().__init__(parent=parent)
 
     def field(self, key):
         """
@@ -184,3 +192,38 @@ class StructMethods(ColumnMethodsMixin):
             return self._return_or_inplace(self._column.children[pos])
         else:
             return self._return_or_inplace(self._column.children[key])
+
+    def explode(self):
+        """
+        Return a DataFrame whose columns are the fields of this struct Series.
+
+        Notes
+        -----
+        Note that a copy of the columns is made.
+
+        Examples
+        --------
+        >>> s
+        0    {'a': 1, 'b': 'x'}
+        1    {'a': 2, 'b': 'y'}
+        2    {'a': 3, 'b': 'z'}
+        3    {'a': 4, 'b': 'a'}
+        dtype: struct
+
+        >>> s.struct.explode()
+           a  b
+        0  1  x
+        1  2  y
+        2  3  z
+        3  4  a
+        """
+        return cudf.DataFrame._from_data(
+            cudf.core.column_accessor.ColumnAccessor(
+                {
+                    name: col.copy(deep=True)
+                    for name, col in zip(
+                        self._column.dtype.fields, self._column.children
+                    )
+                }
+            )
+        )

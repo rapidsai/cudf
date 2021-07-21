@@ -27,9 +27,9 @@
 namespace cudf {
 namespace test {
 
-constexpr bool print_all{true};  // For debugging
-constexpr int32_t null{0};       // Mark for null child elements
-constexpr int32_t XXX{0};        // Mark for null struct elements
+constexpr debug_output_level verbosity{debug_output_level::ALL_ERRORS};
+constexpr int32_t null{0};  // Mark for null child elements
+constexpr int32_t XXX{0};   // Mark for null struct elements
 
 using structs_col = cudf::test::structs_column_wrapper;
 
@@ -69,7 +69,7 @@ TYPED_TEST(TypedStructScalarScatterTest, Basic)
 
   auto got = scatter_single_scalar(*slr, scatter_map, target);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, got, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, got, verbosity);
 }
 
 TYPED_TEST(TypedStructScalarScatterTest, FillNulls)
@@ -93,7 +93,7 @@ TYPED_TEST(TypedStructScalarScatterTest, FillNulls)
 
   auto got = scatter_single_scalar(*slr, scatter_map, target);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, got, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, got, verbosity);
 }
 
 TYPED_TEST(TypedStructScalarScatterTest, ScatterNullElements)
@@ -118,7 +118,7 @@ TYPED_TEST(TypedStructScalarScatterTest, ScatterNullElements)
 
   auto got = scatter_single_scalar(*slr, scatter_map, target);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got, verbosity);
 }
 
 TYPED_TEST(TypedStructScalarScatterTest, ScatterNullFields)
@@ -142,7 +142,7 @@ TYPED_TEST(TypedStructScalarScatterTest, ScatterNullFields)
 
   auto got = scatter_single_scalar(*slr, scatter_map, target);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got, verbosity);
 }
 
 TYPED_TEST(TypedStructScalarScatterTest, NegativeIndices)
@@ -166,7 +166,7 @@ TYPED_TEST(TypedStructScalarScatterTest, NegativeIndices)
 
   auto got = scatter_single_scalar(*slr, scatter_map, target);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, got, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, got, verbosity);
 }
 
 TYPED_TEST(TypedStructScalarScatterTest, EmptyInputTest)
@@ -190,7 +190,7 @@ TYPED_TEST(TypedStructScalarScatterTest, EmptyInputTest)
 
   auto got = scatter_single_scalar(*slr, scatter_map, target);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, got, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, got, verbosity);
 }
 
 TYPED_TEST(TypedStructScalarScatterTest, EmptyScatterMapTest)
@@ -210,7 +210,7 @@ TYPED_TEST(TypedStructScalarScatterTest, EmptyScatterMapTest)
 
   auto got = scatter_single_scalar(*slr, scatter_map, target);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(target, got, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(target, got, verbosity);
 }
 
 TYPED_TEST(TypedStructScalarScatterTest, FixedWidthStringTypes)
@@ -239,7 +239,7 @@ TYPED_TEST(TypedStructScalarScatterTest, FixedWidthStringTypes)
 
   auto got = scatter_single_scalar(*slr, scatter_map, target);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, got, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, got, verbosity);
 }
 
 TYPED_TEST(TypedStructScalarScatterTest, StructOfLists)
@@ -263,7 +263,7 @@ TYPED_TEST(TypedStructScalarScatterTest, StructOfLists)
 
   auto got = scatter_single_scalar(*slr, scatter_map, target);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, got, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, got, verbosity);
 }
 
 }  // namespace test
