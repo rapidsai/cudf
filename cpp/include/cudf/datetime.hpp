@@ -209,15 +209,12 @@ std::unique_ptr<cudf::column> is_leap_year(
 /**
  * @brief  Returns the quarter of the date
  *
- * `output[i] == 1` if month of `column[i]` is in first quarter
- * `output[i] == 2` if month of `column[i]` is in second quarter
- * `output[i] == 3` if month of `column[i]` is in third quarter
- * `output[i] == 4` if month of `column[i]` is in fourth quarter
- * `output[i] is null` if `column[i]` is null
+ * `output[i]` will be a value from {1, 2, 3, 4} corresponding to the quater of month given by
+ * `column[i]`. `output[i] is null` if `column[i]` is null
  *
- * @param[in] cudf::column_view of the input datetime values
+ * @param[in] The input column containing datetime values
  *
- * @returns cudf::column of datatype INT16 indicating which quarter the date is in
+ * @return A column of INT16 type indicating which quarter the date is in
  * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
  */
 std::unique_ptr<cudf::column> extract_quarter(

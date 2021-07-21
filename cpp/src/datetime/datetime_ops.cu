@@ -29,8 +29,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cmath>
-
 namespace cudf {
 namespace datetime {
 namespace detail {
