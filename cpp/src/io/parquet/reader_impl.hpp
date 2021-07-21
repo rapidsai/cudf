@@ -91,13 +91,13 @@ class reader::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    */
-  void read_column_chunks(std::vector<std::unique_ptr<datasource::buffer>>& page_data,
-                          hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                          size_t begin_chunk,
-                          size_t end_chunk,
-                          const std::vector<size_t>& column_chunk_offsets,
-                          std::vector<size_type> const& chunk_source_map,
-                          rmm::cuda_stream_view stream);
+  std::future<void> read_column_chunks(std::vector<std::unique_ptr<datasource::buffer>>& page_data,
+                                       hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+                                       size_t begin_chunk,
+                                       size_t end_chunk,
+                                       const std::vector<size_t>& column_chunk_offsets,
+                                       std::vector<size_type> const& chunk_source_map,
+                                       rmm::cuda_stream_view stream);
 
   /**
    * @brief Returns the number of total pages from the given column chunks

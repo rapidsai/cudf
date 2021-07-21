@@ -823,7 +823,7 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
 /**
  * @copydoc cudf::io::detail::parquet::read_column_chunks
  */
-void reader::impl::read_column_chunks(
+std::future<void> reader::impl::read_column_chunks(
   std::vector<std::unique_ptr<datasource::buffer>>& page_data,
   hostdevice_vector<gpu::ColumnChunkDesc>& chunks,  // TODO const?
   size_t begin_chunk,
@@ -874,9 +874,12 @@ void reader::impl::read_column_chunks(
       chunk = next_chunk;
     }
   }
-  for (auto& task : read_tasks) {
-    task.wait();
-  }
+  auto sync_fn = [](decltype(read_tasks) read_tasks) {
+    for (auto& task : read_tasks) {
+      task.wait();
+    }
+  };
+  return std::async(std::launch::deferred, sync_fn, std::move(read_tasks));
 }
 
 /**
@@ -1443,6 +1446,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Initialize column chunk information
     size_t total_decompressed_size = 0;
     auto remaining_rows            = num_rows;
+    std::vector<std::future<void>> read_rowgroup_tasks;
     for (const auto& rg : selected_row_groups) {
       const auto& row_group       = _metadata->get_row_group(rg.index, rg.source_index);
       auto const row_group_start  = rg.start_row;
@@ -1510,15 +1514,18 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         }
       }
       // Read compressed chunk data to device memory
-      read_column_chunks(page_data,
-                         chunks,
-                         io_chunk_idx,
-                         chunks.size(),
-                         column_chunk_offsets,
-                         chunk_source_map,
-                         stream);
+      read_rowgroup_tasks.push_back(read_column_chunks(page_data,
+                                                       chunks,
+                                                       io_chunk_idx,
+                                                       chunks.size(),
+                                                       column_chunk_offsets,
+                                                       chunk_source_map,
+                                                       stream));
 
       remaining_rows -= row_group.num_rows;
+    }
+    for (auto& task : read_rowgroup_tasks) {
+      task.wait();
     }
     assert(remaining_rows <= 0);
 
