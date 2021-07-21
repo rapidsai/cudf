@@ -2376,7 +2376,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         try:
             col = libcudf.concat.concat_columns(objs)
         except RuntimeError as e:
-            if "concatenated rows exceeds size_type range" in str(e):
+            if "exceeds size_type range" in str(e):
                 raise OverflowError(
                     "total size of output is too large for a cudf column"
                 ) from e
