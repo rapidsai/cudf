@@ -10,11 +10,12 @@ import numpy as np
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import Dtype, ScalarLike
+from cudf._typing import ScalarLike
 from cudf.core.column import ColumnBase
+from cudf.core.reductions import Reducible
 
 
-class NumericalBaseColumn(ColumnBase):
+class NumericalBaseColumn(Reducible, ColumnBase):
     """A column composed of numerical data.
 
     This class encodes a standard interface for different types of columns
@@ -23,7 +24,7 @@ class NumericalBaseColumn(ColumnBase):
     point, should be encoded here.
     """
 
-    def reduce(
+    def _reduce(
         self, op: str, skipna: bool = None, min_count: int = 0, **kwargs
     ) -> ScalarLike:
         """Perform a reduction operation.
@@ -31,7 +32,10 @@ class NumericalBaseColumn(ColumnBase):
         op : str
             The operation to perform.
         skipna : bool
-            Whether or not na values must be
+            Whether or not na values must be skipped.
+        min_count : int, default 0
+            The minimum number of entries for the reduction, otherwise the
+            reduction returns NaN.
         """
         preprocessed = self._process_for_reduction(
             skipna=skipna, min_count=min_count
@@ -40,42 +44,6 @@ class NumericalBaseColumn(ColumnBase):
             return libcudf.reduce.reduce(op, preprocessed, **kwargs)
         else:
             return preprocessed
-
-    def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ) -> ScalarLike:
-        return self.reduce(
-            "sum", skipna=skipna, dtype=dtype, min_count=min_count
-        )
-
-    def product(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ) -> ScalarLike:
-        return self.reduce(
-            "product", skipna=skipna, dtype=dtype, min_count=min_count
-        )
-
-    def mean(
-        self, skipna: bool = None, dtype: Dtype = np.float64
-    ) -> ScalarLike:
-        return self.reduce("mean", skipna=skipna, dtype=dtype)
-
-    def var(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
-    ) -> ScalarLike:
-        return self.reduce("var", skipna=skipna, dtype=dtype, ddof=ddof)
-
-    def std(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
-    ) -> ScalarLike:
-        return self.reduce("std", skipna=skipna, dtype=dtype, ddof=ddof)
-
-    def sum_of_squares(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ) -> ScalarLike:
-        return self.reduce(
-            "sum_of_squares", skipna=skipna, dtype=dtype, min_count=min_count
-        )
 
     def _can_return_nan(self, skipna: bool = None) -> bool:
         return not skipna and self.has_nulls()
