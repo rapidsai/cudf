@@ -80,21 +80,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
       case 17: // ROW_NUMBER
         ret = cudf::make_row_number_aggregation();
         break;
-      case 18: // RANK
+      // case 18: COLLECT_LIST
+      // case 19: COLLECT_SET
+      // case 20: MERGE_LISTS
+      case 20: ret = cudf::make_merge_lists_aggregation(); break;
+      // case 21: MERGE_SETS
+      // case 22: LEAD
+      // case 23: LAG
+      // case 24: PTX
+      // case 25: CUDA
+      case 26: // RANK
         ret = cudf::make_rank_aggregation();
         break;
-      case 19: // DENSE_RANK
+      case 27: // DENSE_RANK
         ret = cudf::make_dense_rank_aggregation();
         break;
-      // case 20: COLLECT_LIST
-      // case 21: COLLECT_SET
-      // case 22: MERGE_LISTS
-      case 22: ret = cudf::make_merge_lists_aggregation(); break;
-      // case 23: MERGE_SETS
-      // case 24: LEAD
-      // case 25: LAG
-      // case 26: PTX
-      // case 27: CUDA
       default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
     }
 
@@ -192,10 +192,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createLeadLagAgg(JNIEnv 
     std::unique_ptr<cudf::aggregation> ret;
     // These numbers come from Aggregation.java and must stay in sync
     switch (kind) {
-      case 24: // LEAD
+      case 22: // LEAD
         ret = cudf::make_lead_aggregation(offset);
         break;
-      case 25: // LAG
+      case 23: // LAG
         ret = cudf::make_lag_aggregation(offset);
         break;
       default: throw std::logic_error("Unsupported Lead/Lag Aggregation Operation");

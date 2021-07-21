@@ -54,16 +54,16 @@ public abstract class Aggregation {
         NUNIQUE(15),
         NTH_ELEMENT(16),
         ROW_NUMBER(17),
-        RANK(18),
-        DENSE_RANK(19),
-        COLLECT_LIST(20),
-        COLLECT_SET(21),
-        MERGE_LISTS(22),
-        MERGE_SETS(23),
-        LEAD(24),
-        LAG(25),
-        PTX(26),
-        CUDA(27);
+        COLLECT_LIST(18),
+        COLLECT_SET(19),
+        MERGE_LISTS(20),
+        MERGE_SETS(21),
+        LEAD(22),
+        LAG(23),
+        PTX(24),
+        CUDA(25),
+        RANK(26),
+        DENSE_RANK(27);
 
         final int nativeId;
 
