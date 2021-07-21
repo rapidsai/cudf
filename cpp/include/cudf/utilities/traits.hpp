@@ -152,7 +152,8 @@ constexpr inline bool is_equality_comparable()
 template <typename T>
 constexpr inline bool is_numeric()
 {
-  return std::is_integral<T>::value or std::is_floating_point<T>::value or std::is_same<T, __int128_t>::value;
+  return std::is_integral<T>::value or std::is_floating_point<T>::value or
+         std::is_same<T, __int128_t>::value;
 }
 
 struct is_numeric_impl {
@@ -379,8 +380,7 @@ constexpr inline bool is_timestamp(data_type type)
 template <typename T>
 constexpr inline bool is_fixed_point()
 {
-  return std::is_same<numeric::decimal32, T>::value ||
-         std::is_same<numeric::decimal64, T>::value ||
+  return std::is_same<numeric::decimal32, T>::value || std::is_same<numeric::decimal64, T>::value ||
          std::is_same<numeric::decimal128, T>::value;
 }
 

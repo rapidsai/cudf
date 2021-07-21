@@ -98,26 +98,10 @@ using id_to_type = typename id_to_type_impl<Id>::type;
 // clang-format off
 template <typename T>
 using device_storage_type_t =
-  std::conditional_t<std::is_same<numeric::decimal32, T>::value, int32_t,
-  std::conditional_t<std::is_same<numeric::decimal64, T>::value, int64_t,
+  std::conditional_t<std::is_same<numeric::decimal32,  T>::value, int32_t,
+  std::conditional_t<std::is_same<numeric::decimal64,  T>::value, int64_t,
   std::conditional_t<std::is_same<numeric::decimal128, T>::value, __int128_t, T>>>;
 // clang-format on
-
-/**
- * @brief Returns the corresponding `type_id` of type stored on device for a given `type_id`
- *
- * @param id   The given `type_id`
- * @return     Corresponding `type_id` of type stored on device
- */
-inline type_id device_storage_type_id(type_id id)
-{
-  switch (id) {
-    case type_id::DECIMAL32: return type_id::INT32;
-    case type_id::DECIMAL64: return type_id::INT64;
-    // case type_id::DECIMAL128: return type_id::INT128; // TODO: avoid this (need for type_id::INT128)
-    default: return id;
-  }
-}
 
 /**
  * @brief Checks if `fixed_point`-like types have template type `T` matching the column's

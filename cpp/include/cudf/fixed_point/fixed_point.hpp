@@ -48,8 +48,7 @@ enum class Radix : int32_t { BASE_2 = 2, BASE_10 = 10 };
 template <typename T>
 constexpr inline auto is_supported_representation_type()
 {
-  return cuda::std::is_same<T, int32_t>::value ||
-         cuda::std::is_same<T, int64_t>::value ||
+  return cuda::std::is_same<T, int32_t>::value || cuda::std::is_same<T, int64_t>::value ||
          cuda::std::is_same<T, __int128_t>::value;
 }
 
@@ -552,7 +551,7 @@ class fixed_point {
   {
     if constexpr (not std::is_same<Rep, __int128_t>::value) {
       if (_scale < 0) {
-        auto const av   = std::abs(_value); 
+        auto const av   = std::abs(_value);
         int64_t const n = std::pow(10, -_scale);
         int64_t const f = av % n;
         auto const num_zeros =

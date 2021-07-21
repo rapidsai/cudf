@@ -28,8 +28,7 @@ void initialize_with_identity(mutable_table_view& table,
   // kernel per column
   for (size_type i = 0; i < table.num_columns(); ++i) {
     auto col        = table.column(i);
-    auto const type = data_type{device_storage_type_id(col.type().id())};
-    dispatch_type_and_aggregation(type, aggs[i], identity_initializer{}, col, stream);
+    dispatch_type_and_aggregation(col.type(), aggs[i], identity_initializer{}, col, stream); // TODO SFINAE for decimal
   }
 }
 
