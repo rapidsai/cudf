@@ -15,11 +15,7 @@
  */
 #pragma once
 
-#include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 
 /**
  * @file
@@ -86,21 +82,7 @@ class strings_column_view : private column_view {
 
 //! Strings column APIs.
 namespace strings {
-/**
- * @brief Create output per Arrow strings format.
- *
- * The return pair is the vector of chars and the vector of offsets.
- *
- * @param strings Strings instance for this operation.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned device vectors.
- * @return Pair containing a vector of chars and a vector of offsets.
- */
-std::pair<rmm::device_uvector<char>, rmm::device_uvector<size_type>> create_offsets(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
 }  // namespace strings
+
 /** @} */  // end of group
 }  // namespace cudf

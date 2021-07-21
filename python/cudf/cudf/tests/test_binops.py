@@ -7,6 +7,7 @@ import operator
 import random
 from itertools import product
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -34,6 +35,15 @@ _binops = [
     operator.truediv,
     operator.mod,
     operator.pow,
+]
+
+_binops_compare = [
+    operator.eq,
+    operator.ne,
+    operator.lt,
+    operator.le,
+    operator.gt,
+    operator.ge,
 ]
 
 
@@ -2864,3 +2874,42 @@ def generate_test_null_equals_columnops_data():
 )
 def test_null_equals_columnops(lcol, rcol, ans, case):
     assert lcol._null_equals(rcol).all() == ans
+
+
+def test_add_series_to_dataframe():
+    """Verify that missing columns result in NaNs, not NULLs."""
+    assert cp.all(
+        cp.isnan(
+            (
+                cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+                + cudf.Series([1, 2, 3], index=["a", "b", "c"])
+            )["c"]
+        )
+    )
+
+
+@pytest.mark.parametrize("obj_class", [cudf.Series, cudf.Index])
+@pytest.mark.parametrize("binop", _binops)
+@pytest.mark.parametrize("other_type", [np.array, cp.array, pd.Series, list])
+def test_binops_non_cudf_types(obj_class, binop, other_type):
+    # Skip 0 to not deal with NaNs from division.
+    data = range(1, 100)
+    lhs = obj_class(data)
+    rhs = other_type(data)
+    assert cp.all((binop(lhs, rhs) == binop(lhs, lhs)).values)
+
+
+@pytest.mark.parametrize("binop", _binops + _binops_compare)
+@pytest.mark.parametrize("data", [None, [-9, 7], [5, -2], [12, 18]])
+@pytest.mark.parametrize("scalar", [1, 3, 12, np.nan])
+def test_empty_column(binop, data, scalar):
+    gdf = cudf.DataFrame(columns=["a", "b"])
+    if data is not None:
+        gdf["a"] = data
+
+    pdf = gdf.to_pandas()
+
+    got = binop(gdf, scalar)
+    expected = binop(pdf, scalar)
+
+    utils.assert_eq(expected, got)

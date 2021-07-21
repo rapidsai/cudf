@@ -177,7 +177,7 @@ def to_csv(
         df = df.copy(deep=False)
         for col_name, col in df._data.items():
             if isinstance(col, cudf.core.column.CategoricalColumn):
-                df._data[col_name] = col.astype(col.cat().categories.dtype)
+                df._data[col_name] = col.astype(col.categories.dtype)
 
         if isinstance(df.index, cudf.CategoricalIndex):
             df.index = df.index.astype(df.index.categories.dtype)

@@ -651,12 +651,17 @@ static const __device__ __constant__ uint8_t ClosestFixedBitsMap[65] = {
  * @param[in] vals buffer for output values (uint32_t, int32_t, uint64_t or int64_t)
  * @param[in] maxvals maximum number of values to decode
  * @param[in] t thread id
+ * @param[in] has_buffered_values If true, means there are already buffered values
  *
  * @return number of values decoded
  */
 template <class T>
-static __device__ uint32_t Integer_RLEv2(
-  orc_bytestream_s* bs, volatile orc_rlev2_state_s* rle, volatile T* vals, uint32_t maxvals, int t)
+static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
+                                         volatile orc_rlev2_state_s* rle,
+                                         volatile T* vals,
+                                         uint32_t maxvals,
+                                         int t,
+                                         bool has_buffered_values = false)
 {
   uint32_t numvals, numruns;
   int r, tr;
@@ -704,6 +709,11 @@ static __device__ uint32_t Integer_RLEv2(
         }
       }
       if ((numvals != 0) and (numvals + n > maxvals)) break;
+      // case where there are buffered values and can't consume a whole chunk
+      // from decoded values, so skip adding any more to buffer, work on buffered values and then
+      // start fresh in next iteration with empty buffer.
+      if ((numvals == 0) and (n > maxvals) and (has_buffered_values)) break;
+
       pos += l;
       if (pos > maxpos) break;
       ((numvals == 0) and (n > maxvals)) ? numvals = maxvals : numvals += n;
@@ -1502,9 +1512,11 @@ __global__ void __launch_bounds__(block_size)
               numvals = ofs + Integer_RLEv1(bs, &s->u.rlev1, &s->vals.u32[ofs], numvals - ofs, t);
           } else {
             if (s->chunk.type_kind == TIMESTAMP)
-              numvals = ofs + Integer_RLEv2(bs, &s->u.rlev2, &s->vals.u64[ofs], numvals - ofs, t);
+              numvals =
+                ofs + Integer_RLEv2(bs, &s->u.rlev2, &s->vals.u64[ofs], numvals - ofs, t, ofs > 0);
             else
-              numvals = ofs + Integer_RLEv2(bs, &s->u.rlev2, &s->vals.u32[ofs], numvals - ofs, t);
+              numvals =
+                ofs + Integer_RLEv2(bs, &s->u.rlev2, &s->vals.u32[ofs], numvals - ofs, t, ofs > 0);
           }
           __syncthreads();
           if (numvals <= ofs && t >= ofs && t < s->top.data.max_vals) { s->vals.u32[t] = 0; }
@@ -1571,18 +1583,6 @@ __global__ void __launch_bounds__(block_size)
         } else {
           numvals = Integer_RLEv2<uint64_t>(&s->bs2, &s->u.rlev2, s->vals.u64, numvals, t);
         }
-        // If we're using an index, we may have to drop values from the initial run
-        uint32_t skip = 0;
-        if (num_rowgroups > 0 and false) {
-          uint32_t run_pos = s->top.data.index.run_pos[CI_DATA2];
-          if (run_pos) {
-            skip = min(numvals, run_pos);
-            __syncthreads();
-            if (t == 0) { s->top.data.index.run_pos[CI_DATA2] = 0; }
-            numvals -= skip;
-          }
-        }
-
         __syncthreads();
       } else if (s->chunk.type_kind == BYTE) {
         numvals = Byte_RLE(&s->bs, &s->u.rle8, s->vals.u8, numvals, t);

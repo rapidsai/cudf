@@ -1,16 +1,14 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libc.stdint cimport (
-    int32_t, int64_t
-)
+from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool
 from libcpp.string cimport string
 
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type
 from cudf._lib.cpp.wrappers.decimals cimport scale_type
 
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.table.table_view cimport table_view
 
 cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
     cdef cppclass scalar:
@@ -70,4 +68,5 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         column_view view() except +
 
     cdef cppclass struct_scalar(scalar):
+        struct_scalar(table_view cols, bool valid) except +
         table_view view() except +
