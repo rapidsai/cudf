@@ -2433,6 +2433,9 @@ class Series(SingleColumnFrame, Serializable):
         if isinstance(col, cudf.core.column.Decimal64Column):
             col = col._with_type_metadata(objs[0]._column.dtype)
 
+        if isinstance(col, cudf.core.column.StructColumn):
+            col = col._with_type_metadata(objs[0].dtype)
+
         return cls(data=col, index=index, name=name)
 
     @property
