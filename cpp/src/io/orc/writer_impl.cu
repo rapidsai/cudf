@@ -1612,7 +1612,7 @@ void writer::impl::write(table_view const& table)
         schema_type.scale     = static_cast<uint32_t>(column.scale());
         schema_type.precision = column.precision();
       }
-      // In preorder tracersal the column after a list column is always the child column
+      // In preorder traversal the column after a list column is always the child column
       if (column.orc_kind() == LIST) { schema_type.subtypes.emplace_back(column.id() + 1); }
     }
   } else {
