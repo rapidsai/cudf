@@ -258,10 +258,13 @@ class base_2dspan {
     return row * size.second + column;
   }
 
-  constexpr RowType<T, dynamic_extent> operator[](size_t row)
+  constexpr RowType<T, dynamic_extent> operator[](size_t row) const
   {
     return {this->data() + flatten_index(row, 0, this->size()), this->size().second};
   }
+
+  constexpr RowType<T, dynamic_extent> front() const { return (*this)[0]; }
+  constexpr RowType<T, dynamic_extent> back() const { return (*this)[size().first - 1]; }
 
   constexpr base_2dspan subspan(size_t first_row, size_t num_rows) const noexcept
   {

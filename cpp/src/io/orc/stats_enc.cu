@@ -25,15 +25,7 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-/**
- * @brief Initializes statistics groups
- *
- * @param[out] groups Statistics groups
- * @param[in] cols Column descriptors
- * @param[in] num_columns Number of columns
- * @param[in] num_rowgroups Number of rowgroups
- * @param[in] row_index_stride Rowgroup size in rows
- */
+
 constexpr unsigned int init_threads_per_group = 32;
 constexpr unsigned int init_groups_per_block  = 4;
 constexpr unsigned int init_threads_per_block = init_threads_per_group * init_groups_per_block;
@@ -41,20 +33,18 @@ constexpr unsigned int init_threads_per_block = init_threads_per_group * init_gr
 __global__ void __launch_bounds__(init_threads_per_block)
   gpu_init_statistics_groups(statistics_group* groups,
                              const stats_column_desc* cols,
-                             uint32_t num_columns,
-                             uint32_t num_rowgroups,
-                             uint32_t row_index_stride)
+                             device_2dspan<rowgroup_rows const> rowgroup_bounds)
 {
   __shared__ __align__(4) statistics_group group_g[init_groups_per_block];
-  uint32_t col_id         = blockIdx.y;
-  uint32_t chunk_id       = (blockIdx.x * init_groups_per_block) + threadIdx.y;
-  uint32_t t              = threadIdx.x;
-  statistics_group* group = &group_g[threadIdx.y];
+  uint32_t const col_id    = blockIdx.y;
+  uint32_t const chunk_id  = (blockIdx.x * init_groups_per_block) + threadIdx.y;
+  uint32_t const t         = threadIdx.x;
+  auto const num_rowgroups = rowgroup_bounds.size().first;
+  statistics_group* group  = &group_g[threadIdx.y];
   if (chunk_id < num_rowgroups and t == 0) {
-    uint32_t num_rows = cols[col_id].leaf_column->size();
-    group->col        = &cols[col_id];
-    group->start_row  = chunk_id * row_index_stride;
-    group->num_rows = min(num_rows - min(chunk_id * row_index_stride, num_rows), row_index_stride);
+    group->col                                = &cols[col_id];
+    group->start_row                          = rowgroup_bounds[chunk_id][col_id].begin;
+    group->num_rows                           = rowgroup_bounds[chunk_id][col_id].size();
     groups[col_id * num_rowgroups + chunk_id] = *group;
   }
 }
@@ -115,6 +105,7 @@ __global__ void __launch_bounds__(block_size, 1)
           stats_len = pb_fldlen_common + pb_fld_hdrlen32 + 3 * (pb_fld_hdrlen + pb_fldlen_int64) +
                       chunks[idx].min_value.str_val.length + chunks[idx].max_value.str_val.length;
           break;
+        case dtype_none: stats_len = pb_fldlen_common;
         default: break;
       }
     }
@@ -363,27 +354,16 @@ __global__ void __launch_bounds__(encode_threads_per_block)
   }
 }
 
-/**
- * @brief Launches kernels to initialize statistics collection
- *
- * @param[out] groups Statistics groups (rowgroup-level)
- * @param[in] cols Column descriptors
- * @param[in] num_columns Number of columns
- * @param[in] num_rowgroups Number of rowgroups
- * @param[in] row_index_stride Rowgroup size in rows
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
- */
 void orc_init_statistics_groups(statistics_group* groups,
                                 const stats_column_desc* cols,
-                                uint32_t num_columns,
-                                uint32_t num_rowgroups,
-                                uint32_t row_index_stride,
+                                device_2dspan<rowgroup_rows const> rowgroup_bounds,
                                 rmm::cuda_stream_view stream)
 {
-  dim3 dim_grid((num_rowgroups + init_groups_per_block - 1) / init_groups_per_block, num_columns);
+  dim3 dim_grid((rowgroup_bounds.size().first + init_groups_per_block - 1) / init_groups_per_block,
+                rowgroup_bounds.size().second);
   dim3 dim_block(init_threads_per_group, init_groups_per_block);
   gpu_init_statistics_groups<<<dim_grid, dim_block, 0, stream.value()>>>(
-    groups, cols, num_columns, num_rowgroups, row_index_stride);
+    groups, cols, rowgroup_bounds);
 }
 
 /**
@@ -392,7 +372,7 @@ void orc_init_statistics_groups(statistics_group* groups,
  * @param[in,out] groups Statistics merge groups
  * @param[in] chunks Statistics chunks
  * @param[in] statistics_count Number of statistics buffers to encode
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void orc_init_statistics_buffersize(statistics_merge_group* groups,
                                     const statistics_chunk* chunks,
