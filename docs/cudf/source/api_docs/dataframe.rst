@@ -94,6 +94,9 @@ Function application, GroupBy & window
 .. autosummary::
    :toctree: api/
 
+   DataFrame.apply
+   DataFrame.apply_chunks
+   DataFrame.apply_rows
    DataFrame.pipe
    DataFrame.agg
    DataFrame.groupby
@@ -126,6 +129,7 @@ Computations / descriptive stats
    DataFrame.prod
    DataFrame.product
    DataFrame.quantile
+   DataFrame.quantiles
    DataFrame.rank
    DataFrame.round
    DataFrame.skew
@@ -146,9 +150,12 @@ Reindexing / selection / label manipulation
    DataFrame.rename
    DataFrame.reset_index
    DataFrame.sample
+   DataFrame.searchsorted
    DataFrame.set_index
+   DataFrame.repeat
    DataFrame.tail
    DataFrame.take
+   DataFrame.tile
 
 .. _api.dataframe.missing:
 
@@ -161,6 +168,7 @@ Missing data handling
    DataFrame.fillna
    DataFrame.isna
    DataFrame.isnull
+   DataFrame.nans_to_nulls
    DataFrame.notna
    DataFrame.notnull
    DataFrame.replace
@@ -170,7 +178,11 @@ Reshaping, sorting, transposing
 .. autosummary::
    :toctree: api/
 
+   DataFrame.argsort
+   DataFrame.interleave_columns
+   DataFrame.partition_by_hash
    DataFrame.pivot
+   DataFrame.scatter_by_map
    DataFrame.sort_values
    DataFrame.sort_index
    DataFrame.nlargest
@@ -182,7 +194,7 @@ Reshaping, sorting, transposing
    DataFrame.T
    DataFrame.transpose
 
-Combining / comparing / joining / merging
+Combining / comparing / joining / merging / encoding
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. autosummary::
    :toctree: api/
@@ -192,6 +204,23 @@ Combining / comparing / joining / merging
    DataFrame.join
    DataFrame.merge
    DataFrame.update
+   DataFrame.label_encoding
+   DataFrame.one_hot_encoding
+
+Numerical operations
+~~~~~~~~~~~~~~~~~~~~
+.. autosummary::
+   :toctree: api/
+
+   DataFrame.acos
+   DataFrame.asin
+   DataFrame.atan
+   DataFrame.cos
+   DataFrame.exp
+   DataFrame.log
+   DataFrame.sin
+   DataFrame.sqrt
+   DataFrame.tan
 
 Time Series-related
 ~~~~~~~~~~~~~~~~~~~
@@ -205,13 +234,21 @@ Serialization / IO / conversion
 .. autosummary::
    :toctree: api/
 
+   DataFrame.as_gpu_matrix
+   DataFrame.as_matrix
+   DataFrame.from_arrow
+   DataFrame.from_pandas
    DataFrame.from_records
+   DataFrame.hash_columns
+   DataFrame.to_arrow
+   DataFrame.to_dlpack
    DataFrame.to_parquet
    DataFrame.to_pickle
    DataFrame.to_csv
    DataFrame.to_hdf
    DataFrame.to_dict
    DataFrame.to_json
+   DataFrame.to_pandas
    DataFrame.to_feather
    DataFrame.to_records
    DataFrame.to_string
