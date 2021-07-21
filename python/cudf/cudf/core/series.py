@@ -2761,13 +2761,15 @@ class Series(SingleColumnFrame, Serializable):
                 "bool_only parameter is not implemented yet"
             )
 
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if len(result_series) == result_series.null_count:
-                return True
-        else:
-            result_series = self
-        return result_series._column.all()
+        return self._column.all(skipna=skipna)
+
+        # if skipna:
+        #     result_series = self.nans_to_nulls()
+        #     if len(result_series) == result_series.null_count:
+        #         return True
+        # else:
+        #     result_series = self
+        # return result_series._column.all()
 
     def any(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         """
@@ -2809,21 +2811,23 @@ class Series(SingleColumnFrame, Serializable):
             raise NotImplementedError(
                 "bool_only parameter is not implemented yet"
             )
-
+        # TODO: I think we can remove this, pandas no longer supports None.
         skipna = False if skipna is None else skipna
 
-        if skipna is False and self.has_nulls:
-            return True
+        return self._column.any(skipna=skipna)
 
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if len(result_series) == result_series.null_count:
-                return False
-
-        else:
-            result_series = self
-
-        return result_series._column.any()
+        # if skipna is False and self.has_nulls:
+        #     return True
+        #
+        # if skipna:
+        #     result_series = self.nans_to_nulls()
+        #     if len(result_series) == result_series.null_count:
+        #         return False
+        #
+        # else:
+        #     result_series = self
+        #
+        # return result_series._column.any()
 
     def to_pandas(self, index=True, nullable=False, **kwargs):
         """

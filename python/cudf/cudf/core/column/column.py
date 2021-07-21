@@ -172,11 +172,36 @@ class ColumnBase(Column, Serializable):
     def _null_equals(self, other: ColumnBase) -> ColumnBase:
         return self.binary_operator("NULL_EQUALS", other)
 
-    def all(self) -> bool:
-        return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
+    def all(self, skipna: bool = True) -> bool:
+        # If all entries are null the result is True, including when the column
+        # is empty.
+        if self.null_count == self.size:
+            return True
 
-    def any(self) -> bool:
-        return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
+        # We don't want to call _process_for_reduction if skipna is False
+        # because all is not a reduction where the final output is also
+        # nullified by any nulls in the the input.
+        result_col = self._process_for_reduction(True) if skipna else self
+        if isinstance(result_col, ColumnBase):
+            return libcudf.reduce.reduce("all", result_col, dtype=np.bool_)
+        else:
+            return result_col
+
+    def any(self, skipna: bool = True) -> bool:
+        # Early exit for fast cases.
+        if not skipna and self.has_nulls:
+            return True
+        elif skipna and self.null_count == self.size:
+            return False
+
+        # We don't want to call _process_for_reduction if skipna is False
+        # because any is not a reduction where the final output is also
+        # nullified by any nulls in the the input.
+        result_col = self._process_for_reduction(True) if skipna else self
+        if isinstance(result_col, ColumnBase):
+            return libcudf.reduce.reduce("any", result_col, dtype=np.bool_)
+        else:
+            return result_col
 
     def __sizeof__(self) -> int:
         n = 0
