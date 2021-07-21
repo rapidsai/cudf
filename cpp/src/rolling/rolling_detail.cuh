@@ -307,9 +307,9 @@ struct DeviceRollingCountAll {
                               size_type end_index,
                               size_type current_index)
    {
-     cudf::size_type count = end_index - start_index;
+     cudf::size_type N = end_index - start_index; // population
  
-     bool output_is_valid                      = count >= min_periods;
+     bool output_is_valid                      = N >= min_periods and not (N == ddof);
      if (has_nulls) {
        cudf::size_type null_count = thrust::count_if(
          thrust::seq, thrust::make_counting_iterator(start_index), thrust::make_counting_iterator(end_index),
@@ -318,18 +318,20 @@ struct DeviceRollingCountAll {
        output_is_valid = output_is_valid and null_count == 0;
      }
 
-    OutputType mean = thrust::reduce(thrust::seq,
-                                      thrust::make_counting_iterator(start_index),
-                                      thrust::make_counting_iterator(end_index)) / count;
-    
-    OutputType result = thrust::reduce(
-      thrust::seq,
-      thrust::make_counting_iterator(start_index),
-      thrust::make_counting_iterator(end_index),
-      OutputType{0},
-      [&](auto prev, auto cur) {
-        return prev + (cur - mean) * (cur - mean);
-      }) / (count - ddof);
+    if (not (N == ddof)) {
+      OutputType mean = thrust::reduce(thrust::seq,
+                                        thrust::make_counting_iterator(start_index),
+                                        thrust::make_counting_iterator(end_index)) / N;
+      
+      output.element<OutputType>(current_index) = thrust::reduce(
+        thrust::seq,
+        thrust::make_counting_iterator(start_index),
+        thrust::make_counting_iterator(end_index),
+        OutputType{0},
+        [&](auto prev, auto cur) {
+          return prev + (cur - mean) * (cur - mean);
+        }) / (N - ddof);
+    }
 
      return output_is_valid;
    }

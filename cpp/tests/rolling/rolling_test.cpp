@@ -29,10 +29,13 @@
 #include <cudf/rolling.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <src/rolling/rolling_detail.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <vector>
+#include <memory>
 
 using cudf::bitmask_type;
 using cudf::size_type;
@@ -247,6 +250,19 @@ class RollingTest : public cudf::test::BaseFixture {
                    min_periods,
                    *cudf::make_mean_aggregation<cudf::rolling_aggregation>());
     }
+
+    if (cudf::is_fixed_width(input.type()) and not cudf::is_chrono(input.type())) {
+      run_test_col(input,
+                   preceding_window,
+                   following_window,
+                   min_periods,
+                   *cudf::make_variance_aggregation<cudf::rolling_aggregation>());
+      run_test_col(input,
+                   preceding_window,
+                   following_window,
+                   min_periods,
+                   *cudf::make_std_aggregation<cudf::rolling_aggregation>());
+    }
   }
 
  private:
@@ -294,6 +310,83 @@ class RollingTest : public cudf::test::BaseFixture {
     fixed_width_column_wrapper<cudf::size_type> col(
       ref_data.begin(), ref_data.end(), ref_valid.begin());
     return col.release();
+  }
+
+  template<bool do_square_root,
+          typename R = T,
+          CUDF_ENABLE_IF(cudf::is_fixed_width<R>() and not cudf::is_chrono<R>())>
+  std::unique_ptr<cudf::column> create_var_std_reference_output(
+    cudf::column_view const& input,
+    std::vector<size_type> const& preceding_window_col,
+    std::vector<size_type> const& following_window_col,
+    size_type min_periods,
+    size_type ddof)
+  {
+    using OutputType = double;
+
+    size_type num_rows = input.size();
+    std::vector<OutputType> ref_data(num_rows);
+    std::vector<bool> ref_valid(num_rows);
+
+    // input data and mask
+    thrust::host_vector<T> in_col;
+    std::vector<bitmask_type> in_valid;
+    std::tie(in_col, in_valid) = cudf::test::to_host<T>(input);
+    bitmask_type* valid_mask   = in_valid.data();
+
+    for (size_type i = 0; i < num_rows; i++) {
+      // load sizes
+      min_periods = std::max(min_periods, 1);  // at least one observation is required
+
+      // compute bounds
+      auto preceding_window = preceding_window_col[i % preceding_window_col.size()];
+      auto following_window = following_window_col[i % following_window_col.size()];
+      size_type start       = std::min(num_rows, std::max(0, i - preceding_window + 1));
+      size_type end         = std::min(num_rows, std::max(0, i + following_window + 1));
+      size_type start_index = std::min(start, end);
+      size_type end_index   = std::max(start, end);
+
+      size_type count = end_index - start_index;
+
+      // compute var/std with raw loop - alternative to implementation
+      OutputType mean{0}, result{0};
+      for (auto j = start_index; j < end_index; j++) {
+        mean += in_col[i];
+      }
+      mean /= count;
+      for (auto j = start_index; j < end_index; j++) {
+        result += (in_col[i] - mean) * (in_col[i] - mean);
+      }
+      result /= (count - ddof);
+      if (do_square_root) {
+        result = std::sqrt(result);
+      }
+      ref_data[i] = result;
+      
+      ref_valid[i] = (count >= min_periods) and not (count == ddof);
+
+      ref_valid[i] = ref_valid[i] and input.nullable() ? std::all_of(
+        thrust::make_counting_iterator(start_index),
+        thrust::make_counting_iterator(end_index),
+        [&](auto i) { return cudf::bit_is_set(valid_mask, i); }
+      ) : true;
+    }
+
+    fixed_width_column_wrapper<OutputType> col(ref_data.begin(), ref_data.end(), ref_valid.begin());
+    return col.release();
+  }
+
+  template<bool do_square_root,
+           typename R = T,
+           CUDF_ENABLE_IF(not cudf::is_fixed_width<R>() or cudf::is_chrono<R>())>
+  std::unique_ptr<cudf::column> create_var_std_reference_output(
+    cudf::column_view const& input,
+    std::vector<size_type> const& preceding_window_col,
+    std::vector<size_type> const& following_window_col,
+    size_type min_periods,
+    size_type ddof)
+  {
+    CUDF_FAIL("Unsupported combination of type and aggregation");
   }
 
   template <typename agg_op,
@@ -404,6 +497,20 @@ class RollingTest : public cudf::test::BaseFixture {
                                        cudf::detail::target_type_t<T, cudf::aggregation::MEAN>,
                                        true>(
           input, preceding_window, following_window, min_periods);
+      case cudf::aggregation::VARIANCE:
+        return create_var_std_reference_output<false>(
+          input,
+          preceding_window,
+          following_window,
+          min_periods,
+          dynamic_cast<cudf::detail::std_var_aggregation const *>(&op)->_ddof);
+      case cudf::aggregation::STD:
+        return create_var_std_reference_output<true>(
+          input,
+          preceding_window,
+          following_window,
+          min_periods,
+          dynamic_cast<cudf::detail::std_var_aggregation const *>(&op)->_ddof);
       default: return fixed_width_column_wrapper<T>({}).release();
     }
   }
