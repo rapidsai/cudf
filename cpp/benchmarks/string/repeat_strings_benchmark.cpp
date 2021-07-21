@@ -118,13 +118,13 @@ static void BM_repeat_strings_column_times_precomputed_sizes(benchmark::State& s
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)
 {
-  int const min_rows    = 1 << 8;
-  int const max_rows    = 1 << 18;
-  int const row_mult    = 4;
-  int const min_strleng = 1 << 4;
-  int const max_strleng = 1 << 8;
-  int const leng_mult   = 4;
-  generate_string_bench_args(b, min_rows, max_rows, row_mult, min_strleng, max_strleng, leng_mult);
+  int const min_rows   = 1 << 8;
+  int const max_rows   = 1 << 18;
+  int const row_mult   = 4;
+  int const min_strlen = 1 << 4;
+  int const max_strlen = 1 << 8;
+  int const len_mult   = 4;
+  generate_string_bench_args(b, min_rows, max_rows, row_mult, min_strlen, max_strlen, len_mult);
 }
 
 class RepeatStrings : public cudf::benchmark {
