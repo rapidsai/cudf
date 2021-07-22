@@ -4242,6 +4242,7 @@ class Series(SingleColumnFrame, Serializable):
             skipna=skipna, dtype=dtype, min_count=min_count
         )
 
+    # Alias for pandas compatibility.
     prod = product
 
     def cummin(self, axis=None, skipna=True, *args, **kwargs):

@@ -6480,62 +6480,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             **kwargs,
         )
 
-    def prod(
-        self,
-        axis=None,
-        skipna=None,
-        dtype=None,
-        level=None,
-        numeric_only=None,
-        min_count=0,
-        **kwargs,
-    ):
-        """
-        Return product of the values in the DataFrame.
-
-        Parameters
-        ----------
-
-        axis: {index (0), columns(1)}
-            Axis for the function to be applied on.
-        skipna: bool, default True
-            Exclude NA/null values when computing the result.
-        dtype: data type
-            Data type to cast the result to.
-        min_count: int, default 0
-            The required number of valid values to perform the operation.
-            If fewer than min_count non-NA values are present the result
-            will be NA.
-
-            The default being 0. This means the sum of an all-NA or empty
-            Series is 0, and the product of an all-NA or empty Series is 1.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `level`, `numeric_only`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
-        >>> df.prod()
-        a      24
-        b    5040
-        dtype: int64
-        """
-        return self.product(
-            axis=axis,
-            skipna=skipna,
-            dtype=dtype,
-            level=level,
-            numeric_only=numeric_only,
-            min_count=min_count,
-            **kwargs,
-        )
+    # Alias for pandas compatibility.
+    prod = product
 
     def cummin(self, axis=None, skipna=True, *args, **kwargs):
         """
