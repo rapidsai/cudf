@@ -526,13 +526,21 @@ if(CUDA_STATIC_RUNTIME)
     # Tell CMake what CUDA language runtime to use
     set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Static)
     # Make sure to export to consumers what runtime we used
-    target_link_libraries(cudf PUBLIC CUDA::cudart_static CUDA::cuda_driver)
+    target_link_libraries(cudf PUBLIC CUDA::cudart_static)
 else()
     # Tell CMake what CUDA language runtime to use
     set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
     # Make sure to export to consumers what runtime we used
-    target_link_libraries(cudf PUBLIC CUDA::cudart CUDA::cuda_driver)
+    target_link_libraries(cudf PUBLIC CUDA::cudart)
 endif()
+
+# The CUDA::cuda_driver is needed due to JITIFY sources which
+# directly call the cuda driver API
+if(NOT TARGET CUDA::cuda_driver)
+    message(FATAL_ERROR "Building libcudf requires `libcuda.so` to be present.
+        This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded.")
+endif()
+target_link_libraries(cudf PRIVATE CUDA::cuda_driver)
 
 # Add cuFile interface if available
 if(TARGET cuFile::cuFile_interface)
