@@ -502,7 +502,6 @@ TEST_F(RowBitCount, EmptyChildColumnInListOfLists)
 
   auto offsets   = cudf::test::fixed_width_column_wrapper<offset_type>{0, 0, 0, 0, 0};
   auto lists_col = cudf::make_lists_column(4, offsets.release(), empty_child_lists_column(), 0, {});
-  auto constexpr offset_nbits = sizeof(offset_type) * CHAR_BIT;
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     cudf::row_bit_count(table_view{{lists_col->view()}})->view(),
