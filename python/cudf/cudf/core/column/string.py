@@ -5042,7 +5042,14 @@ class StringColumn(column.ColumnBase):
         super().set_base_children(value)
 
     def __contains__(self, item: ScalarLike) -> bool:
-        return True in libstrings.contains_re(self, f"^{item}$")
+        if is_scalar(item):
+            return True in libcudf.search.contains(
+                self, column.as_column([item], dtype=self.dtype)
+            )
+        else:
+            return True in libcudf.search.contains(
+                self, column.as_column(item, dtype=self.dtype)
+            )
 
     def as_numerical_column(
         self, dtype: Dtype, **kwargs
