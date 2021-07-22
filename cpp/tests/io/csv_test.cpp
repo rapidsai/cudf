@@ -2141,4 +2141,25 @@ TEST_F(CsvReaderTest, DefaultWriteChunkSize)
   }
 }
 
+TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
+{
+  auto filepath = temp_env->get_temp_dir() + "something.csv";
+  // make up some kind of dataframe
+  auto constexpr num_rows = 10;
+  auto int32_column       = []() {
+    auto values = random_values<int32_t>(num_rows);
+    return column_wrapper<int32_t>(values.begin(), values.end());
+  }();
+  auto int64_column = []() {
+    auto values = random_values<int64_t>(num_rows);
+    return column_wrapper<int64_t>(values.begin(), values.end());
+  }();
+  std::vector<cudf::column_view> input_columns{int32_column, int64_column};
+  cudf::table_view original_table{input_columns};
+  // write that dataframe to a csv using the default options to some temporary file
+  // read the temp csv file using default options
+  // check to see / assert / verify they are identical, or at least as identical as expected.
+  ASSERT_TRUE(false);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
