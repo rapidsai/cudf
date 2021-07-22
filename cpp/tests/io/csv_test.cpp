@@ -80,7 +80,6 @@ struct CsvReaderTest : public cudf::test::BaseFixture {
 // Typed test fixture for timestamp type tests
 template <typename T>
 struct CsvReaderNumericTypeTest : public CsvReaderTest {
-  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 // Declare typed test cases
@@ -2139,6 +2138,38 @@ TEST_F(CsvReaderTest, DefaultWriteChunkSize)
       cudf_io::csv_writer_options::builder(cudf_io::sink_info{"unused.path"}, input_table);
     ASSERT_EQ(num_rows, opts.get_rows_per_chunk());
   }
+}
+
+TEST_F(CsvReaderTest, DtypesMap)
+{
+  std::string csv_in{"12,9\n34,8\n56,7"};
+
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{csv_in.c_str(), csv_in.size()})
+      .names({"A", "B"})
+      .dtypes(std::map<std::string, cudf::data_type>{{"B", cudf::data_type{cudf::type_id::INT16}},
+                                                     {"A", cudf::data_type{cudf::type_id::INT32}}})
+      .header(-1);
+  auto result = cudf_io::read_csv(in_opts);
+
+  const auto result_table = result.tbl->view();
+  assert(result_table->num_columns() == 2);
+  assert(result_table.column(0).type() == cudf::data_type{cudf::type_id::INT32});
+  assert(result_table.column(1).type() == cudf::data_type{cudf::type_id::INT16});
+  expect_column_data_equal(std::vector<int32_t>{12, 34, 56}, result_table.column(0));
+  expect_column_data_equal(std::vector<int16_t>{9, 8, 7}, result_table.column(1));
+}
+
+TEST_F(CsvReaderTest, DtypesMapInvalid)
+{
+  std::string csv_in{""};
+
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{csv_in.c_str(), csv_in.size()})
+      .names({"A", "B"})
+      .dtypes(std::map<std::string, cudf::data_type>{{"C", cudf::data_type{cudf::type_id::INT16}}});
+
+  EXPECT_THROW(cudf_io::read_csv(in_opts), cudf::logic_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

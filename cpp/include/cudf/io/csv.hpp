@@ -111,7 +111,8 @@ class csv_reader_options {
   // Conversion settings
 
   // Per-column types; disables type inference on those columns
-  std::variant<std::vector<std::string>, std::vector<data_type>> _dtypes;
+  std::variant<std::vector<std::string>, std::vector<data_type>, std::map<std::string, data_type>>
+    _dtypes;
   // Additional values to recognize as boolean true values
   std::vector<std::string> _true_values{"True", "TRUE", "true"};
   // Additional values to recognize as boolean false values
@@ -290,7 +291,10 @@ class csv_reader_options {
   /**
    * @brief Returns per-column types.
    */
-  std::variant<std::vector<std::string>, std::vector<data_type>> const& get_dtypes() const
+  std::variant<std::vector<std::string>,
+               std::vector<data_type>,
+               std::map<std::string, data_type>> const&
+  get_dtypes() const
   {
     return _dtypes;
   }
@@ -561,6 +565,13 @@ class csv_reader_options {
   {
     _infer_date_indexes = std::move(col_ind);
   }
+
+  /**
+   * @brief Sets per-column types
+   *
+   * @param types Column name -> data type map specifying the columns' target data types
+   */
+  void set_dtypes(std::map<std::string, data_type> types) { _dtypes = std::move(types); }
 
   /**
    * @brief Sets per-column types
@@ -976,6 +987,18 @@ class csv_reader_options_builder {
   csv_reader_options_builder& infer_date_indexes(std::vector<int> col_ind)
   {
     options._infer_date_indexes = std::move(col_ind);
+    return *this;
+  }
+
+  /**
+   * @brief Sets per-column types.
+   *
+   * @param types Column name -> data type map specifying the columns' target data types
+   * @return this for chaining.
+   */
+  csv_reader_options_builder& dtypes(std::map<std::string, data_type> types)
+  {
+    options._dtypes = std::move(types);
     return *this;
   }
 

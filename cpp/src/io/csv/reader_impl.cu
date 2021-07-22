@@ -280,6 +280,24 @@ reader::impl::select_data_and_row_offsets(rmm::cuda_stream_view stream)
   return {rmm::device_uvector<char>{0, stream}, selected_rows_offsets{stream}};
 }
 
+std::vector<data_type> reader::impl::sort_data_types(
+  std::map<std::string, data_type> const& col_type_map)
+{
+  std::vector<data_type> dtypes;
+  dtypes.reserve(col_type_map.size());
+
+  for (int col = 0; col < num_actual_cols_; col++) {
+    if (column_flags_[col] & column_parse::enabled) {
+      auto const col_type_it = col_type_map.find(col_names_[col]);
+      CUDF_EXPECTS(col_type_it != col_type_map.end(),
+                   "Must specify data types for all active columns");
+      CUDF_EXPECTS(col_type_it->second.id() != cudf::type_id::EMPTY, "Unsupported data type");
+      dtypes.emplace_back(col_type_it->second);
+    }
+  }
+  return dtypes;
+}
+
 table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
 {
   auto const data_row_offsets = select_data_and_row_offsets(stream);
@@ -385,6 +403,9 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
     column_types =
       std::visit(VisitorOverload{
                    [&](const std::vector<data_type>& data_types) { return data_types; },
+                   [&](const std::map<std::string, data_type>& data_types) {
+                     return sort_data_types(data_types);
+                   },
                    [&](const std::vector<string>& dtypes) { return parse_column_types(dtypes); }},
                  opts_.get_dtypes());
   }
