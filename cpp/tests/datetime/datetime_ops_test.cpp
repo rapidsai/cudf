@@ -600,7 +600,7 @@ TEST_F(BasicDatetimeOpsTest, TestQuarter)
       nulls_at({1, 8, 11})};
 
   auto quarter = cudf::test::fixed_width_column_wrapper<int16_t>{
-    {3, 6, 1, 2, 2, 4, 1, 1, 1, 3, 4, 3, 4, 1}, nulls_at({1, 8, 11})};
+    {3, 0 /*null*/, 1, 2, 2, 4, 1, 1, 0 /*null*/, 3, 4, 0 /*null*/, 4, 1}, nulls_at({1, 8, 11})};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_quarter(timestamps_s), quarter);
 }
