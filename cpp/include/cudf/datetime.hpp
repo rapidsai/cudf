@@ -207,6 +207,9 @@ std::unique_ptr<cudf::column> is_leap_year(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief  Returns the quarter of the date
+ *
+ * `output[i]` will be a value from {1, 2, 3, 4} corresponding to the quater of month given by
  * `column[i]`. It will be null` if the input row at `column[i]` is null.
  *
  * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
