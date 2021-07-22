@@ -17,6 +17,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/reshape.hpp>
 #include <cudf/lists/detail/interleave_columns.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -185,12 +186,11 @@ struct interleave_columns_functor {
 };
 
 }  // anonymous namespace
-}  // namespace detail
 
 std::unique_ptr<column> interleave_columns(table_view const& input,
+                                           rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input.num_columns() > 0, "input must have at least one column to determine dtype.");
 
   auto const dtype = input.column(0).type();
@@ -203,12 +203,17 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   auto const output_needs_mask = std::any_of(
     std::cbegin(input), std::cend(input), [](auto const& col) { return col.nullable(); });
 
-  return type_dispatcher<dispatch_storage_type>(dtype,
-                                                detail::interleave_columns_functor{},
-                                                input,
-                                                output_needs_mask,
-                                                rmm::cuda_stream_default,
-                                                mr);
+  return type_dispatcher<dispatch_storage_type>(
+    dtype, detail::interleave_columns_functor{}, input, output_needs_mask, stream, mr);
+}
+
+}  // namespace detail
+
+std::unique_ptr<column> interleave_columns(table_view const& input,
+                                           rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::interleave_columns(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
