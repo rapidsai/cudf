@@ -540,10 +540,7 @@ class OrcDecompressor {
 };
 
 /**
- * @brief Stores orc id for each column and its adjacent number of children
- * in case of struct or number of children in case of list column.
- * If list column has struct column, then all child columns of that struct are treated as child
- * column of list.
+ * @brief Stores orc id for each column and number of children in that column.
  *
  * @code{.pseudo}
  * Consider following data where a struct has two members and a list column
@@ -560,9 +557,16 @@ class OrcDecompressor {
  *
  */
 struct orc_column_meta {
-  // orc_column_meta(uint32_t _id, uint32_t _num_children) : id(_id), num_children(_num_children){};
   uint32_t id;            // orc id for the column
   uint32_t num_children;  // number of children at the same level of nesting in case of struct
+};
+
+/**
+ * @brief Stores column's validity map and null count
+ */
+struct column_validity_info {
+  uint32_t* valid_map_base;
+  uint32_t null_count;
 };
 
 /**

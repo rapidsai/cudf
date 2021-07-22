@@ -843,9 +843,10 @@ def test_orc_string_stream_offset_issue():
     assert_eq(df, cudf.read_orc(buffer))
 
 
+# Data is generated using pyorc module
 def generate_list_struct_buff(size=28000):
-    rd = random.Random(0)
-    np.random.seed(seed=0)
+    rd = random.Random(1)
+    np.random.seed(seed=1)
 
     buff = BytesIO()
 
@@ -875,16 +876,21 @@ def generate_list_struct_buff(size=28000):
     schema = po.Struct(**schema)
 
     lvl3_list = [
-        [
+        rd.choice(
             [
+                None,
                 [
-                    rd.choice([None, np.random.randint(1, 3)])
-                    for z in range(np.random.randint(1, 3))
-                ]
-                for z in range(np.random.randint(0, 3))
+                    [
+                        [
+                            rd.choice([None, np.random.randint(1, 3)])
+                            for z in range(np.random.randint(1, 3))
+                        ]
+                        for z in range(np.random.randint(0, 3))
+                    ]
+                    for y in range(np.random.randint(0, 3))
+                ],
             ]
-            for y in range(np.random.randint(0, 3))
-        ]
+        )
         for x in range(size)
     ]
     lvl1_list = [
@@ -895,15 +901,21 @@ def generate_list_struct_buff(size=28000):
         for x in range(size)
     ]
     lvl1_struct = [
-        (np.random.randint(0, 3), np.random.randint(0, 3)) for x in range(size)
+        rd.choice([None, (np.random.randint(0, 3), np.random.randint(0, 3))])
+        for x in range(size)
     ]
     lvl2_struct = [
-        (
-            rd.choice([None, np.random.randint(0, 3)]),
-            (
-                rd.choice([None, np.random.randint(0, 3)]),
-                np.random.randint(0, 3),
-            ),
+        rd.choice(
+            [
+                None,
+                (
+                    rd.choice([None, np.random.randint(0, 3)]),
+                    (
+                        rd.choice([None, np.random.randint(0, 3)]),
+                        np.random.randint(0, 3),
+                    ),
+                ),
+            ]
         )
         for x in range(size)
     ]
@@ -953,47 +965,48 @@ list_struct_buff = generate_list_struct_buff()
 )
 @pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 28000])
 @pytest.mark.parametrize("use_index", [True, False])
-@pytest.mark.parametrize("skip_rows", [0, 101, 1007, 27000])
 def test_lists_struct_nests(
-    columns, num_rows, use_index, skip_rows,
+    columns, num_rows, use_index,
 ):
 
-    has_lists = (
-        any("list" in col_name for col_name in columns) if columns else True
+    gdf = cudf.read_orc(
+        list_struct_buff,
+        columns=columns,
+        num_rows=num_rows,
+        use_index=use_index,
     )
 
-    if has_lists and skip_rows > 0:
-        with pytest.raises(
-            RuntimeError, match="skip_rows is not supported by list column"
-        ):
-            cudf.read_orc(
-                list_struct_buff,
-                columns=columns,
-                num_rows=num_rows,
-                use_index=use_index,
-                skiprows=skip_rows,
-            )
+    pyarrow_tbl = pyarrow.orc.ORCFile(list_struct_buff).read()
+
+    pyarrow_tbl = (
+        pyarrow_tbl[:num_rows]
+        if columns is None
+        else pyarrow_tbl.select(columns)[:num_rows]
+    )
+
+    if num_rows > 0:
+        assert pyarrow_tbl.equals(gdf.to_arrow())
     else:
-        gdf = cudf.read_orc(
-            list_struct_buff,
-            columns=columns,
-            num_rows=num_rows,
-            use_index=use_index,
-            skiprows=skip_rows,
+        assert_eq(pyarrow_tbl.to_pandas(), gdf)
+
+
+@pytest.mark.parametrize("columns", [None, ["lvl1_struct"], ["lvl1_list"]])
+def test_skip_rows_for_nested_types(columns):
+    with pytest.raises(
+        RuntimeError, match="skip_rows is not supported by nested column"
+    ):
+        cudf.read_orc(
+            list_struct_buff, columns=columns, use_index=True, skiprows=5,
         )
 
-        pyarrow_tbl = pyarrow.orc.ORCFile(list_struct_buff).read()
 
-        pyarrow_tbl = (
-            pyarrow_tbl[skip_rows : skip_rows + num_rows]
-            if columns is None
-            else pyarrow_tbl.select(columns)[skip_rows : skip_rows + num_rows]
-        )
+def test_pyspark_struct(datadir):
+    path = datadir / "TestOrcFile.testPySparkStruct.orc"
 
-        if num_rows > 0:
-            assert_eq(True, pyarrow_tbl.equals(gdf.to_arrow()))
-        else:
-            assert_eq(pyarrow_tbl.to_pandas(), gdf)
+    pdf = pa.orc.ORCFile(path).read().to_pandas()
+    gdf = cudf.read_orc(path)
+
+    assert_eq(pdf, gdf)
 
 
 @pytest.mark.parametrize(
