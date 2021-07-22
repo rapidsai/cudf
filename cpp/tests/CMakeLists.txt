@@ -199,6 +199,17 @@ if(CUDF_ENABLE_ARROW_S3)
 endif()
 
 ###################################################################################################
+# - io tests --------------------------------------------------------------------------------------
+ConfigureTest(SUPERSTATE_TEST
+    io/text/superstate_test.cpp)
+
+ConfigureTest(TRIE_TEST
+    io/text/trie_test.cpp)
+
+ConfigureTest(MULTIBYTE_SPLIT_TEST
+    io/text/multibyte_split_test.cpp)
+
+###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
 ConfigureTest(SORT_TEST
     sort/segmented_sort_tests.cpp
