@@ -243,3 +243,7 @@ ConfigureBench(STRINGS_BENCH
 # - json benchmark -------------------------------------------------------------------
 ConfigureBench(JSON_BENCH
   string/json_benchmark.cpp)
+
+###################################################################################################
+# - row conversion benchmark ----------------------------------------------------------------------------
+ConfigureBench(ROW_CONVERSION_BENCH row_conversion/row_conversion.cpp)
