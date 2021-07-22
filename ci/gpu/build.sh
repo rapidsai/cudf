@@ -1,4 +1,5 @@
 #!/bin/bash
+#TEST
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 ##############################################
 # cuDF GPU build and test script for CI      #
