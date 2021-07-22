@@ -1428,6 +1428,63 @@ class Frame(libcudf.table.Table):
         result._copy_type_metadata(self)
         return result
 
+    def _interpolate(self, method='linear'):
+        """
+        Interpolate data values between some points.
+
+        Parameters
+        ----------
+        method : str, default 'linear'
+            Interpolation technique to use. Currently,
+            only 'linear` is supported.
+            * 'linear': Ignore the index and treat the values as
+            equally spaced. This is the only method supported on MultiIndexes.
+            * 'index', 'values': linearly interpolate using the index as 
+            an x-axis. Note that unsorted indices can lead to erroneous results.  
+        axis : int, default 0
+            Axis to interpolate along. Currently,
+            only 'axis=0' is supprted.
+        inplace : bool, default False
+            Update the data in place if possible.
+
+        Returns
+        -------
+        Series or DataFrame
+            Returns the same object type as the caller, interpolated at
+            some or all ``NaN`` values
+
+        """
+        columns = ColumnAccessor()
+
+        if method == 'linear':
+            xax = as_column(cupy.arange(len(self)))
+        elif method in {'index', 'values'}:
+            xax = self.index
+
+        for colname, col in self._data.items():
+            if col.nullable:
+                not_null = col.notnull()
+                known_x = cupy.asarray(
+                    xax.apply_boolean_mask(not_null)
+                )
+                known_y = cupy.asarray(
+                    col.apply_boolean_mask(not_null)
+                ).astype(np.dtype('float64'))
+
+                result = cupy.interp(
+                    cupy.asarray(xax), 
+                    known_x, 
+                    known_y, 
+                    left=np.nan, 
+                    right=np.nan)
+            else:
+                # The trivial case
+                result = col
+            columns[colname] = result
+
+
+        return self.__class__(columns)
+
     def _quantiles(
         self,
         q,
