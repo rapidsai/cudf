@@ -2703,6 +2703,55 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testRepeatStringsWithColumnRepeatTimesAndPrecomputedOutputSizes() {
+    // Empty strings column.
+    try (ColumnVector input = ColumnVector.fromStrings("", "", "");
+         ColumnVector repeatTimes = ColumnVector.fromInts(-1, 0, 1);
+         ColumnView.OutputSizesRepeatStrings outputSizes = input.computeOutputSizesRepeatStrings(repeatTimes)) {
+      assertEquals(0, outputSizes.totalStringSize);
+      assertNotEquals(null, outputSizes.stringSizes);
+      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.stringSizes)) {
+        assertColumnsAreEqual(input, results);
+      }
+    }
+
+    // Zero and negative repeatTimes.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "xyz", "123", "456", "789", "a1");
+         ColumnVector repeatTimes = ColumnVector.fromInts(-200, -100, 0, 0, 1, 2);
+         ColumnVector expected = ColumnVector.fromStrings("", "", "", "", "789", "a1a1");
+         ColumnView.OutputSizesRepeatStrings outputSizes = input.computeOutputSizesRepeatStrings(repeatTimes)) {
+      assertEquals(7, outputSizes.totalStringSize);
+      assertNotEquals(null, outputSizes.stringSizes);
+      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.stringSizes)) {
+        assertColumnsAreEqual(expected, results);
+      }
+    }
+
+    // Strings column contains both null and empty, output is copied exactly from input.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector repeatTimes = ColumnVector.fromInts(1, 1, 1, 1, 1);
+         ColumnView.OutputSizesRepeatStrings outputSizes = input.computeOutputSizesRepeatStrings(repeatTimes)) {
+      assertEquals(6, outputSizes.totalStringSize);
+      assertNotEquals(null, outputSizes.stringSizes);
+      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.stringSizes)) {
+        assertColumnsAreEqual(input, results);
+      }
+    }
+
+    // Strings column contains both null and empty.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector repeatTimes = ColumnVector.fromInts(2, 3, 1, 3, 2);
+         ColumnVector expected = ColumnVector.fromStrings("abcabc", "", null, "123123123", null);
+         ColumnView.OutputSizesRepeatStrings outputSizes = input.computeOutputSizesRepeatStrings(repeatTimes)) {
+      assertEquals(15, outputSizes.totalStringSize);
+      assertNotEquals(null, outputSizes.stringSizes);
+      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.stringSizes)) {
+        assertColumnsAreEqual(expected, results);
+      }
+    }
+  }
+
+  @Test
   void testListConcatByRow() {
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
             new HostColumnVector.BasicType(true, DType.INT32)),
