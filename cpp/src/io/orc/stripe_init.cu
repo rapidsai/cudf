@@ -456,8 +456,10 @@ extern "C" __global__ void __launch_bounds__(128, 8)
         ((uint32_t*)&row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x])[j] =
           ((volatile uint32_t*)&s->rowgroups[i])[j];
       }
-      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_rows  = num_rows;
-      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].start_row = start_row;
+      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_rows = num_rows;
+      // Updating in case of struct
+      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_child_rows = num_rows;
+      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].start_row      = start_row;
     }
     __syncthreads();
     if (t == 0) { s->rowgroup_start += num_rowgroups; }
