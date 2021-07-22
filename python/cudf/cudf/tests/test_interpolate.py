@@ -50,6 +50,31 @@ def test_interpolate_series(data, method, axis):
 
     assert_eq(expect, got)
 
+@pytest.mark.parametrize('data', [
+    [1.0, 2.0, 3.0, 4.0],
+    [None, 2.0, 3.0, 4.0],
+    [1.0, 2.0, 3.0, None],
+    [None, None, 3.0, 4.0],
+    [1.0, 2.0, None, None],
+    [1.0, None, 3.0, None],
+    [None, 2.0, None, 4.0],
+    [None, None, None, None]
+])
+@pytest.mark.parametrize('index', [
+    [0, 1, 2, 3],
+    [0, 2, 4, 6],
+    [0, 3, 4, 9]
+])
+@pytest.mark.parametrize('method', ['index', 'values'])
+def test_interpolate_series_values_or_index(data, index, method):
+    gsr = cudf.Series(data, index=index)
+    psr = gsr.to_pandas()
+
+    expect = psr.interpolate(method=method)
+    got = gsr.interpolate(method=method)
+
+    assert_eq(expect, got)
+
 @pytest.mark.parametrize('data,kwargs', [
     (
         {
