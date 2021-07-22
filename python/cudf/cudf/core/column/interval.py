@@ -5,7 +5,7 @@ import pyarrow as pa
 import cudf
 from cudf.core.column import StructColumn
 from cudf.core.dtypes import IntervalDtype
-from cudf.utils.dtypes import is_interval_dtype
+from cudf.utils.dtypes import is_interval_dtype, is_categorical_dtype
 
 
 class IntervalColumn(StructColumn):
@@ -98,19 +98,26 @@ class IntervalColumn(StructColumn):
 
     def as_interval_column(self, dtype, **kwargs):
         if is_interval_dtype(dtype):
-            # a user can directly input the string `interval` as the dtype
-            # when creating an interval series or interval dataframe
-            if dtype == "interval":
-                dtype = IntervalDtype(self.dtype.fields["left"], self.closed)
-            return IntervalColumn(
-                size=self.size,
-                dtype=dtype,
-                mask=self.mask,
-                offset=self.offset,
-                null_count=self.null_count,
-                children=self.children,
-                closed=dtype.closed,
-            )
+            if is_categorical_dtype(self):
+                new_struct = self._get_decategorized_column()
+                return IntervalColumn.from_struct_column(new_struct)
+            if is_interval_dtype(dtype):
+                # a user can directly input the string `interval` as the dtype
+                # when creating an interval series or interval dataframe
+                if dtype == "interval":
+                    dtype = IntervalDtype(
+                        self.dtype.fields["left"], self.closed
+                    )
+                children = self.children
+                return IntervalColumn(
+                    size=self.size,
+                    dtype=dtype,
+                    mask=self.mask,
+                    offset=self.offset,
+                    null_count=self.null_count,
+                    children=children,
+                    closed=dtype.closed,
+                )
         else:
             raise ValueError("dtype must be IntervalDtype")
 
