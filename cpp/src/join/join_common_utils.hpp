@@ -51,7 +51,7 @@ using row_equality = cudf::row_equality_comparator<true>;
 class pair_equality {
  public:
   pair_equality(table_device_view lhs, table_device_view rhs, bool nulls_are_equal = true)
-    : row_equality{lhs, rhs, nulls_are_equal}
+    : check_row_equality{lhs, rhs, nulls_are_equal}
   {
   }
 
@@ -59,11 +59,13 @@ class pair_equality {
     const cuco::pair_type<hash_value_type, size_type>& lhs,
     const cuco::pair_type<hash_value_type, size_type>& rhs) const noexcept
   {
-    return lhs.first == rhs.first and row_equality(rhs.second, lhs.second);
+    bool res = (lhs.first == rhs.first);
+    if (res) { return check_row_equality(rhs.second, lhs.second); }
+    return res;
   }
 
  private:
-  cudf::row_equality_comparator<true> row_equality;
+  cudf::row_equality_comparator<true> check_row_equality;
 };
 
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
