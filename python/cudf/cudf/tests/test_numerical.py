@@ -6,7 +6,7 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_100
-from cudf.tests.utils import NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, assert_eq
 from cudf.utils.dtypes import cudf_dtypes_to_pandas_dtypes
 
 

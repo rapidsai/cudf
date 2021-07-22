@@ -358,20 +358,16 @@ std::unique_ptr<column> column_merger::operator()<cudf::struct_view>(
   rmm::mr::device_memory_resource* mr) const
 {
   // merge each child.
-  std::vector<std::unique_ptr<column>> merged_children;
-  merged_children.reserve(lcol.num_children());
+  auto const lhs = structs_column_view{lcol};
+  auto const rhs = structs_column_view{rcol};
 
-  structs_column_view lhs(lcol);
-  structs_column_view rhs(rcol);
-
-  column_merger merger{row_order_};
-  auto iter = thrust::make_counting_iterator(0);
-  std::transform(
-    iter, iter + lhs.num_children(), std::back_inserter(merged_children), [&](size_type i) {
+  auto it = cudf::detail::make_counting_transform_iterator(
+    0, [&, merger = column_merger{row_order_}](size_type i) {
       return cudf::type_dispatcher<dispatch_storage_type>(
         lhs.child(i).type(), merger, lhs.get_sliced_child(i), rhs.get_sliced_child(i), stream, mr);
     });
 
+  auto merged_children   = std::vector<std::unique_ptr<column>>(it, it + lhs.num_children());
   auto const merged_size = lcol.size() + rcol.size();
 
   // materialize the output buffer

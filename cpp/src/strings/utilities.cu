@@ -84,8 +84,7 @@ std::unique_ptr<cudf::column> child_chars_from_string_vector(cudf::device_span<s
   auto const d_offsets = offsets.data<int32_t>();
 
   // create column
-  auto chars_column =
-    make_numeric_column(data_type{type_id::INT8}, bytes, mask_state::UNALLOCATED, stream, mr);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
   // get it's view
   auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
@@ -100,8 +99,7 @@ std::unique_ptr<cudf::column> child_chars_from_string_vector(cudf::device_span<s
 }
 
 //
-std::unique_ptr<column> create_chars_child_column(cudf::size_type strings_count,
-                                                  cudf::size_type total_bytes,
+std::unique_ptr<column> create_chars_child_column(cudf::size_type total_bytes,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {

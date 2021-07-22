@@ -15,14 +15,14 @@ import rmm
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.dataset_generator import rand_dataframe
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
 )
+from cudf.testing.dataset_generator import rand_dataframe
 
 _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")

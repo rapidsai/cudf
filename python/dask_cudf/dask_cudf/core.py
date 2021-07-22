@@ -9,10 +9,9 @@ import pandas as pd
 from tlz import partition_all
 
 import dask
+import dask.dataframe.optimize
 from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
-from dask.context import _globals
-from dask.core import flatten
 from dask.dataframe.core import (
     Scalar,
     finalize,
@@ -22,7 +21,6 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.utils import raise_on_meta_error
 from dask.highlevelgraph import HighLevelGraph
-from dask.optimization import cull, fuse
 from dask.utils import M, OperatorMethodMixin, apply, derived_from, funcname
 
 import cudf
@@ -32,19 +30,6 @@ from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods
 
 DASK_VERSION = LooseVersion(dask.__version__)
-
-
-def optimize(dsk, keys, **kwargs):
-    flatkeys = list(flatten(keys)) if isinstance(keys, list) else [keys]
-    dsk, dependencies = cull(dsk, flatkeys)
-    dsk, dependencies = fuse(
-        dsk,
-        keys,
-        dependencies=dependencies,
-        ave_width=_globals.get("fuse_ave_width", 1),
-    )
-    dsk, _ = cull(dsk, keys)
-    return dsk
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
@@ -65,7 +50,6 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
     """
 
     __dask_scheduler__ = staticmethod(dask.get)
-    __dask_optimize__ = staticmethod(optimize)
 
     def __dask_postcompute__(self):
         return finalize, ()

@@ -43,7 +43,9 @@ auto concatenate_column_views(std::vector<ViewType> const& views)
 {
   using ColumnView = typename ViewType::ColumnView;
   std::vector<ColumnView> concat_cols;
-  for (auto& view : views) { concat_cols.insert(concat_cols.end(), view.begin(), view.end()); }
+  for (auto& view : views) {
+    concat_cols.insert(concat_cols.end(), view.begin(), view.end());
+  }
   return concat_cols;
 }
 

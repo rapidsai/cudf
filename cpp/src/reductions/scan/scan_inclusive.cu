@@ -22,6 +22,8 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/reduction.hpp>
+#include <cudf/strings/detail/gather.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -31,30 +33,81 @@
 
 namespace cudf {
 namespace detail {
-namespace {
 
-rmm::device_buffer mask_inclusive_scan(const column_view& input_view,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+// logical-and scan of the null mask of the input view
+rmm::device_buffer mask_scan(const column_view& input_view,
+                             cudf::scan_type inclusive,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   rmm::device_buffer mask =
     detail::create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
   auto d_input   = column_device_view::create(input_view, stream);
   auto valid_itr = detail::make_validity_iterator(*d_input);
 
-  auto first_null_position = thrust::find_if_not(rmm::exec_policy(stream),
-                                                 valid_itr,
-                                                 valid_itr + input_view.size(),
-                                                 thrust::identity<bool>{}) -
-                             valid_itr;
-  cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), 0, first_null_position, true);
-  cudf::set_null_mask(
-    static_cast<cudf::bitmask_type*>(mask.data()), first_null_position, input_view.size(), false);
+  auto first_null_position = [&] {
+    size_type const first_null = thrust::find_if_not(rmm::exec_policy(stream),
+                                                     valid_itr,
+                                                     valid_itr + input_view.size(),
+                                                     thrust::identity<bool>{}) -
+                                 valid_itr;
+    size_type const exclusive_offset = (inclusive == scan_type::EXCLUSIVE) ? 1 : 0;
+    return std::min(input_view.size(), first_null + exclusive_offset);
+  }();
+
+  cudf::detail::set_null_mask(
+    static_cast<cudf::bitmask_type*>(mask.data()), 0, first_null_position, true, stream);
+  cudf::detail::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()),
+                              first_null_position,
+                              input_view.size(),
+                              false,
+                              stream);
   return mask;
 }
 
+namespace {
+
 /**
- * @brief Dispatcher for running Scan operation on input column
+ * @brief Strings inclusive scan operator
+ *
+ * This was specifically created to workaround a thrust issue
+ * https://github.com/NVIDIA/thrust/issues/1479
+ * where invalid values are passed to the operator.
+ *
+ * This operator will accept index values, check them and then
+ * run the `Op` operation on the individual string_view objects.
+ * The returned result is the appropriate index value.
+ */
+template <typename Op>
+struct string_scan_operator {
+  column_device_view const col;          ///< strings column device view
+  string_view const null_replacement{};  ///< value used when element is null
+  bool const has_nulls;                  ///< true if col has null elements
+
+  string_scan_operator(column_device_view const& col, bool has_nulls = true)
+    : col{col}, null_replacement{Op::template identity<string_view>()}, has_nulls{has_nulls}
+  {
+    CUDF_EXPECTS(type_id::STRING == col.type().id(), "the data type mismatch");
+    // verify validity bitmask is non-null, otherwise, is_null_nocheck() will crash
+    if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
+  }
+
+  CUDA_DEVICE_CALLABLE
+  size_type operator()(size_type lhs, size_type rhs) const
+  {
+    // thrust::inclusive_scan may pass us garbage values so we need to protect ourselves;
+    // in these cases the return value does not matter since the result is not used
+    if (lhs < 0 || rhs < 0 || lhs >= col.size() || rhs >= col.size()) return 0;
+    string_view d_lhs =
+      has_nulls && col.is_null_nocheck(lhs) ? null_replacement : col.element<string_view>(lhs);
+    string_view d_rhs =
+      has_nulls && col.is_null_nocheck(rhs) ? null_replacement : col.element<string_view>(rhs);
+    return Op{}(d_lhs, d_rhs) == d_lhs ? lhs : rhs;
+  }
+};
+
+/**
+ * @brief Dispatcher for running a Scan operation on an input column
  *
  * @tparam Op device binary operator
  */
@@ -104,22 +157,25 @@ struct scan_dispatcher {
   {
     auto d_input = column_device_view::create(input_view, stream);
 
-    rmm::device_uvector<T> result(input_view.size(), stream);
-    auto begin =
-      make_null_replacement_iterator(*d_input, Op::template identity<T>(), input_view.has_nulls());
-    thrust::inclusive_scan(
-      rmm::exec_policy(stream), begin, begin + input_view.size(), result.data(), Op{});
+    // build indices of the scan operation results
+    rmm::device_uvector<size_type> result(input_view.size(), stream);
+    thrust::inclusive_scan(rmm::exec_policy(stream),
+                           thrust::counting_iterator<size_type>(0),
+                           thrust::counting_iterator<size_type>(input_view.size()),
+                           result.begin(),
+                           string_scan_operator<Op>{*d_input, input_view.has_nulls()});
 
-    CHECK_CUDA(stream.value());
-    return cudf::make_strings_column(result, Op::template identity<string_view>(), stream, mr);
+    // call gather using the indices to build the output column
+    return cudf::strings::detail::gather(
+      strings_column_view(input_view), result.begin(), result.end(), false, stream, mr);
   }
 
  public:
   /**
-   * @brief creates new column from input column by applying scan operation
+   * @brief Creates a new column from the input column by applying the scan operation
    *
-   * @param input     input column view
-   * @param inclusive inclusive or exclusive scan
+   * @param input Input column view
+   * @param null_handling How null row entries are to be processed
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned column's device memory
    * @return
@@ -156,7 +212,8 @@ std::unique_ptr<column> scan_inclusive(
   if (null_handling == null_policy::EXCLUDE) {
     output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
   } else if (input.nullable()) {
-    output->set_null_mask(mask_inclusive_scan(input, stream, mr), cudf::UNKNOWN_NULL_COUNT);
+    output->set_null_mask(mask_scan(input, scan_type::INCLUSIVE, stream, mr),
+                          cudf::UNKNOWN_NULL_COUNT);
   }
 
   return output;

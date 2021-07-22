@@ -1,14 +1,14 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
 from libcpp.vector cimport vector
 
 from cudf._lib.cpp.types cimport (
-    size_type,
     data_type,
     interpolation,
-    null_policy
+    null_policy,
+    size_type,
 )
 
 

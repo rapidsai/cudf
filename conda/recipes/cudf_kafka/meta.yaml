@@ -24,7 +24,7 @@ build:
 
 requirements:
   build:
-    - cmake >=3.18
+    - cmake >=3.20.1
   host:
     - python
     - cython >=0.29,<0.30

@@ -21,7 +21,7 @@ namespace detail {
 
 bool result_cache::has_result(size_t col_idx, aggregation const& agg) const
 {
-  if (col_idx < 0 or col_idx > _cache.size()) return false;
+  if (col_idx > _cache.size()) return false;
 
   auto result_it = _cache[col_idx].find(agg);
 

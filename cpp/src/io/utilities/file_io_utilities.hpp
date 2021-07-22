@@ -40,8 +40,8 @@ class file_wrapper {
   size_t _size;
 
  public:
-  explicit file_wrapper(std::string const &filepath, int flags);
-  explicit file_wrapper(std::string const &filepath, int flags, mode_t mode);
+  explicit file_wrapper(std::string const& filepath, int flags);
+  explicit file_wrapper(std::string const& filepath, int flags, mode_t mode);
   ~file_wrapper();
   auto size() const { return _size; }
   auto desc() const { return fd; }
@@ -105,7 +105,7 @@ class cufile_input : public cufile_io_base {
    *
    * @return The number of bytes read
    */
-  virtual size_t read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream) = 0;
+  virtual size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) = 0;
 };
 
 /**
@@ -122,7 +122,7 @@ class cufile_output : public cufile_io_base {
    * @param offset Number of bytes from the start
    * @param size Number of bytes to write
    */
-  virtual void write(void const *data, size_t offset, size_t size) = 0;
+  virtual void write(void const* data, size_t offset, size_t size) = 0;
 };
 
 #ifdef CUFILE_FOUND
@@ -152,7 +152,7 @@ class cufile_config {
    */
   bool is_required() const { return policy == "ALWAYS"; }
 
-  static cufile_config const *instance();
+  static cufile_config const* instance();
 };
 
 /**
@@ -162,14 +162,14 @@ struct cufile_registered_file {
   void register_handle();
 
  public:
-  cufile_registered_file(cufile_shim const *shim, std::string const &filepath, int flags)
+  cufile_registered_file(cufile_shim const* shim, std::string const& filepath, int flags)
     : _file(filepath, flags), shim{shim}
   {
     register_handle();
   }
 
-  cufile_registered_file(cufile_shim const *shim,
-                         std::string const &filepath,
+  cufile_registered_file(cufile_shim const* shim,
+                         std::string const& filepath,
                          int flags,
                          mode_t mode)
     : _file(filepath, flags, mode), shim{shim}
@@ -177,14 +177,14 @@ struct cufile_registered_file {
     register_handle();
   }
 
-  auto const &handle() const noexcept { return cf_handle; }
+  auto const& handle() const noexcept { return cf_handle; }
 
   ~cufile_registered_file();
 
  private:
   file_wrapper const _file;
   CUfileHandle_t cf_handle = nullptr;
-  cufile_shim const *shim  = nullptr;
+  cufile_shim const* shim  = nullptr;
 };
 
 /**
@@ -194,16 +194,16 @@ struct cufile_registered_file {
  */
 class cufile_input_impl final : public cufile_input {
  public:
-  cufile_input_impl(std::string const &filepath);
+  cufile_input_impl(std::string const& filepath);
 
   std::unique_ptr<datasource::buffer> read(size_t offset,
                                            size_t size,
                                            rmm::cuda_stream_view stream) override;
 
-  size_t read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream) override;
+  size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) override;
 
  private:
-  cufile_shim const *shim = nullptr;
+  cufile_shim const* shim = nullptr;
   cufile_registered_file const cf_file;
 };
 
@@ -214,12 +214,12 @@ class cufile_input_impl final : public cufile_input {
  */
 class cufile_output_impl final : public cufile_output {
  public:
-  cufile_output_impl(std::string const &filepath);
+  cufile_output_impl(std::string const& filepath);
 
-  void write(void const *data, size_t offset, size_t size) override;
+  void write(void const* data, size_t offset, size_t size) override;
 
  private:
-  cufile_shim const *shim = nullptr;
+  cufile_shim const* shim = nullptr;
   cufile_registered_file const cf_file;
 };
 #else
@@ -233,7 +233,7 @@ class cufile_input_impl final : public cufile_input {
     CUDF_FAIL("Only used to compile without cufile library, should not be called");
   }
 
-  size_t read(size_t offset, size_t size, uint8_t *dst, rmm::cuda_stream_view stream) override
+  size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) override
   {
     CUDF_FAIL("Only used to compile without cufile library, should not be called");
   }
@@ -241,7 +241,7 @@ class cufile_input_impl final : public cufile_input {
 
 class cufile_output_impl final : public cufile_output {
  public:
-  void write(void const *data, size_t offset, size_t size) override
+  void write(void const* data, size_t offset, size_t size) override
   {
     CUDF_FAIL("Only used to compile without cufile library, should not be called");
   }
@@ -254,7 +254,7 @@ class cufile_output_impl final : public cufile_output {
  * Returns a null pointer if an exception occurs in the `cufile_input_impl` constructor, or if the
  * cuFile library is not installed.
  */
-std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath);
+std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath);
 
 /**
  * @brief Creates a `cufile_output_impl` object
@@ -262,7 +262,7 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath
  * Returns a null pointer if an exception occurs in the `cufile_output_impl` constructor, or if the
  * cuFile library is not installed.
  */
-std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const &filepath);
+std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepath);
 
 }  // namespace detail
 }  // namespace io

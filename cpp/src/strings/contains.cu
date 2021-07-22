@@ -45,7 +45,7 @@ namespace {
  * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
  * Longer patterns require global memory.
  */
-template <size_t stack_size>
+template <int stack_size>
 struct contains_fn {
   reprog_device prog;
   column_device_view d_strings;
@@ -56,8 +56,8 @@ struct contains_fn {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str = d_strings.element<string_view>(idx);
     int32_t begin     = 0;
-    int32_t end       = bmatch ? 1  // match only the beginning of the string;
-                         : -1;      // this handles empty strings too
+    int32_t end       = bmatch ? 1    // match only the beginning of the string;
+                               : -1;  // this handles empty strings too
     return static_cast<bool>(prog.find<stack_size>(idx, d_str, begin, end));
   }
 };
@@ -163,7 +163,7 @@ namespace {
 /**
  * @brief This counts the number of times the regex pattern matches in each string.
  */
-template <size_t stack_size>
+template <int stack_size>
 struct count_fn {
   reprog_device prog;
   column_device_view d_strings;

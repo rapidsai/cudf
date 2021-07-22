@@ -111,10 +111,9 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
                           mr);
     } else {
       // this approach is 2-3x faster for a large number of smaller string lengths
-      auto chars_column =
-        strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
-      auto d_chars    = chars_column->mutable_view().template data<char>();
-      auto copy_chars = [d_chars] __device__(auto item) {
+      auto chars_column = create_chars_child_column(bytes, stream, mr);
+      auto d_chars      = chars_column->mutable_view().template data<char>();
+      auto copy_chars   = [d_chars] __device__(auto item) {
         string_index_pair const str = thrust::get<0>(item);
         size_type const offset      = thrust::get<1>(item);
         if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
@@ -182,7 +181,7 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
                     [] __device__(auto offset) { return static_cast<int32_t>(offset); });
 
   // build chars column
-  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
   auto chars_view   = chars_column->mutable_view();
   thrust::copy(rmm::exec_policy(stream), chars_begin, chars_end, chars_view.data<char>());
 

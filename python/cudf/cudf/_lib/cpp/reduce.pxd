@@ -1,13 +1,14 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.types cimport data_type
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.aggregation cimport aggregation
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport pair
+
+from cudf._lib.aggregation cimport aggregation
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.cpp.types cimport data_type
+from cudf._lib.scalar cimport DeviceScalar
 
 
 cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:

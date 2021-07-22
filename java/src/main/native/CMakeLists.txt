@@ -52,7 +52,11 @@ message(VERBOSE "CUDF_JNI: Build with GPUDirect Storage support: ${USE_GDS}")
 message(VERBOSE "CUDF_JNI: Build with static Arrow library: ${CUDF_JNI_ARROW_STATIC}")
 
 set(CUDF_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp")
-set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
+if (DEFINED ENV{CUDF_CPP_BUILD_DIR}) 
+  set(CUDF_CPP_BUILD_DIR "$ENV{CUDF_CPP_BUILD_DIR}")
+else()
+  set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
+endif()
 
 set(CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/"
@@ -111,20 +115,25 @@ endif(CUDA_STATIC_RUNTIME)
 
 ###################################################################################################
 # - Thrust/CUB/libcudacxx ------------------------------------------------------------------------------------
-
 find_path(THRUST_INCLUDE "thrust"
     HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src"
           "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src"
           "$ENV{CONDA_PREFIX}/include")
+
+message(STATUS "THRUST: THRUST_INCLUDE set to ${THRUST_INCLUDE}")
 
 find_path(CUB_INCLUDE "cub"
     HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src"
           "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src"
           "$ENV{CONDA_PREFIX}/include")
 
+message(STATUS "CUB: CUB_INCLUDE set to ${CUB_INCLUDE}")
+
 find_path(LIBCUDACXX_INCLUDE "cuda"
     HINTS "$ENV{CUDF_ROOT}/_deps/libcudacxx-src/include"
           "${CUDF_CPP_BUILD_DIR}/_deps/libcudacxx-src/include")
+
+message(STATUS "LIBCUDACXX: LIBCUDACXX_INCLUDE set to ${LIBCUDACXX_INCLUDE}")
 
 find_path(SPDLOG_INCLUDE "spdlog"
     HINTS "${CUDF_CPP_BUILD_DIR}/_deps/spdlog-src/include"
@@ -132,6 +141,7 @@ find_path(SPDLOG_INCLUDE "spdlog"
           "$ENV{RMM_ROOT}/include"
           "$ENV{CONDA_PREFIX}/include")
 
+message(STATUS "SPDLOG: SPDLOG_INCLUDE set to ${SPDLOG_INCLUDE}")
 ###################################################################################################
 # - CUDF ------------------------------------------------------------------------------------------
 
@@ -163,7 +173,6 @@ message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
 
 find_path(ARROW_INCLUDE "arrow"
           HINTS "$ENV{ARROW_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include"
                 "${CUDF_CPP_BUILD_DIR}/_deps/arrow-src/cpp/src")
 
 message(STATUS "ARROW: ARROW_INCLUDE set to ${ARROW_INCLUDE}")
@@ -177,7 +186,6 @@ endif(CUDF_JNI_ARROW_STATIC)
 
 find_library(ARROW_LIBRARY ${CUDF_JNI_ARROW_LIBNAME} REQUIRED
   HINTS "$ENV{ARROW_ROOT}/lib"
-        "$ENV{CONDA_PREFIX}/lib"
         "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/release")
 
 if(NOT ARROW_LIBRARY)
@@ -260,7 +268,6 @@ set(SOURCE_FILES
     "src/RmmJni.cpp"
     "src/ScalarJni.cpp"
     "src/TableJni.cpp"
-    "src/prefix_sum.cu"
     "src/map_lookup.cu")
 add_library(cudfjni SHARED ${SOURCE_FILES})
 

@@ -1,12 +1,12 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
+from libcpp.vector cimport vector
 
+cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
-cimport cudf._lib.cpp.types as libcudf_types
 
 
 cdef extern from "cudf/search.hpp" namespace "cudf" nogil:

@@ -89,7 +89,9 @@ inline String& stringAppend(String& s, String a) { return s.append(std::move(a))
 
 inline String& stringAppend(String& s, int n, UChar32 c)
 {
-  for (int i = 0; i != n; ++i) { s.append(c); }
+  for (int i = 0; i != n; ++i) {
+    s.append(c);
+  }
 
   return s;
 }
@@ -1449,7 +1451,9 @@ inline void Options::generate_all_groups_help(String& result) const
   std::vector<std::string> all_groups;
   all_groups.reserve(m_help.size());
 
-  for (auto& group : m_help) { all_groups.push_back(group.first); }
+  for (auto& group : m_help) {
+    all_groups.push_back(group.first);
+  }
 
   generate_group_help(result, all_groups);
 }

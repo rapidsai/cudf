@@ -1,17 +1,17 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
-import cudf
-
 import pyarrow as pa
 
-from cudf._lib.column cimport Column
-from cudf._lib.table cimport Table
-from cudf._lib.cpp.column.column cimport column_view
-from cudf._lib.cpp.table.table cimport table_view
+import cudf
 
 from libc.stdint cimport uint8_t
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column_view
+from cudf._lib.cpp.table.table cimport table_view
+from cudf._lib.table cimport Table
 
 try:
     import ujson as json
@@ -19,12 +19,18 @@ except ImportError:
     import json
 
 from cudf.utils.dtypes import (
-    np_to_pa_dtype,
+    cudf_dtypes_to_pandas_dtypes,
     is_categorical_dtype,
+    is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype,
-    is_decimal_dtype,
+    np_to_pa_dtype,
 )
+
+PARQUET_META_TYPE_MAP = {
+    str(cudf_dtype): str(pandas_dtype)
+    for cudf_dtype, pandas_dtype in cudf_dtypes_to_pandas_dtypes.items()
+}
 
 
 cdef vector[column_view] make_column_views(object columns):
@@ -138,18 +144,30 @@ cpdef generate_pandas_metadata(Table table, index):
             index_descriptors.append(descr)
 
     metadata = pa.pandas_compat.construct_metadata(
-        table,
-        col_names,
-        index_levels,
-        index_descriptors,
-        index,
-        types,
+        columns_to_convert=[
+            col
+            for col in table._columns
+        ],
+        df=table,
+        column_names=col_names,
+        index_levels=index_levels,
+        index_descriptors=index_descriptors,
+        preserve_index=index,
+        types=types,
     )
 
     md_dict = json.loads(metadata[b"pandas"])
 
-    # correct metadata for list and struct types
+    # correct metadata for list and struct and nullable numeric types
     for col_meta in md_dict["columns"]:
+        if (
+            col_meta["name"] in table._column_names
+            and table._data[col_meta["name"]].nullable
+            and col_meta["numpy_type"] in PARQUET_META_TYPE_MAP
+        ):
+            col_meta["numpy_type"] = PARQUET_META_TYPE_MAP[
+                col_meta["numpy_type"]
+            ]
         if col_meta["numpy_type"] in ("list", "struct"):
             col_meta["numpy_type"] = "object"
 

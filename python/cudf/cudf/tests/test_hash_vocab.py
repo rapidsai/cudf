@@ -1,8 +1,10 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
-from cudf.utils.hash_vocab_utils import hash_vocab
-import os
 import filecmp
+import os
+
 import pytest
+
+from cudf.utils.hash_vocab_utils import hash_vocab
 
 
 @pytest.fixture(scope="module")

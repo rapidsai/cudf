@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq, gen_rand
+from cudf.testing._utils import assert_eq, gen_rand
 
 
 def test_sqrt_float():

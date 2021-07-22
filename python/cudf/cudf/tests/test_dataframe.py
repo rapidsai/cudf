@@ -20,8 +20,8 @@ from numba import cuda
 import cudf
 from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
 from cudf.core.column import column
-from cudf.tests import utils
-from cudf.tests.utils import (
+from cudf.testing import _utils as utils
+from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -734,6 +734,17 @@ def test_dataframe_astype(nelem):
     df["b"] = df["a"].astype(np.float32)
     assert df["b"].dtype is np.dtype(np.float32)
     np.testing.assert_equal(df["a"].to_array(), df["b"].to_array())
+
+
+def test_astype_dict():
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": ["1", "2", "3"]})
+    pdf = gdf.to_pandas()
+
+    assert_eq(pdf.astype({"a": "str"}), gdf.astype({"a": "str"}))
+    assert_eq(
+        pdf.astype({"a": "str", "b": np.int64}),
+        gdf.astype({"a": "str", "b": np.int64}),
+    )
 
 
 @pytest.mark.parametrize("nelem", [0, 100])
@@ -5206,8 +5217,8 @@ def test_memory_usage_cat():
     gdf = cudf.from_pandas(df)
 
     expected = (
-        gdf.B._column.cat().categories.__sizeof__()
-        + gdf.B._column.cat().codes.__sizeof__()
+        gdf.B._column.categories.__sizeof__()
+        + gdf.B._column.codes.__sizeof__()
     )
 
     # Check cat column
@@ -8153,6 +8164,16 @@ def test_dataframe_constructor_columns(df, columns, index):
     assert_local_eq(actual, df, expected, host_columns)
 
 
+def test_dataframe_constructor_column_index_only():
+    columns = ["a", "b", "c"]
+    index = ["r1", "r2", "r3"]
+
+    gdf = cudf.DataFrame(index=index, columns=columns)
+    assert not id(gdf["a"]._column) == id(gdf["b"]._column) and not id(
+        gdf["b"]._column
+    ) == id(gdf["c"]._column)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -8676,3 +8697,13 @@ def test_is_homogeneous_index(data, expected):
     actual = cudf.Index(data)._is_homogeneous
 
     assert actual == expected
+
+
+def test_frame_series_where():
+    gdf = cudf.DataFrame(
+        {"a": [1.0, 2.0, None, 3.0, None], "b": [None, 10.0, 11.0, None, 23.0]}
+    )
+    pdf = gdf.to_pandas()
+    expected = gdf.where(gdf.notna(), gdf.mean())
+    actual = pdf.where(pdf.notna(), pdf.mean(), axis=1)
+    assert_eq(expected, actual)

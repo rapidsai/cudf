@@ -205,7 +205,8 @@ std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_d
       auto dict_cols = dictionary::detail::match_dictionaries(dict_views, stream, mr);
       // replace the updated_columns vector entries for the set of columns at col_idx
       auto dict_col_idx = 0;
-      for (auto& v : updated_columns) v[col_idx] = dict_cols[dict_col_idx++]->view();
+      for (auto& v : updated_columns)
+        v[col_idx] = dict_cols[dict_col_idx++]->view();
       // move the updated dictionary columns into the main output vector
       std::move(dict_cols.begin(), dict_cols.end(), std::back_inserter(dictionary_columns));
     }

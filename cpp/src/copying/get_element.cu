@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/is_element_valid.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -33,17 +34,17 @@ namespace detail {
 namespace {
 
 struct get_element_functor {
-  template <typename T, std::enable_if_t<is_fixed_width<T>() && !is_fixed_point<T>()> *p = nullptr>
+  template <typename T, std::enable_if_t<is_fixed_width<T>() && !is_fixed_point<T>()>* p = nullptr>
   std::unique_ptr<scalar> operator()(
-    column_view const &input,
+    column_view const& input,
     size_type index,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
     auto s = make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
 
     using ScalarType = cudf::scalar_type_t<T>;
-    auto typed_s     = static_cast<ScalarType *>(s.get());
+    auto typed_s     = static_cast<ScalarType*>(s.get());
 
     auto device_s   = get_scalar_device_view(*typed_s);
     auto device_col = column_device_view::create(input, stream);
@@ -57,12 +58,12 @@ struct get_element_functor {
     return s;
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, string_view>::value> *p = nullptr>
+  template <typename T, std::enable_if_t<std::is_same<T, string_view>::value>* p = nullptr>
   std::unique_ptr<scalar> operator()(
-    column_view const &input,
+    column_view const& input,
     size_type index,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
     auto device_col = column_device_view::create(input, stream);
 
@@ -82,12 +83,12 @@ struct get_element_functor {
     return std::make_unique<string_scalar>(temp_data, temp_valid.value(stream), stream, mr);
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, dictionary32>::value> *p = nullptr>
+  template <typename T, std::enable_if_t<std::is_same<T, dictionary32>::value>* p = nullptr>
   std::unique_ptr<scalar> operator()(
-    column_view const &input,
+    column_view const& input,
     size_type index,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
     auto dict_view    = dictionary_column_view(input);
     auto indices_iter = detail::indexalator_factory::make_input_iterator(dict_view.indices());
@@ -118,12 +119,12 @@ struct get_element_functor {
                            mr);
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, list_view>::value> *p = nullptr>
+  template <typename T, std::enable_if_t<std::is_same<T, list_view>::value>* p = nullptr>
   std::unique_ptr<scalar> operator()(
-    column_view const &input,
+    column_view const& input,
     size_type index,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
     bool valid               = is_element_valid_sync(input, index, stream);
     auto const child_col_idx = lists_column_view::child_column_index;
@@ -143,12 +144,12 @@ struct get_element_functor {
     }
   }
 
-  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()> *p = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* p = nullptr>
   std::unique_ptr<scalar> operator()(
-    column_view const &input,
+    column_view const& input,
     size_type index,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
     using Type = typename T::rep;
 
@@ -174,20 +175,27 @@ struct get_element_functor {
                                                    mr);
   }
 
-  template <typename T, typename... Args>
-  std::enable_if_t<std::is_same<T, struct_view>::value, std::unique_ptr<scalar>> operator()(
-    Args &&...)
+  template <typename T, std::enable_if_t<std::is_same<T, struct_view>::value>* p = nullptr>
+  std::unique_ptr<scalar> operator()(
+    column_view const& input,
+    size_type index,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
-    CUDF_FAIL("get_element_functor not supported for struct_view");
+    bool valid = is_element_valid_sync(input, index, stream);
+    auto row_contents =
+      std::make_unique<column>(slice(input, index, index + 1), stream, mr)->release();
+    auto scalar_contents = table(std::move(row_contents.children));
+    return std::make_unique<struct_scalar>(std::move(scalar_contents), valid, stream, mr);
   }
 };
 
 }  // namespace
 
-std::unique_ptr<scalar> get_element(column_view const &input,
+std::unique_ptr<scalar> get_element(column_view const& input,
                                     size_type index,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource *mr)
+                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(index >= 0 and index < input.size(), "Index out of bounds");
   return type_dispatcher(input.type(), get_element_functor{}, input, index, stream, mr);
@@ -195,9 +203,9 @@ std::unique_ptr<scalar> get_element(column_view const &input,
 
 }  // namespace detail
 
-std::unique_ptr<scalar> get_element(column_view const &input,
+std::unique_ptr<scalar> get_element(column_view const& input,
                                     size_type index,
-                                    rmm::mr::device_memory_resource *mr)
+                                    rmm::mr::device_memory_resource* mr)
 {
   return detail::get_element(input, index, rmm::cuda_stream_default, mr);
 }

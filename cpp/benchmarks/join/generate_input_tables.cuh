@@ -141,7 +141,7 @@ __global__ void init_probe_tbl(key_type* const probe_tbl,
  * (e.g. device memory, zero copy memory or unified memory). Each value in the build table
  * will be from [0,rand_max] and if uniq_build_tbl_keys is true it is ensured that each value
  * will be uniq in the build table. Each value in the probe table will be also in the build
- * table with a propability of selectivity and a random number from
+ * table with a probability of selectivity and a random number from
  * [0,rand_max] \setminus \{build_tbl\} otherwise.
  *
  * @param[out] build_tbl            The build table to generate. Usually the smaller table used to
@@ -150,7 +150,7 @@ __global__ void init_probe_tbl(key_type* const probe_tbl,
  * @param[out] probe_tbl            The probe table to generate. Usually the larger table used to
  *                                  probe into the hash table created from the build table.
  * @param[in] build_tbl_size        number of keys in the build table
- * @param[in] selectivity           propability with which an element of the probe table is
+ * @param[in] selectivity           probability with which an element of the probe table is
  *                                  present in the build table.
  * @param[in] rand_max              maximum random number to generate. I.e. random numbers are
  *                                  integers from [0,rand_max].
@@ -169,7 +169,7 @@ void generate_input_tables(key_type* const build_tbl,
   // expense of not being that accurate with applying the selectivity an especially more memory
   // efficient implementations would be to partition the random numbers into two intervals and then
   // let one table choose random numbers from only one interval and the other only select with
-  // selectivity propability from the same interval and from the other in the other cases.
+  // selective probability from the same interval and from the other in the other cases.
 
   static_assert(std::is_signed<key_type>::value, "key_type needs to be signed for lottery to work");
 

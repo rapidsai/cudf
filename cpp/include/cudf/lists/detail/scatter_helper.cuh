@@ -129,11 +129,6 @@ struct unbound_list_view {
   size_type _size{};       // Number of elements in *this* list row.
 };
 
-/**
- * @brief Checks that the specified columns have matching schemas, all the way down.
- */
-void assert_same_data_type(column_view const& lhs, column_view const& rhs);
-
 std::unique_ptr<column> build_lists_child_column_recursive(
   data_type child_column_type,
   rmm::device_uvector<unbound_list_view> const& list_vector,

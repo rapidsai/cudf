@@ -8,7 +8,7 @@ import pytest
 
 from cudf.core import DataFrame, GenericIndex, Series
 from cudf.core.buffer import Buffer
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 if sys.version_info < (3, 8):
     try:

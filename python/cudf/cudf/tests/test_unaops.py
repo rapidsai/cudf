@@ -10,7 +10,7 @@ import pytest
 
 import cudf
 from cudf.core import Series
-from cudf.tests import utils
+from cudf.testing import _utils as utils
 
 _unaops = [operator.abs, operator.invert, operator.neg, np.ceil, np.floor]
 

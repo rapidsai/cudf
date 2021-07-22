@@ -87,14 +87,14 @@ struct linked_column_view : public column_view {
   //       copy of this object. Options:
   // 1. Inherit from column_view_base. Only lose out on children vector. That is not needed.
   // 2. Don't inherit at all. make linked_column_view keep a reference wrapper to its column_view
-  linked_column_view(column_view const &col) : column_view(col), parent(nullptr)
+  linked_column_view(column_view const& col) : column_view(col), parent(nullptr)
   {
     for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
       children.push_back(std::make_shared<linked_column_view>(this, *child_it));
     }
   }
 
-  linked_column_view(linked_column_view *parent, column_view const &col)
+  linked_column_view(linked_column_view* parent, column_view const& col)
     : column_view(col), parent(parent)
   {
     for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
@@ -102,7 +102,7 @@ struct linked_column_view : public column_view {
     }
   }
 
-  linked_column_view *parent;  //!< Pointer to parent of this column. Nullptr if root
+  linked_column_view* parent;  //!< Pointer to parent of this column. Nullptr if root
   LinkedColVector children;
 };
 
@@ -112,10 +112,10 @@ struct linked_column_view : public column_view {
  * @param table table of columns to convert
  * @return Vector of converted linked_column_views
  */
-LinkedColVector input_table_to_linked_columns(table_view const &table)
+LinkedColVector input_table_to_linked_columns(table_view const& table)
 {
   LinkedColVector result;
-  for (column_view const &col : table) {
+  for (column_view const& col : table) {
     result.emplace_back(std::make_shared<linked_column_view>(col));
   }
 
@@ -144,9 +144,9 @@ struct schema_tree_node : public SchemaElement {
 };
 
 struct leaf_schema_fn {
-  schema_tree_node &col_schema;
-  LinkedColPtr const &col;
-  column_in_metadata const &col_meta;
+  schema_tree_node& col_schema;
+  LinkedColPtr const& col;
+  column_in_metadata const& col_meta;
   bool timestamp_is_int96;
 
   template <typename T>
@@ -370,8 +370,8 @@ struct leaf_schema_fn {
  * Recursively traverses through linked_columns and corresponding metadata to construct schema tree.
  * The resulting schema tree is stored in a vector in pre-order traversal order.
  */
-std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linked_columns,
-                                                    table_input_metadata const &metadata,
+std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linked_columns,
+                                                    table_input_metadata const& metadata,
                                                     bool single_write_mode,
                                                     bool int96_timestamps)
 {
@@ -384,8 +384,8 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
   root.parent_idx      = -1;  // root schema has no parent
   schema.push_back(std::move(root));
 
-  std::function<void(LinkedColPtr const &, column_in_metadata const &, size_t)> add_schema =
-    [&](LinkedColPtr const &col, column_in_metadata const &col_meta, size_t parent_idx) {
+  std::function<void(LinkedColPtr const&, column_in_metadata const&, size_t)> add_schema =
+    [&](LinkedColPtr const& col, column_in_metadata const& col_meta, size_t parent_idx) {
       bool col_nullable = [&]() {
         if (single_write_mode) {
           return col->nullable();
@@ -500,8 +500,8 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
  *
  */
 struct parquet_column_view {
-  parquet_column_view(schema_tree_node const &schema_node,
-                      std::vector<schema_tree_node> const &schema_tree,
+  parquet_column_view(schema_tree_node const& schema_node,
+                      std::vector<schema_tree_node> const& schema_tree,
                       rmm::cuda_stream_view stream);
 
   column_view leaf_column_view() const;
@@ -510,7 +510,7 @@ struct parquet_column_view {
   column_view cudf_column_view() const { return cudf_col; }
   parquet::Type physical_type() const { return schema_node.type; }
 
-  std::vector<std::string> const &get_path_in_schema() { return path_in_schema; }
+  std::vector<std::string> const& get_path_in_schema() { return path_in_schema; }
 
   // LIST related member functions
   uint8_t max_def_level() const noexcept { return _max_def_level; }
@@ -518,8 +518,8 @@ struct parquet_column_view {
   bool is_list() const noexcept { return _is_list; }
 
   // Dictionary related member functions
-  uint32_t *get_dict_data() { return (_dict_data.size()) ? _dict_data.data() : nullptr; }
-  uint32_t *get_dict_index() { return (_dict_index.size()) ? _dict_index.data() : nullptr; }
+  uint32_t* get_dict_data() { return (_dict_data.size()) ? _dict_data.data() : nullptr; }
+  uint32_t* get_dict_index() { return (_dict_index.size()) ? _dict_index.data() : nullptr; }
   void use_dictionary(bool use_dict) { _dictionary_used = use_dict; }
   void alloc_dictionary(size_t max_num_rows, rmm::cuda_stream_view stream)
   {
@@ -563,8 +563,8 @@ struct parquet_column_view {
   rmm::device_uvector<uint32_t> _dict_index;
 };
 
-parquet_column_view::parquet_column_view(schema_tree_node const &schema_node,
-                                         std::vector<schema_tree_node> const &schema_tree,
+parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
+                                         std::vector<schema_tree_node> const& schema_tree,
                                          rmm::cuda_stream_view stream)
   : schema_node(schema_node),
     _d_nullability(0, stream),
@@ -578,7 +578,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const &schema_node,
   auto curr_col                           = schema_node.leaf_column.get();
   column_view single_inheritance_cudf_col = *curr_col;
   while (curr_col->parent) {
-    auto const &parent = *curr_col->parent;
+    auto const& parent = *curr_col->parent;
 
     // For list columns, we still need to retain the offset child column.
     auto children =
@@ -718,7 +718,7 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_s
   return desc;
 }
 
-void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragment> &frag,
+void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragment>& frag,
                                        device_span<gpu::parquet_column_device_view const> col_desc,
                                        uint32_t num_rows,
                                        uint32_t fragment_size)
@@ -745,7 +745,7 @@ void writer::impl::gather_fragment_statistics(
 }
 
 void writer::impl::build_chunk_dictionaries(
-  hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
+  hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   device_span<gpu::parquet_column_device_view const> col_desc,
   uint32_t num_columns,
   uint32_t num_dictionaries)
@@ -762,11 +762,11 @@ void writer::impl::build_chunk_dictionaries(
   chunks.device_to_host(stream, true);
 }
 
-void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
+void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                                       device_span<gpu::parquet_column_device_view const> col_desc,
                                       device_span<gpu::EncPage> pages,
-                                      statistics_chunk *page_stats,
-                                      statistics_chunk *frag_stats,
+                                      statistics_chunk* page_stats,
+                                      statistics_chunk* frag_stats,
                                       uint32_t num_columns,
                                       uint32_t num_pages,
                                       uint32_t num_stats_bfr)
@@ -795,14 +795,14 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &
   stream.synchronize();
 }
 
-void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
+void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                                 device_span<gpu::EncPage> pages,
                                 uint32_t pages_in_batch,
                                 uint32_t first_page_in_batch,
                                 uint32_t rowgroups_in_batch,
                                 uint32_t first_rowgroup,
-                                const statistics_chunk *page_stats,
-                                const statistics_chunk *chunk_stats)
+                                const statistics_chunk* page_stats,
+                                const statistics_chunk* chunk_stats)
 {
   auto batch_pages = pages.subspan(first_page_in_batch, pages_in_batch);
 
@@ -844,10 +844,10 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   parquet_writer_options const &options,
+                   parquet_writer_options const& options,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource *mr)
+                   rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
     compression_(to_parquet_compression(options.get_compression())),
@@ -863,10 +863,10 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   chunked_parquet_writer_options const &options,
+                   chunked_parquet_writer_options const& options,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource *mr)
+                   rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
     compression_(to_parquet_compression(options.get_compression())),
@@ -892,7 +892,7 @@ void writer::impl::init_state()
   current_chunk_offset = sizeof(file_header_s);
 }
 
-void writer::impl::write(table_view const &table)
+void writer::impl::write(table_view const& table)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
 
@@ -901,8 +901,8 @@ void writer::impl::write(table_view const &table)
   if (not table_meta) { table_meta = std::make_unique<table_input_metadata>(table); }
 
   // Fill unnamed columns' names in table_meta
-  std::function<void(column_in_metadata &, std::string)> add_default_name =
-    [&](column_in_metadata &col_meta, std::string default_name) {
+  std::function<void(column_in_metadata&, std::string)> add_default_name =
+    [&](column_in_metadata& col_meta, std::string default_name) {
       if (col_meta.get_name().empty()) col_meta.set_name(default_name);
       for (size_type i = 0; i < col_meta.num_children(); ++i) {
         add_default_name(col_meta.child(i), col_meta.get_name() + "_" + std::to_string(i));
@@ -917,14 +917,16 @@ void writer::impl::write(table_view const &table)
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;
 
-  for (schema_tree_node const &schema_node : schema_tree) {
+  for (schema_tree_node const& schema_node : schema_tree) {
     if (schema_node.leaf_column) { parquet_columns.emplace_back(schema_node, schema_tree, stream); }
   }
 
   // Mass allocation of column_device_views for each parquet_column_view
   std::vector<column_view> cudf_cols;
   cudf_cols.reserve(parquet_columns.size());
-  for (auto const &parq_col : parquet_columns) { cudf_cols.push_back(parq_col.cudf_column_view()); }
+  for (auto const& parq_col : parquet_columns) {
+    cudf_cols.push_back(parq_col.cudf_column_view());
+  }
   table_view single_streams_table(cudf_cols);
   size_type num_columns = single_streams_table.num_columns();
 
@@ -938,7 +940,7 @@ void writer::impl::write(table_view const &table)
     std::transform(table_meta->user_data.begin(),
                    table_meta->user_data.end(),
                    std::back_inserter(md.key_value_metadata),
-                   [](auto const &kv) {
+                   [](auto const& kv) {
                      return KeyValue{kv.first, kv.second};
                    });
     md.schema = this_table_schema;
@@ -960,7 +962,7 @@ void writer::impl::write(table_view const &table)
   // This should've been `auto const&` but isn't since dictionary space is allocated when calling
   // get_device_view(). Fix during dictionary refactor.
   std::transform(
-    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [&](auto &pcol) {
+    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [&](auto& pcol) {
       return pcol.get_device_view(stream);
     });
 
@@ -1039,7 +1041,7 @@ void writer::impl::write(table_view const &table)
     md.row_groups[global_r].total_byte_size = 0;
     md.row_groups[global_r].columns.resize(num_columns);
     for (int i = 0; i < num_columns; i++) {
-      gpu::EncColumnChunk *ck = &chunks[r][i];
+      gpu::EncColumnChunk* ck = &chunks[r][i];
       bool dict_enable        = false;
 
       *ck           = {};
@@ -1088,7 +1090,9 @@ void writer::impl::write(table_view const &table)
   }
 
   // Free unused dictionaries
-  for (auto &col : parquet_columns) { col.check_dictionary_used(stream); }
+  for (auto& col : parquet_columns) {
+    col.check_dictionary_used(stream);
+  }
 
   // Build chunk dictionaries and count pages
   if (num_chunks != 0) {
@@ -1107,7 +1111,7 @@ void writer::impl::write(table_view const &table)
     size_t rowgroup_size = 0;
     if (r < num_rowgroups) {
       for (int i = 0; i < num_columns; i++) {
-        gpu::EncColumnChunk *ck = &chunks[r][i];
+        gpu::EncColumnChunk* ck = &chunks[r][i];
         ck->first_page          = num_pages;
         num_pages += ck->num_pages;
         pages_in_batch += ck->num_pages;
@@ -1146,11 +1150,11 @@ void writer::impl::write(table_view const &table)
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
   for (uint32_t b = 0, r = 0; b < (uint32_t)batch_list.size(); b++) {
-    uint8_t *bfr   = static_cast<uint8_t *>(uncomp_bfr.data());
-    uint8_t *bfr_c = static_cast<uint8_t *>(comp_bfr.data());
+    uint8_t* bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
+    uint8_t* bfr_c = static_cast<uint8_t*>(comp_bfr.data());
     for (uint32_t j = 0; j < batch_list[b]; j++, r++) {
       for (int i = 0; i < num_columns; i++) {
-        gpu::EncColumnChunk *ck = &chunks[r][i];
+        gpu::EncColumnChunk* ck = &chunks[r][i];
         ck->uncompressed_bfr    = bfr;
         ck->compressed_bfr      = bfr_c;
         bfr += ck->bfr_size;
@@ -1194,8 +1198,8 @@ void writer::impl::write(table_view const &table)
                                                                : nullptr);
     for (; r < rnext; r++, global_r++) {
       for (auto i = 0; i < num_columns; i++) {
-        gpu::EncColumnChunk *ck = &chunks[r][i];
-        uint8_t *dev_bfr;
+        gpu::EncColumnChunk* ck = &chunks[r][i];
+        uint8_t* dev_bfr;
         if (ck->is_compressed) {
           md.row_groups[global_r].columns[i].meta_data.codec = compression_;
           dev_bfr                                            = ck->compressed_bfr;
@@ -1220,7 +1224,7 @@ void writer::impl::write(table_view const &table)
         } else {
           if (!host_bfr) {
             host_bfr = pinned_buffer<uint8_t>{[](size_t size) {
-                                                uint8_t *ptr = nullptr;
+                                                uint8_t* ptr = nullptr;
                                                 CUDA_TRY(cudaMallocHost(&ptr, size));
                                                 return ptr;
                                               }(max_chunk_bfr_size),
@@ -1255,7 +1259,7 @@ void writer::impl::write(table_view const &table)
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
-  std::string const &column_chunks_file_path)
+  std::string const& column_chunks_file_path)
 {
   if (closed) { return nullptr; }
   closed = true;
@@ -1273,15 +1277,17 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     file_header_s fhdr = {parquet_magic};
     buffer_.resize(0);
     buffer_.insert(buffer_.end(),
-                   reinterpret_cast<const uint8_t *>(&fhdr),
-                   reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
-    for (auto &rowgroup : md.row_groups) {
-      for (auto &col : rowgroup.columns) { col.file_path = column_chunks_file_path; }
+                   reinterpret_cast<const uint8_t*>(&fhdr),
+                   reinterpret_cast<const uint8_t*>(&fhdr) + sizeof(fhdr));
+    for (auto& rowgroup : md.row_groups) {
+      for (auto& col : rowgroup.columns) {
+        col.file_path = column_chunks_file_path;
+      }
     }
     fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
     buffer_.insert(buffer_.end(),
-                   reinterpret_cast<const uint8_t *>(&fendr),
-                   reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));
+                   reinterpret_cast<const uint8_t*>(&fendr),
+                   reinterpret_cast<const uint8_t*>(&fendr) + sizeof(fendr));
     return std::make_unique<std::vector<uint8_t>>(std::move(buffer_));
   } else {
     return {nullptr};
@@ -1290,19 +1296,19 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
 
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
-               parquet_writer_options const &options,
+               parquet_writer_options const& options,
                SingleWriteMode mode,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource *mr)
+               rmm::mr::device_memory_resource* mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
 {
 }
 
 writer::writer(std::unique_ptr<data_sink> sink,
-               chunked_parquet_writer_options const &options,
+               chunked_parquet_writer_options const& options,
                SingleWriteMode mode,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource *mr)
+               rmm::mr::device_memory_resource* mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
 {
 }
@@ -1311,23 +1317,23 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write(table_view const &table) { _impl->write(table); }
+void writer::write(table_view const& table) { _impl->write(table); }
 
 // Forward to implementation
-std::unique_ptr<std::vector<uint8_t>> writer::close(std::string const &column_chunks_file_path)
+std::unique_ptr<std::vector<uint8_t>> writer::close(std::string const& column_chunks_file_path)
 {
   return _impl->close(column_chunks_file_path);
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
-  const std::vector<std::unique_ptr<std::vector<uint8_t>>> &metadata_list)
+  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
 {
   std::vector<uint8_t> output;
   CompactProtocolWriter cpw(&output);
   FileMetaData md;
 
   md.row_groups.reserve(metadata_list.size());
-  for (const auto &blob : metadata_list) {
+  for (const auto& blob : metadata_list) {
     CompactProtocolReader cpreader(
       blob.get()->data(),
       std::max<size_t>(blob.get()->size(), sizeof(file_ender_s)) - sizeof(file_ender_s));
@@ -1356,13 +1362,13 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
   file_ender_s fendr;
   fhdr.magic = parquet_magic;
   output.insert(output.end(),
-                reinterpret_cast<const uint8_t *>(&fhdr),
-                reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
+                reinterpret_cast<const uint8_t*>(&fhdr),
+                reinterpret_cast<const uint8_t*>(&fhdr) + sizeof(fhdr));
   fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
   fendr.magic      = parquet_magic;
   output.insert(output.end(),
-                reinterpret_cast<const uint8_t *>(&fendr),
-                reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));
+                reinterpret_cast<const uint8_t*>(&fendr),
+                reinterpret_cast<const uint8_t*>(&fendr) + sizeof(fendr));
   return std::make_unique<std::vector<uint8_t>>(std::move(output));
 }
 

@@ -13,8 +13,8 @@ import pytest
 import cudf
 from cudf.core import Series
 from cudf.core.dtypes import Decimal64Dtype
-from cudf.tests import utils
-from cudf.tests.utils import NUMERIC_TYPES, assert_eq, gen_rand
+from cudf.testing import _utils as utils
+from cudf.testing._utils import NUMERIC_TYPES, assert_eq, gen_rand
 
 params_dtype = NUMERIC_TYPES
 

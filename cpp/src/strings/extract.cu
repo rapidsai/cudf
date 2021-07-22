@@ -32,9 +32,11 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-using string_index_pair = thrust::pair<const char*, size_type>;
 
 namespace {
+
+using string_index_pair = thrust::pair<const char*, size_type>;
+
 /**
  * @brief This functor handles extracting strings by applying the compiled regex pattern
  * and creating string_index_pairs for all the substrings.
@@ -42,7 +44,7 @@ namespace {
  * @tparam stack_size Correlates to the regex instructions state to maintain for each string.
  *         Each instruction requires a fixed amount of overhead data.
  */
-template <size_t stack_size>
+template <int stack_size>
 struct extract_fn {
   reprog_device prog;
   column_device_view d_strings;
@@ -55,11 +57,14 @@ struct extract_fn {
     string_index_pair result{nullptr, 0};
     int32_t begin = 0;
     int32_t end   = -1;  // handles empty strings automatically
-    if ((prog.find<stack_size>(idx, d_str, begin, end) > 0) &&
-        (prog.extract<stack_size>(idx, d_str, begin, end, column_index) > 0)) {
-      auto offset = d_str.byte_offset(begin);
-      // build index-pair
-      result = string_index_pair{d_str.data() + offset, d_str.byte_offset(end) - offset};
+    if (prog.find<stack_size>(idx, d_str, begin, end) > 0) {
+      auto extracted = prog.extract<stack_size>(idx, d_str, begin, end, column_index);
+      if (extracted) {
+        auto const offset = d_str.byte_offset(extracted.value().first);
+        // build index-pair
+        result = string_index_pair{d_str.data() + offset,
+                                   d_str.byte_offset(extracted.value().second) - offset};
+      }
     }
     return result;
   }
@@ -82,7 +87,7 @@ std::unique_ptr<table> extract(
   auto prog   = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
   auto d_prog = *prog;
   // extract should include groups
-  int groups = d_prog.group_counts();
+  auto const groups = d_prog.group_counts();
   CUDF_EXPECTS(groups > 0, "Group indicators not found in regex pattern");
 
   // build a result column for each group
@@ -92,30 +97,31 @@ std::unique_ptr<table> extract(
   for (int32_t column_index = 0; column_index < groups; ++column_index) {
     rmm::device_uvector<string_index_pair> indices(strings_count, stream);
 
-    if (regex_insts <= RX_SMALL_INSTS)
+    if (regex_insts <= RX_SMALL_INSTS) {
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
                         indices.begin(),
                         extract_fn<RX_STACK_SMALL>{d_prog, d_strings, column_index});
-    else if (regex_insts <= RX_MEDIUM_INSTS)
+    } else if (regex_insts <= RX_MEDIUM_INSTS) {
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
                         indices.begin(),
                         extract_fn<RX_STACK_MEDIUM>{d_prog, d_strings, column_index});
-    else if (regex_insts <= RX_LARGE_INSTS)
+    } else if (regex_insts <= RX_LARGE_INSTS) {
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
                         indices.begin(),
                         extract_fn<RX_STACK_LARGE>{d_prog, d_strings, column_index});
-    else
+    } else {
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
                         indices.begin(),
                         extract_fn<RX_STACK_ANY>{d_prog, d_strings, column_index});
+    }
 
     results.emplace_back(make_strings_column(indices, stream, mr));
   }

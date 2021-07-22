@@ -56,10 +56,14 @@ public abstract class Aggregation {
         ROW_NUMBER(17),
         COLLECT_LIST(18),
         COLLECT_SET(19),
-        LEAD(20),
-        LAG(21),
-        PTX(22),
-        CUDA(23);
+        MERGE_LISTS(20),
+        MERGE_SETS(21),
+        LEAD(22),
+        LAG(23),
+        PTX(24),
+        CUDA(25),
+        M2(26),
+        MERGE_M2(27);
 
         final int nativeId;
 
@@ -342,6 +346,40 @@ public abstract class Aggregation {
         }
     }
 
+    public static final class MergeSetsAggregation extends Aggregation {
+        private final NullEquality nullEquality;
+        private final NaNEquality nanEquality;
+
+        private MergeSetsAggregation(NullEquality nullEquality, NaNEquality nanEquality) {
+            super(Kind.MERGE_SETS);
+            this.nullEquality = nullEquality;
+            this.nanEquality = nanEquality;
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createMergeSetsAgg(nullEquality.nullsEqual, nanEquality.nansEqual);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode()
+                + Boolean.hashCode(nullEquality.nullsEqual)
+                + Boolean.hashCode(nanEquality.nansEqual);
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof MergeSetsAggregation) {
+                MergeSetsAggregation o = (MergeSetsAggregation) other;
+                return o.nullEquality == this.nullEquality && o.nanEquality == this.nanEquality;
+            }
+            return false;
+        }
+    }
+
     protected final Kind kind;
 
     protected Aggregation(Kind kind) {
@@ -529,6 +567,19 @@ public abstract class Aggregation {
         return new MeanAggregation();
     }
 
+    public static class M2Aggregation extends NoParamAggregation {
+        private M2Aggregation() {
+            super(Kind.M2);
+        }
+    }
+
+    /**
+     * Sum of square of differences from mean.
+     */
+    public static M2Aggregation M2() {
+        return new M2Aggregation();
+    }
+
     public static class VarianceAggregation extends DdofAggregation {
         private VarianceAggregation(int ddof) {
             super(Kind.VARIANCE, ddof);
@@ -713,7 +764,7 @@ public abstract class Aggregation {
      * unique instances.
      */
     public static CollectSetAggregation collectSet() {
-        return new CollectSetAggregation(NullPolicy.EXCLUDE, NullEquality.UNEQUAL, NaNEquality.UNEQUAL);
+        return collectSet(NullPolicy.EXCLUDE, NullEquality.UNEQUAL, NaNEquality.UNEQUAL);
     }
 
     /**
@@ -725,6 +776,38 @@ public abstract class Aggregation {
      */
     public static CollectSetAggregation collectSet(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
         return new CollectSetAggregation(nullPolicy, nullEquality, nanEquality);
+    }
+
+    public static final class MergeListsAggregation extends NoParamAggregation {
+        private MergeListsAggregation() {
+            super(Kind.MERGE_LISTS);
+        }
+    }
+
+    /**
+     * Merge the partial lists produced by multiple CollectListAggregations.
+     * NOTICE: The partial lists to be merged should NOT include any null list element (but can include null list entries).
+     */
+    public static MergeListsAggregation mergeLists() {
+        return new MergeListsAggregation();
+    }
+
+    /**
+     * Merge the partial sets produced by multiple CollectSetAggregations. Each null/nan value will be regarded as
+     * a unique instance.
+     */
+    public static MergeSetsAggregation mergeSets() {
+        return mergeSets(NullEquality.UNEQUAL, NaNEquality.UNEQUAL);
+    }
+
+    /**
+     * Merge the partial sets produced by multiple CollectSetAggregations.
+     *
+     * @param nullEquality Flag to specify whether null entries within each list should be considered equal.
+     * @param nanEquality  Flag to specify whether NaN values in floating point column should be considered equal.
+     */
+    public static MergeSetsAggregation mergeSets(NullEquality nullEquality, NaNEquality nanEquality) {
+        return new MergeSetsAggregation(nullEquality, nanEquality);
     }
 
     public static class LeadAggregation extends LeadLagAggregation
@@ -778,6 +861,19 @@ public abstract class Aggregation {
         return new LagAggregation(offset, defaultOutput);
     }
 
+    public static final class MergeM2Aggregation extends NoParamAggregation {
+        private MergeM2Aggregation() {
+            super(Kind.MERGE_M2);
+        }
+    }
+
+    /**
+     * Merge the partial M2 values produced by multiple instances of M2Aggregation.
+     */
+    public static MergeM2Aggregation mergeM2() {
+        return new MergeM2Aggregation();
+    }
+
     /**
      * Create one of the aggregations that only needs a kind, no other parameters. This does not
      * work for all types and for code safety reasons each kind is added separately.
@@ -818,4 +914,9 @@ public abstract class Aggregation {
      * Create a collect set aggregation.
      */
     private static native long createCollectSetAgg(boolean includeNulls, boolean nullsEqual, boolean nansEqual);
+
+    /**
+     * Create a merge sets aggregation.
+     */
+    private static native long createMergeSetsAgg(boolean nullsEqual, boolean nansEqual);
 }

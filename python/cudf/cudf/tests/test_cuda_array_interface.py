@@ -10,7 +10,7 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
@@ -171,6 +171,9 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
 
 def test_cuda_array_interface_pytorch():
     torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        pytest.skip("need gpu version of pytorch to be installed")
+
     series = cudf.Series([1, -1, 10, -56])
     tensor = torch.tensor(series)
     got = cudf.Series(tensor)

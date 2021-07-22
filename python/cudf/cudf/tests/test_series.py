@@ -4,12 +4,13 @@ import operator
 import re
 from string import ascii_letters, digits
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
@@ -1203,3 +1204,29 @@ def test_explode(data, ignore_index, p_index):
             assert_eq(expect, got, check_dtype=False)
     else:
         assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data, expected",
+    [
+        (
+            [cudf.Series([1, 2, 3]), cudf.Series([10, 20])],
+            cudf.Series([[1, 2, 3], [10, 20]]),
+        ),
+        (
+            [cudf.Series([1, 2, 3]), None, cudf.Series([10, 20, np.nan])],
+            cudf.Series([[1, 2, 3], None, [10, 20, np.nan]]),
+        ),
+        (
+            [cp.array([5, 6]), cudf.NA, cp.array([1])],
+            cudf.Series([[5, 6], None, [1]]),
+        ),
+        (
+            [None, None, None, None, None, cudf.Series([10, 20])],
+            cudf.Series([None, None, None, None, None, [10, 20]]),
+        ),
+    ],
+)
+def test_nested_series_from_sequence_data(data, expected):
+    actual = cudf.Series(data)
+    assert_eq(actual, expected)

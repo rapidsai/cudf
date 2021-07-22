@@ -470,7 +470,7 @@ libcudf, and you should not use it in new code in libcudf without careful consid
 use `rmm::device_uvector` along with the utility factories in `device_factories.hpp`. These 
 utilities enable creation of `uvector`s from host-side vectors, or creating zero-initialized
 `uvector`s, so that they are as convenient to use as `device_vector`. Avoiding `device_vector` has
-a number of benefits, as described in the folling section on `rmm::device_uvector`.
+a number of benefits, as described in the following section on `rmm::device_uvector`.
 
 #### `rmm::device_uvector<T>`
 

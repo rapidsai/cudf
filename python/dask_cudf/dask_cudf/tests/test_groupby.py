@@ -48,10 +48,7 @@ def test_groupby_basic_aggs(aggregation):
     "func",
     [
         lambda df: df.groupby("x").agg({"y": "max"}),
-        pytest.param(
-            lambda df: df.groupby("x").y.agg(["sum", "max"]),
-            marks=pytest.mark.skip,
-        ),
+        lambda df: df.groupby("x").y.agg(["sum", "max"]),
     ],
 )
 def test_groupby_agg(func):
@@ -98,7 +95,6 @@ def test_groupby_agg_empty_partition(tmpdir, split_out):
     dd.assert_eq(gb.compute().sort_index(), expect)
 
 
-@pytest.mark.xfail(reason="cudf issues")
 @pytest.mark.parametrize(
     "func",
     [lambda df: df.groupby("x").std(), lambda df: df.groupby("x").y.std()],
@@ -115,12 +111,33 @@ def test_groupby_std(func):
 
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
-    a = func(gdf.to_pandas())
+    a = func(gdf).to_pandas()
     b = func(ddf).compute().to_pandas()
 
-    a.index.name = None
-    a.name = None
-    b.index.name = None
+    dd.assert_eq(a, b)
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df: df.groupby("x").agg({"y": "collect"}),
+        lambda df: df.groupby("x").y.agg("collect"),
+    ],
+)
+def test_groupby_collect(func):
+    pdf = pd.DataFrame(
+        {
+            "x": np.random.randint(0, 5, size=10000),
+            "y": np.random.normal(size=10000),
+        }
+    )
+
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
+
+    a = func(gdf).to_pandas()
+    b = func(ddf).compute().to_pandas()
 
     dd.assert_eq(a, b)
 
@@ -563,3 +580,17 @@ def test_groupby_agg_redirect(aggregations):
 )
 def test_is_supported(arg):
     assert _is_supported(arg, {"supported"}) is False
+
+
+def test_groupby_unique_lists():
+    df = pd.DataFrame({"a": [0, 0, 0, 1, 1, 1], "b": [10, 10, 10, 7, 8, 9]})
+    ddf = dd.from_pandas(df, 2)
+    gdf = cudf.from_pandas(df)
+    gddf = dask_cudf.from_cudf(gdf, 2)
+    dd.assert_eq(
+        ddf.groupby("a").b.unique().compute(),
+        gddf.groupby("a").b.unique().compute(),
+    )
+    dd.assert_eq(
+        gdf.groupby("a").b.unique(), gddf.groupby("a").b.unique().compute(),
+    )

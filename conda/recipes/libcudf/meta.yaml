@@ -33,15 +33,16 @@ build:
 
 requirements:
   build:
-    - cmake >=3.18
+    - cmake >=3.20.1
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 1.0.1
+    - arrow-cpp 4.0.1 *cuda
     - arrow-cpp-proc * cuda
     - dlpack>=0.5,<0.6.0a0
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
+    - arrow-cpp * *cuda
     - arrow-cpp-proc * cuda
     - {{ pin_compatible('dlpack', max_pin='x.x') }}
 
@@ -220,6 +221,7 @@ test:
     - test -f $PREFIX/include/cudf/utilities/error.hpp
     - test -f $PREFIX/include/cudf/utilities/traits.hpp
     - test -f $PREFIX/include/cudf/utilities/type_dispatcher.hpp
+    - test -f $PREFIX/include/cudf/utilities/type_checks.hpp
     - test -f $PREFIX/include/cudf/utilities/default_stream.hpp
     - test -f $PREFIX/include/cudf/wrappers/dictionary.hpp
     - test -f $PREFIX/include/cudf/wrappers/durations.hpp

@@ -7,12 +7,11 @@ import pandas as pd
 
 import cudf
 from cudf import _lib as libcudf
+from cudf.api.types import is_integer, is_number
 from cudf.core import column
 from cudf.core.column.column import as_column
 from cudf.utils import cudautils
 from cudf.utils.utils import GetAttrGetItemMixin
-
-from ...api.types import is_integer, is_number
 
 
 class Rolling(GetAttrGetItemMixin):

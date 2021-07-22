@@ -154,7 +154,9 @@ struct integer_to_hex_fn {
     // compute the number of output bytes
     int bytes      = sizeof(IntegerType);
     int byte_index = sizeof(IntegerType);
-    while ((--byte_index > 0) && (value_bytes[byte_index] & 0xFF) == 0) { --bytes; }
+    while ((--byte_index > 0) && (value_bytes[byte_index] & 0xFF) == 0) {
+      --bytes;
+    }
 
     // create output
     byte_index = bytes - 1;

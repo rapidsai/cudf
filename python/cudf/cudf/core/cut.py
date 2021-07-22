@@ -1,13 +1,14 @@
-from cudf._lib.labeling import label_bins
-from cudf.core.column import as_column
-from cudf.core.column import build_categorical_column
-from cudf.core.index import IntervalIndex, interval_range
-from cudf.utils.dtypes import is_list_like
+from collections.abc import Sequence
+
 import cupy
-import cudf
 import numpy as np
 import pandas as pd
-from collections.abc import Sequence
+
+import cudf
+from cudf._lib.labeling import label_bins
+from cudf.core.column import as_column, build_categorical_column
+from cudf.core.index import IntervalIndex, interval_range
+from cudf.utils.dtypes import is_list_like
 
 # from cudf._lib.filling import sequence
 

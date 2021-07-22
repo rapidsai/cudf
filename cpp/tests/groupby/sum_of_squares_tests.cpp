@@ -23,6 +23,8 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 
+using namespace cudf::test::iterators;
+
 namespace cudf {
 namespace test {
 template <typename V>
@@ -45,7 +47,7 @@ TYPED_TEST(groupby_sum_of_squares_test, basic)
   //  { 1, 1, 1,  2, 2, 2, 2,  3, 3, 3}
   fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
   //  { 0, 3, 6,  1, 4, 5, 9,  2, 7, 8}
-  fixed_width_column_wrapper<R> expect_vals({45., 123., 117.}, iterator_no_null());
+  fixed_width_column_wrapper<R> expect_vals({45., 123., 117.}, no_nulls());
 
   auto agg = cudf::make_sum_of_squares_aggregation();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -71,7 +73,7 @@ TYPED_TEST(groupby_sum_of_squares_test, zero_valid_keys)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::SUM_OF_SQUARES>;
 
-  fixed_width_column_wrapper<K> keys({1, 2, 3}, iterator_all_nulls());
+  fixed_width_column_wrapper<K> keys({1, 2, 3}, all_nulls());
   fixed_width_column_wrapper<V> vals{3, 4, 5};
 
   fixed_width_column_wrapper<K> expect_keys{};
@@ -87,10 +89,10 @@ TYPED_TEST(groupby_sum_of_squares_test, zero_valid_values)
   using R = cudf::detail::target_type_t<V, aggregation::SUM_OF_SQUARES>;
 
   fixed_width_column_wrapper<K> keys{1, 1, 1};
-  fixed_width_column_wrapper<V> vals({3, 4, 5}, iterator_all_nulls());
+  fixed_width_column_wrapper<V> vals({3, 4, 5}, all_nulls());
 
   fixed_width_column_wrapper<K> expect_keys{1};
-  fixed_width_column_wrapper<R> expect_vals({0}, iterator_all_nulls());
+  fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
   auto agg = cudf::make_sum_of_squares_aggregation();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -107,7 +109,7 @@ TYPED_TEST(groupby_sum_of_squares_test, null_keys_and_values)
                                      {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
   //  { 1, 1,     2, 2, 2,   3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, iterator_no_null());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
   //  { 3, 6,     1, 4, 9,   2, 8,    3}
   fixed_width_column_wrapper<R> expect_vals({45., 98., 68., 9.}, {1, 1, 1, 0});
 
@@ -127,7 +129,7 @@ TYPED_TEST(groupby_sum_of_squares_test, dictionary)
   //                                        {1, 1, 1,  2, 2, 2, 2,  3, 3, 3}
   fixed_width_column_wrapper<K> expect_keys({1,        2,           3      });
   //                                        {0, 3, 6,  1, 4, 5, 9,  2, 7, 8}
-  fixed_width_column_wrapper<R> expect_vals({45.,       123.,       117.   }, iterator_no_null());
+  fixed_width_column_wrapper<R> expect_vals({45.,       123.,       117.   }, no_nulls());
   // clang-format on
 
   test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_sum_of_squares_aggregation());

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -200,4 +200,34 @@ TYPED_TEST(ShiftTest, MismatchFillValueDtypes)
   std::unique_ptr<cudf::column> output;
 
   EXPECT_THROW(output = cudf::shift(input, 5, *fill), cudf::logic_error);
+}
+
+struct ShiftTestNonFixedWidth : public cudf::test::BaseFixture {
+};
+
+TEST_F(ShiftTestNonFixedWidth, StringsShiftTest)
+{
+  auto input =
+    cudf::test::strings_column_wrapper({"", "bb", "ccc", "ddddddé", ""}, {0, 1, 1, 1, 0});
+
+  auto fill    = cudf::string_scalar("xx");
+  auto results = cudf::shift(input, 2, fill);
+  auto expected_right =
+    cudf::test::strings_column_wrapper({"xx", "xx", "", "bb", "ccc"}, {1, 1, 0, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_right, *results);
+
+  results = cudf::shift(input, -2, fill);
+  auto expected_left =
+    cudf::test::strings_column_wrapper({"ccc", "ddddddé", "", "xx", "xx"}, {1, 1, 0, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_left, *results);
+
+  auto sliced = cudf::slice(input, {1, 4}).front();
+
+  results           = cudf::shift(sliced, 1, fill);
+  auto sliced_right = cudf::test::strings_column_wrapper({"xx", "bb", "ccc"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sliced_right, *results);
+
+  results          = cudf::shift(sliced, -1, fill);
+  auto sliced_left = cudf::test::strings_column_wrapper({"ccc", "ddddddé", "xx"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sliced_left, *results);
 }
