@@ -258,13 +258,14 @@ std::unique_ptr<Base> make_row_number_aggregation();
 /**
  * @brief Factory to create a RANK aggregation
  *
- * `RANK` returns a non-nullable column of size_type ranks, the number of rows preceding or equal
- * to the current row plus one. As a result, ranks are not unique and gaps will appear in the
- * ranking sequence.
+ * `RANK` returns a non-nullable column of size_type "ranks": the number of rows preceding or
+ * equal to the current row plus one. As a result, ranks are not unique and gaps will appear in
+ * the ranking sequence.
  *
- * The input column into the group or ungrouped scan is an orderby column that orders the rows
- * that the aggregate function ranks. If rows are ordered by more than one column, the orderby
- * input column should be a struct column containing the ordering columns.
+ * This aggregation only works with "scan" algorithms. The input column into the group or
+ * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
+ * If rows are ordered by more than one column, the orderby input column should be a struct
+ * column containing the ordering columns.
  *
  * Note:
  *  1. This method requires that the rows are presorted by the group keys and order_by columns.
@@ -309,13 +310,14 @@ std::unique_ptr<Base> make_rank_aggregation();
 /**
  * @brief Factory to create a DENSE_RANK aggregation
  *
- * `DENSE_RANK` returns a non-nullable column of dense size_type ranks, the preceding unique
+ * `DENSE_RANK` returns a non-nullable column of size_type "dense ranks": the preceding unique
  * value's rank plus one. As a result, ranks are not unique but there are no gaps in the ranking
  * sequence (unlike RANK aggregations).
  *
- * The input column into the group or ungrouped scan is an orderby column that orders the rows
- * that the aggregate function ranks. If rows are ordered by more than one column, the orderby
- * input column should be a struct column containing the ordering columns.
+ * This aggregation only works with "scan" algorithms. The input column into the group or
+ * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
+ * If rows are ordered by more than one column, the orderby input column should be a struct
+ * column containing the ordering columns.
  *
  * Note:
  *  1. This method requires that the rows are presorted by the group keys and order_by columns.
