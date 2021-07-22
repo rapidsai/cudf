@@ -743,14 +743,18 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
       }
     }
   }
+
+  thrust::counting_iterator<int, thrust::host_space_tag> col_idx_it(0);
+  thrust::counting_iterator<int, thrust::host_space_tag> stripe_idx_it(0);
+
   if (is_mask_updated) {
     // Update chunks with pointers to column data which might have been changed.
-    for (size_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
-      for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    std::for_each(stripe_idx_it + 0, stripe_idx_it + num_stripes, [&](auto stripe_idx) {
+      std::for_each(col_idx_it + 0, col_idx_it + num_columns, [&](auto col_idx) {
         auto& chunk          = chunks[stripe_idx][col_idx];
         chunk.valid_map_base = out_buffers[col_idx].null_mask();
-      }
-    }
+      });
+    });
     chunks.host_to_device(stream, true);
   }
 }
@@ -767,15 +771,17 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
 {
   const auto num_stripes = chunks.size().first;
   const auto num_columns = chunks.size().second;
+  thrust::counting_iterator<int, thrust::host_space_tag> col_idx_it(0);
+  thrust::counting_iterator<int, thrust::host_space_tag> stripe_idx_it(0);
 
   // Update chunks with pointers to column data
-  for (size_t i = 0; i < num_stripes; ++i) {
-    for (size_t j = 0; j < num_columns; ++j) {
-      auto& chunk            = chunks[i][j];
-      chunk.column_data_base = out_buffers[j].data();
-      chunk.valid_map_base   = out_buffers[j].null_mask();
-    }
-  }
+  std::for_each(stripe_idx_it + 0, stripe_idx_it + num_stripes, [&](auto stripe_idx) {
+    std::for_each(col_idx_it + 0, col_idx_it + num_columns, [&](auto col_idx) {
+      auto& chunk            = chunks[stripe_idx][col_idx];
+      chunk.column_data_base = out_buffers[col_idx].data();
+      chunk.valid_map_base   = out_buffers[col_idx].null_mask();
+    });
+  });
 
   // Allocate global dictionary for deserializing
   rmm::device_uvector<gpu::DictionaryEntry> global_dict(num_dicts, stream);
@@ -803,13 +809,17 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
                            stream);
   chunks.device_to_host(stream, true);
 
-  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
-    for (size_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
-      out_buffers[col_idx].null_count() += chunks[stripe_idx][col_idx].null_count;
-    }
+  std::for_each(col_idx_it + 0, col_idx_it + num_columns, [&](auto col_idx) {
+    out_buffers[col_idx].null_count() =
+      std::accumulate(stripe_idx_it + 0,
+                      stripe_idx_it + num_stripes,
+                      0,
+                      [&](auto null_count, auto const stripe_idx) {
+                        return null_count + chunks[stripe_idx][col_idx].null_count;
+                      });
     // Add parent null count in case this is a child column of a struct
     out_buffers[col_idx].null_count() += chunks[0][col_idx].parent_validity_info.null_count;
-  }
+  });
 }
 
 // Aggregate child column metadata per stripe and per column
