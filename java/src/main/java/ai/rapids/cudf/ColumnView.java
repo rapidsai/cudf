@@ -2386,23 +2386,41 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Struct to hold the results output from the function
+   * {@link #repeatStringsOutputSizes(ColumnView) repeatStringsOutputSizes}.
+   */
+  static final class RepeatedStringSizes implements AutoCloseable {
+    public final ColumnVector stringSizes;
+    public final long totalStringSize;
+    RepeatedStringSizes(ColumnVector stringSizes, long totalStringSize) {
+      this.stringSizes = stringSizes;
+      this.totalStringSize = totalStringSize;
+    }
+
+    /** Close the underlying resources */
+    @Override
+    public void close() {
+      if (stringSizes != null) {
+        stringSizes.close();
+      }
+    }
+  };
+
+  /**
    * Compute sizes of the output strings if each string in an input strings column is repeated by
    * a different number of times given by the corresponding row in a <code>repeatTimes</code>
    * numeric column (i.e., compute sizes of the strings resulted from
    * {@link #repeatStringsWithColumnRepeatTimes}).
    *
    * @param repeatTimes The column containing numbers of times each input string is repeated.
-   * @return A list of two objects, the first one is an object of ColumnVector class containing
-   *         the computed sizes of the repeated strings, and the second one is a Long object storing
-   *         sum of all these computed string sizes.
+   * @return An instance of RepeatedStringSizes class which stores a Java column vector containing
+   *         the computed sizes of the repeated strings, and a long value storing sum of all these
+   *         computed sizes.
    */
-  public final List<Object> repeatStringsOutputSizes(ColumnView repeatTimes) {
+  public final RepeatedStringSizes repeatStringsOutputSizes(ColumnView repeatTimes) {
     assert type.equals(DType.STRING) : "column type must be String";
-    long[] sizes = repeatStringsOutputSizes(getNativeView(), repeatTimes.getNativeView());
-    return new ArrayList<Object>(){{
-        add(new ColumnVector(sizes[0]));
-        add(sizes[0]);
-      }};
+    final long[] sizes = repeatStringsOutputSizes(getNativeView(), repeatTimes.getNativeView());
+    return new RepeatedStringSizes(new ColumnVector(sizes[0]), sizes[1]);
   }
 
    /**
