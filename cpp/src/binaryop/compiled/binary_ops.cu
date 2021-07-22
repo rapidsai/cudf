@@ -19,6 +19,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/fill.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 
@@ -45,10 +46,11 @@ struct scalar_as_column_device_view {
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource* mr)
   {
-    auto h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
-    auto col_v =
-      column_view(s.type(), 1, h_scalar_type_view.data(), (bitmask_type const*)s.validity_data());
-    return std::pair{column_device_view::create(col_v, stream), std::unique_ptr<column>(nullptr)};
+    auto col = make_fixed_width_column(
+      s.type(), 1, (s.is_valid() ? mask_state::ALL_VALID : mask_state::ALL_NULL), stream, mr);
+    auto col_mv = col->mutable_view();
+    cudf::detail::fill_in_place(col_mv, 0, 1, s, stream);
+    return std::pair{column_device_view::create(col->view(), stream), std::move(col)};
   }
   template <typename T, std::enable_if_t<(!is_fixed_width<T>())>* = nullptr>
   return_type operator()(scalar const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
