@@ -54,6 +54,12 @@ using cudf::data_type;
 using cudf::type_id;
 using cudf::type_to_id;
 
+template <typename T>
+auto dtype()
+{
+  return data_type{type_to_id<T>()};
+}
+
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
   typename std::conditional<std::is_same<T, cudf::string_view>::value,
@@ -96,8 +102,8 @@ struct CsvFixedPointReaderTest : public CsvReaderTest {
   void run_tests(const std::vector<std::string>& reference_strings, numeric::scale_type scale)
   {
     cudf::test::strings_column_wrapper strings(reference_strings.begin(), reference_strings.end());
-    auto input_column = cudf::strings::to_fixed_point(
-      cudf::strings_column_view(strings), data_type{type_to_id<DecimalType>(), scale});
+    auto input_column = cudf::strings::to_fixed_point(cudf::strings_column_view(strings),
+                                                      data_type{type_to_id<DecimalType>(), scale});
 
     std::string buffer = std::accumulate(reference_strings.begin(),
                                          reference_strings.end(),
@@ -392,9 +398,9 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
   reference_strings = valid_reference_strings;
 
   using DecimalType = TypeParam;
-  auto input_column = cudf::strings::to_fixed_point(
-    cudf::strings_column_view(strings),
-    data_type{type_to_id<DecimalType>(), numeric::scale_type{-2}});
+  auto input_column =
+    cudf::strings::to_fixed_point(cudf::strings_column_view(strings),
+                                  data_type{type_to_id<DecimalType>(), numeric::scale_type{-2}});
 
   auto input_table = cudf::table_view{std::vector<cudf::column_view>{*input_column}};
 
@@ -438,9 +444,9 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
   reference_strings = valid_reference_strings;
 
   using DecimalType = TypeParam;
-  auto input_column = cudf::strings::to_fixed_point(
-    cudf::strings_column_view(strings),
-    data_type{type_to_id<DecimalType>(), numeric::scale_type{3}});
+  auto input_column =
+    cudf::strings::to_fixed_point(cudf::strings_column_view(strings),
+                                  data_type{type_to_id<DecimalType>(), numeric::scale_type{3}});
 
   auto input_table = cudf::table_view{std::vector<cudf::column_view>{*input_column}};
 
@@ -482,11 +488,10 @@ TEST_F(CsvReaderTest, MultiColumn)
   {
     std::ostringstream line;
     for (int i = 0; i < num_rows; ++i) {
-      line << std::to_string(int8_values[i]) << "," << int16_values[i] << "," << int16_values[i]
-           << "," << int32_values[i] << "," << int32_values[i] << "," << int64_values[i] << ","
-           << int64_values[i] << "," << std::to_string(uint8_values[i]) << "," << uint16_values[i]
-           << "," << uint32_values[i] << "," << uint64_values[i] << "," << float32_values[i] << ","
-           << float32_values[i] << "," << float64_values[i] << "," << float64_values[i] << "\n";
+      line << std::to_string(int8_values[i]) << "," << int16_values[i] << "," << int32_values[i]
+           << "," << int64_values[i] << "," << std::to_string(uint8_values[i]) << ","
+           << uint16_values[i] << "," << uint32_values[i] << "," << uint64_values[i] << ","
+           << float32_values[i] << "," << float64_values[i] << "\n";
     }
     std::ofstream outfile(filepath, std::ofstream::out);
     outfile << line.str();
@@ -495,39 +500,29 @@ TEST_F(CsvReaderTest, MultiColumn)
   cudf_io::csv_reader_options in_opts =
     cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
       .header(-1)
-      .dtypes(std::vector<std::string>{"int8",
-                                       "short",
-                                       "int16",
-                                       "int",
-                                       "int32",
-                                       "long",
-                                       "int64",
-                                       "uint8",
-                                       "uint16",
-                                       "uint32",
-                                       "uint64",
-                                       "float",
-                                       "float32",
-                                       "double",
-                                       "float64"});
+      .dtypes({dtype<int8_t>(),
+               dtype<int16_t>(),
+               dtype<int32_t>(),
+               dtype<int64_t>(),
+               dtype<uint8_t>(),
+               dtype<uint16_t>(),
+               dtype<uint32_t>(),
+               dtype<uint64_t>(),
+               dtype<float>(),
+               dtype<double>()});
   auto result = cudf_io::read_csv(in_opts);
 
   const auto view = result.tbl->view();
   expect_column_data_equal(int8_values, view.column(0));
   expect_column_data_equal(int16_values, view.column(1));
-  expect_column_data_equal(int16_values, view.column(2));
-  expect_column_data_equal(int32_values, view.column(3));
-  expect_column_data_equal(int32_values, view.column(4));
-  expect_column_data_equal(int64_values, view.column(5));
-  expect_column_data_equal(int64_values, view.column(6));
-  expect_column_data_equal(uint8_values, view.column(7));
-  expect_column_data_equal(uint16_values, view.column(8));
-  expect_column_data_equal(uint32_values, view.column(9));
-  expect_column_data_equal(uint64_values, view.column(10));
-  expect_column_data_equal(float32_values, view.column(11));
-  expect_column_data_equal(float32_values, view.column(12));
-  expect_column_data_equal(float64_values, view.column(13));
-  expect_column_data_equal(float64_values, view.column(14));
+  expect_column_data_equal(int32_values, view.column(2));
+  expect_column_data_equal(int64_values, view.column(3));
+  expect_column_data_equal(uint8_values, view.column(4));
+  expect_column_data_equal(uint16_values, view.column(5));
+  expect_column_data_equal(uint32_values, view.column(6));
+  expect_column_data_equal(uint64_values, view.column(7));
+  expect_column_data_equal(float32_values, view.column(8));
+  expect_column_data_equal(float64_values, view.column(9));
 }
 
 TEST_F(CsvReaderTest, RepeatColumn)
@@ -552,7 +547,7 @@ TEST_F(CsvReaderTest, RepeatColumn)
   // repeats column in indexes and names, misses 1 column.
   cudf_io::csv_reader_options in_opts =
     cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
-      .dtypes(std::vector<std::string>{"int16", "int64", "uint64", "float"})
+      .dtypes({dtype<int16_t>(), dtype<int64_t>(), dtype<uint64_t>(), dtype<float>()})
       .names({"A", "B", "C", "D"})
       .use_cols_indexes({1, 0, 0})
       .use_cols_names({"D", "B", "B"})
@@ -578,7 +573,7 @@ TEST_F(CsvReaderTest, Booleans)
   cudf_io::csv_reader_options in_opts =
     cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
       .names({"A", "B", "C", "D"})
-      .dtypes(std::vector<std::string>{"int32", "int32", "short", "bool"})
+      .dtypes({dtype<int32_t>(), dtype<int32_t>(), dtype<int16_t>(), dtype<bool>()})
       .true_values({"yes", "Yes", "YES", "foo", "FOO"})
       .false_values({"no", "No", "NO", "Bar", "bar"})
       .header(-1);

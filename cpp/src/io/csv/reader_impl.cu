@@ -280,22 +280,39 @@ reader::impl::select_data_and_row_offsets(rmm::cuda_stream_view stream)
   return {rmm::device_uvector<char>{0, stream}, selected_rows_offsets{stream}};
 }
 
-std::vector<data_type> reader::impl::sort_data_types(
+std::vector<data_type> reader::impl::select_data_types(
   std::map<std::string, data_type> const& col_type_map)
 {
-  std::vector<data_type> dtypes;
-  dtypes.reserve(col_type_map.size());
+  std::vector<data_type> selected_dtypes;
 
   for (int col = 0; col < num_actual_cols_; col++) {
     if (column_flags_[col] & column_parse::enabled) {
       auto const col_type_it = col_type_map.find(col_names_[col]);
       CUDF_EXPECTS(col_type_it != col_type_map.end(),
                    "Must specify data types for all active columns");
-      CUDF_EXPECTS(col_type_it->second.id() != cudf::type_id::EMPTY, "Unsupported data type");
-      dtypes.emplace_back(col_type_it->second);
+      selected_dtypes.emplace_back(col_type_it->second);
     }
   }
-  return dtypes;
+  return selected_dtypes;
+}
+
+std::vector<data_type> reader::impl::select_data_types(std::vector<data_type> const& dtypes)
+{
+  std::vector<data_type> selected_dtypes;
+
+  if (dtypes.size() == 1) {
+    // If it's a single dtype, assign that dtype to all active columns
+    selected_dtypes.resize(num_active_cols_, dtypes.front());
+  } else {
+    // If it's a list, assign dtypes to active columns in the given order
+    CUDF_EXPECTS(static_cast<int>(dtypes.size()) >= num_actual_cols_,
+                 "Must specify data types for all columns");
+
+    for (int col = 0; col < num_actual_cols_; col++) {
+      if (column_flags_[col] & column_parse::enabled) { selected_dtypes.emplace_back(dtypes[col]); }
+    }
+  }
+  return selected_dtypes;
 }
 
 table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
@@ -400,14 +417,14 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
   if (has_to_infer_column_types) {
     column_types = infer_column_types(data, row_offsets, stream);
   } else {
-    column_types =
-      std::visit(VisitorOverload{
-                   [&](const std::vector<data_type>& data_types) { return data_types; },
-                   [&](const std::map<std::string, data_type>& data_types) {
-                     return sort_data_types(data_types);
-                   },
-                   [&](const std::vector<string>& dtypes) { return parse_column_types(dtypes); }},
-                 opts_.get_dtypes());
+    column_types = std::visit(
+      VisitorOverload{
+        [&](const std::vector<data_type>& data_types) { return select_data_types(data_types); },
+        [&](const std::map<std::string, data_type>& data_types) {
+          return select_data_types(data_types);
+        },
+        [&](const std::vector<string>& dtypes) { return parse_column_types(dtypes); }},
+      opts_.get_dtypes());
   }
 
   out_columns.reserve(column_types.size());
