@@ -113,12 +113,19 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
   if (cache.has_result(col_idx, agg)) return;
   CUDF_EXPECTS(helper.is_presorted(),
                "Rank aggregate in groupby scan requires the keys to be presorted");
+  auto const order_by = get_grouped_values();
+  CUDF_EXPECTS(order_by.type().id() != type_id::LIST,
+               "Unsupported list type in grouped rank scan.");
+  CUDF_EXPECTS(std::none_of(order_by.child_begin(),
+                            order_by.child_end(),
+                            [](auto const& col) { return is_nested(col.type()); }),
+               "Unsupported nested columns in grouped rank scan.");
 
   cache.add_result(
     col_idx,
     agg,
     detail::rank_scan(
-      get_grouped_values(), helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
+      order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
 }
 
 template <>
@@ -127,12 +134,19 @@ void scan_result_functor::operator()<aggregation::DENSE_RANK>(aggregation const&
   if (cache.has_result(col_idx, agg)) return;
   CUDF_EXPECTS(helper.is_presorted(),
                "Dense rank aggregate in groupby scan requires the keys to be presorted");
+  auto const order_by = get_grouped_values();
+  CUDF_EXPECTS(order_by.type().id() != type_id::LIST,
+               "Unsupported list type in grouped dense_rank scan.");
+  CUDF_EXPECTS(std::none_of(order_by.child_begin(),
+                            order_by.child_end(),
+                            [](auto const& col) { return is_nested(col.type()); }),
+               "Unsupported nested columns in grouped dense_rank scan.");
 
   cache.add_result(
     col_idx,
     agg,
     detail::dense_rank_scan(
-      get_grouped_values(), helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
+      order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
 }
 }  // namespace detail
 

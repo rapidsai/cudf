@@ -48,9 +48,7 @@ std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  if (agg->kind == aggregation::RANK || agg->kind == aggregation::DENSE_RANK) {
-    CUDF_EXPECTS(input.type().id() != type_id::LIST, "Unsupported list type in rank aggregation.");
-  } else {
+  if (agg->kind != aggregation::RANK && agg->kind != aggregation::DENSE_RANK) {
     CUDF_EXPECTS(
       is_numeric(input.type()) || is_compound(input.type()) || is_fixed_point(input.type()),
       "Unexpected non-numeric or non-string type.");

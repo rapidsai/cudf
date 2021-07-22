@@ -298,6 +298,11 @@ std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(order_by.type().id() != type_id::LIST, "Unsupported list type in dense_rank scan.");
+  CUDF_EXPECTS(std::none_of(order_by.child_begin(),
+                            order_by.child_end(),
+                            [](auto const& col) { return is_nested(col.type()); }),
+               "Unsupported nested columns in dense_rank scan.");
   if ((order_by.type().id() == type_id::STRUCT &&
        has_nested_nulls(
          table_view{std::vector<column_view>{order_by.child_begin(), order_by.child_end()}})) ||
@@ -311,6 +316,11 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(order_by.type().id() != type_id::LIST, "Unsupported list type in rank scan.");
+  CUDF_EXPECTS(std::none_of(order_by.child_begin(),
+                            order_by.child_end(),
+                            [](auto const& col) { return is_nested(col.type()); }),
+               "Unsupported nested columns in rank scan.");
   if ((order_by.type().id() == type_id::STRUCT &&
        has_nested_nulls(
          table_view{std::vector<column_view>{order_by.child_begin(), order_by.child_end()}})) ||
