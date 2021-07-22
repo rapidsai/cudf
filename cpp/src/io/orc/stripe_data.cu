@@ -1152,7 +1152,7 @@ __global__ void __launch_bounds__(block_size)
 
   if (t == 0) s->chunk = chunks[chunk_id];
   __syncthreads();
-  const size_t max_num_rows = s->chunk.column_num_rows - s->chunk.parent_data.null_count;
+  const size_t max_num_rows = s->chunk.column_num_rows - s->chunk.parent_validity_info.null_count;
 
   if (is_nulldec) {
     uint32_t null_count = 0;
@@ -1338,7 +1338,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
     // Even though s->chunk.strm_len is zero, there is possibility that there is null mask.
     // This happens in a struct column with nulls which has child column which doesn't have any
     // nulls.
-    if (s->chunk.strm_len[CI_PRESENT] > 0 or s->chunk.valid_map_base) {
+    if (s->chunk.strm_len[CI_PRESENT] > 0 or s->chunk.valid_map_base != NULL) {
       // We have a present stream
       uint32_t rmax  = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
       uint32_t r     = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);

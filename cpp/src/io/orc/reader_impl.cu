@@ -694,16 +694,20 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
   const auto num_columns = chunks.size().second;
   bool is_mask_updated   = false;
 
-  for (size_t j = 0; j < num_columns; ++j) {
-    if (chunks[0][j].parent_data.valid_map_base) {
-      if (not is_mask_updated) chunks.device_to_host(stream, true);
+  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    if (chunks[0][col_idx].parent_validity_info.valid_map_base != nullptr) {
+      if (not is_mask_updated) {
+        chunks.device_to_host(stream, true);
+        is_mask_updated = true;
+      }
 
-      auto parent_valid_map_base = chunks[0][j].parent_data.valid_map_base;
-      auto child_valid_map_base  = out_buffers[j].null_mask();
-      auto child_mask_len  = chunks[0][j].column_num_rows - chunks[0][j].parent_data.null_count;
-      auto parent_mask_len = chunks[0][j].column_num_rows;
+      auto parent_valid_map_base = chunks[0][col_idx].parent_validity_info.valid_map_base;
+      auto child_valid_map_base  = out_buffers[col_idx].null_mask();
+      auto child_mask_len =
+        chunks[0][col_idx].column_num_rows - chunks[0][col_idx].parent_validity_info.null_count;
+      auto parent_mask_len = chunks[0][col_idx].column_num_rows;
 
-      if (child_valid_map_base) {
+      if (child_valid_map_base != nullptr) {
         rmm::device_uvector<uint32_t> dst_idx(child_mask_len, stream);
         // Copy indexes at which the parent has valid value.
         thrust::copy_if(rmm::exec_policy(stream),
@@ -711,14 +715,13 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
                         thrust::make_counting_iterator(0) + parent_mask_len,
                         dst_idx.begin(),
                         [parent_valid_map_base] __device__(auto idx) {
-                          auto val = bit_is_set(parent_valid_map_base, idx);
-                          return val;
+                          return bit_is_set(parent_valid_map_base, idx);
                         });
 
         auto merged_null_mask = cudf::detail::create_null_mask(
           parent_mask_len, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
-        bitmask_type* merged_mask = static_cast<bitmask_type*>(merged_null_mask.data());
-        uint32_t* dst_idx_ptr     = dst_idx.data();
+        auto merged_mask      = static_cast<bitmask_type*>(merged_null_mask.data());
+        uint32_t* dst_idx_ptr = dst_idx.data();
         // Copy child valid bits from child column to valid indexes, this will merge both child and
         // parent null masks
         thrust::for_each(rmm::exec_policy(stream),
@@ -730,23 +733,22 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
                            };
                          });
 
-        out_buffers[j]._null_mask = std::move(merged_null_mask);
+        out_buffers[col_idx]._null_mask = std::move(merged_null_mask);
 
       } else {
         // Since child column doesn't have a mask, copy parent null mask
-        auto mask_size            = bitmask_allocation_size_bytes(parent_mask_len);
-        out_buffers[j]._null_mask = std::move(
-          rmm::device_buffer(static_cast<void*>(parent_valid_map_base), mask_size, stream, mr));
+        auto mask_size = bitmask_allocation_size_bytes(parent_mask_len);
+        out_buffers[col_idx]._null_mask =
+          rmm::device_buffer(static_cast<void*>(parent_valid_map_base), mask_size, stream, mr);
       }
-      if (not is_mask_updated) is_mask_updated = true;
     }
   }
   if (is_mask_updated) {
     // Update chunks with pointers to column data which might have been changed.
-    for (size_t i = 0; i < num_stripes; ++i) {
-      for (size_t j = 0; j < num_columns; ++j) {
-        auto& chunk          = chunks[i][j];
-        chunk.valid_map_base = out_buffers[j].null_mask();
+    for (size_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
+      for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+        auto& chunk          = chunks[stripe_idx][col_idx];
+        chunk.valid_map_base = out_buffers[col_idx].null_mask();
       }
     }
     chunks.host_to_device(stream, true);
@@ -801,12 +803,12 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
                            stream);
   chunks.device_to_host(stream, true);
 
-  for (size_t i = 0; i < num_columns; ++i) {
-    for (size_t j = 0; j < num_stripes; ++j) {
-      out_buffers[i].null_count() += chunks[j][i].null_count;
+  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    for (size_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
+      out_buffers[col_idx].null_count() += chunks[stripe_idx][col_idx].null_count;
     }
     // Add parent null count in case this is a child column of a struct
-    out_buffers[i].null_count() += chunks[0][i].parent_data.null_count;
+    out_buffers[col_idx].null_count() += chunks[0][col_idx].parent_validity_info.null_count;
   }
 }
 
@@ -883,7 +885,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
     // to adjust its nullmask.
     auto type              = out_buffers[parent_col_idx].type.id();
     auto parent_null_count = static_cast<uint32_t>(out_buffers[parent_col_idx].null_count());
-    auto parent_valid_map  = static_cast<bitmask_type*>(out_buffers[parent_col_idx].null_mask());
+    auto parent_valid_map  = out_buffers[parent_col_idx].null_mask();
     auto num_rows          = out_buffers[parent_col_idx].size;
 
     for (uint32_t id = 0; id < p_col.num_children; id++) {
@@ -1193,9 +1195,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                 ? stripe_info->numberOfRows
                 : _col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
             chunk.column_num_rows = (level == 0) ? num_rows : _col_meta.num_child_rows[col_idx];
-            chunk.parent_data.valid_map_base =
+            chunk.parent_validity_info.valid_map_base =
               (level == 0) ? nullptr : _col_meta.parent_column_data[col_idx].valid_map_base;
-            chunk.parent_data.null_count =
+            chunk.parent_validity_info.null_count =
               (level == 0) ? 0 : _col_meta.parent_column_data[col_idx].null_count;
             chunk.encoding_kind = stripe_footer->columns[selected_columns[col_idx].id].kind;
             chunk.type_kind     = _metadata->per_file_metadata[stripe_source_mapping.source_idx]

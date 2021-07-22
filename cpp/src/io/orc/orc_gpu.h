@@ -24,6 +24,7 @@
 #include <cudf/utilities/span.hpp>
 #include <io/statistics/statistics.cuh>
 #include <io/utilities/column_buffer.hpp>
+#include "orc.h"
 #include "orc_common.h"
 
 #include <rmm/cuda_stream_view.hpp>
@@ -117,7 +118,7 @@ struct ColumnDesc {
   uint8_t dtype_len;      // data type length (for types that can be mapped to different sizes)
   int32_t decimal_scale;  // number of fractional decimal digits for decimal type
   int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
-  ParentColumnData parent_data;  // consists of parent column valid_map and null count
+  column_validity_info parent_validity_info;  // consists of parent column valid_map and null count
 };
 
 /**

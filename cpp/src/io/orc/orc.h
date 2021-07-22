@@ -561,6 +561,14 @@ struct orc_column_meta {
 };
 
 /**
+ * @brief Stores column's validity map and null count
+ */
+struct column_validity_info {
+  uint32_t* valid_map_base;
+  uint32_t null_count;
+};
+
+/**
  * @brief A helper class for ORC file metadata. Provides some additional
  * convenience methods for initializing and accessing metadata.
  */

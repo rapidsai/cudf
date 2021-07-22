@@ -843,6 +843,7 @@ def test_orc_string_stream_offset_issue():
     assert_eq(df, cudf.read_orc(buffer))
 
 
+# Data is generated using pyorc module
 def generate_list_struct_buff(size=28000):
     rd = random.Random(1)
     np.random.seed(seed=1)
@@ -984,7 +985,7 @@ def test_lists_struct_nests(
     )
 
     if num_rows > 0:
-        assert_eq(True, pyarrow_tbl.equals(gdf.to_arrow()))
+        assert pyarrow_tbl.equals(gdf.to_arrow())
     else:
         assert_eq(pyarrow_tbl.to_pandas(), gdf)
 
