@@ -6,8 +6,8 @@ from cudf.testing._utils import assert_eq, assert_exceptions_equal
 @pytest.mark.parametrize("data", [
     # basics
     {
-        'A': [1, 2, 3],
-        'B': [4, 5, 6]
+        'A': [1.0, 2.0, 3.0],
+        'B': [4.0, 5.0, 6.0]
     },
     {
         'A': [1.0, None, 3.0],
@@ -34,6 +34,9 @@ def test_interpolate_dataframe(data, method, axis):
     [1.0, None, 3.0],
     [None, 2.0, None, 4.0],
     [1.0, None, 3.0, None],
+    [None, None, 3.0, 4.0],
+    [1.0, 2.0, None, None],
+    [None, None, None, None],
     [0.1, 0.2, 0.3]
 ])
 @pytest.mark.parametrize("method", ['linear'])

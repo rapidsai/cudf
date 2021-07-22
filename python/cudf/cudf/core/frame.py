@@ -1473,16 +1473,17 @@ class Frame(libcudf.table.Table):
 
         columns = ColumnAccessor()
 
-        if method in 'linear':
-            xax = as_column(cupy.arange(len(self)))
-        elif method in {'index', 'values'}:
-            xax = self.index
         interpolator = cudf.core.algorithms.get_column_interpolator(method)
-
         for colname, col in self._data.items():
             if col.nullable:
                 col = col.fillna(np.nan)
-            result = interpolator(col, xax)            
+            
+            # Interpolation methods may or may not need the index
+            to_interp = Frame(
+                data={colname: col},
+                index=self.index
+            )
+            result = interpolator(to_interp)            
             columns[colname] = result
 
         return self.__class__(columns)
