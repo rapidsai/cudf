@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <cstdint>
+
 namespace cudf {
 
 namespace ast {
@@ -22,7 +24,7 @@ namespace ast {
 /**
  * @brief Enum of supported operators.
  */
-enum class ast_operator {
+enum class ast_operator : int32_t {
   // Binary operators
   ADD,            ///< operator +
   SUB,            ///< operator -
