@@ -2664,6 +2664,7 @@ public class TableTest extends CudfTestBase {
         .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
         .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
         .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, 10.0)
+        .column(  -9, null,   -5,   0,     4,    4,    8,    2,    2,    2, null)
         .build()) {
       try (Table result = t1
           .groupBy(GroupByOptions.builder()
@@ -2673,7 +2674,9 @@ public class TableTest extends CudfTestBase {
           .scan(Aggregation.sum().onColumn(2),
               Aggregation.count(NullPolicy.INCLUDE).onColumn(2),
               Aggregation.min().onColumn(2),
-              Aggregation.max().onColumn(2));
+              Aggregation.max().onColumn(2),
+              Aggregation.rank().onColumn(3),
+              Aggregation.denseRank().onColumn(3));
            Table expected = new Table.TestBuilder()
                .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
                .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
@@ -2681,6 +2684,8 @@ public class TableTest extends CudfTestBase {
                .column(   0,    0,    0,    1,    0,    1,    2,    0,    1,    2,    3) // odd why is this not 1 based?
                .column(12.0, 14.0, 13.0, 13.0, 17.0, 17.0, null, null, 11.0, null, 10.0)
                .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, 11.0)
+               .column(1, 1, 1, 2, 1, 1, 3, 1, 1, 1, 4)
+               .column(1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 2)
                .build()) {
         assertTablesAreEqual(expected, result);
       }

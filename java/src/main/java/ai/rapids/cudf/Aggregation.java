@@ -22,7 +22,7 @@ import java.util.Arrays;
 
 /**
  * Represents an aggregation operation.  Please note that not all aggregations work, or even make
- * since in all types of aggregation operations.
+ * sense in all types of aggregation operations.
  */
 public abstract class Aggregation {
     static {
@@ -63,7 +63,9 @@ public abstract class Aggregation {
         PTX(24),
         CUDA(25),
         M2(26),
-        MERGE_M2(27);
+        MERGE_M2(27),
+        RANK(28),
+        DENSE_RANK(29);;
 
         final int nativeId;
 
@@ -737,10 +739,38 @@ public abstract class Aggregation {
     }
 
     /**
-     * Get the row number, only makes since for a window operations.
+     * Get the row number, only makes sense for a window operations.
      */
     public static RowNumberAggregation rowNumber() {
         return new RowNumberAggregation();
+    }
+
+    public static class RankAggregation extends NoParamAggregation
+        implements RollingAggregation<RankAggregation>{
+        private RankAggregation() {
+            super(Kind.RANK);
+        }
+    }
+
+    /**
+     * Get the row's ranking.
+     */
+    public static RankAggregation rank() {
+        return new RankAggregation();
+    }
+
+    public static class DenseRankAggregation extends NoParamAggregation
+        implements RollingAggregation<DenseRankAggregation>{
+        private DenseRankAggregation() {
+            super(Kind.DENSE_RANK);
+        }
+    }
+
+    /**
+     * Get the row's dense ranking.
+     */
+    public static DenseRankAggregation denseRank() {
+        return new DenseRankAggregation();
     }
 
     /**
