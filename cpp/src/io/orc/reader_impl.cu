@@ -182,7 +182,7 @@ size_t gather_stream_info(const size_t stripe_index,
                           size_t* num_dictionary_entries,
                           cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
                           std::vector<orc_stream_info>& stream_info,
-                          size_t level)
+                          bool apply_struct_map)
 {
   uint64_t src_offset = 0;
   uint64_t dst_offset = 0;
@@ -195,7 +195,7 @@ size_t gather_stream_info(const size_t stripe_index,
     auto const column_id = *stream.column_id;
     auto col             = orc2gdf[column_id];
 
-    if (col == -1 and level == 0) {
+    if (col == -1 and apply_struct_map) {
       // A struct-type column has no data itself, but rather child columns
       // for each of its fields. There is only a PRESENT stream, which
       // needs to be included for the reader.
@@ -1149,7 +1149,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                                           &num_dict_entries,
                                                           chunks,
                                                           stream_info,
-                                                          level);
+                                                          level == 0);
 
           CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
 

@@ -87,14 +87,6 @@ struct DictionaryEntry {
 constexpr int orc_decimal2float64_scale = 0x80;
 
 /**
- * Struct to store parent column mask and null count
- */
-struct ParentColumnData {
-  uint32_t* valid_map_base;
-  uint32_t null_count;
-};
-
-/**
  * @brief Struct to describe per stripe's column information
  */
 struct ColumnDesc {
