@@ -49,8 +49,10 @@ cdef extern from "cudf/io/csv.hpp" \
         cudf_io_types.quote_style get_quoting() except+
         char get_quotechar() except+
         bool is_enabled_doublequote() except+
-        vector[string] get_infer_date_names() except+
-        vector[int] get_infer_date_indexes() except+
+        vector[string] get_parse_dates_names() except+
+        vector[int] get_parse_dates_indexes() except+
+        vector[string] get_parse_hex_names() except+
+        vector[int] get_parse_hex_indexes() except+
 
         # Conversion settings
         vector[string] get_dtype() except+
@@ -92,8 +94,10 @@ cdef extern from "cudf/io/csv.hpp" \
         void set_quoting(cudf_io_types.quote_style style) except+
         void set_quotechar(char val) except+
         void set_doublequote(bool val) except+
-        void set_infer_date_names(vector[string]) except+
-        void set_infer_date_indexes(vector[int]) except+
+        void set_parse_dates(vector[string]) except+
+        void set_parse_dates(vector[int]) except+
+        void set_parse_hex(vector[string]) except+
+        void set_parse_hex(vector[int]) except+
 
         # Conversion settings
         void set_dtypes(vector[string] types) except+

@@ -116,8 +116,8 @@ cdef csv_reader_options make_csv_reader_options(
     cdef vector[string] c_use_cols_names
     cdef size_type c_nrows = nrows if nrows is not None else -1
     cdef quote_style c_quoting
-    cdef vector[string] c_infer_date_names
-    cdef vector[int] c_infer_date_indexes
+    cdef vector[string] c_parse_dates_names
+    cdef vector[int] c_parse_dates_indexes
     cdef vector[string] c_dtypes
     cdef vector[string] c_true_values
     cdef vector[string] c_false_values
@@ -220,14 +220,14 @@ cdef csv_reader_options make_csv_reader_options(
                 "`parse_dates`: non-lists are unsupported")
         for col in parse_dates:
             if isinstance(col, str):
-                c_infer_date_names.push_back(str(col).encode())
+                c_parse_dates_names.push_back(str(col).encode())
             elif isinstance(col, int):
-                c_infer_date_indexes.push_back(col)
+                c_parse_dates_indexes.push_back(col)
             else:
                 raise NotImplementedError(
                     "`parse_dates`: Nesting is unsupported")
-        csv_reader_options_c.set_infer_date_names(c_infer_date_names)
-        csv_reader_options_c.set_infer_date_indexes(c_infer_date_indexes)
+        csv_reader_options_c.set_parse_dates(c_parse_dates_names)
+        csv_reader_options_c.set_parse_dates(c_parse_dates_indexes)
 
     if dtype is not None:
         if isinstance(dtype, abc.Mapping):

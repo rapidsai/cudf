@@ -390,16 +390,30 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
     }
   }
 
-  // User can specify which columns should be inferred as datetime
-  if (!opts_.get_infer_date_indexes().empty() || !opts_.get_infer_date_names().empty()) {
-    for (const auto index : opts_.get_infer_date_indexes()) {
+  // User can specify which columns should be read as datetime
+  if (!opts_.get_parse_dates_indexes().empty() || !opts_.get_parse_dates_names().empty()) {
+    for (const auto index : opts_.get_parse_dates_indexes()) {
       column_flags_[index] |= column_parse::as_datetime;
     }
 
-    for (const auto& name : opts_.get_infer_date_names()) {
+    for (const auto& name : opts_.get_parse_dates_names()) {
       auto it = std::find(col_names_.begin(), col_names_.end(), name);
       if (it != col_names_.end()) {
         column_flags_[it - col_names_.begin()] |= column_parse::as_datetime;
+      }
+    }
+  }
+
+  // User can specify which columns should be inferred as datetime
+  if (!opts_.get_parse_hex_indexes().empty() || !opts_.get_parse_hex_names().empty()) {
+    for (const auto index : opts_.get_parse_hex_indexes()) {
+      column_flags_[index] |= column_parse::as_hexadecimal;
+    }
+
+    for (const auto& name : opts_.get_parse_hex_names()) {
+      auto it = std::find(col_names_.begin(), col_names_.end(), name);
+      if (it != col_names_.end()) {
+        column_flags_[it - col_names_.begin()] |= column_parse::as_hexadecimal;
       }
     }
   }
