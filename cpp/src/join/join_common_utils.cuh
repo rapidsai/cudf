@@ -17,6 +17,8 @@
 
 #include <join/join_common_utils.hpp>
 
+#include <cudf/detail/utilities/cuda.cuh>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
@@ -71,11 +73,15 @@ using VectorPair = std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
  * results. In this case, each input VectorPair contains the left and right
  * indices from a join.
  *
+ * Note that this is a destructive operation, in that at least one of a or b
+ * will be invalidated (by a move) by this operation. Calling code should
+ * assume that neither input VectorPair is valid after this function executes.
+ *
  * @param a The first pair of vectors.
  * @param b The second pair of vectors.
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
- * @return New pair of vectors containing the concatenated output.
+ * @return A pair of vectors containing the concatenated output.
  */
 inline VectorPair concatenate_vector_pairs(VectorPair& a,
                                            VectorPair& b,

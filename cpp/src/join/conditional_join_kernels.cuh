@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,15 @@
 
 #pragma once
 
+#include <join/join_common_utils.cuh>
+#include <join/join_common_utils.hpp>
+
 #include <cub/cub.cuh>
 #include <cudf/ast/detail/linearizer.hpp>
 #include <cudf/ast/detail/transform.cuh>
 #include <cudf/ast/operators.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
-
-#include "join_common_utils.cuh"
-#include "join_common_utils.hpp"
 
 namespace cudf {
 namespace detail {

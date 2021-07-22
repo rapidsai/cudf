@@ -16,14 +16,13 @@
 
 #pragma once
 
-//#include <cstddef>
-#include <cub/cub.cuh>
+#include <join/join_common_utils.cuh>
+#include <join/join_common_utils.hpp>
+
 #include <cudf/table/table_device_view.cuh>
 
-#include "join_common_utils.cuh"
-#include "join_common_utils.hpp"
-
 #include <thrust/pair.h>
+#include <cub/cub.cuh>
 
 namespace cudf {
 namespace detail {
