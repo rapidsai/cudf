@@ -168,9 +168,9 @@ def is_list_like(obj):
     bool
         Return True if given object is list-like.
     """
-    return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(
-        obj, (str, bytes)
-    )
+    return isinstance(
+        obj, (Sequence, np.ndarray)
+    ) and not isinstance(obj, (str, bytes))
 
 
 # These methods are aliased directly into this namespace, but can be modified

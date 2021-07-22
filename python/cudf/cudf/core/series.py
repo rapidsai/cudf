@@ -10,7 +10,7 @@ from shutil import get_terminal_size
 from typing import Any, Optional
 from uuid import uuid4
 
-import cupy
+import cupy as cp
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
@@ -5468,14 +5468,16 @@ class Series(SingleColumnFrame, Serializable):
         0.75    3.25
         dtype: float64
         """
-
         result = self._column.quantile(q, interpolation, exact)
 
         if isinstance(q, Number):
             return result
 
         if quant_index:
-            index = np.asarray(q)
+            if isinstance(q, cp.ndarray):
+                index = cp.asarray(q)
+            else:
+                index = np.asarray(q)
             if len(self) == 0:
                 result = column_empty_like(
                     index, dtype=self.dtype, masked=True, newsize=len(index),

@@ -9,6 +9,7 @@ from typing import Sequence, Union
 import numpy as np
 
 import cudf
+import cupy as cp
 from cudf import _lib as libcudf
 from cudf._typing import Dtype, ScalarLike
 from cudf.core.column import ColumnBase
@@ -128,6 +129,8 @@ class NumericalBaseColumn(ColumnBase):
     def quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> NumericalBaseColumn:
+        if isinstance(q, cp.ndarray):
+            q = q.get()
         if isinstance(q, Number) or cudf.utils.dtypes.is_list_like(q):
             np_array_q = np.asarray(q)
             if np.logical_or(np_array_q < 0, np_array_q > 1).any():
