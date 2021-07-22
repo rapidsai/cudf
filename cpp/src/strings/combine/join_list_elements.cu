@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
@@ -61,7 +62,7 @@ struct compute_size_and_concatenate_fn {
   char* d_chars{nullptr};
 
   // We need to set `1` or `0` for the validities of the output strings.
-  int8_t* d_validities{nullptr};
+  // int8_t* d_validities{nullptr};
 
   __device__ bool output_is_null(size_type const idx,
                                  size_type const start_idx,
@@ -73,16 +74,16 @@ struct compute_size_and_concatenate_fn {
 
   __device__ void operator()(size_type const idx) const noexcept
   {
-    // If this is the second pass, and the row `idx` is known to be a null string
-    if (d_chars && !d_validities[idx]) { return; }
+    // If this is the second pass, and the row `idx` is known to be a null or empty string
+    if (d_chars && (d_offsets[idx] == d_offsets[idx + 1])) { return; }
 
     // Indices of the strings within the list row
     auto const start_idx = list_offsets[idx];
     auto const end_idx   = list_offsets[idx + 1];
 
     if (!d_chars && output_is_null(idx, start_idx, end_idx)) {
-      d_offsets[idx]    = 0;
-      d_validities[idx] = false;
+      d_offsets[idx] = 0;
+      // d_validities[idx] = false;
       return;
     }
 
@@ -97,8 +98,8 @@ struct compute_size_and_concatenate_fn {
       has_valid_element = has_valid_element || !null_element;
 
       if (!d_chars && (null_element && !string_narep_dv.is_valid())) {
-        d_offsets[idx]    = 0;
-        d_validities[idx] = false;
+        d_offsets[idx] = 0;
+        // d_validities[idx] = false;
         return;  // early termination: the entire list of strings will result in a null string
       }
 
@@ -121,8 +122,8 @@ struct compute_size_and_concatenate_fn {
     // a null or an empty string
     if (!d_chars) {
       d_offsets[idx] = has_valid_element ? size_bytes : 0;
-      d_validities[idx] =
-        has_valid_element || empty_list_policy == output_if_empty_list::EMPTY_STRING;
+      // d_validities[idx] =
+      //  has_valid_element || empty_list_policy == output_if_empty_list::EMPTY_STRING;
     }
   }
 };
@@ -142,6 +143,27 @@ struct scalar_separator_fn {
   }
 
   __device__ string_view separator(size_type const) const noexcept { return d_separator.value(); }
+};
+
+template <typename CompFn>
+struct validities_fn {
+  CompFn comp_fn;
+
+  validities_fn(CompFn comp_fn) : comp_fn(comp_fn) {}
+
+  __device__ bool operator()(size_type idx)
+  {
+    auto const start_idx = comp_fn.list_offsets[idx];
+    auto const end_idx   = comp_fn.list_offsets[idx + 1];
+    if (comp_fn.output_is_null(idx, start_idx, end_idx)) return false;
+    bool has_valid_element = false;
+    for (size_type str_idx = start_idx; str_idx < end_idx; ++str_idx) {
+      bool const valid_element = comp_fn.strings_dv.is_valid(str_idx);
+      has_valid_element        = has_valid_element || valid_element;
+      if (!valid_element && !comp_fn.string_narep_dv.is_valid()) return false;
+    }
+    return has_valid_element || comp_fn.empty_list_policy == output_if_empty_list::EMPTY_STRING;
+  }
 };
 
 }  // namespace
@@ -180,8 +202,14 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                                     string_narep_dv,
                                                     separate_nulls,
                                                     empty_list_policy};
-  auto [offsets_column, chars_column, null_mask, null_count] =
-    make_strings_children_with_null_mask(comp_fn, num_rows, num_rows, stream, mr);
+
+  auto [offsets_column, chars_column] = make_strings_children(comp_fn, num_rows, stream, mr);
+  auto [null_mask, null_count] =
+    cudf::detail::valid_if(thrust::counting_iterator<size_type>(0),
+                           thrust::counting_iterator<size_type>(num_rows),
+                           validities_fn{comp_fn},
+                           stream,
+                           mr);
 
   return make_strings_column(num_rows,
                              std::move(offsets_column),
@@ -254,8 +282,14 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                                     string_narep_dv,
                                                     separate_nulls,
                                                     empty_list_policy};
-  auto [offsets_column, chars_column, null_mask, null_count] =
-    make_strings_children_with_null_mask(comp_fn, num_rows, num_rows, stream, mr);
+
+  auto [offsets_column, chars_column] = make_strings_children(comp_fn, num_rows, stream, mr);
+  auto [null_mask, null_count] =
+    cudf::detail::valid_if(thrust::counting_iterator<size_type>(0),
+                           thrust::counting_iterator<size_type>(num_rows),
+                           validities_fn{comp_fn},
+                           stream,
+                           mr);
 
   return make_strings_column(num_rows,
                              std::move(offsets_column),
