@@ -1,10 +1,9 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint16_t, uint32_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
-from libc.stdint cimport uint16_t, uint32_t
-
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view

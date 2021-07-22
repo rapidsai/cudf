@@ -453,6 +453,61 @@ TEST_F(RowBitCount, NestedTypes)
   }
 }
 
+TEST_F(RowBitCount, NullsInStringsList)
+{
+  using offsets_wrapper = cudf::test::fixed_width_column_wrapper<offset_type>;
+
+  // clang-format off
+  auto strings = std::vector<std::string>{ "daïs", "def", "", "z", "bananas", "warp", "", "zing" };
+  auto valids  = std::vector<bool>{            1,     0,   0,  1,         0,      1,   1,     1 };
+  // clang-format on
+
+  cudf::test::strings_column_wrapper col(strings.begin(), strings.end(), valids.begin());
+
+  auto offsets   = cudf::test::fixed_width_column_wrapper<int>{0, 2, 4, 6, 8};
+  auto lists_col = cudf::make_lists_column(
+    4,
+    offsets_wrapper{0, 2, 4, 6, 8}.release(),
+    cudf::test::strings_column_wrapper{strings.begin(), strings.end(), valids.begin()}.release(),
+    0,
+    {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    cudf::row_bit_count(table_view{{lists_col->view()}})->view(),
+    cudf::test::fixed_width_column_wrapper<offset_type>{138, 106, 130, 130});
+}
+
+TEST_F(RowBitCount, EmptyChildColumnInListOfStrings)
+{
+  // Test with a list<string> column with 4 empty list rows.
+  // Note: Since there are no strings in any of the lists,
+  //       the lists column's child can be empty.
+  auto offsets   = cudf::test::fixed_width_column_wrapper<offset_type>{0, 0, 0, 0, 0};
+  auto lists_col = cudf::make_lists_column(
+    4, offsets.release(), cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING}), 0, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    cudf::row_bit_count(table_view{{lists_col->view()}})->view(),
+    cudf::test::fixed_width_column_wrapper<offset_type>{32, 32, 32, 32});
+}
+
+TEST_F(RowBitCount, EmptyChildColumnInListOfLists)
+{
+  // Test with a list<list> column with 4 empty list rows.
+  // Note: Since there are no elements in any of the lists,
+  //       the lists column's child can be empty.
+  auto empty_child_lists_column = [] {
+    auto exemplar = cudf::test::lists_column_wrapper<int32_t>{{0, 1, 2}, {3, 4, 5}};
+    return cudf::empty_like(exemplar);
+  };
+
+  auto offsets   = cudf::test::fixed_width_column_wrapper<offset_type>{0, 0, 0, 0, 0};
+  auto lists_col = cudf::make_lists_column(4, offsets.release(), empty_child_lists_column(), 0, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    cudf::row_bit_count(table_view{{lists_col->view()}})->view(),
+    cudf::test::fixed_width_column_wrapper<offset_type>{32, 32, 32, 32});
+}
+
 struct sum_functor {
   size_type const* s0;
   size_type const* s1;

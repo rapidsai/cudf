@@ -2,16 +2,14 @@
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
+from cudf._lib.cpp.strings.json cimport get_json_object as cpp_get_json_object
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.cpp.column.column cimport column
-
-from cudf._lib.cpp.strings.json cimport (
-    get_json_object as cpp_get_json_object
-)
 
 
 def get_json_object(Column col, object py_json_path):

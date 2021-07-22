@@ -75,7 +75,7 @@ void auto_set_device(JNIEnv *env);
  * The operation has not necessarily completed when this returns, but it could overlap with
  * operations occurring on other streams.
  */
-void device_memset_async(JNIEnv *env, rmm::device_buffer& buf, char value);
+void device_memset_async(JNIEnv *env, rmm::device_buffer &buf, char value);
 
 } // namespace jni
 } // namespace cudf

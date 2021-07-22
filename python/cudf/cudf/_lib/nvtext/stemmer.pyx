@@ -2,19 +2,19 @@
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+
 from enum import IntEnum
 
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.types cimport size_type
-from cudf._lib.column cimport Column
-
 from cudf._lib.cpp.nvtext.stemmer cimport (
-    porter_stemmer_measure as cpp_porter_stemmer_measure,
     is_letter as cpp_is_letter,
-    letter_type as letter_type
+    letter_type as letter_type,
+    porter_stemmer_measure as cpp_porter_stemmer_measure,
+    underlying_type_t_letter_type,
 )
-from cudf._lib.cpp.nvtext.stemmer cimport underlying_type_t_letter_type
+from cudf._lib.cpp.types cimport size_type
 
 
 class LetterType(IntEnum):

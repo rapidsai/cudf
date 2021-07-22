@@ -8,23 +8,16 @@ from cudf.core.column_accessor import ColumnAccessor
 
 from cython.operator cimport dereference
 from libc.stdint cimport uintptr_t
-from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-
-from cudf._lib.cpp.types cimport size_type
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport (
-    column_view,
-    mutable_column_view
-)
+from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport (
-    table_view,
-    mutable_table_view
-)
+from cudf._lib.cpp.table.table_view cimport mutable_table_view, table_view
+from cudf._lib.cpp.types cimport size_type
 
 
 cdef class Table:

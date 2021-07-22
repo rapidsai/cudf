@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@
 #include <string>
 #include "cudf_kafka/kafka_consumer.hpp"
 
-#include <cudf/io/datasource.hpp>
 #include <cudf/io/csv.hpp>
+#include <cudf/io/datasource.hpp>
 
 namespace kafka = cudf::io::external::kafka;
 

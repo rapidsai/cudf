@@ -182,6 +182,12 @@ T fixed_point_scalar<T>::fixed_point_value(rmm::cuda_stream_view stream) const
 }
 
 template <typename T>
+fixed_point_scalar<T>::operator value_type() const
+{
+  return this->fixed_point_value(rmm::cuda_stream_default);
+}
+
+template <typename T>
 typename fixed_point_scalar<T>::rep_type* fixed_point_scalar<T>::data()
 {
   return _data.data();

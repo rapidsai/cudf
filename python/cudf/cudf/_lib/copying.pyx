@@ -4,37 +4,37 @@ import pickle
 
 import pandas as pd
 
-from libcpp cimport bool
-from libcpp.memory cimport make_unique, unique_ptr, shared_ptr, make_shared
-from libcpp.vector cimport vector
-from libcpp.utility cimport move
 from libc.stdint cimport int32_t, int64_t, uint8_t, uintptr_t
+from libcpp cimport bool
+from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
+from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+from rmm._lib.device_buffer cimport DeviceBuffer
+from cudf.core.buffer import Buffer
 
 from cudf._lib.column cimport Column
+
 from cudf._lib.scalar import as_device_scalar
+
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
-from cudf._lib.reduce import minmax
 
+from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
 
+cimport cudf._lib.cpp.copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport (
-    column_view,
-    mutable_column_view
-)
+from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
+from cudf._lib.cpp.lists.gather cimport (
+    segmented_gather as cpp_segmented_gather,
+)
+from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
-from cudf._lib.cpp.lists.gather cimport (
-    segmented_gather as cpp_segmented_gather
-)
-cimport cudf._lib.cpp.copying as cpp_copying
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
@@ -825,14 +825,18 @@ cdef class _CPackedColumns:
         header = {}
         frames = []
 
+        gpu_data = Buffer(self.gpu_data_ptr, self.gpu_data_size, self)
+        data_header, data_frames = gpu_data.serialize()
+        header["data"] = data_header
+        frames.extend(data_frames)
+
         header["column-names"] = self.column_names
         header["index-names"] = self.index_names
-        header["gpu-data-ptr"] = self.gpu_data_ptr
-        header["gpu-data-size"] = self.gpu_data_size
-        header["metadata"] = list(
-            <uint8_t[:self.c_obj.metadata_.get()[0].size()]>
-            self.c_obj.metadata_.get()[0].data()
-        )
+        if self.c_obj.metadata_.get()[0].data() != NULL:
+            header["metadata"] = list(
+                <uint8_t[:self.c_obj.metadata_.get()[0].size()]>
+                self.c_obj.metadata_.get()[0].data()
+            )
 
         column_dtypes = {}
         for name, dtype in self.column_dtypes.items():
@@ -850,15 +854,17 @@ cdef class _CPackedColumns:
     def deserialize(header, frames):
         cdef _CPackedColumns p = _CPackedColumns.__new__(_CPackedColumns)
 
+        gpu_data = Buffer.deserialize(header["data"], frames)
+
         dbuf = DeviceBuffer(
-            ptr=header["gpu-data-ptr"],
-            size=header["gpu-data-size"]
+            ptr=gpu_data.ptr,
+            size=gpu_data.nbytes
         )
 
         cdef cpp_copying.packed_columns data
         data.metadata_ = move(
             make_unique[cpp_copying.metadata](
-                move(<vector[uint8_t]>header["metadata"])
+                move(<vector[uint8_t]>header.get("metadata", []))
             )
         )
         data.gpu_data = move(dbuf.c_obj)
@@ -916,7 +922,10 @@ class PackedColumns(Serializable):
         }
 
     def serialize(self):
-        return self._data.serialize()
+        header, frames = self._data.serialize()
+        header["type-serialized"] = pickle.dumps(type(self))
+
+        return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):

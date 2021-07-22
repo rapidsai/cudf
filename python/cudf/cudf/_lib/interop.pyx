@@ -2,27 +2,25 @@
 
 import cudf
 
-from cudf._lib.table cimport Table
-from libcpp.vector cimport vector
-from libcpp.string cimport string
-from libcpp cimport bool
-
-from libcpp.memory cimport unique_ptr, shared_ptr
-from libcpp.utility cimport move
-
 from cpython cimport pycapsule
+from libcpp cimport bool
+from libcpp.memory cimport shared_ptr, unique_ptr
+from libcpp.string cimport string
+from libcpp.utility cimport move
+from libcpp.vector cimport vector
+from pyarrow.lib cimport CTable, pyarrow_unwrap_table, pyarrow_wrap_table
 
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from pyarrow.lib cimport CTable, pyarrow_wrap_table, pyarrow_unwrap_table
 from cudf._lib.cpp.interop cimport (
-    to_arrow as cpp_to_arrow,
+    DLManagedTensor,
+    column_metadata,
     from_arrow as cpp_from_arrow,
     from_dlpack as cpp_from_dlpack,
+    to_arrow as cpp_to_arrow,
     to_dlpack as cpp_to_dlpack,
-    column_metadata,
-    DLManagedTensor
 )
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.table cimport Table
 
 
 def from_dlpack(dlpack_capsule):

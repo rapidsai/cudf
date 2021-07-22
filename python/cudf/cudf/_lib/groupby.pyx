@@ -1,43 +1,44 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from collections import defaultdict
-from pandas.core.groupby.groupby import DataError
-from cudf.utils.dtypes import (
-    is_categorical_dtype,
-    is_string_dtype,
-    is_list_dtype,
-    is_interval_dtype,
-    is_struct_dtype,
-    is_decimal_dtype,
-)
 
 import numpy as np
+from pandas.core.groupby.groupby import DataError
+
 import rmm
 
-from libcpp.pair cimport pair
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_decimal_dtype,
+    is_interval_dtype,
+    is_list_dtype,
+    is_string_dtype,
+    is_struct_dtype,
+)
+
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
+from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-from libcpp cimport bool
 
 from cudf._lib.column cimport Column
-from cudf._lib.table cimport Table
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.scalar import as_device_scalar
-from cudf._lib.aggregation cimport Aggregation, make_aggregation
+from cudf._lib.table cimport Table
 
-from cudf._lib.cpp.types cimport size_type
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
+from cudf._lib.scalar import as_device_scalar
+
+cimport cudf._lib.cpp.groupby as libcudf_groupby
+cimport cudf._lib.cpp.types as libcudf_types
+from cudf._lib.aggregation cimport Aggregation, make_aggregation
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.table.table cimport table, table_view
+from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
 from cudf._lib.cpp.replace cimport replace_policy
-from cudf._lib.cpp.utilities.host_span cimport host_span
+from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.cpp.table.table cimport table, table_view
 from cudf._lib.cpp.types cimport size_type
-cimport cudf._lib.cpp.types as libcudf_types
-cimport cudf._lib.cpp.groupby as libcudf_groupby
-
+from cudf._lib.cpp.utilities.host_span cimport host_span
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.

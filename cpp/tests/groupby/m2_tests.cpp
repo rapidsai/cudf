@@ -26,7 +26,7 @@
 using namespace cudf::test::iterators;
 
 namespace {
-constexpr bool print_all{false};                                 // For debugging
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::FIRST_ERROR};
 constexpr int32_t null{0};                                       // Mark for null elements
 constexpr double NaN{std::numeric_limits<double>::quiet_NaN()};  // Mark for NaN double elements
 
@@ -72,8 +72,8 @@ TYPED_TEST(GroupbyM2TypedTest, EmptyInput)
   auto const [out_keys, out_M2s] = compute_M2(keys, vals);
   auto const expected_M2s        = M2s_col<R>{};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, AllNullKeysInput)
@@ -88,8 +88,8 @@ TYPED_TEST(GroupbyM2TypedTest, AllNullKeysInput)
   auto const expected_keys       = keys_col<T>{};
   auto const expected_M2s        = M2s_col<R>{};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, AllNullValuesInput)
@@ -103,8 +103,8 @@ TYPED_TEST(GroupbyM2TypedTest, AllNullValuesInput)
   auto const [out_keys, out_M2s] = compute_M2(keys, vals);
   auto const expected_M2s        = M2s_col<R>{{null, null, null}, all_nulls()};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, SimpleInput)
@@ -122,8 +122,8 @@ TYPED_TEST(GroupbyM2TypedTest, SimpleInput)
   auto const expected_keys       = keys_col<T>{1, 2, 3};
   auto const expected_M2s        = M2s_col<R>{18.0, 32.75, 20.0 + 2.0 / 3.0};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, SimpleInputHavingNegativeValues)
@@ -141,8 +141,8 @@ TYPED_TEST(GroupbyM2TypedTest, SimpleInputHavingNegativeValues)
   auto const expected_keys       = keys_col<T>{1, 2, 3};
   auto const expected_M2s        = M2s_col<R>{42.0, 122.75, 114.0};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, ValuesHaveNulls)
@@ -157,8 +157,8 @@ TYPED_TEST(GroupbyM2TypedTest, ValuesHaveNulls)
   auto const expected_keys       = keys_col<T>{1, 2, 3, 4, 5};
   auto const expected_M2s        = M2s_col<R>{{0.0, 2.0, 8.0, 0.0, 0.0 /*NULL*/}, null_at(4)};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, KeysAndValuesHaveNulls)
@@ -177,8 +177,8 @@ TYPED_TEST(GroupbyM2TypedTest, KeysAndValuesHaveNulls)
   auto const expected_keys       = keys_col<T>{1, 2, 3, 4};
   auto const expected_M2s = M2s_col<R>{{4.5, 32.0 + 2.0 / 3.0, 18.0, 0.0 /*NULL*/}, null_at(3)};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, InputHaveNullsAndNaNs)
@@ -199,8 +199,8 @@ TYPED_TEST(GroupbyM2TypedTest, InputHaveNullsAndNaNs)
   auto const expected_keys       = keys_col<T>{1, 2, 3, 4};
   auto const expected_M2s        = M2s_col<R>{18.0, NaN, 18.0, NaN};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, SlicedColumnsInput)
@@ -238,6 +238,6 @@ TYPED_TEST(GroupbyM2TypedTest, SlicedColumnsInput)
   auto const expected_keys       = keys_col<T>{1, 2, 3, 4};
   auto const expected_M2s        = M2s_col<R>{18.0, NaN, 18.0, NaN};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
 }

@@ -164,8 +164,8 @@ def assert_column_equal(
 
     if check_exact and check_categorical:
         if is_categorical_dtype(left) and is_categorical_dtype(right):
-            left_cat = left.cat().categories
-            right_cat = right.cat().categories
+            left_cat = left.categories
+            right_cat = right.categories
 
             if check_category_order:
                 assert_index_equal(

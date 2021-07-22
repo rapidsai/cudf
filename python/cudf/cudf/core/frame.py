@@ -6,7 +6,7 @@ import copy
 import functools
 import warnings
 from collections import abc
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
 import numpy as np
@@ -17,16 +17,19 @@ from nvtx import annotate
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
-from cudf.api.types import is_dict_like, is_dtype_equal
+from cudf.api.types import is_dict_like, is_dtype_equal, issubdtype
 from cudf.core.column import (
     ColumnBase,
     as_column,
     build_categorical_column,
     column_empty,
+    concat_columns,
 )
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
     _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
     find_common_type,
     is_categorical_dtype,
     is_column_like,
@@ -38,9 +41,6 @@ from cudf.utils.dtypes import (
 )
 
 T = TypeVar("T", bound="Frame")
-
-if TYPE_CHECKING:
-    from cudf.core.column_accessor import ColumnAccessor
 
 
 class Frame(libcudf.table.Table):
@@ -1296,8 +1296,15 @@ class Frame(libcudf.table.Table):
         if value is not None and method is not None:
             raise ValueError("Cannot specify both 'value' and 'method'.")
 
-        if method and method not in {"ffill", "bfill"}:
-            raise NotImplementedError(f"Fill method {method} is not supported")
+        if method:
+            if method not in {"ffill", "bfill", "pad", "backfill"}:
+                raise NotImplementedError(
+                    f"Fill method {method} is not supported"
+                )
+            if method == "pad":
+                method = "ffill"
+            elif method == "backfill":
+                method = "bfill"
 
         if isinstance(value, cudf.Series):
             value = value.reindex(self._data.names)
@@ -1380,6 +1387,10 @@ class Frame(libcudf.table.Table):
             )
         )
         result._copy_type_metadata(frame)
+        if self._index is not None:
+            result._index.name = self._index.name
+            if isinstance(self._index, cudf.MultiIndex):
+                result._index.names = self._index.names
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -1454,6 +1465,17 @@ class Frame(libcudf.table.Table):
         )
 
         result._copy_type_metadata(self)
+        return result
+
+    @annotate("APPLY", color="purple", domain="cudf_python")
+    def _apply(self, func):
+        """
+        Apply `func` across the rows of the frame.
+        """
+        output_dtype, ptx = cudf.core.udf.pipeline.compile_masked_udf(
+            func, self.dtypes
+        )
+        result = cudf._lib.transform.masked_udf(self, ptx, output_dtype)
         return result
 
     def rank(
@@ -2052,9 +2074,7 @@ class Frame(libcudf.table.Table):
             )
             # as dictionary size can vary, it can't be a single table
             cudf_dictionaries_columns = {
-                name: cudf.core.column.ColumnBase.from_arrow(
-                    dict_dictionaries[name]
-                )
+                name: ColumnBase.from_arrow(dict_dictionaries[name])
                 for name in dict_dictionaries.keys()
             }
 
@@ -2281,11 +2301,6 @@ class Frame(libcudf.table.Table):
         self._copy_categories(other, include_index=include_index)
         self._copy_struct_names(other, include_index=include_index)
         self._copy_interval_data(other, include_index=include_index)
-
-    def _unaryop(self, op):
-        data_columns = (col.unary_operator(op) for col in self._columns)
-        data = zip(self._column_names, data_columns)
-        return self.__class__._from_table(Frame(data, self._index))
 
     def isnull(self):
         """
@@ -3258,6 +3273,11 @@ class Frame(libcudf.table.Table):
     def _encode(self):
         keys, indices = libcudf.transform.table_encode(self)
         keys = self.__class__._from_table(keys)
+        for col in keys._data:
+            keys._data[col] = keys._data[col]._with_type_metadata(
+                self._data[col].dtype
+            )
+
         return keys, indices
 
     def _reindex(
@@ -3337,18 +3357,261 @@ class Frame(libcudf.table.Table):
 
         return self._mimic_inplace(result, inplace=inplace)
 
+    def _unaryop(self, op):
+        data_columns = (col.unary_operator(op) for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
 
-_truediv_int_dtype_corrections = {
-    np.int8: np.float32,
-    np.int16: np.float32,
-    np.int32: np.float32,
-    np.int64: np.float64,
-    np.uint8: np.float32,
-    np.uint16: np.float32,
-    np.uint32: np.float64,
-    np.uint64: np.float64,
-    np.bool_: np.float32,
-}
+    def _binaryop(
+        self,
+        other: T,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        *args,
+        **kwargs,
+    ) -> Frame:
+        raise NotImplementedError
+
+    @classmethod
+    def _colwise_binop(
+        cls,
+        operands: Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+        fn: str,
+    ):
+        """Implement binary ops between two frame-like objects.
+
+        Binary operations for Frames can be reduced to a sequence of binary
+        operations between column-like objects. Different types of frames need
+        to preprocess different inputs, so subclasses should implement binary
+        operations as a preprocessing step that calls this method.
+
+        Parameters
+        ----------
+        operands : Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]]
+            A mapping from column names to a tuple containing left and right
+            operands as well as a boolean indicating whether or not to reflect
+            an operation and fill value for nulls.
+        fn : str
+            The operation to perform.
+
+        Returns
+        -------
+        Frame
+            A subclass of Frame constructed from the result of performing the
+            requested operation on the operands.
+        """
+
+        # Now actually perform the binop on the columns in left and right.
+        output = {}
+        for (
+            col,
+            (left_column, right_column, reflect, fill_value),
+        ) in operands.items():
+
+            # Handle object columns that are empty or
+            # all nulls when performing binary operations
+            if (
+                left_column.dtype == "object"
+                and left_column.null_count == len(left_column)
+                and fill_value is None
+            ):
+                if fn in (
+                    "add",
+                    "sub",
+                    "mul",
+                    "mod",
+                    "pow",
+                    "truediv",
+                    "floordiv",
+                ):
+                    output[col] = left_column
+                elif fn in ("eq", "lt", "le", "gt", "ge"):
+                    output[col] = left_column.notnull()
+                elif fn == "ne":
+                    output[col] = left_column.isnull()
+                continue
+
+            if right_column is cudf.NA:
+                right_column = cudf.Scalar(
+                    right_column, dtype=left_column.dtype
+                )
+            elif not isinstance(right_column, ColumnBase):
+                right_column = left_column.normalize_binop_value(right_column)
+
+            fn_apply = fn
+            if fn == "truediv":
+                # Decimals in libcudf don't support truediv, see
+                # https://github.com/rapidsai/cudf/pull/7435 for explanation.
+                if is_decimal_dtype(left_column.dtype):
+                    fn_apply = "div"
+
+                # Division with integer types results in a suitable float.
+                truediv_type = {
+                    np.int8: np.float32,
+                    np.int16: np.float32,
+                    np.int32: np.float32,
+                    np.int64: np.float64,
+                    np.uint8: np.float32,
+                    np.uint16: np.float32,
+                    np.uint32: np.float64,
+                    np.uint64: np.float64,
+                    np.bool_: np.float32,
+                }.get(left_column.dtype.type)
+                if truediv_type is not None:
+                    left_column = left_column.astype(truediv_type)
+
+            output_mask = None
+            if fill_value is not None:
+                if is_scalar(right_column):
+                    if left_column.nullable:
+                        left_column = left_column.fillna(fill_value)
+                else:
+                    # If both columns are nullable, pandas semantics dictate
+                    # that nulls that are present in both left_column and
+                    # right_column are not filled.
+                    if left_column.nullable and right_column.nullable:
+                        lmask = as_column(left_column.nullmask)
+                        rmask = as_column(right_column.nullmask)
+                        output_mask = (lmask | rmask).data
+                        left_column = left_column.fillna(fill_value)
+                        right_column = right_column.fillna(fill_value)
+                    elif left_column.nullable:
+                        left_column = left_column.fillna(fill_value)
+                    elif right_column.nullable:
+                        right_column = right_column.fillna(fill_value)
+
+            # For bitwise operations we must verify whether the input column
+            # types are valid, and if so, whether we need to coerce the output
+            # columns to booleans.
+            coerce_to_bool = False
+            if fn_apply in {"and", "or", "xor"}:
+                err_msg = (
+                    f"Operation 'bitwise {fn_apply}' not supported between "
+                    f"{left_column.dtype.type.__name__} and {{}}"
+                )
+                if right_column is None:
+                    raise TypeError(err_msg.format(type(None)))
+
+                try:
+                    left_is_bool = issubdtype(left_column.dtype, np.bool_)
+                    right_is_bool = issubdtype(right_column.dtype, np.bool_)
+                except TypeError:
+                    raise TypeError(err_msg.format(type(right_column)))
+
+                coerce_to_bool = left_is_bool or right_is_bool
+
+                if not (
+                    (left_is_bool or issubdtype(left_column.dtype, np.integer))
+                    and (
+                        right_is_bool
+                        or issubdtype(right_column.dtype, np.integer)
+                    )
+                ):
+                    raise TypeError(
+                        err_msg.format(right_column.dtype.type.__name__)
+                    )
+
+            outcol = (
+                left_column.binary_operator(
+                    fn_apply, right_column, reflect=reflect
+                )
+                if right_column is not None
+                else column_empty(
+                    left_column.size, left_column.dtype, masked=True
+                )
+            )
+
+            if output_mask is not None:
+                outcol = outcol.set_mask(output_mask)
+
+            if coerce_to_bool:
+                outcol = outcol.astype(np.bool_)
+
+            output[col] = outcol
+
+        return output
+
+    # Binary arithmetic operations.
+    def __add__(self, other):
+        return self._binaryop(other, "add")
+
+    def __radd__(self, other):
+        return self._binaryop(other, "add", reflect=True)
+
+    def __sub__(self, other):
+        return self._binaryop(other, "sub")
+
+    def __rsub__(self, other):
+        return self._binaryop(other, "sub", reflect=True)
+
+    def __mul__(self, other):
+        return self._binaryop(other, "mul")
+
+    def __rmul__(self, other):
+        return self._binaryop(other, "mul", reflect=True)
+
+    def __mod__(self, other):
+        return self._binaryop(other, "mod")
+
+    def __rmod__(self, other):
+        return self._binaryop(other, "mod", reflect=True)
+
+    def __pow__(self, other):
+        return self._binaryop(other, "pow")
+
+    def __rpow__(self, other):
+        return self._binaryop(other, "pow", reflect=True)
+
+    def __floordiv__(self, other):
+        return self._binaryop(other, "floordiv")
+
+    def __rfloordiv__(self, other):
+        return self._binaryop(other, "floordiv", reflect=True)
+
+    def __truediv__(self, other):
+        return self._binaryop(other, "truediv")
+
+    def __rtruediv__(self, other):
+        return self._binaryop(other, "truediv", reflect=True)
+
+    def __and__(self, other):
+        return self._binaryop(other, "and")
+
+    def __or__(self, other):
+        return self._binaryop(other, "or")
+
+    def __xor__(self, other):
+        return self._binaryop(other, "xor")
+
+    # Binary rich comparison operations.
+    def __eq__(self, other):
+        return self._binaryop(other, "eq")
+
+    def __ne__(self, other):
+        return self._binaryop(other, "ne")
+
+    def __lt__(self, other):
+        return self._binaryop(other, "lt")
+
+    def __le__(self, other):
+        return self._binaryop(other, "le")
+
+    def __gt__(self, other):
+        return self._binaryop(other, "gt")
+
+    def __ge__(self, other):
+        return self._binaryop(other, "ge")
+
+    # Unary logical operators
+    def __neg__(self):
+        return -1 * self
+
+    def __pos__(self):
+        return self.copy(deep=True)
+
+    def __abs__(self):
+        return self._unaryop("abs")
 
 
 class SingleColumnFrame(Frame):
@@ -3527,7 +3790,7 @@ class SingleColumnFrame(Frame):
         2    <NA>
         dtype: object
         """
-        return cls(cudf.core.column.column.ColumnBase.from_arrow(array))
+        return cls(ColumnBase.from_arrow(array))
 
     def to_arrow(self):
         """
@@ -3644,14 +3907,13 @@ class SingleColumnFrame(Frame):
 
     def _binaryop(
         self,
-        other,
-        fn,
-        fill_value=None,
-        reflect=False,
-        lhs=None,
+        other: T,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
         *args,
         **kwargs,
-    ):
+    ) -> SingleColumnFrame:
         """Perform a binary operation between two single column frames.
 
         Parameters
@@ -3675,37 +3937,6 @@ class SingleColumnFrame(Frame):
         SingleColumnFrame
             A new instance containing the result of the operation.
         """
-        if lhs is None:
-            lhs = self
-
-        rhs = self._normalize_binop_value(other)
-
-        if fn == "truediv":
-            truediv_type = _truediv_int_dtype_corrections.get(lhs.dtype.type)
-            if truediv_type is not None:
-                lhs = lhs.astype(truediv_type)
-
-        output_mask = None
-        if fill_value is not None:
-            if is_scalar(rhs):
-                if lhs.nullable:
-                    lhs = lhs.fillna(fill_value)
-            else:
-                # If both columns are nullable, pandas semantics dictate that
-                # nulls that are present in both lhs and rhs are not filled.
-                if lhs.nullable and rhs.nullable:
-                    # Note: lhs is a Frame, while rhs is already a column.
-                    lmask = as_column(lhs._column.nullmask)
-                    rmask = as_column(rhs.nullmask)
-                    output_mask = (lmask | rmask).data
-                    lhs = lhs.fillna(fill_value)
-                    rhs = rhs.fillna(fill_value)
-                elif lhs.nullable:
-                    lhs = lhs.fillna(fill_value)
-                elif rhs.nullable:
-                    rhs = rhs.fillna(fill_value)
-
-        outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
 
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
@@ -3718,140 +3949,24 @@ class SingleColumnFrame(Frame):
         else:
             result_name = self.name
 
-        output = lhs._copy_construct(data=outcol, name=result_name)
-
-        if output_mask is not None:
-            output._column = output._column.set_mask(output_mask)
-        return output
-
-    def _normalize_binop_value(self, other):
-        """Returns a *column* (not a Series) or scalar for performing
-        binary operations with self._column.
-        """
-        if isinstance(other, ColumnBase):
-            return other
+        # This needs to be tested correctly
         if isinstance(other, SingleColumnFrame):
-            return other._column
-        if other is cudf.NA:
-            return cudf.Scalar(other, dtype=self.dtype)
-        else:
-            return self._column.normalize_binop_value(other)
+            other = other._column
+        elif not _is_scalar_or_zero_d_array(other):
+            # Non-scalar right operands are valid iff they convert to columns.
+            try:
+                other = as_column(other)
+            except Exception:
+                return NotImplemented
 
-    def _bitwise_binop(self, other, op):
-        """Type-coercing wrapper around _binaryop for bitwise operations."""
-        # This will catch attempts at bitwise ops on extension dtypes.
-        try:
-            self_is_bool = np.issubdtype(self.dtype, np.bool_)
-            other_is_bool = np.issubdtype(other.dtype, np.bool_)
-        except TypeError:
-            raise TypeError(
-                f"Operation 'bitwise {op}' not supported between "
-                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
-            )
+        operands: Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]] = {
+            result_name: (self._column, other, reflect, fill_value)
+        }
 
-        if (self_is_bool or np.issubdtype(self.dtype, np.integer)) and (
-            other_is_bool or np.issubdtype(other.dtype, np.integer)
-        ):
-            # TODO: This doesn't work on Series (op) DataFrame
-            # because dataframe doesn't have dtype
-            ser = self._binaryop(other, op)
-            if self_is_bool or other_is_bool:
-                ser = ser.astype(np.bool_)
-            return ser
-        else:
-            raise TypeError(
-                f"Operation 'bitwise {op}' not supported between "
-                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
-            )
-
-    # Binary arithmetic operations.
-    def __add__(self, other):
-        return self._binaryop(other, "add")
-
-    def __radd__(self, other):
-        return self._binaryop(other, "add", reflect=True)
-
-    def __sub__(self, other):
-        return self._binaryop(other, "sub")
-
-    def __rsub__(self, other):
-        return self._binaryop(other, "sub", reflect=True)
-
-    def __mul__(self, other):
-        return self._binaryop(other, "mul")
-
-    def __rmul__(self, other):
-        return self._binaryop(other, "mul", reflect=True)
-
-    def __mod__(self, other):
-        return self._binaryop(other, "mod")
-
-    def __rmod__(self, other):
-        return self._binaryop(other, "mod", reflect=True)
-
-    def __pow__(self, other):
-        return self._binaryop(other, "pow")
-
-    def __rpow__(self, other):
-        return self._binaryop(other, "pow", reflect=True)
-
-    def __floordiv__(self, other):
-        return self._binaryop(other, "floordiv")
-
-    def __rfloordiv__(self, other):
-        return self._binaryop(other, "floordiv", reflect=True)
-
-    def __truediv__(self, other):
-        if is_decimal_dtype(self.dtype):
-            return self._binaryop(other, "div")
-        else:
-            return self._binaryop(other, "truediv")
-
-    def __rtruediv__(self, other):
-        if is_decimal_dtype(self.dtype):
-            return self._binaryop(other, "div", reflect=True)
-        else:
-            return self._binaryop(other, "truediv", reflect=True)
-
-    __div__ = __truediv__
-
-    def __and__(self, other):
-        return self._bitwise_binop(other, "and")
-
-    def __or__(self, other):
-        return self._bitwise_binop(other, "or")
-
-    def __xor__(self, other):
-        return self._bitwise_binop(other, "xor")
-
-    # Binary rich comparison operations.
-    def __eq__(self, other):
-        return self._binaryop(other, "eq")
-
-    def __ne__(self, other):
-        return self._binaryop(other, "ne")
-
-    def __lt__(self, other):
-        return self._binaryop(other, "lt")
-
-    def __le__(self, other):
-        return self._binaryop(other, "le")
-
-    def __gt__(self, other):
-        return self._binaryop(other, "gt")
-
-    def __ge__(self, other):
-        return self._binaryop(other, "ge")
-
-    # Unary logical operators
-    def __neg__(self):
-        return -1 * self
-
-    def __pos__(self):
-        return self.copy(deep=True)
-
-    def __abs__(self):
-        return self._unaryop("abs")
+        return self._copy_construct(
+            data=type(self)._colwise_binop(operands, fn)[result_name],
+            name=result_name,
+        )
 
 
 def _get_replacement_values_for_columns(
@@ -3889,7 +4004,7 @@ def _get_replacement_values_for_columns(
         to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
         values_columns = {col: [value] for col in columns_dtype_map}
     elif cudf.utils.dtypes.is_list_like(to_replace) or isinstance(
-        to_replace, cudf.core.column.ColumnBase
+        to_replace, ColumnBase
     ):
         if is_scalar(value):
             to_replace_columns = {col: to_replace for col in columns_dtype_map}
@@ -4054,8 +4169,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
         ):
             # Combine and de-dupe the categories
             categories[idx] = (
-                cudf.concat([col.cat().categories for col in cols])
-                .to_series()
+                cudf.Series(concat_columns([col.categories for col in cols]))
                 .drop_duplicates(ignore_index=True)
                 ._column
             )
@@ -4085,12 +4199,7 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
                 if idx in categories:
                     cols[idx] = (
                         cols[idx]
-                        .cat()
-                        ._set_categories(
-                            cols[idx].cat().categories,
-                            categories[idx],
-                            is_unique=True,
-                        )
+                        ._set_categories(categories[idx], is_unique=True,)
                         .codes
                     )
                 cols[idx] = cols[idx].astype(dtype)
