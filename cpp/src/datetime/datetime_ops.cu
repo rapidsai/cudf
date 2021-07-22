@@ -139,8 +139,8 @@ struct extract_quarter_op {
     auto const date             = year_month_day(days_since_epoch);
     auto const month            = unsigned{date.month()};
 
-    return (month + 2) /
-           3;  // (x + y - 1) / y = ceil(x/y), where x and y are unsigned. x = month, y = 3
+    // (x + y - 1) / y = ceil(x/y), where x and y are unsigned. x = month, y = 3
+    return (month + 2) / 3;
   }
 };
 
