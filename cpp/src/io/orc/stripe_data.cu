@@ -1335,10 +1335,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
          s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row) {
     uint32_t nrows = min(s->top.data.end_row - (s->top.data.cur_row + s->top.data.nrows),
                          min((row_decoder_buffer_size - s->u.rowdec.nz_count) * 2, blockDim.x));
-    // Even though s->chunk.strm_len is zero, there is possibility that there is null mask.
-    // This happens in a struct column with nulls which has child column which doesn't have any
-    // nulls.
-    if (s->chunk.strm_len[CI_PRESENT] > 0 or s->chunk.valid_map_base != NULL) {
+    if (s->chunk.valid_map_base != NULL) {
       // We have a present stream
       uint32_t rmax  = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
       uint32_t r     = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
