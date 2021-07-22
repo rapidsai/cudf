@@ -15,9 +15,7 @@
  */
 #pragma once
 
-#include <cudf/ast/detail/linearizer.hpp>
-#include <cudf/ast/detail/operators.hpp>
-#include <cudf/ast/operators.hpp>
+#include <cudf/ast/detail/expressions.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -26,6 +24,58 @@
 
 namespace cudf {
 namespace ast {
+
+/**
+ * @brief Enum of supported operators.
+ */
+enum class ast_operator {
+  // Binary operators
+  ADD,            ///< operator +
+  SUB,            ///< operator -
+  MUL,            ///< operator *
+  DIV,            ///< operator / using common type of lhs and rhs
+  TRUE_DIV,       ///< operator / after promoting type to floating point
+  FLOOR_DIV,      ///< operator / after promoting to 64 bit floating point and then
+                  ///< flooring the result
+  MOD,            ///< operator %
+  PYMOD,          ///< operator % but following python's sign rules for negatives
+  POW,            ///< lhs ^ rhs
+  EQUAL,          ///< operator ==
+  NOT_EQUAL,      ///< operator !=
+  LESS,           ///< operator <
+  GREATER,        ///< operator >
+  LESS_EQUAL,     ///< operator <=
+  GREATER_EQUAL,  ///< operator >=
+  BITWISE_AND,    ///< operator &
+  BITWISE_OR,     ///< operator |
+  BITWISE_XOR,    ///< operator ^
+  LOGICAL_AND,    ///< operator &&
+  LOGICAL_OR,     ///< operator ||
+  // Unary operators
+  IDENTITY,    ///< Identity function
+  SIN,         ///< Trigonometric sine
+  COS,         ///< Trigonometric cosine
+  TAN,         ///< Trigonometric tangent
+  ARCSIN,      ///< Trigonometric sine inverse
+  ARCCOS,      ///< Trigonometric cosine inverse
+  ARCTAN,      ///< Trigonometric tangent inverse
+  SINH,        ///< Hyperbolic sine
+  COSH,        ///< Hyperbolic cosine
+  TANH,        ///< Hyperbolic tangent
+  ARCSINH,     ///< Hyperbolic sine inverse
+  ARCCOSH,     ///< Hyperbolic cosine inverse
+  ARCTANH,     ///< Hyperbolic tangent inverse
+  EXP,         ///< Exponential (base e, Euler number)
+  LOG,         ///< Natural Logarithm (base e)
+  SQRT,        ///< Square-root (x^0.5)
+  CBRT,        ///< Cube-root (x^(1.0/3))
+  CEIL,        ///< Smallest integer value not less than arg
+  FLOOR,       ///< largest integer value not greater than arg
+  ABS,         ///< Absolute value
+  RINT,        ///< Rounds the floating-point argument arg to an integer value
+  BIT_INVERT,  ///< Bitwise Not (~)
+  NOT          ///< Logical Not (!)
+};
 
 /**
  * @brief Enum of table references.
@@ -96,7 +146,7 @@ class literal : public detail::node {
    * @param visitor Visitor.
    * @return cudf::size_type Index of device data reference for this instance.
    */
-  cudf::size_type accept(detail::linearizer& visitor) const override;
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
 
  private:
   const cudf::detail::fixed_width_scalar_device_view_base value;
@@ -172,7 +222,7 @@ class column_reference : public detail::node {
    * @param visitor Visitor.
    * @return cudf::size_type Index of device data reference for this instance.
    */
-  cudf::size_type accept(detail::linearizer& visitor) const override;
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
 
  private:
   cudf::size_type column_index;
@@ -190,12 +240,7 @@ class expression : public detail::node {
    * @param op Operator
    * @param input Input node (operand)
    */
-  expression(ast_operator op, node const& input) : op(op), operands({input})
-  {
-    if (cudf::ast::detail::ast_operator_arity(op) != 1) {
-      CUDF_FAIL("The provided operator is not a unary operator.");
-    }
-  }
+  expression(ast_operator op, detail::node const& input);
 
   /**
    * @brief Construct a new binary expression object.
@@ -204,19 +249,14 @@ class expression : public detail::node {
    * @param left Left input node (left operand)
    * @param right Right input node (right operand)
    */
-  expression(ast_operator op, node const& left, node const& right) : op(op), operands({left, right})
-  {
-    if (cudf::ast::detail::ast_operator_arity(op) != 2) {
-      CUDF_FAIL("The provided operator is not a binary operator.");
-    }
-  }
+  expression(ast_operator op, detail::node const& left, detail::node const& right);
 
   // expression only stores references to nodes, so it does not accept r-value
   // references: the calling code must own the nodes.
-  expression(ast_operator op, node&& input)                   = delete;
-  expression(ast_operator op, node&& left, node&& right)      = delete;
-  expression(ast_operator op, node&& left, node const& right) = delete;
-  expression(ast_operator op, node const& left, node&& right) = delete;
+  expression(ast_operator op, detail::node&& input)                           = delete;
+  expression(ast_operator op, detail::node&& left, detail::node&& right)      = delete;
+  expression(ast_operator op, detail::node&& left, detail::node const& right) = delete;
+  expression(ast_operator op, detail::node const& left, detail::node&& right) = delete;
 
   /**
    * @brief Get the operator.
@@ -230,7 +270,7 @@ class expression : public detail::node {
    *
    * @return std::vector<std::reference_wrapper<const node>>
    */
-  std::vector<std::reference_wrapper<const node>> get_operands() const { return operands; }
+  std::vector<std::reference_wrapper<const detail::node>> get_operands() const { return operands; }
 
   /**
    * @brief Accepts a visitor class.
@@ -238,11 +278,11 @@ class expression : public detail::node {
    * @param visitor Visitor.
    * @return cudf::size_type Index of device data reference for this instance.
    */
-  cudf::size_type accept(detail::linearizer& visitor) const override;
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
 
  private:
   const ast_operator op;
-  const std::vector<std::reference_wrapper<const node>> operands;
+  const std::vector<std::reference_wrapper<const detail::node>> operands;
 };
 
 }  // namespace ast

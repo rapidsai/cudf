@@ -18,6 +18,7 @@
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
+#include <join/join_common_utils.cuh>
 #include <join/join_common_utils.hpp>
 #include <join/join_kernels.cuh>
 
@@ -119,50 +120,11 @@ std::size_t compute_join_output_size(table_device_view build_table,
   return h_size;
 }
 
-/**
- * @brief Computes the trivial left join operation for the case when the
- * right table is empty. In this case all the valid indices of the left table
- * are returned with their corresponding right indices being set to
- * JoinNoneValue, i.e. -1.
- *
- * @param left Table of left columns to join
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the result
- *
- * @return Join output indices vector pair
- */
-inline std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-                 std::unique_ptr<rmm::device_uvector<size_type>>>
-get_trivial_left_join_indices(
-  table_view const& left,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
-  thrust::sequence(rmm::exec_policy(stream), left_indices->begin(), left_indices->end(), 0);
-  auto right_indices =
-    std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
-  thrust::fill(
-    rmm::exec_policy(stream), right_indices->begin(), right_indices->end(), JoinNoneValue);
-  return std::make_pair(std::move(left_indices), std::move(right_indices));
-}
-
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table(
   table_view const& probe, table_view const& build);
 
 std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table>&& left,
                                                 std::unique_ptr<cudf::table>&& right);
-
-VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b, rmm::cuda_stream_view stream);
-
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-get_left_join_indices_complement(
-  std::unique_ptr<rmm::device_uvector<size_type>>& right_indices,
-  size_type left_table_row_count,
-  size_type right_table_row_count,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 

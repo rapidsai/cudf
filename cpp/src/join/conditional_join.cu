@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,53 +13,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
 
-#include "hash_join.cuh"
-#include "join_common_utils.hpp"
-#include "join_kernels.cuh"
-
-#include <cudf/ast/detail/transform.cuh>
-#include <cudf/ast/nodes.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/ast/expressions.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <join/conditional_join.hpp>
+#include <join/conditional_join_kernels.cuh>
+#include <join/join_common_utils.cuh>
+#include <join/join_common_utils.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
-#include <thrust/optional.h>
-
-#include <algorithm>
+#include <limits>
 
 namespace cudf {
 namespace detail {
 
-/**
- * @brief Computes the join operation between two tables and returns the
- * output indices of left and right table as a combined table
- *
- * @param left  Table of left columns to join
- * @param right Table of right  columns to join
- * tables have been flipped, meaning the output indices should also be flipped
- * @param JoinKind The type of join to be performed
- * @param compare_nulls Controls whether null join-key values should match or not.
- * @param stream CUDA stream used for device memory operations and kernel launches
- *
- * @return Join output indices vector pair
- */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-get_conditional_join_indices(table_view const& left,
-                             table_view const& right,
-                             join_kind JoinKind,
-                             ast::expression binary_pred,
-                             null_equality compare_nulls,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+conditional_join(table_view const& left,
+                 table_view const& right,
+                 ast::expression binary_predicate,
+                 null_equality compare_nulls,
+                 join_kind JoinKind,
+                 rmm::cuda_stream_view stream,
+                 rmm::mr::device_memory_resource* mr)
 {
   // We can immediately filter out cases where the right table is empty. In
   // some cases, we return all the rows of the left table with a corresponding
@@ -85,18 +67,12 @@ get_conditional_join_indices(table_view const& left,
   // If none of the input columns actually contain nulls, we can still use the
   // non-nullable version of the expression evaluation code path for
   // performance, so we capture that information as well.
-  auto const nullable =
-    std::any_of(left.begin(), left.end(), [](column_view c) { return c.nullable(); }) ||
-    std::any_of(right.begin(), right.end(), [](column_view c) { return c.nullable(); });
-  auto const has_nulls =
-    nullable &&
-    (std::any_of(
-       left.begin(), left.end(), [](column_view c) { return c.nullable() && c.has_nulls(); }) ||
-     std::any_of(
-       right.begin(), right.end(), [](column_view c) { return c.nullable() && c.has_nulls(); }));
+  auto const nullable  = cudf::nullable(left) || cudf::nullable(right);
+  auto const has_nulls = nullable && (cudf::has_nulls(left) || cudf::has_nulls(right));
 
-  auto const plan = ast::detail::ast_plan{binary_pred, left, right, has_nulls, stream, mr};
-  CUDF_EXPECTS(plan.output_type().id() == type_id::BOOL8,
+  auto const parser =
+    ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
+  CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
                "The expression must produce a boolean output.");
 
   auto left_table  = table_device_view::create(left, stream);
@@ -107,7 +83,8 @@ get_conditional_join_indices(table_view const& left,
   CHECK_CUDA(stream.value());
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(left_table->num_rows(), block_size);
-  auto const shmem_size_per_block = plan.dev_plan.shmem_per_thread * config.num_threads_per_block;
+  auto const shmem_size_per_block =
+    parser.device_expression_data.shmem_per_thread * config.num_threads_per_block;
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
@@ -115,15 +92,26 @@ get_conditional_join_indices(table_view const& left,
   if (has_nulls) {
     compute_conditional_join_output_size<block_size, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_table, *right_table, KernelJoinKind, compare_nulls, plan.dev_plan, size.data());
+        *left_table,
+        *right_table,
+        KernelJoinKind,
+        compare_nulls,
+        parser.device_expression_data,
+        size.data());
   } else {
     compute_conditional_join_output_size<block_size, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_table, *right_table, KernelJoinKind, compare_nulls, plan.dev_plan, size.data());
+        *left_table,
+        *right_table,
+        KernelJoinKind,
+        compare_nulls,
+        parser.device_expression_data,
+        size.data());
   }
   CHECK_CUDA(stream.value());
 
   size_type const join_size = size.value(stream);
+  CUDF_EXPECTS(join_size < std::numeric_limits<size_type>::max(), "The result of this join is too large for a cudf column.");
 
   // If the output size will be zero, we can return immediately.
   if (join_size == 0) {
@@ -148,7 +136,7 @@ get_conditional_join_indices(table_view const& left,
         join_output_l,
         join_output_r,
         write_index.data(),
-        plan.dev_plan,
+        parser.device_expression_data,
         join_size);
   } else {
     conditional_join<block_size, DEFAULT_JOIN_CACHE_SIZE, false>
@@ -160,7 +148,7 @@ get_conditional_join_indices(table_view const& left,
         join_output_l,
         join_output_r,
         write_index.data(),
-        plan.dev_plan,
+        parser.device_expression_data,
         join_size);
   }
 
@@ -179,5 +167,95 @@ get_conditional_join_indices(table_view const& left,
 }
 
 }  // namespace detail
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+conditional_inner_join(table_view left,
+                       table_view right,
+                       ast::expression binary_predicate,
+                       null_equality compare_nulls,
+                       rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::conditional_join(left,
+                                  right,
+                                  binary_predicate,
+                                  compare_nulls,
+                                  detail::join_kind::INNER_JOIN,
+                                  rmm::cuda_stream_default,
+                                  mr);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+conditional_left_join(table_view left,
+                      table_view right,
+                      ast::expression binary_predicate,
+                      null_equality compare_nulls,
+                      rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::conditional_join(left,
+                                  right,
+                                  binary_predicate,
+                                  compare_nulls,
+                                  detail::join_kind::LEFT_JOIN,
+                                  rmm::cuda_stream_default,
+                                  mr);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+conditional_full_join(table_view left,
+                      table_view right,
+                      ast::expression binary_predicate,
+                      null_equality compare_nulls,
+                      rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::conditional_join(left,
+                                  right,
+                                  binary_predicate,
+                                  compare_nulls,
+                                  detail::join_kind::FULL_JOIN,
+                                  rmm::cuda_stream_default,
+                                  mr);
+}
+
+std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
+  table_view left,
+  table_view right,
+  ast::expression binary_predicate,
+  null_equality compare_nulls,
+  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return std::move(detail::conditional_join(left,
+                                            right,
+                                            binary_predicate,
+                                            compare_nulls,
+                                            detail::join_kind::LEFT_SEMI_JOIN,
+                                            rmm::cuda_stream_default,
+                                            mr)
+                     .first);
+}
+
+std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
+  table_view left,
+  table_view right,
+  ast::expression binary_predicate,
+  null_equality compare_nulls,
+  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return std::move(detail::conditional_join(left,
+                                            right,
+                                            binary_predicate,
+                                            compare_nulls,
+                                            detail::join_kind::LEFT_ANTI_JOIN,
+                                            rmm::cuda_stream_default,
+                                            mr)
+                     .first);
+}
 
 }  // namespace cudf
