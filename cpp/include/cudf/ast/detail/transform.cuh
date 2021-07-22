@@ -33,9 +33,6 @@
 
 #include <thrust/optional.h>
 
-#include <cstring>
-#include <numeric>
-
 namespace cudf {
 
 namespace ast {
