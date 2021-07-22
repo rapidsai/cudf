@@ -24,6 +24,8 @@
 
 #include <thrust/transform.h>
 
+#include <cstdio>
+#include <fstream>
 #include <memory>
 
 using cudf::test::fixed_width_column_wrapper;
@@ -36,8 +38,18 @@ static void BM_multibyte_split(benchmark::State& state)
   auto host_input   = std::string(num_chars, 'x');
   auto device_input = cudf::string_scalar(host_input);
 
-  auto host_input_stream   = std::basic_stringstream(host_input);
-  auto device_input_stream = cudf::io::text::host_device_istream(host_input_stream);
+  auto temp_file_name = std::string("io.x");
+  close(mkstemp(const_cast<char*>(temp_file_name.data())));
+  {
+    auto temp_fostream = std::ofstream(temp_file_name, std::ofstream::out);
+    temp_fostream << host_input;
+    temp_fostream.close();
+  }
+  auto temp_fistream = std::ifstream(temp_file_name, std::ifstream::in);
+
+  auto host_input_stream = std::basic_stringstream(host_input);
+  // auto device_input_stream = cudf::io::text::host_device_istream(host_input_stream);
+  auto device_input_stream = cudf::io::text::host_device_istream(temp_fistream);
 
   cudaDeviceSynchronize();
 

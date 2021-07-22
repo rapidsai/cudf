@@ -6,6 +6,8 @@
 
 #include <thrust/host_vector.h>
 
+#include <thrust/system/cuda/experimental/pinned_allocator.h>
+
 #include <istream>
 
 namespace cudf {
@@ -22,7 +24,8 @@ class host_device_istream : public cudf::io::text::device_istream {
 
  private:
   std::istream& _source_stream;
-  thrust::host_vector<char> _host_buffer{};
+  thrust::host_vector<char, thrust::system::cuda::experimental::pinned_allocator<char>>
+    _host_buffer{};
 };
 
 }  // namespace text

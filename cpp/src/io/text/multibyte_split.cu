@@ -6,6 +6,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_pool.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
@@ -532,34 +533,81 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::string_scalar const& input,
   return res;
 }
 
+struct chunk {
+  chunk(rmm::device_buffer&& buffer, std::size_t size) : _buffer(std::move(buffer)), _size(size) {}
+
+  operator device_span<char const>()
+  {
+    return device_span<char const>(static_cast<char const*>(_buffer.data()), _size);
+  }
+
+  uint32_t size() const { return _size; }
+
+  rmm::cuda_stream_view stream() const { return _buffer.stream(); }
+
+ private:
+  rmm::device_buffer _buffer;
+  std::size_t _size;
+};
+
+struct chunk_reader {
+  chunk_reader(cudf::io::text::device_istream& input, rmm::cuda_stream_pool& stream_pool)
+    : _input(input), _stream_pool(stream_pool)
+  {
+    auto buffers = std::vector<rmm::device_buffer>(stream_pool.get_pool_size());
+    for (uint32_t i = 0; i < stream_pool.get_pool_size(); i++) {
+      buffers[i] = rmm::device_buffer(ITEMS_PER_CHUNK, _stream_pool.get_stream(i));
+    }
+  }
+  chunk get_next_chunk(uint32_t size)
+  {
+    auto stream       = _stream_pool.get_stream(i++);
+    auto chunk_buffer = rmm::device_buffer(size, stream);
+    auto chunk_span =
+      device_span<char>(static_cast<char*>(chunk_buffer.data()), chunk_buffer.size());
+    cudaStreamSynchronize(stream);
+    size = _input.read(chunk_span, stream);
+    return chunk(std::move(chunk_buffer), size);
+  }
+
+ private:
+  cudf::io::text::device_istream& _input;
+  rmm::cuda_stream_pool& _stream_pool;
+  uint32_t i = 0;
+};
+
+void fork_stream_to_pool(rmm::cuda_stream_view stream, rmm::cuda_stream_pool& stream_pool)
+{
+  cudaEvent_t event;
+  cudaEventCreate(&event);
+  cudaEventRecord(event, stream);
+  for (uint32_t i = 0; i < stream_pool.get_pool_size(); i++) {
+    cudaStreamWaitEvent(stream_pool.get_stream(i), event, 0);
+  }
+  cudaEventDestroy(event);
+}
+
+void join_pool_to_stream(rmm::cuda_stream_pool& stream_pool, rmm::cuda_stream_view stream)
+{
+  cudaEvent_t event;
+  cudaEventCreate(&event);
+  for (uint32_t i = 0; i < stream_pool.get_pool_size(); i++) {
+    cudaEventRecord(event, stream_pool.get_stream(i));
+    cudaStreamWaitEvent(stream, event, 0);
+  }
+  cudaEventDestroy(event);
+}
+
 cudf::size_type scan_full_stream(cudf::io::text::device_istream& input,
                                  cudf::io::text::trie const& trie,
                                  scan_tile_state<superstate<16>>& tile_superstates,
                                  scan_tile_state<uint32_t>& tile_offsets,
                                  device_span<cudf::size_type> output_buffer,
                                  device_span<char> output_char_buffer,
-                                 rmm::cuda_stream_view stream)
+                                 rmm::cuda_stream_view stream,
+                                 rmm::cuda_stream_pool& stream_pool)
 {
-  uint32_t bytes_read;
   cudf::size_type bytes_total = 0;
-
-  rmm::device_uvector<char> input_buffer(ITEMS_PER_CHUNK, stream);
-  rmm::device_uvector<char> input_buffer_next(ITEMS_PER_CHUNK, stream);
-  rmm::device_uvector<char> input_buffer_next_next(ITEMS_PER_CHUNK, stream);
-
-  cudaEvent_t my_event;
-  cudaEvent_t my_event_next;
-  cudaEvent_t my_event_next_next;
-  cudaEventCreate(&my_event);
-  cudaEventCreate(&my_event_next);
-  cudaEventCreate(&my_event_next_next);
-
-  cudaStream_t my_stream;
-  cudaStream_t my_stream_next;
-  cudaStream_t my_stream_next_next;
-  cudaStreamCreate(&my_stream);
-  cudaStreamCreate(&my_stream_next);
-  cudaStreamCreate(&my_stream_next_next);
 
   // this function interleaves three kernel executions
 
@@ -573,63 +621,35 @@ cudf::size_type scan_full_stream(cudf::io::text::device_istream& input,
   tile_superstates.set_seed_async(superstate<16>(), stream);
   tile_offsets.set_seed_async(0, stream);
 
-  for (auto base_tile_idx = 0; (bytes_read = input.read(input_buffer, my_stream)) > 0;
-       base_tile_idx += TILES_PER_CHUNK) {
-    bytes_total += bytes_read;
+  fork_stream_to_pool(stream, stream_pool);
+
+  auto reader = chunk_reader(input, stream_pool);
+
+  for (auto base_tile_idx = 0; true; base_tile_idx += TILES_PER_CHUNK) {
+    auto chunk = reader.get_next_chunk(ITEMS_PER_CHUNK);
+
+    if (chunk.size() == 0) { break; }
+
+    bytes_total += chunk.size();
 
     // reset the next chunk of tile state
-    multibyte_split_init_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, my_stream>>>(  //
+    multibyte_split_init_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, chunk.stream()>>>(  //
       base_tile_idx,
       TILES_PER_CHUNK,
       tile_superstates,
       tile_offsets);
-
-    multibyte_split_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, my_stream>>>(  //
+    multibyte_split_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, chunk.stream()>>>(  //
       base_tile_idx,
       TILES_PER_CHUNK,
       tile_superstates,
       tile_offsets,
       trie.view(),
-      device_span<char const>(input_buffer).first(bytes_read),
+      chunk,
       output_buffer,
       output_char_buffer);
-
-    cudaEventRecord(my_event, my_stream);
-
-    std::swap(my_event_next_next, my_event_next);
-    std::swap(my_event_next, my_event);
-
-    std::swap(my_stream_next_next, my_stream_next);
-    std::swap(my_stream_next, my_stream);
-
-    std::swap(input_buffer_next_next, input_buffer_next);
-    std::swap(input_buffer_next, input_buffer);
-
-    // std::swap(my_event, my_event_next);
-    // std::swap(my_event_next, my_event_next_next);
-
-    // std::swap(my_stream, my_stream_next);
-    // std::swap(my_stream_next, my_stream_next_next);
-
-    // std::swap(input_buffer, input_buffer_next);
-    // std::swap(input_buffer_next, input_buffer_next_next);
-
-    cudaStreamSynchronize(my_stream);
-
-    // cudaStreamWaitEvent(my_stream, my_event, 0);
   }
 
-  cudaStreamWaitEvent(stream.value(), my_event, 0);
-  cudaStreamWaitEvent(stream.value(), my_event_next, 0);
-  cudaStreamWaitEvent(stream.value(), my_event_next_next, 0);
-
-  cudaEventDestroy(my_event);
-  cudaEventDestroy(my_event_next);
-  cudaEventDestroy(my_event_next_next);
-
-  cudaStreamDestroy(my_stream);
-  cudaStreamDestroy(my_stream_next);
-  cudaStreamDestroy(my_stream_next_next);
+  join_pool_to_stream(stream_pool, stream);
 
   return bytes_total;
 }
@@ -643,9 +663,12 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::device_istream& in
   // must be at least 32 when using warp-reduce on partials
   // must be at least 1 more than max possible concurrent tiles
   // best when at least 32 more than max possible concurrent tiles, due to rolling `invalid`s
-  auto num_tile_states  = std::max(32, TILES_PER_CHUNK * 3 + 32);
+  auto concurrency      = 3;
+  auto num_tile_states  = std::max(32, TILES_PER_CHUNK * concurrency + 32);
   auto tile_superstates = scan_tile_state<superstate<16>>(num_tile_states, stream);
   auto tile_offsets     = scan_tile_state<uint32_t>(num_tile_states, stream);
+
+  auto stream_pool = rmm::cuda_stream_pool(concurrency);
 
   auto bytes_total = scan_full_stream(input,
                                       trie,
@@ -653,7 +676,8 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::device_istream& in
                                       tile_offsets,
                                       cudf::device_span<int32_t>(static_cast<int32_t*>(nullptr), 0),
                                       cudf::device_span<char>(static_cast<char*>(nullptr), 0),
-                                      stream);
+                                      stream,
+                                      stream_pool);
 
   // allocate string offsets
 
@@ -677,11 +701,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::device_istream& in
                    tile_offsets,
                    cudf::device_span<int32_t>(string_offsets).subspan(1, num_results),
                    string_chars,
-                   stream);
+                   stream,
+                   stream_pool);
 
   auto res = create_strings_column(std::move(string_chars), std::move(string_offsets), stream, mr);
-
-  stream.synchronize();
 
   return res;
 }
@@ -692,14 +715,20 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::string_scalar const& input,
                                               std::vector<std::string> const& delimeters,
                                               rmm::mr::device_memory_resource* mr)
 {
-  return detail::multibyte_split(input, delimeters, rmm::cuda_stream_default, mr);
+  auto stream = rmm::cuda_stream_default;
+  auto result = detail::multibyte_split(input, delimeters, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::device_istream& input,
                                               std::vector<std::string> const& delimeters,
                                               rmm::mr::device_memory_resource* mr)
 {
-  return detail::multibyte_split(input, delimeters, rmm::cuda_stream_default, mr);
+  auto stream = rmm::cuda_stream_default;
+  auto result = detail::multibyte_split(input, delimeters, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace text
