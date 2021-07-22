@@ -317,6 +317,32 @@ def test_series_median(dtype, num_na):
 
 
 @pytest.mark.parametrize(
+    "data",
+    [
+        np.random.normal(-100, 100, 1000),
+        np.random.randint(-50, 50, 1000),
+        np.zeros(100),
+        np.array([1.123, 2.343, np.nan, 0.0]),
+        np.array([-2, 3.75, 6, None, None, None, -8.5, None, 4.2]),
+        cudf.Series([]),
+        cudf.Series([-3]),
+    ],
+)
+@pytest.mark.parametrize("periods", range(-5, 5))
+@pytest.mark.parametrize("fill_method", ["ffill", "bfill", "pad", "backfill"])
+def test_series_pct_change(data, periods, fill_method):
+    cs = cudf.Series(data)
+    ps = cs.to_pandas()
+
+    if np.abs(periods) <= len(cs):
+        got = cs.pct_change(periods=periods, fill_method=fill_method)
+        expected = ps.pct_change(periods=periods, fill_method=fill_method)
+        np.testing.assert_array_almost_equal(
+            got.to_array(fillna="pandas"), expected
+        )
+
+
+@pytest.mark.parametrize(
     "data1",
     [
         np.random.normal(-100, 100, 1000),
