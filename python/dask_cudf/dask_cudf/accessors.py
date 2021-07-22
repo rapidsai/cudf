@@ -28,20 +28,25 @@ class StructMethods:
         1    3
         dtype: int64
         """
-        if key in self.d_series._meta.dtype.fields.keys():
+        try:            
             typ = self.d_series._meta.dtype.fields[key]
             return self.d_series.map_partitions(
                 lambda s: s.struct.field(key),
                 meta=self.d_series._meta._constructor([], dtype=typ),
             )
-        elif isinstance(key, int):
-            key_list = [dict_key for dict_key in self.d_series._meta.dtype.fields.keys()]
-            typ_key = key_list[key]
-            typ = self.d_series._meta.dtype.fields[typ_key]
-            return self.d_series.map_partitions(
-                lambda s: s.struct.field(key), 
-                meta=self.d_series._meta._constructor([], dtype=typ),
-        )
+        except KeyError as e:
+            if isinstance(key, int):
+                key_list = [dict_key for dict_key in self.d_series._meta.dtype.fields.keys()]
+                typ_key = key_list[key]
+                typ = self.d_series._meta.dtype.fields[typ_key]
+                return self.d_series.map_partitions(
+                    lambda s: s.struct.field(key), 
+                    meta=self.d_series._meta._constructor([], dtype=typ),
+                )
+            else:
+                print('Field "' + str(key) + '" is not found in the set of existing keys.')
+                raise e
+
         
 
 class ListMethods:
