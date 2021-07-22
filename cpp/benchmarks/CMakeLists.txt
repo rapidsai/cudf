@@ -231,6 +231,7 @@ ConfigureBench(STRINGS_BENCH
   string/factory_benchmark.cu
   string/filter_benchmark.cpp
   string/find_benchmark.cpp
+  string/repeat_strings_benchmark.cpp
   string/replace_benchmark.cpp
   string/replace_re_benchmark.cpp
   string/split_benchmark.cpp
