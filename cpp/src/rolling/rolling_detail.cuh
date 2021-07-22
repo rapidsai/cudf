@@ -285,57 +285,82 @@ struct DeviceRollingCountAll {
 /**
  * @brief Operator for applying a VAR rolling aggregation on a single window.
  */
- template <typename InputType>
- struct DeviceRollingVariance {
-   size_type min_periods;
-   size_type ddof;
- 
-   // what operations do we support
-   template <typename T = InputType, aggregation::Kind O = aggregation::VARIANCE>
-   static constexpr bool is_supported()
-   {
-     return true;
-   }
- 
-   DeviceRollingVariance(size_type _min_periods, size_type _ddof) : min_periods(_min_periods), ddof{_ddof} {}
+template <typename InputType>
+struct DeviceRollingVariance {
+  size_type min_periods;
+  size_type ddof;
 
-   template <typename OutputType, bool has_nulls>
-   bool __device__ operator()(column_device_view const& input,
-                              column_device_view const&,
-                              mutable_column_device_view& output,
-                              size_type start_index,
-                              size_type end_index,
-                              size_type current_index)
-   {
-     cudf::size_type N = end_index - start_index; // population
- 
-     bool output_is_valid                      = N >= min_periods and not (N == ddof);
-     if (has_nulls) {
-       cudf::size_type null_count = thrust::count_if(
-         thrust::seq, thrust::make_counting_iterator(start_index), thrust::make_counting_iterator(end_index),
-         [&input](auto i) { return input.is_null_nocheck(i); }
-       );
-       output_is_valid = output_is_valid and null_count == 0;
-     }
+  // what operations do we support
+  template <typename T = InputType, aggregation::Kind O = aggregation::VARIANCE>
+  static constexpr bool is_supported()
+  {
+    return is_fixed_width<InputType>() and not is_chrono<InputType>();
+  }
 
-    if (not (N == ddof)) {
-      OutputType mean = thrust::reduce(thrust::seq,
-                                        thrust::make_counting_iterator(start_index),
-                                        thrust::make_counting_iterator(end_index)) / N;
-      
-      output.element<OutputType>(current_index) = thrust::reduce(
-        thrust::seq,
-        thrust::make_counting_iterator(start_index),
-        thrust::make_counting_iterator(end_index),
-        OutputType{0},
-        [&](auto prev, auto cur) {
-          return prev + (cur - mean) * (cur - mean);
-        }) / (N - ddof);
+  DeviceRollingVariance(size_type _min_periods, size_type _ddof)
+    : min_periods(_min_periods), ddof{_ddof}
+  {
+  }
+
+  template <typename OutputType, bool has_nulls>
+  bool __device__ operator()(column_device_view const& input,
+                             column_device_view const&,
+                             mutable_column_device_view& output,
+                             size_type start_index,
+                             size_type end_index,
+                             size_type current_index)
+  {
+    using DeviceInputType = device_storage_type_t<InputType>;
+
+    cudf::size_type count{0};  // valid counts in the window
+
+    if (has_nulls) {
+      count = thrust::count_if(thrust::seq,
+                               thrust::make_counting_iterator(start_index),
+                               thrust::make_counting_iterator(end_index),
+                               [&input](auto i) { return input.is_valid_nocheck(i); });
+    } else {
+      count = end_index - start_index;
     }
 
-     return output_is_valid;
-   }
- };
+    // Variance/Std is non-negative and thus ddof should be strictly less than valid counts.
+    bool output_is_valid = (count >= min_periods) and not(count <= ddof);
+
+    if (output_is_valid) {
+      OutputType mean = thrust::reduce(thrust::seq,
+                                       thrust::make_counting_iterator(start_index),
+                                       thrust::make_counting_iterator(end_index),
+                                       OutputType{0},
+                                       [&](auto acc, auto i) {
+                                         if (has_nulls) {
+                                           return input.is_valid_nocheck(i)
+                                                    ? acc + input.element<DeviceInputType>(i)
+                                                    : acc;
+                                         } else {
+                                           return acc + input.element<DeviceInputType>(i);
+                                         }
+                                       }) /
+                        count;
+
+      output.element<OutputType>(current_index) =
+        thrust::reduce(thrust::seq,
+                       thrust::make_counting_iterator(start_index),
+                       thrust::make_counting_iterator(end_index),
+                       OutputType{0},
+                       [&](auto acc, auto i) {
+                         auto x = input.element<DeviceInputType>(i);
+                         if (has_nulls) {
+                           return input.is_valid_nocheck(i) ? acc + (x - mean) * (x - mean) : acc;
+                         } else {
+                           return acc + (x - mean) * (x - mean);
+                         }
+                       }) /
+        (count - ddof);
+    }
+
+    return output_is_valid;
+  }
+};
 
 /**
  * @brief Operator for applying a ROW_NUMBER rolling aggregation on a single window.
@@ -596,22 +621,23 @@ struct create_rolling_operator<
   op,
   std::enable_if_t<corresponding_rolling_operator<InputType, op>::type::is_supported()>> {
   template <
-    typename T                                                                     = InputType,
-    aggregation::Kind O                                                            = op,
-    std::enable_if_t<O != aggregation::Kind::LEAD && O != aggregation::Kind::LAG && O != aggregation::Kind::VARIANCE && O != aggregation::Kind::STD>* = nullptr>
+    typename T                                                                         = InputType,
+    aggregation::Kind O                                                                = op,
+    std::enable_if_t<O != aggregation::Kind::LEAD && O != aggregation::Kind::LAG &&
+                     O != aggregation::Kind::VARIANCE && O != aggregation::Kind::STD>* = nullptr>
   auto operator()(size_type min_periods, rolling_aggregation const&)
   {
     return typename corresponding_rolling_operator<InputType, op>::type(min_periods);
   }
 
-  template <typename T                                      = InputType,
-            aggregation::Kind O                             = op,
-            std::enable_if_t<O == aggregation::Kind::VARIANCE || O == aggregation::Kind::STD>* = nullptr>
+  template <
+    typename T                                                                         = InputType,
+    aggregation::Kind O                                                                = op,
+    std::enable_if_t<O == aggregation::Kind::VARIANCE || O == aggregation::Kind::STD>* = nullptr>
   auto operator()(size_type min_periods, rolling_aggregation const& agg)
   {
     return DeviceRollingVariance<InputType>{
-      min_periods, dynamic_cast<cudf::detail::var_aggregation const&>(agg)._ddof
-    };
+      min_periods, dynamic_cast<cudf::detail::var_aggregation const&>(agg)._ddof};
   }
 
   template <typename T                                      = InputType,
@@ -831,18 +857,18 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
   // perform the element-wise square root operation on result of VARIANCE
   void visit(cudf::detail::std_aggregation const& agg) override
   {
-    result = make_numeric_column(data_type{type_to_id<double>()},
-                                 intermediate->size(),
-                                 mask_state::UNALLOCATED,
-                                 stream,
-                                 mr);
-    column_view intermediate_view = intermediate->view();
+    result = make_numeric_column(
+      data_type{type_to_id<double>()}, intermediate->size(), mask_state::UNALLOCATED, stream, mr);
+    column_view intermediate_view    = intermediate->view();
     mutable_column_view result_mview = result->mutable_view();
-    thrust::transform(rmm::exec_policy(stream), intermediate_view.begin<double>(), intermediate_view.end<double>(), result_mview.begin<double>(),
-      []__device__(auto v){ return std::sqrt(v); }
-    );
-    
-    result->set_null_mask(detail::copy_bitmask(intermediate_view, stream, mr), intermediate_view.null_count());
+    thrust::transform(rmm::exec_policy(stream),
+                      intermediate_view.begin<double>(),
+                      intermediate_view.end<double>(),
+                      result_mview.begin<double>(),
+                      [] __device__(auto v) { return std::sqrt(v); });
+
+    result->set_null_mask(detail::copy_bitmask(intermediate_view, stream, mr),
+                          intermediate_view.null_count());
   }
 
   std::unique_ptr<column> get_result()
@@ -1085,6 +1111,9 @@ struct dispatch_rolling {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
+    if constexpr (is_fixed_width<InputType>() and not is_chrono<InputType>())
+      cudf::debug::print<device_storage_type_t<InputType>>(input, std::cout, ",", stream.value());
+
     // do any preprocessing of aggregations (eg, MIN -> ARGMIN, COLLECT_LIST -> nothing)
     rolling_aggregation_preprocessor preprocessor;
     auto preprocessed_aggs = agg.get_simple_aggregations(input.type(), preprocessor);
@@ -1105,6 +1134,8 @@ struct dispatch_rolling {
                               stream,
                               mr)
                           : nullptr;
+
+    cudf::debug::print<double>(intermediate->view(), std::cout, ",", stream.value());
 
     // finalize.
     auto const result_type = target_type(input.type(), agg.kind);

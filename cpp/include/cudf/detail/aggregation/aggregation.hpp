@@ -342,7 +342,10 @@ class std_var_aggregation : public rolling_aggregation {
  */
 class var_aggregation final : public std_var_aggregation {
  public:
-  var_aggregation(size_type ddof) : aggregation(aggregation::VARIANCE), std_var_aggregation{aggregation::VARIANCE, ddof} {}
+  var_aggregation(size_type ddof)
+    : aggregation(aggregation::VARIANCE), std_var_aggregation{aggregation::VARIANCE, ddof}
+  {
+  }
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -361,7 +364,10 @@ class var_aggregation final : public std_var_aggregation {
  */
 class std_aggregation final : public std_var_aggregation {
  public:
-  std_aggregation(size_type ddof) : aggregation(aggregation::STD), std_var_aggregation{aggregation::STD, ddof} {}
+  std_aggregation(size_type ddof)
+    : aggregation(aggregation::STD), std_var_aggregation{aggregation::STD, ddof}
+  {
+  }
 
   std::unique_ptr<aggregation> clone() const override
   {
