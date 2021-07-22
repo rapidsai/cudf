@@ -11,6 +11,7 @@ from cudf._lib.cpp.strings.extract cimport extract as cpp_extract
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def extract(Column source_strings, object pattern):
@@ -31,7 +32,7 @@ def extract(Column source_strings, object pattern):
             pattern_string
         ))
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=range(0, c_result.get()[0].num_columns())
     )

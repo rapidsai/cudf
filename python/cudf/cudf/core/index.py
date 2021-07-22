@@ -1362,53 +1362,42 @@ class BaseIndex(SingleColumnFrame, Serializable):
         ind.name = index.name
         return ind
 
-    @classmethod
-    def _from_table(cls, table):
-        if not isinstance(table, RangeIndex):
-            if table._num_columns == 0:
-                raise ValueError("Cannot construct Index from any empty Table")
-            if table._num_columns == 1:
-                values = next(iter(table._data.values()))
-
-                if isinstance(values, NumericalColumn):
-                    try:
-                        index_class_type = _dtype_to_index[values.dtype.type]
-                    except KeyError:
-                        index_class_type = GenericIndex
-                    out = super(BaseIndex, index_class_type).__new__(
-                        index_class_type
-                    )
-                elif isinstance(values, DatetimeColumn):
-                    out = super(BaseIndex, DatetimeIndex).__new__(
-                        DatetimeIndex
-                    )
-                elif isinstance(values, TimeDeltaColumn):
-                    out = super(BaseIndex, TimedeltaIndex).__new__(
-                        TimedeltaIndex
-                    )
-                elif isinstance(values, StringColumn):
-                    out = super(BaseIndex, StringIndex).__new__(StringIndex)
-                elif isinstance(values, CategoricalColumn):
-                    out = super(BaseIndex, CategoricalIndex).__new__(
-                        CategoricalIndex
-                    )
-                out._data = table._data
-                out._index = None
-                return out
-            else:
-                return cudf.MultiIndex._from_table(
-                    table, names=table._data.names
-                )
-        else:
-            return as_index(table)
-
     @property
     def _copy_construct_defaults(self):
         return {"data": self._column, "name": self.name}
 
     @classmethod
     def _from_data(cls, data, index=None):
-        return cls._from_table(SingleColumnFrame(data=data))
+        if not isinstance(data, cudf.core.column_accessor.ColumnAccessor):
+            data = cudf.core.column_accessor.ColumnAccessor(data)
+        if len(data) == 0:
+            raise ValueError("Cannot construct Index from any empty Table")
+        if len(data) == 1:
+            values = next(iter(data.values()))
+
+            if isinstance(values, NumericalColumn):
+                try:
+                    index_class_type = _dtype_to_index[values.dtype.type]
+                except KeyError:
+                    index_class_type = GenericIndex
+                out = super(BaseIndex, index_class_type).__new__(
+                    index_class_type
+                )
+            elif isinstance(values, DatetimeColumn):
+                out = super(BaseIndex, DatetimeIndex).__new__(DatetimeIndex)
+            elif isinstance(values, TimeDeltaColumn):
+                out = super(BaseIndex, TimedeltaIndex).__new__(TimedeltaIndex)
+            elif isinstance(values, StringColumn):
+                out = super(BaseIndex, StringIndex).__new__(StringIndex)
+            elif isinstance(values, CategoricalColumn):
+                out = super(BaseIndex, CategoricalIndex).__new__(
+                    CategoricalIndex
+                )
+            out._data = data
+            out._index = None
+            return out
+        else:
+            return cudf.MultiIndex._from_data(data)
 
     @property
     def _constructor_expanddim(self):

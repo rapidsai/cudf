@@ -4,13 +4,17 @@ import pyarrow as pa
 
 import cudf
 
+from cython.operator cimport dereference
 from libc.stdint cimport uint8_t
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column_view
+from cudf._lib.cpp.column.column cimport column, column_view
 from cudf._lib.cpp.table.table cimport table_view
+from cudf._lib.cpp.types cimport size_type
 from cudf._lib.table cimport Table
 
 try:
@@ -192,3 +196,113 @@ def _index_level_name(index_name, level, column_names):
         return index_name
     else:
         return f"__index_level_{level}__"
+
+
+# TODO: Look into simplifying calling APIs that don't use the index from this.
+# TODO: There's a bit of an inconsistency in use cases where calling functions
+# are calling this function once to get the index and once to get the data. The
+# index is converted to an index object, while the data is not. Perhaps this
+# should be made more consistent.
+cdef data_from_unique_ptr(
+    unique_ptr[table] c_tbl, column_names, index_names=None
+):
+    """Convert a libcudf table into a dict with an index.
+
+    This method is intended to provide the bridge between the columns returned
+    from calls to libcudf APIs and the cuDF Python Table objects, which require
+    named columns and a separate index.
+
+    Since cuDF Python has an independent representation of a table as a
+    collection of columns, this function simply returns a list of columns
+    suitable for conversion into data to be passed to cuDF constructors.
+    This method returns the columns of the table in the order they are
+    stored in libcudf, but calling code is responsible for partitioning and
+    labeling them as needed.
+
+    Parameters
+    ----------
+    c_tbl : unique_ptr[cudf::table]
+    index_names : iterable
+    column_names : iterable
+
+    Returns
+    -------
+    List[Column]
+        A list of the columns in the output table.
+    """
+    cdef vector[unique_ptr[column]] c_columns = move(c_tbl.get().release())
+    cdef vector[unique_ptr[column]].iterator it = c_columns.begin()
+
+    # First construct the index, if any
+    cdef int i
+
+    columns = [Column.from_unique_ptr(move(dereference(it+i)))
+               for i in range(c_columns.size())]
+
+    index = (
+        cudf.Index._from_data(
+            {
+                name: columns[i]
+                for i, name in enumerate(index_names)
+            }
+        )
+        if index_names is not None
+        else None
+    )
+    n_index_columns = len(index_names) if index_names is not None else 0
+    data = {
+        name: columns[i + n_index_columns]
+        for i, name in enumerate(column_names)
+    }
+    return data, index
+
+
+cdef data_from_table_view(
+    table_view tv,
+    object owner,
+    object column_names,
+    object index_names=None
+):
+    """
+    Given a ``cudf::table_view``, constructs a ``cudf.Table`` from it,
+    along with referencing an ``owner`` Python object that owns the memory
+    lifetime. If ``owner`` is a ``cudf.Table``, we reach inside of it and
+    reach inside of each ``cudf.Column`` to make the owner of each newly
+    created ``Buffer`` underneath the ``cudf.Column`` objects of the
+    created ``cudf.Table`` the respective ``Buffer`` from the relevant
+    ``cudf.Column`` of the ``owner`` ``cudf.Table``.
+    """
+    cdef size_type column_idx = 0
+    table_owner = isinstance(owner, Table)
+
+    # First construct the index, if any
+    index = None
+    if index_names is not None:
+        index_columns = []
+        for _ in index_names:
+            column_owner = owner
+            if table_owner:
+                column_owner = owner._index._columns[column_idx]
+            index_columns.append(
+                Column.from_column_view(
+                    tv.column(column_idx),
+                    column_owner
+                )
+            )
+            column_idx += 1
+        index = cudf.Index._from_data(dict(zip(index_names, index_columns)))
+
+    # Construct the data dict
+    cdef size_type source_column_idx = 0
+    data_columns = []
+    for _ in column_names:
+        column_owner = owner
+        if table_owner:
+            column_owner = owner._columns[source_column_idx]
+        data_columns.append(
+            Column.from_column_view(tv.column(column_idx), column_owner)
+        )
+        column_idx += 1
+        source_column_idx += 1
+
+    return dict(zip(column_names, data_columns)), index

@@ -195,9 +195,9 @@ class GroupBy(Serializable):
         # Note: When there are no key columns, the below produces
         # a Float64Index, while Pandas returns an Int64Index
         # (GH: 6945)
-        result = self._groupby.aggregate(self.obj, normalized_aggs)
-
-        result = cudf.DataFrame._from_table(result)
+        result = cudf.DataFrame._from_data(
+            *self._groupby.aggregate(self.obj, normalized_aggs)
+        )
 
         if self._sort:
             result = result.sort_index()
@@ -226,7 +226,7 @@ class GroupBy(Serializable):
 
         # copy categorical information from keys to the result index:
         result.index._copy_type_metadata(self.grouping.keys)
-        result._index = cudf.core.index.Index._from_table(result._index)
+        result._index = cudf.Index(result._index)
 
         if not self._as_index:
             for col_name in reversed(self.grouping._named_columns):
@@ -288,9 +288,7 @@ class GroupBy(Serializable):
 
     def _grouped(self):
         grouped_keys, grouped_values, offsets = self._groupby.groups(self.obj)
-
-        grouped_keys = cudf.Index._from_table(grouped_keys)
-        grouped_values = self.obj.__class__._from_table(grouped_values)
+        grouped_values = self.obj.__class__._from_data(*grouped_values)
         grouped_values._copy_type_metadata(self.obj)
         group_names = grouped_keys.unique()
         return (group_names, offsets, grouped_keys, grouped_values)
@@ -819,10 +817,9 @@ class GroupBy(Serializable):
         """Internal implementation for `ffill` and `bfill`
         """
         value_columns = self.grouping.values
-        result = self._groupby.replace_nulls(
-            Table(value_columns._data), method
+        result = self.obj.__class__._from_data(
+            self._groupby.replace_nulls(Table(value_columns._data), method)
         )
-        result = self.obj.__class__._from_table(result)
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(value_columns)
 
@@ -936,9 +933,9 @@ class GroupBy(Serializable):
             return getattr(self, method, limit)()
 
         value_columns = self.grouping.values
-        _, grouped_values, _ = self._groupby.groups(Table(value_columns._data))
+        _, (data, index), _ = self._groupby.groups(Table(value_columns._data))
 
-        grouped = self.obj.__class__._from_data(grouped_values._data)
+        grouped = self.obj.__class__._from_data(data, index)
         result = grouped.fillna(
             value=value, inplace=inplace, axis=axis, limit=limit
         )
@@ -997,8 +994,9 @@ class GroupBy(Serializable):
             fill_value = [fill_value] * num_columns_to_shift
 
         value_columns = self.obj._data.select_by_label(value_column_names)
-        result = self._groupby.shift(Table(value_columns), periods, fill_value)
-        return self.obj.__class__._from_table(result)
+        return self.obj.__class__._from_data(
+            *self._groupby.shift(Table(value_columns), periods, fill_value)
+        )
 
     def _mimic_pandas_order(
         self, result: DataFrameOrSeries
@@ -1007,11 +1005,10 @@ class GroupBy(Serializable):
         matching that of pandas. This also adds appropriate indices.
         """
         sorted_order_column = arange(0, result._data.nrows)
-        _, order, _ = self._groupby.groups(
+        _, (order, _), _ = self._groupby.groups(
             Table({"sorted_order_column": sorted_order_column})
         )
-        order = order._data["sorted_order_column"]
-        gather_map = order.argsort()
+        gather_map = order["sorted_order_column"].argsort()
         result = result.take(gather_map)
         result.index = self.obj.index
         return result

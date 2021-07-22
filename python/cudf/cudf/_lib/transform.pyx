@@ -27,6 +27,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.types cimport underlying_type_t_type_id
+from cudf._lib.utils cimport data_from_unique_ptr
 
 from numba.np import numpy_support
 
@@ -151,7 +152,7 @@ def table_encode(Table input):
         c_result = move(libcudf_transform.encode(c_input))
 
     return (
-        Table.from_unique_ptr(
+        *data_from_unique_ptr(
             move(c_result.first),
             column_names=input._column_names,
         ),

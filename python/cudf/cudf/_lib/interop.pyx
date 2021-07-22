@@ -21,6 +21,7 @@ from cudf._lib.cpp.interop cimport (
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.table cimport Table
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def from_dlpack(dlpack_capsule):
@@ -40,7 +41,7 @@ def from_dlpack(dlpack_capsule):
             cpp_from_dlpack(dlpack_tensor)
         )
 
-    res = Table.from_unique_ptr(
+    res = data_from_unique_ptr(
         move(c_result),
         column_names=range(0, c_result.get()[0].num_columns())
     )
@@ -164,10 +165,8 @@ def from_arrow(
     with nogil:
         c_result = move(cpp_from_arrow(cpp_arrow_table.get()[0]))
 
-    out_table = Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=column_names,
         index_names=index_names
     )
-
-    return out_table

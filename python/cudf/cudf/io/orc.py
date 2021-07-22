@@ -290,8 +290,8 @@ def read_orc(
             stripes = selected_stripes
 
     if engine == "cudf":
-        df = DataFrame._from_table(
-            liborc.read_orc(
+        return DataFrame._from_data(
+            *liborc.read_orc(
                 filepaths_or_buffers,
                 columns,
                 stripes,

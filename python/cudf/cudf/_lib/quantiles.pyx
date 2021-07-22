@@ -32,6 +32,7 @@ from cudf._lib.cpp.types cimport (
     order_info,
     sorted,
 )
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def quantile(
@@ -118,7 +119,7 @@ def quantiles(Table source_table,
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names
     )

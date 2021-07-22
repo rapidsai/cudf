@@ -13,6 +13,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.table cimport Table
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def interleave_columns(Table source_table):
@@ -35,7 +36,7 @@ def tile(Table source_table, size_type count):
     with nogil:
         c_result = move(cpp_tile(c_view, c_count))
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=source_table._index_names
