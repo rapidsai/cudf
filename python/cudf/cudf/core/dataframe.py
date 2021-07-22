@@ -7084,116 +7084,119 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             **kwargs,
         )
 
+    def _apply_support_method_axis_0(self, method, *args, **kwargs):
+        result = [
+            getattr(self[col], method)(*args, **kwargs)
+            for col in self._data.names
+        ]
+
+        if isinstance(result[0], Series):
+            support_result = result
+            result = DataFrame(index=support_result[0].index)
+            for idx, col in enumerate(self._data.names):
+                result[col] = support_result[idx]
+        else:
+            result = Series(result)
+            result = result.set_index(self._data.names)
+        return result
+
+    def _apply_support_method_axis_1(self, method, *args, **kwargs):
+        # for dask metadata compatibility
+        skipna = kwargs.pop("skipna", None)
+        if method not in _cupy_nan_methods_map and skipna not in (
+            None,
+            True,
+            1,
+        ):
+            raise NotImplementedError(
+                f"Row-wise operation to calculate '{method}'"
+                f" currently do not support `skipna=False`."
+            )
+
+        level = kwargs.pop("level", None)
+        if level not in (None,):
+            raise NotImplementedError(
+                "Row-wise operations currently do not support `level`."
+            )
+
+        numeric_only = kwargs.pop("numeric_only", None)
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "Row-wise operations currently do not "
+                "support `numeric_only=False`."
+            )
+
+        min_count = kwargs.pop("min_count", None)
+        if min_count not in (None, 0):
+            raise NotImplementedError(
+                "Row-wise operations currently do not " "support `min_count`."
+            )
+
+        bool_only = kwargs.pop("bool_only", None)
+        if bool_only not in (None, True):
+            raise NotImplementedError(
+                "Row-wise operations currently do not " "support `bool_only`."
+            )
+
+        prepared, mask, common_dtype = self._prepare_for_rowwise_op(
+            method, skipna
+        )
+        for col in prepared._data.names:
+            if prepared._data[col].nullable:
+                prepared._data[col] = (
+                    prepared._data[col]
+                    .astype(
+                        cudf.utils.dtypes.get_min_float_dtype(
+                            prepared._data[col]
+                        )
+                        if not is_datetime_dtype(common_dtype)
+                        else np.dtype("float64")
+                    )
+                    .fillna(np.nan)
+                )
+        arr = cupy.asarray(prepared.as_gpu_matrix())
+
+        if skipna is not False and method in _cupy_nan_methods_map:
+            method = _cupy_nan_methods_map[method]
+
+        result = getattr(cupy, method)(arr, axis=1, **kwargs)
+
+        if result.ndim == 1:
+            type_coerced_methods = {
+                "count",
+                "min",
+                "max",
+                "sum",
+                "prod",
+                "cummin",
+                "cummax",
+                "cumsum",
+                "cumprod",
+            }
+            result_dtype = (
+                common_dtype
+                if method in type_coerced_methods
+                or is_datetime_dtype(common_dtype)
+                else None
+            )
+            result = column.as_column(result, dtype=result_dtype)
+            if mask is not None:
+                result = result.set_mask(
+                    cudf._lib.transform.bools_to_mask(mask._column)
+                )
+            return Series(result, index=self.index, dtype=result_dtype,)
+        else:
+            result_df = DataFrame(result).set_index(self.index)
+            result_df.columns = prepared.columns
+            return result_df
+
     def _apply_support_method(self, method, axis=0, *args, **kwargs):
         assert axis in (None, 0, 1)
 
         if axis in (None, 0):
-            result = [
-                getattr(self[col], method)(*args, **kwargs)
-                for col in self._data.names
-            ]
-
-            if isinstance(result[0], Series):
-                support_result = result
-                result = DataFrame(index=support_result[0].index)
-                for idx, col in enumerate(self._data.names):
-                    result[col] = support_result[idx]
-            else:
-                result = Series(result)
-                result = result.set_index(self._data.names)
-            return result
-
+            return self._apply_support_method_axis_0(method, *args, **kwargs)
         elif axis == 1:
-            # for dask metadata compatibility
-            skipna = kwargs.pop("skipna", None)
-            if method not in _cupy_nan_methods_map and skipna not in (
-                None,
-                True,
-                1,
-            ):
-                raise NotImplementedError(
-                    f"Row-wise operation to calculate '{method}'"
-                    f" currently do not support `skipna=False`."
-                )
-
-            level = kwargs.pop("level", None)
-            if level not in (None,):
-                raise NotImplementedError(
-                    "Row-wise operations currently do not support `level`."
-                )
-
-            numeric_only = kwargs.pop("numeric_only", None)
-            if numeric_only not in (None, True):
-                raise NotImplementedError(
-                    "Row-wise operations currently do not "
-                    "support `numeric_only=False`."
-                )
-
-            min_count = kwargs.pop("min_count", None)
-            if min_count not in (None, 0):
-                raise NotImplementedError(
-                    "Row-wise operations currently do not "
-                    "support `min_count`."
-                )
-
-            bool_only = kwargs.pop("bool_only", None)
-            if bool_only not in (None, True):
-                raise NotImplementedError(
-                    "Row-wise operations currently do not "
-                    "support `bool_only`."
-                )
-
-            prepared, mask, common_dtype = self._prepare_for_rowwise_op(
-                method, skipna
-            )
-            for col in prepared._data.names:
-                if prepared._data[col].nullable:
-                    prepared._data[col] = (
-                        prepared._data[col]
-                        .astype(
-                            cudf.utils.dtypes.get_min_float_dtype(
-                                prepared._data[col]
-                            )
-                            if not is_datetime_dtype(common_dtype)
-                            else np.dtype("float64")
-                        )
-                        .fillna(np.nan)
-                    )
-            arr = cupy.asarray(prepared.as_gpu_matrix())
-
-            if skipna is not False and method in _cupy_nan_methods_map:
-                method = _cupy_nan_methods_map[method]
-
-            result = getattr(cupy, method)(arr, axis=1, **kwargs)
-
-            if result.ndim == 1:
-                type_coerced_methods = {
-                    "count",
-                    "min",
-                    "max",
-                    "sum",
-                    "prod",
-                    "cummin",
-                    "cummax",
-                    "cumsum",
-                    "cumprod",
-                }
-                result_dtype = (
-                    common_dtype
-                    if method in type_coerced_methods
-                    or is_datetime_dtype(common_dtype)
-                    else None
-                )
-                result = column.as_column(result, dtype=result_dtype)
-                if mask is not None:
-                    result = result.set_mask(
-                        cudf._lib.transform.bools_to_mask(mask._column)
-                    )
-                return Series(result, index=self.index, dtype=result_dtype,)
-            else:
-                result_df = DataFrame(result).set_index(self.index)
-                result_df.columns = prepared.columns
-                return result_df
+            return self._apply_support_method_axis_1(method, *args, **kwargs)
 
     def _columns_view(self, columns):
         """
