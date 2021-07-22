@@ -4324,8 +4324,6 @@ class Series(SingleColumnFrame, Serializable):
         3    5
         4    5
         """
-        assert axis in (None, 0)
-
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
 
@@ -4937,7 +4935,11 @@ class Series(SingleColumnFrame, Serializable):
         -0.20454263717316112
         """
 
-        assert method in ("pearson",) and min_periods in (None,)
+        if method not in ("pearson",):
+            raise ValueError(f"Unknown method {method}")
+
+        if min_periods not in ("None",):
+            raise NotImplementedError("Unsupported argument 'min_periods'")
 
         if self.empty or other.empty:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
@@ -5386,7 +5388,8 @@ class Series(SingleColumnFrame, Serializable):
         2     76
         dtype: int32
         """
-        assert stop > 0
+        if not stop > 0:
+            raise ValueError("stop must be a positive integer.")
 
         initial_hash = [hash(self.name) & 0xFFFFFFFF] if use_name else None
         hashed_values = Series(self._hash(initial_hash))
