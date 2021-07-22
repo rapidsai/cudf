@@ -117,6 +117,7 @@ class rolling_aggregation : public virtual aggregation {
 
  protected:
   rolling_aggregation() {}
+  rolling_aggregation(aggregation::Kind a) : aggregation{a} {}
 };
 
 enum class udf_type : bool { CUDA, PTX };
