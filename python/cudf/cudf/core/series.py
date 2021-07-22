@@ -3994,6 +3994,21 @@ class Series(SingleColumnFrame, Serializable):
     #
     # Stats
     #
+    def _reduce(
+        self, op, axis=None, level=None, numeric_only=None, **kwargs,
+    ):
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
+        return getattr(self._column, op)(**kwargs)
+
     def count(self, level=None, **kwargs):
         """
         Return number of non-NA/null observations in the Series
@@ -4056,19 +4071,15 @@ class Series(SingleColumnFrame, Serializable):
         >>> ser.min()
         1
         """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.min(skipna=skipna, dtype=dtype)
+        return self._reduce(
+            "min",
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            level=level,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
 
     def max(
         self,
@@ -4106,19 +4117,15 @@ class Series(SingleColumnFrame, Serializable):
         >>> ser.max()
         5
         """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.max(skipna=skipna, dtype=dtype)
+        return self._reduce(
+            "max",
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            level=level,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
 
     def sum(
         self,
@@ -4165,20 +4172,15 @@ class Series(SingleColumnFrame, Serializable):
         >>> ser.sum()
         15
         """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.sum(
-            skipna=skipna, dtype=dtype, min_count=min_count
+        return self._reduce(
+            "sum",
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            level=level,
+            numeric_only=numeric_only,
+            min_count=min_count,
+            **kwargs,
         )
 
     def product(
@@ -4226,20 +4228,15 @@ class Series(SingleColumnFrame, Serializable):
         >>> ser.product()
         120
         """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.product(
-            skipna=skipna, dtype=dtype, min_count=min_count
+        return self._reduce(
+            "product",
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            level=level,
+            numeric_only=numeric_only,
+            min_count=min_count,
+            **kwargs,
         )
 
     # Alias for pandas compatibility.
@@ -4507,19 +4504,14 @@ class Series(SingleColumnFrame, Serializable):
         >>> ser.mean()
         15.5
         """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.mean(skipna=skipna)
+        return self._reduce(
+            "mean",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
 
     def std(
         self,
@@ -4572,19 +4564,15 @@ class Series(SingleColumnFrame, Serializable):
         >>> series.std(ddof=2)
         15.05545305418162
         """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.std(skipna=skipna, ddof=ddof)
+        return self._reduce(
+            "std",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            numeric_only=numeric_only,
+            ddof=ddof,
+            **kwargs,
+        )
 
     def var(
         self,
@@ -4635,22 +4623,18 @@ class Series(SingleColumnFrame, Serializable):
         >>> series.var()
         33.7
         """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.var(skipna=skipna, ddof=ddof)
+        return self._reduce(
+            "var",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            numeric_only=numeric_only,
+            ddof=ddof,
+            **kwargs,
+        )
 
     def sum_of_squares(self, dtype=None):
-        return self._column.sum_of_squares(dtype=dtype)
+        return self._reduce("sum_of_squares", dtype=dtype)
 
     def median(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
@@ -4688,18 +4672,14 @@ class Series(SingleColumnFrame, Serializable):
         >>> ser.median()
         17.0
         """
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.median(skipna=skipna)
+        return self._reduce(
+            "median",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
 
     def mode(self, dropna=True):
         """
