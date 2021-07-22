@@ -1486,7 +1486,7 @@ class Frame(libcudf.table.Table):
             result = interpolator(to_interp)            
             columns[colname] = result
 
-        return self.__class__(columns)
+        return self.__class__(columns, index=self.index.copy())
 
     def _quantiles(
         self,
