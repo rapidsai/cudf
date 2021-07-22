@@ -61,9 +61,6 @@ struct compute_size_and_concatenate_fn {
   // If d_chars != nullptr: only concatenate strings.
   char* d_chars{nullptr};
 
-  // We need to set `1` or `0` for the validities of the output strings.
-  // int8_t* d_validities{nullptr};
-
   __device__ bool output_is_null(size_type const idx,
                                  size_type const start_idx,
                                  size_type const end_idx) const noexcept
@@ -83,7 +80,6 @@ struct compute_size_and_concatenate_fn {
 
     if (!d_chars && output_is_null(idx, start_idx, end_idx)) {
       d_offsets[idx] = 0;
-      // d_validities[idx] = false;
       return;
     }
 
@@ -99,7 +95,6 @@ struct compute_size_and_concatenate_fn {
 
       if (!d_chars && (null_element && !string_narep_dv.is_valid())) {
         d_offsets[idx] = 0;
-        // d_validities[idx] = false;
         return;  // early termination: the entire list of strings will result in a null string
       }
 
@@ -120,11 +115,7 @@ struct compute_size_and_concatenate_fn {
 
     // If there are all null elements, the output should be the same as having an empty list input:
     // a null or an empty string
-    if (!d_chars) {
-      d_offsets[idx] = has_valid_element ? size_bytes : 0;
-      // d_validities[idx] =
-      //  has_valid_element || empty_list_policy == output_if_empty_list::EMPTY_STRING;
-    }
+    if (!d_chars) { d_offsets[idx] = has_valid_element ? size_bytes : 0; }
   }
 };
 
