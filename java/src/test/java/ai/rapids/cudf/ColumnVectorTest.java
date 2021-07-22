@@ -2634,79 +2634,71 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testRepeatStrings() {
+  void testRepeatStringsWithScalarRepeatTimes() {
     // Empty strings column.
-    try (ColumnVector sv = ColumnVector.fromStrings("", "", "");
-         ColumnVector result = sv.repeatStrings(1)) {
-      assertColumnsAreEqual(sv, result);
+    try (ColumnVector input = ColumnVector.fromStrings("", "", "");
+         ColumnVector results = input.repeatStrings(1)) {
+      assertColumnsAreEqual(input, results);
     }
 
     // Zero repeatTimes.
-    try (ColumnVector sv = ColumnVector.fromStrings("abc", "xyz", "123");
-         ColumnVector result = sv.repeatStrings(0);
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "xyz", "123");
+         ColumnVector results = input.repeatStrings(0);
          ColumnVector expected = ColumnVector.fromStrings("", "", "")) {
-      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, results);
     }
 
     // Negative repeatTimes.
-    try (ColumnVector sv = ColumnVector.fromStrings("abc", "xyz", "123");
-         ColumnVector result = sv.repeatStrings(-1);
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "xyz", "123");
+         ColumnVector results = input.repeatStrings(-1);
          ColumnVector expected = ColumnVector.fromStrings("", "", "")) {
-      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, results);
     }
 
     // Strings column containing both null and empty, output is copied exactly from input.
-    try (ColumnVector sv = ColumnVector.fromStrings("abc", "", null, "123", null);
-         ColumnVector result = sv.repeatStrings(1)) {
-      assertColumnsAreEqual(sv, result);
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector results = input.repeatStrings(1)) {
+      assertColumnsAreEqual(input, results);
     }
 
     // Strings column containing both null and empty.
-    try (ColumnVector sv = ColumnVector.fromStrings("abc", "", null, "123", null);
-         ColumnVector result = sv.repeatStrings( 2);
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector results = input.repeatStrings( 2);
          ColumnVector expected = ColumnVector.fromStrings("abcabc", "", null, "123123", null)) {
-      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, results);
     }
   }
 
   @Test
   void testRepeatStringsWithColumnRepeatTimes() {
     // Empty strings column.
-    try (ColumnVector sv = ColumnVector.fromStrings("", "", "");
+    try (ColumnVector input = ColumnVector.fromStrings("", "", "");
          ColumnVector repeatTimes = ColumnVector.fromInts(-1, 0, 1);
-         ColumnVector result = sv.repeatStrings(repeatTimes)) {
-      assertColumnsAreEqual(sv, result);
+         ColumnVector results = input.repeatStrings(repeatTimes)) {
+      assertColumnsAreEqual(input, results);
     }
 
-    // Zero repeatTimes.
-    try (ColumnVector sv = ColumnVector.fromStrings("abc", "xyz", "123");
-         ColumnVector repeatTimes = ColumnVector.fromInts(0, 0, 0);
-         ColumnVector result = sv.repeatStrings(repeatTimes);
-         ColumnVector expected = ColumnVector.fromStrings("", "", "")) {
-      assertColumnsAreEqual(expected, result);
+    // Zero and negative repeatTimes.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "xyz", "123", "456", "789", "a1");
+         ColumnVector repeatTimes = ColumnVector.fromInts(-200, -100, 0, 0, 1, 2);
+         ColumnVector results = input.repeatStrings(repeatTimes);
+         ColumnVector expected = ColumnVector.fromStrings("", "", "", "", "789", "a1a1")) {
+      assertColumnsAreEqual(expected, results);
     }
 
-    // Negative repeatTimes.
-    try (ColumnVector sv = ColumnVector.fromStrings("abc", "xyz", "123");
-         ColumnVector repeatTimes = ColumnVector.fromInts(-100, -200, -300);
-         ColumnVector result = sv.repeatStrings(repeatTimes);
-         ColumnVector expected = ColumnVector.fromStrings("", "", "")) {
-      assertColumnsAreEqual(expected, result);
-    }
-
-    // Strings column containing both null and empty, output is copied exactly from input.
-    try (ColumnVector sv = ColumnVector.fromStrings("abc", "", null, "123", null);
+    // Strings column contains both null and empty, output is copied exactly from input.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
          ColumnVector repeatTimes = ColumnVector.fromInts(1, 1, 1, 1, 1);
-         ColumnVector result = sv.repeatStrings(repeatTimes)) {
-      assertColumnsAreEqual(sv, result);
+         ColumnVector results = input.repeatStrings(repeatTimes)) {
+      assertColumnsAreEqual(input, results);
     }
 
-    // Strings column containing both null and empty.
-    try (ColumnVector sv = ColumnVector.fromStrings("abc", "", null, "123", null);
+    // Strings column contains both null and empty.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
          ColumnVector repeatTimes = ColumnVector.fromInts(2, 3, 1, 3, 2);
-         ColumnVector result = sv.repeatStrings(repeatTimes);
+         ColumnVector results = input.repeatStrings(repeatTimes);
          ColumnVector expected = ColumnVector.fromStrings("abcabc", "", null, "123123123", null)) {
-      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, results);
     }
   }
 
