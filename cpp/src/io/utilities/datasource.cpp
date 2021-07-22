@@ -41,7 +41,7 @@ class file_source : public datasource {
 
   bool supports_device_read() const override { return _cufile_in != nullptr; }
 
-  bool is_device_read_preferred(size_t size) const
+  bool is_device_read_preferred(size_t size) const override
   {
     return _cufile_in != nullptr && _cufile_in->is_cufile_io_preferred(size);
   }
@@ -65,6 +65,17 @@ class file_source : public datasource {
 
     auto const read_size = std::min(size, _file.size() - offset);
     return _cufile_in->read(offset, read_size, dst, stream);
+  }
+
+  std::future<size_t> device_read_async(size_t offset,
+                                        size_t size,
+                                        uint8_t* dst,
+                                        rmm::cuda_stream_view stream) override
+  {
+    CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
+
+    auto const read_size = std::min(size, _file.size() - offset);
+    return _cufile_in->read_async(offset, read_size, dst, stream);
   }
 
   size_t size() const override { return _file.size(); }

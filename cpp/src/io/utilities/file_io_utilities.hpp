@@ -17,6 +17,8 @@
 #pragma once
 
 #ifdef CUFILE_FOUND
+#include "thread_pool.hpp"
+
 #include <cufile.h>
 #include <cudf_test/file_utilities.hpp>
 #endif
@@ -106,6 +108,23 @@ class cufile_input : public cufile_io_base {
    * @return The number of bytes read
    */
   virtual size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) = 0;
+
+  /**
+   * @brief Asynchronously reads into existing device memory.
+   *
+   *  @throws cudf::logic_error on cuFile error
+   *
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to read
+   * @param dst Address of the existing device memory
+   * @param stream CUDA stream to use
+   *
+   * @return The number of bytes read as an std::future
+   */
+  virtual std::future<size_t> read_async(size_t offset,
+                                         size_t size,
+                                         uint8_t* dst,
+                                         rmm::cuda_stream_view stream) = 0;
 };
 
 /**
@@ -202,9 +221,15 @@ class cufile_input_impl final : public cufile_input {
 
   size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) override;
 
+  std::future<size_t> read_async(size_t offset,
+                                 size_t size,
+                                 uint8_t* dst,
+                                 rmm::cuda_stream_view stream) override;
+
  private:
   cufile_shim const* shim = nullptr;
   cufile_registered_file const cf_file;
+  cudf::detail::thread_pool pool;
 };
 
 /**

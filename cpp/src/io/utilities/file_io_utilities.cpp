@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 #include "file_io_utilities.hpp"
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/device_buffer.hpp>
 
 #include <dlfcn.h>
 
 #include <fstream>
+#include <numeric>
 
 namespace cudf {
 namespace io {
@@ -166,8 +168,11 @@ void cufile_registered_file::register_handle()
 cufile_registered_file::~cufile_registered_file() { shim->handle_deregister(cf_handle); }
 
 cufile_input_impl::cufile_input_impl(std::string const& filepath)
-  : shim{cufile_shim::instance()}, cf_file(shim, filepath, O_RDONLY | O_DIRECT)
+  : shim{cufile_shim::instance()},
+    cf_file(shim, filepath, O_RDONLY | O_DIRECT),
+    pool(16)  // The benefit from multithreaded read plateaus around 16 threads
 {
+  pool.sleep_duration = 10;
 }
 
 std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
@@ -175,10 +180,47 @@ std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
                                                             rmm::cuda_stream_view stream)
 {
   rmm::device_buffer out_data(size, stream);
-  CUDF_EXPECTS(shim->read(cf_file.handle(), out_data.data(), size, offset, 0) != -1,
-               "cuFile error reading from a file");
-
+  auto read_size = read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
+  out_data.resize(read_size, stream);
   return datasource::buffer::create(std::move(out_data));
+}
+
+std::future<size_t> cufile_input_impl::read_async(size_t offset,
+                                                  size_t size,
+                                                  uint8_t* dst,
+                                                  rmm::cuda_stream_view stream)
+{
+  int device;
+  cudaGetDevice(&device);
+
+  auto read_slice = [=](void* dst, size_t size, size_t offset) -> ssize_t {
+    cudaSetDevice(device);
+    auto read_size = shim->read(cf_file.handle(), dst, size, offset, 0);
+    CUDF_EXPECTS(read_size != -1, "cuFile error reading from a file");
+    return read_size;
+  };
+
+  std::vector<std::future<ssize_t>> slice_tasks;
+  constexpr size_t max_slice_bytes = 4 * 1024 * 1024;
+  size_t n_slices                  = util::div_rounding_up_safe(size, max_slice_bytes);
+  size_t slice_size                = max_slice_bytes;
+  size_t slice_offset              = 0;
+  for (size_t t = 0; t < n_slices; ++t) {
+    void* dst_slice = dst + slice_offset;
+
+    if (t == n_slices - 1) { slice_size = size % max_slice_bytes; }
+    slice_tasks.push_back(pool.submit(read_slice, dst_slice, slice_size, offset + slice_offset));
+
+    slice_offset += slice_size;
+  }
+  auto waiter = [](decltype(slice_tasks) slice_tasks) -> size_t {
+    return std::accumulate(slice_tasks.begin(), slice_tasks.end(), 0, [](auto sum, auto& task) {
+      return sum + task.get();
+    });
+  };
+  // The future returned from this function is deferred, not async becasue we want to avoid creating
+  // threads for each read_async call. This overhead is significant in case of multiple small reads.
+  return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
 
 size_t cufile_input_impl::read(size_t offset,
@@ -186,10 +228,8 @@ size_t cufile_input_impl::read(size_t offset,
                                uint8_t* dst,
                                rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(shim->read(cf_file.handle(), dst, size, offset, 0) != -1,
-               "cuFile error reading from a file");
-  // always read the requested size for now
-  return size;
+  auto result = read_async(offset, size, dst, stream);
+  return result.get();
 }
 
 cufile_output_impl::cufile_output_impl(std::string const& filepath)
