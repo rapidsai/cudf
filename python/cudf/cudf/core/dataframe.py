@@ -7084,37 +7084,26 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             **kwargs,
         )
 
-    _support_axis_lookup = {
-        0: 0,
-        1: 1,
-        None: 0,
-        "index": 0,
-        "columns": 1,
-    }
-
     def _apply_support_method(self, method, axis=0, *args, **kwargs):
-        axis = self._support_axis_lookup[axis]
+        assert axis in (None, 0, 1)
 
-        if axis == 0:
-            kwargs.pop("level", None)
-            kwargs.pop("numeric_only", None)
+        if axis in (None, 0):
             result = [
-                getattr(self._data[col], method)(*args, **kwargs)
+                getattr(self[col], method)(*args, **kwargs)
                 for col in self._data.names
             ]
 
             if isinstance(result[0], Series):
-                result = self._from_data(
-                    {col: result[i] for i, col in enumerate(self._data.names)},
-                    result[0].index,
-                )
+                support_result = result
+                result = DataFrame(index=support_result[0].index)
+                for idx, col in enumerate(self._data.names):
+                    result[col] = support_result[idx]
             else:
-                result = Series._from_data(
-                    {None: result}, as_index(self._data.names)
-                )
+                result = Series(result)
+                result = result.set_index(self._data.names)
             return result
 
-        else:
+        elif axis == 1:
             # for dask metadata compatibility
             skipna = kwargs.pop("skipna", None)
             if method not in _cupy_nan_methods_map and skipna not in (
