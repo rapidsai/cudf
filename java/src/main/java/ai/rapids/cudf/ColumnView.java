@@ -2387,12 +2387,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Struct to hold the results output from the function
-   * {@link #repeatStringsOutputSizes(ColumnView) repeatStringsOutputSizes}.
+   * {@link #computeOutputSizesRepeatStrings(ColumnView) computeOutputSizesRepeatStrings}.
    */
-  static final class RepeatedStringSizes implements AutoCloseable {
+  static final class OutputSizesRepeatStrings implements AutoCloseable {
     public final ColumnVector stringSizes;
     public final long totalStringSize;
-    RepeatedStringSizes(ColumnVector stringSizes, long totalStringSize) {
+    OutputSizesRepeatStrings(ColumnVector stringSizes, long totalStringSize) {
       this.stringSizes = stringSizes;
       this.totalStringSize = totalStringSize;
     }
@@ -2413,14 +2413,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * {@link #repeatStringsWithColumnRepeatTimes}).
    *
    * @param repeatTimes The column containing numbers of times each input string is repeated.
-   * @return An instance of RepeatedStringSizes class which stores a Java column vector containing
+   * @return An instance of OutputSizesRepeatStrings class which stores a Java column vector containing
    *         the computed sizes of the repeated strings, and a long value storing sum of all these
    *         computed sizes.
    */
-  public final RepeatedStringSizes repeatStringsOutputSizes(ColumnView repeatTimes) {
+  public final OutputSizesRepeatStrings computeOutputSizesRepeatStrings(ColumnView repeatTimes) {
     assert type.equals(DType.STRING) : "column type must be String";
-    final long[] sizes = repeatStringsOutputSizes(getNativeView(), repeatTimes.getNativeView());
-    return new RepeatedStringSizes(new ColumnVector(sizes[0]), sizes[1]);
+    final long[] sizes = computeOutputSizesRepeatStrings(getNativeView(), repeatTimes.getNativeView());
+    return new OutputSizesRepeatStrings(new ColumnVector(sizes[0]), sizes[1]);
   }
 
    /**
@@ -3159,7 +3159,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         containing the computed sizes of the repeated strings, and the second value is the sum
    *         of all those string sizes.
    */
-  private static native long[] repeatStringsOutputSizes(long stringsHandle, long repeatTimesHandle);
+  private static native long[] computeOutputSizesRepeatStrings(long stringsHandle, long repeatTimesHandle);
 
   private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
 

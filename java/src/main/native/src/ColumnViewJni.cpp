@@ -1977,7 +1977,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_repeatStringsWithColumnRe
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_computeRepeatStringsOutputSizes(
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_computeOutputSizesRepeatStrings(
     JNIEnv *env, jclass, jlong strings_handle, jlong repeat_times_handle) {
   JNI_NULL_CHECK(env, strings_handle, "strings handle is null", 0);
   JNI_NULL_CHECK(env, repeat_times_handle, "repeat_times handle is null", 0);
