@@ -19,4 +19,13 @@ When ``LIBCUDF_CUFILE_POLICY`` is set to "GDS" and a GDS API call fails for any 
 When ``LIBCUDF_CUFILE_POLICY`` is set to "ALWAYS" and a GDS API call fails for any reason (unlikely, given that the compatibility mode is on), 
 cuDF throws an exception to propagate the error to te user.
 
+Operations that support the use of GPUDirect Storage:
+
+- `read_avro`
+- `read_parquet`
+- `read_orc`
+- `to_csv`
+- `to_parquet`
+- `to_orc`
+
 NOTE: current GDS integration is not fully optimized and enabling GDS will not lead to performance improvements in all cases.

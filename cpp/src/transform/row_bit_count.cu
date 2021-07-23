@@ -334,10 +334,21 @@ template <>
 __device__ size_type row_size_functor::operator()<string_view>(column_device_view const& col,
                                                                row_span const& span)
 {
-  column_device_view const& offsets = col.child(strings_column_view::offsets_column_index);
   auto const num_rows{span.row_end - span.row_start};
+  if (num_rows == 0) {
+    // For empty columns, the `span` cannot have a row size.
+    return 0;
+  }
+
+  auto const& offsets = col.child(strings_column_view::offsets_column_index);
   auto const row_start{span.row_start + col.offset()};
   auto const row_end{span.row_end + col.offset()};
+  if (row_start == row_end) {
+    // Empty row contributes 0 bits to row_bit_count().
+    // Note: Validity bit doesn't count either. There are no rows in the child column
+    //       corresponding to this span.
+    return 0;
+  }
 
   auto const offsets_size  = sizeof(offset_type) * CHAR_BIT;
   auto const validity_size = col.nullable() ? 1 : 0;
@@ -434,7 +445,7 @@ __global__ void compute_row_sizes(device_span<column_device_view const> cols,
     size += cudf::type_dispatcher(col.type(), row_size_functor{}, col, cur_span);
 
     // if this is a list column, update the working span from our offsets
-    if (col.type().id() == type_id::LIST) {
+    if (col.type().id() == type_id::LIST && col.size() > 0) {
       column_device_view const& offsets = col.child(lists_column_view::offsets_column_index);
       auto const base_offset            = offsets.data<offset_type>()[col.offset()];
       cur_span.row_start =
