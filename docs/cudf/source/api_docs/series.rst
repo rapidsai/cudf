@@ -1,6 +1,3 @@
-.. meta::
-   :my-var: a-for-apple
-
 ======
 Series
 ======
@@ -40,6 +37,10 @@ Conversion
    Series.copy
    Series.to_list
    Series.__array__
+   Series.as_index
+   Series.as_mask
+   Series.scale
+
 
 Indexing, iteration
 -------------------
@@ -63,7 +64,9 @@ Binary operator functions
 
    Series.add
    Series.sub
+   Series.subtract
    Series.mul
+   Series.multiply
    Series.truediv
    Series.floordiv
    Series.mod
@@ -89,6 +92,7 @@ Function application, GroupBy & window
 .. autosummary::
    :toctree: api/
 
+   Series.applymap
    Series.map
    Series.groupby
    Series.rolling
@@ -104,6 +108,7 @@ Computations / descriptive stats
    Series.abs
    Series.all
    Series.any
+   Series.ceil
    Series.clip
    Series.corr
    Series.count
@@ -114,7 +119,9 @@ Computations / descriptive stats
    Series.cumsum
    Series.describe
    Series.diff
+   Series.digitize
    Series.factorize
+   Series.floor
    Series.kurt
    Series.max
    Series.mean
@@ -152,9 +159,13 @@ Reindexing / selection / label manipulation
    Series.reindex
    Series.rename
    Series.reset_index
+   Series.reverse
    Series.sample
+   Series.set_index
+   Series.set_mask
    Series.take
    Series.tail
+   Series.tile
    Series.truncate
    Series.where
    Series.mask
@@ -168,6 +179,7 @@ Missing data handling
    Series.fillna
    Series.isna
    Series.isnull
+   Series.nans_to_nulls
    Series.notna
    Series.notnull
    Series.replace
@@ -178,19 +190,38 @@ Reshaping, sorting
    :toctree: api/
 
    Series.argsort
+   Series.interleave_columns
    Series.sort_values
    Series.sort_index
    Series.explode
+   Series.scatter_by_map
    Series.searchsorted
    Series.repeat
 
-Combining / comparing / joining / merging
------------------------------------------
+Combining / comparing / joining / merging / encoding
+----------------------------------------------------
 .. autosummary::
    :toctree: api/
 
    Series.append
    Series.update
+   Series.label_encoding
+   Series.one_hot_encoding
+
+Numerical operations
+~~~~~~~~~~~~~~~~~~~~
+.. autosummary::
+   :toctree: api/
+
+   Series.acos
+   Series.asin
+   Series.atan
+   Series.cos
+   Series.exp
+   Series.log
+   Series.sin
+   Series.sqrt
+   Series.tan
 
 Time Series-related
 -------------------
@@ -424,7 +455,19 @@ Serialization / IO / conversion
 .. autosummary::
    :toctree: api/
 
+   Series.to_array
+   Series.to_arrow
+   Series.to_dlpack
    Series.to_frame
+   Series.to_gpu_array
    Series.to_hdf
    Series.to_json
+   Series.to_pandas
    Series.to_string
+   Series.from_arrow
+   Series.from_categorical
+   Series.from_masked_array
+   Series.from_pandas
+   Series.hash_encode
+   Series.hash_values
+   

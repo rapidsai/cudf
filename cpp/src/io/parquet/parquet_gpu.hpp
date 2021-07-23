@@ -265,7 +265,7 @@ constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
 /**
  * @brief Return the byte length of parquet dtypes that are physically represented by INT32
  */
-inline uint32_t __device__ GetDtypeLogicalLen(column_device_view* col)
+inline uint32_t __device__ GetDtypeLogicalLen(column_device_view const* col)
 {
   switch (col->type().id()) {
     case cudf::type_id::INT8:

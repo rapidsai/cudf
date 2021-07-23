@@ -26,6 +26,7 @@ from docutils.nodes import Text
 from sphinx.addnodes import pending_xref
 
 sys.path.insert(0, os.path.abspath("../.."))
+sys.path.append(os.path.abspath("./_ext"))
 
 # -- General configuration ------------------------------------------------
 
@@ -45,8 +46,8 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "IPython.sphinxext.ipython_directive",
     "nbsphinx",
+    "PandasCompat",
 ]
-
 
 copybutton_prompt_text = ">>> "
 autosummary_generate = True
@@ -103,6 +104,7 @@ html_theme_options = {
     "show_toc_level": 1,
     "navbar_align": "right",
 }
+include_pandas_compat = True
 
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
@@ -242,7 +244,6 @@ def ignore_internal_references(app, env, node, contnode):
 
 
 def setup(app):
-    # app.add_css_file("params.css")
-    app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")
+    app.add_css_file("params.css")
     app.connect("doctree-read", resolve_aliases)
     app.connect("missing-reference", ignore_internal_references)

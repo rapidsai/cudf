@@ -9,5 +9,7 @@ Basics
    basics
    io.rst
    groupby.rst
+   PandasCompat.rst
    dask-cudf.rst
    internals.rst
+   
