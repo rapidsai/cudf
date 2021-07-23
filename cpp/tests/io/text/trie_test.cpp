@@ -19,8 +19,6 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
-#include <cudf/io/text/host_device_istream.hpp>
-
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 

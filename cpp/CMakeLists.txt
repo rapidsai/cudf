@@ -289,7 +289,6 @@ add_library(cudf
     src/io/parquet/writer_impl.cu
     src/io/statistics/orc_column_statistics.cu
     src/io/statistics/parquet_column_statistics.cu
-    src/io/text/host_device_istream.cpp
     src/io/text/multibyte_split.cu
     src/io/utilities/column_buffer.cpp
     src/io/utilities/data_sink.cpp

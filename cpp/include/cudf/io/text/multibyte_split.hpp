@@ -1,4 +1,4 @@
-#include <cudf/io/text/device_istream.hpp>
+#include <cudf/io/text/data_chunk_source.hpp>
 
 #include <cudf/column/column.hpp>
 
@@ -13,12 +13,7 @@ namespace io {
 namespace text {
 
 std::unique_ptr<cudf::column> multibyte_split(
-  cudf::string_scalar const& input,
-  std::vector<std::string> const& delimeters,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-std::unique_ptr<cudf::column> multibyte_split(
-  cudf::io::text::device_istream& input,
+  data_chunk_source& source,
   std::vector<std::string> const& delimeters,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

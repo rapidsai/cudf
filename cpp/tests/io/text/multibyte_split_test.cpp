@@ -21,7 +21,7 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/io/text/host_device_istream.hpp>
+#include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -76,19 +76,20 @@ TEST_F(MultibyteSplitTest, SimpleStreaming)
     "emojis,",      "which,", "are😎", "multiple,", "bytes::", "and😎",  "used😎",      "as😎",
     "delimeters.😎", "::",     ",",    "😀",         ""};
 
-  auto host_input_stream   = std::basic_stringstream(host_input);
-  auto device_input_stream = cudf::io::text::host_device_istream(host_input_stream);
-  auto out                 = cudf::io::text::multibyte_split(device_input_stream, delimiters);
+  CUDF_FAIL();
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
+  // auto source = cudf::io::text::make_source(host_input);
+  // auto out    = cudf::io::text::multibyte_split(*source, delimiters);
+
+  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
 }
 
 TEST_F(MultibyteSplitTest, SimplePreloaded)
 {
   // 😀 | F0 9F 98 80 | 11110000 10011111 01100010 01010000
   // 😎 | F0 9F 98 8E | 11110000 10011111 01100010 11101000
-  auto delimiters = std::vector<std::string>({"😀", "😎", ",", "::"});
-  auto host_input = std::string(
+  auto delimiters   = std::vector<std::string>({"😀", "😎", ",", "::"});
+  auto device_input = cudf::string_scalar(
     "aaa😀"
     "bbb😀"
     "ccc😀"
@@ -124,8 +125,10 @@ TEST_F(MultibyteSplitTest, SimplePreloaded)
     "emojis,",      "which,", "are😎", "multiple,", "bytes::", "and😎",  "used😎",      "as😎",
     "delimeters.😎", "::",     ",",    "😀",         ""};
 
-  auto device_input = cudf::string_scalar(host_input);
-  auto out          = cudf::io::text::multibyte_split(device_input, delimiters);
+  CUDF_FAIL();
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
+  // auto source = cudf::io::text::make_source(device_input);
+  // auto out    = cudf::io::text::multibyte_split(*source, delimiters);
+
+  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
 }

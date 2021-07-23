@@ -17,7 +17,7 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/io/text/host_device_istream.hpp>
+#include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/types.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -45,17 +45,16 @@ static void BM_multibyte_split(benchmark::State& state)
     temp_fostream << host_input;
     temp_fostream.close();
   }
-  auto temp_fistream = std::ifstream(temp_file_name, std::ifstream::in);
 
-  auto host_input_stream = std::basic_stringstream(host_input);
-  // auto device_input_stream = cudf::io::text::host_device_istream(host_input_stream);
-  auto device_input_stream = cudf::io::text::host_device_istream(temp_fistream);
+  auto source = cudf::io::text::make_source_from_file(temp_file_name);
+  // auto source = cudf::text::io::make_source(device_input);
+  // auto source = cudf::text::io::make_source(host_input);
 
   cudaDeviceSynchronize();
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
-    auto output = cudf::io::text::multibyte_split(device_input_stream, delimiters);
+    auto output = cudf::io::text::multibyte_split(*source, delimiters);
     // auto output = cudf::io::text::multibyte_split(device_input, delimiters);
   }
 
