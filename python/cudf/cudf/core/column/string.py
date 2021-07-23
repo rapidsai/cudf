@@ -5277,8 +5277,14 @@ class StringColumn(column.ColumnBase):
             and replacement_col.dtype != self.dtype
         ):
             return self.copy()
-
-        return libcudf.replace.replace(self, to_replace_col, replacement_col)
+        df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
+        df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
+        if df._data["old"].null_count == 1:
+            res = self.fillna(df._data["new"][df._data["old"].isna()][0])
+            df = df.dropna(subset=["old"])
+        else:
+            res = self
+        return libcudf.replace.replace(res, df._data["old"], df._data["new"])
 
     def fillna(
         self,
@@ -5289,6 +5295,9 @@ class StringColumn(column.ColumnBase):
         if fill_value is not None:
             if not is_scalar(fill_value):
                 fill_value = column.as_column(fill_value, dtype=self.dtype)
+            elif cudf._lib.scalar._is_null_host_scalar(fill_value):
+                # Trying to fill <NA> with <NA> value? Return copy.
+                return self.copy(deep=True)
             return super().fillna(value=fill_value, dtype="object")
         else:
             return super().fillna(method=method)
@@ -5296,8 +5305,8 @@ class StringColumn(column.ColumnBase):
     def _find_first_and_last(self, value: ScalarLike) -> Tuple[int, int]:
         found_indices = libstrings.contains_re(self, f"^{value}$")
         found_indices = libcudf.unary.cast(found_indices, dtype=np.int32)
-        first = column.as_column(found_indices).find_first_value(1)
-        last = column.as_column(found_indices).find_last_value(1)
+        first = column.as_column(found_indices).find_first_value(np.int32(1))
+        last = column.as_column(found_indices).find_last_value(np.int32(1))
         return first, last
 
     def find_first_value(

@@ -499,9 +499,8 @@ void __host__ PostDecompressionReassemble(CompressedStreamInfo* strm_info,
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
  * @param[in] rowidx_stride Row index stride
- * @param[in] use_base_stride Whether to use base stride obtained from meta or use the computed
- * value
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] use_base_stride Whether to use base stride obtained from meta or the computed value
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void __host__ ParseRowGroupIndex(RowGroup* row_groups,
                                  CompressedStreamInfo* strm_info,

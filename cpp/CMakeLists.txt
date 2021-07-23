@@ -242,8 +242,10 @@ add_library(cudf
     src/groupby/sort/group_sum.cu
     src/groupby/sort/scan.cpp
     src/groupby/sort/group_count_scan.cu
+    src/groupby/sort/group_dense_rank_scan.cu
     src/groupby/sort/group_max_scan.cu
     src/groupby/sort/group_min_scan.cu
+    src/groupby/sort/group_rank_scan.cu
     src/groupby/sort/group_sum_scan.cu
     src/groupby/sort/group_replace_nulls.cu
     src/groupby/sort/sort_helper.cu
@@ -533,6 +535,14 @@ else()
     # Make sure to export to consumers what runtime we used
     target_link_libraries(cudf PUBLIC CUDA::cudart)
 endif()
+
+# The CUDA::cuda_driver is needed due to JITIFY sources which
+# directly call the cuda driver API
+if(NOT TARGET CUDA::cuda_driver)
+    message(FATAL_ERROR "Building libcudf requires `libcuda.so` to be present.
+        This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded.")
+endif()
+target_link_libraries(cudf PRIVATE CUDA::cuda_driver)
 
 # Add cuFile interface if available
 if(TARGET cuFile::cuFile_interface)

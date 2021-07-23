@@ -92,7 +92,7 @@ class reader::impl {
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read
    * @param stripes Indices of individual stripes to load if non-empty
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return The set of columns along with metadata
    */
@@ -113,7 +113,7 @@ class reader::impl {
    * @param row_groups Vector of list of row index descriptors
    * @param row_index_stride Distance between each row index
    * @param use_base_stride Whether to use base stride obtained from meta or use the computed value
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Device buffer to decompressed page data
    */
@@ -139,7 +139,7 @@ class reader::impl {
    * @param row_index_stride Distance between each row index
    * @param out_buffers Output columns' device buffers
    * @param level Current nesting level being processed
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   void decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
                           size_t num_dicts,
@@ -183,7 +183,7 @@ class reader::impl {
    * @param col_buffers Column buffers for columns and children.
    * @param out_columns Vector of columns formed from column buffers.
    * @param schema_info Vector of schema information formed from column buffers.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   void create_columns(std::vector<std::vector<column_buffer>>&& col_buffers,
                       std::vector<std::unique_ptr<column>>& out_columns,
@@ -195,7 +195,7 @@ class reader::impl {
    *
    * @param col_buffers Column buffers for columns and children.
    * @param schema_info Vector of schema information formed from column buffers.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return An empty column equivalent to orc column type.
    */

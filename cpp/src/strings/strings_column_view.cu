@@ -54,43 +54,4 @@ size_type strings_column_view::chars_size() const noexcept
   return chars().size();
 }
 
-namespace strings {
-
-std::pair<rmm::device_uvector<char>, rmm::device_uvector<size_type>> create_offsets(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  size_type const count = strings.size();
-
-  auto d_offsets = strings.offsets().data<int32_t>();
-  d_offsets += strings.offset();  // nvbug-2808421 : do not combine with the previous line
-
-  rmm::device_uvector<size_type> offsets(count + 1, stream);
-  // normalize the offset values for the column offset
-  thrust::transform(rmm::exec_policy(stream),
-                    d_offsets,
-                    d_offsets + count + 1,
-                    offsets.begin(),
-                    [d_offsets] __device__(int32_t offset) {
-                      return static_cast<size_type>(offset - d_offsets[0]);
-                    });
-
-  // get the input chars column byte offset
-  auto const bytes = offsets.element(count, stream);
-  auto const chars_offset =
-    cudf::detail::get_value<offset_type>(strings.offsets(), strings.offset(), stream);
-  stream.synchronize();
-
-  // copy the chars column data
-  const char* d_chars = strings.chars().data<char>() + chars_offset;
-  rmm::device_uvector<char> chars(bytes, stream);
-  CUDA_TRY(cudaMemcpyAsync(chars.data(), d_chars, bytes, cudaMemcpyDefault, stream.value()));
-
-  // return offsets and chars
-  return std::make_pair(std::move(chars), std::move(offsets));
-}
-
-}  // namespace strings
 }  // namespace cudf

@@ -19,6 +19,7 @@
 #include "orc_common.h"
 
 #include <io/comp/io_uncomp.h>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/utilities/error.hpp>
@@ -82,7 +83,7 @@ struct FileFooter {
 struct Stream {
   StreamKind kind = INVALID_STREAM_KIND;
   std::optional<uint32_t> column_id;  // ORC column id (different from column index in the table!)
-  uint64_t length = 0;                // the number of bytes in the file
+  uint64_t length = 0;                // the number of bytes in the stream
 
   // Returns index of the column in the table, if any
   // Stream of the 'column 0' does not have a corresponding column in the table
@@ -611,6 +612,23 @@ class metadata {
   void init_column_names() const;
 
   mutable std::vector<std::string> column_names;
+};
+
+/**
+ * @brief `column_device_view` and additional, ORC specific, information on the column.
+ */
+struct orc_column_device_view {
+  column_device_view cudf_column;
+  thrust::optional<uint32_t> parent_index;
+};
+
+/**
+ * @brief Range of rows within a single rowgroup.
+ */
+struct rowgroup_rows {
+  size_type begin;
+  size_type end;
+  constexpr auto size() const noexcept { return end - begin; }
 };
 
 }  // namespace orc
