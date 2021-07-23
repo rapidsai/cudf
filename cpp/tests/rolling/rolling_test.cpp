@@ -926,19 +926,6 @@ TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
   this->run_test_col_agg(input, preceding_window, following_window, max_window_size);
 }
 
-// TYPED_TEST(RollingTest, ContrivedVar)
-// {
-//   // https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html
-//   auto const col_data              = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 0,
-//   4}); const std::vector<bool> col_mask = {1, 1, 1, 1, 1};
-
-//   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(),
-//   col_mask.begin()); std::vector<size_type> pwindow{2}; std::vector<size_type> fwindow{0};
-
-//   // static sizes
-//   this->run_test_col_agg(input, pwindow, fwindow, 2);
-// }
-
 // ------------- non-fixed-width types --------------------
 
 using RollingTestStrings = RollingTest<cudf::string_view>;
