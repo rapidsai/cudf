@@ -179,6 +179,11 @@ std::unique_ptr<Base> make_m2_aggregation();
 /**
  * @brief Factory to create a VARIANCE aggregation
  *
+ * In rolling window aggregation, when there is only one valid observation
+ * in the window, the result is null.
+ *
+ * Chrono type is unsupported in rolling window VARIANCE aggregation.
+ *
  * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `variance` is `N - ddof`, where `N` is the population size.
  */
@@ -187,6 +192,11 @@ std::unique_ptr<Base> make_variance_aggregation(size_type ddof = 1);
 
 /**
  * @brief Factory to create a STD aggregation
+ *
+ * In rolling window aggregation, when there is only one valid observation
+ * in the window, the result is null.
+ *
+ * Chrono type is unsupported in rolling window STD aggregation.
  *
  * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `std` is `N - ddof`, where `N` is the population size.
