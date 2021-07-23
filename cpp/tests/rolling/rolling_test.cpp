@@ -976,8 +976,7 @@ struct RollingTestUdf : public cudf::test::BaseFixture {
   const std::string cuda_func{
     R"***(
       template <typename OutType, typename InType>
-      __device__ void CUDA_GENERIC_AGGREGATOR(OutType *ret, InType *in_col, cudf::size_type
-      start,
+      __device__ void CUDA_GENERIC_AGGREGATOR(OutType *ret, InType *in_col, cudf::size_type start,
                                               cudf::size_type count) {
         OutType val = 0;
         for (cudf::size_type i = 0; i < count; i++) {
@@ -1004,21 +1003,21 @@ struct RollingTestUdf : public cudf::test::BaseFixture {
     // .globl	_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE
     .common .global .align 8 .u64 _ZN08NumbaEnv8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE;
 
-    .visible .func  (.param .b32 func_retval0)
-    _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE( .param .b64
-    _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_0, .param .b64
-    _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_1, .param .b64
-    _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_2, .param .b64
-    _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_3, .param .b64
-    _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_4, .param .b64
-    _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_5, .param .b64
-    _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_6, .param .b64
-    _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_7
+    .visible .func  (.param .b32 func_retval0) _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE(
+    .param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_0,
+    .param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_1,
+    .param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_2,
+    .param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_3,
+    .param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_4,
+    .param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_5,
+    .param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_6,
+    .param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_7
     )
     {
     .reg .pred 	%p<3>;
     .reg .b32 	%r<6>;
     .reg .b64 	%rd<18>;
+
 
     ld.param.u64 	%rd6, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_0];
     ld.param.u64 	%rd7, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_5];
