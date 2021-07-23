@@ -7171,12 +7171,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             **kwargs,
         )
 
-    def _apply_support_method(self, _method, axis=0, *args, **kwargs):
+    def _apply_support_method(self, method, axis=0, *args, **kwargs):
         assert axis in (None, 0, 1)
 
         if axis in (None, 0):
             result = [
-                getattr(self[col], _method)(*args, **kwargs)
+                getattr(self[col], method)(*args, **kwargs)
                 for col in self._data.names
             ]
 
@@ -7193,13 +7193,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         elif axis == 1:
             # for dask metadata compatibility
             skipna = kwargs.pop("skipna", None)
-            if _method not in _cupy_nan_methods_map and skipna not in (
+            if method not in _cupy_nan_methods_map and skipna not in (
                 None,
                 True,
                 1,
             ):
                 raise NotImplementedError(
-                    f"Row-wise operation to calculate '{_method}'"
+                    f"Row-wise operation to calculate '{method}'"
                     f" currently do not support `skipna=False`."
                 )
 
@@ -7231,7 +7231,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 )
 
             prepared, mask, common_dtype = self._prepare_for_rowwise_op(
-                _method, skipna
+                method, skipna
             )
             for col in prepared._data.names:
                 if prepared._data[col].nullable:
@@ -7248,10 +7248,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     )
             arr = cupy.asarray(prepared.as_gpu_matrix())
 
-            if skipna is not False and _method in _cupy_nan_methods_map:
-                _method = _cupy_nan_methods_map[_method]
+            if skipna is not False and method in _cupy_nan_methods_map:
+                method = _cupy_nan_methods_map[method]
 
-            result = getattr(cupy, _method)(arr, axis=1, **kwargs)
+            result = getattr(cupy, method)(arr, axis=1, **kwargs)
 
             if result.ndim == 1:
                 type_coerced_methods = {
@@ -7267,7 +7267,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 }
                 result_dtype = (
                     common_dtype
-                    if _method in type_coerced_methods
+                    if method in type_coerced_methods
                     or is_datetime_dtype(common_dtype)
                     else None
                 )
