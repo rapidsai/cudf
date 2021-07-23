@@ -327,43 +327,10 @@ struct DeviceRollingVariance {
     // Variance/Std is non-negative, thus ddof should be strictly less than valid counts.
     // Variance/Std of a lone value is statistically meaningless
     bool output_is_valid = (count >= min_periods) and not(count == 1) and not(count <= ddof);
-#ifdef DEBUG
-    printf("count: %d\n", count);
-#endif
 
     if (output_is_valid) {
-      // OutputType mean = thrust::reduce(thrust::seq,
-      //                                  thrust::make_counting_iterator(start_index),
-      //                                  thrust::make_counting_iterator(end_index),
-      //                                  OutputType{0},
-      //                                  [&](auto acc, auto i) {
-      //                                    if (has_nulls) {
-      //                                      return input.is_valid_nocheck(i)
-      //                                               ? acc + input.element<DeviceInputType>(i)
-      //                                               : acc;
-      //                                    } else {
-      //                                      return acc + input.element<DeviceInputType>(i);
-      //                                    }
-      //                                  }) /
-      //                   count;
-
-      // output.element<OutputType>(current_index) =
-      //   thrust::reduce(thrust::seq,
-      //                  thrust::make_counting_iterator(start_index),
-      //                  thrust::make_counting_iterator(end_index),
-      //                  OutputType{0},
-      //                  [&](auto acc, auto i) {
-      //                    auto x = input.element<DeviceInputType>(i);
-      //                    if (has_nulls) {
-      //                      return input.is_valid_nocheck(i) ? acc + (x - mean) * (x - mean) :
-      //                      acc;
-      //                    } else {
-      //                      return acc + (x - mean) * (x - mean);
-      //                    }
-      //                  }) /
-      //   (count - ddof);
-
-      // Welford algorithm
+      // Welford algorithm, a numerically stable, single pass algorithm
+      // See https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
       OutputType m, m2;
       size_type running_count;
 
