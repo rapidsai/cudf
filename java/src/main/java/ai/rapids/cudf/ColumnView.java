@@ -2385,11 +2385,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
             repeatTimes.getNativeView(), outputStringSizes.getNativeView()));
   }
 
-  /**
-   * Struct to hold the results output from the function
-   * {@link #repeatStringsSizes(ColumnView) repeatStringsSizes}.
-   */
-  static final class StringSizes implements AutoCloseable {
+  /** Struct to return the computed strings size column and total size */
+  public static final class StringSizes implements AutoCloseable {
     private final ColumnVector stringSizes;
     private final long totalSize;
 
