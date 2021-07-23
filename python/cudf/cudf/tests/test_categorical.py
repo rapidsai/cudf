@@ -830,3 +830,14 @@ def test_serialize_categorical_columns(data):
     df = cudf.DataFrame(data)
     recreated = df.__class__.deserialize(*df.serialize())
     assert_eq(recreated, df)
+
+
+@pytest.mark.parametrize(
+    "data", [["$ 1", "$ 2", "hello"], ["($) 1", "( 2", "hello", "^1$"]]
+)
+@pytest.mark.parametrize("value", ["$ 1", "hello", "$", "^1$"])
+def test_categorical_string_index_contains(data, value):
+    idx = cudf.CategoricalIndex(data)
+    pidx = idx.to_pandas()
+
+    assert_eq(value in idx, value in pidx)
