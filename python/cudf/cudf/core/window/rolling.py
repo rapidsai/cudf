@@ -245,9 +245,6 @@ class Rolling(GetAttrGetItemMixin):
 
     def count(self):
         return self._apply_agg("count")
-    
-    def std(self):
-        return self._apply_agg("std")
 
     def apply(self, func, *args, **kwargs):
         """

@@ -354,7 +354,6 @@ struct DeviceRollingVariance {
                          m2_acc += tmp1 * tmp2;
                          return thrust::make_tuple(r_count_acc, m_acc, m2_acc);
                        });
-
       output.element<OutputType>(current_index) = m2 / (count - ddof);
     }
 

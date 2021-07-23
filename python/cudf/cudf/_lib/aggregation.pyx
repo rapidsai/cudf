@@ -382,14 +382,6 @@ cdef class RollingAggregation:
             libcudf_aggregation.make_collect_list_aggregation[
                 rolling_aggregation]())
         return agg
-    
-    @classmethod
-    def std(cls, ddof=1):
-        cdef RollingAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.make_std_aggregation[
-                rolling_aggregation](ddof))
-        return agg
 
     @classmethod
     def from_udf(cls, op, *args, **kwargs):
