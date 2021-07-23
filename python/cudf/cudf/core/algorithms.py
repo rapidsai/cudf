@@ -1,11 +1,14 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 from warnings import warn
-import numpy as np
-import cupy as cp
 
-from cudf.core.series import Index, Series
+import cupy as cp
+import numpy as np
+
 from cudf.core.column import as_column
 from cudf.core.index import RangeIndex
+from cudf.core.series import Index, Series
+
+
 def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
     """Encode the input values as integer labels
 
@@ -60,16 +63,18 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
 
     return labels, cats.values if return_cupy_array else Index(cats)
 
+
 def linear_interpolation(to_interp):
     """
-    Interpolate over a float column. Implicitly assumes that values are 
+    Interpolate over a float column. Implicitly assumes that values are
     evenly spaced with respect to the x-axis, for example the data
-    [1.0, NaN, 3.0] will be interpolated assuming the NaN is half way 
+    [1.0, NaN, 3.0] will be interpolated assuming the NaN is half way
     between the two valid values, yielding [1.0, 2.0, 3.0]
     """
 
     to_interp._index = RangeIndex(start=0, stop=len(to_interp), step=1)
     return index_or_values_interpolation(to_interp)
+
 
 def index_or_values_interpolation(to_interp):
     """
@@ -78,12 +83,12 @@ def index_or_values_interpolation(to_interp):
     values. For example the data and index [1.0, NaN, 4.0], [1, 3, 4]
     would result in [1.0, 3.0, 4.0]
     """
-    xax = to_interp._index._column
+    colname = list(to_interp._data.keys())[0]
+    to_interp._data[colname] = (
+        to_interp._data[colname].astype("float64").fillna(np.nan)
+    )
 
-    col = to_interp._data[list(to_interp._data.keys())[0]]
-
-    # fill all NAs with NaNs
-    col = col.astype('float64').fillna(np.nan)
+    col = to_interp._data[colname]
 
     # figure out where the nans are
     mask = cp.isnan(col)
@@ -91,29 +96,25 @@ def index_or_values_interpolation(to_interp):
     # trivial case
     if mask.all():
         return col
-    
-    mask = ~mask
+
+    mask = as_column(~mask)
+    known_x_and_y = to_interp._apply_boolean_mask(mask)
+
+    known_x = cp.asarray(known_x_and_y._index._column)
+    known_y = cp.asarray(known_x_and_y._data.columns[0])
+
+    result = cp.interp(cp.asarray(to_interp._index), known_x, known_y)
 
     # find the first nan
     first_nan_idx = as_column(mask).find_first_value(1)
-
-    known_x = cp.asarray(xax.apply_boolean_mask(mask))
-    known_y = cp.asarray(col.apply_boolean_mask(mask)).astype(np.dtype('float64'))
-
-    result = cp.interp(
-        cp.asarray(xax), 
-        known_x, 
-        known_y
-    )
     result[:first_nan_idx] = np.nan
     return result
 
+
 def get_column_interpolator(method):
-    if method == 'linear':
+    if method == "linear":
         return linear_interpolation
-    elif method in {'index', 'values'}:
+    elif method in {"index", "values"}:
         return index_or_values_interpolation
     else:
-        raise ValueError(
-            f"Interpolation method `{method}` not found"
-        )        
+        raise ValueError(f"Interpolation method `{method}` not found")

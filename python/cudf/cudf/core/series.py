@@ -5421,24 +5421,24 @@ class Series(SingleColumnFrame, Serializable):
     @copy_docstring(Frame._interpolate)
     def interpolate(
         self,
-        method='linear',
+        method="linear",
         axis=0,
         limit=None,
         inplace=False,
         limit_direction=None,
         limit_area=None,
         downcast=None,
-        **kwargs
+        **kwargs,
     ):
         return super()._interpolate(
-            method=method, 
-            axis=axis, 
-            limit=limit, 
-            inplace=inplace, 
-            limit_direction=limit_direction, 
-            limit_area=limit_area, 
-            downcast=downcast, 
-            **kwargs
+            method=method,
+            axis=axis,
+            limit=limit,
+            inplace=inplace,
+            limit_direction=limit_direction,
+            limit_area=limit_area,
+            downcast=downcast,
+            **kwargs,
         )
 
     def quantile(

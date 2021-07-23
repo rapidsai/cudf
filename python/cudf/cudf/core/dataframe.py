@@ -5894,34 +5894,36 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     @copy_docstring(Frame._interpolate)
     def interpolate(
         self,
-        method='linear',
+        method="linear",
         axis=0,
         limit=None,
         inplace=False,
         limit_direction=None,
         limit_area=None,
         downcast=None,
-        **kwargs
+        **kwargs,
     ):
 
-        if method in {'index', 'values'} and not self.index.is_monotonic_increasing:
-            warnings.warn(
-                "Unsorted Index..."
-            )
-        if all(dt == np.dtype('object') for dt in self.dtypes):
+        if (
+            method in {"index", "values"}
+            and not self.index.is_monotonic_increasing
+        ):
+            warnings.warn("Unsorted Index...")
+        if all(dt == np.dtype("object") for dt in self.dtypes):
             raise TypeError(
-                "Cannot interpolate with all object-dtype columns in the DataFrame. "
-                "Try setting at least one column to a numeric dtype."
+                "Cannot interpolate with all object-dtype "
+                "columns in the DataFrame. Try setting at "
+                "least one column to a numeric dtype."
             )
         return super()._interpolate(
-            method=method, 
-            axis=axis, 
-            limit=limit, 
-            inplace=inplace, 
-            limit_direction=limit_direction, 
-            limit_area=limit_area, 
-            downcast=downcast, 
-            **kwargs
+            method=method,
+            axis=axis,
+            limit=limit,
+            inplace=inplace,
+            limit_direction=limit_direction,
+            limit_area=limit_area,
+            downcast=downcast,
+            **kwargs,
         )
 
     def quantile(

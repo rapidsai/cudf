@@ -65,7 +65,12 @@ class Frame(libcudf.table.Table):
 
     @classmethod
     def _from_table(cls, table: Frame):
-        return cls(table._data, index=table._index)
+        return cls(
+            table._data,
+            index=cudf.Index._from_table(table._index)
+            if table._index is not None
+            else table._index,
+        )
 
     def _mimic_inplace(
         self: T, result: Frame, inplace: bool = False
@@ -1415,7 +1420,6 @@ class Frame(libcudf.table.Table):
         rows corresponding to `False` is dropped
         """
         boolean_mask = as_column(boolean_mask)
-
         result = self.__class__._from_table(
             libcudf.stream_compaction.apply_boolean_mask(
                 self, as_column(boolean_mask)
@@ -1425,15 +1429,15 @@ class Frame(libcudf.table.Table):
         return result
 
     def _interpolate(
-        self, 
-        method='linear', 
-        axis=0, 
-        limit=None, 
-        inplace=False, 
-        limit_direction=None, 
-        limit_area=None, 
-        downcast=None, 
-        **kwargs
+        self,
+        method="linear",
+        axis=0,
+        limit=None,
+        inplace=False,
+        limit_direction=None,
+        limit_area=None,
+        downcast=None,
+        **kwargs,
     ):
         """
         Interpolate data values between some points.
@@ -1445,8 +1449,8 @@ class Frame(libcudf.table.Table):
             only 'linear` is supported.
             * 'linear': Ignore the index and treat the values as
             equally spaced. This is the only method supported on MultiIndexes.
-            * 'index', 'values': linearly interpolate using the index as 
-            an x-axis. Note that unsorted indices can lead to erroneous results.  
+            * 'index', 'values': linearly interpolate using the index as
+            an x-axis. Unsorted indices can lead to erroneous results.
         axis : int, default 0
             Axis to interpolate along. Currently,
             only 'axis=0' is supprted.
@@ -1461,15 +1465,14 @@ class Frame(libcudf.table.Table):
 
         """
 
-        if method in {'pad', 'ffill'} and limit_direction != 'forward':
+        if method in {"pad", "ffill"} and limit_direction != "forward":
             raise ValueError(
                 f"`limit_direction` must be 'forward' for method `{method}`"
             )
-        if method in {'backfill', 'bfill'} and limit_direction != 'backward':
+        if method in {"backfill", "bfill"} and limit_direction != "backward":
             raise ValueError(
                 f"`limit_direction` must be 'backward' for method `{method}`"
             )
-
 
         columns = ColumnAccessor()
 
@@ -1477,13 +1480,10 @@ class Frame(libcudf.table.Table):
         for colname, col in self._data.items():
             if col.nullable:
                 col = col.fillna(np.nan)
-            
+
             # Interpolation methods may or may not need the index
-            to_interp = Frame(
-                data={colname: col},
-                index=self.index
-            )
-            result = interpolator(to_interp)            
+            to_interp = Frame(data={colname: col}, index=self.index)
+            result = interpolator(to_interp)
             columns[colname] = result
 
         return self.__class__(columns, index=self.index.copy())
