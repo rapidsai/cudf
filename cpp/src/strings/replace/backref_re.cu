@@ -77,7 +77,7 @@ std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string con
   while (std::regex_search(str, m, ex) && !m.empty()) {
     // parse the back-ref index number
     size_type const index = static_cast<size_type>(std::atoi(std::string{m[1]}.c_str()));
-    CUDF_EXPECTS(index > 0 && index < 100, "Capture index numbers must be in the range 1-99");
+    CUDF_EXPECTS(index > 0 && index < 100, "Group index numbers must be in the range 1-99");
 
     // store the new byte offset and index value
     size_type const position = static_cast<size_type>(m.position(0));
