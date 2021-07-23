@@ -70,18 +70,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
           return cudf::make_row_number_aggregation();
         // case 18: COLLECT_LIST
         // case 19: COLLECT_SET
-        // case 20: MERGE_LISTS
-        case 20:
+        case 20: // MERGE_LISTS
           return cudf::make_merge_lists_aggregation();
-          // case 21: MERGE_SETS
-          // case 22: LEAD
-          // case 23: LAG
-          // case 24: PTX
-          // case 25: CUDA
+        // case 21: MERGE_SETS
+        // case 22: LEAD
+        // case 23: LAG
+        // case 24: PTX
+        // case 25: CUDA
         case 26: // M2
           return cudf::make_m2_aggregation();
         case 27: // MERGE_M2
           return cudf::make_merge_m2_aggregation();
+        case 28: // RANK
+          return cudf::make_rank_aggregation();
+        case 29: // DENSE_RANK
+          return cudf::make_dense_rank_aggregation();
 
         default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
       }
