@@ -2,7 +2,6 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
-#include <cudf/io/text/device_istream.hpp>
 #include <cudf/scalar/scalar.hpp>
 
 #include <rmm/device_buffer.hpp>
