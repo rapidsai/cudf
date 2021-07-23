@@ -35,7 +35,6 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <limits>
-#include <memory>
 #include <vector>
 
 using cudf::bitmask_type;
