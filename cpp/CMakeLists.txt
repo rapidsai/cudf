@@ -253,8 +253,8 @@ add_library(cudf
     src/interop/dlpack.cpp
     src/interop/from_arrow.cu
     src/interop/to_arrow.cu
-    src/io/avro/avro_gpu.cu
     src/io/avro/avro.cpp
+    src/io/avro/avro_gpu.cu
     src/io/avro/reader_impl.cu
     src/io/comp/brotli_dict.cpp
     src/io/comp/cpu_unbz2.cpp
