@@ -1,3 +1,5 @@
+#include <cudf/detail/utilities/vector_factories.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
@@ -109,7 +111,9 @@ struct trie {
 
     // create the trie tree
     auto root = std::make_unique<trie_builder_node>();
-    for (auto& pattern : patterns) { root->insert(pattern); }
+    for (auto& pattern : patterns) {
+      root->insert(pattern);
+    }
 
     // flatten
     auto sum = 1;
@@ -138,45 +142,10 @@ struct trie {
 
     match_length.emplace_back(false);
 
-    // allocate device memory
-
-    auto device_layer_offsets = rmm::device_uvector<uint16_t>(layer_offsets.size(), stream, mr);
-    auto device_tokens        = rmm::device_uvector<char>(tokens.size(), stream, mr);
-    auto device_transitions   = rmm::device_uvector<uint16_t>(transitions.size(), stream, mr);
-    auto device_match_length  = rmm::device_uvector<uint8_t>(match_length.size(), stream, mr);
-
-    // copy host buffers to device
-
-    CUDA_TRY(cudaMemcpyAsync(device_layer_offsets.data(),
-                             layer_offsets.data(),
-                             layer_offsets.size() * sizeof(uint16_t),
-                             cudaMemcpyDefault,
-                             stream.value()));
-
-    CUDA_TRY(cudaMemcpyAsync(device_tokens.data(),
-                             tokens.data(),
-                             tokens.size() * sizeof(char),
-                             cudaMemcpyDefault,
-                             stream.value()));
-
-    CUDA_TRY(cudaMemcpyAsync(device_transitions.data(),
-                             transitions.data(),
-                             transitions.size() * sizeof(uint16_t),
-                             cudaMemcpyDefault,
-                             stream.value()));
-
-    CUDA_TRY(cudaMemcpyAsync(device_match_length.data(),
-                             match_length.data(),
-                             match_length.size() * sizeof(uint8_t),
-                             cudaMemcpyDefault,
-                             stream.value()));
-
-    // create owning container
-
-    return trie{std::move(device_layer_offsets),
-                std::move(device_tokens),
-                std::move(device_transitions),
-                std::move(device_match_length)};
+    return trie{detail::make_device_uvector_async(layer_offsets, stream, mr),
+                detail::make_device_uvector_async(tokens, stream, mr),
+                detail::make_device_uvector_async(transitions, stream, mr),
+                detail::make_device_uvector_async(match_length, stream, mr)};
   }
 
   trie_device_view view() const
