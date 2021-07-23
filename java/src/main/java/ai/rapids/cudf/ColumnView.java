@@ -2387,6 +2387,48 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * For each string, replaces any character sequence matching the given pattern using the
+   * replacement string scalar.
+   *
+   * @param pattern The regular expression pattern to search within each string.
+   * @param repl The string scalar to replace for each pattern match.
+   * @return A new column vector containing the string results.
+   */
+  public final ColumnVector replaceRegex(String pattern, Scalar repl) {
+    return replaceRegex(pattern, repl, -1);
+  }
+
+  /**
+   * For each string, replaces any character sequence matching the given pattern using the
+   * replacement string scalar.
+   *
+   * @param pattern The regular expression pattern to search within each string.
+   * @param repl The string scalar to replace for each pattern match.
+   * @param maxRepl The maximum number of times a replacement should occur within each string.
+   * @return A new column vector containing the string results.
+   */
+  public final ColumnVector replaceRegex(String pattern, Scalar repl, int maxRepl) {
+    if (!repl.getType().equals(DType.STRING)) {
+      throw new IllegalArgumentException("Replacement must be a string scalar");
+    }
+    return new ColumnVector(replaceRegex(getNativeView(), pattern, repl.getScalarHandle(),
+        maxRepl));
+  }
+
+  /**
+   * For each string, replaces any character sequence matching any of the regular expression
+   * patterns with the corresponding replacement strings.
+   *
+   * @param patterns The regular expression patterns to search within each string.
+   * @param repls The string scalars to replace for each corresponding pattern match.
+   * @return A new column vector containing the string results.
+   */
+  public final ColumnVector replaceMultiRegex(String[] patterns, ColumnView repls) {
+    return new ColumnVector(replaceMultiRegex(getNativeView(), patterns,
+        repls.getNativeView()));
+  }
+
+  /**
    * For each string, replaces any character sequence matching the given pattern
    * using the replace template for back-references.
    *
@@ -3116,6 +3158,28 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param repl handle of scalar containing the string to replace.
    */
   private static native long stringReplace(long columnView, long target, long repl) throws CudfException;
+
+  /**
+   * Native method for replacing each regular expression pattern match with the specified
+   * replacement string.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param pattern The regular expression pattern to search within each string.
+   * @param repl native handle of the cudf::scalar containing the replacement string.
+   * @param maxRepl maximum number of times to replace the pattern within a string
+   * @return native handle of the resulting cudf column containing the string results.
+   */
+  private static native long replaceRegex(long columnView, String pattern,
+                                          long repl, long maxRepl) throws CudfException;
+
+  /**
+   * Native method for multiple instance regular expression replacement.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param patterns native handle of the cudf::column_view containing the regex patterns.
+   * @param repls The replacement template for creating the output string.
+   * @return native handle of the resulting cudf column containing the string results.
+   */
+  private static native long replaceMultiRegex(long columnView, String[] patterns,
+                                               long repls) throws CudfException;
 
   /**
    * Native method for replacing any character sequence matching the given pattern

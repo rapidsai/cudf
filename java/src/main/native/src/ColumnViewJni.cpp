@@ -1213,6 +1213,51 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapContains(JNIEnv *env, 
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceRegex(JNIEnv *env, jclass,
+                                                                    jlong j_column_view,
+                                                                    jstring j_pattern, jlong j_repl,
+                                                                    jlong j_maxrepl) {
+
+  JNI_NULL_CHECK(env, j_column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, j_pattern, "pattern string is null", 0);
+  JNI_NULL_CHECK(env, j_repl, "replace scalar is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto cv = reinterpret_cast<cudf::column_view const *>(j_column_view);
+    cudf::strings_column_view scv(*cv);
+    cudf::jni::native_jstring pattern(env, j_pattern);
+    auto repl = reinterpret_cast<cudf::string_scalar const *>(j_repl);
+
+    std::unique_ptr<cudf::column> result =
+        cudf::strings::replace_re(scv, pattern.get(), *repl, j_maxrepl);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceMultiRegex(JNIEnv *env, jclass,
+                                                                         jlong j_column_view,
+                                                                         jobjectArray j_patterns,
+                                                                         jlong j_repls) {
+
+  JNI_NULL_CHECK(env, j_column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, j_patterns, "patterns is null", 0);
+  JNI_NULL_CHECK(env, j_repls, "repls is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto cv = reinterpret_cast<cudf::column_view const *>(j_column_view);
+    cudf::strings_column_view scv(*cv);
+    cudf::jni::native_jstringArray patterns(env, j_patterns);
+    auto repl_cv = reinterpret_cast<cudf::column_view const *>(j_repls);
+    cudf::strings_column_view repl_scv(*repl_cv);
+
+    std::unique_ptr<cudf::column> result =
+        cudf::strings::replace_re(scv, patterns.as_cpp_vector(), repl_scv);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplaceWithBackrefs(
     JNIEnv *env, jclass, jlong column_view, jstring patternObj, jstring replaceObj) {
 
