@@ -2387,15 +2387,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Struct to hold the results output from the function
-   * {@link #computeOutputSizesRepeatStrings(ColumnView) computeOutputSizesRepeatStrings}.
+   * {@link #repeatStringsSizes(ColumnView) repeatStringsSizes}.
    */
-  static final class OutputSizesRepeatStrings implements AutoCloseable {
-    public final ColumnVector stringSizes;
-    public final long totalStringSize;
-    OutputSizesRepeatStrings(ColumnVector stringSizes, long totalStringSize) {
+  static final class StringSizes implements AutoCloseable {
+    private final ColumnVector stringSizes;
+    private final long totalSize;
+
+    StringSizes(ColumnVector stringSizes, long totalSize) {
       this.stringSizes = stringSizes;
-      this.totalStringSize = totalStringSize;
+      this.totalSize = totalSize;
     }
+
+    public ColumnVector getStringSizes() { return stringSizes; }
+    public long getTotalSize() { return totalSize; }
 
     /** Close the underlying resources */
     @Override
@@ -2413,14 +2417,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * {@link #repeatStringsWithColumnRepeatTimes}).
    *
    * @param repeatTimes The column containing numbers of times each input string is repeated.
-   * @return An instance of OutputSizesRepeatStrings class which stores a Java column vector containing
+   * @return An instance of StringSizes class which stores a Java column vector containing
    *         the computed sizes of the repeated strings, and a long value storing sum of all these
    *         computed sizes.
    */
-  public final OutputSizesRepeatStrings computeOutputSizesRepeatStrings(ColumnView repeatTimes) {
+  public final StringSizes repeatStringsSizes(ColumnView repeatTimes) {
     assert type.equals(DType.STRING) : "column type must be String";
-    final long[] sizes = computeOutputSizesRepeatStrings(getNativeView(), repeatTimes.getNativeView());
-    return new OutputSizesRepeatStrings(new ColumnVector(sizes[0]), sizes[1]);
+    final long[] sizes = repeatStringsSizes(getNativeView(), repeatTimes.getNativeView());
+    return new StringSizes(new ColumnVector(sizes[0]), sizes[1]);
   }
 
    /**
@@ -3143,7 +3147,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                                <code>0</code> value if that column is not available.
    * @return native handle of the resulting cudf strings column containing repeated strings.
    */
-  private static native long repeatStringsWithColumnRepeatTimes(long stringsHandle,
+    private static native long repeatStringsWithColumnRepeatTimes(long stringsHandle,
       long repeatTimesHandle, long outputStringSizesHandle);
 
   /**
@@ -3159,7 +3163,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         containing the computed sizes of the repeated strings, and the second value is the sum
    *         of all those string sizes.
    */
-  private static native long[] computeOutputSizesRepeatStrings(long stringsHandle, long repeatTimesHandle);
+  private static native long[] repeatStringsSizes(long stringsHandle, long repeatTimesHandle);
 
   private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
 

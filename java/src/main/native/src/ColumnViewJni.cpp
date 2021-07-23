@@ -1943,12 +1943,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringConcatenationListEl
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_repeatStrings(JNIEnv *env, jclass,
-                                                                     jlong column_handle,
+                                                                     jlong strings_handle,
                                                                      jint repeat_times) {
-  JNI_NULL_CHECK(env, column_handle, "column handle is null", 0);
+  JNI_NULL_CHECK(env, strings_handle, "column handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    auto const cv = *reinterpret_cast<cudf::column_view *>(column_handle);
+    auto const cv = *reinterpret_cast<cudf::column_view *>(strings_handle);
     auto const strs_col = cudf::strings_column_view(cv);
     return reinterpret_cast<jlong>(cudf::strings::repeat_strings(strs_col, repeat_times).release());
   }
@@ -1977,7 +1977,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_repeatStringsWithColumnRe
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_computeOutputSizesRepeatStrings(
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_repeatStringsSizes(
     JNIEnv *env, jclass, jlong strings_handle, jlong repeat_times_handle) {
   JNI_NULL_CHECK(env, strings_handle, "strings handle is null", 0);
   JNI_NULL_CHECK(env, repeat_times_handle, "repeat_times handle is null", 0);
