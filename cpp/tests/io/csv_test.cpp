@@ -1467,16 +1467,35 @@ TEST_F(CsvReaderTest, HexTest)
     std::ofstream outfile(filepath, std::ofstream::out);
     outfile << "0x0\n-0x1000\n0xfedcba\n0xABCDEF\n0xaBcDeF\n9512c20b\n";
   }
+  // specify hex columns by name
+  {
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+        .names({"A"})
+        .dtypes({dtype<int64_t>()})
+        .header(-1)
+        .parse_hex({"A"});
+    auto result = cudf_io::read_csv(in_opts);
 
-  cudf_io::csv_reader_options in_opts =
-    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
-      .names({"A"})
-      .dtypes(std::vector<std::string>{"hex"})
-      .header(-1);
-  auto result = cudf_io::read_csv(in_opts);
+    expect_column_data_equal(
+      std::vector<int64_t>{0, -4096, 16702650, 11259375, 11259375, 2501034507},
+      result.tbl->view().column(0));
+  }
 
-  expect_column_data_equal(std::vector<int64_t>{0, -4096, 16702650, 11259375, 11259375, 2501034507},
-                           result.tbl->view().column(0));
+  // specify hex columns by index
+  {
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+        .names({"A"})
+        .dtypes({dtype<int64_t>()})
+        .header(-1)
+        .parse_hex(std::vector<int>{0});
+    auto result = cudf_io::read_csv(in_opts);
+
+    expect_column_data_equal(
+      std::vector<int64_t>{0, -4096, 16702650, 11259375, 11259375, 2501034507},
+      result.tbl->view().column(0));
+  }
 }
 
 TYPED_TEST(CsvReaderNumericTypeTest, SingleColumnWithWriter)
