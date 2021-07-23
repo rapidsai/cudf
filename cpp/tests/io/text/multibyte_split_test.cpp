@@ -76,59 +76,8 @@ TEST_F(MultibyteSplitTest, SimpleStreaming)
     "emojis,",      "which,", "are😎", "multiple,", "bytes::", "and😎",  "used😎",      "as😎",
     "delimeters.😎", "::",     ",",    "😀",         ""};
 
-  CUDF_FAIL();
+  auto source = cudf::io::text::make_source(host_input);
+  auto out    = cudf::io::text::multibyte_split(*source, delimiters);
 
-  // auto source = cudf::io::text::make_source(host_input);
-  // auto out    = cudf::io::text::multibyte_split(*source, delimiters);
-
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
-}
-
-TEST_F(MultibyteSplitTest, SimplePreloaded)
-{
-  // 😀 | F0 9F 98 80 | 11110000 10011111 01100010 01010000
-  // 😎 | F0 9F 98 8E | 11110000 10011111 01100010 11101000
-  auto delimiters   = std::vector<std::string>({"😀", "😎", ",", "::"});
-  auto device_input = cudf::string_scalar(
-    "aaa😀"
-    "bbb😀"
-    "ccc😀"
-    "ddd😀"
-    "eee😀"
-    "fff::"
-    "ggg😀"
-    "hhh😀"
-    "___,"
-    "here,"
-    "is,"
-    "another,"
-    "simple😀"
-    "text😎"
-    "seperated😎"
-    "by😎"
-    "emojis,"
-    "which,"
-    "are😎"
-    "multiple,"
-    "bytes::"
-    "and😎"
-    "used😎"
-    "as😎"
-    "delimeters.😎"
-    "::"
-    ","
-    "😀");
-
-  auto expected = strings_column_wrapper{
-    "aaa😀",         "bbb😀",   "ccc😀", "ddd😀",      "eee😀",    "fff::", "ggg😀",       "hhh😀",
-    "___,",         "here,",  "is,",  "another,",  "simple😀", "text😎", "seperated😎", "by😎",
-    "emojis,",      "which,", "are😎", "multiple,", "bytes::", "and😎",  "used😎",      "as😎",
-    "delimeters.😎", "::",     ",",    "😀",         ""};
-
-  CUDF_FAIL();
-
-  // auto source = cudf::io::text::make_source(device_input);
-  // auto out    = cudf::io::text::multibyte_split(*source, delimiters);
-
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
 }

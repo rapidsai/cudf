@@ -15,12 +15,15 @@
  */
 
 #include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/io/cuio_benchmark_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
+
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/file_utilities.hpp>
 
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/types.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
 #include <thrust/transform.h>
 
@@ -30,6 +33,8 @@
 
 using cudf::test::fixed_width_column_wrapper;
 
+temp_directory const temp_dir("cudf_gbench");
+
 static void BM_multibyte_split(benchmark::State& state)
 {
   auto delimiters = std::vector<std::string>({"😀", "😎", ",", "::"});
@@ -38,7 +43,8 @@ static void BM_multibyte_split(benchmark::State& state)
   auto host_input   = std::string(num_chars, 'x');
   auto device_input = cudf::string_scalar(host_input);
 
-  auto temp_file_name = std::string("io.x");
+  auto temp_file_name = random_file_in_dir(temp_dir.path());
+
   close(mkstemp(const_cast<char*>(temp_file_name.data())));
   {
     auto temp_fostream = std::ofstream(temp_file_name, std::ofstream::out);
@@ -46,16 +52,15 @@ static void BM_multibyte_split(benchmark::State& state)
     temp_fostream.close();
   }
 
-  auto source = cudf::io::text::make_source_from_file(temp_file_name);
-  // auto source = cudf::text::io::make_source(device_input);
-  // auto source = cudf::text::io::make_source(host_input);
-
   cudaDeviceSynchronize();
+
+  auto source = cudf::io::text::make_source_from_file(temp_file_name);
+  // auto source = cudf::io::text::make_source(device_input);
+  // auto source = cudf::io::text::make_source(host_input);
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
     auto output = cudf::io::text::multibyte_split(*source, delimiters);
-    // auto output = cudf::io::text::multibyte_split(device_input, delimiters);
   }
 
   state.SetBytesProcessed(state.iterations() * num_chars);

@@ -1,5 +1,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
 #include <cudf/io/text/superstate.hpp>
 #include <cudf/io/text/trie.hpp>
@@ -134,15 +135,14 @@ struct scan_tile_state {
   }
 };
 
-auto constexpr PARTIAL_AGGRIGATION_STRATEGY = 2;
+auto constexpr PARTIAL_AGGRIGATION_STRATEGY = 1;
 
 // keep ITEMS_PER_TILE below input size to force multi-tile execution.
 auto constexpr ITEMS_PER_THREAD = 32;   // influences register pressure
 auto constexpr THREADS_PER_TILE = 128;  // must be >= 32 for warp-reduce. influences shmem usage.
 auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
-auto constexpr TILES_PER_CHUNK  = 256;  // blocks in streaming launch
+auto constexpr TILES_PER_CHUNK  = 512;  // blocks in streaming launch
 auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
-auto constexpr TILES_PER_PASS   = 512;  // blocks in non-streaming launch
 
 template <typename T>
 struct scan_tile_state_callback {
@@ -435,15 +435,16 @@ void join_pool_to_stream(rmm::cuda_stream_pool& stream_pool, rmm::cuda_stream_vi
   cudaEventDestroy(event);
 }
 
-cudf::size_type scan_full_stream(cudf::io::text::data_chunk_source& source,
-                                 cudf::io::text::trie const& trie,
-                                 scan_tile_state<superstate<16>>& tile_superstates,
-                                 scan_tile_state<uint32_t>& tile_offsets,
-                                 device_span<cudf::size_type> output_buffer,
-                                 device_span<char> output_char_buffer,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::cuda_stream_pool& stream_pool)
+cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_source& source,
+                                                 cudf::io::text::trie const& trie,
+                                                 scan_tile_state<superstate<16>>& tile_superstates,
+                                                 scan_tile_state<uint32_t>& tile_offsets,
+                                                 device_span<cudf::size_type> output_buffer,
+                                                 device_span<char> output_char_buffer,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::cuda_stream_pool& stream_pool)
 {
+  CUDF_FUNC_RANGE();
   cudf::size_type bytes_total = 0;
 
   // this function interleaves three kernel executions
@@ -497,25 +498,27 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source&
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   auto const trie = cudf::io::text::trie::create(delimeters, stream);
   // must be at least 32 when using warp-reduce on partials
   // must be at least 1 more than max possible concurrent tiles
   // best when at least 32 more than max possible concurrent tiles, due to rolling `invalid`s
-  auto concurrency      = 3;
+  auto concurrency      = 2;
   auto num_tile_states  = std::max(32, TILES_PER_CHUNK * concurrency + 32);
   auto tile_superstates = scan_tile_state<superstate<16>>(num_tile_states, stream);
   auto tile_offsets     = scan_tile_state<uint32_t>(num_tile_states, stream);
 
   auto stream_pool = rmm::cuda_stream_pool(concurrency);
 
-  auto bytes_total = scan_full_stream(source,
-                                      trie,
-                                      tile_superstates,
-                                      tile_offsets,
-                                      cudf::device_span<int32_t>(static_cast<int32_t*>(nullptr), 0),
-                                      cudf::device_span<char>(static_cast<char*>(nullptr), 0),
-                                      stream,
-                                      stream_pool);
+  auto bytes_total =
+    multibyte_split_scan_full_source(source,
+                                     trie,
+                                     tile_superstates,
+                                     tile_offsets,
+                                     cudf::device_span<int32_t>(static_cast<int32_t*>(nullptr), 0),
+                                     cudf::device_span<char>(static_cast<char*>(nullptr), 0),
+                                     stream,
+                                     stream_pool);
 
   // allocate string offsets
 
@@ -530,14 +533,15 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source&
   string_offsets.set_element_to_zero_async(0, stream);
   string_offsets.set_element_async(x, bytes_total, stream);
 
-  scan_full_stream(source,
-                   trie,
-                   tile_superstates,
-                   tile_offsets,
-                   cudf::device_span<int32_t>(string_offsets).subspan(1, num_results),
-                   string_chars,
-                   stream,
-                   stream_pool);
+  multibyte_split_scan_full_source(
+    source,
+    trie,
+    tile_superstates,
+    tile_offsets,
+    cudf::device_span<int32_t>(string_offsets).subspan(1, num_results),
+    string_chars,
+    stream,
+    stream_pool);
 
   auto res = create_strings_column(std::move(string_chars), std::move(string_offsets), stream, mr);
 

@@ -10,23 +10,14 @@ namespace io {
 namespace text {
 
 struct data_chunk {
-  data_chunk(rmm::device_buffer&& buffer, std::size_t size)
-    : _buffer(std::move(buffer)), _size(size)
-  {
-  }
+  data_chunk(device_span<char const> data) : _data(data) {}
 
-  operator cudf::device_span<char const>()
-  {
-    return cudf::device_span<char const>(static_cast<char const*>(_buffer.data()), _size);
-  }
+  operator cudf::device_span<char const>() { return _data; }
 
-  uint32_t size() const { return _size; }
-
-  rmm::cuda_stream_view stream() const { return _buffer.stream(); }
+  uint32_t size() const { return _data.size(); }
 
  private:
-  rmm::device_buffer _buffer;
-  std::size_t _size;
+  device_span<char const> _data;
 };
 
 class data_chunk_reader {
