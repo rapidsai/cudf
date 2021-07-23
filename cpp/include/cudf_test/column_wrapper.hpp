@@ -575,11 +575,12 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   {
     CUDF_EXPECTS(numeric::is_supported_representation_type<Rep>(), "not valid representation type");
 
-    auto const size         = cudf::distance(begin, end);
-    auto const elements     = thrust::host_vector<Rep>(begin, end);
-    auto const is_decimal32 = std::is_same<Rep, int32_t>::value;
-    auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;
-    auto const data_type    = cudf::data_type{id, static_cast<int32_t>(scale)};
+    auto const size      = cudf::distance(begin, end);
+    auto const elements  = thrust::host_vector<Rep>(begin, end);
+    auto const id        = std::is_same<Rep, int32_t>::value   ? type_id::DECIMAL32
+                           : std::is_same<Rep, int64_t>::value ? type_id::DECIMAL64
+                                                               : type_id::DECIMAL128;
+    auto const data_type = cudf::data_type{id, static_cast<int32_t>(scale)};
 
     wrapped.reset(new cudf::column{
       data_type,

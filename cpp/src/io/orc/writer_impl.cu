@@ -94,7 +94,8 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id)
     case cudf::type_id::TIMESTAMP_NANOSECONDS: return TypeKind::TIMESTAMP;
     case cudf::type_id::STRING: return TypeKind::STRING;
     case cudf::type_id::DECIMAL32:
-    case cudf::type_id::DECIMAL64: return TypeKind::DECIMAL;
+    case cudf::type_id::DECIMAL64:
+    case cudf::type_id::DECIMAL128: return TypeKind::DECIMAL;
     default: return TypeKind::INVALID_TYPE_KIND;
   }
 }
@@ -121,6 +122,7 @@ constexpr auto orc_precision(cudf::type_id decimal_id)
   switch (decimal_id) {
     case cudf::type_id::DECIMAL32: return 9;
     case cudf::type_id::DECIMAL64: return 18;
+    case cudf::type_id::DECIMAL128: return 38;
     default: return 0;
   }
 }

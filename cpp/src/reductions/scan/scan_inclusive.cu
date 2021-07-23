@@ -124,11 +124,14 @@ struct scan_dispatcher {
   template <typename T>
   static constexpr bool is_supported()
   {
-    return std::is_arithmetic<T>::value || is_string_supported<T>();
+    return std::is_arithmetic<T>::value || is_string_supported<T>() ||
+           std::is_same<T, __int128_t>::value;
   }
 
   // for arithmetic types
-  template <typename T, std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
+  template <
+    typename T,
+    std::enable_if_t<std::is_arithmetic<T>::value || std::is_same<T, __int128_t>::value>* = nullptr>
   auto inclusive_scan(const column_view& input_view,
                       null_policy,
                       rmm::cuda_stream_view stream,
