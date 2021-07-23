@@ -1945,7 +1945,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringConcatenationListEl
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_repeatStrings(JNIEnv *env, jclass,
                                                                      jlong strings_handle,
                                                                      jint repeat_times) {
-  JNI_NULL_CHECK(env, strings_handle, "column handle is null", 0);
+  JNI_NULL_CHECK(env, strings_handle, "strings_handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto const cv = *reinterpret_cast<cudf::column_view *>(strings_handle);
