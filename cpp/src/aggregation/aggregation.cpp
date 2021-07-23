@@ -450,6 +450,8 @@ std::unique_ptr<Base> make_variance_aggregation(size_type ddof)
   return std::make_unique<detail::var_aggregation>(ddof);
 }
 template std::unique_ptr<aggregation> make_variance_aggregation<aggregation>(size_type ddof);
+template std::unique_ptr<rolling_aggregation> make_variance_aggregation<rolling_aggregation>(
+  size_type ddof);
 
 /// Factory to create a STD aggregation
 template <typename Base>
@@ -458,6 +460,8 @@ std::unique_ptr<Base> make_std_aggregation(size_type ddof)
   return std::make_unique<detail::std_aggregation>(ddof);
 }
 template std::unique_ptr<aggregation> make_std_aggregation<aggregation>(size_type ddof);
+template std::unique_ptr<rolling_aggregation> make_std_aggregation<rolling_aggregation>(
+  size_type ddof);
 
 /// Factory to create a MEDIAN aggregation
 template <typename Base>

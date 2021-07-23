@@ -320,7 +320,7 @@ class m2_aggregation : public aggregation {
 /**
  * @brief Derived class for specifying a standard deviation/variance aggregation
  */
-class std_var_aggregation : public aggregation {
+class std_var_aggregation : public rolling_aggregation {
  public:
   size_type _ddof;  ///< Delta degrees of freedom
 
@@ -334,7 +334,7 @@ class std_var_aggregation : public aggregation {
   size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
 
  protected:
-  std_var_aggregation(aggregation::Kind k, size_type ddof) : aggregation(k), _ddof{ddof}
+  std_var_aggregation(aggregation::Kind k, size_type ddof) : rolling_aggregation(k), _ddof{ddof}
   {
     CUDF_EXPECTS(k == aggregation::STD or k == aggregation::VARIANCE,
                  "std_var_aggregation can accept only STD, VARIANCE");
@@ -348,7 +348,10 @@ class std_var_aggregation : public aggregation {
  */
 class var_aggregation final : public std_var_aggregation {
  public:
-  var_aggregation(size_type ddof) : std_var_aggregation{aggregation::VARIANCE, ddof} {}
+  var_aggregation(size_type ddof)
+    : aggregation(aggregation::VARIANCE), std_var_aggregation{aggregation::VARIANCE, ddof}
+  {
+  }
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -367,7 +370,10 @@ class var_aggregation final : public std_var_aggregation {
  */
 class std_aggregation final : public std_var_aggregation {
  public:
-  std_aggregation(size_type ddof) : std_var_aggregation{aggregation::STD, ddof} {}
+  std_aggregation(size_type ddof)
+    : aggregation(aggregation::STD), std_var_aggregation{aggregation::STD, ddof}
+  {
+  }
 
   std::unique_ptr<aggregation> clone() const override
   {

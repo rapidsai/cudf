@@ -41,9 +41,12 @@ namespace cudf {
  * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
  *
- * The returned column for count aggregation always has `INT32` type. All other operators return a
- * column of the same type as the input. Therefore it is suggested to convert integer column types
- * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
+ * Notes on return column types:
+ * - The returned column for count aggregation always has `INT32` type.
+ * - The returned column for VARIANCE/STD aggregations always has `double` type.
+ * - All other operators return a column of the same type as the input. Therefore
+ *   it is suggested to convert integer column types (especially low-precision integers)
+ *   to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
  *
  * @param[in] input_col The input column
  * @param[in] preceding_window The static rolling window size in the backward direction.
