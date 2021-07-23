@@ -16,16 +16,11 @@
 
 #pragma once
 
-#include "cudf/detail/null_mask.hpp"
-#include "cudf/detail/unary.hpp"
-#include "cudf/utilities/type_dispatcher.hpp"
 #include "lead_lag_nested_detail.cuh"
-#include "rmm/exec_policy.hpp"
 #include "rolling/rolling_collect_list.cuh"
 #include "rolling/rolling_detail.hpp"
 #include "rolling/rolling_jit_detail.hpp"
 #include "rolling_detail.hpp"
-#include "thrust/pair.h"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -38,6 +33,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -59,12 +55,14 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/detail/execution_policy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 #include <memory>
