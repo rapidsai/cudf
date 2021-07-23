@@ -6445,6 +6445,18 @@ class DatetimeProperties(object):
             index=self.series._index,
             name=self.series.name,
         )
+    
+    @property
+    def is_month_start(self): 
+        """
+        Boolean indicator if the date is the first day of the month.
+
+        Returns
+        -------
+        Series
+        Booleans indicating if dates are the first day of the month.
+        """
+        return self.day == 1
 
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)

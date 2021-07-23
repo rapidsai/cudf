@@ -1297,3 +1297,36 @@ def test_is_leap_year():
     got2 = gIndex.is_leap_year
 
     assert_eq(expect2, got2)
+
+    
+def test_is_month_start():
+    data = [
+        "2020-05-31",
+        None,
+        "1999-12-01",
+        "2000-12-21",
+        None,
+        "1900-02-28",
+        "1800-03-14",
+        "2100-03-10",
+        "1970-01-01",
+        "1969-12-11",
+    ]
+
+    # Series
+    ps = pd.Series(data, dtype="datetime64[ms]")
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.is_leap_year
+    got = gs.dt.is_leap_year
+
+    assert_eq(expect, got)
+
+    # DatetimeIndex
+    pIndex = pd.DatetimeIndex(data)
+    gIndex = cudf.from_pandas(pIndex)
+
+    expect2 = pIndex.is_leap_year
+    got2 = gIndex.is_leap_year
+
+    assert_eq(expect2, got2)
