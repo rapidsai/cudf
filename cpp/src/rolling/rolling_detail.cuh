@@ -67,8 +67,6 @@
 
 #include <memory>
 
-#undef DEBUG
-
 namespace cudf {
 
 namespace detail {
