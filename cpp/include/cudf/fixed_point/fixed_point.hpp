@@ -154,6 +154,30 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T shift(T const& val, scale_type const& scal
     return left_shift<Rep, Rad>(val, scale);
 }
 
+template <typename T>
+auto to_string(T value) -> std::string
+{
+  if constexpr (std::is_same<T, __int128>::value) {
+    auto s          = std::string{};
+    auto const sign = value < 0;
+    while (value) {
+      s.push_back("0123456789"[value % 10]);
+      value /= 10;
+    }
+    if (sign) s.push_back('-');
+    std::reverse(s.begin(), s.end());
+    return s;
+  } else {
+    return std::to_string(value);
+  }
+}
+
+template <typename T>
+auto abs(T value)
+{
+  return value >= 0 ? value : -value;
+}
+
 }  // namespace detail
 
 /**
@@ -552,24 +576,20 @@ class fixed_point {
    */
   explicit operator std::string() const
   {
-    if constexpr (not std::is_same<Rep, __int128_t>::value) {
-      if (_scale < 0) {
-        auto const av   = std::abs(_value);
-        int64_t const n = std::pow(10, -_scale);
-        int64_t const f = av % n;
-        auto const num_zeros =
-          std::max(0, (-_scale - static_cast<int32_t>(std::to_string(f).size())));
-        auto const zeros = std::string(num_zeros, '0');
-        auto const sign  = _value < 0 ? std::string("-") : std::string();
-        return sign + std::to_string(av / n) + std::string(".") + zeros + std::to_string(av % n);
-      } else {
-        auto const zeros = std::string(_scale, '0');
-        return std::to_string(_value) + zeros;
-      }
+    if (_scale < 0) {
+      auto const av = detail::abs(_value);
+      Rep const n   = std::pow(10, -_scale);  // does this work for all values of __int128
+      Rep const f   = av % n;
+      auto const num_zeros =
+        std::max(0, (-_scale - static_cast<int32_t>(detail::to_string(f).size())));
+      auto const zeros = std::string(num_zeros, '0');
+      auto const sign  = _value < 0 ? std::string("-") : std::string();
+      return sign + detail::to_string(av / n) + std::string(".") + zeros +
+             detail::to_string(av % n);
+    } else {
+      auto const zeros = std::string(_scale, '0');
+      return detail::to_string(_value) + zeros;
     }
-
-    // std::abs and std::to_string don't work on __int128_t
-    return "TODO";
   }
 };
 
