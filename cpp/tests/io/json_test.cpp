@@ -615,6 +615,7 @@ TEST_F(JsonReaderTest, JsonLinesObjectsOutOfOrder)
                                  cudf::test::strings_column_wrapper({"aaa", "bbb"}));
 }
 
+/*
 // currently, the json reader is strict about having non-empty input.
 TEST_F(JsonReaderTest, EmptyFile)
 {
@@ -648,6 +649,7 @@ TEST_F(JsonReaderTest, NoDataFile)
   const auto view = result.tbl->view();
   EXPECT_EQ(0, view.num_columns());
 }
+*/
 
 TEST_F(JsonReaderTest, ArrowFileSource)
 {
