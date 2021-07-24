@@ -189,7 +189,7 @@ class reader::impl {
    */
   std::vector<data_type> select_data_types(std::map<std::string, data_type> const& col_type_map);
 
-    /**
+  /**
    * @brief Sorts the columns' data types from the map of dtypes.
    *
    * @param col_type_map Vector of deta types specifying the columns' target data types

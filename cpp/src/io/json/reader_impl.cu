@@ -50,6 +50,15 @@ namespace json {
 using namespace cudf::io;
 
 namespace {
+/**
+ * @brief Helper class to support inline-overloading for all of a variant's alternative types
+ */
+template <class... Ts>
+struct VisitorOverload : Ts... {
+  using Ts::operator()...;
+};
+template <class... Ts>
+VisitorOverload(Ts...) -> VisitorOverload<Ts...>;
 
 /**
  * @brief Estimates the maximum expected length or a row, based on the number
@@ -236,7 +245,9 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
 {
   size_t map_range_size = 0;
   if (range_size != 0) {
-    map_range_size = range_size + calculate_max_row_size(options_.get_dtypes().size());
+    auto const dtype_option_size =
+      std::visit([](const auto& dtypes) { return dtypes.size(); }, options_.get_dtypes());
+    map_range_size = range_size + calculate_max_row_size(dtype_option_size);
   }
 
   // Support delayed opening of the file if using memory mapping datasource
@@ -464,52 +475,71 @@ void reader::impl::set_column_names(device_span<uint64_t const> rec_starts,
   }
 }
 
-void reader::impl::parse_data_types(std::vector<std::string> const& types_as_strings){
-
+std::vector<data_type> reader::impl::parse_data_types(
+  std::vector<std::string> const& types_as_strings)
+{
   CUDF_EXPECTS(types_as_strings.size() == metadata_.column_names.size(),
-                 "Need to specify the type of each column.\n");
+               "Need to specify the type of each column.\n");
+  std::vector<data_type> dtypes;
+  // Assume that the dtype is in dictionary format only if all elements contain a colon
+  const bool is_dict = std::all_of(
+    std::cbegin(types_as_strings), std::cend(types_as_strings), [](const std::string& s) {
+      return std::find(std::cbegin(s), std::cend(s), ':') != std::cend(s);
+    });
 
-    // Assume that the dtype is in dictionary format only if all elements contain a colon
-    const bool is_dict =
-      std::all_of(std::cbegin(types_as_strings), std::cend(types_as_strings), [](const std::string& s) {
-        return std::find(std::cbegin(s), std::cend(s), ':') != std::cend(s);
+  auto split_on_colon = [](std::string_view s) {
+    auto const i = s.find(":");
+    return std::pair{s.substr(0, i), s.substr(i + 1)};
+  };
+
+  if (is_dict) {
+    std::map<std::string, data_type> col_type_map;
+    std::transform(
+      std::cbegin(types_as_strings),
+      std::cend(types_as_strings),
+      std::inserter(col_type_map, col_type_map.end()),
+      [&](auto const& ts) {
+        auto const [col_name, type_str] = split_on_colon(ts);
+        return std::pair{std::string{col_name}, convert_string_to_dtype(std::string{type_str})};
       });
 
-    auto split_on_colon = [](std::string_view s) {
-      auto const i = s.find(":");
-      return std::pair{s.substr(0, i), s.substr(i + 1)};
-    };
-
-    if (is_dict) {
-      std::map<std::string, data_type> col_type_map;
-      std::transform(
-        std::cbegin(types_as_strings),
-        std::cend(types_as_strings),
-        std::inserter(col_type_map, col_type_map.end()),
-        [&](auto const& ts) {
-          auto const [col_name, type_str] = split_on_colon(ts);
-          return std::pair{std::string{col_name}, convert_string_to_dtype(std::string{type_str})};
-        });
-
-      // Using the map here allows O(n log n) complexity
-      std::transform(std::cbegin(metadata_.column_names),
-                     std::cend(metadata_.column_names),
-                     std::back_inserter(dtypes_),
-                     [&](auto const& column_name) { return col_type_map[column_name]; });
-    } else {
-      std::transform(std::cbegin(types_as_strings),
-                     std::cend(types_as_strings),
-                     std::back_inserter(dtypes_),
-                     [](auto const& col_dtype) { return convert_string_to_dtype(col_dtype); });
-    }
+    // Using the map here allows O(n log n) complexity
+    std::transform(std::cbegin(metadata_.column_names),
+                   std::cend(metadata_.column_names),
+                   std::back_inserter(dtypes),
+                   [&](auto const& column_name) { return col_type_map[column_name]; });
+  } else {
+    std::transform(std::cbegin(types_as_strings),
+                   std::cend(types_as_strings),
+                   std::back_inserter(dtypes),
+                   [](auto const& col_dtype) { return convert_string_to_dtype(col_dtype); });
+  }
+  return dtypes;
 }
 
 void reader::impl::set_data_types(device_span<uint64_t const> rec_starts,
                                   rmm::cuda_stream_view stream)
 {
-  auto const& dtype = options_.get_dtypes();
-  if (!dtype.empty()) {
-    parse_data_types(dtype);
+  bool has_to_infer_column_types =
+    std::visit([](const auto& dtypes) { return dtypes.empty(); }, options_.get_dtypes());
+  if (!has_to_infer_column_types) {
+    dtypes_ = std::visit(
+      VisitorOverload{
+        [&](const std::vector<data_type>& dtypes) { return dtypes; },
+        [&](const std::map<std::string, data_type>& dtypes) {
+          std::vector<data_type> sorted_dtypes;
+          std::transform(std::cbegin(metadata_.column_names),
+                         std::cend(metadata_.column_names),
+                         std::back_inserter(sorted_dtypes),
+                         [&](auto const& column_name) {
+                           auto const it = dtypes.find(column_name);
+                           CUDF_EXPECTS(it != dtypes.end(), "Must specify types for all columns");
+                           return it->second;
+                         });
+          return sorted_dtypes;
+        },
+        [&](std::vector<std::string> const& dtypes) { return parse_data_types(dtypes); }},
+      options_.get_dtypes());
   } else {
     CUDF_EXPECTS(rec_starts.size() != 0, "No data available for data type inference.\n");
     auto const num_columns       = metadata_.column_names.size();
