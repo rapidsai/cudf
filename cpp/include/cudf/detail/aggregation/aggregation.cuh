@@ -593,9 +593,7 @@ struct identity_initializer {
   template <typename T, aggregation::Kind k>
   static constexpr bool is_supported()
   {
-    // Note: !is_fixed_point<T>() means that aggregations for fixed_point should happen on the
-    //       underlying type (see device_storage_type_t), not that fixed_point is not supported
-    return cudf::is_fixed_width<T>() && !is_fixed_point<T>() and
+    return cudf::is_fixed_width<T>() and
            (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
             k == aggregation::ARGMAX or k == aggregation::ARGMIN or
@@ -608,7 +606,8 @@ struct identity_initializer {
   std::enable_if_t<not std::is_same<corresponding_operator_t<k>, void>::value, T>
   identity_from_operator()
   {
-    return corresponding_operator_t<k>::template identity<T>();
+    using DeviceType = device_storage_type_t<T>;
+    return corresponding_operator_t<k>::template identity<DeviceType>();
   }
 
   template <typename T, aggregation::Kind k>
@@ -637,7 +636,11 @@ struct identity_initializer {
   std::enable_if_t<is_supported<T, k>(), void> operator()(mutable_column_view const& col,
                                                           rmm::cuda_stream_view stream)
   {
-    thrust::fill(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), get_identity<T, k>());
+    using DeviceType = device_storage_type_t<T>;
+    thrust::fill(rmm::exec_policy(stream),
+                 col.begin<DeviceType>(),
+                 col.end<DeviceType>(),
+                 get_identity<DeviceType, k>());
   }
 
   template <typename T, aggregation::Kind k>
