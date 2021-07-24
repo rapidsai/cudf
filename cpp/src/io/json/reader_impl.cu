@@ -464,17 +464,14 @@ void reader::impl::set_column_names(device_span<uint64_t const> rec_starts,
   }
 }
 
-void reader::impl::set_data_types(device_span<uint64_t const> rec_starts,
-                                  rmm::cuda_stream_view stream)
-{
-  auto const dtype = options_.get_dtypes();
-  if (!dtype.empty()) {
-    CUDF_EXPECTS(dtype.size() == metadata_.column_names.size(),
+void reader::impl::parse_data_types(std::vector<std::string> const& types_as_strings){
+
+  CUDF_EXPECTS(types_as_strings.size() == metadata_.column_names.size(),
                  "Need to specify the type of each column.\n");
 
     // Assume that the dtype is in dictionary format only if all elements contain a colon
     const bool is_dict =
-      std::all_of(std::cbegin(dtype), std::cend(dtype), [](const std::string& s) {
+      std::all_of(std::cbegin(types_as_strings), std::cend(types_as_strings), [](const std::string& s) {
         return std::find(std::cbegin(s), std::cend(s), ':') != std::cend(s);
       });
 
@@ -486,8 +483,8 @@ void reader::impl::set_data_types(device_span<uint64_t const> rec_starts,
     if (is_dict) {
       std::map<std::string, data_type> col_type_map;
       std::transform(
-        std::cbegin(dtype),
-        std::cend(dtype),
+        std::cbegin(types_as_strings),
+        std::cend(types_as_strings),
         std::inserter(col_type_map, col_type_map.end()),
         [&](auto const& ts) {
           auto const [col_name, type_str] = split_on_colon(ts);
@@ -500,11 +497,19 @@ void reader::impl::set_data_types(device_span<uint64_t const> rec_starts,
                      std::back_inserter(dtypes_),
                      [&](auto const& column_name) { return col_type_map[column_name]; });
     } else {
-      std::transform(std::cbegin(dtype),
-                     std::cend(dtype),
+      std::transform(std::cbegin(types_as_strings),
+                     std::cend(types_as_strings),
                      std::back_inserter(dtypes_),
                      [](auto const& col_dtype) { return convert_string_to_dtype(col_dtype); });
     }
+}
+
+void reader::impl::set_data_types(device_span<uint64_t const> rec_starts,
+                                  rmm::cuda_stream_view stream)
+{
+  auto const& dtype = options_.get_dtypes();
+  if (!dtype.empty()) {
+    parse_data_types(dtype);
   } else {
     CUDF_EXPECTS(rec_starts.size() != 0, "No data available for data type inference.\n");
     auto const num_columns       = metadata_.column_names.size();
