@@ -256,16 +256,24 @@ class RollingTest : public cudf::test::BaseFixture {
     }
 
     if (cudf::is_fixed_width(input.type()) and not cudf::is_chrono(input.type())) {
-      run_test_col(input,
-                   preceding_window,
-                   following_window,
-                   min_periods,
-                   *cudf::make_variance_aggregation<cudf::rolling_aggregation>());
-      run_test_col(input,
-                   preceding_window,
-                   following_window,
-                   min_periods,
-                   *cudf::make_std_aggregation<cudf::rolling_aggregation>());
+      size_type min_window_size = preceding_window[0] + following_window[0];
+      for (size_t i = 0; i < preceding_window.size(); i++) {
+        min_window_size = std::min(min_window_size, preceding_window[i] + following_window[i]);
+      }
+
+      for (size_type ddof = 0; ddof < min_window_size; ddof *= 2) {
+        run_test_col(input,
+                     preceding_window,
+                     following_window,
+                     min_periods,
+                     *cudf::make_variance_aggregation<cudf::rolling_aggregation>(ddof));
+        run_test_col(input,
+                     preceding_window,
+                     following_window,
+                     min_periods,
+                     *cudf::make_std_aggregation<cudf::rolling_aggregation>(ddof));
+        if (ddof == 0) { ddof++; }
+      }
     }
   }
 
@@ -355,7 +363,7 @@ class RollingTest : public cudf::test::BaseFixture {
       for (auto j = start_index; j < end_index; j++) {
         if (not input.nullable() or cudf::bit_is_set(valid_mask, j)) { count++; }
       }
-      ref_valid[i] = (count >= min_periods) and not(count == ddof);
+      ref_valid[i] = (count >= min_periods) and not(count <= ddof);
 
       if (ref_valid[i]) {
         OutputType mean{0}, m2{0}, tmp1, tmp2;
