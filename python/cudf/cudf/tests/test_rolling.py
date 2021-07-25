@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
+import cudf.testing.dataset_generator as dataset_generator
 from cudf.core._compat import PANDAS_GE_110
 from cudf.testing._utils import assert_eq
 
@@ -20,7 +21,9 @@ from cudf.testing._utils import assert_eq
         ([1, 2, 4, 9, 9, 4], ["a", "b", "c", "d", "e", "f"]),
     ],
 )
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "std", "var"]
+)
 @pytest.mark.parametrize("nulls", ["none", "one", "some", "all"])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_series_basic(data, index, agg, nulls, center):
@@ -64,7 +67,9 @@ def test_rolling_series_basic(data, index, agg, nulls, center):
         },
     ],
 )
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "std", "var"]
+)
 @pytest.mark.parametrize("nulls", ["none", "one", "some", "all"])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_dataframe_basic(data, agg, nulls, center):
@@ -102,6 +107,8 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
         pytest.param("max"),
         pytest.param("mean"),
         pytest.param("count"),
+        pytest.param("std"),
+        pytest.param("var"),
     ],
 )
 def test_rolling_with_offset(agg):
@@ -122,6 +129,43 @@ def test_rolling_with_offset(agg):
         getattr(gsr.rolling("2s"), agg)().fillna(-1),
         check_dtype=False,
     )
+
+
+@pytest.mark.parametrize("agg", ["std", "var"])
+@pytest.mark.parametrize("center", [True, False])
+def test_rolling_var_std_dynamic(agg, center):
+    if PANDAS_GE_110:
+        kwargs = {"check_freq": False}
+    else:
+        kwargs = {}
+
+    n_rows = 10_000
+    data = dataset_generator.rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "i4", "null_frequency": 0.4, "cardinality": 100},
+            {"dtype": "f8", "null_frequency": 0.4, "cardinality": 100},
+            {"dtype": "decimal64", "null_frequency": 0.4, "cardinality": 100},
+            {"dtype": "decimal32", "null_frequency": 0.4, "cardinality": 100},
+        ],
+        rows=n_rows,
+        use_threads=False,
+    )
+
+    pdf = data.to_pandas()
+    pdf["1"][
+        [np.random.randint(0, n_rows - 1) for _ in range(int(n_rows * 0.2))]
+    ] = float("inf")
+
+    gdf = cudf.from_pandas(pdf)
+    for window_size in range(1, len(data) + 1):
+        for min_periods in range(1, window_size + 1):
+            expect = getattr(
+                pdf.rolling(window_size, min_periods, center), agg
+            )().fillna(-1)
+            got = getattr(
+                gdf.rolling(window_size, min_periods, center), agg
+            )().fillna(-1)
+            assert_eq(expect, got, **kwargs)
 
 
 def test_rolling_count_with_offset():
