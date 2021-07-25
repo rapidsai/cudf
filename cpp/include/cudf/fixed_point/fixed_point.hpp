@@ -157,7 +157,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T shift(T const& val, scale_type const& scal
 template <typename T>
 auto to_string(T value) -> std::string
 {
-  if constexpr (std::is_same<T, __int128>::value) {
+  if constexpr (cuda::std::is_same<T, __int128>::value) {
     auto s          = std::string{};
     auto const sign = value < 0;
     while (value) {
@@ -304,7 +304,7 @@ class fixed_point {
    */
   template <typename U,
             typename cuda::std::enable_if_t<cuda::std::is_integral<U>::value or
-                                            std::is_same<U, __int128_t>::value>* = nullptr>
+                                            cuda::std::is_same<U, __int128_t>::value>* = nullptr>
   explicit constexpr operator U() const
   {
     // Don't cast to U until converting to Rep because in certain cases casting to U before shifting
