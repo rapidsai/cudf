@@ -1,4 +1,5 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
@@ -34,18 +35,21 @@ namespace cudf {
 namespace io {
 namespace text {
 
+struct trie_node {
+  char token;
+  uint8_t match_length;
+  uint8_t transitions_begin;
+};
+
 struct trie_device_view {
-  uint16_t const* layer_offsets;
-  char const* tokens;
-  uint16_t const* transitions;
-  uint8_t const* match_length;
+  device_span<trie_node const> _nodes;
 
   inline constexpr uint16_t transition(uint16_t idx, char c)
   {
-    auto pos = transitions[idx];
-    auto end = transitions[idx + 1];
+    auto pos = _nodes[idx].transitions_begin;
+    auto end = _nodes[idx + 1].transitions_begin;
     while (pos < end) {
-      if (c == tokens[pos - 1]) { return pos; }
+      if (c == _nodes[pos].token) { return pos; }
       pos++;
     }
 
@@ -54,10 +58,10 @@ struct trie_device_view {
 
   inline constexpr uint16_t transition_init(char c)
   {
-    auto pos = transitions[0];
-    auto end = transitions[1];
+    auto pos = _nodes[0].transitions_begin;
+    auto end = _nodes[1].transitions_begin;
     while (pos < end) {
-      if (c == tokens[pos - 1]) { return pos; }
+      if (c == _nodes[pos].token) { return pos; }
       pos++;
     }
 
@@ -65,7 +69,7 @@ struct trie_device_view {
   }
 
   inline constexpr bool is_match(uint16_t idx) { return static_cast<bool>(get_match_length(idx)); }
-  inline constexpr uint8_t get_match_length(uint16_t idx) { return match_length[idx]; }
+  inline constexpr uint8_t get_match_length(uint16_t idx) { return _nodes[idx].match_length; }
 };
 
 struct trie {
@@ -75,22 +79,10 @@ struct trie {
   // layer_offsets to uint8_t, max string length would be 253 2^8-3 (two values
   // reserved: empty string, and error state)
  private:
-  rmm::device_uvector<uint16_t> _layer_offsets;
-  rmm::device_uvector<char> _tokens;
-  rmm::device_uvector<uint16_t> _transitions;
-  rmm::device_uvector<uint8_t> _match_length;
+  rmm::device_uvector<trie_node> _nodes;
 
  public:
-  trie(rmm::device_uvector<uint16_t>&& layer_offsets,
-       rmm::device_uvector<char>&& tokens,
-       rmm::device_uvector<uint16_t>&& transitions,
-       rmm::device_uvector<uint8_t>&& match_length)
-    : _layer_offsets(std::move(layer_offsets)),
-      _tokens(std::move(tokens)),
-      _transitions(std::move(transitions)),
-      _match_length(std::move(match_length))
-  {
-  }
+  trie(rmm::device_uvector<trie_node>&& nodes) : _nodes(std::move(nodes)) {}
 
   static trie create(std::string const& pattern,
                      rmm::cuda_stream_view stream,
@@ -104,9 +96,8 @@ struct trie {
                      rmm::cuda_stream_view stream,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
-    std::vector<uint16_t> layer_offsets;
     std::vector<char> tokens;
-    std::vector<uint16_t> transitions;
+    std::vector<uint8_t> transitions;
     std::vector<uint8_t> match_length;
 
     // create the trie tree
@@ -117,42 +108,43 @@ struct trie {
 
     // flatten
     auto sum = 1;
-    layer_offsets.emplace_back(0);
     transitions.emplace_back(sum);
     match_length.emplace_back(root->match_length);
 
-    auto nodes = std::queue<std::unique_ptr<trie_builder_node>>();
-    nodes.push(std::move(root));
+    auto builder_nodes = std::queue<std::unique_ptr<trie_builder_node>>();
+    builder_nodes.push(std::move(root));
 
-    while (nodes.size()) {
-      layer_offsets.emplace_back(sum);
-      auto layer_size = nodes.size();
+    tokens.emplace_back(0);
+
+    while (builder_nodes.size()) {
+      auto layer_size = builder_nodes.size();
       for (uint32_t i = 0; i < layer_size; i++) {
-        auto node = std::move(nodes.front());
-        nodes.pop();
+        auto node = std::move(builder_nodes.front());
+        builder_nodes.pop();
         sum += node->children.size();
         transitions.emplace_back(sum);
         for (auto& item : node->children) {
           match_length.emplace_back(item.second->match_length);
           tokens.emplace_back(item.first);
-          nodes.push(std::move(item.second));
+          builder_nodes.push(std::move(item.second));
         }
       }
     }
 
-    match_length.emplace_back(false);
+    tokens.emplace_back(0);
 
-    return trie{detail::make_device_uvector_async(layer_offsets, stream, mr),
-                detail::make_device_uvector_async(tokens, stream, mr),
-                detail::make_device_uvector_async(transitions, stream, mr),
-                detail::make_device_uvector_async(match_length, stream, mr)};
+    match_length.emplace_back(0);
+
+    std::vector<trie_node> trie_nodes;
+
+    for (uint32_t i = 0; i < tokens.size(); i++) {
+      trie_nodes.emplace_back(trie_node{tokens[i], match_length[i], transitions[i]});
+    }
+
+    return trie{detail::make_device_uvector_async(trie_nodes, stream, mr)};
   }
 
-  trie_device_view view() const
-  {
-    return trie_device_view{
-      _layer_offsets.data(), _tokens.data(), _transitions.data(), _match_length.data()};
-  }
+  trie_device_view view() const { return trie_device_view{_nodes}; }
 };
 
 }  // namespace text
