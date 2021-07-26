@@ -325,8 +325,7 @@ struct DeviceRollingVariance {
     }
 
     // Variance/Std is non-negative, thus ddof should be strictly less than valid counts.
-    // Variance/Std of a lone value is undefined.
-    bool output_is_valid = (count >= min_periods) and not(count == 1) and not(count <= ddof);
+    bool output_is_valid = (count >= min_periods) and not(count <= ddof);
 
     if (output_is_valid) {
       // Welford algorithm, a numerically stable, single pass algorithm
