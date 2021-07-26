@@ -5,6 +5,7 @@ from libcpp cimport bool
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.map cimport map
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.table.table_view as cudf_table_view
@@ -166,6 +167,10 @@ cdef extern from "cudf/io/csv.hpp" \
 
         # Conversion settings
         csv_reader_options_builder& dtypes(vector[string] types) except+
+        csv_reader_options_builder& dtypes(vector[data_type] types) except+
+        csv_reader_options_builder& dtypes(
+            map[string, data_type] types
+        ) except+
         csv_reader_options_builder& true_values(vector[string] vals) except+
         csv_reader_options_builder& false_values(vector[string] vals) except+
         csv_reader_options_builder& na_values(vector[string] vals) except+

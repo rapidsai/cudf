@@ -5,6 +5,7 @@ from libcpp cimport bool
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.map cimport map
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.table.table_view as cudf_table_view
@@ -46,6 +47,12 @@ cdef extern from "cudf/io/json.hpp" \
         ) except+
         json_reader_options_builder& dtypes(
             vector[string] types
+        ) except+
+        json_reader_options_builder& dtypes(
+            vector[data_type] types
+        ) except+
+        json_reader_options_builder& dtypes(
+            map[string, data_type] types
         ) except+
         json_reader_options_builder& compression(
             cudf_io_types.compression_type compression
