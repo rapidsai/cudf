@@ -89,7 +89,7 @@ struct DeviceMin {
   template <typename T>
   CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
   {
-    return std::min(lhs, rhs);
+    return lhs < rhs ? lhs : rhs;
   }
 
   template <
@@ -98,6 +98,14 @@ struct DeviceMin {
                               !cudf::is_dictionary<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
+    if constexpr (std::is_same<T, __int128_t>::value) {
+      __int128_t max = 1;
+      for (int i = 0; i < 126; ++i) {
+        max *= 2;
+      }
+      return max + (max - 1);
+    }
+
     return std::numeric_limits<T>::max();
   }
 
@@ -128,7 +136,7 @@ struct DeviceMax {
   template <typename T>
   CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
   {
-    return std::max(lhs, rhs);
+    return lhs > rhs ? lhs : rhs;
   }
 
   template <
@@ -137,6 +145,14 @@ struct DeviceMax {
                               !cudf::is_dictionary<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
+    if constexpr (std::is_same<T, __int128_t>::value) {
+      __int128_t lowest = -1;
+      for (int i = 0; i < 127; ++i) {
+        lowest *= 2;
+      }
+      return lowest;
+    }
+
     return std::numeric_limits<T>::lowest();
   }
 
