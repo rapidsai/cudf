@@ -6263,7 +6263,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Single    5
         dtype: int64
         """
-        if axis not in (0, "index", None):
+        axis = self._get_axis_from_axis_arg(axis)
+        if axis != 0:
             raise NotImplementedError("Only axis=0 is currently supported.")
 
         return self._apply_support_method(
@@ -6310,7 +6311,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         b    7
         dtype: int64
         """
-        return self._apply_support_method(
+        return self._reduce(
             "min",
             axis=axis,
             skipna=skipna,
@@ -6355,7 +6356,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         b    10
         dtype: int64
         """
-        return self._apply_support_method(
+        return self._reduce(
             "max",
             axis=axis,
             skipna=skipna,
@@ -6363,6 +6364,23 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             numeric_only=numeric_only,
             **kwargs,
         )
+
+    _SUPPORT_AXIS_LOOKUP = {
+        0: 0,
+        1: 1,
+        None: 0,
+        "index": 0,
+        "columns": 1,
+    }
+
+    @classmethod
+    def _get_axis_from_axis_arg(cls, axis):
+        try:
+            return cls._SUPPORT_AXIS_LOOKUP[axis]
+        except KeyError:
+            raise ValueError(
+                "Invalid axis argument, must be 0, 1, 'index', 'columns'."
+            )
 
     def _reduce(
         self, op, axis=None, level=None, numeric_only=None, **kwargs,
@@ -6374,10 +6392,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             raise NotImplementedError(
                 "numeric_only parameter is not implemented yet"
             )
-        assert axis in (None, 0, 1)
+        axis = self._get_axis_from_axis_arg(axis)
 
-        if axis in (None, 0):
-            return self._apply_support_method_axis_0(op, **kwargs)
+        if axis == 0:
+            result = [
+                getattr(self._data[col], op)(**kwargs)
+                for col in self._data.names
+            ]
+
+            return Series._from_data(
+                {None: result}, as_index(self._data.names)
+            )
         elif axis == 1:
             return self._apply_support_method_axis_1(op, **kwargs)
 
@@ -6486,8 +6511,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         b    5040
         dtype: int64
         """
+        axis = self._get_axis_from_axis_arg(axis)
         return self._reduce(
-            "prod",
+            # cuDF columns use "product" as the op name, but cupy uses "prod"
+            # and we need cupy if axis == 1.
+            "product" if axis == 0 else "prod",
             axis=axis,
             skipna=skipna,
             dtype=dtype,
@@ -7208,9 +7236,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             return result_df
 
     def _apply_support_method(self, method, axis=0, *args, **kwargs):
-        assert axis in (None, 0, 1)
+        axis = self._get_axis_from_axis_arg(axis)
 
-        if axis in (None, 0):
+        if axis == 0:
             return self._apply_support_method_axis_0(method, *args, **kwargs)
         elif axis == 1:
             return self._apply_support_method_axis_1(method, *args, **kwargs)
