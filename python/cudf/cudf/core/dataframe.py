@@ -6364,6 +6364,23 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             **kwargs,
         )
 
+    def _reduce(
+        self, op, axis=None, level=None, numeric_only=None, **kwargs,
+    ):
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
+        assert axis in (None, 0, 1)
+
+        if axis in (None, 0):
+            return self._apply_support_method_axis_0(op, **kwargs)
+        elif axis == 1:
+            return self._apply_support_method_axis_1(op, **kwargs)
+
     def sum(
         self,
         axis=None,
@@ -6411,7 +6428,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         b    34
         dtype: int64
         """
-        return self._apply_support_method(
+        return self._reduce(
             "sum",
             axis=axis,
             skipna=skipna,
@@ -6469,7 +6486,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         b    5040
         dtype: int64
         """
-        return self._apply_support_method(
+        return self._reduce(
             "prod",
             axis=axis,
             skipna=skipna,
@@ -6667,7 +6684,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         b    8.5
         dtype: float64
         """
-        return self._apply_support_method(
+        return self._reduce(
             "mean",
             axis=axis,
             skipna=skipna,
@@ -6822,7 +6839,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         dtype: float64
         """
 
-        return self._apply_support_method(
+        return self._reduce(
             "std",
             axis=axis,
             skipna=skipna,
@@ -6877,7 +6894,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         b    1.666667
         dtype: float64
         """
-        return self._apply_support_method(
+        return self._reduce(
             "var",
             axis=axis,
             skipna=skipna,
