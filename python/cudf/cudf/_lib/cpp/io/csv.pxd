@@ -2,10 +2,10 @@
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
+from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-from libcpp.map cimport map
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.table.table_view as cudf_table_view
@@ -164,8 +164,8 @@ cdef extern from "cudf/io/csv.hpp" \
         ) except+
         csv_reader_options_builder& quotechar(char val) except+
         csv_reader_options_builder& doublequote(bool val) except+
-        csv_reader_options_builder& infer_date_names(vector[string]) except+
-        csv_reader_options_builder& infer_date_indexes(vector[int]) except+
+        csv_reader_options_builder& parse_dates(vector[string]) except+
+        csv_reader_options_builder& parse_dates(vector[int]) except+
 
         # Conversion settings
         csv_reader_options_builder& dtypes(vector[string] types) except+
