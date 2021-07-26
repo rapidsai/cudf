@@ -77,6 +77,16 @@ struct extract_component_operator {
   }
 };
 
+template <datetime_component Component>
+struct ceil_timestamp {
+  template <typename Timestamp>
+  CUDA_DEVICE_CALLABLE Timestamp operator()(Timestamp const ts) const
+  {
+    using namespace cuda::std::chrono;
+    return Timestamp{ts};
+  }
+};
+
 // Number of days until month indexed by leap year and month (0-based index)
 static __device__ int16_t const days_until_month[2][13] = {
   {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365},  // For non leap years
