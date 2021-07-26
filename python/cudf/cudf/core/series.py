@@ -6407,6 +6407,29 @@ class DatetimeProperties(object):
             name=self.series.name,
         )
 
+    @property
+    def quarter(self):
+        """
+        Integer indicator for which quarter of the year the date belongs in.
+
+        There are 4 quarters in a year. With the first quarter being from
+        January - March, second quarter being April - June, third quarter
+        being July - September and fourth quarter being October - December.
+
+        Returns
+        -------
+        Series
+        Integer indicating which quarter the date belongs to.
+        """
+        res = libcudf.datetime.extract_quarter(self.series._column).fillna(
+            False
+        )
+        return Series._from_data(
+            ColumnAccessor({None: res}),
+            index=self.series._index,
+            name=self.series.name,
+        )
+
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(
