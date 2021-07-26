@@ -6695,22 +6695,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         b    False
         dtype: bool
         """
-        if bool_only:
-            return self.select_dtypes(include="bool")._apply_support_method(
-                "all",
-                axis=axis,
-                bool_only=bool_only,
-                skipna=skipna,
-                level=level,
-                **kwargs,
-            )
-        return self._apply_support_method(
-            "all",
-            axis=axis,
-            bool_only=bool_only,
-            skipna=skipna,
-            level=level,
-            **kwargs,
+        obj = self.select_dtypes(include="bool") if bool_only else self
+        return obj._reduce(
+            "all", axis=axis, skipna=skipna, level=level, **kwargs,
         )
 
     def any(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
@@ -6744,22 +6731,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         b    True
         dtype: bool
         """
-        if bool_only:
-            return self.select_dtypes(include="bool")._apply_support_method(
-                "any",
-                axis=axis,
-                bool_only=bool_only,
-                skipna=skipna,
-                level=level,
-                **kwargs,
-            )
-        return self._apply_support_method(
-            "any",
-            axis=axis,
-            bool_only=bool_only,
-            skipna=skipna,
-            level=level,
-            **kwargs,
+        obj = self.select_dtypes(include="bool") if bool_only else self
+        return obj._reduce(
+            "any", axis=axis, skipna=skipna, level=level, **kwargs,
         )
 
     def _apply_support_method_axis_0(self, method, *args, **kwargs):

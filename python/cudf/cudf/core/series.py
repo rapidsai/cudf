@@ -2750,26 +2750,13 @@ class Series(SingleColumnFrame, Serializable):
         True
         """
 
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
         if bool_only not in (None, True):
             raise NotImplementedError(
-                "bool_only parameter is not implemented yet"
+                "The bool_only parameter is not supported for Series."
             )
-
-        return self._column.all(skipna=skipna)
-
-        # if skipna:
-        #     result_series = self.nans_to_nulls()
-        #     if len(result_series) == result_series.null_count:
-        #         return True
-        # else:
-        #     result_series = self
-        # return result_series._column.all()
+        return self._reduce(
+            "all", axis=axis, skipna=skipna, level=level, **kwargs,
+        )
 
     def any(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         """
@@ -2801,33 +2788,13 @@ class Series(SingleColumnFrame, Serializable):
         True
         """
 
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
         if bool_only not in (None, True):
             raise NotImplementedError(
-                "bool_only parameter is not implemented yet"
+                "The bool_only parameter is not supported for Series."
             )
-        # TODO: I think we can remove this, pandas no longer supports None.
-        skipna = False if skipna is None else skipna
-
-        return self._column.any(skipna=skipna)
-
-        # if skipna is False and self.has_nulls:
-        #     return True
-        #
-        # if skipna:
-        #     result_series = self.nans_to_nulls()
-        #     if len(result_series) == result_series.null_count:
-        #         return False
-        #
-        # else:
-        #     result_series = self
-        #
-        # return result_series._column.any()
+        return self._reduce(
+            "any", axis=axis, skipna=skipna, level=level, **kwargs,
+        )
 
     def to_pandas(self, index=True, nullable=False, **kwargs):
         """
