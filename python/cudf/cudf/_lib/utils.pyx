@@ -198,11 +198,6 @@ def _index_level_name(index_name, level, column_names):
         return f"__index_level_{level}__"
 
 
-# TODO: Look into simplifying calling APIs that don't use the index from this.
-# TODO: There's a bit of an inconsistency in use cases where calling functions
-# are calling this function once to get the index and once to get the data. The
-# index is converted to an index object, while the data is not. Perhaps this
-# should be made more consistent.
 cdef data_from_unique_ptr(
     unique_ptr[table] c_tbl, column_names, index_names=None
 ):
@@ -213,7 +208,7 @@ cdef data_from_unique_ptr(
     named columns and a separate index.
 
     Since cuDF Python has an independent representation of a table as a
-    collection of columns, this function simply returns a list of columns
+    collection of columns, this function simply returns a dict of columns
     suitable for conversion into data to be passed to cuDF constructors.
     This method returns the columns of the table in the order they are
     stored in libcudf, but calling code is responsible for partitioning and
@@ -222,24 +217,40 @@ cdef data_from_unique_ptr(
     Parameters
     ----------
     c_tbl : unique_ptr[cudf::table]
-    index_names : iterable
+        The libcudf table whose columns will be extracted
     column_names : iterable
+        The keys associated with the columns in the output data.
+    index_names : iterable, optional
+        If provided, an iterable of strings that will be used to label the
+        corresponding first set of columns into a (Multi)Index. If this
+        argument is omitted, all columns are assumed to be part of the output
+        table and no index is constructed.
+
 
     Returns
     -------
-    List[Column]
-        A list of the columns in the output table.
+    Dict[str, Column]
+        A dict of the columns in the output table.
     """
     cdef vector[unique_ptr[column]] c_columns = move(c_tbl.get().release())
     cdef vector[unique_ptr[column]].iterator it = c_columns.begin()
 
-    # First construct the index, if any
     cdef int i
 
     columns = [Column.from_unique_ptr(move(dereference(it+i)))
                for i in range(c_columns.size())]
 
+    # First construct the index, if any
     index = (
+        # TODO: For performance, the _from_data methods of Frame types assume
+        # that the passed index object is already an Index because cudf.Index
+        # and cudf.as_index are expensive. As a result, this function is
+        # currently somewhat inconsistent in returning a dict of columns for
+        # the data while actually constructing the Index object here (instead
+        # of just returning a dict for that as well). As we clean up the
+        # Frame factories we may want to look for a less dissonant approach
+        # that does not impose performance penalties. The same applies to
+        # data_from_table_view below.
         cudf.Index._from_data(
             {
                 name: columns[i]
