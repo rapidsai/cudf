@@ -182,7 +182,7 @@ class reader::impl {
                                             rmm::cuda_stream_view stream);
 
   /**
-   * @brief Sorts the columns' data types from the map of dtypes.
+   * @brief Selects the columns' data types from the map of dtypes.
    *
    * @param col_type_map Column name -> data type map specifying the columns' target data types
    * @return Sorted ist of selected columns' data types
@@ -190,9 +190,9 @@ class reader::impl {
   std::vector<data_type> select_data_types(std::map<std::string, data_type> const& col_type_map);
 
   /**
-   * @brief Sorts the columns' data types from the map of dtypes.
+   * @brief Selects the columns' data types from the list of dtypes.
    *
-   * @param col_type_map Vector of deta types specifying the columns' target data types
+   * @param col_type_map Vector of data types specifying the columns' target data types
    * @return Sorted ist of selected columns' data types
    */
   std::vector<data_type> select_data_types(std::vector<data_type> const& dtypes);
