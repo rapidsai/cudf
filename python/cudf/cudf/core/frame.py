@@ -1304,8 +1304,15 @@ class Frame(libcudf.table.Table):
         if value is not None and method is not None:
             raise ValueError("Cannot specify both 'value' and 'method'.")
 
-        if method and method not in {"ffill", "bfill"}:
-            raise NotImplementedError(f"Fill method {method} is not supported")
+        if method:
+            if method not in {"ffill", "bfill", "pad", "backfill"}:
+                raise NotImplementedError(
+                    f"Fill method {method} is not supported"
+                )
+            if method == "pad":
+                method = "ffill"
+            elif method == "backfill":
+                method = "bfill"
 
         if isinstance(value, cudf.Series):
             value = value.reindex(self._data.names)

@@ -19,6 +19,7 @@
 #include "orc_common.h"
 
 #include <io/comp/io_uncomp.h>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/utilities/error.hpp>
@@ -82,7 +83,7 @@ struct FileFooter {
 struct Stream {
   StreamKind kind = INVALID_STREAM_KIND;
   std::optional<uint32_t> column_id;  // ORC column id (different from column index in the table!)
-  uint64_t length = 0;                // the number of bytes in the file
+  uint64_t length = 0;                // the number of bytes in the stream
 
   // Returns index of the column in the table, if any
   // Stream of the 'column 0' does not have a corresponding column in the table
@@ -539,10 +540,7 @@ class OrcDecompressor {
 };
 
 /**
- * @brief Stores orc id for each column and its adjacent number of children
- * in case of struct or number of children in case of list column.
- * If list column has struct column, then all child columns of that struct are treated as child
- * column of list.
+ * @brief Stores orc id for each column and number of children in that column.
  *
  * @code{.pseudo}
  * Consider following data where a struct has two members and a list column
@@ -559,9 +557,16 @@ class OrcDecompressor {
  *
  */
 struct orc_column_meta {
-  // orc_column_meta(uint32_t _id, uint32_t _num_children) : id(_id), num_children(_num_children){};
   uint32_t id;            // orc id for the column
   uint32_t num_children;  // number of children at the same level of nesting in case of struct
+};
+
+/**
+ * @brief Stores column's validity map and null count
+ */
+struct column_validity_info {
+  uint32_t* valid_map_base;
+  uint32_t null_count;
 };
 
 /**
@@ -607,6 +612,23 @@ class metadata {
   void init_column_names() const;
 
   mutable std::vector<std::string> column_names;
+};
+
+/**
+ * @brief `column_device_view` and additional, ORC specific, information on the column.
+ */
+struct orc_column_device_view {
+  column_device_view cudf_column;
+  thrust::optional<uint32_t> parent_index;
+};
+
+/**
+ * @brief Range of rows within a single rowgroup.
+ */
+struct rowgroup_rows {
+  size_type begin;
+  size_type end;
+  constexpr auto size() const noexcept { return end - begin; }
 };
 
 }  // namespace orc
