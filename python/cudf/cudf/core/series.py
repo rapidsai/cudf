@@ -2721,80 +2721,18 @@ class Series(SingleColumnFrame, Serializable):
         return self._copy_construct(data=result_col)
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
-        """
-        Return whether all elements are True in Series.
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values. If the entire row/column is NA and
-            skipna is True, then the result will be True, as for an
-            empty row/column.
-            If skipna is False, then NA are treated as True, because
-            these are not equal to zero.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `bool_only`, `level`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3])
-        >>> ser.all()
-        True
-        """
-
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
             )
-        return self._reduce(
-            "all", axis=axis, skipna=skipna, level=level, **kwargs,
-        )
+        return super().all(axis, skipna, level, **kwargs)
 
     def any(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
-        """
-        Return whether any elements is True in Series.
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values. If the entire row/column is NA and
-            skipna is True, then the result will be False, as for an
-            empty row/column.
-            If skipna is False, then NA are treated as True, because
-            these are not equal to zero.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `bool_only`, `level`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3])
-        >>> ser.any()
-        True
-        """
-
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
             )
-        return self._reduce(
-            "any", axis=axis, skipna=skipna, level=level, **kwargs,
-        )
+        return super().any(axis, skipna, level, **kwargs)
 
     def to_pandas(self, index=True, nullable=False, **kwargs):
         """

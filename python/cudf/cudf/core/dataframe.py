@@ -6665,76 +6665,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         )
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
-        """
-        Return whether all elements are True in DataFrame.
-
-        Parameters
-        ----------
-
-        skipna: bool, default True
-            Exclude NA/null values. If the entire row/column is NA and
-            skipna is True, then the result will be True, as for an
-            empty row/column.
-            If skipna is False, then NA are treated as True, because
-            these are not equal to zero.
-
-        Returns
-        -------
-        Series
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `bool_only`, `level`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 0, 10, 10]})
-        >>> df.all()
-        a     True
-        b    False
-        dtype: bool
-        """
         obj = self.select_dtypes(include="bool") if bool_only else self
-        return obj._reduce(
-            "all", axis=axis, skipna=skipna, level=level, **kwargs,
-        )
+        return super(DataFrame, obj).all(axis, skipna, level, **kwargs)
 
     def any(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
-        """
-        Return whether any elements is True in DataFrame.
-
-        Parameters
-        ----------
-
-        skipna: bool, default True
-            Exclude NA/null values. If the entire row/column is NA and
-            skipna is True, then the result will be False, as for an
-            empty row/column.
-            If skipna is False, then NA are treated as True, because
-            these are not equal to zero.
-
-        Returns
-        -------
-        Series
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `bool_only`, `level`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 0, 10, 10]})
-        >>> df.any()
-        a    True
-        b    True
-        dtype: bool
-        """
         obj = self.select_dtypes(include="bool") if bool_only else self
-        return obj._reduce(
-            "any", axis=axis, skipna=skipna, level=level, **kwargs,
-        )
+        return super(DataFrame, obj).any(axis, skipna, level, **kwargs)
 
     def _apply_support_method_axis_0(self, method, *args, **kwargs):
         result = [

@@ -3977,6 +3977,76 @@ class Frame(libcudf.table.Table):
             **kwargs,
         )
 
+    def all(self, axis=0, skipna=True, level=None, **kwargs):
+        """
+        Return whether all elements are True in DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If the entire row/column is NA and
+            skipna is True, then the result will be True, as for an
+            empty row/column.
+            If skipna is False, then NA are treated as True, because
+            these are not equal to zero.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `bool_only`, `level`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 0, 10, 10]})
+        >>> df.all()
+        a     True
+        b    False
+        dtype: bool
+        """
+        return self._reduce(
+            "all", axis=axis, skipna=skipna, level=level, **kwargs,
+        )
+
+    def any(self, axis=0, skipna=True, level=None, **kwargs):
+        """
+        Return whether any elements is True in DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If the entire row/column is NA and
+            skipna is True, then the result will be False, as for an
+            empty row/column.
+            If skipna is False, then NA are treated as True, because
+            these are not equal to zero.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `bool_only`, `level`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 0, 10, 10]})
+        >>> df.any()
+        a    True
+        b    True
+        dtype: bool
+        """
+        return self._reduce(
+            "any", axis=axis, skipna=skipna, level=level, **kwargs,
+        )
+
 
 class SingleColumnFrame(Frame):
     """A one-dimensional frame.
