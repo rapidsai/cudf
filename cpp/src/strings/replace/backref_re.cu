@@ -57,13 +57,13 @@ std::string get_backref_pattern(std::string const& repl)
 /**
  * @brief Parse the back-ref index and position values from a given replace format.
  *
- * The backref numbers are expected to be 1-based.
+ * The back-ref numbers are expected to be 1-based.
  *
- * Returns a modified string without back-ref indicators and a vector of backref
+ * Returns a modified string without back-ref indicators and a vector of back-ref
  * byte position pairs. These are used by the device code to build the output
  * string by placing the captured group elements into the replace format.
  *
- * For example, for input string 'hello \2 and \1' the returned backref vector
+ * For example, for input string 'hello \2 and \1' the returned `backref_type` vector
  * contains `[(2,6),(1,11)]` and the returned string is 'hello  and '.
  */
 std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string const& repl)
@@ -86,7 +86,7 @@ std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string con
 
     // update the output string
     rtn += str.substr(0, position);
-    // remove the backref pattern to continue parsing
+    // remove the back-ref pattern to continue parsing
     str = str.substr(position + static_cast<size_type>(m.length(0)));
   }
   if (!str.empty())  // add the remainder
@@ -114,7 +114,7 @@ std::unique_ptr<column> replace_with_backrefs(
   auto d_prog = reprog_device::create(pattern, get_character_flags_table(), strings.size(), stream);
   auto const regex_insts = d_prog->insts_counts();
 
-  // parse the repl string for backref indicators
+  // parse the repl string for back-ref indicators
   auto const parse_result = parse_backrefs(repl);
   rmm::device_uvector<backref_type> backrefs(parse_result.second.size(), stream);
   CUDA_TRY(cudaMemcpyAsync(backrefs.data(),
