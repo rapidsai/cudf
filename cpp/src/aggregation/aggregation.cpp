@@ -594,8 +594,9 @@ struct target_type_functor {
   constexpr data_type operator()() const noexcept
   {
     auto const id = type_to_id<target_type_t<Source, k>>();
-    return id == type_id::DECIMAL32 || id == type_id::DECIMAL64 ? data_type{id, type.scale()}
-                                                                : data_type{id};
+    return id == type_id::DECIMAL32 || id == type_id::DECIMAL64 || id == type_id::DECIMAL128
+             ? data_type{id, type.scale()}
+             : data_type{id};
   }
 };
 
