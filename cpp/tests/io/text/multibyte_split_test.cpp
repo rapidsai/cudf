@@ -118,7 +118,7 @@ TEST_F(MultibyteSplitTest, MultipleDelimiters)
     "and😎"
     "used😎"
     "as😎"
-    "delimeters.😎"
+    "delimiters.😎"
     "::"
     ","
     "😀");
@@ -127,7 +127,7 @@ TEST_F(MultibyteSplitTest, MultipleDelimiters)
     "aaa😀",         "bbb😀",   "ccc😀", "ddd😀",      "eee😀",    "fff::", "ggg😀",       "hhh😀",
     "___,",         "here,",  "is,",  "another,",  "simple😀", "text😎", "seperated😎", "by😎",
     "emojis,",      "which,", "are😎", "multiple,", "bytes::", "and😎",  "used😎",      "as😎",
-    "delimeters.😎", "::",     ",",    "😀",         ""};
+    "delimiters.😎", "::",     ",",    "😀",         ""};
 
   auto source = cudf::io::text::make_source(host_input);
   auto out    = cudf::io::text::multibyte_split(*source, delimiters);

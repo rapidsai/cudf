@@ -135,7 +135,7 @@ struct scan_tile_state {
   }
 };
 
-auto constexpr PARTIAL_AGGRIGATION_STRATEGY = 1;
+auto constexpr PARTIAL_AGGREGATION_STRATEGY = 1;
 
 // keep ITEMS_PER_TILE below input size to force multi-tile execution.
 auto constexpr ITEMS_PER_THREAD = 32;   // influences register pressure
@@ -171,13 +171,13 @@ struct scan_tile_state_callback {
     auto predecessor_idx    = _tile_idx - 1 - threadIdx.x;
     auto predecessor_status = scan_tile_status::invalid;
 
-    if constexpr (PARTIAL_AGGRIGATION_STRATEGY == 0) {
+    if constexpr (PARTIAL_AGGREGATION_STRATEGY == 0) {
       if (threadIdx.x == 0) {
         _temp_storage.exclusive_prefix = _tile_state.get_inclusive_prefix(predecessor_idx);
       }
     }
 
-    if constexpr (PARTIAL_AGGRIGATION_STRATEGY == 1) {
+    if constexpr (PARTIAL_AGGREGATION_STRATEGY == 1) {
       // scan partials to form prefix
 
       auto window_partial = T{};
@@ -193,7 +193,7 @@ struct scan_tile_state_callback {
       }
     }
 
-    if constexpr (PARTIAL_AGGRIGATION_STRATEGY == 2) {
+    if constexpr (PARTIAL_AGGREGATION_STRATEGY == 2) {
       auto window_partial = T{};
       if (threadIdx.x < 32) {
         do {
@@ -494,12 +494,12 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
 }
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source& source,
-                                              std::vector<std::string> const& delimeters,
+                                              std::vector<std::string> const& delimiters,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto const trie = cudf::io::text::trie::create(delimeters, stream);
+  auto const trie = cudf::io::text::trie::create(delimiters, stream);
   // must be at least 32 when using warp-reduce on partials
   // must be at least 1 more than max possible concurrent tiles
   // best when at least 32 more than max possible concurrent tiles, due to rolling `invalid`s
@@ -551,11 +551,11 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source&
 }  // namespace detail
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source& source,
-                                              std::vector<std::string> const& delimeters,
+                                              std::vector<std::string> const& delimiters,
                                               rmm::mr::device_memory_resource* mr)
 {
   auto stream = rmm::cuda_stream_default;
-  auto result = detail::multibyte_split(source, delimeters, stream, mr);
+  auto result = detail::multibyte_split(source, delimiters, stream, mr);
   stream.synchronize();
   return result;
 }
