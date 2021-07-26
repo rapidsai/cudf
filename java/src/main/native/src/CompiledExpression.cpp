@@ -142,7 +142,9 @@ public:
       case cudf::type_id::DURATION_MILLISECONDS:
       case cudf::type_id::DURATION_MICROSECONDS:
       case cudf::type_id::DURATION_NANOSECONDS:
-      case cudf::type_id::STRING: return cudf::data_type(dtype_id);
+      case cudf::type_id::STRING: {
+        return cudf::data_type(dtype_id);
+      }
       case cudf::type_id::DECIMAL32:
       case cudf::type_id::DECIMAL64: {
         int32_t const scale = read_byte();
