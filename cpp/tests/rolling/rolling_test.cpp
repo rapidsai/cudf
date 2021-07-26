@@ -1378,6 +1378,7 @@ TYPED_TEST(FixedPointTests, VarStd)
 
   size_type preceding_window{2}, following_window{0}, min_periods{1}, ddof{1};
 
+  // The variance of `input` given `scale` == 0
   std::vector<double> result_base_v{-1, 1422984.5, 1401138.0, 1352.0, 2.0, 0.5};
   std::vector<bool> result_mask_v{0, 1, 1, 1, 1, 1};
 
@@ -1396,6 +1397,7 @@ TYPED_TEST(FixedPointTests, VarStd)
     std::vector<double> result_scaled_v(result_base_v.size());
     std::transform(
       result_base_v.begin(), result_base_v.end(), result_scaled_v.begin(), [&s](auto x) {
+        // When values are scaled by 10^n, the variance is scaled by 10^2n.
         return x * exp10(s) * exp10(s);
       });
     fw_wrapper expect(result_scaled_v.begin(), result_scaled_v.end(), result_mask_v.begin());
@@ -1418,6 +1420,7 @@ TYPED_TEST(FixedPointTests, VarStd)
     std::vector<double> result_scaled_v(result_base_v.size());
     std::transform(
       result_base_v.begin(), result_base_v.end(), result_scaled_v.begin(), [&s](auto x) {
+        // When values are scaled by 10^n, the variance is scaled by 10^2n.
         return std::sqrt(x * exp10(s) * exp10(s));
       });
     fw_wrapper expect(result_scaled_v.begin(), result_scaled_v.end(), result_mask_v.begin());

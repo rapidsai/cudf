@@ -354,6 +354,8 @@ struct DeviceRollingVariance {
                          return thrust::make_tuple(r_count_acc, m_acc, m2_acc);
                        });
       if constexpr (is_fixed_point<InputType>()) {
+        // For fixed_point types, the previous computed value used unscaled rep-value,
+        // the final result should be multiplied by the square of decimal `scale`.
         OutputType scaleby = exp10(static_cast<double>(input.type().scale()));
         scaleby *= scaleby;
         output.element<OutputType>(current_index) = m2 / (count - ddof) * scaleby;
