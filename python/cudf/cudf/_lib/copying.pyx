@@ -673,8 +673,8 @@ def _boolean_mask_scatter_scalar(list input_scalars, Table target_table,
     )
 
 
-# TODO: Should we remove this API (and the two functions above)? I don't see it
-# exposed anywhere in cudf.
+# TODO: This function is currently unused but should be used in
+# ColumnBase.__setitem__, see https://github.com/rapidsai/cudf/issues/8667.
 def boolean_mask_scatter(object input, Table target_table,
                          Column boolean_mask):
 
