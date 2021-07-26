@@ -79,6 +79,8 @@ constexpr type_id to_type_id(const orc::SchemaType& schema,
       // There isn't a (DAYS -> np.dtype) mapping
       return (use_np_dtypes) ? type_id::TIMESTAMP_MILLISECONDS : type_id::TIMESTAMP_DAYS;
     case orc::DECIMAL: return (decimals_as_float64) ? type_id::FLOAT64 : type_id::DECIMAL64;
+    // Need to update once cuDF plans to support map type
+    case orc::MAP:
     case orc::LIST: return type_id::LIST;
     case orc::STRUCT: return type_id::STRUCT;
     default: break;
@@ -488,6 +490,7 @@ class aggregate_orc_metadata {
     if (types[id].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
 
     switch (types[id].kind) {
+      case orc::MAP:
       case orc::LIST:
       case orc::STRUCT: {
         has_nested_column = true;
@@ -926,9 +929,10 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
   int32_t scale = 0;
   std::vector<std::unique_ptr<column>> child_columns;
   std::unique_ptr<column> out_col = nullptr;
+  auto kind                       = _metadata->get_col_type(orc_col_id).kind;
 
-  switch (type) {
-    case type_id::LIST:
+  switch (kind) {
+    case orc::LIST:
       schema_info.children.emplace_back("offsets");
       schema_info.children.emplace_back("");
       out_col = make_lists_column(
@@ -939,10 +943,29 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
         0,
         rmm::device_buffer{0, stream},
         stream);
-
       break;
+    case orc::MAP: {
+      schema_info.children.emplace_back("offsets");
+      schema_info.children.emplace_back("struct");
+      const auto cols = _metadata->get_col_type(orc_col_id).subtypes;
+      for (size_t idx = 0; idx < _metadata->get_col_type(orc_col_id).subtypes.size(); idx++) {
+        schema_info.children.back().children.emplace_back("");
+        child_columns.push_back(
+          create_empty_column(cols[idx], schema_info.children.back().children.back(), stream));
+        auto name                                      = (idx == 0) ? "key" : "value";
+        schema_info.children.back().children[idx].name = name;
+      }
+      auto struct_col =
+        make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream);
+      out_col = make_lists_column(0,
+                                  make_empty_column(data_type(type_id::INT32)),
+                                  std::move(struct_col),
+                                  0,
+                                  rmm::device_buffer{0, stream},
+                                  stream);
+    } break;
 
-    case type_id::STRUCT:
+    case orc::STRUCT:
       for (const auto col : _metadata->get_col_type(orc_col_id).subtypes) {
         schema_info.children.emplace_back("");
         child_columns.push_back(create_empty_column(col, schema_info.children.back(), stream));
@@ -951,8 +974,10 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
         make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream);
       break;
 
-    case type_id::DECIMAL64:
-      scale   = -static_cast<int32_t>(_metadata->get_types()[orc_col_id].scale.value_or(0));
+    case orc::DECIMAL:
+      if (type == type_id::DECIMAL64) {
+        scale = -static_cast<int32_t>(_metadata->get_types()[orc_col_id].scale.value_or(0));
+      }
       out_col = make_empty_column(data_type(type, scale));
       break;
 
@@ -965,20 +990,47 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
 // Adds child column buffers to parent column
 column_buffer&& reader::impl::assemble_buffer(const int32_t orc_col_id,
                                               std::vector<std::vector<column_buffer>>& col_buffers,
-                                              const size_t level)
+                                              const size_t level,
+                                              rmm::cuda_stream_view stream)
 {
   auto const col_id = _col_meta.orc_col_map[level][orc_col_id];
   auto& col_buffer  = col_buffers[level][col_id];
 
   col_buffer.name = _metadata->get_column_name(0, orc_col_id);
-  switch (col_buffer.type.id()) {
-    case type_id::LIST:
-    case type_id::STRUCT:
+  auto kind       = _metadata->get_col_type(orc_col_id).kind;
+  switch (kind) {
+    case orc::LIST:
+    case orc::STRUCT:
       for (auto const& col : _metadata->get_col_type(orc_col_id).subtypes) {
-        col_buffer.children.emplace_back(assemble_buffer(col, col_buffers, level + 1));
+        col_buffer.children.emplace_back(assemble_buffer(col, col_buffers, level + 1, stream));
       }
 
       break;
+    case orc::MAP: {
+      std::vector<column_buffer> child_col_buffers;
+      // Get child buffers
+      for (size_t idx = 0; idx < _metadata->get_col_type(orc_col_id).subtypes.size(); idx++) {
+        auto name = (idx == 0) ? "key" : "value";
+        auto col  = _metadata->get_col_type(orc_col_id).subtypes[idx];
+        // printf("RGSL : col id is %u \n", col);
+        child_col_buffers.emplace_back(assemble_buffer(col, col_buffers, level + 1, stream));
+        // printf("RGSL : Assembled child column \n");
+        child_col_buffers.back().name = name;
+        // printf("RGSL : ------------------------------------- child_col_buffers.back() size of the
+        // buffer is %d \n", child_col_buffers[idx].size);
+      }
+      // Create a struct buffer
+      auto num_rows = child_col_buffers[0].size;
+      // printf("RGSL : num_rows is %d \n", num_rows);
+      auto struct_buffer =
+        column_buffer(cudf::data_type(type_id::STRUCT), num_rows, false, stream, _mr);
+      struct_buffer.children = std::move(child_col_buffers);
+      struct_buffer.name     = "struct";
+
+      // printf("RGSL : Created struct column \n");
+      col_buffer.children.emplace_back(std::move(struct_buffer));
+      // printf("RGSL : Created column buffer in map \n");
+    } break;
 
     default: break;
   }
@@ -997,7 +1049,7 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>>&& col_
                  std::back_inserter(out_columns),
                  [&](auto const col_meta) {
                    schema_info.emplace_back("");
-                   auto col_buffer = assemble_buffer(col_meta.id, col_buffers, 0);
+                   auto col_buffer = assemble_buffer(col_meta.id, col_buffers, 0, stream);
                    return make_column(col_buffer, &schema_info.back(), stream, _mr);
                  });
 }
