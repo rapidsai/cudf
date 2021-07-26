@@ -23,10 +23,13 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
+#include <cudf/binaryop.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/rolling.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <src/rolling/rolling_detail.hpp>
@@ -381,6 +384,12 @@ class RollingTest : public cudf::test::BaseFixture {
 
         ref_data[i] = m2 / (count - ddof);
         if (do_square_root) { ref_data[i] = std::sqrt(ref_data[i]); }
+
+        if (cudf::is_fixed_point<T>()) {
+          OutputType scaleby{exp10(static_cast<double>(input.type().scale()))};
+          scaleby = scaleby * scaleby;
+          ref_data[i] *= scaleby;
+        }
       }
     }
 
@@ -1356,6 +1365,65 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_val, valid->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_all, all->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_rowno, rowno->view());
+}
+
+TYPED_TEST(FixedPointTests, VarStd)
+{
+  using namespace numeric;
+  using namespace cudf;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<double>;
+
+  size_type preceding_window{2}, following_window{0}, min_periods{1}, ddof{1};
+
+  std::vector<double> result_base_v{-1, 1422984.5, 1401138.0, 1352.0, 2.0, 0.5};
+  std::vector<bool> result_mask_v{0, 1, 1, 1, 1, 1};
+
+  // var tests
+  for (int32_t s = -5; s < 5; s++) {
+    auto const scale = scale_type{s};
+    auto const input = fp_wrapper{{42, 1729, 55, 3, 1, 2}, {1, 1, 1, 1, 1, 1}, scale};
+
+    auto got = rolling_window(
+      input,
+      preceding_window,
+      following_window,
+      min_periods,
+      dynamic_cast<cudf::rolling_aggregation const&>(*cudf::make_variance_aggregation(ddof)));
+
+    std::vector<double> result_scaled_v(result_base_v.size());
+    std::transform(
+      result_base_v.begin(), result_base_v.end(), result_scaled_v.begin(), [&s](auto x) {
+        return x * exp10(s) * exp10(s);
+      });
+    fw_wrapper expect(result_scaled_v.begin(), result_scaled_v.end(), result_mask_v.begin());
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect, *got);
+  }
+
+  // std tests
+  for (int32_t s = -5; s < 5; s++) {
+    auto const scale = scale_type{s};
+    auto const input = fp_wrapper{{42, 1729, 55, 3, 1, 2}, {1, 1, 1, 1, 1, 1}, scale};
+
+    auto got = rolling_window(
+      input,
+      preceding_window,
+      following_window,
+      min_periods,
+      dynamic_cast<cudf::rolling_aggregation const&>(*cudf::make_std_aggregation(ddof)));
+
+    std::vector<double> result_scaled_v(result_base_v.size());
+    std::transform(
+      result_base_v.begin(), result_base_v.end(), result_scaled_v.begin(), [&s](auto x) {
+        return std::sqrt(x * exp10(s) * exp10(s));
+      });
+    fw_wrapper expect(result_scaled_v.begin(), result_scaled_v.end(), result_mask_v.begin());
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect, *got);
+  }
 }
 
 class RollingDictionaryTest : public cudf::test::BaseFixture {
