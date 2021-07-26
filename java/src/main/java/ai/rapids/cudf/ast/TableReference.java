@@ -25,8 +25,8 @@ import java.nio.ByteBuffer;
  */
 public enum TableReference {
   LEFT(0),
-  RIGHT(1),
-  OUTPUT(2);
+  RIGHT(1);
+  // OUTPUT is an AST implementation detail and should not appear in user-built expressions.
 
   private final byte nativeId;
 

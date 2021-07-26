@@ -38,8 +38,30 @@ import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 public class CompiledExpressionTest extends CudfTestBase {
   @Test
   public void testColumnReferenceTransform() {
+    try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build()) {
+      // use an implicit table reference
+      UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY,
+          new ColumnReference(1));
+      try (CompiledExpression compiledExpr = expr.compile();
+           ColumnVector actual = compiledExpr.computeColumn(t)) {
+        assertColumnsAreEqual(t.getColumn(1), actual);
+      }
+
+      // use an explicit table reference
+      expr = new UnaryExpression(UnaryOperator.IDENTITY,
+          new ColumnReference(1, TableReference.LEFT));
+      try (CompiledExpression compiledExpr = expr.compile();
+           ColumnVector actual = compiledExpr.computeColumn(t)) {
+        assertColumnsAreEqual(t.getColumn(1), actual);
+      }
+    }
+  }
+
+  @Test
+  public void testInvalidColumnReferenceTransform() {
+    // verify attempting to reference an invalid table remaps to the only valid table
     UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY,
-        new ColumnReference(1));
+        new ColumnReference(1, TableReference.RIGHT));
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t)) {

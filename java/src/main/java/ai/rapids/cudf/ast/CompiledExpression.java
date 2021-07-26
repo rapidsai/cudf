@@ -73,7 +73,9 @@ public class CompiledExpression implements AutoCloseable {
   }
 
   /**
-   * Compute a new column by applying this AST expression to the specified table.
+   * Compute a new column by applying this AST expression to the specified table. All
+   * {@link ColumnReference} instances within the expression will use the sole input table,
+   * even if they try to specify a non-existent table, e.g.: {@link TableReference#RIGHT}.
    * @param table input table for this expression
    * @return new column computed from this expression applied to the input table
    */

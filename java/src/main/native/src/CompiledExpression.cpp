@@ -239,7 +239,6 @@ cudf::ast::table_reference jni_to_table_reference(jbyte jni_value) {
   switch (jni_value) {
     case 0: return cudf::ast::table_reference::LEFT;
     case 1: return cudf::ast::table_reference::RIGHT;
-    case 2: return cudf::ast::table_reference::OUTPUT;
     default: throw std::invalid_argument("unexpected JNI table reference value");
   }
 }
