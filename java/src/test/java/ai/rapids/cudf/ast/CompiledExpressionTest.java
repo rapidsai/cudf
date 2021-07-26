@@ -17,9 +17,11 @@
 package ai.rapids.cudf.ast;
 
 import ai.rapids.cudf.ColumnVector;
+import ai.rapids.cudf.CudfException;
 import ai.rapids.cudf.CudfTestBase;
 import ai.rapids.cudf.DType;
 import ai.rapids.cudf.Table;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -557,6 +559,18 @@ public class CompiledExpressionTest extends CudfTestBase {
          ColumnVector expected = ColumnVector.fromBoxedBooleans(
              expectedValues.toArray(new Boolean[0]))) {
       assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testMismatchedBinaryExpressionTypes() {
+    // verify expression fails to transform if operands are not the same type
+    BinaryExpression expr = new BinaryExpression(BinaryOperator.ADD,
+        new ColumnReference(0),
+        new ColumnReference(1));
+    try (Table t = new Table.TestBuilder().column(1, 2, 3).column(1L, 2L, 3L).build();
+         CompiledExpression compiledExpr = expr.compile()) {
+      Assertions.assertThrows(CudfException.class, () -> compiledExpr.computeColumn(t).close());
     }
   }
 }
