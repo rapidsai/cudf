@@ -27,6 +27,8 @@ cdef extern from "cudf/io/json.hpp" \
 
         # setter
         void set_dtypes(vector[string] types) except+
+        void set_dtypes(vector[data_type] types) except+
+        void set_dtypes(map[string, data_type] types) except+
         void set_compression(
             cudf_io_types.compression_type compression
         ) except+

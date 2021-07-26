@@ -102,6 +102,8 @@ cdef extern from "cudf/io/csv.hpp" \
 
         # Conversion settings
         void set_dtypes(vector[string] types) except+
+        void set_dtypes(vector[data_type] types) except+
+        void set_dtypes(map[string, data_type] types) except+
         void set_true_values(vector[string] vals) except+
         void set_false_values(vector[string] vals) except+
         void set_na_values(vector[string] vals) except+
