@@ -96,6 +96,7 @@ __device__ inline size_type integer_to_string(IntegerType value, char* d_buffer)
 template <typename IntegerType>
 constexpr size_type count_digits(IntegerType value)
 {
+  // TODO definitely broken
   if (value == 0) return 1;
   bool is_negative = std::is_signed<IntegerType>::value ? (value < 0) : false;
   // abs(std::numeric_limits<IntegerType>::min()) is negative;

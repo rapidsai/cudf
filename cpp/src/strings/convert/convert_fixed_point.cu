@@ -115,7 +115,7 @@ struct string_to_decimal_check_fn {
     return (exp_ten < scale)
              ? true
              : value <= static_cast<uint64_t>(
-                          std::numeric_limits<DecimalType>::max() /
+                          std::numeric_limits<DecimalType>::max() /  // TODO probably broken
                           static_cast<DecimalType>(exp10(static_cast<double>(exp_ten - scale))));
   }
 };
@@ -206,18 +206,16 @@ struct decimal_to_string_size_fn {
 
     if (scale >= 0) return count_digits(value) + scale;
 
-    if constexpr (not std::is_same<DecimalType, __int128_t>::value) {  // TODO
-      auto const abs_value = std::abs(value);
-      auto const exp_ten   = static_cast<int64_t>(exp10(static_cast<double>(-scale)));
-      auto const fraction  = count_digits(abs_value % exp_ten);
-      auto const num_zeros = std::max(0, (-scale - fraction));
-      return static_cast<int32_t>(value < 0) +    // sign if negative
-             count_digits(abs_value / exp_ten) +  // integer
-             1 +                                  // decimal point
-             num_zeros +                          // zeros padding
-             fraction;                            // size of fraction
-    }
-    return 0;
+    auto const abs_value = numeric::detail::abs(value);
+    auto const exp_ten   = static_cast<int64_t>(exp10(
+        static_cast<double>(-scale)));  // TODO probably broken (might need numeric::detail::exp10)
+    auto const fraction  = count_digits(abs_value % exp_ten);
+    auto const num_zeros = std::max(0, (-scale - fraction));
+    return static_cast<int32_t>(value < 0) +    // sign if negative
+           count_digits(abs_value / exp_ten) +  // integer
+           1 +                                  // decimal point
+           num_zeros +                          // zeros padding
+           fraction;                            // size of fraction
   }
 };
 
@@ -250,20 +248,18 @@ struct decimal_to_string_fn {
     // write format:   [-]integer.fraction
     // where integer  = abs(value) / (10^abs(scale))
     //       fraction = abs(value) % (10^abs(scale))
-    if constexpr (not std::is_same<DecimalType, __int128_t>::value) {  // TODO fix
-      auto const abs_value = std::abs(value);
-      if (value < 0) *d_buffer++ = '-';  // add sign
-      auto const exp_ten   = static_cast<int64_t>(exp10(static_cast<double>(-scale)));
-      auto const num_zeros = std::max(0, (-scale - count_digits(abs_value % exp_ten)));
+    auto const abs_value = numeric::detail::abs(value);
+    if (value < 0) *d_buffer++ = '-';  // add sign
+    auto const exp_ten   = static_cast<int64_t>(exp10(static_cast<double>(-scale)));
+    auto const num_zeros = std::max(0, (-scale - count_digits(abs_value % exp_ten)));
 
-      d_buffer += integer_to_string(abs_value / exp_ten, d_buffer);  // add the integer part
-      *d_buffer++ = '.';                                             // add decimal point
+    d_buffer += integer_to_string(abs_value / exp_ten, d_buffer);  // add the integer part
+    *d_buffer++ = '.';                                             // add decimal point
 
-      thrust::generate_n(thrust::seq, d_buffer, num_zeros, []() { return '0'; });  // add zeros
-      d_buffer += num_zeros;
+    thrust::generate_n(thrust::seq, d_buffer, num_zeros, []() { return '0'; });  // add zeros
+    d_buffer += num_zeros;
 
-      integer_to_string(abs_value % exp_ten, d_buffer);  // add the fraction part
-    }
+    integer_to_string(abs_value % exp_ten, d_buffer);  // add the fraction part
   }
 };
 

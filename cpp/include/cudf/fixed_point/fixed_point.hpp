@@ -173,7 +173,7 @@ auto to_string(T value) -> std::string
 }
 
 template <typename T>
-auto abs(T value)
+CUDA_HOST_DEVICE_CALLABLE auto abs(T value)
 {
   return value >= 0 ? value : -value;
 }
