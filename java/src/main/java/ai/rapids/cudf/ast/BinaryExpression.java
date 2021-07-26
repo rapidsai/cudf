@@ -20,14 +20,11 @@ import java.nio.ByteBuffer;
 
 /** A binary expression consisting of an operator and two operands. */
 public class BinaryExpression extends Expression {
-  private final AstOperator op;
+  private final BinaryOperator op;
   private final AstNode leftInput;
   private final AstNode rightInput;
 
-  public BinaryExpression(AstOperator op, AstNode leftInput, AstNode rightInput) {
-    if (!op.isBinaryOperator()) {
-      throw new IllegalArgumentException(op + " is not a binary operator");
-    }
+  public BinaryExpression(BinaryOperator op, AstNode leftInput, AstNode rightInput) {
     this.op = op;
     this.leftInput = leftInput;
     this.rightInput = rightInput;

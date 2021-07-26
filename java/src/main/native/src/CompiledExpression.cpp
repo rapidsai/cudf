@@ -166,13 +166,46 @@ enum class jni_serialized_node_type : int8_t {
 };
 
 /**
- * Convert a Java AST serialized byte representing an AST operator into the
+ * Convert a Java AST serialized byte representing an AST unary operator into the
  * corresponding libcudf AST operator.
- * NOTE: This must be kept in sync with the enumeration in AstOperator.java!
+ * NOTE: This must be kept in sync with the enumeration in UnaryOperator.java!
  */
-cudf::ast::ast_operator jni_to_ast_operator(jbyte jni_op_value) {
+cudf::ast::ast_operator jni_to_unary_operator(jbyte jni_op_value) {
   switch (jni_op_value) {
-    // Binary operators
+    case 0: return cudf::ast::ast_operator::IDENTITY;
+    case 1: return cudf::ast::ast_operator::SIN;
+    case 2: return cudf::ast::ast_operator::COS;
+    case 3: return cudf::ast::ast_operator::TAN;
+    case 4: return cudf::ast::ast_operator::ARCSIN;
+    case 5: return cudf::ast::ast_operator::ARCCOS;
+    case 6: return cudf::ast::ast_operator::ARCTAN;
+    case 7: return cudf::ast::ast_operator::SINH;
+    case 8: return cudf::ast::ast_operator::COSH;
+    case 9: return cudf::ast::ast_operator::TANH;
+    case 10: return cudf::ast::ast_operator::ARCSINH;
+    case 11: return cudf::ast::ast_operator::ARCCOSH;
+    case 12: return cudf::ast::ast_operator::ARCTANH;
+    case 13: return cudf::ast::ast_operator::EXP;
+    case 14: return cudf::ast::ast_operator::LOG;
+    case 15: return cudf::ast::ast_operator::SQRT;
+    case 16: return cudf::ast::ast_operator::CBRT;
+    case 17: return cudf::ast::ast_operator::CEIL;
+    case 18: return cudf::ast::ast_operator::FLOOR;
+    case 19: return cudf::ast::ast_operator::ABS;
+    case 20: return cudf::ast::ast_operator::RINT;
+    case 21: return cudf::ast::ast_operator::BIT_INVERT;
+    case 22: return cudf::ast::ast_operator::NOT;
+    default: throw std::invalid_argument("unexpected JNI AST unary operator value");
+  }
+}
+
+/**
+ * Convert a Java AST serialized byte representing an AST binary operator into the
+ * corresponding libcudf AST operator.
+ * NOTE: This must be kept in sync with the enumeration in BinaryOperator.java!
+ */
+cudf::ast::ast_operator jni_to_binary_operator(jbyte jni_op_value) {
+  switch (jni_op_value) {
     case 0: return cudf::ast::ast_operator::ADD;
     case 1: return cudf::ast::ast_operator::SUB;
     case 2: return cudf::ast::ast_operator::MUL;
@@ -193,31 +226,7 @@ cudf::ast::ast_operator jni_to_ast_operator(jbyte jni_op_value) {
     case 17: return cudf::ast::ast_operator::BITWISE_XOR;
     case 18: return cudf::ast::ast_operator::LOGICAL_AND;
     case 19: return cudf::ast::ast_operator::LOGICAL_OR;
-    // Unary operators
-    case 20: return cudf::ast::ast_operator::IDENTITY;
-    case 21: return cudf::ast::ast_operator::SIN;
-    case 22: return cudf::ast::ast_operator::COS;
-    case 23: return cudf::ast::ast_operator::TAN;
-    case 24: return cudf::ast::ast_operator::ARCSIN;
-    case 25: return cudf::ast::ast_operator::ARCCOS;
-    case 26: return cudf::ast::ast_operator::ARCTAN;
-    case 27: return cudf::ast::ast_operator::SINH;
-    case 28: return cudf::ast::ast_operator::COSH;
-    case 29: return cudf::ast::ast_operator::TANH;
-    case 30: return cudf::ast::ast_operator::ARCSINH;
-    case 31: return cudf::ast::ast_operator::ARCCOSH;
-    case 32: return cudf::ast::ast_operator::ARCTANH;
-    case 33: return cudf::ast::ast_operator::EXP;
-    case 34: return cudf::ast::ast_operator::LOG;
-    case 35: return cudf::ast::ast_operator::SQRT;
-    case 36: return cudf::ast::ast_operator::CBRT;
-    case 37: return cudf::ast::ast_operator::CEIL;
-    case 38: return cudf::ast::ast_operator::FLOOR;
-    case 39: return cudf::ast::ast_operator::ABS;
-    case 40: return cudf::ast::ast_operator::RINT;
-    case 41: return cudf::ast::ast_operator::BIT_INVERT;
-    case 42: return cudf::ast::ast_operator::NOT;
-    default: throw std::invalid_argument("unexpected JNI AST operator value");
+    default: throw std::invalid_argument("unexpected JNI AST binary operator value");
   }
 }
 
@@ -324,7 +333,7 @@ cudf::ast::detail::node &compile_node(cudf::jni::ast::compiled_expr &compiled_ex
 /** Decode a serialized AST unary expression */
 cudf::ast::expression &compile_unary_expression(cudf::jni::ast::compiled_expr &compiled_expr,
                                                 jni_serialized_ast &jni_ast) {
-  auto const ast_op = jni_to_ast_operator(jni_ast.read_byte());
+  auto const ast_op = jni_to_unary_operator(jni_ast.read_byte());
   cudf::ast::detail::node &child_node = compile_node(compiled_expr, jni_ast);
   return compiled_expr.add_expression(std::make_unique<cudf::ast::expression>(ast_op, child_node));
 }
@@ -332,7 +341,7 @@ cudf::ast::expression &compile_unary_expression(cudf::jni::ast::compiled_expr &c
 /** Decode a serialized AST binary expression */
 cudf::ast::expression &compile_binary_expression(cudf::jni::ast::compiled_expr &compiled_expr,
                                                  jni_serialized_ast &jni_ast) {
-  auto const ast_op = jni_to_ast_operator(jni_ast.read_byte());
+  auto const ast_op = jni_to_binary_operator(jni_ast.read_byte());
   cudf::ast::detail::node &left_child = compile_node(compiled_expr, jni_ast);
   cudf::ast::detail::node &right_child = compile_node(compiled_expr, jni_ast);
   return compiled_expr.add_expression(

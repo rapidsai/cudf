@@ -20,13 +20,10 @@ import java.nio.ByteBuffer;
 
 /** A unary expression consisting of an operator and an operand. */
 public final class UnaryExpression extends Expression {
-  private final AstOperator op;
+  private final UnaryOperator op;
   private final AstNode input;
 
-  public UnaryExpression(AstOperator op, AstNode input) {
-    if (!op.isUnaryOperator()) {
-      throw new IllegalArgumentException(op + " is not a unary operator");
-    }
+  public UnaryExpression(UnaryOperator op, AstNode input) {
     this.op = op;
     this.input = input;
   }
