@@ -196,7 +196,7 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents)
   auto expected_seconds = fixed_width_column_wrapper<int16_t>{20, 40, 0, 20, 40, 0, 20, 40, 0, 20};
 
   // Special cases for timestamp_D: zero out the expected hh/mm/ss cols
-  if (std::is_same<TypeParam, cudf::timestamp_D>::value) {
+  if (std::is_same_v<TypeParam, cudf::timestamp_D>) {
     expected_hours   = fixed_width_column_wrapper<int16_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     expected_minutes = fixed_width_column_wrapper<int16_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     expected_seconds = fixed_width_column_wrapper<int16_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -246,7 +246,7 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedNullableDatetimeComponen
     {true, false, true, false, true, false, true, false, true, false}};
 
   // Special cases for timestamp_D: zero out the expected hh/mm/ss cols
-  if (std::is_same<TypeParam, cudf::timestamp_D>::value) {
+  if (std::is_same_v<TypeParam, cudf::timestamp_D>) {
     expected_hours = fixed_width_column_wrapper<int16_t>{
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
       {true, false, true, false, true, false, true, false, true, false}};

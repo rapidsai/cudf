@@ -380,7 +380,7 @@ struct MathOpDispatcher {
 
   template <typename T,
             typename std::enable_if_t<!std::is_arithmetic<T>::value and
-                                      std::is_same<T, dictionary32>::value>* = nullptr>
+                                      std::is_same_v<T, dictionary32>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -392,7 +392,7 @@ struct MathOpDispatcher {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic<T>::value and !std::is_same<T, dictionary32>::value,
+  std::enable_if_t<!std::is_arithmetic<T>::value and !std::is_same_v<T, dictionary32>,
                    std::unique_ptr<cudf::column>>
   operator()(Args&&...)
   {
@@ -434,7 +434,7 @@ struct BitwiseOpDispatcher {
 
   template <typename T,
             typename std::enable_if_t<!std::is_integral<T>::value and
-                                      std::is_same<T, dictionary32>::value>* = nullptr>
+                                      std::is_same_v<T, dictionary32>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -446,7 +446,7 @@ struct BitwiseOpDispatcher {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_integral<T>::value and !std::is_same<T, dictionary32>::value,
+  std::enable_if_t<!std::is_integral<T>::value and !std::is_same_v<T, dictionary32>,
                    std::unique_ptr<cudf::column>>
   operator()(Args&&...)
   {
@@ -460,7 +460,7 @@ struct LogicalOpDispatcher {
   template <typename T>
   static constexpr bool is_supported()
   {
-    return std::is_arithmetic<T>::value || std::is_same<T, bool>::value;
+    return std::is_arithmetic<T>::value || std::is_same_v<T, bool>;
   }
 
  public:
@@ -501,9 +501,9 @@ struct LogicalOpDispatcher {
     }
   };
 
-  template <typename T,
-            typename std::enable_if_t<!is_supported<T>() and
-                                      std::is_same<T, dictionary32>::value>* = nullptr>
+  template <
+    typename T,
+    typename std::enable_if_t<!is_supported<T>() and std::is_same_v<T, dictionary32>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -515,7 +515,7 @@ struct LogicalOpDispatcher {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!is_supported<T>() and !std::is_same<T, dictionary32>::value,
+  std::enable_if_t<!is_supported<T>() and !std::is_same_v<T, dictionary32>,
                    std::unique_ptr<cudf::column>>
   operator()(Args&&...)
   {

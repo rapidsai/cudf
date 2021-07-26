@@ -43,13 +43,13 @@ struct copy_if_else_functor_impl {
  * @brief Functor to fetch a device-view for the specified scalar/column_view.
  */
 struct get_iterable_device_view {
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, cudf::column_view>::value)>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::column_view>)>
   auto operator()(T const& input)
   {
     return cudf::column_device_view::create(input);
   }
 
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, cudf::scalar>::value)>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::scalar>)>
   auto operator()(T const& input)
   {
     return &input;
