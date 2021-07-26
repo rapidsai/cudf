@@ -126,7 +126,7 @@ struct timezone_table {
  * Uses system's TZif files. Assumes little-endian platform when parsing these files.
  *
  * @param timezone_name standard timezone name (for example, "US/Pacific")
- * @param stream CUDA stream used for any device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return The transition table for the given timezone
  */

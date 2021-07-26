@@ -6,6 +6,7 @@ import os
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import parse as parse_version
 
 import dask
 from dask import dataframe as dd
@@ -334,6 +335,32 @@ def test_chunksize(tmpdir, chunksize, metadata):
         assert ddf2.npartitions == num_row_groups
     else:
         assert ddf2.npartitions < num_row_groups
+
+    if parse_version(dask.__version__) > parse_version("2021.07.0"):
+        # This version of Dask supports `aggregate_files=True`.
+        # Test that it works as expected.
+        ddf3 = dask_cudf.read_parquet(
+            path,
+            chunksize=chunksize,
+            split_row_groups=True,
+            gather_statistics=True,
+            aggregate_files=True,
+        )
+
+        dd.assert_eq(ddf1, ddf3, check_divisions=False)
+
+        if not chunksize:
+            # Files should not be aggregated
+            assert ddf3.npartitions == num_row_groups
+        elif chunksize == "1MiB":
+            # All files should be aggregated into
+            # one output partition
+            assert ddf3.npartitions == 1
+        else:
+            # Files can be aggregateed together, but
+            # chunksize is not large enough to produce
+            # a single output partition
+            assert ddf3.npartitions < num_row_groups
 
 
 @pytest.mark.parametrize("row_groups", [1, 3, 10, 12])

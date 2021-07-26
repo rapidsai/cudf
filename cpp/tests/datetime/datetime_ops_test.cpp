@@ -28,6 +28,8 @@
 
 #define XXX false  // stub for null values
 
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
+
 template <typename T>
 struct NonTimestampTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
@@ -302,7 +304,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
       30,     // This is the UNIX epoch - when rounded up becomes 1970-01-31
       -1523   // 1965-10-31
     },
-    true);
+    verbosity);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
@@ -342,7 +344,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
         111     // Random nullable field
       },
       {false, true, true, true, false, true, true, false}},
-    true);
+    verbosity);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
@@ -384,7 +386,7 @@ TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
                                    },
                                    {false, true, true, true, false, true, true, false, true},
                                  },
-                                 true);
+                                 verbosity);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithEmptyColumn)
@@ -480,7 +482,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSeconds)
       -128952000L,  // 1965-11-30 12:00:00 GMT
       -123587928L   // 1966-01-31 14:01:12 GMT
     },
-    true);
+    verbosity);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSecondsAndNullValues)
@@ -531,7 +533,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSecondsAndNullValues)
         -123587928L   // 1966-01-31 14:01:12 GMT
       },
       {false, false, true, false, true, false, true, false, true, true, true, true}},
-    true);
+    verbosity);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestIsLeapYear)
