@@ -615,7 +615,8 @@ class csv_reader_options {
    */
   [[deprecated(
     "The string-based interface will be deprecated."
-    "Use dtypes(std::vector<data_type>) instead.")]] void
+    "Use dtypes(std::vector<data_type>) or "
+    "dtypes(std::map<std::string, data_type>) instead.")]] void
   set_dtypes(std::vector<std::string> types)
   {
     _dtypes = std::move(types);
@@ -1074,7 +1075,8 @@ class csv_reader_options_builder {
    */
   [[deprecated(
     "The string-based interface will be deprecated."
-    "Use dtypes(std::vector<data_type>) instead.")]] csv_reader_options_builder&
+    "Use dtypes(std::vector<data_type>) or "
+    "dtypes(std::map<std::string, data_type>) instead.")]] csv_reader_options_builder&
   dtypes(std::vector<std::string> types)
   {
     options._dtypes = std::move(types);

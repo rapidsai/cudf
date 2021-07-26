@@ -155,7 +155,14 @@ class json_reader_options {
    *
    * @param types Vector dtypes in string format.
    */
-  void set_dtypes(std::vector<std::string> types) { _dtypes = std::move(types); }
+  [[deprecated(
+    "The string-based interface will be deprecated."
+    "Use dtypes(std::vector<data_type>) or "
+    "dtypes(std::map<std::string, data_type>) instead.")]] void
+  set_dtypes(std::vector<std::string> types)
+  {
+    _dtypes = std::move(types);
+  }
 
   /**
    * @brief Set data types for columns to be read.
@@ -231,7 +238,11 @@ class json_reader_options_builder {
    * @param types Vector of dtypes in string format
    * @return this for chaining
    */
-  json_reader_options_builder& dtypes(std::vector<std::string> types)
+  [[deprecated(
+    "The string-based interface will be deprecated."
+    "Use dtypes(std::vector<data_type>) or "
+    "dtypes(std::map<std::string, data_type>) instead.")]] json_reader_options_builder&
+  dtypes(std::vector<std::string> types)
   {
     options._dtypes = std::move(types);
     return *this;
