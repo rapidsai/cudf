@@ -460,8 +460,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         cls,
         data: Mapping,
         index: Optional[BaseIndex] = None,
-        # TODO: Remove this, callers should always just change the name of the
-        # columns in data.
         columns: Any = None,
     ) -> DataFrame:
         out = super()._from_data(data, index)

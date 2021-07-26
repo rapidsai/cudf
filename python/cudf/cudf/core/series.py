@@ -271,8 +271,6 @@ class Series(SingleColumnFrame, Serializable):
         cls,
         data: Mapping,
         index: Optional[BaseIndex] = None,
-        # TODO: Remove this, callers should always just change the name of the
-        # column in data.
         name: Any = None,
     ) -> Series:
         """
