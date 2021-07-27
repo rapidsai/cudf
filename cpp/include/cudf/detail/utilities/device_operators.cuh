@@ -99,7 +99,7 @@ struct DeviceMin {
                               !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
-    if constexpr (std::is_same<T, __int128_t>::value) {
+    if constexpr (std::is_same_v<T, __int128_t>) {
       __int128_t max = 1;
       for (int i = 0; i < 126; ++i) {
         max *= 2;
@@ -145,7 +145,7 @@ struct DeviceMax {
                               !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
-    if constexpr (std::is_same<T, __int128_t>::value) {
+    if constexpr (std::is_same_v<T, __int128_t>) {
       __int128_t lowest = -1;
       for (int i = 0; i < 127; ++i) {
         lowest *= 2;

@@ -32,7 +32,7 @@
 //! `fixed_point` and supporting types
 namespace numeric {
 namespace detail {
-namespace numeric_limits {
+namespace numeric_limits {  // TODO switch this to struct
 
 template <typename T>
 auto max() -> T
@@ -69,7 +69,7 @@ auto lowest() -> T
 template <typename T>
 auto to_string(T value) -> std::string
 {
-  if constexpr (cuda::std::is_same<T, __int128_t>::value) {
+  if constexpr (cuda::std::is_same_v<T, __int128_t>) {
     auto s          = std::string{};
     auto const sign = value < 0;
     if (sign) {
@@ -117,7 +117,7 @@ constexpr auto is_signed()
 
 // TODO add is_integral
 // TODO add is_arithmetic
-// TODO pull down upstream, then regex replace is_same<>::value
+// TODO pull down upstream, then regex replace is_same_v<>
 
 }  // namespace detail
 

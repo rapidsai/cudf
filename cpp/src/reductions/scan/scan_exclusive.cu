@@ -52,7 +52,7 @@ struct scan_dispatcher {
    */
   template <typename T,
             typename std::enable_if_t<std::is_arithmetic<T>::value ||
-                                      std::is_same<T, __int128_t>::value>* = nullptr>
+                                      std::is_same_v<T, __int128_t>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
                                      null_policy,
                                      rmm::cuda_stream_view stream,
@@ -74,7 +74,7 @@ struct scan_dispatcher {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<not std::is_arithmetic<T>::value and not std::is_same<T, __int128_t>::value,
+  std::enable_if_t<not std::is_arithmetic<T>::value and not std::is_same_v<T, __int128_t>,
                    std::unique_ptr<column>>
   operator()(Args&&...)
   {

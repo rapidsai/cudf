@@ -49,7 +49,7 @@ enum class Radix : int32_t { BASE_2 = 2, BASE_10 = 10 };
 template <typename T>
 constexpr inline auto is_supported_representation_type()
 {
-  return cuda::std::is_same_v<T, int32_t> || cuda::std::is_same<T, int64_t> ||
+  return cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t> ||
          cuda::std::is_same_v<T, __int128_t>;
 }
 
@@ -58,7 +58,7 @@ template <typename T>
 constexpr inline auto is_supported_construction_value_type()
 {
   return cuda::std::is_integral<T>::value || cuda::std::is_floating_point<T>::value ||
-         cuda::std::is_same<T, __int128_t>::value;
+         cuda::std::is_same_v<T, __int128_t>;
 }
 
 // Helper functions for `fixed_point` type
@@ -281,7 +281,7 @@ class fixed_point {
    */
   template <typename U,
             typename cuda::std::enable_if_t<cuda::std::is_integral<U>::value or
-                                            cuda::std::is_same<U, __int128_t>::value>* = nullptr>
+                                            cuda::std::is_same_v<U, __int128_t>>* = nullptr>
   explicit constexpr operator U() const
   {
     // Don't cast to U until converting to Rep because in certain cases casting to U before shifting

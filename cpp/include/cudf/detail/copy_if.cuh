@@ -224,7 +224,7 @@ struct DeviceType<T, std::enable_if_t<std::is_same_v<numeric::decimal64, T>>> {
 };
 
 template <typename T>
-struct DeviceType<T, std::enable_if_t<std::is_same<numeric::decimal128, T>::value>> {
+struct DeviceType<T, std::enable_if_t<std::is_same_v<numeric::decimal128, T>>> {
   using type = typename cudf::device_storage_type_t<T>;
 };
 
