@@ -43,7 +43,7 @@ namespace cudf {
  *
  * Notes on return column types:
  * - The returned column for count aggregation always has `INT32` type.
- * - The returned column for VARIANCE/STD aggregations always has `double` type.
+ * - The returned column for VARIANCE/STD aggregations always has `FLOAT64` type.
  * - All other operators return a column of the same type as the input. Therefore
  *   it is suggested to convert integer column types (especially low-precision integers)
  *   to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
