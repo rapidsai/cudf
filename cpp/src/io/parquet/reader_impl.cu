@@ -596,9 +596,9 @@ class aggregate_metadata {
     auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64
                          ? data_type{col_type, numeric::scale_type{-schema.decimal_scale}}
                          : data_type{col_type};
-    output_columns.emplace_back(dtype, schema.repetition_type == OPTIONAL ? true : false);
-    column_buffer& output_col = output_columns.back();
-    output_col.name           = schema.name;
+    column_buffer& output_col =
+      output_columns.emplace_back(dtype, schema.repetition_type == OPTIONAL ? true : false);
+    output_col.name = schema.name;
 
     // build each child
     for (int idx = 0; idx < schema.num_children; idx++) {
@@ -614,8 +614,8 @@ class aggregate_metadata {
     // if I have no children, we're at a leaf and I'm an input column (that is, one with actual
     // data stored) so add me to the list.
     if (schema.num_children == 0) {
-      input_columns.emplace_back(input_column_info{start_schema_idx, schema.name});
-      input_column_info& input_col = input_columns.back();
+      input_column_info& input_col =
+        input_columns.emplace_back(input_column_info{start_schema_idx, schema.name});
       std::copy(nesting.begin(), nesting.end(), std::back_inserter(input_col.nesting));
     }
 
@@ -1581,18 +1581,16 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       // create the final output cudf columns
       for (size_t i = 0; i < _output_columns.size(); ++i) {
-        out_metadata.schema_info.push_back(column_name_info{""});
-        out_columns.emplace_back(
-          make_column(_output_columns[i], &out_metadata.schema_info.back(), stream, _mr));
+        column_name_info& col_name = out_metadata.schema_info.emplace_back("");
+        out_columns.emplace_back(make_column(_output_columns[i], &col_name, stream, _mr));
       }
     }
   }
 
   // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_columns.size(); ++i) {
-    out_metadata.schema_info.push_back(column_name_info{""});
-    out_columns.emplace_back(cudf::io::detail::empty_like(
-      _output_columns[i], &out_metadata.schema_info.back(), stream, _mr));
+    column_name_info& col_name = out_metadata.schema_info.emplace_back("");
+    out_columns.emplace_back(io::detail::empty_like(_output_columns[i], &col_name, stream, _mr));
   }
 
   // Return column names (must match order of returned columns)
