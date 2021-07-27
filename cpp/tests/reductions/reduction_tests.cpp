@@ -1374,7 +1374,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionQuantile)
     for (auto const i : {0, 1, 2, 3, 4}) {
       auto const expected = decimalXX{scaled_integer<RepType>{i + 1, scale}};
       auto const result   = cudf::reduce(
-        column, cudf::make_quantile_aggregation({i / 4.0}, cudf::interpolation::LINEAR), out_type);
+          column, cudf::make_quantile_aggregation({i / 4.0}, cudf::interpolation::LINEAR), out_type);
       auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
       EXPECT_EQ(result_scalar->fixed_point_value(), expected);
     }
@@ -1397,10 +1397,51 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNthElement)
     for (auto const i : {0, 1, 2, 3}) {
       auto const expected = decimalXX{scaled_integer<RepType>{values[i], scale}};
       auto const result   = cudf::reduce(
-        column, cudf::make_nth_element_aggregation(i, cudf::null_policy::INCLUDE), out_type);
+          column, cudf::make_nth_element_aggregation(i, cudf::null_policy::INCLUDE), out_type);
       auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
       EXPECT_EQ(result_scalar->fixed_point_value(), expected);
     }
+  }
+}
+
+struct Decimal128Only : public cudf::test::BaseFixture {
+};
+
+TEST_F(Decimal128Only, Decimal128ProductReduction)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3}) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{2, 2, 2, 2, 2, 2, 2, 2, 2}, scale};
+    auto const out_type = cudf::data_type{cudf::type_id::DECIMAL128, scale};
+    auto const expected = decimal128{scaled_integer<RepType>{512, scale_type{i * 9}}};
+
+    auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimal128>*>(result.get());
+
+    EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+  }
+}
+
+TEST_F(Decimal128Only, Decimal128ProductReduction2)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3, -4, -5, -6}) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{1, 2, 3, 4, 5, 6}, scale};
+    auto const out_type = cudf::data_type{cudf::type_id::DECIMAL128, scale};
+    auto const expected = decimal128{scaled_integer<RepType>{720, scale_type{i * 6}}};
+
+    auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimal128>*>(result.get());
+
+    EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   }
 }
 
