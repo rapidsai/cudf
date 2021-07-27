@@ -122,7 +122,7 @@ struct scan_dispatcher {
   template <typename T>
   static constexpr bool is_supported()
   {
-    return numeric::detail::is_arithmetic<T>::value || is_string_supported<T>();
+    return numeric::detail::is_arithmetic<T>() || is_string_supported<T>();
   }
 
   // for arithmetic types
