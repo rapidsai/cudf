@@ -622,6 +622,60 @@ class aggregate_metadata {
     nesting.pop_back();
   }
 
+  auto select_columns2(std::vector<std::vector<std::string>> const& use_names,
+                       bool include_index,
+                       bool strings_to_categorical,
+                       type_id timestamp_type_id,
+                       bool strict_decimal_types) const
+  {
+    // Merge the vector use_names into a set of hierarchical column_name_info objects
+    /* This is because if we have columns like this:
+     *     col1
+     *      / \
+     *    s3   f4
+     *   / \
+     * f5   f6
+     *
+     * there may be common paths in use_names like:
+     * {"col1", "s3", "f5"}, {"col1", "f4"}
+     * which means we want the output to contain
+     *     col1
+     *      / \
+     *    s3   f4
+     *   /
+     * f5
+     *
+     * rather than
+     *  col1   col1
+     *   |      |
+     *   s3     f4
+     *   |
+     *   f5
+     */
+    std::vector<column_name_info> selected_columns;
+    for (auto const& path : use_names) {
+      auto array_to_find_in = &selected_columns;
+      for (size_t depth = 0; depth < path.size(); ++depth) {
+        // Check if the path exists in our selected_columns and if not, add it.
+        auto const& name_to_find = path[depth];
+        auto found_col           = std::find_if(
+          array_to_find_in->begin(),
+          array_to_find_in->end(),
+          [&name_to_find](column_name_info const& col) { return col.name == name_to_find; });
+        if (found_col == array_to_find_in->end()) {
+          auto& col        = array_to_find_in->emplace_back(name_to_find);
+          array_to_find_in = &col.children;
+        } else {
+          // Path exists. go down further.
+          array_to_find_in = &found_col->children;
+        }
+      }
+    }
+
+    std::cout << "here" << std::endl;
+
+  }
+
   /**
    * @brief Filters and reduces down to a selection of columns
    *
