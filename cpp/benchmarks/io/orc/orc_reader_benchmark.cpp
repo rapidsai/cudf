@@ -160,6 +160,7 @@ RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, integral, type_group_id
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, list, cudf::type_id::LIST);
 
 BENCHMARK_DEFINE_F(OrcRead, column_selection)
 (::benchmark::State& state) { BM_orc_read_varying_options(state); }

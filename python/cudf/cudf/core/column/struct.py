@@ -87,7 +87,7 @@ class StructColumn(ColumnBase):
                 field: value
                 for field, value in zip(self.dtype.fields, result.values())
             }
-        return result
+        return result._rename_fields(self.dtype.fields.keys())
 
     def __setitem__(self, key, value):
         if isinstance(value, dict):
@@ -150,6 +150,8 @@ class StructMethods(ColumnMethods):
     Struct methods for Series
     """
 
+    _column: StructColumn
+
     def __init__(self, parent=None):
         if not is_struct_dtype(parent.dtype):
             raise AttributeError(
@@ -190,3 +192,38 @@ class StructMethods(ColumnMethods):
             return self._return_or_inplace(self._column.children[pos])
         else:
             return self._return_or_inplace(self._column.children[key])
+
+    def explode(self):
+        """
+        Return a DataFrame whose columns are the fields of this struct Series.
+
+        Notes
+        -----
+        Note that a copy of the columns is made.
+
+        Examples
+        --------
+        >>> s
+        0    {'a': 1, 'b': 'x'}
+        1    {'a': 2, 'b': 'y'}
+        2    {'a': 3, 'b': 'z'}
+        3    {'a': 4, 'b': 'a'}
+        dtype: struct
+
+        >>> s.struct.explode()
+           a  b
+        0  1  x
+        1  2  y
+        2  3  z
+        3  4  a
+        """
+        return cudf.DataFrame._from_data(
+            cudf.core.column_accessor.ColumnAccessor(
+                {
+                    name: col.copy(deep=True)
+                    for name, col in zip(
+                        self._column.dtype.fields, self._column.children
+                    )
+                }
+            )
+        )

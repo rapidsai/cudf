@@ -1296,8 +1296,15 @@ class Frame(libcudf.table.Table):
         if value is not None and method is not None:
             raise ValueError("Cannot specify both 'value' and 'method'.")
 
-        if method and method not in {"ffill", "bfill"}:
-            raise NotImplementedError(f"Fill method {method} is not supported")
+        if method:
+            if method not in {"ffill", "bfill", "pad", "backfill"}:
+                raise NotImplementedError(
+                    f"Fill method {method} is not supported"
+                )
+            if method == "pad":
+                method = "ffill"
+            elif method == "backfill":
+                method = "bfill"
 
         if isinstance(value, cudf.Series):
             value = value.reindex(self._data.names)
@@ -3401,6 +3408,30 @@ class Frame(libcudf.table.Table):
             col,
             (left_column, right_column, reflect, fill_value),
         ) in operands.items():
+
+            # Handle object columns that are empty or
+            # all nulls when performing binary operations
+            if (
+                left_column.dtype == "object"
+                and left_column.null_count == len(left_column)
+                and fill_value is None
+            ):
+                if fn in (
+                    "add",
+                    "sub",
+                    "mul",
+                    "mod",
+                    "pow",
+                    "truediv",
+                    "floordiv",
+                ):
+                    output[col] = left_column
+                elif fn in ("eq", "lt", "le", "gt", "ge"):
+                    output[col] = left_column.notnull()
+                elif fn == "ne":
+                    output[col] = left_column.isnull()
+                continue
+
             if right_column is cudf.NA:
                 right_column = cudf.Scalar(
                     right_column, dtype=left_column.dtype

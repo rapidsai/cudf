@@ -44,8 +44,8 @@ namespace detail {
 template <typename ColumnView>
 ColumnView slice(ColumnView const& input, cudf::size_type begin, cudf::size_type end)
 {
-  static_assert(std::is_same<ColumnView, cudf::column_view>::value or
-                  std::is_same<ColumnView, cudf::mutable_column_view>::value,
+  static_assert(std::is_same_v<ColumnView, cudf::column_view> or
+                  std::is_same_v<ColumnView, cudf::mutable_column_view>,
                 "slice can be performed only on column_view and mutable_column_view");
   CUDF_EXPECTS(begin >= 0, "Invalid beginning of range.");
   CUDF_EXPECTS(end >= begin, "Invalid end of range.");

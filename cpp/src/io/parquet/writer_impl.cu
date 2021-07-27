@@ -150,14 +150,14 @@ struct leaf_schema_fn {
   bool timestamp_is_int96;
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, bool>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, bool>, void> operator()()
   {
     col_schema.type        = Type::BOOLEAN;
     col_schema.stats_dtype = statistics_dtype::dtype_bool;
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, int8_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, int8_t>, void> operator()()
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::INT_8;
@@ -165,7 +165,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, int16_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, int16_t>, void> operator()()
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::INT_16;
@@ -173,21 +173,21 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, int32_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, int32_t>, void> operator()()
   {
     col_schema.type        = Type::INT32;
     col_schema.stats_dtype = statistics_dtype::dtype_int32;
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, int64_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, int64_t>, void> operator()()
   {
     col_schema.type        = Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_int64;
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, uint8_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, uint8_t>, void> operator()()
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_8;
@@ -195,7 +195,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, uint16_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, uint16_t>, void> operator()()
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_16;
@@ -203,7 +203,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, uint32_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, uint32_t>, void> operator()()
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_32;
@@ -211,7 +211,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, uint64_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, uint64_t>, void> operator()()
   {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::UINT_64;
@@ -219,21 +219,21 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, float>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, float>, void> operator()()
   {
     col_schema.type        = Type::FLOAT;
     col_schema.stats_dtype = statistics_dtype::dtype_float32;
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, double>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, double>, void> operator()()
   {
     col_schema.type        = Type::DOUBLE;
     col_schema.stats_dtype = statistics_dtype::dtype_float64;
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::string_view>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> operator()()
   {
     col_schema.type           = Type::BYTE_ARRAY;
     col_schema.converted_type = ConvertedType::UTF8;
@@ -241,7 +241,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::timestamp_D>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::timestamp_D>, void> operator()()
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::DATE;
@@ -249,7 +249,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::timestamp_s>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::timestamp_s>, void> operator()()
   {
     col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.converted_type =
@@ -259,7 +259,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::timestamp_ms>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::timestamp_ms>, void> operator()()
   {
     col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.converted_type =
@@ -268,7 +268,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::timestamp_us>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::timestamp_us>, void> operator()()
   {
     col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.converted_type =
@@ -277,7 +277,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::timestamp_ns>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
     col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.converted_type =
@@ -288,7 +288,7 @@ struct leaf_schema_fn {
 
   //  unsupported outside cudf for parquet 1.0.
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::duration_D>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
@@ -296,7 +296,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::duration_s>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
   {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
@@ -305,7 +305,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::duration_ms>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
   {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
@@ -313,7 +313,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::duration_us>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::duration_us>, void> operator()()
   {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::TIME_MICROS;
@@ -322,7 +322,7 @@ struct leaf_schema_fn {
 
   //  unsupported outside cudf for parquet 1.0.
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::duration_ns>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
   {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::TIME_MICROS;
@@ -333,10 +333,10 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
   {
-    if (std::is_same<T, numeric::decimal32>::value) {
+    if (std::is_same_v<T, numeric::decimal32>) {
       col_schema.type        = Type::INT32;
       col_schema.stats_dtype = statistics_dtype::dtype_int32;
-    } else if (std::is_same<T, numeric::decimal64>::value) {
+    } else if (std::is_same_v<T, numeric::decimal64>) {
       col_schema.type        = Type::INT64;
       col_schema.stats_dtype = statistics_dtype::dtype_decimal64;
     } else {

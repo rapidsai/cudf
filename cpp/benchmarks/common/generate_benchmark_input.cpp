@@ -171,7 +171,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> 
 template <typename T>
 struct random_value_fn<
   T,
-  typename std::enable_if_t<!std::is_same<T, bool>::value && cudf::is_numeric<T>()>> {
+  typename std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_numeric<T>()>> {
   T const lower_bound;
   T const upper_bound;
   distribution_fn<T> dist;
@@ -194,7 +194,7 @@ struct random_value_fn<
  * @brief Creates an boolean value with given probability of returning `true`.
  */
 template <typename T>
-struct random_value_fn<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
+struct random_value_fn<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
   std::bernoulli_distribution b_dist;
 
   random_value_fn(distribution_params<bool> const& desc) : b_dist{desc.probability_true} {}
@@ -235,7 +235,7 @@ struct stored_as {
 
 // Use `int8_t` for bools because that's how they're stored in columns
 template <typename T>
-struct stored_as<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
+struct stored_as<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
   using type = int8_t;
 };
 
