@@ -52,7 +52,7 @@ get_trivial_left_join_indices(
   thrust::sequence(rmm::exec_policy(stream), left_indices->begin(), left_indices->end(), 0);
   auto right_indices =
     std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
-  thrust::fill(
+  thrust::uninitialized_fill(
     rmm::exec_policy(stream), right_indices->begin(), right_indices->end(), JoinNoneValue);
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
@@ -195,10 +195,10 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
 
   auto left_invalid_indices =
     std::make_unique<rmm::device_uvector<size_type>>(right_indices_complement->size(), stream);
-  thrust::fill(rmm::exec_policy(stream),
-               left_invalid_indices->begin(),
-               left_invalid_indices->end(),
-               JoinNoneValue);
+  thrust::uninitialized_fill(rmm::exec_policy(stream),
+                             left_invalid_indices->begin(),
+                             left_invalid_indices->end(),
+                             JoinNoneValue);
 
   return std::make_pair(std::move(left_invalid_indices), std::move(right_indices_complement));
 }
@@ -246,6 +246,11 @@ __device__ void flush_output_cache(const unsigned int activemask,
 
   if (0 == lane_id) { output_offset = atomicAdd(current_idx, current_idx_shared[warp_id]); }
 
+  // No warp sync is necessary here because we are assuming that ShuffleIndex
+  // is internally using post-CUDA 9.0 synchronization-safe primitives
+  // (__shfl_sync instead of __shfl). __shfl is technically not guaranteed to
+  // be safe by the compiler because it is not required by the standard to
+  // converge divergent branches before executing.
   output_offset = cub::ShuffleIndex<detail::warp_size>(output_offset, 0, activemask);
 
   for (int shared_out_idx = lane_id; shared_out_idx < current_idx_shared[warp_id];
