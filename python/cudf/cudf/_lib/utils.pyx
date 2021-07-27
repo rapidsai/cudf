@@ -229,7 +229,7 @@ cdef data_from_unique_ptr(
 
     Returns
     -------
-    Dict[str, Column]
+    tuple(Dict[str, Column], Optional[Index])
         A dict of the columns in the output table.
     """
     cdef vector[unique_ptr[column]] c_columns = move(c_tbl.get().release())
