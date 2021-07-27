@@ -1152,7 +1152,7 @@ __global__ void __launch_bounds__(block_size)
 
   if (t == 0) s->chunk = chunks[chunk_id];
   __syncthreads();
-  const size_t max_num_rows = s->chunk.column_num_rows;
+  const size_t max_num_rows = s->chunk.column_num_rows - s->chunk.parent_validity_info.null_count;
 
   if (is_nulldec) {
     uint32_t null_count = 0;
@@ -1186,6 +1186,7 @@ __global__ void __launch_bounds__(block_size)
         nrows = nrows_max;
       }
       __syncthreads();
+
       row_in = s->chunk.start_row + s->top.nulls_desc_row;
       if (row_in + nrows > first_row && row_in < first_row + max_num_rows &&
           s->chunk.valid_map_base != NULL) {
@@ -1334,7 +1335,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
          s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row) {
     uint32_t nrows = min(s->top.data.end_row - (s->top.data.cur_row + s->top.data.nrows),
                          min((row_decoder_buffer_size - s->u.rowdec.nz_count) * 2, blockDim.x));
-    if (s->chunk.strm_len[CI_PRESENT] > 0) {
+    if (s->chunk.valid_map_base != NULL) {
       // We have a present stream
       uint32_t rmax  = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
       uint32_t r     = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
@@ -1826,7 +1827,7 @@ __global__ void __launch_bounds__(block_size)
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] first_row Crop all rows below first_row
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void __host__ DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                                DictionaryEntry* global_dictionary,
@@ -1854,7 +1855,7 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
  * @param[in] level nesting level being processed
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
                                   DictionaryEntry* global_dictionary,

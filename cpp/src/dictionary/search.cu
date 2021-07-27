@@ -61,9 +61,9 @@ struct dispatch_scalar_index {
  */
 struct find_index_fn {
   template <typename Element,
-            std::enable_if_t<not std::is_same<Element, dictionary32>::value and
-                             not std::is_same<Element, list_view>::value and
-                             not std::is_same<Element, struct_view>::value>* = nullptr>
+            std::enable_if_t<not std::is_same_v<Element, dictionary32> and
+                             not std::is_same_v<Element, list_view> and
+                             not std::is_same_v<Element, struct_view>>* = nullptr>
   std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
                                      scalar const& key,
                                      rmm::cuda_stream_view stream,
@@ -90,10 +90,10 @@ struct find_index_fn {
                            mr);
   }
 
-  template <typename Element,
-            std::enable_if_t<std::is_same<Element, dictionary32>::value or
-                             std::is_same<Element, list_view>::value or
-                             std::is_same<Element, struct_view>::value>* = nullptr>
+  template <
+    typename Element,
+    std::enable_if_t<std::is_same_v<Element, dictionary32> or std::is_same_v<Element, list_view> or
+                     std::is_same_v<Element, struct_view>>* = nullptr>
   std::unique_ptr<scalar> operator()(dictionary_column_view const&,
                                      scalar const&,
                                      rmm::cuda_stream_view,
@@ -106,9 +106,9 @@ struct find_index_fn {
 
 struct find_insert_index_fn {
   template <typename Element,
-            std::enable_if_t<not std::is_same<Element, dictionary32>::value and
-                             not std::is_same<Element, list_view>::value and
-                             not std::is_same<Element, struct_view>::value>* = nullptr>
+            std::enable_if_t<not std::is_same_v<Element, dictionary32> and
+                             not std::is_same_v<Element, list_view> and
+                             not std::is_same_v<Element, struct_view>>* = nullptr>
   std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
                                      scalar const& key,
                                      rmm::cuda_stream_view stream,
@@ -132,10 +132,10 @@ struct find_insert_index_fn {
                            mr);
   }
 
-  template <typename Element,
-            std::enable_if_t<std::is_same<Element, dictionary32>::value or
-                             std::is_same<Element, list_view>::value or
-                             std::is_same<Element, struct_view>::value>* = nullptr>
+  template <
+    typename Element,
+    std::enable_if_t<std::is_same_v<Element, dictionary32> or std::is_same_v<Element, list_view> or
+                     std::is_same_v<Element, struct_view>>* = nullptr>
   std::unique_ptr<scalar> operator()(dictionary_column_view const&,
                                      scalar const&,
                                      rmm::cuda_stream_view,

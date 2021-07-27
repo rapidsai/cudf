@@ -24,7 +24,6 @@ from pandas.io.formats.printing import pprint_thing
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf.api.types import is_bool_dtype, is_dict_like
 from cudf.core import column, reshape
 from cudf.core.abc import Serializable
@@ -56,38 +55,6 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import GetAttrGetItemMixin
 
 T = TypeVar("T", bound="DataFrame")
-
-
-_reverse_op = {
-    "add": "radd",
-    "radd": "add",
-    "sub": "rsub",
-    "rsub": "sub",
-    "mul": "rmul",
-    "rmul": "mul",
-    "mod": "rmod",
-    "rmod": "mod",
-    "pow": "rpow",
-    "rpow": "pow",
-    "floordiv": "rfloordiv",
-    "rfloordiv": "floordiv",
-    "truediv": "rtruediv",
-    "rtruediv": "truediv",
-    "__add__": "__radd__",
-    "__radd__": "__add__",
-    "__sub__": "__rsub__",
-    "__rsub__": "__sub__",
-    "__mul__": "__rmul__",
-    "__rmul__": "__mul__",
-    "__mod__": "__rmod__",
-    "__rmod__": "__mod__",
-    "__pow__": "__rpow__",
-    "__rpow__": "__pow__",
-    "__floordiv__": "__rfloordiv__",
-    "__rfloordiv__": "__floordiv__",
-    "__truediv__": "__rtruediv__",
-    "__rtruediv__": "__truediv__",
-}
 
 
 _cupy_nan_methods_map = {
@@ -1453,84 +1420,91 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         )
         return out
 
-    # unary, binary, rbinary, orderedcompare, unorderedcompare
-    def _apply_op(self, fn, other=None, fill_value=None):
+    def _binaryop(
+        self,
+        other: Any,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        *args,
+        **kwargs,
+    ):
+        lhs, rhs = self, other
 
-        result = DataFrame(index=self.index)
+        if _is_scalar_or_zero_d_array(rhs):
+            rhs = [rhs] * lhs._num_columns
 
-        def op(lhs, rhs):
-            if fill_value is None:
-                return getattr(lhs, fn)(rhs)
-            else:
-                return getattr(lhs, fn)(rhs, fill_value)
-
-        if other is None:
-            for col in self._data:
-                result[col] = getattr(self[col], fn)()
-        elif isinstance(other, Sequence):
-            # This adds the ith element of other to the ith column of self.
-            for k, col in enumerate(self._data):
-                result[col] = getattr(self[col], fn)(other[k])
-        elif isinstance(other, DataFrame):
+        # For columns that exist in rhs but not lhs, we swap the order so that
+        # we can always assume that left has a binary operator. This
+        # implementation assumes that binary operations between a column and
+        # NULL are always commutative, even for binops (like subtraction) that
+        # are normally anticommutative.
+        if isinstance(rhs, Sequence):
+            # TODO: Consider validating sequence length (pandas does).
+            operands = {
+                name: (left, right, reflect, fill_value)
+                for right, (name, left) in zip(rhs, lhs._data.items())
+            }
+        elif isinstance(rhs, DataFrame):
             if fn in cudf.utils.utils._EQUALITY_OPS:
-                if not self.columns.equals(
-                    other.columns
-                ) or not self.index.equals(other.index):
+                if not lhs.columns.equals(rhs.columns) or not lhs.index.equals(
+                    rhs.index
+                ):
                     raise ValueError(
                         "Can only compare identically-labeled "
                         "DataFrame objects"
                     )
 
-            lhs, rhs = _align_indices(self, other)
-            result.index = lhs.index
-            max_num_rows = max(lhs.shape[0], rhs.shape[0])
+            lhs, rhs = _align_indices(lhs, rhs)
 
-            def fallback(col, fn):
-                if fill_value is None:
-                    return Series.from_masked_array(
-                        data=column_empty(max_num_rows, dtype="float64"),
-                        mask=create_null_mask(
-                            max_num_rows, state=MaskState.ALL_NULL
-                        ),
-                    ).set_index(col.index)
-                else:
-                    return getattr(col, fn)(fill_value)
-
-            for col in lhs._data:
-                if col not in rhs._data:
-                    result[col] = fallback(lhs[col], fn)
-                else:
-                    result[col] = op(lhs[col], rhs[col])
-            for col in rhs._data:
-                if col not in lhs._data:
-                    result[col] = fallback(rhs[col], _reverse_op[fn])
-        elif isinstance(other, Series):
-            other_cols = other.to_pandas().to_dict()
-            df_cols = self._column_names
-            result_cols = df_cols + tuple(
-                col for col in other_cols if col not in df_cols
-            )
-
-            for col in result_cols:
-                l_opr = (
-                    self[col]
-                    if col in df_cols
-                    else Series(as_column(np.nan, length=len(self)))
+            operands = {
+                name: (
+                    lcol,
+                    rhs._data[name]
+                    if name in rhs._data
+                    else (fill_value or None),
+                    reflect,
+                    fill_value if name in rhs._data else None,
                 )
-                r_opr = other_cols.get(col)
-                result[col] = op(l_opr, r_opr)
-
-        elif isinstance(other, (numbers.Number, cudf.Scalar)) or (
-            isinstance(other, np.ndarray) and other.ndim == 0
-        ):
-            for col in self._data:
-                result[col] = op(self[col], other)
-        else:
-            raise NotImplementedError(
-                "DataFrame operations with " + str(type(other)) + " not "
-                "supported at this time."
+                for name, lcol in lhs._data.items()
+            }
+            for name, col in rhs._data.items():
+                if name not in lhs._data:
+                    operands[name] = (
+                        col,
+                        (fill_value or None),
+                        not reflect,
+                        None,
+                    )
+        elif isinstance(rhs, Series):
+            # Note: This logic will need updating if any of the user-facing
+            # binop methods (e.g. DataFrame.add) ever support axis=0/rows.
+            right_dict = dict(zip(rhs.index.values_host, rhs.values_host))
+            left_cols = lhs._column_names
+            # mypy thinks lhs._column_names is a List rather than a Tuple, so
+            # we have to ignore the type check.
+            result_cols = left_cols + tuple(  # type: ignore
+                col for col in right_dict if col not in left_cols
             )
-        return result
+            operands = {}
+            for col in result_cols:
+                if col in left_cols:
+                    left = lhs._data[col]
+                    right = right_dict[col] if col in right_dict else None
+                else:
+                    # We match pandas semantics here by performing binops
+                    # between a NaN (not NULL!) column and the actual values,
+                    # which results in nans, the pandas output.
+                    left = as_column(np.nan, length=lhs._num_rows)
+                    right = right_dict[col]
+                operands[col] = (left, right, reflect, fill_value)
+        else:
+            return NotImplemented
+
+        return self._from_data(
+            ColumnAccessor(type(self)._colwise_binop(operands, fn)),
+            index=lhs._index,
+        )
 
     def add(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -1583,7 +1557,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("add", other, fill_value)
+        return self._binaryop(other, "add", fill_value)
 
     def update(
         self,
@@ -1678,8 +1652,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         self._mimic_inplace(source_df, inplace=True)
 
-    def __add__(self, other):
-        return self._apply_op("__add__", other)
+    def __invert__(self):
+        # Defer logic to Series since pandas semantics dictate different
+        # behaviors for different types that requires too much special casing
+        # of the standard _unaryop.
+        return DataFrame(
+            data={col: ~self[col] for col in self}, index=self.index
+        )
 
     def radd(self, other, axis=1, level=None, fill_value=None):
         """
@@ -1732,10 +1711,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("radd", other, fill_value)
-
-    def __radd__(self, other):
-        return self._apply_op("__radd__", other)
+        return self._binaryop(other, "add", fill_value, reflect=True)
 
     def sub(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -1788,10 +1764,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("sub", other, fill_value)
-
-    def __sub__(self, other):
-        return self._apply_op("__sub__", other)
+        return self._binaryop(other, "sub", fill_value)
 
     def rsub(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -1849,10 +1822,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("rsub", other, fill_value)
-
-    def __rsub__(self, other):
-        return self._apply_op("__rsub__", other)
+        return self._binaryop(other, "sub", fill_value, reflect=True)
 
     def mul(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -1907,10 +1877,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("mul", other, fill_value)
-
-    def __mul__(self, other):
-        return self._apply_op("__mul__", other)
+        return self._binaryop(other, "mul", fill_value)
 
     def rmul(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -1965,10 +1932,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("rmul", other, fill_value)
-
-    def __rmul__(self, other):
-        return self._apply_op("__rmul__", other)
+        return self._binaryop(other, "mul", fill_value, reflect=True)
 
     def mod(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2021,10 +1985,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("mod", other, fill_value)
-
-    def __mod__(self, other):
-        return self._apply_op("__mod__", other)
+        return self._binaryop(other, "mod", fill_value)
 
     def rmod(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2077,10 +2038,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("rmod", other, fill_value)
-
-    def __rmod__(self, other):
-        return self._apply_op("__rmod__", other)
+        return self._binaryop(other, "mod", fill_value, reflect=True)
 
     def pow(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2133,10 +2091,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("pow", other, fill_value)
-
-    def __pow__(self, other):
-        return self._apply_op("__pow__", other)
+        return self._binaryop(other, "pow", fill_value)
 
     def rpow(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2189,10 +2144,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("rpow", other, fill_value)
-
-    def __rpow__(self, other):
-        return self._apply_op("__rpow__", other)
+        return self._binaryop(other, "pow", fill_value, reflect=True)
 
     def floordiv(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2245,10 +2197,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("floordiv", other, fill_value)
-
-    def __floordiv__(self, other):
-        return self._apply_op("__floordiv__", other)
+        return self._binaryop(other, "floordiv", fill_value)
 
     def rfloordiv(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2311,10 +2260,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("rfloordiv", other, fill_value)
-
-    def __rfloordiv__(self, other):
-        return self._apply_op("__rfloordiv__", other)
+        return self._binaryop(other, "floordiv", fill_value, reflect=True)
 
     def truediv(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2372,13 +2318,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("truediv", other, fill_value)
+        return self._binaryop(other, "truediv", fill_value)
 
     # Alias for truediv
     div = truediv
-
-    def __truediv__(self, other):
-        return self._apply_op("__truediv__", other)
 
     def rtruediv(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2441,51 +2384,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("rtruediv", other, fill_value)
+        return self._binaryop(other, "truediv", fill_value, reflect=True)
 
     # Alias for rtruediv
     rdiv = rtruediv
-
-    def __rtruediv__(self, other):
-        return self._apply_op("__rtruediv__", other)
-
-    __div__ = __truediv__
-
-    def __and__(self, other):
-        return self._apply_op("__and__", other)
-
-    def __or__(self, other):
-        return self._apply_op("__or__", other)
-
-    def __xor__(self, other):
-        return self._apply_op("__xor__", other)
-
-    def __eq__(self, other):
-        return self._apply_op("__eq__", other)
-
-    def __ne__(self, other):
-        return self._apply_op("__ne__", other)
-
-    def __lt__(self, other):
-        return self._apply_op("__lt__", other)
-
-    def __le__(self, other):
-        return self._apply_op("__le__", other)
-
-    def __gt__(self, other):
-        return self._apply_op("__gt__", other)
-
-    def __ge__(self, other):
-        return self._apply_op("__ge__", other)
-
-    def __invert__(self):
-        return self._apply_op("__invert__")
-
-    def __neg__(self):
-        return self._apply_op("__neg__")
-
-    def __abs__(self):
-        return self._apply_op("__abs__")
 
     def __iter__(self):
         return iter(self.columns)
@@ -3085,17 +2987,22 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             result = self
         else:
             result = self.copy()
-        if all(name is None for name in self.index.names):
-            if isinstance(self.index, cudf.MultiIndex):
-                names = tuple(
-                    f"level_{i}" for i, _ in enumerate(self.index.names)
-                )
-            else:
-                names = ("index",)
-        else:
-            names = self.index.names
 
         if not drop:
+            if isinstance(self.index, cudf.MultiIndex):
+                names = tuple(
+                    name if name is not None else f"level_{i}"
+                    for i, name in enumerate(self.index.names)
+                )
+            else:
+                if self.index.name is None:
+                    if "index" in self._data.names:
+                        names = ("level_0",)
+                    else:
+                        names = ("index",)
+                else:
+                    names = (self.index.name,)
+
             index_columns = self.index._data.columns
             for name, index_column in zip(
                 reversed(names), reversed(index_columns)
@@ -4696,6 +4603,177 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # Run query
             boolmask = queryutils.query_execute(self, expr, callenv)
             return self._apply_boolean_mask(boolmask)
+
+    def apply(self, func, axis=1):
+        """
+        Apply a function along an axis of the DataFrame.
+
+        Designed to mimic `pandas.DataFrame.apply`. Applies a user
+        defined function row wise over a dataframe, with true null
+        handling. Works with UDFs using `core.udf.pipeline.nulludf`
+        and returns a single series. Uses numba to jit compile the
+        function to PTX via LLVM.
+
+        Parameters
+        ----------
+        func : function
+            Function to apply to each row.
+
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Axis along which the function is applied:
+            * 0 or 'index': apply function to each column.
+              Note: axis=0 is not yet supported.
+            * 1 or 'columns': apply function to each row.
+
+        Examples
+        --------
+
+        Simple function of a single variable which could be NA
+
+        >>> from cudf.core.udf.pipeline import nulludf
+        >>> @nulludf
+        ... def f(x):
+        ...     if x is cudf.NA:
+        ...             return 0
+        ...     else:
+        ...             return x + 1
+        ...
+        >>> df = cudf.DataFrame({'a': [1, cudf.NA, 3]})
+        >>> df.apply(lambda row: f(row['a']))
+        0    2
+        1    0
+        2    4
+        dtype: int64
+
+        Function of multiple variables will operate in
+        a null aware manner
+
+        >>> @nulludf
+        ... def f(x, y):
+        ...     return x - y
+        ...
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, cudf.NA, 3, cudf.NA],
+        ...     'b': [5, 6, cudf.NA, cudf.NA]
+        ... })
+        >>> df.apply(lambda row: f(row['a'], row['b']))
+        0      -4
+        1    <NA>
+        2    <NA>
+        3    <NA>
+        dtype: int64
+
+        Functions may conditionally return NA as in pandas
+
+        >>> @nulludf
+        ... def f(x, y):
+        ...     if x + y > 3:
+        ...             return cudf.NA
+        ...     else:
+        ...             return x + y
+        ...
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [2, 1, 1]
+        ... })
+        >>> df.apply(lambda row: f(row['a'], row['b']))
+        0       3
+        1       3
+        2    <NA>
+        dtype: int64
+
+        Mixed types are allowed, but will return the common
+        type, rather than object as in pandas
+
+        >>> @nulludf
+        ... def f(x, y):
+        ...     return x + y
+        ...
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [0.5, cudf.NA, 3.14]
+        ... })
+        >>> df.apply(lambda row: f(row['a'], row['b']))
+        0     1.5
+        1    <NA>
+        2    6.14
+        dtype: float64
+
+        Functions may also return scalar values, however the
+        result will be promoted to a safe type regardless of
+        the data
+
+        >>> @nulludf
+        ... def f(x):
+        ...     if x > 3:
+        ...             return x
+        ...     else:
+        ...             return 1.5
+        ...
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, 3, 5]
+        ... })
+        >>> df.apply(lambda row: f(row['a']))
+        0    1.5
+        1    1.5
+        2    5.0
+        dtype: float64
+
+        Ops against N columns are supported generally
+
+        >>> @nulludf
+        ... def f(v, w, x, y, z):
+        ...     return x + (y - (z / w)) % v
+        ...
+        >>> df = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [cudf.NA, 4, 4],
+        ...     'd': [8, 7, 8],
+        ...     'e': [7, 1, 6]
+        ... })
+        >>> df.apply(
+        ...     lambda row: f(
+        ...             row['a'],
+        ...             row['b'],
+        ...             row['c'],
+        ...             row['d'],
+        ...             row['e']
+        ...     )
+        ... )
+        0    <NA>
+        1     4.8
+        2     5.0
+        dtype: float64
+
+        Notes
+        -----
+        Available only using cuda 11.1+ due to particular required
+        runtime compilation features
+        """
+
+        # libcudacxx tuples are not compatible with nvrtc 11.0
+        runtime = cuda.cudadrv.runtime.Runtime()
+        mjr, mnr = runtime.get_version()
+        if mjr < 11 or (mjr == 11 and mnr < 1):
+            raise RuntimeError("DataFrame.apply requires CUDA 11.1+")
+
+        for dtype in self.dtypes:
+            if (
+                isinstance(dtype, cudf.core.dtypes._BaseDtype)
+                or dtype == "object"
+            ):
+                raise TypeError(
+                    "DataFrame.apply currently only "
+                    "supports non decimal numeric types"
+                )
+
+        if axis != 1:
+            raise ValueError(
+                "DataFrame.apply currently only supports row wise ops"
+            )
+
+        return cudf.Series(func(self))
 
     @applyutils.doc_apply()
     def apply_rows(
@@ -7281,8 +7359,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 # category handling
                 if is_categorical_dtype(i_dtype):
                     include_subtypes.add(i_dtype)
-                elif issubclass(dtype.type, i_dtype):
-                    include_subtypes.add(dtype.type)
+                elif inspect.isclass(dtype.type):
+                    if issubclass(dtype.type, i_dtype):
+                        include_subtypes.add(dtype.type)
 
         # exclude all subtypes
         exclude_subtypes = set()
@@ -7291,8 +7370,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 # category handling
                 if is_categorical_dtype(e_dtype):
                     exclude_subtypes.add(e_dtype)
-                elif issubclass(dtype.type, e_dtype):
-                    exclude_subtypes.add(dtype.type)
+                elif inspect.isclass(dtype.type):
+                    if issubclass(dtype.type, e_dtype):
+                        exclude_subtypes.add(dtype.type)
 
         include_all = set(
             [cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
@@ -7420,8 +7500,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         repeated_index = self.index.repeat(self.shape[1])
         name_index = Frame({0: self._column_names}).tile(self.shape[0])
         new_index = list(repeated_index._columns) + [name_index._columns[0]]
+        if isinstance(self._index, cudf.MultiIndex):
+            index_names = self._index.names + [None]
+        else:
+            index_names = [None] * len(new_index)
         new_index = cudf.core.multiindex.MultiIndex.from_frame(
-            DataFrame(dict(zip(range(0, len(new_index)), new_index)))
+            DataFrame(dict(zip(range(0, len(new_index)), new_index))),
+            names=index_names,
         )
 
         # Collect datatypes and cast columns as that type
@@ -7475,6 +7560,30 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             "cuDF does not support conversion to host memory "
             "via `to_dict()` method. Consider using "
             "`.to_pandas().to_dict()` to construct a Python dictionary."
+        )
+
+    def to_struct(self, name=None):
+        """
+        Return a struct Series composed of the columns of the DataFrame.
+
+        Parameters
+        ----------
+        name: optional
+            Name of the resulting Series
+
+        Notes
+        -----
+        Note that a copy of the columns is made.
+        """
+        col = cudf.core.column.build_struct_column(
+            names=self._data.names, children=self._data.columns, size=len(self)
+        )
+        return cudf.Series._from_data(
+            cudf.core.column_accessor.ColumnAccessor(
+                {name: col.copy(deep=True)}
+            ),
+            index=self.index,
+            name=name,
         )
 
     def keys(self):

@@ -1,9 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+
 from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
 
 
 cdef extern from "cudf/strings/contains.hpp" namespace "cudf::strings" nogil:

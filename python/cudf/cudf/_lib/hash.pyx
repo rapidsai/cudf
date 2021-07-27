@@ -2,24 +2,19 @@
 
 from libc.stdint cimport uint32_t
 from libcpp cimport bool
-from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr
+from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.column cimport Column
-from cudf._lib.table cimport Table
-
 from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.hash cimport hash as cpp_hash
+from cudf._lib.cpp.partitioning cimport hash_partition as cpp_hash_partition
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.hash cimport (
-    hash as cpp_hash
-)
-from cudf._lib.cpp.partitioning cimport (
-    hash_partition as cpp_hash_partition,
-)
-cimport cudf._lib.cpp.types as libcudf_types
+from cudf._lib.table cimport Table
 
 
 def hash_partition(Table source_table, object columns_to_hash,

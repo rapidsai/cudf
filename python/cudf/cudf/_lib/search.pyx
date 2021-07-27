@@ -1,17 +1,16 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
+cimport cudf._lib.cpp.search as cpp_search
+cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.column cimport Column
-from cudf._lib.table cimport Table
-
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
-cimport cudf._lib.cpp.types as libcudf_types
-cimport cudf._lib.cpp.search as cpp_search
+from cudf._lib.table cimport Table
 
 
 def search_sorted(

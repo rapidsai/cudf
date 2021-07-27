@@ -164,3 +164,97 @@ def test_struct_scalar_host_construction(data):
 def test_struct_scalar_null():
     slr = cudf.Scalar(cudf.NA, dtype=StructDtype)
     assert slr.device_value.value is cudf.NA
+
+
+def test_struct_explode():
+    s = cudf.Series([], dtype=cudf.StructDtype({}))
+    expect = cudf.DataFrame({})
+    assert_eq(expect, s.struct.explode())
+
+    s = cudf.Series(
+        [
+            {"a": 1, "b": "x"},
+            {"a": 2, "b": "y"},
+            {"a": 3, "b": "z"},
+            {"a": 4, "b": "a"},
+        ]
+    )
+    expect = cudf.DataFrame({"a": [1, 2, 3, 4], "b": ["x", "y", "z", "a"]})
+    got = s.struct.explode()
+    assert_eq(expect, got)
+
+    # check that a copy was made:
+    got["a"][0] = 5
+    assert_eq(s.struct.explode(), expect)
+
+
+def test_dataframe_to_struct():
+    df = cudf.DataFrame()
+    expect = cudf.Series(dtype=cudf.StructDtype({}))
+    got = df.to_struct()
+    assert_eq(expect, got)
+
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
+    expect = cudf.Series(
+        [{"a": 1, "b": "x"}, {"a": 2, "b": "y"}, {"a": 3, "b": "z"}]
+    )
+    got = df.to_struct()
+    assert_eq(expect, got)
+
+    # check that a copy was made:
+    df["a"][0] = 5
+    assert_eq(got, expect)
+
+
+@pytest.mark.parametrize(
+    "series, start, end",
+    [
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": 1},
+                {},
+                None,
+            ],
+            1,
+            None,
+        ),
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": 1},
+                {},
+                None,
+                {"d": ["Hello", "rapids"]},
+                None,
+                cudf.NA,
+            ],
+            1,
+            5,
+        ),
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": 1},
+                {},
+                None,
+                {"c": 5},
+                None,
+                cudf.NA,
+            ],
+            None,
+            4,
+        ),
+    ],
+)
+def test_struct_slice(series, start, end):
+    sr = cudf.Series(series)
+    if not end:
+        expected = cudf.Series(series[start:])
+        assert sr[start:].to_arrow() == expected.to_arrow()
+    elif not start:
+        expected = cudf.Series(series[:end])
+        assert sr[:end].to_arrow() == expected.to_arrow()
+    else:
+        expected = cudf.Series(series[start:end])
+        assert sr[start:end].to_arrow() == expected.to_arrow()

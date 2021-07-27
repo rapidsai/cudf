@@ -3079,6 +3079,14 @@ def test_select_dtype():
         gdf.select_dtypes(include=["int"], exclude=["object"]),
     )
 
+    gdf = cudf.DataFrame(
+        {"int_col": [0, 1, 2], "list_col": [[1, 2], [3, 4], [5, 6]]}
+    )
+    pdf = gdf.to_pandas()
+    assert_eq(
+        pdf.select_dtypes("int64"), gdf.select_dtypes("int64"),
+    )
+
 
 def test_select_dtype_datetime():
     gdf = cudf.datasets.timeseries(
@@ -8697,3 +8705,13 @@ def test_is_homogeneous_index(data, expected):
     actual = cudf.Index(data)._is_homogeneous
 
     assert actual == expected
+
+
+def test_frame_series_where():
+    gdf = cudf.DataFrame(
+        {"a": [1.0, 2.0, None, 3.0, None], "b": [None, 10.0, 11.0, None, 23.0]}
+    )
+    pdf = gdf.to_pandas()
+    expected = gdf.where(gdf.notna(), gdf.mean())
+    actual = pdf.where(pdf.notna(), pdf.mean(), axis=1)
+    assert_eq(expected, actual)

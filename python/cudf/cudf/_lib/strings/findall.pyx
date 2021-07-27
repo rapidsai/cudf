@@ -1,20 +1,17 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.table cimport Table
-
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
-
-from cudf._lib.cpp.strings.findall cimport (
-    findall_re as cpp_findall_re
-)
 from libcpp.string cimport string
+from libcpp.utility cimport move
+
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.scalar.scalar cimport string_scalar
+from cudf._lib.cpp.strings.findall cimport findall_re as cpp_findall_re
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.scalar cimport DeviceScalar
+from cudf._lib.table cimport Table
 
 
 def findall(Column source_strings, pattern):

@@ -126,6 +126,7 @@ def is_scalar(val):
     return (
         isinstance(val, DeviceScalar)
         or isinstance(val, cudf.Scalar)
+        or isinstance(val, cudf.core.tools.datetimes.DateOffset)
         or pd_types.is_scalar(val)
     )
 
@@ -267,3 +268,7 @@ is_number = pd_types.is_number
 is_re = pd_types.is_re
 is_re_compilable = pd_types.is_re_compilable
 is_dtype_equal = pd_types.is_dtype_equal
+
+
+# Aliases of numpy dtype functionality.
+issubdtype = np.issubdtype

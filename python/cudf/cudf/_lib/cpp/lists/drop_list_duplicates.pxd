@@ -2,9 +2,10 @@
 
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.types cimport null_equality, nan_equality
+from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
+from cudf._lib.cpp.types cimport nan_equality, null_equality
+
 
 cdef extern from "cudf/lists/drop_list_duplicates.hpp" \
         namespace "cudf::lists" nogil:

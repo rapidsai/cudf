@@ -1,8 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import decimal
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+
 from libc.stdint cimport (
     int8_t,
     int16_t,
@@ -13,50 +15,54 @@ from libc.stdint cimport (
     uint32_t,
     uint64_t,
 )
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-from libcpp cimport bool
 
 import cudf
-from cudf.core.dtypes import ListDtype, StructDtype
 from cudf._lib.types import (
     cudf_to_np_types,
-    duration_unit_map
+    datetime_unit_map,
+    duration_unit_map,
 )
-from cudf._lib.types import datetime_unit_map
-from cudf._lib.types cimport underlying_type_t_type_id, dtype_from_column_view
+from cudf.core.dtypes import ListDtype, StructDtype
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.table cimport Table
-from cudf._lib.interop import to_arrow, from_arrow
+from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 
-from cudf._lib.cpp.wrappers.timestamps cimport (
-    timestamp_s,
-    timestamp_ms,
-    timestamp_us,
-    timestamp_ns
-)
-from cudf._lib.cpp.wrappers.durations cimport(
-    duration_s,
-    duration_ms,
-    duration_us,
-    duration_ns
-)
-from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type
+from cudf._lib.interop import from_arrow, to_arrow
+
 from cudf._lib.cpp.scalar.scalar cimport (
-    scalar,
-    numeric_scalar,
-    timestamp_scalar,
     duration_scalar,
-    string_scalar,
     fixed_point_scalar,
     list_scalar,
-    struct_scalar
+    numeric_scalar,
+    scalar,
+    string_scalar,
+    struct_scalar,
+    timestamp_scalar,
 )
+from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type
+from cudf._lib.cpp.wrappers.durations cimport (
+    duration_ms,
+    duration_ns,
+    duration_s,
+    duration_us,
+)
+from cudf._lib.cpp.wrappers.timestamps cimport (
+    timestamp_ms,
+    timestamp_ns,
+    timestamp_s,
+    timestamp_us,
+)
+
 from cudf.utils.dtypes import _decimal_to_int64, is_list_dtype, is_struct_dtype
+
 cimport cudf._lib.cpp.types as libcudf_types
+
 
 cdef class DeviceScalar:
 

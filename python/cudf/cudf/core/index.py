@@ -724,17 +724,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         return difference
 
-    def _binaryop(self, other, fn, fill_value=None, reflect=False):
-        # TODO: Rather than including an allowlist of acceptable types, we
-        # should instead return NotImplemented for __all__ other types. That
-        # will allow other types to support binops with cudf objects if they so
-        # choose, and just as importantly will allow better error messages if
-        # they don't support it.
-        if isinstance(other, (cudf.DataFrame, cudf.Series)):
-            return NotImplemented
-
-        return super()._binaryop(other, fn, fill_value, reflect)
-
     def _copy_construct(self, **kwargs):
         # Need to override the parent behavior because pandas allows operations
         # on unsigned types to return signed values, forcing us to choose the
@@ -761,16 +750,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
                     cls = CategoricalIndex
             elif cls is RangeIndex:
                 # RangeIndex must convert to other numerical types for ops
-
-                # TODO: The one exception to the output type selected here is
-                # that scalar multiplication of a RangeIndex in pandas results
-                # in another RangeIndex. Propagating that information through
-                # cudf with the current internals is possible, but requires
-                # significant hackery since we'd need _copy_construct or some
-                # other constructor to be intrinsically capable of processing
-                # operations. We should fix this behavior once we've completed
-                # a more thorough refactoring of the various Index classes that
-                # makes it easier to propagate this logic.
                 try:
                     cls = _dtype_to_index[data.dtype.type]
                 except KeyError:
@@ -1785,6 +1764,22 @@ class RangeIndex(BaseIndex):
     def unique(self):
         # RangeIndex always has unique values
         return self
+
+    def __mul__(self, other):
+        # Multiplication by raw ints must return a RangeIndex to match pandas.
+        if isinstance(other, cudf.Scalar) and other.dtype.kind in "iu":
+            other = other.value
+        elif (
+            isinstance(other, (np.ndarray, cupy.ndarray))
+            and other.ndim == 0
+            and other.dtype.kind in "iu"
+        ):
+            other = other.item()
+        if isinstance(other, (int, np.integer)):
+            return RangeIndex(
+                self.start * other, self.stop * other, self.step * other
+            )
+        return super().__mul__(other)
 
 
 class GenericIndex(BaseIndex):
