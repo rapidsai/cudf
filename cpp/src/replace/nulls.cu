@@ -289,8 +289,8 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
 
 template <typename T>
 struct replace_nulls_functor {
-  T* value_it;
-  replace_nulls_functor(T* _value_it) : value_it(_value_it) {}
+  T const* value_it;
+  replace_nulls_functor(T const* _value_it) : value_it(_value_it) {}
   __device__ T operator()(T input, bool is_valid) { return is_valid ? input : *value_it; }
 };
 
