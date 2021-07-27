@@ -74,7 +74,7 @@ int16_t __device__ generic_sign(T)
 template <typename T>
 constexpr inline auto is_supported_round_type()
 {
-  return (cudf::is_numeric<T>() && not std::is_same<T, bool>::value) || cudf::is_fixed_point<T>();
+  return (cudf::is_numeric<T>() && not std::is_same_v<T, bool>) || cudf::is_fixed_point<T>();
 }
 
 template <typename T>

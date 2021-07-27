@@ -825,7 +825,7 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
 /**
  * @copydoc cudf::io::detail::parquet::read_column_chunks
  */
-void reader::impl::read_column_chunks(
+std::future<void> reader::impl::read_column_chunks(
   std::vector<std::unique_ptr<datasource::buffer>>& page_data,
   hostdevice_vector<gpu::ColumnChunkDesc>& chunks,  // TODO const?
   size_t begin_chunk,
@@ -835,6 +835,7 @@ void reader::impl::read_column_chunks(
   rmm::cuda_stream_view stream)
 {
   // Transfer chunk data, coalescing adjacent chunks
+  std::vector<std::future<size_t>> read_tasks;
   for (size_t chunk = begin_chunk; chunk < end_chunk;) {
     const size_t io_offset   = column_chunk_offsets[chunk];
     size_t io_size           = chunks[chunk].compressed_size;
@@ -856,7 +857,11 @@ void reader::impl::read_column_chunks(
     if (io_size != 0) {
       auto& source = _sources[chunk_source_map[chunk]];
       if (source->is_device_read_preferred(io_size)) {
-        page_data[chunk] = source->device_read(io_offset, io_size, stream);
+        auto buffer        = rmm::device_buffer(io_size, stream);
+        auto fut_read_size = source->device_read_async(
+          io_offset, io_size, static_cast<uint8_t*>(buffer.data()), stream);
+        read_tasks.emplace_back(std::move(fut_read_size));
+        page_data[chunk] = datasource::buffer::create(std::move(buffer));
       } else {
         auto const buffer = source->host_read(io_offset, io_size);
         page_data[chunk] =
@@ -871,6 +876,12 @@ void reader::impl::read_column_chunks(
       chunk = next_chunk;
     }
   }
+  auto sync_fn = [](decltype(read_tasks) read_tasks) {
+    for (auto& task : read_tasks) {
+      task.wait();
+    }
+  };
+  return std::async(std::launch::deferred, sync_fn, std::move(read_tasks));
 }
 
 /**
@@ -1437,6 +1448,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Initialize column chunk information
     size_t total_decompressed_size = 0;
     auto remaining_rows            = num_rows;
+    std::vector<std::future<void>> read_rowgroup_tasks;
     for (const auto& rg : selected_row_groups) {
       const auto& row_group       = _metadata->get_row_group(rg.index, rg.source_index);
       auto const row_group_start  = rg.start_row;
@@ -1504,15 +1516,18 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         }
       }
       // Read compressed chunk data to device memory
-      read_column_chunks(page_data,
-                         chunks,
-                         io_chunk_idx,
-                         chunks.size(),
-                         column_chunk_offsets,
-                         chunk_source_map,
-                         stream);
+      read_rowgroup_tasks.push_back(read_column_chunks(page_data,
+                                                       chunks,
+                                                       io_chunk_idx,
+                                                       chunks.size(),
+                                                       column_chunk_offsets,
+                                                       chunk_source_map,
+                                                       stream));
 
       remaining_rows -= row_group.num_rows;
+    }
+    for (auto& task : read_rowgroup_tasks) {
+      task.wait();
     }
     assert(remaining_rows <= 0);
 

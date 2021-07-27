@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-#include <cub/cub.cuh>
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/utilities/bit.hpp>
-#include <io/utilities/block_utils.cuh>
-#include <rmm/cuda_stream_view.hpp>
 #include "orc_common.h"
 #include "orc_gpu.h"
+
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/bit.hpp>
+#include <io/utilities/block_utils.cuh>
+
+#include <cub/cub.cuh>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -628,7 +631,7 @@ static const __device__ __constant__ int32_t kTimeScale[10] = {
  * @param[in] chunks encoder chunks device array [column][rowgroup]
  * @param[in, out] streams chunk streams device array [column][rowgroup]
  */
-// blockDim {512,1,1}
+// blockDim {`encode_block_size`,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
   gpuEncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
@@ -665,17 +668,30 @@ __global__ void __launch_bounds__(block_size)
       s->strm_pos[CI_DICTIONARY] = s->stream.lengths[CI_DICTIONARY];
     }
   }
+
+  auto validity_byte = [&] __device__(int row) -> uint8_t& {
+    // valid_buf is a circular buffer where validitiy of 8 rows is stored in each element
+    return s->valid_buf[(row / 8) % encode_block_size];
+  };
+
+  auto validity = [&] __device__(int row) -> uint32_t {
+    // Check if the specific bit is set in the validity buffer
+    return (validity_byte(row) >> (row % 8)) & 1;
+  };
+
   __syncthreads();
   while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
     // Encode valid map
     if (s->present_rows < s->chunk.num_rows) {
       uint32_t present_rows = s->present_rows;
-      uint32_t nrows        = min(s->chunk.num_rows - present_rows,
-                                  512 * 8 - (present_rows - (min(s->cur_row, s->present_out) & ~7)));
+      uint32_t nrows =
+        min(s->chunk.num_rows - present_rows,
+            encode_block_size * 8 - (present_rows - (min(s->cur_row, s->present_out) & ~7)));
       uint32_t nrows_out;
       if (t * 8 < nrows) {
-        uint32_t row  = s->chunk.start_row + present_rows + t * 8;
-        uint8_t valid = 0;
+        auto const row_in_group = present_rows + t * 8;
+        auto const row          = s->chunk.start_row + row_in_group;
+        uint8_t valid           = 0;
         if (row < s->chunk.leaf_column->size()) {
           if (s->chunk.leaf_column->nullable()) {
             size_type current_valid_offset = row + s->chunk.leaf_column->offset();
@@ -689,27 +705,24 @@ __global__ void __launch_bounds__(block_size)
             valid = 0xff;
           }
           if (row + 7 > s->chunk.leaf_column->size()) {
-            valid = valid & ((1 << (s->chunk.leaf_column->size() & 7)) - 1);
+            valid = valid & ((1 << (s->chunk.leaf_column->size() - row)) - 1);
           }
         }
-        s->valid_buf[(row >> 3) & 0x1ff] = valid;
+        validity_byte(row_in_group) = valid;
       }
       __syncthreads();
       present_rows += nrows;
       if (!t) { s->present_rows = present_rows; }
       // RLE encode the present stream
-      nrows_out =
-        present_rows -
-        s->present_out;  // Should always be a multiple of 8 except at the end of the last row group
+      nrows_out = present_rows - s->present_out;  // Should always be a multiple of 8 except at
+                                                  // the end of the last row group
       if (nrows_out > ((present_rows < s->chunk.num_rows) ? 130 * 8 : 0)) {
         uint32_t present_out = s->present_out;
         if (s->stream.ids[CI_PRESENT] >= 0) {
           uint32_t flush = (present_rows < s->chunk.num_rows) ? 0 : 7;
           nrows_out      = (nrows_out + flush) >> 3;
           nrows_out =
-            ByteRLE<CI_PRESENT, 0x1ff>(
-              s, s->valid_buf, (s->chunk.start_row + present_out) >> 3, nrows_out, flush, t) *
-            8;
+            ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, present_out >> 3, nrows_out, flush, t) * 8;
         }
         __syncthreads();
         if (!t) { s->present_out = min(present_out + nrows_out, present_rows); }
@@ -717,7 +730,7 @@ __global__ void __launch_bounds__(block_size)
       __syncthreads();
     }
     // Fetch non-null values
-    if (!s->stream.data_ptrs[CI_DATA]) {
+    if (s->chunk.type_kind != LIST && !s->stream.data_ptrs[CI_DATA]) {
       // Pass-through
       __syncthreads();
       if (!t) {
@@ -728,14 +741,16 @@ __global__ void __launch_bounds__(block_size)
     } else if (s->cur_row < s->present_rows) {
       uint32_t maxnumvals = (s->chunk.type_kind == BOOLEAN) ? 2048 : 1024;
       uint32_t nrows =
-        min(min(s->present_rows - s->cur_row, maxnumvals - max(s->numvals, s->numlengths)), 512);
-      uint32_t row   = s->chunk.start_row + s->cur_row + t;
-      uint32_t valid = (t < nrows) ? (s->valid_buf[(row >> 3) & 0x1ff] >> (row & 7)) & 1 : 0;
-      s->buf.u32[t]  = valid;
+        min(min(s->present_rows - s->cur_row, maxnumvals - max(s->numvals, s->numlengths)),
+            encode_block_size);
+      auto const row_in_group = s->cur_row + t;
+      uint32_t const valid    = (t < nrows) ? validity(row_in_group) : 0;
+      s->buf.u32[t]           = valid;
 
       // TODO: Could use a faster reduction relying on _popc() for the initial phase
-      lengths_to_positions(s->buf.u32, 512, t);
+      lengths_to_positions(s->buf.u32, encode_block_size, t);
       __syncthreads();
+      auto const row = s->chunk.start_row + row_in_group;
       if (valid) {
         int nz_idx = (s->nnz + s->buf.u32[t] - 1) & (maxnumvals - 1);
         switch (s->chunk.type_kind) {
@@ -780,7 +795,9 @@ __global__ void __launch_bounds__(block_size)
           case STRING:
             if (s->chunk.encoding_kind == DICTIONARY_V2) {
               uint32_t dict_idx = s->chunk.dict_index[row];
-              if (dict_idx > 0x7fffffffu) dict_idx = s->chunk.dict_index[dict_idx & 0x7fffffffu];
+              if (dict_idx > 0x7fffffffu) {
+                dict_idx = s->chunk.dict_index[dict_idx & 0x7fffffffu];
+              }
               s->vals.u32[nz_idx] = dict_idx;
             } else {
               string_view value = s->chunk.leaf_column->element<string_view>(row);
@@ -791,6 +808,13 @@ __global__ void __launch_bounds__(block_size)
             // Reusing the lengths array for the scale stream
             // Note: can be written in a faster manner, given that all values are equal
           case DECIMAL: s->lengths.u32[nz_idx] = zigzag(s->chunk.scale); break;
+          case LIST: {
+            auto const& offsets =
+              s->chunk.leaf_column->child(lists_column_view::offsets_column_index);
+            // Compute list length from the offsets
+            s->lengths.u32[nz_idx] =
+              offsets.element<size_type>(row + 1) - offsets.element<size_type>(row);
+          } break;
           default: break;
         }
       }
@@ -825,6 +849,7 @@ __global__ void __launch_bounds__(block_size)
         s->nnz += nz;
         s->numvals += nz;
         s->numlengths += (s->chunk.type_kind == TIMESTAMP || s->chunk.type_kind == DECIMAL ||
+                          s->chunk.type_kind == LIST ||
                           (s->chunk.type_kind == STRING && s->chunk.encoding_kind != DICTIONARY_V2))
                            ? nz
                            : 0;
@@ -902,6 +927,7 @@ __global__ void __launch_bounds__(block_size)
               s, s->lengths.u64, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u64);
             break;
           case DECIMAL:
+          case LIST:
           case STRING:
             n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
               s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u32);
@@ -938,7 +964,7 @@ __global__ void __launch_bounds__(block_size)
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuEncodeStringDictionaries(StripeDictionary* stripes,
+  gpuEncodeStringDictionaries(StripeDictionary const* stripes,
                               device_2dspan<EncChunk const> chunks,
                               device_2dspan<encoder_chunk_streams> streams)
 {
@@ -962,8 +988,8 @@ __global__ void __launch_bounds__(block_size)
     s->nrows         = s->u.dict_stripe.num_strings;
     s->cur_row       = 0;
   }
-  column_device_view* string_column = s->u.dict_stripe.leaf_column;
-  auto const dict_data              = s->u.dict_stripe.dict_data;
+  auto const string_column = s->u.dict_stripe.leaf_column;
+  auto const dict_data     = s->u.dict_stripe.dict_data;
   __syncthreads();
   if (s->chunk.encoding_kind != DICTIONARY_V2) {
     return;  // This column isn't using dictionary encoding -> bail out
@@ -1014,19 +1040,20 @@ __global__ void __launch_bounds__(block_size)
 }
 
 __global__ void __launch_bounds__(512)
-  gpu_set_chunk_columns(const table_device_view view, device_2dspan<EncChunk> chunks)
+  gpu_set_chunk_columns(device_span<orc_column_device_view const> orc_columns,
+                        device_2dspan<EncChunk> chunks)
 {
   // Set leaf_column member of EncChunk
   for (size_type i = threadIdx.x; i < chunks.size().second; i += blockDim.x) {
-    chunks[blockIdx.x][i].leaf_column = view.begin() + blockIdx.x;
+    chunks[blockIdx.x][i].leaf_column = &orc_columns[blockIdx.x].cudf_column;
   }
 }
 
 /**
  * @brief Merge chunked column data into a single contiguous stream
  *
- * @param[in] strm_desc StripeStream device array [stripe][stream]
- * @param[in] streams TODO
+ * @param[in,out] strm_desc StripeStream device array [stripe][stream]
+ * @param[in,out] streams List of encoder chunk streams [column][rowgroup]
  */
 // blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024)
@@ -1211,12 +1238,13 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
                          device_2dspan<encoder_chunk_streams> streams,
                          rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(512, 1);  // 512 threads per chunk
+  dim3 dim_block(encode_block_size, 1);  // `encode_block_size` threads per chunk
   dim3 dim_grid(chunks.size().first, chunks.size().second);
-  gpuEncodeOrcColumnData<512><<<dim_grid, dim_block, 0, stream.value()>>>(chunks, streams);
+  gpuEncodeOrcColumnData<encode_block_size>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, streams);
 }
 
-void EncodeStripeDictionaries(StripeDictionary* stripes,
+void EncodeStripeDictionaries(StripeDictionary const* stripes,
                               device_2dspan<EncChunk const> chunks,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,
@@ -1229,14 +1257,14 @@ void EncodeStripeDictionaries(StripeDictionary* stripes,
     <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, enc_streams);
 }
 
-void set_chunk_columns(const table_device_view& view,
+void set_chunk_columns(device_span<orc_column_device_view const> orc_columns,
                        device_2dspan<EncChunk> chunks,
                        rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);
   dim3 dim_grid(chunks.size().first, 1);
 
-  gpu_set_chunk_columns<<<dim_grid, dim_block, 0, stream.value()>>>(view, chunks);
+  gpu_set_chunk_columns<<<dim_grid, dim_block, 0, stream.value()>>>(orc_columns, chunks);
 }
 
 void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,

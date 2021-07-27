@@ -95,13 +95,13 @@ class alignas(16) column_device_view_base {
    *`data<T>()`.
    *
    * This function will only participate in overload resolution if `is_rep_layout_compatible<T>()`
-   * or `std::is_same<T,void>::value` are true.
+   * or `std::is_same_v<T,void>` are true.
    *
    * @tparam The type to cast to
    * @return T const* Typed pointer to underlying data
    */
   template <typename T = void,
-            CUDF_ENABLE_IF(std::is_same<T, void>::value or is_rep_layout_compatible<T>())>
+            CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   __host__ __device__ T const* head() const noexcept
   {
     return static_cast<T const*>(_data);
@@ -350,7 +350,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired string element
    * @return string_view instance representing this element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, string_view>::value)>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
   __device__ T element(size_type element_index) const noexcept
   {
     size_type index = element_index + offset();  // account for this view's _offset
@@ -411,7 +411,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired element
    * @return dictionary32 instance representing this element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, dictionary32>::value)>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, dictionary32>)>
   __device__ T element(size_type element_index) const noexcept
   {
     size_type index    = element_index + offset();  // account for this view's _offset
@@ -429,7 +429,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired element
    * @return numeric::decimal32 representing the element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, numeric::decimal32>::value)>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, numeric::decimal32>)>
   __device__ T element(size_type element_index) const noexcept
   {
     using namespace numeric;
@@ -447,7 +447,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired element
    * @return numeric::decimal64 representing the element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, numeric::decimal64>::value)>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, numeric::decimal64>)>
   __device__ T element(size_type element_index) const noexcept
   {
     using namespace numeric;
@@ -949,7 +949,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * the specified type.
    *
    * This function will only participate in overload resolution if `is_rep_layout_compatible<T>()`
-   * or `std::is_same<T,void>::value` are true.
+   * or `std::is_same_v<T,void>` are true.
    *
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
@@ -961,7 +961,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @return T* Typed pointer to underlying data
    */
   template <typename T = void,
-            CUDF_ENABLE_IF(std::is_same<T, void>::value or is_rep_layout_compatible<T>())>
+            CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   __host__ __device__ T* head() const noexcept
   {
     return const_cast<T*>(detail::column_device_view_base::head<T>());
@@ -1379,13 +1379,13 @@ struct pair_rep_accessor {
   }
 
  private:
-  template <typename R, std::enable_if_t<std::is_same<R, rep_type>::value, void>* = nullptr>
+  template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
   CUDA_DEVICE_CALLABLE auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i);
   }
 
-  template <typename R, std::enable_if_t<not std::is_same<R, rep_type>::value, void>* = nullptr>
+  template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
   CUDA_DEVICE_CALLABLE auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i).value();

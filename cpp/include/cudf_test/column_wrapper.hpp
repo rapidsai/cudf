@@ -92,9 +92,9 @@ class column_wrapper {
 template <typename From, typename To>
 struct fixed_width_type_converter {
   // Are the types same - simply copy elements from [begin, end) to out
-  template <typename FromT                                                        = From,
-            typename ToT                                                          = To,
-            typename std::enable_if<std::is_same<FromT, ToT>::value, void>::type* = nullptr>
+  template <typename FromT                                                   = From,
+            typename ToT                                                     = To,
+            typename std::enable_if<std::is_same_v<FromT, ToT>, void>::type* = nullptr>
   constexpr ToT operator()(FromT element) const
   {
     return element;
@@ -103,7 +103,7 @@ struct fixed_width_type_converter {
   // Are the types convertible or can target be constructed from source?
   template <typename FromT                       = From,
             typename ToT                         = To,
-            typename std::enable_if<!std::is_same<FromT, ToT>::value &&
+            typename std::enable_if<!std::is_same_v<FromT, ToT> &&
                                       (cudf::is_convertible<FromT, ToT>::value ||
                                        std::is_constructible<ToT, FromT>::value),
                                     void>::type* = nullptr>
@@ -511,9 +511,9 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
 
     auto const size      = cudf::distance(begin, end);
     auto const elements  = thrust::host_vector<Rep>(begin, end);
-    auto const id        = std::is_same<Rep, int32_t>::value   ? type_id::DECIMAL32
-                           : std::is_same<Rep, int64_t>::value ? type_id::DECIMAL64
-                                                               : type_id::DECIMAL128;
+    auto const id        = std::is_same_v<Rep, int32_t>   ? type_id::DECIMAL32
+                           : std::is_same_v<Rep, int64_t> ? type_id::DECIMAL64
+                                                          : type_id::DECIMAL128;
     auto const data_type = cudf::data_type{id, static_cast<int32_t>(scale)};
 
     wrapped.reset(new cudf::column{
@@ -577,9 +577,9 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
 
     auto const size      = cudf::distance(begin, end);
     auto const elements  = thrust::host_vector<Rep>(begin, end);
-    auto const id        = std::is_same<Rep, int32_t>::value   ? type_id::DECIMAL32
-                           : std::is_same<Rep, int64_t>::value ? type_id::DECIMAL64
-                                                               : type_id::DECIMAL128;
+    auto const id        = std::is_same_v<Rep, int32_t>   ? type_id::DECIMAL32
+                           : std::is_same_v<Rep, int64_t> ? type_id::DECIMAL64
+                                                          : type_id::DECIMAL128;
     auto const data_type = cudf::data_type{id, static_cast<int32_t>(scale)};
 
     wrapped.reset(new cudf::column{
@@ -1329,8 +1329,8 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param elements The list of elements
    */
-  template <typename Element                                                   = T,
-            std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
+  template <typename Element                                              = T,
+            std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
   lists_column_wrapper(std::initializer_list<std::string> elements) : column_wrapper{}
   {
     build_from_non_nested(
@@ -1354,7 +1354,7 @@ class lists_column_wrapper : public detail::column_wrapper {
    */
   template <typename Element = T,
             typename ValidityIterator,
-            std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
+            std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
   lists_column_wrapper(std::initializer_list<std::string> elements, ValidityIterator v)
     : column_wrapper{}
   {

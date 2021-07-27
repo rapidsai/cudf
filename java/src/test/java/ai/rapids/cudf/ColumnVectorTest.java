@@ -2634,38 +2634,116 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testRepeatStrings() {
-     // Empty strings column.
-    try (ColumnVector sv = ColumnVector.fromStrings("", "", "");
-         ColumnVector result = sv.repeatStrings(1)) {
-      assertColumnsAreEqual(sv, result);
+  void testRepeatStringsWithScalarRepeatTimes() {
+    // Empty strings column.
+    try (ColumnVector input = ColumnVector.fromStrings("", "", "");
+         ColumnVector results = input.repeatStrings(1)) {
+      assertColumnsAreEqual(input, results);
     }
 
     // Zero repeatTimes.
-    try (ColumnVector sv = ColumnVector.fromStrings("abc", "xyz", "123");
-         ColumnVector result = sv.repeatStrings(0);
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "xyz", "123");
+         ColumnVector results = input.repeatStrings(0);
          ColumnVector expected = ColumnVector.fromStrings("", "", "")) {
-      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, results);
     }
 
     // Negative repeatTimes.
-    try (ColumnVector sv = ColumnVector.fromStrings("abc", "xyz", "123");
-         ColumnVector result = sv.repeatStrings(-1);
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "xyz", "123");
+         ColumnVector results = input.repeatStrings(-1);
          ColumnVector expected = ColumnVector.fromStrings("", "", "")) {
-      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, results);
     }
 
     // Strings column containing both null and empty, output is copied exactly from input.
-    try (ColumnVector sv = ColumnVector.fromStrings("abc", "", null, "123", null);
-         ColumnVector result = sv.repeatStrings(1)) {
-      assertColumnsAreEqual(sv, result);
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector results = input.repeatStrings(1)) {
+      assertColumnsAreEqual(input, results);
     }
 
     // Strings column containing both null and empty.
-    try (ColumnVector sv = ColumnVector.fromStrings("abc", "", null, "123", null);
-         ColumnVector result = sv.repeatStrings( 2);
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector results = input.repeatStrings( 2);
          ColumnVector expected = ColumnVector.fromStrings("abcabc", "", null, "123123", null)) {
-      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, results);
+    }
+  }
+
+  @Test
+  void testRepeatStringsWithColumnRepeatTimes() {
+    // Empty strings column.
+    try (ColumnVector input = ColumnVector.fromStrings("", "", "");
+         ColumnVector repeatTimes = ColumnVector.fromInts(-1, 0, 1);
+         ColumnVector results = input.repeatStrings(repeatTimes)) {
+      assertColumnsAreEqual(input, results);
+    }
+
+    // Zero and negative repeatTimes.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "xyz", "123", "456", "789", "a1");
+         ColumnVector repeatTimes = ColumnVector.fromInts(-200, -100, 0, 0, 1, 2);
+         ColumnVector results = input.repeatStrings(repeatTimes);
+         ColumnVector expected = ColumnVector.fromStrings("", "", "", "", "789", "a1a1")) {
+      assertColumnsAreEqual(expected, results);
+    }
+
+    // Strings column contains both null and empty, output is copied exactly from input.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector repeatTimes = ColumnVector.fromInts(1, 1, 1, 1, 1);
+         ColumnVector results = input.repeatStrings(repeatTimes)) {
+      assertColumnsAreEqual(input, results);
+    }
+
+    // Strings column contains both null and empty.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector repeatTimes = ColumnVector.fromInts(2, 3, 1, 3, 2);
+         ColumnVector results = input.repeatStrings(repeatTimes);
+         ColumnVector expected = ColumnVector.fromStrings("abcabc", "", null, "123123123", null)) {
+      assertColumnsAreEqual(expected, results);
+    }
+  }
+
+  @Test
+  void testRepeatStringsWithColumnRepeatTimesAndPrecomputedOutputSizes() {
+    // Empty strings column.
+    try (ColumnVector input = ColumnVector.fromStrings("", "", "");
+         ColumnVector repeatTimes = ColumnVector.fromInts(-1, 0, 1);
+         ColumnView.StringSizes outputSizes = input.repeatStringsSizes(repeatTimes)) {
+      assertEquals(0, outputSizes.getTotalSize());
+      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.getStringSizes())) {
+        assertColumnsAreEqual(input, results);
+      }
+    }
+
+    // Zero and negative repeatTimes.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "xyz", "123", "456", "789", "a1");
+         ColumnVector repeatTimes = ColumnVector.fromInts(-200, -100, 0, 0, 1, 2);
+         ColumnVector expected = ColumnVector.fromStrings("", "", "", "", "789", "a1a1");
+         ColumnView.StringSizes outputSizes = input.repeatStringsSizes(repeatTimes)) {
+      assertEquals(7, outputSizes.getTotalSize());
+      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.getStringSizes())) {
+        assertColumnsAreEqual(expected, results);
+      }
+    }
+
+    // Strings column contains both null and empty, output is copied exactly from input.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector repeatTimes = ColumnVector.fromInts(1, 1, 1, 1, 1);
+         ColumnView.StringSizes outputSizes = input.repeatStringsSizes(repeatTimes)) {
+      assertEquals(6, outputSizes.getTotalSize());
+      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.getStringSizes())) {
+        assertColumnsAreEqual(input, results);
+      }
+    }
+
+    // Strings column contains both null and empty.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector repeatTimes = ColumnVector.fromInts(2, 3, 1, 3, 2);
+         ColumnVector expected = ColumnVector.fromStrings("abcabc", "", null, "123123123", null);
+         ColumnView.StringSizes outputSizes = input.repeatStringsSizes(repeatTimes)) {
+      assertEquals(15, outputSizes.getTotalSize());
+      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.getStringSizes())) {
+        assertColumnsAreEqual(expected, results);
+      }
     }
   }
 
@@ -2923,6 +3001,51 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnVector expected = ColumnVector.fromBoxedInts(1, 1, null, 2, 6, 30, 240)) {
         assertColumnsAreEqual(expected, result);
       }
+    }
+  }
+
+  @Test
+  void testScanRank() {
+    try (ColumnVector col1 = ColumnVector.fromBoxedInts(-97, -97, -97, null, -16, 5, null, null, 6, 6, 34, null);
+         ColumnVector col2 = ColumnVector.fromBoxedInts(3, 3, 4, 7, 7, 7, 7, 7, 8, 8, 8, 9);
+         ColumnVector struct_order = ColumnVector.makeStruct(col1, col2);
+         ColumnVector expected = ColumnVector.fromBoxedInts(
+            1, 1, 3, 4, 5, 6, 7, 7, 9, 9, 11, 12)) {
+      try (ColumnVector result = struct_order.scan(Aggregation.rank(),
+              ScanType.INCLUSIVE, NullPolicy.INCLUDE)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      // Exclude should have identical results
+      try (ColumnVector result = struct_order.scan(Aggregation.rank(),
+              ScanType.INCLUSIVE, NullPolicy.EXCLUDE)
+              ) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      // Rank aggregations do not support ScanType.EXCLUSIVE
+    }
+  }
+
+  @Test
+  void testScanDenseRank() {
+    try (ColumnVector col1 = ColumnVector.fromBoxedInts(-97, -97, -97, null, -16, 5, null, null, 6, 6, 34, null);
+         ColumnVector col2 = ColumnVector.fromBoxedInts(3, 3, 4, 7, 7, 7, 7, 7, 8, 8, 8, 9);
+         ColumnVector struct_order = ColumnVector.makeStruct(col1, col2);
+         ColumnVector expected = ColumnVector.fromBoxedInts(
+            1, 1, 2, 3, 4, 5, 6, 6, 7, 7, 8, 9)) {
+      try (ColumnVector result = struct_order.scan(Aggregation.denseRank(),
+              ScanType.INCLUSIVE, NullPolicy.INCLUDE)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      // Exclude should have identical results
+      try (ColumnVector result = struct_order.scan(Aggregation.denseRank(),
+              ScanType.INCLUSIVE, NullPolicy.EXCLUDE)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      // Dense rank aggregations do not support ScanType.EXCLUSIVE
     }
   }
 

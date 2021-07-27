@@ -3079,6 +3079,14 @@ def test_select_dtype():
         gdf.select_dtypes(include=["int"], exclude=["object"]),
     )
 
+    gdf = cudf.DataFrame(
+        {"int_col": [0, 1, 2], "list_col": [[1, 2], [3, 4], [5, 6]]}
+    )
+    pdf = gdf.to_pandas()
+    assert_eq(
+        pdf.select_dtypes("int64"), gdf.select_dtypes("int64"),
+    )
+
 
 def test_select_dtype_datetime():
     gdf = cudf.datasets.timeseries(

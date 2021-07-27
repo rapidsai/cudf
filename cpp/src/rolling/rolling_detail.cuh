@@ -158,7 +158,7 @@ struct DeviceRollingArgMinMax {
     // strictly speaking, I think it would be ok to make this work
     // for comparable types as well.  but right now the only use case is
     // for MIN/MAX on strings.
-    return std::is_same<T, cudf::string_view>::value;
+    return std::is_same_v<T, cudf::string_view>;
   }
 
   DeviceRollingArgMinMax(size_type _min_periods) : min_periods(_min_periods) {}

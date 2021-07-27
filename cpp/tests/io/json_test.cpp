@@ -44,7 +44,7 @@ using bool_wrapper         = wrapper<bool>;
 
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
-  typename std::conditional<std::is_same<T, cudf::string_view>::value,
+  typename std::conditional<std::is_same_v<T, cudf::string_view>,
                             cudf::test::strings_column_wrapper,
                             cudf::test::fixed_width_column_wrapper<T, SourceElementT>>::type;
 
@@ -106,7 +106,7 @@ inline auto random_values(size_t size)
 
   using T1 = T;
   using uniform_distribution =
-    typename std::conditional_t<std::is_same<T1, bool>::value,
+    typename std::conditional_t<std::is_same_v<T1, bool>,
                                 std::bernoulli_distribution,
                                 std::conditional_t<std::is_floating_point<T1>::value,
                                                    std::uniform_real_distribution<T1>,
@@ -145,7 +145,6 @@ void check_float_column(cudf::column_view const& col,
 struct JsonReaderTest : public cudf::test::BaseFixture {
 };
 
-/*
 TEST_F(JsonReaderTest, BasicJsonLines)
 {
   std::string data = "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n";
@@ -615,10 +614,11 @@ TEST_F(JsonReaderTest, JsonLinesObjectsOutOfOrder)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                  cudf::test::strings_column_wrapper({"aaa", "bbb"}));
 }
-*/
+
 /*
 // currently, the json reader is strict about having non-empty input.
-TEST_F(JsonReaderTest, EmptyFile) {
+TEST_F(JsonReaderTest, EmptyFile)
+{
   auto filepath = temp_env->get_temp_dir() + "EmptyFile.csv";
   {
     std::ofstream outfile{filepath, std::ofstream::out};
@@ -634,7 +634,8 @@ TEST_F(JsonReaderTest, EmptyFile) {
 }
 
 // currently, the json reader is strict about having non-empty input.
-TEST_F(JsonReaderTest, NoDataFile) {
+TEST_F(JsonReaderTest, NoDataFile)
+{
   auto filepath = temp_env->get_temp_dir() + "NoDataFile.csv";
   {
     std::ofstream outfile{filepath, std::ofstream::out};
@@ -649,7 +650,7 @@ TEST_F(JsonReaderTest, NoDataFile) {
   EXPECT_EQ(0, view.num_columns());
 }
 */
-/*
+
 TEST_F(JsonReaderTest, ArrowFileSource)
 {
   const std::string fname = temp_env->get_temp_dir() + "ArrowFileSource.csv";
@@ -698,7 +699,8 @@ TEST_F(JsonReaderTest, InvalidFloatingPoint)
 
   const auto col_data = cudf::test::to_host<float>(result.tbl->view().column(0));
   // col_data.first contains the column data
-  for (const auto& elem : col_data.first) ASSERT_TRUE(std::isnan(elem));
+  for (const auto& elem : col_data.first)
+    ASSERT_TRUE(std::isnan(elem));
   // col_data.second contains the bitmasks
   ASSERT_EQ(0u, col_data.second[0]);
 }
@@ -861,7 +863,7 @@ TEST_F(JsonReaderTest, ParseOutOfRangeIntegers)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_less_int64_min_append, view.column(8));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_mixed_range_append, view.column(9));
 }
-*/
+
 TEST_F(JsonReaderTest, JsonLinesMultipleFileInputs)
 {
   const std::string file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";

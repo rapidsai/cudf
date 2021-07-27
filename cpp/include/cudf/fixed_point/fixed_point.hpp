@@ -49,8 +49,8 @@ enum class Radix : int32_t { BASE_2 = 2, BASE_10 = 10 };
 template <typename T>
 constexpr inline auto is_supported_representation_type()
 {
-  return cuda::std::is_same<T, int32_t>::value || cuda::std::is_same<T, int64_t>::value ||
-         cuda::std::is_same<T, __int128_t>::value;
+  return cuda::std::is_same_v<T, int32_t> || cuda::std::is_same<T, int64_t> ||
+         cuda::std::is_same_v<T, __int128_t>;
 }
 
 // TODO make a temporary::is_integral function
@@ -78,7 +78,7 @@ namespace detail {
 template <typename Rep,
           Radix Base,
           typename T,
-          typename cuda::std::enable_if_t<(cuda::std::is_same<int32_t, T>::value &&
+          typename cuda::std::enable_if_t<(cuda::std::is_same_v<int32_t, T> &&
                                            is_supported_representation_type<Rep>())>* = nullptr>
 CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent)
 {
