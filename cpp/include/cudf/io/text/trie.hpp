@@ -38,38 +38,94 @@ namespace text {
 struct trie_node {
   char token;
   uint8_t match_length;
-  uint8_t transitions_begin;
+  uint8_t child_begin;
+};
+
+struct trie_path_part {
+  uint32_t head;
+  uint32_t tail;
+};
+
+struct trie_queue {
+  static uint32_t const N = 8;
+  trie_path_part values[N];
+  uint32_t pos;
+  uint32_t end;
+
+  inline constexpr uint32_t size() { return end - pos; }
+
+  inline constexpr trie_path_part peek() { return values[pos % N]; }
+
+  inline constexpr trie_path_part dequeue() { return values[pos++ % N]; }
+
+  inline constexpr void enqueue(trie_path_part value)
+  {
+    if (size() < N) { values[end++ % N] = value; }
+  }
 };
 
 struct trie_device_view {
   device_span<trie_node const> _nodes;
 
-  inline constexpr uint16_t transition(uint16_t idx, char c)
+  template <uint32_t N>
+  inline constexpr void transition_init(  //
+    char c,
+    trie_path_part (&parts)[N],
+    uint32_t& pos,
+    uint32_t& end)
   {
-    auto pos = _nodes[idx].transitions_begin;
-    auto end = _nodes[idx + 1].transitions_begin;
-    while (pos < end) {
-      if (c == _nodes[pos].token) { return pos; }
-      pos++;
+    for (uint32_t curr = 0; curr < _nodes.size() - 1; curr++) {
+      transition_enqueue_all(c, parts, pos, end, curr, curr);
     }
-
-    return transition_init(c);
   }
 
-  inline constexpr uint16_t transition_init(char c)
+  template <uint32_t N>
+  inline constexpr void transition(  //
+    char c,
+    trie_path_part (&parts)[N],
+    uint32_t& pos,
+    uint32_t& end)
   {
-    auto pos = _nodes[0].transitions_begin;
-    auto end = _nodes[1].transitions_begin;
-    while (pos < end) {
-      if (c == _nodes[pos].token) { return pos; }
-      pos++;
+    auto size = end - pos;
+    transition_enqueue_all(c, parts, pos, end, 0, 0);
+    for (uint32_t i = 0; i < size; i++) {
+      auto partial = parts[pos++ % N];
+      transition_enqueue_all(c, parts, pos, end, partial.head, partial.tail);
     }
+  }
 
-    return 0;
+  template <uint32_t N>
+  inline constexpr void transition_enqueue_all(  //
+    char c,
+    trie_path_part (&parts)[N],
+    uint32_t& pos,
+    uint32_t& end,
+    uint32_t const& head,
+    uint32_t const& curr)
+  {
+    for (uint32_t tail = _nodes[curr].child_begin; tail < _nodes[curr + 1].child_begin; tail++) {
+      if (end - pos < N) {              //
+        if (_nodes[tail].token == c) {  //
+          parts[end++ % N] = {head, tail};
+        }
+      }
+    }
   }
 
   inline constexpr bool is_match(uint16_t idx) { return static_cast<bool>(get_match_length(idx)); }
   inline constexpr uint8_t get_match_length(uint16_t idx) { return _nodes[idx].match_length; }
+
+  template <uint32_t N>
+  inline constexpr uint8_t get_match_length(trie_path_part (&parts)[N],
+                                            uint32_t& pos,
+                                            uint32_t& end)
+  {
+    int8_t val = 0;
+    for (uint32_t i = pos; i != end; i++) {
+      val = max(val, get_match_length(parts[i % N].tail));
+    }
+    return val;
+  }
 };
 
 struct trie {

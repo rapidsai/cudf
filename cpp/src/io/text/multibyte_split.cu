@@ -138,10 +138,10 @@ struct scan_tile_state {
 auto constexpr PARTIAL_AGGREGATION_STRATEGY = 1;
 
 // keep ITEMS_PER_TILE below input size to force multi-tile execution.
-auto constexpr ITEMS_PER_THREAD = 32;   // influences register pressure
-auto constexpr THREADS_PER_TILE = 128;  // must be >= 32 for warp-reduce. influences shmem usage.
+auto constexpr ITEMS_PER_THREAD = 32;  // influences register pressure
+auto constexpr THREADS_PER_TILE = 32;  // must be >= 32 for warp-reduce. influences shmem usage.
 auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
-auto constexpr TILES_PER_CHUNK  = 512;  // blocks in streaming launch
+auto constexpr TILES_PER_CHUNK  = 1;  // blocks in streaming launch
 auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 
 template <typename T>
@@ -249,27 +249,19 @@ struct PatternScan {
                               char (&thread_data)[ITEMS_PER_THREAD],
                               uint32_t (&thread_state)[ITEMS_PER_THREAD])
   {
-    // create a state that represents all possible starting states.
-    auto thread_superstate = superstate();
+    cudf::io::text::trie_path_part parts[4];
+    uint32_t pos = 0;
+    uint32_t end = 0;
 
-    // transition all possible states
-    for (uint32_t i = 0; i < ITEMS_PER_THREAD; i++) {
-      thread_superstate = thread_superstate.apply([&](uint8_t state) {  //
-        return trie.transition(state, thread_data[i]);
-      });
-    }
-
-    auto prefix_callback = BlockScanCallback(_temp_storage.scan_callback, tile_state, tile_idx);
-
-    BlockScan(_temp_storage.scan)
-      .ExclusiveSum(thread_superstate, thread_superstate, prefix_callback);
-
-    // transition from known state to known state
-    thread_state[0] = trie.transition(thread_superstate.get(0), thread_data[0]);
+    trie.transition_init(thread_data[0], parts, pos, end);
 
     for (uint32_t i = 1; i < ITEMS_PER_THREAD; i++) {
-      thread_state[i] = trie.transition(thread_state[i - 1], thread_data[i]);
+      trie.transition(thread_data[i], parts, pos, end);
     }
+
+    // at this point, `parts` should contain the possible matches for this thread.
+
+    // but now we have to join them across threads. And then across blocks.
   }
 };
 
