@@ -7359,8 +7359,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 # category handling
                 if is_categorical_dtype(i_dtype):
                     include_subtypes.add(i_dtype)
-                elif issubclass(dtype.type, i_dtype):
-                    include_subtypes.add(dtype.type)
+                elif inspect.isclass(dtype.type):
+                    if issubclass(dtype.type, i_dtype):
+                        include_subtypes.add(dtype.type)
 
         # exclude all subtypes
         exclude_subtypes = set()
@@ -7369,8 +7370,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 # category handling
                 if is_categorical_dtype(e_dtype):
                     exclude_subtypes.add(e_dtype)
-                elif issubclass(dtype.type, e_dtype):
-                    exclude_subtypes.add(dtype.type)
+                elif inspect.isclass(dtype.type):
+                    if issubclass(dtype.type, e_dtype):
+                        exclude_subtypes.add(dtype.type)
 
         include_all = set(
             [cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
