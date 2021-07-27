@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,17 +83,24 @@ std::size_t compute_join_output_size(table_device_view build_table,
   }
 
   // Allocate storage for the counter used to get the size of the join output
-  std::size_t h_size{0};
-  rmm::device_scalar<std::size_t> d_size(0, stream);
+  rmm::device_scalar<cuda::atomic<std::size_t>> d_size(0, stream);
 
   CHECK_CUDA(stream.value());
 
+  constexpr auto cg_size = multimap_type::cg_size();
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   int numBlocks{-1};
 
   using multimap_view_type = typename multimap_type::device_view;
   CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &numBlocks, compute_join_output_size<JoinKind, block_size, multimap_view_type>, block_size, 0));
+    &numBlocks,
+    compute_join_output_size<JoinKind,
+                             cg_size,
+                             block_size,
+                             multimap_view_type,
+                             cuda::atomic<std::size_t>>,
+    block_size,
+    0));
 
   int dev_id{-1};
   CUDA_TRY(cudaGetDevice(&dev_id));
@@ -102,23 +109,20 @@ std::size_t compute_join_output_size(table_device_view build_table,
   CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
 
   row_hash hash_probe{probe_table};
-  row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
+  pair_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
+
   auto const hash_table_view = hash_table.get_device_view();
+
   // Probe the hash table without actually building the output to simply
   // find what the size of the output will be.
-  compute_join_output_size<JoinKind, block_size>
-    <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(hash_table_view,
-                                                             build_table,
-                                                             probe_table,
-                                                             hash_probe,
-                                                             equality,
-                                                             probe_table_num_rows,
-                                                             d_size.data());
+  compute_join_output_size<JoinKind, cg_size, block_size>
+    <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(
+      hash_table_view, hash_probe, equality, probe_table_num_rows, d_size.data());
 
   CHECK_CUDA(stream.value());
-  h_size = d_size.value(stream);
+  auto h_size = d_size.value(stream);
 
-  return h_size;
+  return h_size.load(cuda::std::memory_order_relaxed);
 }
 
 /**

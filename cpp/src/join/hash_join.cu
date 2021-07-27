@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -158,10 +158,6 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
 /**
  * @brief Builds the hash table based on the given `build_table`.
  *
- * @throw cudf::logic_error if the number of columns in `build` table is 0.
- * @throw cudf::logic_error if the number of rows in `build` table is 0.
- * @throw cudf::logic_error if insertion to the hash table fails.
- *
  * @param build Table of columns used to build join hash.
  * @param compare_nulls Controls whether null join-key values should match or not.
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -179,35 +175,25 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type*)>> build_join_h
   size_type const build_table_num_rows{build_device_table->num_rows()};
   std::size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
 
-  /*
-  auto hash_table = multimap_type::create(hash_table_size,
-                                          stream,
-                                          true,
-                                          multimap_type::hasher(),
-                                          multimap_type::key_equal(),
-                                          multimap_type::allocator_type());
-                                          */
-  auto hash_table = std::make_unique<multimap_type>(hash_table_size,
+  auto hash_table      = std::make_unique<multimap_type>(hash_table_size,
                                                     std::numeric_limits<hash_value_type>::max(),
                                                     std::numeric_limits<size_type>::max());
-
   auto hash_table_view = hash_table->get_device_mutable_view();
 
-  row_hash hash_build{*build_device_table};
+  constexpr auto cg_size = multimap_type::cg_size();
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-  detail::grid_1d config(build_table_num_rows, block_size);
+  detail::grid_1d config(build_table_num_rows * cg_size, block_size);
+
   auto const row_bitmask = (compare_nulls == null_equality::EQUAL)
                              ? rmm::device_buffer{0, stream}
                              : cudf::detail::bitmask_and(build, stream);
+  row_hash hash_build{*build_device_table};
 
-  auto const cg_size = multimap_type::cg_size();
-
-  build_hash_table<cg_size, hash_value_type, size_type>
-    <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-      hash_table_view,
-      hash_build,
-      build_table_num_rows,
-      static_cast<bitmask_type const*>(row_bitmask.data()));
+  build_hash_table<cg_size><<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
+    hash_table_view,
+    hash_build,
+    build_table_num_rows,
+    static_cast<bitmask_type const*>(row_bitmask.data()));
 
   return hash_table;
 }
@@ -263,7 +249,7 @@ probe_join_hash_table(cudf::table_device_view build_table,
   detail::grid_1d config(probe_table.num_rows(), block_size);
 
   row_hash hash_probe{probe_table};
-  row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
+  pair_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
   if constexpr (JoinKind == cudf::detail::join_kind::FULL_JOIN) {
     probe_hash_table<cudf::detail::join_kind::LEFT_JOIN, block_size, DEFAULT_JOIN_CACHE_SIZE>
       <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
@@ -333,7 +319,7 @@ std::size_t get_full_join_size(cudf::table_device_view build_table,
   detail::grid_1d config(probe_table.num_rows(), block_size);
 
   row_hash hash_probe{probe_table};
-  row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
+  pair_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
   probe_hash_table<cudf::detail::join_kind::LEFT_JOIN, block_size, DEFAULT_JOIN_CACHE_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(hash_table_view,
                                                                              build_table,

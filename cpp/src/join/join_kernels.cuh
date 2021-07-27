@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,6 +76,7 @@ constexpr auto remap_sentinel_hash(H hash, S sentinel)
  * @brief Builds a hash table from a row hasher that maps the hash
  * values of each row to its respective row index.
  *
+ * @tparam cg_size The size of the CUDA cooperative thread group
  * @tparam multimap_view_type The type of the hash table view
  *
  * @param[in,out] multimap_view The hash table to be built to insert rows into
@@ -84,15 +85,15 @@ constexpr auto remap_sentinel_hash(H hash, S sentinel)
  * @param[in] row_bitmask Bitmask where bit `i` indicates the presence of a null
  * value in row `i` of input keys. This is nullptr if nulls are equal.
  */
-template <cudf::size_type cg_size,
-          typename key_type,
-          typename payload_type,
-          typename multimap_view_type>
+template <cudf::size_type cg_size, typename multimap_view_type>
 __global__ void build_hash_table(multimap_view_type multimap_view,
                                  row_hash hash_build,
                                  const cudf::size_type build_table_num_rows,
                                  bitmask_type const* row_bitmask)
 {
+  using key_type     = typename multimap_view_type::key_type;
+  using payload_type = typename multimap_view_type::mapped_type;
+
   auto g   = cg::tiled_partition<cg_size>(cg::this_thread_block());
   auto tid = blockDim.x * blockIdx.x + threadIdx.x;
   auto i   = tid / cg_size;
@@ -100,7 +101,7 @@ __global__ void build_hash_table(multimap_view_type multimap_view,
   while (i < build_table_num_rows) {
     if (!row_bitmask || cudf::bit_is_set(row_bitmask, i)) {
       // Compute the hash value of this row
-      auto const row_hash_value =
+      auto row_hash_value =
         remap_sentinel_hash(hash_build(i), multimap_view.get_empty_key_sentinel());
 
       auto insert_pair =
@@ -117,96 +118,65 @@ __global__ void build_hash_table(multimap_view_type multimap_view,
  * by probing the hash map with the probe table and counting the number of matches.
  *
  * @tparam JoinKind The type of join to be performed
+ * @tparam cg_size The size of the CUDA cooperative thread group
  * @tparam block_size The number of threads per block for this kernel
  * @tparam multimap_view_type The datatype of the hash table view
  *
  * @param[in] multi_map The view of the hash table built on the build table
- * @param[in] build_table The build table
- * @param[in] probe_table The probe table
  * @param[in] hash_probe Row hasher for the probe table
- * @param[in] check_row_equality The row equality comparator
+ * @param[in] check_pair_equality The pair equality comparator
  * @param[in] probe_table_num_rows The number of rows in the probe table
  * @param[out] output_size The resulting output size
  */
-template <join_kind JoinKind, int block_size, typename multimap_view_type>
-__global__ void compute_join_output_size(multimap_view_type multi_map,
-                                         table_device_view build_table,
-                                         table_device_view probe_table,
+template <join_kind JoinKind,
+          uint32_t cg_size,
+          uint32_t block_size,
+          typename multimap_view_type,
+          typename atomic_counter_type>
+__global__ void compute_join_output_size(multimap_view_type multimap_view,
                                          row_hash hash_probe,
-                                         row_equality check_row_equality,
+                                         pair_equality check_pair_equality,
                                          const cudf::size_type probe_table_num_rows,
-                                         std::size_t* output_size)
+                                         atomic_counter_type* output_size)
 {
   // This kernel probes multiple elements in the probe_table and store the number of matches found
   // inside a register. A block reduction is used at the end to calculate the matches per thread
   // block, and atomically add to the global 'output_size'. Compared to probing one element per
   // thread, this implementation improves performance by reducing atomic adds to the shared memory
   // counter.
+  using key_type     = typename multimap_view_type::key_type;
+  using payload_type = typename multimap_view_type::mapped_type;
 
-  cudf::size_type thread_counter{0};
-  const cudf::size_type start_idx = threadIdx.x + blockIdx.x * blockDim.x;
-  const cudf::size_type stride    = blockDim.x * gridDim.x;
-  /*
-  const auto unused_key           = multi_map.get_unused_key();
-  const auto end                  = multi_map.end();
+  auto tile            = cg::tiled_partition<cg_size>(cg::this_thread_block());
+  auto tid             = block_size * blockIdx.x + threadIdx.x;
+  auto probe_row_index = tid / cg_size;
 
-  for (cudf::size_type probe_row_index = start_idx; probe_row_index < probe_table_num_rows;
-       probe_row_index += stride) {
+  std::size_t thread_counter{0};
+
+  const auto empty_key_sentinel = multimap_view.get_empty_key_sentinel();
+
+  while (probe_row_index < probe_table_num_rows) {
     // Search the hash map for the hash value of the probe row using the row's
     // hash value to determine the location where to search for the row in the hash map
-    auto const probe_row_hash_value = remap_sentinel_hash(hash_probe(probe_row_index), unused_key);
+    auto probe_row_hash_value =
+      remap_sentinel_hash(hash_probe(probe_row_index), empty_key_sentinel);
 
-    auto found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
+    auto current_pair = cuco::make_pair<key_type, payload_type>(std::move(probe_row_hash_value),
+                                                                std::move(probe_row_index));
 
-    // for left-joins we always need to add an output
-    bool running     = (JoinKind == join_kind::LEFT_JOIN) || (end != found);
-    bool found_match = false;
-
-    while (running) {
-      // TODO Simplify this logic...
-
-      // Left joins always have an entry in the output
-      if (JoinKind == join_kind::LEFT_JOIN && (end == found)) {
-        running = false;
-      }
-      // Stop searching after encountering an empty hash table entry
-      else if (unused_key == found->first) {
-        running = false;
-      }
-      // First check that the hash values of the two rows match
-      else if (found->first == probe_row_hash_value) {
-        // If the hash values are equal, check that the rows are equal
-        if (check_row_equality(probe_row_index, found->second)) {
-          // If the rows are equal, then we have found a true match
-          found_match = true;
-          ++thread_counter;
-        }
-        // Continue searching for matching rows until you hit an empty hash map entry
-        ++found;
-        // If you hit the end of the hash map, wrap around to the beginning
-        if (end == found) found = multi_map.begin();
-        // Next entry is empty, stop searching
-        if (unused_key == found->first) running = false;
-      } else {
-        // Continue searching for matching rows until you hit an empty hash table entry
-        ++found;
-        // If you hit the end of the hash map, wrap around to the beginning
-        if (end == found) found = multi_map.begin();
-        // Next entry is empty, stop searching
-        if (unused_key == found->first) running = false;
-      }
-
-      if ((JoinKind == join_kind::LEFT_JOIN) && (!running) && (!found_match)) { ++thread_counter; }
+    if constexpr (JoinKind == join_kind::LEFT_JOIN) {
+      multimap_view.pair_count_outer(tile, current_pair, thread_counter, check_pair_equality);
+    } else {
+      multimap_view.pair_count(tile, current_pair, thread_counter, check_pair_equality);
     }
+    probe_row_index += (gridDim.x * block_size) / cg_size;
   }
 
-  using BlockReduce = cub::BlockReduce<std::size_t, block_size>;
+  typedef cub::BlockReduce<std::size_t, block_size> BlockReduce;
   __shared__ typename BlockReduce::TempStorage temp_storage;
   std::size_t block_counter = BlockReduce(temp_storage).Sum(thread_counter);
-
   // Add block counter to global counter
-  if (threadIdx.x == 0) atomicAdd(output_size, block_counter);
-  */
+  if (threadIdx.x == 0) { output_size->fetch_add(block_counter, cuda::std::memory_order_relaxed); }
 }
 
 /**
@@ -324,7 +294,7 @@ __device__ void flush_output_cache(const unsigned int activemask,
  * @param[in] build_table The build table
  * @param[in] probe_table The probe table
  * @param[in] hash_probe Row hasher for the probe table
- * @param[in] check_row_equality The row equality comparator
+ * @param[in] check_pair_equality The row equality comparator
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
  * @param[in,out] current_idx A global counter used by threads to coordinate writes to the global
@@ -339,7 +309,7 @@ __global__ void probe_hash_table(multimap_view_type multi_map,
                                  table_device_view build_table,
                                  table_device_view probe_table,
                                  row_hash hash_probe,
-                                 row_equality check_row_equality,
+                                 pair_equality check_pair_equality,
                                  size_type* join_output_l,
                                  size_type* join_output_r,
                                  cudf::size_type* current_idx,
