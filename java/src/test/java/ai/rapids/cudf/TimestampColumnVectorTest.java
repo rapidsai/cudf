@@ -312,6 +312,23 @@ public class TimestampColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  public void testAddMonths() {
+    long[] EXPECTED = new long[]{
+        -131968727762L,   //'1965-10-26 14:01:12.238' Tuesday
+        1533384000115L,   //'2018-08-04 12:00:00.115' Saturday
+        1679729532929L,   //'2023-03-25 07:32:12.929' Saturday
+        -124019927762L,   //'1966-01-26 14:01:12.238' Wednesday
+        1520164800115L};  //'2018-03-04 12:00:00.115' Sunday
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
+         ColumnVector months = ColumnVector.fromShorts(
+             (short)0, (short)1, (short)2, (short)3, (short)-4);
+         ColumnVector result = timestampColumnVector.addCalendricalMonths(months);
+         ColumnVector expected = ColumnVector.timestampMilliSecondsFromLongs(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   public void testCastToTimestamp() {
     try (ColumnVector timestampMillis = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
          ColumnVector tmp = timestampMillis.asTimestampSeconds();

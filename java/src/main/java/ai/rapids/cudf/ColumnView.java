@@ -828,6 +828,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Add the specified number of months to the timestamp.
+   * @param months must be a INT16 column indicating the number of months to add. A negative number
+   *               of months works too.
+   * @return the updated timestamp
+   */
+  public final ColumnVector addCalendricalMonths(ColumnView months) {
+    return new ColumnVector(addCalendricalMonths(getNativeView(), months.getNativeView()));
+  }
+
+  /**
    * Rounds all the values in a column to the specified number of decimal places.
    *
    * @param decimalPlaces Number of decimal places to round to. If negative, this
@@ -3461,6 +3471,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long lastDayOfMonth(long viewHandle) throws CudfException;
 
   private static native long dayOfYear(long viewHandle) throws CudfException;
+
+  private static native long addCalendricalMonths(long tsViewHandle, long monthsViewHandle);
 
   private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 
