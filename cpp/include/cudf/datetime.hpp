@@ -206,6 +206,11 @@ std::unique_ptr<cudf::column> is_leap_year(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+std::unique_ptr<cudf::column> date_range(
+  cudf::scalar const& initial,
+  size_t n,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 }  // namespace datetime
 }  // namespace cudf

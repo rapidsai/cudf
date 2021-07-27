@@ -207,6 +207,7 @@ add_library(cudf
     src/copying/slice.cu
     src/copying/split.cpp
     src/copying/segmented_shift.cu
+    src/datetime/date_offsets.cu    
     src/datetime/datetime_ops.cu
     src/dictionary/add_keys.cu
     src/dictionary/decode.cu
