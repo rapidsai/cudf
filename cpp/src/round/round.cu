@@ -86,9 +86,7 @@ struct half_up_zero {
     return generic_round(e);
   }
 
-  template <typename U                                                = T,
-            typename std::enable_if_t<std::is_integral<U>::value or
-                                      std::is_same_v<U, __int128_t>>* = nullptr>
+  template <typename U = T, typename std::enable_if_t<numeric::detail::is_integral<U>()>* = nullptr>
   __device__ U operator()(U)
   {
     assert(false);  // Should never get here. Just for compilation
@@ -107,10 +105,8 @@ struct half_up_positive {
     return integer_part + generic_round(fractional_part * n) / n;
   }
 
-  template <typename U                                                = T,
-            typename std::enable_if_t<std::is_integral<U>::value or
-                                      std::is_same_v<U, __int128_t>>* = nullptr>
-  __device__ U operator()(U)
+  template <typename U = T, typename std::enable_if_t<numeric::detail::is_integral<U>()>>
+  * = nullptr > __device__ U operator()(U)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
