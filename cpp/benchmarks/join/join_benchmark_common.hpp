@@ -66,15 +66,11 @@ static void BM_join(state_type& state, Join JoinFunc)
   // Generate build and probe tables
   cudf::test::UniformRandomGenerator<cudf::size_type> rand_gen(0, build_table_size);
   auto build_random_null_mask = [&rand_gen](int size) {
-    if (Nullable) {
-      // roughly 25% nulls
-      auto validity = thrust::make_transform_iterator(
-        thrust::make_counting_iterator(0),
-        [&rand_gen](auto i) { return (rand_gen.generate() & 3) == 0; });
-      return cudf::test::detail::make_null_mask(validity, validity + size);
-    } else {
-      return cudf::create_null_mask(size, cudf::mask_state::UNINITIALIZED);
-    }
+    // roughly 25% nulls
+    auto validity = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      [&rand_gen](auto i) { return (rand_gen.generate() & 3) == 0; });
+    return cudf::test::detail::make_null_mask(validity, validity + size);
   };
 
   std::unique_ptr<cudf::column> build_key_column = [&]() {
