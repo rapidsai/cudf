@@ -55,7 +55,7 @@ struct lookup_functor {
   struct is_supported {
     static constexpr bool value =
       cudf::is_numeric<ElementType>() || cudf::is_chrono<ElementType>() ||
-      cudf::is_fixed_point<ElementType>() || std::is_same<ElementType, cudf::string_view>::value;
+      cudf::is_fixed_point<ElementType>() || std::is_same_v<ElementType, cudf::string_view>;
   };
 
   template <typename ElementType, typename... Args>
@@ -148,7 +148,7 @@ struct lookup_functor {
                  "Type/Scale of search key does not match list column element type.");
     CUDF_EXPECTS(search_key.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
-    auto constexpr search_key_is_scalar = std::is_same<SearchKeyType, cudf::scalar>::value;
+    auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;
 
     if (search_keys_have_nulls && search_key_is_scalar) {
       return make_fixed_width_column(data_type(type_id::BOOL8),

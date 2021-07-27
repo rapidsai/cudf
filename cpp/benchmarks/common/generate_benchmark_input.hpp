@@ -77,7 +77,7 @@ distribution_id default_distribution_id()
 }
 
 template <typename T,
-          std::enable_if_t<!std::is_same<T, bool>::value && std::is_unsigned<T>::value &&
+          std::enable_if_t<!std::is_same_v<T, bool> && std::is_unsigned<T>::value &&
                            cudf::is_numeric<T>()>* = nullptr>
 distribution_id default_distribution_id()
 {
@@ -130,7 +130,7 @@ struct distribution_params;
 template <typename T>
 struct distribution_params<
   T,
-  typename std::enable_if_t<!std::is_same<T, bool>::value && cudf::is_numeric<T>()>> {
+  typename std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_numeric<T>()>> {
   distribution_id id;
   T lower_bound;
   T upper_bound;
@@ -140,7 +140,7 @@ struct distribution_params<
  * @brief Booleans are parameterized with the probability of getting `true` value.
  */
 template <typename T>
-struct distribution_params<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
+struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
   double probability_true;
 };
 
@@ -158,8 +158,7 @@ struct distribution_params<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
  * @brief Strings are parameterized by the distribution of their length, as an integral value.
  */
 template <typename T>
-struct distribution_params<T,
-                           typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>> {
+struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, cudf::string_view>>> {
   distribution_params<uint32_t> length_params;
 };
 
@@ -168,7 +167,7 @@ struct distribution_params<T,
  * the element type.
  */
 template <typename T>
-struct distribution_params<T, typename std::enable_if_t<std::is_same<T, cudf::list_view>::value>> {
+struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, cudf::list_view>>> {
   cudf::type_id element_type;
   distribution_params<uint32_t> length_params;
   cudf::size_type max_depth;
@@ -224,9 +223,9 @@ class data_profile {
   cudf::size_type avg_run_length = 4;
 
  public:
-  template <typename T,
-            typename std::enable_if_t<!std::is_same<T, bool>::value && std::is_integral<T>::value,
-                                      T>* = nullptr>
+  template <
+    typename T,
+    typename std::enable_if_t<!std::is_same_v<T, bool> && std::is_integral<T>::value, T>* = nullptr>
   distribution_params<T> get_distribution_params() const
   {
     auto it = int_params.find(cudf::type_to_id<T>());
@@ -252,7 +251,7 @@ class data_profile {
     }
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, bool>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, bool>>* = nullptr>
   distribution_params<T> get_distribution_params() const
   {
     return distribution_params<T>{bool_probability};
@@ -272,13 +271,13 @@ class data_profile {
     }
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
   distribution_params<T> get_distribution_params() const
   {
     return string_dist_desc;
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::list_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::list_view>>* = nullptr>
   distribution_params<T> get_distribution_params() const
   {
     return list_dist_desc;
