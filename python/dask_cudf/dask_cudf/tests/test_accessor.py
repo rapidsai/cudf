@@ -478,7 +478,6 @@ def test_create_struct_series(data):
 @pytest.mark.parametrize(
     "data",
     [
-        #[{}],
 
         [{"a":5, "b":10},
         {"a":3, "b":7},
@@ -488,16 +487,10 @@ def test_create_struct_series(data):
         {"a":None, "b":0},
         {"a":-3, "b":None}],
 
-        [{}],
-
         [{'a':1, 'b':2}],
 
         [{'b':3, 'c':4}],
 
-        [{None:None},
-        {None:5},
-        {'string_key':'string_field'},
-        {None:'string_field'}]
 
 
     ],
