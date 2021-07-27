@@ -1416,9 +1416,9 @@ TEST_F(Decimal128Only, Decimal128ProductReduction)
   for (auto const i : {0, -1, -2, -3}) {
     auto const scale    = scale_type{i};
     auto const column   = fp_wrapper{{2, 2, 2, 2, 2, 2, 2, 2, 2}, scale};
-    auto const out_type = cudf::data_type{cudf::type_id::DECIMAL128, scale};
     auto const expected = decimal128{scaled_integer<RepType>{512, scale_type{i * 9}}};
 
+    auto const out_type      = cudf::data_type{cudf::type_id::DECIMAL128, scale};
     auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimal128>*>(result.get());
 
@@ -1435,14 +1435,33 @@ TEST_F(Decimal128Only, Decimal128ProductReduction2)
   for (auto const i : {0, -1, -2, -3, -4, -5, -6}) {
     auto const scale    = scale_type{i};
     auto const column   = fp_wrapper{{1, 2, 3, 4, 5, 6}, scale};
-    auto const out_type = cudf::data_type{cudf::type_id::DECIMAL128, scale};
     auto const expected = decimal128{scaled_integer<RepType>{720, scale_type{i * 6}}};
 
+    auto const out_type      = cudf::data_type{cudf::type_id::DECIMAL128, scale};
     auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimal128>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   }
+}
+
+TEST_F(Decimal128Only, Decimal128ProductReduction3)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const values   = std::vector(127, -2);
+  auto const scale    = scale_type{0};
+  auto const column   = fp_wrapper{values.cbegin(), values.cend(), scale};
+  auto const lowest   = numeric::detail::numeric_limits::lowest<RepType>();
+  auto const expected = decimal128{scaled_integer<RepType>{lowest, scale}};
+
+  auto const out_type      = cudf::data_type{cudf::type_id::DECIMAL128, scale};
+  auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
+  auto const result_scalar = static_cast<cudf::scalar_type_t<decimal128>*>(result.get());
+
+  EXPECT_EQ(result_scalar->fixed_point_value(), expected);
 }
 
 TYPED_TEST(ReductionTest, NthElement)
