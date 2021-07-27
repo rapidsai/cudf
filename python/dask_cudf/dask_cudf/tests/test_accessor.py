@@ -438,3 +438,71 @@ def test_sorting(data, ascending, na_position, ignore_index):
         .reset_index(drop=True)
     )
     assert_eq(expect, got)
+
+#############################################################################
+#                              Struct Accessor                                #
+#############################################################################
+
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{"a":5, "b":10},
+        {"a":3, "b":7},
+        {"a":-3, "b":11}],
+
+        [{"a":None, "b":1},
+        {"a":None, "b":0},
+        {"a":-3, "b":None}],
+
+        #[{}],
+
+        [{'a':1, 'b':2}],
+
+        [{'b':3, 'c':4}],
+
+        #[{None:None},
+        #{None:5},
+        #{'string_key':'string_field'},
+        #{None:'string_field'}]
+
+
+    ],
+)
+def test_create_struct_series(data):
+    expect = pd.Series(data)
+    ds_got = dgd.from_cudf(Series(data), 2)
+    assert_eq(expect, ds_got.compute())
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        #[{}],
+
+        [{"a":5, "b":10},
+        {"a":3, "b":7},
+        {"a":-3, "b":11}],
+
+        [{"a":None, "b":1},
+        {"a":None, "b":0},
+        {"a":-3, "b":None}],
+
+        [{}],
+
+        [{'a':1, 'b':2}],
+
+        [{'b':3, 'c':4}],
+
+        [{None:None},
+        {None:5},
+        {'string_key':'string_field'},
+        {None:'string_field'}]
+
+
+    ],
+)
+def test_struct_field(data):
+    expect = Series(data).struct.field('a')
+    ds_got = dgd.from_cudf(Series(data), 2).struct.field('a')
+    assert_eq(expect, ds_got.compute())
