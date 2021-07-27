@@ -184,7 +184,7 @@ struct create_column_from_view {
   rmm::mr::device_memory_resource* mr;
 
   template <typename ColumnType,
-            std::enable_if_t<std::is_same<ColumnType, cudf::string_view>::value>* = nullptr>
+            std::enable_if_t<std::is_same_v<ColumnType, cudf::string_view>>* = nullptr>
   std::unique_ptr<column> operator()()
   {
     cudf::strings_column_view sview(view);
@@ -192,7 +192,7 @@ struct create_column_from_view {
   }
 
   template <typename ColumnType,
-            std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32>::value>* = nullptr>
+            std::enable_if_t<std::is_same_v<ColumnType, cudf::dictionary32>>* = nullptr>
   std::unique_ptr<column> operator()()
   {
     std::vector<std::unique_ptr<column>> children;
@@ -236,7 +236,7 @@ struct create_column_from_view {
   }
 
   template <typename ColumnType,
-            std::enable_if_t<std::is_same<ColumnType, cudf::list_view>::value>* = nullptr>
+            std::enable_if_t<std::is_same_v<ColumnType, cudf::list_view>>* = nullptr>
   std::unique_ptr<column> operator()()
   {
     auto lists_view = lists_column_view(view);
@@ -244,7 +244,7 @@ struct create_column_from_view {
   }
 
   template <typename ColumnType,
-            std::enable_if_t<std::is_same<ColumnType, cudf::struct_view>::value>* = nullptr>
+            std::enable_if_t<std::is_same_v<ColumnType, cudf::struct_view>>* = nullptr>
   std::unique_ptr<column> operator()()
   {
     if (view.is_empty()) { return cudf::empty_like(view); }
