@@ -17,7 +17,7 @@ except ImportError:
     create_metadata_file_dd = None
 
 import cudf
-from cudf.core.column import as_column, build_categorical_column
+from cudf.core.column import as_column
 from cudf.io import write_to_dataset
 
 
@@ -130,30 +130,18 @@ class CudfEngine(ArrowEngine):
         if partition_keys:
             if partitions is None:
                 raise ValueError("Must pass partition sets")
-            
+
             for i, (name, index2) in enumerate(partition_keys):
 
-                #categories = [
-                #    val.as_py() for val in partitions.levels[i].dictionary
-                #]
                 categories = partitions[i].keys
 
                 col = as_column(index2).as_frame().repeat(len(df))._data[None]
 
                 df[name] = col.as_categorical_column(
                     cudf.CategoricalDtype(
-                        categories=categories,
-                        ordered=False,
+                        categories=categories, ordered=False,
                     )
                 )
-
-                # df[name] = build_categorical_column(
-                #     categories=categories,
-                #     codes=as_column(col.base_data, dtype=col.dtype),
-                #     size=col.size,
-                #     offset=col.offset,
-                #     ordered=False,
-                # )
 
         return df
 
