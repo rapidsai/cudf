@@ -263,7 +263,7 @@ struct same_element_type_dispatcher {
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
   {
-    auto index = static_cast<numeric_scalar<IndexType> const&>(keys_index);
+    auto& index = static_cast<numeric_scalar<IndexType> const&>(keys_index);
     return cudf::detail::get_element(keys, index.value(stream), stream, mr);
   }
 

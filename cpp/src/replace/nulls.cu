@@ -312,7 +312,7 @@ struct replace_nulls_scalar_kernel_forwarder {
     auto output_view = output->mutable_view();
 
     using ScalarType = cudf::scalar_type_t<col_type>;
-    auto s1          = static_cast<ScalarType const&>(replacement);
+    auto& s1         = static_cast<ScalarType const&>(replacement);
     auto device_in   = cudf::column_device_view::create(input);
 
     auto func = replace_nulls_functor<col_type>{s1.data()};
