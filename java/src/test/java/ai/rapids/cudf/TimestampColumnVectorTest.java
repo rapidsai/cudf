@@ -312,6 +312,28 @@ public class TimestampColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  public void testQuarterOfYear() {
+    short[] EXPECTED = new short[]{4, 3, 1, 4, 3};
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
+         ColumnVector result = timestampColumnVector.quarterOfYear();
+         ColumnVector expected = ColumnVector.fromShorts(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
+         ColumnVector result = timestampColumnVector.quarterOfYear();
+         ColumnVector expected = ColumnVector.fromShorts(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.daysFromInts(TIMES_DAY);
+         ColumnVector result = timestampColumnVector.quarterOfYear();
+         ColumnVector expected = ColumnVector.fromShorts(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   public void testAddMonths() {
     long[] EXPECTED = new long[]{
         -131968727762L,   //'1965-10-26 14:01:12.238' Tuesday

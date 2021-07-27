@@ -828,6 +828,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Get the quarter of the year from a timestamp.
+   * @return A new INT16 vector allocated on the GPU. It will be a value from {1, 2, 3, 4}
+   * corresponding to the quarter of the year.
+   */
+  public final ColumnVector quarterOfYear() {
+    assert type.isTimestampType();
+    return new ColumnVector(quarterOfYear(getNativeView()));
+  }
+
+  /**
    * Add the specified number of months to the timestamp.
    * @param months must be a INT16 column indicating the number of months to add. A negative number
    *               of months works too.
@@ -3480,9 +3490,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long dayOfYear(long viewHandle) throws CudfException;
 
+  private static native long quarterOfYear(long viewHandle) throws CudfException;
+
   private static native long addCalendricalMonths(long tsViewHandle, long monthsViewHandle);
 
-  private static native long isLeapYear(long viewHandle);
+  private static native long isLeapYear(long viewHandle) throws CudfException;
 
   private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 
