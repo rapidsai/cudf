@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import dask_cudf
+
 import cudf
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -17,7 +19,6 @@ from cudf.testing._utils import (
     assert_eq,
     assert_exceptions_equal,
 )
-import dask_cudf
 
 
 def _series_na_data():
