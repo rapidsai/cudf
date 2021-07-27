@@ -192,8 +192,6 @@ std::unique_ptr<Base> make_variance_aggregation(size_type ddof = 1);
 /**
  * @brief Factory to create a STD aggregation
  *
- * Chrono type is unsupported in rolling window STD aggregation.
- *
  * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `std` is `N - ddof`, where `N` is the population size.
  *
