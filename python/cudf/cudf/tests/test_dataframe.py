@@ -3084,7 +3084,7 @@ def test_select_dtype():
     )
     pdf = gdf.to_pandas()
     assert_eq(
-        pdf.select_dtypes("int64").columns, gdf.select_dtypes("int64").columns,
+        pdf.select_dtypes("int64"), gdf.select_dtypes("int64"),
     )
 
 
