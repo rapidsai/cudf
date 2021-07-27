@@ -379,12 +379,14 @@ std::unique_ptr<column> url_decode(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  constexpr int threadblock_size = 128;
-  constexpr int block_size       = 256;
-  constexpr int num_threadblocks = 65536;
-
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+
+  constexpr int threadblock_size      = 128;
+  constexpr int block_size            = 256;
+  constexpr int warps_per_threadblock = threadblock_size / cudf::detail::warp_size;
+  const int num_threadblocks =
+    std::min(65536, (strings_count + warps_per_threadblock - 1) / warps_per_threadblock);
 
   auto offset_count = strings_count + 1;
   auto d_in_offsets = strings.offsets().data<offset_type>() + strings.offset();
@@ -413,13 +415,8 @@ std::unique_ptr<column> url_decode(
 
   // copy the total number of characters of all strings combined (last element of the offset column)
   // to the host memory
-  offset_type out_chars_bytes;
-  CUDA_TRY(cudaMemcpyAsync(&out_chars_bytes,
-                           offsets_view.begin<offset_type>() + offset_count - 1,
-                           sizeof(offset_type),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  stream.synchronize();
+  auto out_chars_bytes =
+    cudf::detail::get_value<offset_type>(offsets_view, offset_count - 1, stream);
 
   // create the chars column
   auto chars_column = create_chars_child_column(out_chars_bytes, stream, mr);
