@@ -838,6 +838,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Check to see if the year for this timestamp is a leap year or not.
+   * @return BOOL8 vector of results
+   */
+  public final ColumnVector isLeapYear() {
+    return new ColumnVector(isLeapYear(getNativeView()));
+  }
+
+  /**
    * Rounds all the values in a column to the specified number of decimal places.
    *
    * @param decimalPlaces Number of decimal places to round to. If negative, this
@@ -3473,6 +3481,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long dayOfYear(long viewHandle) throws CudfException;
 
   private static native long addCalendricalMonths(long tsViewHandle, long monthsViewHandle);
+
+  private static native long isLeapYear(long viewHandle);
 
   private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 

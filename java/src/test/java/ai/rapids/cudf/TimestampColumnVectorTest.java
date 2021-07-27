@@ -329,6 +329,39 @@ public class TimestampColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  public void testIsLeapYear() {
+    Boolean[] EXPECTED = new Boolean[]{false, false, false, false, false};
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
+         ColumnVector result = timestampColumnVector.isLeapYear();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
+         ColumnVector result = timestampColumnVector.isLeapYear();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.daysFromInts(TIMES_DAY);
+         ColumnVector result = timestampColumnVector.isLeapYear();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    final long[] LEAP_TIMES_S = {1073865600L,   // Monday, January 12, 2004 0:00:00
+        947635200L, // Wednesday, January 12, 2000 0:00:00
+        -2208038400L // Friday, January 12, 1900 0:00:00
+    };
+
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(LEAP_TIMES_S);
+         ColumnVector result = timestampColumnVector.isLeapYear();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   public void testCastToTimestamp() {
     try (ColumnVector timestampMillis = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
          ColumnVector tmp = timestampMillis.asTimestampSeconds();
