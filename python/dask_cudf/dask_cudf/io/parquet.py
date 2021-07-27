@@ -8,7 +8,6 @@ from pyarrow import parquet as pq
 
 from dask import dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine as ArrowEngine
-#from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 try:
     from dask.dataframe.io.parquet import (
