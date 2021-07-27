@@ -52,7 +52,7 @@ namespace cudf_io = cudf::io;
 
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
-  typename std::conditional<std::is_same<T, cudf::string_view>::value,
+  typename std::conditional<std::is_same_v<T, cudf::string_view>,
                             cudf::test::strings_column_wrapper,
                             cudf::test::fixed_width_column_wrapper<T, SourceElementT>>::type;
 using column     = cudf::column;
@@ -127,7 +127,7 @@ inline auto random_values(size_t size)
 
   using T1 = T;
   using uniform_distribution =
-    typename std::conditional_t<std::is_same<T1, bool>::value,
+    typename std::conditional_t<std::is_same_v<T1, bool>,
                                 std::bernoulli_distribution,
                                 std::conditional_t<std::is_floating_point<T1>::value,
                                                    std::uniform_real_distribution<T1>,
@@ -1840,6 +1840,29 @@ TEST_F(CsvReaderTest, StringsEmbeddedDelimiter)
     cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
       .names(names)
       .dtypes(std::vector<std::string>{"int32", "str"});
+  auto result = cudf_io::read_csv(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result.tbl->view());
+}
+
+TEST_F(CsvReaderTest, HeaderEmbeddedDelimiter)
+{
+  std::vector<std::string> names{
+    "header1", "header,2", "quote\"embedded", "new\nline", "\"quoted\""};
+
+  auto filepath = temp_env->get_temp_dir() + "HeaderEmbeddedDelimiter.csv";
+
+  auto int_column    = column_wrapper<int32_t>{10, 20, 30};
+  auto string_column = column_wrapper<cudf::string_view>{"abc", "jkl,mno", "xyz"};
+  cudf::table_view input_table(
+    std::vector<cudf::column_view>{int_column, string_column, int_column, int_column, int_column});
+
+  write_csv_helper(filepath, input_table, true, names);
+
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+      .names(names)
+      .dtypes(std::vector<std::string>{"int32", "str", "int32", "int32", "int32"});
   auto result = cudf_io::read_csv(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result.tbl->view());

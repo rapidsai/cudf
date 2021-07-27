@@ -40,18 +40,16 @@ template <typename Type>
 constexpr bool isFloat = false;
 
 template <typename T>
-constexpr bool is_timestamp_v = cuda::std::is_same<cudf::timestamp_D, T>::value ||
-                                cuda::std::is_same<cudf::timestamp_s, T>::value ||
-                                cuda::std::is_same<cudf::timestamp_ms, T>::value ||
-                                cuda::std::is_same<cudf::timestamp_us, T>::value ||
-                                cuda::std::is_same<cudf::timestamp_ns, T>::value;
+constexpr bool is_timestamp_v =
+  cuda::std::is_same_v<cudf::timestamp_D, T> || cuda::std::is_same_v<cudf::timestamp_s, T> ||
+  cuda::std::is_same_v<cudf::timestamp_ms, T> || cuda::std::is_same_v<cudf::timestamp_us, T> ||
+  cuda::std::is_same_v<cudf::timestamp_ns, T>;
 
 template <typename T>
-constexpr bool is_duration_v = cuda::std::is_same<cudf::duration_D, T>::value ||
-                               cuda::std::is_same<cudf::duration_s, T>::value ||
-                               cuda::std::is_same<cudf::duration_ms, T>::value ||
-                               cuda::std::is_same<cudf::duration_us, T>::value ||
-                               cuda::std::is_same<cudf::duration_ns, T>::value;
+constexpr bool is_duration_v =
+  cuda::std::is_same_v<cudf::duration_D, T> || cuda::std::is_same_v<cudf::duration_s, T> ||
+  cuda::std::is_same_v<cudf::duration_ms, T> || cuda::std::is_same_v<cudf::duration_us, T> ||
+  cuda::std::is_same_v<cudf::duration_ns, T>;
 
 template <typename T>
 constexpr bool is_chrono_v = is_timestamp_v<T> || is_duration_v<T>;
