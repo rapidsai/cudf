@@ -114,14 +114,13 @@ struct column_to_strings_fn {
   template <typename column_type>
   constexpr static bool is_not_handled(void)
   {
-    // Note: the case (not std::is_same<column_type, bool>::value)
+    // Note: the case (not std::is_same_v<column_type, bool>)
     // is already covered by is_integral)
     //
-    return not((std::is_same<column_type, cudf::string_view>::value) ||
-               (std::is_integral<column_type>::value) ||
-               (std::is_floating_point<column_type>::value) ||
-               (cudf::is_fixed_point<column_type>()) || (cudf::is_timestamp<column_type>()) ||
-               (cudf::is_duration<column_type>()));
+    return not(
+      (std::is_same_v<column_type, cudf::string_view>) || (std::is_integral<column_type>::value) ||
+      (std::is_floating_point<column_type>::value) || (cudf::is_fixed_point<column_type>()) ||
+      (cudf::is_timestamp<column_type>()) || (cudf::is_duration<column_type>()));
   }
 
   explicit column_to_strings_fn(
@@ -143,7 +142,7 @@ struct column_to_strings_fn {
   // bools:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_same<column_type, bool>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<std::is_same_v<column_type, bool>, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
     return cudf::strings::detail::from_booleans(
@@ -153,7 +152,7 @@ struct column_to_strings_fn {
   // strings:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_same<column_type, cudf::string_view>::value, std::unique_ptr<column>>
+  std::enable_if_t<std::is_same_v<column_type, cudf::string_view>, std::unique_ptr<column>>
   operator()(column_view const& column_v) const
   {
     // handle special characters: {delimiter, '\n', "} in row:
@@ -175,7 +174,7 @@ struct column_to_strings_fn {
   // ints:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_integral<column_type>::value && !std::is_same<column_type, bool>::value,
+  std::enable_if_t<std::is_integral<column_type>::value && !std::is_same_v<column_type, bool>,
                    std::unique_ptr<column>>
   operator()(column_view const& column) const
   {
@@ -207,13 +206,13 @@ struct column_to_strings_fn {
     column_view const& column) const
   {
     std::string format = [&]() {
-      if (std::is_same<cudf::timestamp_s, column_type>::value) {
+      if (std::is_same_v<cudf::timestamp_s, column_type>) {
         return std::string{"%Y-%m-%dT%H:%M:%SZ"};
-      } else if (std::is_same<cudf::timestamp_ms, column_type>::value) {
+      } else if (std::is_same_v<cudf::timestamp_ms, column_type>) {
         return std::string{"%Y-%m-%dT%H:%M:%S.%3fZ"};
-      } else if (std::is_same<cudf::timestamp_us, column_type>::value) {
+      } else if (std::is_same_v<cudf::timestamp_us, column_type>) {
         return std::string{"%Y-%m-%dT%H:%M:%S.%6fZ"};
-      } else if (std::is_same<cudf::timestamp_ns, column_type>::value) {
+      } else if (std::is_same_v<cudf::timestamp_ns, column_type>) {
         return std::string{"%Y-%m-%dT%H:%M:%S.%9fZ"};
       } else {
         return std::string{"%Y-%m-%d"};

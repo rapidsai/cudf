@@ -252,8 +252,8 @@ struct column_property_comparator {
   }
 
   template <typename T,
-            std::enable_if_t<!std::is_same<T, cudf::list_view>::value &&
-                             !std::is_same<T, cudf::struct_view>::value>* = nullptr>
+            std::enable_if_t<!std::is_same_v<T, cudf::list_view> &&
+                             !std::is_same_v<T, cudf::struct_view>>* = nullptr>
   bool operator()(cudf::column_view const& lhs,
                   cudf::column_view const& rhs,
                   cudf::column_view const& lhs_row_indices,
@@ -263,7 +263,7 @@ struct column_property_comparator {
     return compare_common(lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity);
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::list_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::list_view>>* = nullptr>
   bool operator()(cudf::column_view const& lhs,
                   cudf::column_view const& rhs,
                   cudf::column_view const& lhs_row_indices,
@@ -294,7 +294,7 @@ struct column_property_comparator {
     return true;
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::struct_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>* = nullptr>
   bool operator()(cudf::column_view const& lhs,
                   cudf::column_view const& rhs,
                   cudf::column_view const& lhs_row_indices,
@@ -955,7 +955,7 @@ struct column_view_printer {
   }
 
   template <typename Element,
-            typename std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
+            typename std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     //
@@ -976,7 +976,7 @@ struct column_view_printer {
   }
 
   template <typename Element,
-            typename std::enable_if_t<std::is_same<Element, cudf::dictionary32>::value>* = nullptr>
+            typename std::enable_if_t<std::is_same_v<Element, cudf::dictionary32>>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     cudf::dictionary_column_view dictionary(col);
@@ -1023,7 +1023,7 @@ struct column_view_printer {
   }
 
   template <typename Element,
-            typename std::enable_if_t<std::is_same<Element, cudf::list_view>::value>* = nullptr>
+            typename std::enable_if_t<std::is_same_v<Element, cudf::list_view>>* = nullptr>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
@@ -1052,7 +1052,7 @@ struct column_view_printer {
   }
 
   template <typename Element,
-            typename std::enable_if_t<std::is_same<Element, cudf::struct_view>::value>* = nullptr>
+            typename std::enable_if_t<std::is_same_v<Element, cudf::struct_view>>* = nullptr>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
