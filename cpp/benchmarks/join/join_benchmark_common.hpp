@@ -21,9 +21,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/join.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf_test/base_fixture.hpp>
