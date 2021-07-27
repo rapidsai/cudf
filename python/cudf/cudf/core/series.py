@@ -6034,6 +6034,18 @@ class Series(SingleColumnFrame, Serializable):
         3       5
         dtype: int64
         """
+        if is_struct_dtype(self._column.dtype):
+            cols = [key for key in self.dtype.fields]
+            results = []
+            for row in self.to_arrow():
+                row_results = [str(row[col]) for col in cols]
+                results.append(row_results)
+
+            out = cudf.DataFrame(results, columns=cols)
+            for col in cols:
+                out[col] = out[col].astype(self.dtype.fields[col])
+            return out
+
         if not is_list_dtype(self._column.dtype):
             data = self._data.copy(deep=True)
             idx = None if ignore_index else self._index.copy(deep=True)

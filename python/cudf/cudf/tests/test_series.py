@@ -17,6 +17,7 @@ from cudf.testing._utils import (
     assert_eq,
     assert_exceptions_equal,
 )
+import dask_cudf
 
 
 def _series_na_data():
@@ -1230,3 +1231,25 @@ def test_explode(data, ignore_index, p_index):
 def test_nested_series_from_sequence_data(data, expected):
     actual = cudf.Series(data)
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data, npartitions",
+    [
+        (
+            [
+                {"a": 1, "b": "x"},
+                {"a": 2, "b": "y"},
+                {"a": 3, "b": "z"},
+                {"a": 4, "b": "a"},
+            ],
+            2,
+        )
+    ],
+)
+def test_dask_explode(data, npartitions):
+    s = cudf.Series(data)
+    assert_eq(s.struct.explode(), s.explode())
+
+    sd = dask_cudf.from_cudf(s, npartitions=npartitions)
+    assert_eq(s.explode(), sd.compute().explode())
