@@ -328,31 +328,23 @@ struct DeviceRollingVariance {
     bool output_is_valid = (count >= min_periods) and not(count <= ddof);
 
     if (output_is_valid) {
-      // Welford algorithm, a numerically stable, single pass algorithm
+      // Welford algorithm
       // See https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
-      OutputType m, m2;
-      size_type running_count;
+      OutputType m{0}, m2(0);
+      size_type running_count{0};
 
-      thrust::tie(running_count, m, m2) =
-        thrust::reduce(thrust::seq,
-                       thrust::make_counting_iterator(start_index),
-                       thrust::make_counting_iterator(end_index),
-                       thrust::make_tuple(size_type{0}, OutputType{0}, OutputType{0}),
-                       [&](auto acc, auto i) {
-                         if (has_nulls and input.is_null_nocheck(i)) { return acc; }
+      for (size_type i = start_index; i < end_index; i++) {
+        if (has_nulls and input.is_null_nocheck(i)) { continue; }
 
-                         OutputType m_acc, m2_acc, tmp1, tmp2;
-                         size_type r_count_acc;
-                         thrust::tie(r_count_acc, m_acc, m2_acc) = acc;
-                         OutputType x = static_cast<OutputType>(input.element<DeviceInputType>(i));
+        OutputType tmp1, tmp2;
+        OutputType x = static_cast<OutputType>(input.element<DeviceInputType>(i));
 
-                         r_count_acc++;
-                         tmp1 = x - m_acc;
-                         m_acc += tmp1 / r_count_acc;
-                         tmp2 = x - m_acc;
-                         m2_acc += tmp1 * tmp2;
-                         return thrust::make_tuple(r_count_acc, m_acc, m2_acc);
-                       });
+        running_count++;
+        tmp1 = x - m;
+        m += tmp1 / running_count;
+        tmp2 = x - m;
+        m2 += tmp1 * tmp2;
+      }
       if constexpr (is_fixed_point<InputType>()) {
         // For fixed_point types, the previous computed value used unscaled rep-value,
         // the final result should be multiplied by the square of decimal `scale`.
