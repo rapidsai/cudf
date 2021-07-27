@@ -22,6 +22,7 @@
  */
 
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/fixed_point/temporary.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
@@ -89,7 +90,7 @@ struct DeviceMin {
   template <typename T>
   CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
   {
-    return lhs < rhs ? lhs : rhs;
+    return numeric::detail::min(lhs, rhs);
   }
 
   template <
@@ -136,7 +137,7 @@ struct DeviceMax {
   template <typename T>
   CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
   {
-    return lhs > rhs ? lhs : rhs;
+    return numeric::detail::max(lhs, rhs);
   }
 
   template <

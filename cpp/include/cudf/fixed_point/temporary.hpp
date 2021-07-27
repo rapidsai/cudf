@@ -38,7 +38,7 @@ template <typename T>
 auto max() -> T
 {
   if constexpr (std::is_same_v<T, __int128_t>) {
-    // −170,141,183,460,469,231,731,687,303,715,884,105,728
+    // 170,141,183,460,469,231,731,687,303,715,884,105,727
     __int128_t max = 1;
     for (int i = 0; i < 126; ++i) {
       max *= 2;
@@ -53,7 +53,7 @@ template <typename T>
 auto lowest() -> T
 {
   if constexpr (std::is_same_v<T, __int128_t>) {
-    // 170,141,183,460,469,231,731,687,303,715,884,105,728
+    // -170,141,183,460,469,231,731,687,303,715,884,105,728
     __int128_t lowest = -1;
     for (int i = 0; i < 127; ++i) {
       lowest *= 2;
@@ -92,16 +92,32 @@ auto to_string(T value) -> std::string
 }
 
 template <typename T>
-CUDA_HOST_DEVICE_CALLABLE constexpr auto abs(T value)
+constexpr auto abs(T value)
 {
   return value >= 0 ? value : -value;
 }
 
 template <typename T>
-CUDA_HOST_DEVICE_CALLABLE constexpr auto is_signed()
+CUDA_HOST_DEVICE_CALLABLE auto min(T lhs, T rhs)
+{
+  return lhs < rhs ? lhs : rhs;
+}
+
+template <typename T>
+CUDA_HOST_DEVICE_CALLABLE auto max(T lhs, T rhs)
+{
+  return lhs > rhs ? lhs : rhs;
+}
+
+template <typename T>
+constexpr auto is_signed()
 {
   return std::is_signed<T>::value || std::is_same_v<T, __int128_t>;
 }
+
+// TODO add is_integral
+// TODO add is_arithmetic
+// TODO pull down upstream, then regex replace is_same<>::value
 
 }  // namespace detail
 
