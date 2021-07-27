@@ -1297,3 +1297,34 @@ def test_is_leap_year():
     got2 = gIndex.is_leap_year
 
     assert_eq(expect2, got2)
+
+
+def test_quarter():
+    data = [
+        "2020-05-31 08:00:00",
+        "1999-12-31 18:40:00",
+        "2000-12-31 04:00:00",
+        "1900-02-28 07:00:00",
+        "1800-03-14 07:30:00",
+        "2100-03-14 07:30:00",
+        "1970-01-01 00:00:00",
+        "1969-12-31 12:59:00",
+    ]
+
+    # Series
+    ps = pd.Series(data, dtype="datetime64[s]")
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.quarter
+    got = gs.dt.quarter.astype(np.int64)
+
+    assert_eq(expect, got)
+
+    # DatetimeIndex
+    pIndex = pd.DatetimeIndex(data)
+    gIndex = cudf.from_pandas(pIndex)
+
+    expect2 = pIndex.quarter
+    got2 = gIndex.quarter
+
+    assert_eq(expect2, got2)
