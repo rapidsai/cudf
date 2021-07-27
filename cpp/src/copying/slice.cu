@@ -18,7 +18,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -36,7 +36,13 @@ std::vector<column_view> slice(column_view const& input,
 
   if (indices.empty()) return {};
 
-  auto null_counts = cudf::detail::segmented_count_unset_bits(input.null_mask(), indices, stream);
+  // need to shift incoming indices by the column offset to generate the correct bit ranges
+  // to count
+  auto indices_iter = cudf::detail::make_counting_transform_iterator(
+    0, [offset = input.offset(), &indices](size_type index) { return indices[index] + offset; });
+  auto null_counts = cudf::detail::segmented_count_unset_bits(
+    input.null_mask(), indices_iter, indices_iter + indices.size(), stream);
+
   auto const children = std::vector<column_view>(input.child_begin(), input.child_end());
 
   auto op = [&](auto i) {

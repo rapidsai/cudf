@@ -283,9 +283,9 @@ struct dispatch_unary_cast_to {
 
   template <
     typename TargetT,
-    typename SourceT                                                  = _SourceT,
+    typename SourceT                                             = _SourceT,
     typename std::enable_if_t<cudf::is_fixed_point<SourceT>() && cudf::is_fixed_point<TargetT>() &&
-                              std::is_same<SourceT, TargetT>::value>* = nullptr>
+                              std::is_same_v<SourceT, TargetT>>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -297,9 +297,9 @@ struct dispatch_unary_cast_to {
 
   template <
     typename TargetT,
-    typename SourceT                                                      = _SourceT,
+    typename SourceT                                                 = _SourceT,
     typename std::enable_if_t<cudf::is_fixed_point<SourceT>() && cudf::is_fixed_point<TargetT>() &&
-                              not std::is_same<SourceT, TargetT>::value>* = nullptr>
+                              not std::is_same_v<SourceT, TargetT>>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
