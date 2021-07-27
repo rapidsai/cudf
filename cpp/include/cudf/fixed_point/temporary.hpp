@@ -27,9 +27,10 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <limits>
 #include <string>
+#include <type_traits>
 
-//! `fixed_point` and supporting types
 namespace numeric {
 namespace detail {
 namespace numeric_limits {  // TODO switch this to struct
@@ -115,11 +116,17 @@ constexpr auto is_signed()
   return std::is_signed<T>::value || std::is_same_v<T, __int128_t>;
 }
 
-// TODO add is_integral
-// TODO add is_arithmetic
-// TODO pull down upstream, then regex replace is_same_v<>
+template <typename T>
+constexpr auto is_integral()
+{
+  return cuda::std::is_integral<T>::value || cuda::std::is_same_v<T, __int128_t>;
+}
+
+template <typename T>
+constexpr auto is_arithmetic()
+{
+  return numeric::detail::is_integral<T>() || cuda::std::is_floating_point_v<T>;
+}
 
 }  // namespace detail
-
-/** @} */  // end of group
 }  // namespace numeric
