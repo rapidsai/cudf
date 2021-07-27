@@ -330,14 +330,13 @@ struct DeviceRollingVariance {
     if (output_is_valid) {
       // Welford algorithm
       // See https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
-      OutputType m{0}, m2(0);
+      OutputType m{0}, m2(0), tmp1, tmp2;
       size_type running_count{0};
 
       for (size_type i = start_index; i < end_index; i++) {
         if (has_nulls and input.is_null_nocheck(i)) { continue; }
 
-        OutputType tmp1, tmp2;
-        OutputType x = static_cast<OutputType>(input.element<DeviceInputType>(i));
+        OutputType const& x = static_cast<OutputType>(input.element<DeviceInputType>(i));
 
         running_count++;
         tmp1 = x - m;

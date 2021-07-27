@@ -361,7 +361,7 @@ class RollingTest : public cudf::test::BaseFixture {
       size_type start_index = std::min(start, end);
       size_type end_index   = std::max(start, end);
 
-      // compute window var/std - with raw loop, alternative to implementation
+      // compute window var/std
       size_type count{0};  // valid count in window
       for (auto j = start_index; j < end_index; j++) {
         if (not input.nullable() or cudf::bit_is_set(valid_mask, j)) { count++; }
