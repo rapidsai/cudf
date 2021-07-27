@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/fixed_point/temporary.hpp>
 #include <cudf/types.hpp>
 
 // Note: The <cuda/std/*> versions are used in order for Jitify to work with our fixed_point type.
@@ -152,30 +153,6 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T shift(T const& val, scale_type const& scal
     return right_shift<Rep, Rad>(val, scale);
   else
     return left_shift<Rep, Rad>(val, scale);
-}
-
-template <typename T>
-auto to_string(T value) -> std::string
-{
-  if constexpr (cuda::std::is_same<T, __int128>::value) {
-    auto s          = std::string{};
-    auto const sign = value < 0;
-    while (value) {
-      s.push_back("0123456789"[value % 10]);
-      value /= 10;
-    }
-    if (sign) s.push_back('-');
-    std::reverse(s.begin(), s.end());
-    return s;
-  } else {
-    return std::to_string(value);
-  }
-}
-
-template <typename T>
-CUDA_HOST_DEVICE_CALLABLE auto abs(T value)
-{
-  return value >= 0 ? value : -value;
 }
 
 }  // namespace detail

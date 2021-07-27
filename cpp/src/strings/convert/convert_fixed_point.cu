@@ -248,8 +248,8 @@ struct decimal_to_string_fn {
     // write format:   [-]integer.fraction
     // where integer  = abs(value) / (10^abs(scale))
     //       fraction = abs(value) % (10^abs(scale))
-    auto const abs_value = numeric::detail::abs(value);
     if (value < 0) *d_buffer++ = '-';  // add sign
+    auto const abs_value = numeric::detail::abs(value);
     auto const exp_ten   = static_cast<int64_t>(exp10(static_cast<double>(-scale)));
     auto const num_zeros = std::max(0, (-scale - count_digits(abs_value % exp_ten)));
 
