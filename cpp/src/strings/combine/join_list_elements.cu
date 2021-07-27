@@ -84,18 +84,18 @@ struct compute_size_and_concatenate_fn {
     }
 
     auto const separator   = func.separator(idx);
-    auto size_bytes        = size_type{0};
     char* output_ptr       = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    bool has_valid_element = false;
     bool write_separator   = false;
+    auto size_bytes        = size_type{0};
+    bool has_valid_element = false;
 
     for (size_type str_idx = start_idx; str_idx < end_idx; ++str_idx) {
       bool null_element = strings_dv.is_null(str_idx);
       has_valid_element = has_valid_element || !null_element;
 
       if (!d_chars && (null_element && !string_narep_dv.is_valid())) {
-        d_offsets[idx] = 0;
-        return;  // early termination: the entire list of strings will result in a null string
+        size_bytes = 0;
+        break;
       }
 
       if (write_separator && (separate_nulls == separator_on_nulls::YES || !null_element)) {
@@ -146,14 +146,20 @@ struct validities_fn {
   {
     auto const start_idx = comp_fn.list_offsets[idx];
     auto const end_idx   = comp_fn.list_offsets[idx + 1];
-    if (comp_fn.output_is_null(idx, start_idx, end_idx)) return false;
-    bool has_valid_element = false;
-    for (size_type str_idx = start_idx; str_idx < end_idx; ++str_idx) {
-      bool const valid_element = comp_fn.strings_dv.is_valid(str_idx);
-      has_valid_element        = has_valid_element || valid_element;
-      if (!valid_element && !comp_fn.string_narep_dv.is_valid()) return false;
+    bool valid_output    = !comp_fn.output_is_null(idx, start_idx, end_idx);
+    if (valid_output) {
+      bool check_elements = false;
+      for (size_type str_idx = start_idx; str_idx < end_idx; ++str_idx) {
+        bool const valid_element = comp_fn.strings_dv.is_valid(str_idx);
+        check_elements           = check_elements || valid_element;
+        // if an element is null and narep is invalid, the output row is null
+        if (!valid_element && !comp_fn.string_narep_dv.is_valid()) { return false; }
+      }
+      // handle empty-list-as-null output policy setting
+      valid_output =
+        check_elements || comp_fn.empty_list_policy == output_if_empty_list::EMPTY_STRING;
     }
-    return has_valid_element || comp_fn.empty_list_policy == output_if_empty_list::EMPTY_STRING;
+    return valid_output;
   }
 };
 
