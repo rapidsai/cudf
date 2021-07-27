@@ -245,9 +245,9 @@ def read_parquet(
     """ Read parquet files into a Dask DataFrame
 
     Calls ``dask.dataframe.read_parquet`` to cordinate the execution of
-    ``cudf.read_parquet``, and ultimately read multiple partitions into a
-    single Dask dataframe. The Dask version must supply an ``ArrowEngine``
-    class to support full functionality.
+    ``cudf.read_parquet``, and ultimately read multiple partitions into
+    a single Dask dataframe. The Dask version must supply an
+    ``ArrowDatasetEngine`` class to support full functionality.
     See ``cudf.read_parquet`` and Dask documentation for further details.
 
     Examples
