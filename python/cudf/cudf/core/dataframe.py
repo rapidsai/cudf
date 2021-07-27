@@ -2469,6 +2469,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         0  1  a
         """
         return _DataFrameLocIndexer(self)
+        #
 
     @property
     def iloc(self):
