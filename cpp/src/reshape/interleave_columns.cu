@@ -31,9 +31,8 @@ namespace detail {
 namespace {
 struct interleave_columns_functor {
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_fixed_width<T>() and
-                     not std::is_same<T, cudf::string_view>::value and
-                     not std::is_same<T, cudf::list_view>::value,
+  std::enable_if_t<not cudf::is_fixed_width<T>() and not std::is_same_v<T, cudf::string_view> and
+                     not std::is_same_v<T, cudf::list_view>,
                    std::unique_ptr<cudf::column>>
   operator()(Args&&...)
   {
@@ -41,21 +40,21 @@ struct interleave_columns_functor {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::list_view>::value, std::unique_ptr<cudf::column>>
-  operator()(table_view const& lists_columns,
-             bool create_mask,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+  std::enable_if_t<std::is_same_v<T, cudf::list_view>, std::unique_ptr<cudf::column>> operator()(
+    table_view const& lists_columns,
+    bool create_mask,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
     return lists::detail::interleave_columns(lists_columns, create_mask, stream, mr);
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::string_view>::value, std::unique_ptr<cudf::column>>
-  operator()(table_view const& strings_columns,
-             bool create_mask,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+  std::enable_if_t<std::is_same_v<T, cudf::string_view>, std::unique_ptr<cudf::column>> operator()(
+    table_view const& strings_columns,
+    bool create_mask,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
     auto num_columns = strings_columns.num_columns();
     if (num_columns == 1)  // Single strings column returns a copy

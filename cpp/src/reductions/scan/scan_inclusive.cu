@@ -115,8 +115,8 @@ struct scan_dispatcher {
   template <typename T>
   static constexpr bool is_string_supported()
   {
-    return std::is_same<T, string_view>::value &&
-           (std::is_same<Op, DeviceMin>::value || std::is_same<Op, DeviceMax>::value);
+    return std::is_same_v<T, string_view> &&
+           (std::is_same_v<Op, DeviceMin> || std::is_same_v<Op, DeviceMax>);
   }
 
   template <typename T>
