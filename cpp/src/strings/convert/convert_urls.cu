@@ -20,6 +20,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/convert/convert_urls.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
@@ -236,9 +237,9 @@ __global__ void url_decode_char_counter(char const* const in_chars,
 
   // Loop through strings, and assign each string to a warp.
   for (size_type row_idx = global_warp_id; row_idx < num_strings; row_idx += nwarps) {
-    auto in_chars_string          = in_chars + in_offsets[row_idx];
-    auto string_length            = in_offsets[row_idx + 1] - in_offsets[row_idx];
-    int nblocks                   = (string_length + char_block_size - 1) / char_block_size;
+    auto in_chars_string = in_chars + in_offsets[row_idx];
+    auto string_length   = in_offsets[row_idx + 1] - in_offsets[row_idx];
+    int nblocks          = cudf::util::div_rounding_up_unsafe(string_length, char_block_size);
     offset_type escape_char_count = 0;
 
     for (int block_idx = 0; block_idx < nblocks; block_idx++) {
@@ -321,7 +322,7 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
     auto in_chars_string  = in_chars + in_offsets[row_idx];
     auto out_chars_string = out_chars + out_offsets[row_idx];
     auto string_length    = in_offsets[row_idx + 1] - in_offsets[row_idx];
-    int nblocks           = (string_length + char_block_size - 1) / char_block_size;
+    int nblocks           = cudf::util::div_rounding_up_unsafe(string_length, char_block_size);
 
     if (warp_lane == cudf::detail::warp_size - 1) { out_idx[local_warp_id] = 0; }
 
@@ -399,7 +400,7 @@ std::unique_ptr<column> url_decode(
   constexpr int threadblock_size          = num_warps_per_threadblock * cudf::detail::warp_size;
   constexpr int char_block_size           = 256;
   const int num_threadblocks =
-    std::min(65536, (strings_count + num_warps_per_threadblock - 1) / num_warps_per_threadblock);
+    std::min(65536, cudf::util::div_rounding_up_unsafe(strings_count, num_warps_per_threadblock));
 
   auto offset_count = strings_count + 1;
   auto d_in_offsets = strings.offsets().data<offset_type>() + strings.offset();
