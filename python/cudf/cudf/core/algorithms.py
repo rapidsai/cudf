@@ -64,7 +64,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
     return labels, cats.values if return_cupy_array else Index(cats)
 
 
-def linear_interpolation(to_interp):
+def _linear_interpolation(to_interp):
     """
     Interpolate over a float column. Implicitly assumes that values are
     evenly spaced with respect to the x-axis, for example the data
@@ -76,7 +76,7 @@ def linear_interpolation(to_interp):
     return index_or_values_interpolation(to_interp)
 
 
-def index_or_values_interpolation(to_interp):
+def _index_or_values_interpolation(to_interp):
     """
     Interpolate over a float column. assumes a linear interpolation
     strategy using the index of the data to denote spacing of the x
@@ -97,8 +97,7 @@ def index_or_values_interpolation(to_interp):
     if mask.all():
         return col
 
-    mask = as_column(~mask)
-    known_x_and_y = to_interp._apply_boolean_mask(mask)
+    known_x_and_y = to_interp._apply_boolean_mask(as_column(~mask))
 
     known_x = cp.asarray(known_x_and_y._index._column)
     known_y = cp.asarray(known_x_and_y._data.columns[0])
@@ -106,7 +105,7 @@ def index_or_values_interpolation(to_interp):
     result = cp.interp(cp.asarray(to_interp._index), known_x, known_y)
 
     # find the first nan
-    first_nan_idx = as_column(mask).find_first_value(1)
+    first_nan_idx = (mask == 1).argmax().item()
     result[:first_nan_idx] = np.nan
     return result
 
