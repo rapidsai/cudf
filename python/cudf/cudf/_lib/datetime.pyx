@@ -5,6 +5,7 @@ cimport cudf._lib.cpp.datetime as libcudf_datetime
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.scalar cimport DeviceScalar
 
 
 def add_months(Column col, Column months):
@@ -66,4 +67,14 @@ def is_leap_year(Column col):
     with nogil:
         c_result = move(libcudf_datetime.is_leap_year(col_view))
 
+    return Column.from_unique_ptr(move(c_result))
+
+
+def date_range(DeviceScalar start, size_t n):
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(libcudf_datetime.date_range(
+            start.c_value.get()[0],
+            n
+        ))
     return Column.from_unique_ptr(move(c_result))

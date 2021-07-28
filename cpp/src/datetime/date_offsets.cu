@@ -11,6 +11,7 @@
 #include <cudf/detail/date_offsets.cuh>
 
 namespace cudf {
+namespace datetime {
 namespace detail {
 std::unique_ptr<cudf::column> date_range(cudf::scalar const& initial,
                                          std::size_t n,
@@ -36,4 +37,5 @@ std::unique_ptr<cudf::column> date_range(cudf::scalar const& initial,
   return detail::date_range(initial, n, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace datetime
 }  // namespace cudf

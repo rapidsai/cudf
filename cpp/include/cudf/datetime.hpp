@@ -206,9 +206,20 @@ std::unique_ptr<cudf::column> is_leap_year(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief  Generate a sequence of timestamps
+ *
+ * `output[i] = start[i] + n*freq
+ *
+ * @param initial The initial timestamp
+ * @param n Number of timestamps to generate
+ *
+ * @returns cudf::column
+ * @throw cudf::logic_error if input datatype is not a TIMESTAMP
+ */
 std::unique_ptr<cudf::column> date_range(
   cudf::scalar const& initial,
-  size_t n,
+  std::size_t n,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

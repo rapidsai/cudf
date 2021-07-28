@@ -9,6 +9,7 @@
 #include <rmm/exec_policy.hpp>
 
 namespace cudf {
+namespace datetime {
 namespace detail {
 
 template <typename Timestamp>
@@ -34,13 +35,12 @@ struct date_range_functor {
       output_column_type, n, cudf::mask_state::UNALLOCATED, stream, mr);
     auto output_view = static_cast<cudf::mutable_column_view>(*output);
 
-    // thrust call here, I guess?
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<std::size_t>(0),
                       thrust::make_counting_iterator<std::size_t>(n),
                       output_view.begin<T>(),
                       [device_input, n] __device__(std::size_t i) {
-                        return add_business_days<T>(device_input, n);
+                        return add_business_days<T>(device_input, i);
                       });
 
     return output;
@@ -58,4 +58,5 @@ struct date_range_functor {
 };
 
 }  // namespace detail
+}  // namespace datetime
 }  // namespace cudf

@@ -2,6 +2,7 @@ from libcpp.memory cimport unique_ptr
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.scalar.scalar cimport scalar
 
 
 cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
@@ -18,3 +19,7 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
     ) except +
     cdef unique_ptr[column] day_of_year(const column_view& column) except +
     cdef unique_ptr[column] is_leap_year(const column_view& column) except +
+    cdef unique_ptr[column] date_range(
+        const scalar& initial,
+        size_t n
+    ) except +
