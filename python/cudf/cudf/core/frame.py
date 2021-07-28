@@ -1480,7 +1480,7 @@ class Frame(libcudf.table.Table):
         if not isinstance(data._index, cudf.RangeIndex):
             perm_sort = data._index.argsort()
             data = data._gather(perm_sort)
-    
+
         interpolator = cudf.core.algorithms.get_column_interpolator(method)
         for colname, col in data._data.items():
             if col.nullable:
