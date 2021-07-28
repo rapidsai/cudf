@@ -197,6 +197,12 @@ __forceinline__ __device__ bool is_escape_char(char const* const ptr)
   return (ptr[0] == '%' && is_hex_digit(ptr[1]) && is_hex_digit(ptr[2]));
 }
 
+// helper function for converting an escaped sequence starting at `ptr` to a single byte
+__forceinline__ __device__ char escaped_sequence_to_byte(char const* const ptr)
+{
+  return (hex_char_to_byte(ptr[1]) << 4) | hex_char_to_byte(ptr[2]);
+}
+
 /**
  * @brief Count the number of characters of each string after URL decoding.
  *
@@ -247,10 +253,8 @@ __global__ void url_decode_char_counter(char const* const in_chars,
       // escaped sequence.
       for (int char_idx = warp_lane; char_idx < string_length_block + halo_size;
            char_idx += cudf::detail::warp_size) {
-        char ch    = 0;
-        int in_idx = block_idx * char_block_size + char_idx;
-        if (in_idx < string_length) ch = in_chars_string[in_idx];
-        in_chars_shared[char_idx] = ch;
+        int in_idx                = block_idx * char_block_size + char_idx;
+        in_chars_shared[char_idx] = in_idx < string_length ? in_chars_string[in_idx] : 0;
       }
 
       __syncwarp();
@@ -331,10 +335,9 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
       // without branches.
       for (int char_idx = warp_lane; char_idx < string_length_block + halo_size * 2;
            char_idx += cudf::detail::warp_size) {
-        char ch    = 0;
         int in_idx = block_idx * char_block_size + char_idx - halo_size;
-        if (in_idx >= 0 && in_idx < string_length) ch = in_chars_string[in_idx];
-        in_chars_shared[char_idx] = ch;
+        in_chars_shared[char_idx] =
+          in_idx >= 0 && in_idx < string_length ? in_chars_string[in_idx] : 0;
       }
 
       __syncwarp();
@@ -360,13 +363,13 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
 
         if (out_size == 1) {
           char ch;
-          if (is_escape_char(in_chars_shared + char_idx + halo_size)) {
+          char* ch_ptr = in_chars_shared + char_idx + halo_size;
+          if (is_escape_char(ch_ptr)) {
             // If the current location is the start of an escape sequence, load and decode.
-            ch = (hex_char_to_byte(in_chars_shared[char_idx + halo_size + 1]) << 4) |
-                 hex_char_to_byte(in_chars_shared[char_idx + halo_size + 2]);
+            ch = escaped_sequence_to_byte(ch_ptr);
           } else {
             // If the current location is not the start of an escape sequence, load directly.
-            ch = in_chars_shared[char_idx + halo_size];
+            ch = *ch_ptr;
           }
           out_chars_string[out_idx[local_warp_id] + out_offset] = ch;
         }
