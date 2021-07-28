@@ -67,6 +67,7 @@ from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     check_cast_unsupported_dtype,
     cudf_dtype_from_pa_type,
+    cudf_dtypes_to_pandas_dtypes,
     get_time_unit,
     min_unsigned_type,
     np_to_pa_dtype,
@@ -877,6 +878,9 @@ class ColumnBase(Column, Serializable):
         raise NotImplementedError()
 
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
+        if dtype in cudf_dtypes_to_pandas_dtypes.values():
+            # pandas nullable dtypes
+            dtype = np.dtype(dtype.type)
         if _is_non_decimal_numeric_dtype(dtype):
             return self.as_numerical_column(dtype, **kwargs)
         elif is_categorical_dtype(dtype):
