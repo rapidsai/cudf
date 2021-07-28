@@ -342,6 +342,7 @@ int CompactProtocolReader::WalkSchema(
     e->max_definition_level = max_def_level;
     e->max_repetition_level = max_rep_level;
     e->parent_idx           = parent_idx;
+    e->self_idx             = idx;
 
     parent_idx = idx;
     ++idx;

@@ -672,8 +672,92 @@ class aggregate_metadata {
       }
     }
 
+    // TODO: Wherever we use this, should use get_schema()
+    auto const& schema = per_file_metadata[0].schema;
+
     std::cout << "here" << std::endl;
 
+    auto find_schema_child = [&schema](SchemaElement const& schema_elem,
+                                       std::string const& name) -> SchemaElement const& {
+      auto const& col_schema_idx =
+        std::find_if(schema_elem.children_idx.begin(),
+                     schema_elem.children_idx.end(),
+                     [&](size_t col_schema_idx) { return schema[col_schema_idx].name == name; });
+      CUDF_EXPECTS(col_schema_idx != schema_elem.children_idx.end(), "Child not found");
+      return schema[*col_schema_idx];
+    };
+
+    std::vector<column_buffer> output_columns;
+    std::vector<input_column_info> input_columns;
+    std::deque<int> nesting;
+
+    std::function<void(column_name_info const*, SchemaElement const&, std::vector<column_buffer>&)>
+      build_column = [&](column_name_info const* col_name_info,
+                         SchemaElement const& schema_elem,
+                         std::vector<column_buffer>& out_col_array) {
+        // if I am a stub, continue on
+        if (schema_elem.is_stub()) {
+          // is this legit?
+          CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
+          build_column((col_name_info) ? &col_name_info->children[0] : nullptr,
+                       schema[schema_elem.children_idx[0]],
+                       out_col_array);
+          return;
+        }
+
+        // if we're at the root, this is a new output column
+        // TODO: This should be done after out_col_array.emplace_back to signify that we're storing
+        // the idx of the newly created outcol in nesting
+        nesting.push_back(static_cast<int>(out_col_array.size()));
+        auto const col_type =
+          to_type_id(schema_elem, strings_to_categorical, timestamp_type_id, strict_decimal_types);
+        auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64
+                             ? data_type{col_type, numeric::scale_type{-schema_elem.decimal_scale}}
+                             : data_type{col_type};
+
+        column_buffer& output_col =
+          out_col_array.emplace_back(dtype, schema_elem.repetition_type == OPTIONAL ? true : false);
+        output_col.name = schema_elem.name;
+
+        // build each child
+        if (col_name_info == nullptr or col_name_info->children.empty()) {
+          // add all children of schema_elem.
+          // At this point, we can no longer pass a col_name_info to build_column
+          for (int idx = 0; idx < schema_elem.num_children; idx++) {
+            build_column(nullptr, schema[schema_elem.children_idx[idx]], output_col.children);
+          }
+        } else {
+          for (size_t idx = 0; idx < col_name_info->children.size(); idx++) {
+            build_column(&col_name_info->children[idx],
+                         find_schema_child(schema_elem, col_name_info->children[idx].name),
+                         output_col.children);
+          }
+        }
+
+        // if I have no children, we're at a leaf and I'm an input column (that is, one with actual
+        // data stored) so add me to the list.
+        if (schema_elem.num_children == 0) {
+          input_column_info& input_col =
+            input_columns.emplace_back(input_column_info{schema_elem.self_idx, schema_elem.name});
+          std::copy(nesting.begin(), nesting.end(), std::back_inserter(input_col.nesting));
+        }
+
+        nesting.pop_back();
+      };
+
+    std::vector<int> output_column_schemas;
+
+    for (auto& col : selected_columns) {
+      auto const& root                    = schema.front();
+      auto const& top_level_col_schem_idx = find_schema_child(root, col.name);
+      build_column(&col, top_level_col_schem_idx, output_columns);
+      output_column_schemas.push_back(top_level_col_schem_idx.self_idx);
+    }
+
+    std::cout << "here" << std::endl;
+
+    return std::make_tuple(
+      std::move(input_columns), std::move(output_columns), std::move(output_column_schemas));
   }
 
   /**
