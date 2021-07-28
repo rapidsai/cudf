@@ -14,7 +14,27 @@ from cudf.utils import cudautils
 from cudf.utils.utils import GetAttrGetItemMixin
 
 
-class Rolling(GetAttrGetItemMixin):
+class _RollingBase:
+    """
+    Contains methods common to all kinds of rolling
+    """
+
+    def _apply_agg_dataframe(self, df, agg_name):
+        result_df = cudf.DataFrame({})
+        for i, col_name in enumerate(df.columns):
+            result_col = self._apply_agg_series(df[col_name], agg_name)
+            result_df.insert(i, col_name, result_col)
+        result_df.index = df.index
+        return result_df
+
+    def _apply_agg(self, agg_name):
+        if isinstance(self.obj, cudf.Series):
+            return self._apply_agg_series(self.obj, agg_name)
+        else:
+            return self._apply_agg_dataframe(self.obj, agg_name)
+
+
+class Rolling(GetAttrGetItemMixin, _RollingBase):
     """
     Rolling window calculations.
 
@@ -216,20 +236,6 @@ class Rolling(GetAttrGetItemMixin):
                 agg_name,
             )
         return sr._copy_construct(data=result_col)
-
-    def _apply_agg_dataframe(self, df, agg_name):
-        result_df = cudf.DataFrame({})
-        for i, col_name in enumerate(df.columns):
-            result_col = self._apply_agg_series(df[col_name], agg_name)
-            result_df.insert(i, col_name, result_col)
-        result_df.index = df.index
-        return result_df
-
-    def _apply_agg(self, agg_name):
-        if isinstance(self.obj, cudf.Series):
-            return self._apply_agg_series(self.obj, agg_name)
-        else:
-            return self._apply_agg_dataframe(self.obj, agg_name)
 
     def sum(self):
         return self._apply_agg("sum")

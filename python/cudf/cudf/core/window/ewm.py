@@ -1,6 +1,6 @@
 from pandas.core.window.ewm import get_center_of_mass
-
-class ExponentialMovingWindow(object):
+from cudf.core.window.rolling import _RollingBase
+class ExponentialMovingWindow(_RollingBase):
     def __init__(
         self, 
         obj, 
@@ -14,5 +14,28 @@ class ExponentialMovingWindow(object):
         axis=0
     ):
 
-        self._obj = obj
+        self.obj = obj
         self.com = get_center_of_mass(com, span, halflife, alpha)
+
+    def mean(self):
+        return self._apply_agg("mean")
+
+    def var(self):
+        return self._apply_agg("mean")
+
+    def std(self):
+        return self._apply_agg("mean")
+
+    def corr(self):
+        return self._apply_agg("mean")
+
+    def cov(self):
+        return self._apply_agg("mean")
+
+    def _apply_agg_series(self, sr, agg_name):
+        """
+        placeholder implementation
+        """
+        pd_obj =  sr.to_pandas().ewm(com=self.com)
+        pd_agged = getattr(pd_obj, agg_name)()
+        return type(self.obj).from_pandas(pd_agged)
