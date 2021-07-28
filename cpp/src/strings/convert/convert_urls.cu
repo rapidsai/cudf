@@ -217,7 +217,8 @@ __global__ void url_decode_char_counter(char const* const in_chars,
                                         offset_type* const out_counts,
                                         size_type const num_strings)
 {
-  __shared__ char temporary_buffer[num_warps_per_threadblock][char_block_size + 2];
+  constexpr int halo_size = 2;
+  __shared__ char temporary_buffer[num_warps_per_threadblock][char_block_size + halo_size];
   __shared__ typename cub::WarpReduce<int8_t>::TempStorage cub_storage[num_warps_per_threadblock];
 
   int global_thread_id  = blockIdx.x * blockDim.x + threadIdx.x;
@@ -239,9 +240,12 @@ __global__ void url_decode_char_counter(char const* const in_chars,
         std::min(char_block_size, string_length - char_block_size * block_idx);
 
       // Each warp collectively loads input characters of the current block to the shared memory.
-      // Two halo cells with 0s are added after the input characters to avoid branches when testing
-      // escape characters.
-      for (int char_idx = warp_lane; char_idx < string_length_block + 2;
+      // When testing whether a location is the start of an escaped character, we need to access
+      // the current location as well as the next two locations. To avoid branches, two halo cells
+      // are added after the end of the block. If the cell is beyond the end of the string, 0s are
+      // filled in to make sure the last two characters of the string are not the start of an
+      // escaped sequence.
+      for (int char_idx = warp_lane; char_idx < string_length_block + halo_size;
            char_idx += cudf::detail::warp_size) {
         char ch    = 0;
         int in_idx = block_idx * char_block_size + char_idx;
@@ -296,7 +300,8 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
                                          offset_type const* const out_offsets,
                                          size_type const num_strings)
 {
-  __shared__ char temporary_buffer[num_warps_per_threadblock][char_block_size + 4];
+  constexpr int halo_size = 2;
+  __shared__ char temporary_buffer[num_warps_per_threadblock][char_block_size + halo_size * 2];
   __shared__ typename cub::WarpScan<int8_t>::TempStorage cub_storage[num_warps_per_threadblock];
   __shared__ int out_idx[num_warps_per_threadblock];
 
@@ -321,13 +326,13 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
         std::min(char_block_size, string_length - char_block_size * block_idx);
 
       // Each warp collectively loads input characters of the current block to shared memory.
-      // Two halo cells with 0s before and after the input characters are added. The halo cells are
-      // used to test whether the current location as well as the previous two locations are escape
-      // characters, without branches.
-      for (int char_idx = warp_lane; char_idx < string_length_block + 4;
+      // Two halo cells before and after the block are added. The halo cells are used to test
+      // whether the current location as well as the previous two locations are escape characters,
+      // without branches.
+      for (int char_idx = warp_lane; char_idx < string_length_block + halo_size * 2;
            char_idx += cudf::detail::warp_size) {
         char ch    = 0;
-        int in_idx = block_idx * char_block_size + char_idx - 2;
+        int in_idx = block_idx * char_block_size + char_idx - halo_size;
         if (in_idx >= 0 && in_idx < string_length) ch = in_chars_string[in_idx];
         in_chars_shared[char_idx] = ch;
       }
@@ -338,8 +343,9 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
       for (int char_idx_start = 0; char_idx_start < string_length_block;
            char_idx_start += cudf::detail::warp_size) {
         int char_idx = char_idx_start + warp_lane;
-        // The current thread should output a character if it is not part of an escape sequence
-        // starting at the previous two locations.
+        // If the current character is part of an escape sequence starting at the previous two
+        // locations, the thread with the starting location should output the escaped character, and
+        // the current thread should not output a character.
         int8_t out_size =
           (char_idx >= string_length_block || is_escape_char(in_chars_shared + char_idx) ||
            is_escape_char(in_chars_shared + char_idx + 1))
@@ -354,13 +360,13 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
 
         if (out_size == 1) {
           char ch;
-          if (is_escape_char(in_chars_shared + char_idx + 2)) {
+          if (is_escape_char(in_chars_shared + char_idx + halo_size)) {
             // If the current location is the start of an escape sequence, load and decode.
-            ch = (hex_char_to_byte(in_chars_shared[char_idx + 3]) << 4) |
-                 hex_char_to_byte(in_chars_shared[char_idx + 4]);
+            ch = (hex_char_to_byte(in_chars_shared[char_idx + halo_size + 1]) << 4) |
+                 hex_char_to_byte(in_chars_shared[char_idx + halo_size + 2]);
           } else {
             // If the current location is not the start of an escape sequence, load directly.
-            ch = in_chars_shared[char_idx + 2];
+            ch = in_chars_shared[char_idx + halo_size];
           }
           out_chars_string[out_idx[local_warp_id] + out_offset] = ch;
         }
