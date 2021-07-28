@@ -7359,8 +7359,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 # category handling
                 if is_categorical_dtype(i_dtype):
                     include_subtypes.add(i_dtype)
-                elif issubclass(dtype.type, i_dtype):
-                    include_subtypes.add(dtype.type)
+                elif inspect.isclass(dtype.type):
+                    if issubclass(dtype.type, i_dtype):
+                        include_subtypes.add(dtype.type)
 
         # exclude all subtypes
         exclude_subtypes = set()
@@ -7369,8 +7370,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 # category handling
                 if is_categorical_dtype(e_dtype):
                     exclude_subtypes.add(e_dtype)
-                elif issubclass(dtype.type, e_dtype):
-                    exclude_subtypes.add(dtype.type)
+                elif inspect.isclass(dtype.type):
+                    if issubclass(dtype.type, e_dtype):
+                        exclude_subtypes.add(dtype.type)
 
         include_all = set(
             [cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
@@ -7563,18 +7565,23 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     def to_struct(self, name=None):
         """
         Return a struct Series composed of the columns of the DataFrame.
-        Note that no copies of the data are made.
 
         Parameters
         ----------
         name: optional
             Name of the resulting Series
+
+        Notes
+        -----
+        Note that a copy of the columns is made.
         """
         col = cudf.core.column.build_struct_column(
             names=self._data.names, children=self._data.columns, size=len(self)
         )
         return cudf.Series._from_data(
-            cudf.core.column_accessor.ColumnAccessor({name: col}),
+            cudf.core.column_accessor.ColumnAccessor(
+                {name: col.copy(deep=True)}
+            ),
             index=self.index,
             name=name,
         )

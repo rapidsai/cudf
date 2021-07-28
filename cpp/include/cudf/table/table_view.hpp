@@ -48,8 +48,8 @@ namespace detail {
  */
 template <typename ColumnView>
 class table_view_base {
-  static_assert(std::is_same<ColumnView, column_view>::value or
-                  std::is_same<ColumnView, mutable_column_view>::value,
+  static_assert(std::is_same_v<ColumnView, column_view> or
+                  std::is_same_v<ColumnView, mutable_column_view>,
                 "table_view_base can only be instantiated with column_view or "
                 "column_view_base.");
 

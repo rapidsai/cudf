@@ -196,14 +196,6 @@ fi
 
 # Both regular and Project Flash proceed here
 
-################################################################################
-# BUILD - Build libcudf examples
-################################################################################
-
-# If examples grows too large to build, should move to cpu side
-# gpuci_logger "Building libcudf examples"
-# $WORKSPACE/cpp/examples/build.sh
-
 # set environment variable for numpy 1.16
 # will be enabled for later versions by default
 np_ver=$(python -c "import numpy; print('.'.join(numpy.__version__.split('.')[:-1]))")
