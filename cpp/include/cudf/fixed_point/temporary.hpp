@@ -16,34 +16,28 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/types.hpp>
 
 // Note: The <cuda/std/*> versions are used in order for Jitify to work with our fixed_point type.
 //       Jitify is needed for several algorithms (binaryop, rolling, etc)
-#include <cuda/std/limits>
-#include <cuda/std/type_traits>  // add cuda namespace
+#include <cuda/std/type_traits>
 
 #include <algorithm>
-#include <cassert>
-#include <cmath>
 #include <limits>
 #include <string>
-#include <type_traits>
 
 namespace numeric {
 namespace detail {
-namespace numeric_limits {  // TODO switch this to struct
+namespace numeric_limits {
 
 template <typename T>
-auto max() -> T
+static constexpr auto max() -> T
 {
   if constexpr (std::is_same_v<T, __int128_t>) {
     // 170,141,183,460,469,231,731,687,303,715,884,105,727
     __int128_t max = 1;
-    for (int i = 0; i < 126; ++i) {
+    for (int i = 0; i < 126; ++i)
       max *= 2;
-    }
     return max + (max - 1);
   }
 
@@ -51,14 +45,13 @@ auto max() -> T
 }
 
 template <typename T>
-auto lowest() -> T
+static constexpr auto lowest() -> T
 {
   if constexpr (std::is_same_v<T, __int128_t>) {
     // -170,141,183,460,469,231,731,687,303,715,884,105,728
     __int128_t lowest = -1;
-    for (int i = 0; i < 127; ++i) {
+    for (int i = 0; i < 127; ++i)
       lowest *= 2;
-    }
     return lowest;
   }
 

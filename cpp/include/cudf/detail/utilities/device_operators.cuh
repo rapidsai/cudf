@@ -99,15 +99,7 @@ struct DeviceMin {
                               !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
-    if constexpr (std::is_same_v<T, __int128_t>) {
-      __int128_t max = 1;
-      for (int i = 0; i < 126; ++i) {
-        max *= 2;
-      }
-      return max + (max - 1);
-    }
-
-    return std::numeric_limits<T>::max();
+    return numeric::detail::numeric_limits::max<T>();
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
@@ -145,15 +137,7 @@ struct DeviceMax {
                               !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
-    if constexpr (std::is_same_v<T, __int128_t>) {
-      __int128_t lowest = -1;
-      for (int i = 0; i < 127; ++i) {
-        lowest *= 2;
-      }
-      return lowest;
-    }
-
-    return std::numeric_limits<T>::lowest();
+    return numeric::detail::numeric_limits::lowest<T>();
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
