@@ -1474,27 +1474,30 @@ class Frame(libcudf.table.Table):
                 f"`limit_direction` must be 'backward' for method `{method}`"
             )
 
-
+        data = self
         columns = ColumnAccessor()
 
-        perm_sort = self._index.argsort()
-        sorted_data = self._gather(perm_sort)
+        if not isinstance(data._index, cudf.RangeIndex):
+            perm_sort = data._index.argsort()
+            data = data._gather(perm_sort)
     
         interpolator = cudf.core.algorithms.get_column_interpolator(method)
-        for colname, col in sorted_data._data.items():
+        for colname, col in data._data.items():
             if col.nullable:
                 col = col.fillna(np.nan)
 
             # Interpolation methods may or may not need the index
-            to_interp = Frame(data={colname: col}, index=sorted_data._index)
+            to_interp = Frame(data={colname: col}, index=data._index)
             result = interpolator(to_interp)
             columns[colname] = result
 
-        result = self.__class__(columns, index=sorted_data._index)
-        # that which was once sorted, now is not
-        restored = result._gather(perm_sort.argsort())
+        result = self.__class__(columns, index=data._index)
 
-        return restored
+        if not isinstance(data._index, cudf.RangeIndex):
+            # that which was once sorted, now is not
+            result = result._gather(perm_sort.argsort())
+
+        return result
 
     def _quantiles(
         self,
