@@ -1475,7 +1475,7 @@ class Frame(libcudf.table.Table):
             )
 
         data = self
-        columns = ColumnAccessor()
+        columns = {}
 
         if not isinstance(data._index, cudf.RangeIndex):
             perm_sort = data._index.argsort()
@@ -1491,7 +1491,7 @@ class Frame(libcudf.table.Table):
             result = interpolator(to_interp)
             columns[colname] = result
 
-        result = self.__class__(columns, index=data._index)
+        result = self.__class__(ColumnAccessor(columns), index=data._index)
 
         if not isinstance(data._index, cudf.RangeIndex):
             # that which was once sorted, now is not

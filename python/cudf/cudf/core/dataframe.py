@@ -5891,7 +5891,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         return cls(data=data, index=index,)
 
-    @copy_docstring(Frame._interpolate)
     def interpolate(
         self,
         method="linear",
