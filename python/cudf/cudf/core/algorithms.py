@@ -99,10 +99,10 @@ def _index_or_values_interpolation(to_interp):
 
     known_x_and_y = to_interp._apply_boolean_mask(as_column(~mask))
 
-    known_x = cp.asarray(known_x_and_y._index._column)
-    known_y = cp.asarray(known_x_and_y._data.columns[0])
+    known_x = known_x_and_y._index._column.values
+    known_y = known_x_and_y._data.columns[0].values
 
-    result = cp.interp(cp.asarray(to_interp._index), known_x, known_y)
+    result = cp.interp(to_interp._index.values, known_x, known_y)
 
     # find the first nan
     first_nan_idx = (mask == 0).argmax().item()
