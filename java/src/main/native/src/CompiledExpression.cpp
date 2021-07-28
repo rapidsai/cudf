@@ -260,7 +260,7 @@ struct make_literal {
       static_cast<ScalarType *>(scalar_ptr.get())->set_value(val);
     }
 
-    auto numeric_scalar = static_cast<cudf::numeric_scalar<T> &>(*scalar_ptr);
+    auto &numeric_scalar = static_cast<cudf::numeric_scalar<T> &>(*scalar_ptr);
     return compiled_expr.add_literal(std::make_unique<cudf::ast::literal>(numeric_scalar),
                                      std::move(scalar_ptr));
   }
@@ -278,7 +278,7 @@ struct make_literal {
       static_cast<ScalarType *>(scalar_ptr.get())->set_value(val);
     }
 
-    auto timestamp_scalar = static_cast<cudf::timestamp_scalar<T> &>(*scalar_ptr);
+    auto &timestamp_scalar = static_cast<cudf::timestamp_scalar<T> &>(*scalar_ptr);
     return compiled_expr.add_literal(std::make_unique<cudf::ast::literal>(timestamp_scalar),
                                      std::move(scalar_ptr));
   }
@@ -296,7 +296,7 @@ struct make_literal {
       static_cast<ScalarType *>(scalar_ptr.get())->set_value(val);
     }
 
-    auto duration_scalar = static_cast<cudf::duration_scalar<T> &>(*scalar_ptr);
+    auto &duration_scalar = static_cast<cudf::duration_scalar<T> &>(*scalar_ptr);
     return compiled_expr.add_literal(std::make_unique<cudf::ast::literal>(duration_scalar),
                                      std::move(scalar_ptr));
   }
