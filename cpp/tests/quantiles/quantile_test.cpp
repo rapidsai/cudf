@@ -98,7 +98,7 @@ test_case<T> interpolate_center()
   // int64_t is internally casted to a double, meaning the lerp center point
   // is float-like.
   double lin_d = [] {
-    if (std::is_floating_point<T>::value || std::is_same<T, int64_t>::value) return 0.0;
+    if (std::is_floating_point<T>::value || std::is_same_v<T, int64_t>) return 0.0;
     if (std::is_signed<T>::value) return -0.5;
     return static_cast<double>(std::numeric_limits<T>::max()) / 2.0;
   }();
@@ -238,7 +238,7 @@ std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> all_invalid()
 // some invalid
 
 template <typename T>
-std::enable_if_t<std::is_same<T, double>::value, test_case<T>> some_invalid()
+std::enable_if_t<std::is_same_v<T, double>, test_case<T>> some_invalid()
 {
   T high = 0.16;
   T low  = -1.024;
@@ -256,7 +256,7 @@ std::enable_if_t<std::is_same<T, double>::value, test_case<T>> some_invalid()
 }
 
 template <typename T>
-std::enable_if_t<std::is_same<T, float>::value, test_case<T>> some_invalid()
+std::enable_if_t<std::is_same_v<T, float>, test_case<T>> some_invalid()
 {
   T high     = 0.16;
   T low      = -1.024;

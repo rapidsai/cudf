@@ -143,8 +143,8 @@ struct minmax_functor {
   template <typename T>
   static constexpr bool is_supported()
   {
-    return !(cudf::is_fixed_point<T>() || std::is_same<T, cudf::list_view>::value ||
-             std::is_same<T, cudf::struct_view>::value);
+    return !(cudf::is_fixed_point<T>() || std::is_same_v<T, cudf::list_view> ||
+             std::is_same_v<T, cudf::struct_view>);
   }
 
   template <typename T>
@@ -180,7 +180,7 @@ struct minmax_functor {
   };
 
   template <typename T,
-            std::enable_if_t<is_supported<T>() and !std::is_same<T, cudf::string_view>::value and
+            std::enable_if_t<is_supported<T>() and !std::is_same_v<T, cudf::string_view> and
                              !cudf::is_dictionary<T>()>* = nullptr>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
     cudf::column_view const& col, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
@@ -200,7 +200,7 @@ struct minmax_functor {
   /**
    * @brief Specialization for strings column.
    */
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
     cudf::column_view const& col, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
   {

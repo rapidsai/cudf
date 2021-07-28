@@ -1184,6 +1184,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       size_t num_rowgroups    = 0;
       int stripe_idx          = 0;
 
+      std::vector<std::pair<std::future<size_t>, size_t>> read_tasks;
       for (auto const& stripe_source_mapping : selected_stripes) {
         // Iterate through the source files selected stripes
         for (auto const& stripe : stripe_source_mapping.stripe_info) {
@@ -1222,10 +1223,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             }
             if (_metadata->per_file_metadata[stripe_source_mapping.source_idx]
                   .source->is_device_read_preferred(len)) {
-              CUDF_EXPECTS(
-                _metadata->per_file_metadata[stripe_source_mapping.source_idx].source->device_read(
-                  offset, len, d_dst, stream) == len,
-                "Unexpected discrepancy in bytes read.");
+              read_tasks.push_back(
+                std::make_pair(_metadata->per_file_metadata[stripe_source_mapping.source_idx]
+                                 .source->device_read_async(offset, len, d_dst, stream),
+                               len));
+
             } else {
               const auto buffer =
                 _metadata->per_file_metadata[stripe_source_mapping.source_idx].source->host_read(
@@ -1297,6 +1299,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
           stripe_idx++;
         }
+      }
+      for (auto& task : read_tasks) {
+        CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
       }
 
       // Process dataset chunk pages into output columns

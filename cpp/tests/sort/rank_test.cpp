@@ -76,7 +76,7 @@ struct Rank : public BaseFixture {
                      column_view const col3_rank,
                      bool percentage = false)
   {
-    if (std::is_same<T, bool>::value) return;
+    if (std::is_same_v<T, bool>) return;
     for (auto const& test_case : {
            // Non-null column
            test_case_t{table_view{{col1}}, table_view{{col1_rank}}},

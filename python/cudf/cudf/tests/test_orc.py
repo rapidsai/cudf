@@ -1324,3 +1324,22 @@ def test_chunked_orc_writer_lists():
 
     got = pa.orc.ORCFile(buffer).read().to_pandas()
     assert_eq(expect, got)
+
+
+def test_writer_timestamp_stream_size(datadir, tmpdir):
+    pdf_fname = datadir / "TestOrcFile.largeTimestamps.orc"
+    gdf_fname = tmpdir.join("gdf.orc")
+
+    try:
+        orcfile = pa.orc.ORCFile(pdf_fname)
+    except Exception as excpr:
+        if type(excpr).__name__ == "ArrowIOError":
+            pytest.skip(".orc file is not found")
+        else:
+            print(type(excpr).__name__)
+
+    expect = orcfile.read().to_pandas()
+    cudf.from_pandas(expect).to_orc(gdf_fname.strpath)
+    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+
+    assert_eq(expect, got)
