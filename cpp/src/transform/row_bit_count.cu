@@ -178,7 +178,7 @@ struct flatten_functor {
   }
 
   // strings
-  template <typename T, std::enable_if_t<std::is_same<T, string_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, string_view>>* = nullptr>
   void operator()(column_view const& col,
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
@@ -194,7 +194,7 @@ struct flatten_functor {
   }
 
   // lists
-  template <typename T, std::enable_if_t<std::is_same<T, list_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, list_view>>* = nullptr>
   void operator()(column_view const& col,
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
@@ -227,7 +227,7 @@ struct flatten_functor {
   }
 
   // structs
-  template <typename T, std::enable_if_t<std::is_same<T, struct_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, struct_view>>* = nullptr>
   void operator()(column_view const& col,
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
@@ -258,8 +258,8 @@ struct flatten_functor {
 
   // everything else
   template <typename T, typename... Args>
-  std::enable_if_t<!cudf::is_fixed_width<T>() && !std::is_same<T, string_view>::value &&
-                     !std::is_same<T, list_view>::value && !std::is_same<T, struct_view>::value,
+  std::enable_if_t<!cudf::is_fixed_width<T>() && !std::is_same_v<T, string_view> &&
+                     !std::is_same_v<T, list_view> && !std::is_same_v<T, struct_view>,
                    void>
   operator()(Args&&...)
   {
