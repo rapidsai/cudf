@@ -97,6 +97,7 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id)
     case cudf::type_id::DECIMAL32:
     case cudf::type_id::DECIMAL64: return TypeKind::DECIMAL;
     case cudf::type_id::LIST: return TypeKind::LIST;
+    case cudf::type_id::STRUCT: return TypeKind::STRUCT;
     default: return TypeKind::INVALID_TYPE_KIND;
   }
 }
@@ -509,6 +510,7 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
     };
 
     if (is_nullable) { add_RLE_stream(gpu::CI_PRESENT, PRESENT, TypeKind::BOOLEAN); }
+
     switch (kind) {
       case TypeKind::BOOLEAN:
       case TypeKind::BYTE:
@@ -591,6 +593,9 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         // no data stream, only lengths
         add_RLE_stream(gpu::CI_DATA2, LENGTH, TypeKind::INT);
         column.set_orc_encoding(DIRECT_V2);
+        break;
+      case TypeKind::STRUCT:
+        // Only has the present stream
         break;
       default: CUDF_FAIL("Unsupported ORC type kind");
     }

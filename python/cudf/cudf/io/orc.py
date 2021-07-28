@@ -337,12 +337,7 @@ def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
     """{docstring}"""
 
     for col in df._data.columns:
-        if isinstance(col, cudf.core.column.StructColumn):
-            raise NotImplementedError(
-                "Writing to ORC format is not yet supported with "
-                "Struct columns."
-            )
-        elif isinstance(col, cudf.core.column.CategoricalColumn):
+        if isinstance(col, cudf.core.column.CategoricalColumn):
             raise NotImplementedError(
                 "Writing to ORC format is not yet supported with "
                 "Categorical columns."
