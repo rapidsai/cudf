@@ -200,8 +200,9 @@ __forceinline__ __device__ bool is_escape_char(char const* const ptr)
 /**
  * @brief Count the number of characters of each string after URL decoding.
  *
- * @tparam threadblock_size Number of threads in a threadblock. This template argument must be a
- * multiple of `cudf::detail::warp_size`.
+ * @tparam num_warps_per_threadblock Number of warps in a threadblock. This template argument must
+ * match the launch configuration, i.e. the kernel must be launched with
+ * `num_warps_per_threadblock * cudf::detail::warp_size` threads per threadblock.
  * @tparam block_size Number of characters which will be loaded into the shared memory at a time.
  *
  * @param[in] in_chars Character buffer for the input string column.
@@ -209,15 +210,14 @@ __forceinline__ __device__ bool is_escape_char(char const* const ptr)
  * @param[out] out_counts Number of characters in each decode URL.
  * @param[in] num_strings Number of strings to count the number of decoded characters.
  */
-template <int threadblock_size, int block_size>
+template <int num_warps_per_threadblock, int block_size>
 __global__ void url_decode_char_counter(char const* const in_chars,
                                         offset_type const* const in_offsets,
                                         offset_type* const out_counts,
                                         size_type const num_strings)
 {
-  constexpr int warps_per_threadblock = threadblock_size / cudf::detail::warp_size;
-  __shared__ char temporary_buffer[warps_per_threadblock][block_size + 2];
-  __shared__ typename cub::WarpReduce<int8_t>::TempStorage cub_storage[warps_per_threadblock];
+  __shared__ char temporary_buffer[num_warps_per_threadblock][block_size + 2];
+  __shared__ typename cub::WarpReduce<int8_t>::TempStorage cub_storage[num_warps_per_threadblock];
 
   int global_thread_id  = blockIdx.x * blockDim.x + threadIdx.x;
   int global_warp_id    = global_thread_id / cudf::detail::warp_size;
@@ -275,8 +275,9 @@ __global__ void url_decode_char_counter(char const* const in_chars,
 /**
  * @brief Decode and copy from the input char column to the output char column.
  *
- * @tparam threadblock_size Number of threads in a threadblock. This template argument must be a
- * multiple of `cudf::detail::warp_size`.
+ * @tparam num_warps_per_threadblock Number of warps in a threadblock. This template argument must
+ * match the launch configuration, i.e. the kernel must be launched with
+ * `num_warps_per_threadblock * cudf::detail::warp_size` threads per threadblock.
  * @tparam block_size Number of characters which will be loaded into the shared memory at a time.
  *
  * @param[in] in_chars Character buffer for the input string column.
@@ -285,17 +286,16 @@ __global__ void url_decode_char_counter(char const* const in_chars,
  * @param[in] out_offsets Offset value of each string associated with `out_chars`.
  * @param[in] num_strings Number of strings to decode and copy.
  */
-template <int threadblock_size, int block_size>
+template <int num_warps_per_threadblock, int block_size>
 __global__ void url_decode_char_replacer(char const* const in_chars,
                                          offset_type const* const in_offsets,
                                          char* const out_chars,
                                          offset_type const* const out_offsets,
                                          size_type const num_strings)
 {
-  constexpr int warps_per_threadblock = threadblock_size / cudf::detail::warp_size;
-  __shared__ char temporary_buffer[warps_per_threadblock][block_size + 4];
-  __shared__ typename cub::WarpScan<int8_t>::TempStorage cub_storage[warps_per_threadblock];
-  __shared__ int out_idx[warps_per_threadblock];
+  __shared__ char temporary_buffer[num_warps_per_threadblock][block_size + 4];
+  __shared__ typename cub::WarpScan<int8_t>::TempStorage cub_storage[num_warps_per_threadblock];
+  __shared__ int out_idx[num_warps_per_threadblock];
 
   int global_thread_id  = blockIdx.x * blockDim.x + threadIdx.x;
   int global_warp_id    = global_thread_id / cudf::detail::warp_size;
@@ -382,11 +382,11 @@ std::unique_ptr<column> url_decode(
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
-  constexpr int threadblock_size      = 128;
-  constexpr int block_size            = 256;
-  constexpr int warps_per_threadblock = threadblock_size / cudf::detail::warp_size;
+  constexpr int num_warps_per_threadblock = 4;
+  constexpr int threadblock_size          = num_warps_per_threadblock * cudf::detail::warp_size;
+  constexpr int block_size                = 256;
   const int num_threadblocks =
-    std::min(65536, (strings_count + warps_per_threadblock - 1) / warps_per_threadblock);
+    std::min(65536, (strings_count + num_warps_per_threadblock - 1) / num_warps_per_threadblock);
 
   auto offset_count = strings_count + 1;
   auto d_in_offsets = strings.offsets().data<offset_type>() + strings.offset();
@@ -399,7 +399,7 @@ std::unique_ptr<column> url_decode(
   // count number of bytes in each string after decoding and store it in offsets_column
   auto offsets_view         = offsets_column->view();
   auto offsets_mutable_view = offsets_column->mutable_view();
-  url_decode_char_counter<threadblock_size, block_size>
+  url_decode_char_counter<num_warps_per_threadblock, block_size>
     <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(
       d_in_chars, d_in_offsets, offsets_mutable_view.begin<offset_type>() + 1, strings_count);
 
@@ -423,7 +423,7 @@ std::unique_ptr<column> url_decode(
   auto d_out_chars  = chars_column->mutable_view().data<char>();
 
   // decode and copy the characters from the input column to the output column
-  url_decode_char_replacer<threadblock_size, block_size>
+  url_decode_char_replacer<num_warps_per_threadblock, block_size>
     <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(
       d_in_chars,
       d_in_offsets,
