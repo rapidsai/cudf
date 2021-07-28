@@ -73,7 +73,7 @@ def _linear_interpolation(to_interp):
     """
 
     to_interp._index = RangeIndex(start=0, stop=len(to_interp), step=1)
-    return index_or_values_interpolation(to_interp)
+    return _index_or_values_interpolation(to_interp)
 
 
 def _index_or_values_interpolation(to_interp):
@@ -105,15 +105,15 @@ def _index_or_values_interpolation(to_interp):
     result = cp.interp(cp.asarray(to_interp._index), known_x, known_y)
 
     # find the first nan
-    first_nan_idx = (mask == 1).argmax().item()
+    first_nan_idx = (mask == 0).argmax().item()
     result[:first_nan_idx] = np.nan
     return result
 
 
 def get_column_interpolator(method):
     if method == "linear":
-        return linear_interpolation
+        return _linear_interpolation
     elif method in {"index", "values"}:
-        return index_or_values_interpolation
+        return _index_or_values_interpolation
     else:
         raise ValueError(f"Interpolation method `{method}` not found")
