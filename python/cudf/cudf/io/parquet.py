@@ -210,6 +210,11 @@ def read_parquet(
         else:
             filepaths_or_buffers.append(tmp_source)
 
+    if columns is not None:
+        if not is_list_like(columns):
+            raise ValueError("Expected list like for columns")
+        columns = [c.split(".") for c in columns]
+
     if filters is not None:
         # Convert filters to ds.Expression
         filters = pq._filters_to_expression(filters)

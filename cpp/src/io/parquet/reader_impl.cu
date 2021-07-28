@@ -796,7 +796,7 @@ class aggregate_metadata {
     // process to produce the final cudf "name" column.
     //
     std::vector<int> output_column_schemas;
-    if (use_names.empty()) {
+    if (use_names.empty()) {  // Will be `not use_names.has_value()`
       // walk the schema and choose all top level columns
       for (size_t schema_idx = 1; schema_idx < pfm.schema.size(); schema_idx++) {
         auto const& schema = pfm.schema[schema_idx];
@@ -1541,11 +1541,11 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 
   // Select only columns required by the options
   std::tie(_input_columns, _output_columns, _output_column_schemas) =
-    _metadata->select_columns(options.get_columns(),
-                              options.is_enabled_use_pandas_metadata(),
-                              _strings_to_categorical,
-                              _timestamp_type.id(),
-                              _strict_decimal_types);
+    _metadata->select_columns2(options.get_columns(),
+                               options.is_enabled_use_pandas_metadata(),
+                               _strings_to_categorical,
+                               _timestamp_type.id(),
+                               _strict_decimal_types);
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,

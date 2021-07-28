@@ -50,8 +50,9 @@ class parquet_reader_options_builder;
 class parquet_reader_options {
   source_info _source;
 
-  // Names of column to read; empty is all
-  std::vector<std::string> _columns;
+  // Path in schema of column to read; empty is all
+  // TODO: A more descriptive doc that mentions how things work when using path to field of nested
+  std::vector<std::vector<std::string>> _columns;
 
   // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
@@ -125,7 +126,7 @@ class parquet_reader_options {
   /**
    * @brief Returns names of column to be read.
    */
-  std::vector<std::string> const& get_columns() const { return _columns; }
+  std::vector<std::vector<std::string>> const& get_columns() const { return _columns; }
 
   /**
    * @brief Returns list of individual row groups to be read.
@@ -148,7 +149,10 @@ class parquet_reader_options {
    *
    * @param col_names Vector of column names.
    */
-  void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
+  void set_columns(std::vector<std::vector<std::string>> col_names)
+  {
+    _columns = std::move(col_names);
+  }
 
   /**
    * @brief Sets vector of individual row groups to read.
@@ -246,7 +250,7 @@ class parquet_reader_options_builder {
    * @param col_names Vector of column names.
    * @return this for chaining.
    */
-  parquet_reader_options_builder& columns(std::vector<std::string> col_names)
+  parquet_reader_options_builder& columns(std::vector<std::vector<std::string>> col_names)
   {
     options._columns = std::move(col_names);
     return *this;
