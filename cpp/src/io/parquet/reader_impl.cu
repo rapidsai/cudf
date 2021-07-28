@@ -464,8 +464,9 @@ class aggregate_metadata {
    *
    * @param names List of column names to load, where index column name(s) will be added
    */
-  void add_pandas_index_names(std::vector<std::string>& names) const
+  std::vector<std::string> get_pandas_index_names() const
   {
+    std::vector<std::string> names;
     auto str = get_pandas_index();
     if (str.length() != 0) {
       std::regex index_name_expr{R"(\"((?:\\.|[^\"])*)\")"};
@@ -480,6 +481,7 @@ class aggregate_metadata {
         str = sm.suffix();
       }
     }
+    return names;
   }
 
   struct row_group_info {
@@ -636,6 +638,13 @@ class aggregate_metadata {
         selected_columns.emplace_back(get_schema(col_idx).name);
       }
     } else {
+      if (include_index) {
+        std::vector<std::string> index_names = get_pandas_index_names();
+        std::transform(index_names.begin(),
+                       index_names.end(),
+                       std::back_inserter(selected_columns),
+                       [](std::string name) { return column_name_info(name); });
+      }
       // Merge the vector use_names into a set of hierarchical column_name_info objects
       /* This is because if we have columns like this:
        *     col1
