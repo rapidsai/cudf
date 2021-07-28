@@ -62,8 +62,6 @@ cudf_dtypes_to_pandas_dtypes = {
     np.dtype("int16"): pd.Int16Dtype(),
     np.dtype("int32"): pd.Int32Dtype(),
     np.dtype("int64"): pd.Int64Dtype(),
-    np.dtype("float32"): pd.Float32Dtype(),
-    np.dtype("float64"): pd.Float64Dtype(),
     np.dtype("bool_"): pd.BooleanDtype(),
     np.dtype("object"): pd.StringDtype(),
 }
