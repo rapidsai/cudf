@@ -220,6 +220,8 @@ std::unique_ptr<cudf::column> is_leap_year(
 std::unique_ptr<cudf::column> date_range(
   cudf::scalar const& initial,
   std::size_t n,
+  std::size_t months,
+  std::size_t nanoseconds,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

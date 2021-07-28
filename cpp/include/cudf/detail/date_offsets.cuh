@@ -1,6 +1,9 @@
+#include <sys/syscall.h>
+#include <chrono>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
+#include <cudf/detail/datetime_ops.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/types.hpp>
@@ -12,12 +15,30 @@ namespace cudf {
 namespace datetime {
 namespace detail {
 
+struct DateOffset {
+  std::size_t month, nanoseconds;
+  add_calendrical_months_functor_impl f;
+
+  template <typename Timestamp>
+  Timestamp __device__ operator+(Timestamp const& base)
+  {
+    auto result = cuda::std::chrono::time_point_cast<typename Timestamp::duration>(
+      base + cuda::std::chrono::nanoseconds{nanoseconds});
+    return f(result, month);
+  }
+
+  DateOffset __device__ operator*(std::size_t const& n)
+  {
+    return DateOffset{month * n, nanoseconds * n, add_calendrical_months_functor_impl{}};
+  }
+};
+
 template <typename Timestamp>
-CUDA_DEVICE_CALLABLE Timestamp
-add_business_days(cudf::timestamp_scalar_device_view<Timestamp> const initial, std::size_t n)
+CUDA_DEVICE_CALLABLE Timestamp add_dateoffset(
+  cudf::timestamp_scalar_device_view<Timestamp> const initial, std::size_t n, DateOffset offset)
 {
   // just add `n` days:
-  return initial.value() + cuda::std::chrono::days(n);
+  return offset * n + initial.value();
 }
 
 struct date_range_functor {
@@ -25,6 +46,7 @@ struct date_range_functor {
   typename std::enable_if_t<cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>>
   operator()(cudf::scalar const& input,
              std::size_t n,
+             DateOffset offset,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
@@ -39,8 +61,8 @@ struct date_range_functor {
                       thrust::make_counting_iterator<std::size_t>(0),
                       thrust::make_counting_iterator<std::size_t>(n),
                       output_view.begin<T>(),
-                      [device_input, n] __device__(std::size_t i) {
-                        return add_business_days<T>(device_input, i);
+                      [device_input, n, offset] __device__(std::size_t i) {
+                        return add_dateoffset<T>(device_input, i, offset);
                       });
 
     return output;
@@ -50,6 +72,7 @@ struct date_range_functor {
   typename std::enable_if_t<!cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>>
   operator()(cudf::scalar const& input,
              std::size_t n,
+             DateOffset offset,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
