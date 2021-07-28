@@ -1,8 +1,10 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
+
 class StructMethods:
     def __init__(self, d_series):
         self.d_series = d_series
+
     def field(self, key):
         """
         Extract children of the specified struct column
@@ -28,26 +30,31 @@ class StructMethods:
         1    3
         dtype: int64
         """
-        try:            
+        try:
             typ = self.d_series._meta.dtype.fields[key]
-            return self.d_series.map_partitions(
-                lambda s: s.struct.field(key),
-                meta=self.d_series._meta._constructor([], dtype=typ),
-            )
+
         except KeyError as e:
             if isinstance(key, int):
-                key_list = [dict_key for dict_key in self.d_series._meta.dtype.fields.keys()]
+                key_list = [
+                    dict_key
+                    for dict_key in self.d_series._meta.dtype.fields.keys()
+                ]
                 typ_key = key_list[key]
                 typ = self.d_series._meta.dtype.fields[typ_key]
-                return self.d_series.map_partitions(
-                    lambda s: s.struct.field(key), 
-                    meta=self.d_series._meta._constructor([], dtype=typ),
-                )
+
             else:
-                print('Field "' + str(key) + '" is not found in the set of existing keys.')
+                print(
+                    'Field "'
+                    + str(key)
+                    + '" is not found in the set of existing keys.'
+                )
                 raise e
 
-        
+        return self.d_series.map_partitions(
+            lambda s: s.struct.field(key),
+            meta=self.d_series._meta._constructor([], dtype=typ),
+        )
+
 
 class ListMethods:
     def __init__(self, d_series):
