@@ -1428,7 +1428,7 @@ class Frame(libcudf.table.Table):
         result._copy_type_metadata(self)
         return result
 
-    def _interpolate(
+    def interpolate(
         self,
         method="linear",
         axis=0,

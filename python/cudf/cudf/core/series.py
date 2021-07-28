@@ -5418,29 +5418,6 @@ class Series(SingleColumnFrame, Serializable):
         mod_vals = hashed_values % stop
         return Series(mod_vals._column, index=self.index, name=self.name)
 
-    @copy_docstring(Frame._interpolate)
-    def interpolate(
-        self,
-        method="linear",
-        axis=0,
-        limit=None,
-        inplace=False,
-        limit_direction=None,
-        limit_area=None,
-        downcast=None,
-        **kwargs,
-    ):
-        return super()._interpolate(
-            method=method,
-            axis=axis,
-            limit=limit,
-            inplace=inplace,
-            limit_direction=limit_direction,
-            limit_area=limit_area,
-            downcast=downcast,
-            **kwargs,
-        )
-
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True
     ):

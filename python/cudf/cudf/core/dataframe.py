@@ -5910,7 +5910,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 "least one column to a numeric dtype."
             )
 
-        return super()._interpolate(
+        return super().interpolate(
             method=method,
             axis=axis,
             limit=limit,
