@@ -35,8 +35,8 @@ most modern cuda drivers.
 ```
 
 In some cases there may be a classifier to indicate the version of cuda required. See the 
-Build From Source section below for more information about when this can happen. No official
-release of the jar will have a classifier on it.
+[Build From Source](#build-from-source) section below for more information about when this
+can happen. No official release of the jar will have a classifier on it.
 
 CUDA 11.0:
 ```xml
@@ -51,9 +51,9 @@ CUDA 11.0:
 ## Build From Source
 
 Build [libcudf](../cpp) first, and make sure the JDK is installed and available. Specify
-the cmake option `-DCUDF_USE_ARROW_STATIC=ON` when building so that Apache Arrow is linked
-statically to libcudf, as this will help create a jar that does not require Arrow and its
-dependencies to be available in the runtime environment.
+the cmake option `-DCUDF_USE_ARROW_STATIC=ON -DCUDF_ENABLE_ARROW_S3=OFF` when building so
+that Apache Arrow is linked statically to libcudf, as this will help create a jar that
+does not require Arrow and its dependencies to be available in the runtime environment.
 
 After building libcudf, the Java bindings can be built via Maven, e.g.:
 ```
@@ -62,6 +62,18 @@ mvn clean install
 
 If you have a compatible GPU on your build system the tests will use it.  If not you will see a
 lot of skipped tests.
+
+### Using the Java CI Docker Image
+
+If you are interested in building a Java cudf jar that is similar to the official releases
+that can run on all modern Linux systems, see the [Java CI README](ci/README.md) for
+instructions on how to build within a Docker environment using devtoolset. Note that
+building the jar without the Docker setup and script will likely produce a jar that can
+only run in environments similar to that of the build machine.
+
+If you decide to build without Docker and the build script, examining the cmake and Maven
+settings in the [Java CI build script](ci/build-in-docker.sh) can be helpful if you are
+encountering difficulties during the build.
 
 ## Dynamically Linking Arrow
 

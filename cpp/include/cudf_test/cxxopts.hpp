@@ -584,7 +584,7 @@ class abstract_value : public Value {
 
   std::string get_implicit_value() const { return m_implicit_value; }
 
-  bool is_boolean() const { return std::is_same<T, bool>::value; }
+  bool is_boolean() const { return std::is_same_v<T, bool>; }
 
   const T& get() const
   {

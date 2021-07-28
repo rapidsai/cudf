@@ -170,7 +170,7 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
 
 
 def test_cuda_array_interface_pytorch():
-    torch = pytest.importorskip("torch")
+    torch = pytest.importorskip("torch", minversion="1.6.0")
     if not torch.cuda.is_available():
         pytest.skip("need gpu version of pytorch to be installed")
 
