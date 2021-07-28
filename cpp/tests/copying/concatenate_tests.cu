@@ -48,8 +48,6 @@ using Table       = cudf::table;
 
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
-  static std::size_t data_size() { return 1000; }
-  static std::size_t mask_size() { return 100; }
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
@@ -58,14 +56,14 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   {
     auto typed_data = static_cast<char*>(data.data());
     auto typed_mask = static_cast<char*>(mask.data());
-    std::vector<char> h_data(data_size());
+    std::vector<char> h_data(data.size());
     std::iota(h_data.begin(), h_data.end(), char{0});
-    std::vector<char> h_mask(mask_size());
+    std::vector<char> h_mask(mask.size());
     std::iota(h_mask.begin(), h_mask.end(), char{0});
     CUDA_TRY(cudaMemcpyAsync(
-      typed_data, h_data.data(), data_size(), cudaMemcpyHostToDevice, stream.value()));
+      typed_data, h_data.data(), data.size(), cudaMemcpyHostToDevice, stream.value()));
     CUDA_TRY(cudaMemcpyAsync(
-      typed_mask, h_mask.data(), mask_size(), cudaMemcpyHostToDevice, stream.value()));
+      typed_mask, h_mask.data(), mask.size(), cudaMemcpyHostToDevice, stream.value()));
     stream.synchronize();
   }
 
