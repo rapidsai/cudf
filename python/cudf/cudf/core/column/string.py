@@ -749,12 +749,20 @@ class StringMethods(ColumnMethods):
             )
         return self._return_or_inplace(result_col)
 
-    def repeat(self, repeats: int) -> SeriesOrIndex:
+    def repeat(
+        self,
+        repeats: Union[int, Sequence]
+    ) -> SeriesOrIndex:
         """
         Description here.
         """
-        # print(column.as_column(repeats, dtype="str"))
-        #      self._column, column.as_column(repeats, dtype="str"),  # just repeats?
+        if can_convert_to_column(repeats):
+            return self._return_or_inplace(
+                libstrings.repeat_sequence(
+                    self._column, column.as_column(repeats, dtype="int"),
+                ),
+            )
+
         return self._return_or_inplace(
             libstrings.repeat(self._column, repeats)
         )

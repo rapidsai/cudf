@@ -14,3 +14,7 @@ cdef extern from "cudf/strings/repeat_strings.hpp" namespace "cudf::strings" nog
     cdef unique_ptr[column] repeat_strings(
         column_view source_strings,
         size_type repeat) except +
+
+    cdef unique_ptr[column] repeat_strings(
+        column_view source_strings,
+        column_view repeats) except +
