@@ -89,12 +89,12 @@ def index_or_values_interpolation(to_interp):
     )
 
     col = to_interp._data[colname]
-
     # figure out where the nans are
     mask = cp.isnan(col)
 
-    # trivial case
-    if mask.all():
+    # trivial cases, all nan or no nans
+    num_nan = mask.sum()
+    if num_nan == 0 or num_nan == len(to_interp):
         return col
 
     mask = as_column(~mask)
