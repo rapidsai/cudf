@@ -17,7 +17,7 @@
 #include <structs/utilities.hpp>
 
 #include <cudf/column/column.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.hpp>
@@ -567,12 +567,13 @@ void struct_scalar::superimpose_nulls(rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   // push validity mask down
-  std::vector<bitmask_type> host_validity({0});
-  auto validity = cudf::detail::make_device_uvector_sync(host_validity, stream, mr);
+  std::vector<bitmask_type> host_validity(
+    cudf::bitmask_allocation_size_bytes(1) / sizeof(bitmask_type), 0);
+  auto validity = cudf::detail::create_null_mask(1, mask_state::ALL_NULL, stream);
   auto iter     = thrust::make_counting_iterator(0);
   std::for_each(iter, iter + _data.num_columns(), [&](size_type i) {
     cudf::structs::detail::superimpose_parent_nulls(
-      validity.data(), 1, _data.get_column(i), stream, mr);
+      static_cast<bitmask_type const*>(validity.data()), 1, _data.get_column(i), stream, mr);
   });
 }
 
