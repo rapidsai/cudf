@@ -628,50 +628,57 @@ class aggregate_metadata {
                        type_id timestamp_type_id,
                        bool strict_decimal_types) const
   {
-    // Merge the vector use_names into a set of hierarchical column_name_info objects
-    /* This is because if we have columns like this:
-     *     col1
-     *      / \
-     *    s3   f4
-     *   / \
-     * f5   f6
-     *
-     * there may be common paths in use_names like:
-     * {"col1", "s3", "f5"}, {"col1", "f4"}
-     * which means we want the output to contain
-     *     col1
-     *      / \
-     *    s3   f4
-     *   /
-     * f5
-     *
-     * rather than
-     *  col1   col1
-     *   |      |
-     *   s3     f4
-     *   |
-     *   f5
-     */
     std::vector<column_name_info> selected_columns;
-    for (auto const& path : use_names) {
-      auto array_to_find_in = &selected_columns;
-      for (size_t depth = 0; depth < path.size(); ++depth) {
-        // Check if the path exists in our selected_columns and if not, add it.
-        auto const& name_to_find = path[depth];
-        auto found_col           = std::find_if(
-          array_to_find_in->begin(),
-          array_to_find_in->end(),
-          [&name_to_find](column_name_info const& col) { return col.name == name_to_find; });
-        if (found_col == array_to_find_in->end()) {
-          auto& col        = array_to_find_in->emplace_back(name_to_find);
-          array_to_find_in = &col.children;
-        } else {
-          // Path exists. go down further.
-          array_to_find_in = &found_col->children;
+    if (use_names.empty()) {
+      // select all columns
+      auto const& root = get_schema(0);
+      for (auto const& col_idx : root.children_idx) {
+        selected_columns.emplace_back(get_schema(col_idx).name);
+      }
+    } else {
+      // Merge the vector use_names into a set of hierarchical column_name_info objects
+      /* This is because if we have columns like this:
+       *     col1
+       *      / \
+       *    s3   f4
+       *   / \
+       * f5   f6
+       *
+       * there may be common paths in use_names like:
+       * {"col1", "s3", "f5"}, {"col1", "f4"}
+       * which means we want the output to contain
+       *     col1
+       *      / \
+       *    s3   f4
+       *   /
+       * f5
+       *
+       * rather than
+       *  col1   col1
+       *   |      |
+       *   s3     f4
+       *   |
+       *   f5
+       */
+      for (auto const& path : use_names) {
+        auto array_to_find_in = &selected_columns;
+        for (size_t depth = 0; depth < path.size(); ++depth) {
+          // Check if the path exists in our selected_columns and if not, add it.
+          auto const& name_to_find = path[depth];
+          auto found_col           = std::find_if(
+            array_to_find_in->begin(),
+            array_to_find_in->end(),
+            [&name_to_find](column_name_info const& col) { return col.name == name_to_find; });
+          if (found_col == array_to_find_in->end()) {
+            auto& col        = array_to_find_in->emplace_back(name_to_find);
+            array_to_find_in = &col.children;
+          } else {
+            // Path exists. go down further.
+            array_to_find_in = &found_col->children;
+          }
         }
       }
     }
-
     // TODO: Wherever we use this, should use get_schema()
     auto const& schema = per_file_metadata[0].schema;
 
