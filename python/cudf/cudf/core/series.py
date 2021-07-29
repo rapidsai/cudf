@@ -6483,6 +6483,18 @@ class DatetimeProperties(object):
         )
 
     @property
+    def is_month_start(self):
+        """
+        Boolean indicator if the date is the first day of the month.
+
+        Returns
+        -------
+        Series
+        Booleans indicating if dates are the first day of the month.
+        """
+        return (self.day == 1).fillna(False)
+
+    @property
     def days_in_month(self):
         """
         Get the total number of days in the month that the date falls on.

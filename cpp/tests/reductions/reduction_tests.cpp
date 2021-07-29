@@ -85,7 +85,7 @@ template <typename T>
 struct ReductionTest : public cudf::test::BaseFixture {
   // Sum/Prod/SumOfSquare never support non arithmetics
   static constexpr bool ret_non_arithmetic =
-    (std::is_arithmetic<T>::value || std::is_same<T, bool>::value) ? true : false;
+    (std::is_arithmetic<T>::value || std::is_same_v<T, bool>) ? true : false;
 
   ReductionTest() {}
 
@@ -936,7 +936,7 @@ TYPED_TEST(ReductionTest, Median)
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
   double expected_value = [] {
-    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_same_v<T, bool>) return 1.0;
     if (std::is_signed<T>::value) return 3.0;
     return 13.5;
   }();
@@ -945,7 +945,7 @@ TYPED_TEST(ReductionTest, Median)
 
   auto col_odd              = cudf::split(col, {1})[1];
   double expected_value_odd = [] {
-    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_same_v<T, bool>) return 1.0;
     if (std::is_signed<T>::value) return 0.0;
     return 14.0;
   }();
@@ -954,7 +954,7 @@ TYPED_TEST(ReductionTest, Median)
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
   double expected_null_value                          = [] {
-    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_same_v<T, bool>) return 1.0;
     if (std::is_signed<T>::value) return 0.0;
     return 13.0;
   }();
@@ -964,7 +964,7 @@ TYPED_TEST(ReductionTest, Median)
 
   auto col_nulls_odd             = cudf::split(col_nulls, {1})[1];
   double expected_null_value_odd = [] {
-    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_same_v<T, bool>) return 1.0;
     if (std::is_signed<T>::value) return -6.5;
     return 13.5;
   }();
@@ -985,7 +985,7 @@ TYPED_TEST(ReductionTest, Quantile)
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  double expected_value0 = std::is_same<T, bool>::value || std::is_unsigned<T>::value ? v[4] : v[6];
+  double expected_value0 = std::is_same_v<T, bool> || std::is_unsigned<T>::value ? v[4] : v[6];
   this->reduction_test(
     col, expected_value0, this->ret_non_arithmetic, cudf::make_quantile_aggregation({0.0}, interp));
   double expected_value1 = v[3];
@@ -1015,7 +1015,7 @@ TYPED_TEST(ReductionTest, UniqueCount)
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  cudf::size_type expected_value = std::is_same<T, bool>::value ? 2 : 6;
+  cudf::size_type expected_value = std::is_same_v<T, bool> ? 2 : 6;
   this->reduction_test(col,
                        expected_value,
                        this->ret_non_arithmetic,
@@ -1027,8 +1027,8 @@ TYPED_TEST(ReductionTest, UniqueCount)
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  cudf::size_type expected_null_value0                = std::is_same<T, bool>::value ? 3 : 7;
-  cudf::size_type expected_null_value1                = std::is_same<T, bool>::value ? 2 : 6;
+  cudf::size_type expected_null_value0                = std::is_same_v<T, bool> ? 3 : 7;
+  cudf::size_type expected_null_value1                = std::is_same_v<T, bool> ? 2 : 6;
 
   this->reduction_test(col_nulls,
                        expected_null_value0,
@@ -1844,7 +1844,7 @@ TYPED_TEST(DictionaryReductionTest, Quantile)
 
   // test without nulls
   cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
-  double expected_value = std::is_same<T, bool>::value || std::is_unsigned<T>::value ? 0.0 : -20.0;
+  double expected_value = std::is_same_v<T, bool> || std::is_unsigned<T>::value ? 0.0 : -20.0;
   this->reduction_test(col,
                        expected_value,
                        this->ret_non_arithmetic,

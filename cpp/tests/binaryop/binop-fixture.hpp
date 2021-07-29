@@ -74,7 +74,7 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
     cudf::test::UniformRandomGenerator<uint8_t> rand_gen(r_min, r_max);
     uint8_t size = rand_gen.generate();
     std::string str{"ஔⒶbc⁂∰ൠ \tنж水✉♪✿™"};
-    return cudf::scalar_type_t<T>(string_view(str.data(), size));
+    return cudf::scalar_type_t<T>(str.substr(0, size));
   }
 };
 
