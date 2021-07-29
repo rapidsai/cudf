@@ -25,6 +25,8 @@
 #include <cudf/datetime.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
+#include "build/cuda-11.2.0/date-offset/release/_deps/gtest-src/googletest/include/gtest/gtest.h"
+#include "cudf/detail/iterator.cuh"
 
 #define XXX false  // stub for null values
 
@@ -567,6 +569,85 @@ TEST_F(BasicDatetimeOpsTest, TestIsLeapYear)
     cudf::test::fixed_width_column_wrapper<bool>{
       {true, XXX, false, true, true, false, false, false, XXX, true, false, XXX},
       {true, false, true, true, true, true, true, true, false, true, true, false}});
+}
+
+TEST_F(BasicDatetimeOpsTest, TestDaysInMonths)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace cuda::std::chrono;
+
+  auto start = time_point_ms(milliseconds(-2500000000000));  // Sat, 11 Oct 1890 19:33:20 GMT
+  auto stop  = time_point_ms(milliseconds(2500000000000));   // Mon, 22 Mar 2049 04:26:40 GMT
+  auto step  = months{1};  // std::ratio<2629746>>, 1/12 of avg gregorian year
+
+  auto count = static_cast<std::size_t>((stop - start) / step);
+
+  auto date_vector = thrust::host_vector<long>(count, start.time_since_epoch().count());
+  auto month_iter  = thrust::make_counting_iterator<int16_t>(0);
+
+  fixed_width_column_wrapper<cudf::timestamp_ms> base_timestamps(date_vector.begin(),
+                                                                 date_vector.end());
+  fixed_width_column_wrapper<int16_t> month_offset(month_iter, month_iter + count);
+
+  auto input = cudf::datetime::add_calendrical_months(base_timestamps, month_offset);
+
+  auto got = cudf::datetime::days_in_month(*input);
+
+  // Extract last day of the month on host
+  auto [host_input, _] = cudf::test::to_host<int64_t>(*input);
+  auto host_expect     = thrust::host_vector<int16_t>(host_input.size());
+
+  std::transform(host_input.begin(), host_input.end(), host_expect.begin(), [](auto rep) {
+    auto tp = time_point_ms(milliseconds{rep});
+    auto dp = floor<days>(tp);
+    year_month_day ymd{dp};
+    year_month_day_last ymdl{ymd.year() / ymd.month() / last};
+    return static_cast<int16_t>(unsigned(ymdl.day()));
+  });
+  fixed_width_column_wrapper<int16_t> expect(host_expect.begin(), host_expect.end());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expect);
+}
+
+TEST_F(BasicDatetimeOpsTest, TestDaysInMonthsMasked)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace cuda::std::chrono;
+
+  auto start = time_point_ms(milliseconds(-2500000000000));  // Sat, 11 Oct 1890 19:33:20 GMT
+  auto stop  = time_point_ms(milliseconds(2500000000000));   // Mon, 22 Mar 2049 04:26:40 GMT
+  auto step  = months{1};  // std::ratio<2629746>>, 1/12 of avg gregorian year
+
+  auto count = static_cast<std::size_t>((stop - start) / step);
+
+  auto date_vector = thrust::host_vector<long>(count, start.time_since_epoch().count());
+  auto month_iter  = thrust::make_counting_iterator<int16_t>(0);
+  auto mask = cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 2 == 0; });
+
+  fixed_width_column_wrapper<cudf::timestamp_ms> base_timestamps(
+    date_vector.begin(), date_vector.end(), mask);
+  fixed_width_column_wrapper<int16_t> month_offset(month_iter, month_iter + count);
+
+  auto input = cudf::datetime::add_calendrical_months(base_timestamps, month_offset);
+
+  auto got = cudf::datetime::days_in_month(*input);
+
+  // Extract last day of the month on host
+  auto [host_input, _] = cudf::test::to_host<int64_t>(*input);
+  auto host_expect     = thrust::host_vector<int16_t>(host_input.size());
+
+  std::transform(host_input.begin(), host_input.end(), host_expect.begin(), [](auto rep) {
+    auto tp = time_point_ms(milliseconds{rep});
+    auto dp = floor<days>(tp);
+    year_month_day ymd{dp};
+    year_month_day_last ymdl{ymd.year() / ymd.month() / last};
+    return static_cast<int16_t>(unsigned(ymdl.day()));
+  });
+  fixed_width_column_wrapper<int16_t> expect(host_expect.begin(), host_expect.end(), mask);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expect);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

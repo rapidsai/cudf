@@ -206,6 +206,21 @@ std::unique_ptr<cudf::column> is_leap_year(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief  Extract the number of days in the month
+ *
+ * output[i] contains the number of days of date `column[i]`
+ * output[i] is null if `column[i]` is null
+ *
+ * @param[in] cudf::column_view of the input datetime values
+ *
+ * @returns cudf::column of datatype INT16 of days in month of the corresponding date
+ * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
+ */
+std::unique_ptr<cudf::column> days_in_month(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 }  // namespace datetime
 }  // namespace cudf

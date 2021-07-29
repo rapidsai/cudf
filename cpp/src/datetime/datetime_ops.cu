@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cstdint>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -83,10 +84,15 @@ static __device__ int16_t const days_until_month[2][13] = {
   {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366}   // For leap years
 };
 
+// Number of days in month
+static __device__ uint8_t const days_in_month_table[2][13] = {
+  {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},  // For non leap years
+  {0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}   // For leap years
+};
+
 CUDA_DEVICE_CALLABLE uint8_t days_in_month(cuda::std::chrono::month mon, bool is_leap_year)
 {
-  return days_until_month[is_leap_year][unsigned{mon}] -
-         days_until_month[is_leap_year][unsigned{mon} - 1];
+  return days_in_month_table[is_leap_year][unsigned{mon}];
 }
 
 // Round up the date to the last day of the month and return the
@@ -127,6 +133,7 @@ struct extract_day_num_of_year {
   }
 };
 
+// Returns true if the year is a leap year
 struct is_leap_year_op {
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE bool operator()(Timestamp const ts) const
@@ -135,6 +142,18 @@ struct is_leap_year_op {
     auto const days_since_epoch = floor<days>(ts);
     auto const date             = year_month_day(days_since_epoch);
     return date.year().is_leap();
+  }
+};
+
+// Extract the number of days of the month
+struct days_in_month_op {
+  template <typename Timestamp>
+  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
+  {
+    using namespace cuda::std::chrono;
+    auto const days_since_epoch = floor<days>(ts);
+    auto const date             = year_month_day(days_since_epoch);
+    return static_cast<int16_t>(days_in_month(date.month(), date.year().is_leap()));
   }
 };
 
@@ -376,6 +395,13 @@ std::unique_ptr<column> is_leap_year(column_view const& column,
   return apply_datetime_op<is_leap_year_op, type_id::BOOL8>(column, stream, mr);
 }
 
+std::unique_ptr<column> days_in_month(column_view const& column,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  return apply_datetime_op<days_in_month_op, type_id::INT16>(column, stream, mr);
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> extract_year(column_view const& column, rmm::mr::device_memory_resource* mr)
@@ -450,6 +476,13 @@ std::unique_ptr<column> is_leap_year(column_view const& column, rmm::mr::device_
 {
   CUDF_FUNC_RANGE();
   return detail::is_leap_year(column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> days_in_month(column_view const& column,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::days_in_month(column, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace datetime

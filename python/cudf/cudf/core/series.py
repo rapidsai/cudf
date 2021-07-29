@@ -6438,8 +6438,32 @@ class DatetimeProperties(object):
         -------
         Series
         Booleans indicating if dates belong to a leap year.
+
+        Example
+        -------
+
         """
         res = libcudf.datetime.is_leap_year(self.series._column).fillna(False)
+        return Series._from_data(
+            ColumnAccessor({None: res}),
+            index=self.series._index,
+            name=self.series.name,
+        )
+
+    @property
+    def days_in_month(self):
+        """
+        Get the total number of days in the month that the date falls on.
+
+        Returns
+        -------
+        int
+
+        Example
+        -------
+
+        """
+        res = libcudf.datetime.days_in_month(self.series._column)
         return Series._from_data(
             ColumnAccessor({None: res}),
             index=self.series._index,
