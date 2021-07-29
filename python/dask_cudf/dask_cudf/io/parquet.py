@@ -7,7 +7,7 @@ import numpy as np
 from pyarrow import parquet as pq
 
 from dask import dataframe as dd
-from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine as ArrowEngine
+from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
 try:
     from dask.dataframe.io.parquet import (
@@ -21,10 +21,12 @@ from cudf.core.column import as_column
 from cudf.io import write_to_dataset
 
 
-class CudfEngine(ArrowEngine):
+class CudfEngine(ArrowDatasetEngine):
     @staticmethod
     def read_metadata(*args, **kwargs):
-        meta, stats, parts, index = ArrowEngine.read_metadata(*args, **kwargs)
+        meta, stats, parts, index = ArrowDatasetEngine.read_metadata(
+            *args, **kwargs
+        )
 
         # If `strings_to_categorical==True`, convert objects to int32
         strings_to_cats = kwargs.get("strings_to_categorical", False)
