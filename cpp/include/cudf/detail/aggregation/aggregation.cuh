@@ -624,9 +624,11 @@ struct identity_initializer {
       if constexpr (cudf::is_timestamp<T>())
         return k == aggregation::ARGMAX ? T{typename T::duration(ARGMAX_SENTINEL)}
                                         : T{typename T::duration(ARGMIN_SENTINEL)};
-      else
-        return k == aggregation::ARGMAX ? static_cast<T>(ARGMAX_SENTINEL)
-                                        : static_cast<T>(ARGMIN_SENTINEL);
+      else {
+        using DeviceType = device_storage_type_t<T>;
+        return k == aggregation::ARGMAX ? static_cast<DeviceType>(ARGMAX_SENTINEL)
+                                        : static_cast<DeviceType>(ARGMIN_SENTINEL);
+      }
     }
     return identity_from_operator<T, k>();
   }

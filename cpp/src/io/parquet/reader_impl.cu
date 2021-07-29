@@ -224,8 +224,7 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
 
   int8_t converted_type = converted;
   if (converted_type == parquet::DECIMAL && column_type_id != type_id::FLOAT64 &&
-      column_type_id != type_id::DECIMAL32 && column_type_id != type_id::DECIMAL64 &&
-      column_type_id != type_id::DECIMAL128) {
+      not cudf::is_fixed_point(column_type_id)) {
     converted_type = parquet::UNKNOWN;  // Not converting to float64 or decimal
   }
   return std::make_tuple(type_width, clock_rate, converted_type);
@@ -594,8 +593,7 @@ class aggregate_metadata {
     nesting.push_back(static_cast<int>(output_columns.size()));
     auto const col_type =
       to_type_id(schema, strings_to_categorical, timestamp_type_id, strict_decimal_types);
-    auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64 ||
-                           col_type == type_id::DECIMAL128
+    auto const dtype = cudf::is_fixed_point(col_type)
                          ? data_type{col_type, numeric::scale_type{-schema.decimal_scale}}
                          : data_type{col_type};
     output_columns.emplace_back(dtype, schema.repetition_type == OPTIONAL ? true : false);

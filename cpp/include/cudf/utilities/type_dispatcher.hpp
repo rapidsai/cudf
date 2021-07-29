@@ -85,8 +85,9 @@ using id_to_type = typename id_to_type_impl<Id>::type;
 /**
  * @brief "Returns" the corresponding type that is stored on the device when using `cudf::column`
  *
- * For `decimal32`, the storage type is an `int32_t`.
- * For `decimal64`, the storage type is an `int64_t`.
+ * For `decimal32`,  the storage type is an `int32_t`.
+ * For `decimal64`,  the storage type is an `int64_t`.
+ * For `decimal128`, the storage type is an `__int128_t`.
  *
  * Use this "type function" with the `using` type alias:
  * @code
@@ -113,11 +114,19 @@ using device_storage_type_t =
  * @return     `false` If T does not match the stored column `type_id`
  */
 template <typename T>
-bool type_id_matches_device_storage_type(type_id id)
+constexpr bool type_id_matches_device_storage_type(type_id id)
 {
   return (id == type_id::DECIMAL32 && std::is_same_v<T, int32_t>) ||
          (id == type_id::DECIMAL64 && std::is_same_v<T, int64_t>) ||
          (id == type_id::DECIMAL128 && std::is_same_v<T, __int128_t>) || id == type_to_id<T>();
+}
+
+// TODO docs
+constexpr bool is_fixed_point(cudf::type_id id)
+{
+  return id == type_id::DECIMAL32 or  //
+         id == type_id::DECIMAL64 or  //
+         id == type_id::DECIMAL128;
 }
 
 /**

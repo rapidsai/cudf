@@ -71,7 +71,7 @@ auto to_string(T value) -> std::string
       value *= -1;
       if (value == detail::numeric_limits::max<__int128_t>())
         return "-170141183460469231731687303715884105728";
-      value += 1;  // can add back the one, not need to avoid overflow anymore
+      value += 1;  // can add back the one, no need to avoid overflow anymore
     }
     while (value) {
       s.push_back("0123456789"[value % 10]);
@@ -83,6 +83,7 @@ auto to_string(T value) -> std::string
   } else {
     return std::to_string(value);
   }
+  return std::string{};  // won't ever hit here, need to supress warning though
 }
 
 template <typename T>

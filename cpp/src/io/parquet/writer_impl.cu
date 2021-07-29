@@ -339,6 +339,10 @@ struct leaf_schema_fn {
     } else if (std::is_same_v<T, numeric::decimal64>) {
       col_schema.type        = Type::INT64;
       col_schema.stats_dtype = statistics_dtype::dtype_decimal64;
+    } else if (std::is_same_v<T, numeric::decimal128>) {
+      // TODO
+      // col_schema.type        = Type::INT64;
+      // col_schema.stats_dtype = statistics_dtype::dtype_decimal64;
     } else {
       CUDF_FAIL("Unsupported fixed point type for parquet writer");
     }

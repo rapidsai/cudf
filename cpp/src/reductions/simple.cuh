@@ -74,7 +74,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
 /**
  * @brief Reduction for `sum`, `product`, `min` and `max` for decimal types
  *
- * @tparam DecimalXX  The `decimal32` or `decimal64` type
+ * @tparam DecimalXX  The `decimal32`, `decimal64` or `decimal128` type
  * @tparam Op         The operator of cudf::reduction::op::
  * @param col         Input column of data to reduce
 

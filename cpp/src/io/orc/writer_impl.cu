@@ -1270,9 +1270,10 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
                         col_idx = orc_col.index()] __device__(auto idx) {
                          auto const& col = d_cols[col_idx].cudf_column;
                          if (col.is_null(idx)) return 0u;
-                         int64_t const element   = (col.type().id() == type_id::DECIMAL32)
-                                                     ? col.element<int32_t>(idx)
-                                                     : col.element<int64_t>(idx);
+                         int64_t const element =
+                           col.type().id() == type_id::DECIMAL32   ? col.element<int32_t>(idx)
+                           : col.type().id() == type_id::DECIMAL64 ? col.element<int64_t>(idx)
+                                                                   : col.element<__int128_t>(idx);
                          int64_t const sign      = (element < 0) ? 1 : 0;
                          uint64_t zigzaged_value = ((element ^ -sign) * 2) + sign;
 
