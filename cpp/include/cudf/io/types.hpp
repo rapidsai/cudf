@@ -128,34 +128,6 @@ struct table_metadata {
 };
 
 /**
- * @brief Derived class of table_metadata which includes flattened nullability information of input.
- *
- * This information is used as an optimization for chunked writes. If the caller leaves
- * column_nullable uninitialized, the writer code will assume the worst case : that all columns are
- * nullable.
- *
- * If the column_nullable field is not empty, it is expected that it has a length equal to the
- * number of columns in the flattened table being written.
- *
- * Flattening refers to the flattening of nested columns. For list columns, the number of values
- * expected in the nullability vector is equal to the depth of the nesting. e.g. for a table of
- * three columns of types: {int, list<double>, float}, the nullability vector contains the values:
- *
- * |Index| Nullability of                         |
- * |-----|----------------------------------------|
- * |  0  | int column                             |
- * |  1  | Level 0 of list column (list itself)   |
- * |  2  | Level 1 of list column (double values) |
- * |  3  | float column                           |
- *
- * In the case where column nullability is known, pass `true` if the corresponding column could
- * contain nulls in one or more subtables to be written, otherwise `false`.
- */
-struct table_metadata_with_nullability : public table_metadata {
-  std::vector<bool> column_nullable;  //!< Per-column nullability information.
-};
-
-/**
  * @brief Table with table metadata used by io readers to return the metadata by value
  */
 struct table_with_metadata {
@@ -250,6 +222,8 @@ class column_in_metadata {
   std::vector<column_in_metadata> children;
 
  public:
+  column_in_metadata() = default;
+  column_in_metadata(std::string_view name) : _name{name} {}
   /**
    * @brief Get the children of this column metadata
    *

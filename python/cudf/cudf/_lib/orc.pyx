@@ -31,8 +31,8 @@ from cudf._lib.cpp.io.types cimport (
     data_sink,
     sink_info,
     source_info,
+    table_input_metadata,
     table_metadata,
-    table_metadata_with_nullability,
     table_with_metadata,
 )
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -264,8 +264,8 @@ cdef class ORCWriter:
         """
         Prepare all the values required to build the
         chunked_orc_writer_options anb creates a writer"""
-        cdef unique_ptr[table_metadata_with_nullability] tbl_meta
-        tbl_meta = make_unique[table_metadata_with_nullability]()
+        cdef unique_ptr[table_input_metadata] tbl_meta
+        tbl_meta = make_unique[table_input_metadata]()
 
         # Set the table_metadata
         tbl_meta.get().column_names = get_column_names(table, self.index)

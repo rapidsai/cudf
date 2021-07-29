@@ -55,11 +55,6 @@ cdef extern from "cudf/io/types.hpp" \
         map[string, string] user_data
         vector[column_name_info] schema_info
 
-    cdef cppclass table_metadata_with_nullability(table_metadata):
-        table_metadata_with_nullability() except +
-
-        vector[bool] nullability
-
     cdef cppclass table_with_metadata:
         unique_ptr[table] tbl
         table_metadata metadata
