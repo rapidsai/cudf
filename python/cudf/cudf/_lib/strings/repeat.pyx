@@ -11,7 +11,7 @@ from cudf._lib.cpp.types cimport size_type
 
 
 def repeat_scalar(Column source_strings,
-           size_type repeats):
+                  size_type repeats):
     """
     Returns a Column after repeating
     each string in `source_strings`
