@@ -369,15 +369,15 @@ class RollingTest : public cudf::test::BaseFixture {
       ref_valid[i] = (count >= min_periods) and not(count <= ddof);
 
       if (ref_valid[i]) {
-        OutputType mean{0}, m2{0}, tmp1, tmp2;
+        OutputType mean{0}, m2{0};
         size_type r_count{0};
 
         for (auto j = start_index; j < end_index; j++) {
           if (not input.nullable() or cudf::bit_is_set(valid_mask, j)) {
             r_count++;
-            tmp1 = in_col[j] - mean;
+            OutputType const tmp1 = in_col[j] - mean;
             mean += tmp1 / r_count;
-            tmp2 = in_col[j] - mean;
+            OutputType const tmp2 = in_col[j] - mean;
             m2 += tmp1 * tmp2;
           }
         }
