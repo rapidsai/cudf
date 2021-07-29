@@ -1686,8 +1686,8 @@ public class TableTest extends CudfTestBase {
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
          Table right = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
          Table expected = new Table.TestBuilder()
-             .column(  0,   1, 2, 2, 2,   3,   4, 5, 5,   6, 7,   8, 9, 9, inv, inv, inv)
-             .column(inv, inv, 0, 1, 3, inv, inv, 0, 1, inv, 1, inv, 0, 1,   2,   4,   5)
+             .column(inv, inv, inv,   0,   1, 2, 2, 2,   3,   4, 5, 5,   6, 7,   8, 9, 9)
+             .column(  2,   4,   5, inv, inv, 0, 1, 3, inv, inv, 0, 1, inv, 1, inv, 0, 1)
              .build();
          CompiledExpression condition = expr.compile()) {
       GatherMap[] maps = left.fullJoinGatherMaps(right, condition, false);
@@ -1832,7 +1832,7 @@ public class TableTest extends CudfTestBase {
              .column(0, 1, 3, 4, 6, 8) // left
              .build();
          CompiledExpression condition = expr.compile();
-         GatherMap map = left.leftSemiJoinGatherMap(right, condition, false)) {
+         GatherMap map = left.leftAntiJoinGatherMap(right, condition, false)) {
       verifySemiJoinGatherMap(map, expected);
     }
   }
