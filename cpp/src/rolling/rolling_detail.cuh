@@ -1050,7 +1050,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
 
   min_periods = std::max(min_periods, 0);
 
-  auto udf_agg = dynamic_cast<udf_aggregation const&>(agg);
+  auto& udf_agg = dynamic_cast<udf_aggregation const&>(agg);
 
   std::string hash = "prog_rolling." + std::to_string(std::hash<std::string>{}(udf_agg._source));
 
