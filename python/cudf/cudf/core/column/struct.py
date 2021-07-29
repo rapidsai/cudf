@@ -195,17 +195,11 @@ class StructMethods(ColumnMethods):
                 try:
                     return self._return_or_inplace(self._column.children[key])
                 except IndexError:
-                    error_message_string = (
-                        "Index " + str(key) + " out of range"
-                    )
-                    raise IndexError(error_message_string)
+                    raise IndexError(f"Index {key} out of range")
             else:
-                error_message_string = (
-                    'Field "'
-                    + str(key)
-                    + '" is not found in the set of existing keys.'
+                raise KeyError(
+                    f"Field '{key}' is not found in the set of existing keys."
                 )
-                raise KeyError(error_message_string)
 
     def explode(self):
         """
