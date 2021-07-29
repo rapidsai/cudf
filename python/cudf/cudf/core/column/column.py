@@ -878,6 +878,9 @@ class ColumnBase(Column, Serializable):
         raise NotImplementedError()
 
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
+        if is_categorical_dtype(dtype):
+            return self.as_categorical_column(dtype, **kwargs)
+
         dtype = pandas_dtypes_to_cudf_dtypes.get(dtype, dtype)
         if _is_non_decimal_numeric_dtype(dtype):
             return self.as_numerical_column(dtype, **kwargs)
