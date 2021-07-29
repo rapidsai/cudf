@@ -51,7 +51,7 @@ auto create_scalar_search_key(T const& value)
   return search_key;
 }
 
-template <typename T, std::enable_if_t<std::is_same<T, std::string>::value, void>* = nullptr>
+template <typename T, std::enable_if_t<std::is_same_v<T, std::string>, void>* = nullptr>
 auto create_scalar_search_key(std::string const& value)
 {
   return make_string_scalar(value);

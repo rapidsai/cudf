@@ -92,7 +92,7 @@ TYPED_TEST(SortLists, NoNull)
 TYPED_TEST(SortLists, Null)
 {
   using T = TypeParam;
-  if (std::is_same<T, bool>::value) return;
+  if (std::is_same_v<T, bool>) return;
   std::vector<bool> valids_o{1, 1, 0, 1};
   std::vector<bool> valids_a{1, 1, 1, 0};
   std::vector<bool> valids_b{0, 1, 1, 1};

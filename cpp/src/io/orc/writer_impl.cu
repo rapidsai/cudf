@@ -575,8 +575,8 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         break;
       }
       case TypeKind::TIMESTAMP:
-        add_RLE_stream(gpu::CI_DATA, DATA, TypeKind::INT);
-        add_RLE_stream(gpu::CI_DATA2, SECONDARY, TypeKind::INT);
+        add_RLE_stream(gpu::CI_DATA, DATA, TypeKind::LONG);
+        add_RLE_stream(gpu::CI_DATA2, SECONDARY, TypeKind::LONG);
         column.set_orc_encoding(DIRECT_V2);
         break;
       case TypeKind::DECIMAL:
