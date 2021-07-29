@@ -27,7 +27,6 @@ namespace cudf {
 namespace ast {
 namespace detail {
 
-// TODO: These forward declarations of detail
 // Forward declaration
 class expression_parser;
 /**
