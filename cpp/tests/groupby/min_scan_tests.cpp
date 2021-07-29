@@ -143,12 +143,12 @@ TEST_F(groupby_min_scan_string_test, basic)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, GroupBySortMinScanDecimalAsValue)
+TYPED_TEST(FixedPointTestAllReps, GroupBySortMinScanDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;

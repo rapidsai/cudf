@@ -1041,12 +1041,12 @@ TYPED_TEST(ReductionTest, UniqueCount)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProductZeroScale)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionProductZeroScale)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -1070,7 +1070,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProductZeroScale)
   EXPECT_EQ(result_fp, _24);
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProduct)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionProduct)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1090,7 +1090,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProduct)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProductWithNulls)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionProductWithNulls)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1110,7 +1110,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProductWithNulls)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSum)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSum)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1131,7 +1131,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSum)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumAlternate)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumAlternate)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -1155,7 +1155,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumAlternate)
   EXPECT_EQ(result_scalar->fixed_point_value(), TEN);
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumFractional)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumFractional)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1175,7 +1175,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumFractional)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumLarge)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumLarge)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1198,7 +1198,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumLarge)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMin)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMin)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1218,7 +1218,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMin)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMinLarge)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMinLarge)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1239,7 +1239,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMinLarge)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMax)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMax)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1259,7 +1259,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMax)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMaxLarge)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMaxLarge)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1280,7 +1280,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMaxLarge)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNUnique)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNUnique)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1299,7 +1299,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNUnique)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumOfSquares)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumOfSquares)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1319,7 +1319,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumOfSquares)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMedianOddNumberOfElements)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMedianOddNumberOfElements)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1339,7 +1339,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMedianOddNumberOfElements)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMedianEvenNumberOfElements)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMedianEvenNumberOfElements)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1359,7 +1359,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMedianEvenNumberOfElements
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionQuantile)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionQuantile)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1381,7 +1381,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionQuantile)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNthElement)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNthElement)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;

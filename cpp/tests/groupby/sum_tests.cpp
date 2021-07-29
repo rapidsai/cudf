@@ -152,12 +152,12 @@ TYPED_TEST(groupby_sum_test, dictionary)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, GroupBySortSumDecimalAsValue)
+TYPED_TEST(FixedPointTestAllReps, GroupBySortSumDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX    = TypeParam;
@@ -187,7 +187,7 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySortSumDecimalAsValue)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, GroupByHashSumDecimalAsValue)
+TYPED_TEST(FixedPointTestAllReps, GroupByHashSumDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX    = TypeParam;

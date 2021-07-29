@@ -673,14 +673,14 @@ TEST_F(SortByKey, ValueKeysSizeMismatch)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointSortedOrderGather)
+TYPED_TEST(FixedPointTestAllReps, FixedPointSortedOrderGather)
 {
   using namespace numeric;
   using decimalXX = TypeParam;

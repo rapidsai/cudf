@@ -345,12 +345,12 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnStringMixNullableMix)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointInterleave)
+TYPED_TEST(FixedPointTestAllReps, FixedPointInterleave)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
