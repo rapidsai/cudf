@@ -38,6 +38,25 @@
 
 namespace cudf {
 namespace detail {
+
+class make_pair_function {
+ public:
+  make_pair_function(row_hash const& hash, hash_value_type const empty_key_sentinel)
+    : _hash{hash}, _empty_key_sentinel{empty_key_sentinel}
+  {
+  }
+
+  __device__ __inline__ cudf::detail::pair_type operator()(size_type i) const noexcept
+  {
+    auto row_hash_value = remap_sentinel_hash(_hash(i), _empty_key_sentinel);
+    return cuco::make_pair<hash_value_type, size_type>(std::move(row_hash_value), std::move(i));
+  }
+
+ private:
+  row_hash const& _hash;
+  hash_value_type const _empty_key_sentinel;
+};
+
 /**
  * @brief Calculates the exact size of the join output produced when
  * joining two tables together.
@@ -82,47 +101,28 @@ std::size_t compute_join_output_size(table_device_view build_table,
     }
   }
 
-  // Allocate storage for the counter used to get the size of the join output
-  rmm::device_scalar<cuda::atomic<std::size_t>> d_size(0, stream);
-
-  CHECK_CUDA(stream.value());
-
-  constexpr auto cg_size = multimap_type::cg_size();
-  constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-  int numBlocks{-1};
-
-  using multimap_view_type = typename multimap_type::device_view;
-  CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &numBlocks,
-    compute_join_output_size<JoinKind,
-                             cg_size,
-                             block_size,
-                             multimap_view_type,
-                             cuda::atomic<std::size_t>>,
-    block_size,
-    0));
-
-  int dev_id{-1};
-  CUDA_TRY(cudaGetDevice(&dev_id));
-
-  int num_sms{-1};
-  CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
-
-  row_hash hash_probe{probe_table};
   pair_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
 
-  auto const hash_table_view = hash_table.get_device_view();
+  row_hash hash_probe{probe_table};
+  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
+  make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
-  // Probe the hash table without actually building the output to simply
-  // find what the size of the output will be.
-  compute_join_output_size<JoinKind, cg_size, block_size>
-    <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(
-      hash_table_view, hash_probe, equality, probe_table_num_rows, d_size.data());
+  thrust::counting_iterator<size_type> first(0);
+  thrust::transform_iterator<make_pair_function,
+                             thrust::counting_iterator<size_type>,
+                             cudf::detail::pair_type>
+    iter(first, pair_func);
 
-  CHECK_CUDA(stream.value());
-  auto h_size = d_size.value(stream);
+  size_type size;
+  if constexpr (JoinKind == join_kind::LEFT_JOIN) {
+    size = static_cast<size_type>(
+      hash_table.pair_count_outer(iter, iter + probe_table_num_rows, equality, stream.value()));
+  } else {
+    size = static_cast<size_type>(
+      hash_table.pair_count(iter, iter + probe_table_num_rows, equality, stream.value()));
+  }
 
-  return h_size.load(cuda::std::memory_order_relaxed);
+  return size;
 }
 
 /**

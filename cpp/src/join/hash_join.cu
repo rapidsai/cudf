@@ -74,6 +74,19 @@ struct valid_range {
   }
 };
 
+class build_predicate {
+ public:
+  build_predicate(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
+
+  __device__ __inline__ bool operator()(const pair_type& pair) const noexcept
+  {
+    return !_row_bitmask || cudf::bit_is_set(_row_bitmask, pair.second);
+  }
+
+ private:
+  bitmask_type const* _row_bitmask;
+};
+
 /**
  * @brief  Creates a table containing the complement of left join indices.
  * This table has two columns. The first one is filled with JoinNoneValue(-1)
@@ -175,25 +188,26 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type*)>> build_join_h
   size_type const build_table_num_rows{build_device_table->num_rows()};
   std::size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
 
-  auto hash_table      = std::make_unique<multimap_type>(hash_table_size,
+  auto hash_table = std::make_unique<multimap_type>(hash_table_size,
                                                     std::numeric_limits<hash_value_type>::max(),
                                                     std::numeric_limits<size_type>::max());
-  auto hash_table_view = hash_table->get_device_mutable_view();
-
-  constexpr auto cg_size = multimap_type::cg_size();
-  constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-  detail::grid_1d config(build_table_num_rows * cg_size, block_size);
 
   auto const row_bitmask = (compare_nulls == null_equality::EQUAL)
                              ? rmm::device_buffer{0, stream}
                              : cudf::detail::bitmask_and(build, stream);
-  row_hash hash_build{*build_device_table};
+  build_predicate pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
-  build_hash_table<cg_size><<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-    hash_table_view,
-    hash_build,
-    build_table_num_rows,
-    static_cast<bitmask_type const*>(row_bitmask.data()));
+  row_hash hash_build{*build_device_table};
+  auto const empty_key_sentinel = hash_table->get_empty_key_sentinel();
+  make_pair_function pair_func{hash_build, empty_key_sentinel};
+
+  thrust::counting_iterator<size_type> first(0);
+  thrust::transform_iterator<make_pair_function,
+                             thrust::counting_iterator<size_type>,
+                             cudf::detail::pair_type>
+    iter(first, pair_func);
+
+  hash_table->insert_if(iter, iter + build_table_num_rows, pred);
 
   return hash_table;
 }
@@ -239,44 +253,27 @@ probe_join_hash_table(cudf::table_device_view build_table,
                           std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
-  rmm::device_scalar<size_type> write_index(0, stream);
-
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
-  auto const hash_table_view = hash_table.get_device_view();
 
-  constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-  detail::grid_1d config(probe_table.num_rows(), block_size);
+  pair_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
 
   row_hash hash_probe{probe_table};
-  pair_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
-  if constexpr (JoinKind == cudf::detail::join_kind::FULL_JOIN) {
-    probe_hash_table<cudf::detail::join_kind::LEFT_JOIN, block_size, DEFAULT_JOIN_CACHE_SIZE>
-      <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-        hash_table_view,
-        build_table,
-        probe_table,
-        hash_probe,
-        equality,
-        left_indices->data(),
-        right_indices->data(),
-        write_index.data(),
-        join_size);
-    auto const actual_size = write_index.value(stream);
-    left_indices->resize(actual_size, stream);
-    right_indices->resize(actual_size, stream);
+  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
+  make_pair_function pair_func{hash_probe, empty_key_sentinel};
+
+  thrust::counting_iterator<size_type> first(0);
+  thrust::transform_iterator<make_pair_function,
+                             thrust::counting_iterator<size_type>,
+                             cudf::detail::pair_type>
+    iter(first, pair_func);
+
+  if constexpr (JoinKind == cudf::detail::join_kind::FULL_JOIN or
+                JoinKind == cudf::detail::join_kind::LEFT_JOIN) {
+    hash_table.pair_retrieve_outer(
+      iter, iter + join_size, output.begin(), equality, stream.value());
   } else {
-    probe_hash_table<JoinKind, block_size, DEFAULT_JOIN_CACHE_SIZE>
-      <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-        hash_table_view,
-        build_table,
-        probe_table,
-        hash_probe,
-        equality,
-        left_indices->data(),
-        right_indices->data(),
-        write_index.data(),
-        join_size);
+    hash_table.pair_retrieve(iter, iter + join_size, output.begin(), equality, stream.value());
   }
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
