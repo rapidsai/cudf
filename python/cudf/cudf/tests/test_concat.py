@@ -8,9 +8,9 @@ import pandas as pd
 import pytest
 
 import cudf as gd
+from cudf.api.types import is_categorical_dtype
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
-from cudf.utils.dtypes import is_categorical_dtype
 
 
 def make_frames(index=None, nulls="none"):

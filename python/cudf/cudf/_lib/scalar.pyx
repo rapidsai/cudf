@@ -35,7 +35,6 @@ from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 
 from cudf._lib.interop import from_arrow, to_arrow
 
-cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.cpp.scalar.scalar cimport (
     duration_scalar,
     fixed_point_scalar,
@@ -61,7 +60,7 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
 )
 from cudf._lib.utils cimport data_from_table_view
 
-import cudf
+cimport cudf._lib.cpp.types as libcudf_types
 
 
 cdef class DeviceScalar:

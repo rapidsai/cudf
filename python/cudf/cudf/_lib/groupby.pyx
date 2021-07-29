@@ -7,7 +7,7 @@ from pandas.core.groupby.groupby import DataError
 
 import rmm
 
-from cudf.utils.dtypes import (
+from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
     is_interval_dtype,

@@ -11,9 +11,9 @@ import cudf
 from cudf._lib import groupby as libgroupby
 from cudf._lib.table import Table
 from cudf._typing import DataFrameOrSeries
+from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import arange
-from cudf.utils.dtypes import is_list_like
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
