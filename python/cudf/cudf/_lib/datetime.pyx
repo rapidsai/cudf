@@ -60,6 +60,8 @@ def extract_datetime_component(Column col, object field):
 
 
 def is_leap_year(Column col):
+    """Returns a boolean indicator whether the year of the date is a leap year
+    """
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
 
@@ -70,6 +72,8 @@ def is_leap_year(Column col):
 
 
 def days_in_month(Column col):
+    """Extracts the number of days in the month of the date
+    """
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
 

@@ -1310,7 +1310,7 @@ def test_days_in_months(dtype):
         ],
         rows=nrows,
         use_threads=False,
-        seed=23
+        seed=23,
     )
 
     ps = data.to_pandas()["0"]
