@@ -180,20 +180,20 @@ struct scan_tile_state_callback {
     if constexpr (PARTIAL_AGGREGATION_STRATEGY == 1) {
       // scan partials to form prefix
 
-      auto window_partial = T{};
-
       if (threadIdx.x == 0) {
-        do {
+        auto window_partial = _tile_state.get_prefix(predecessor_idx, predecessor_status);
+        while (predecessor_status != scan_tile_status::inclusive) {
+          predecessor_idx--;
           auto predecessor_prefix = _tile_state.get_prefix(predecessor_idx, predecessor_status);
           window_partial          = predecessor_prefix + window_partial;
-          predecessor_idx--;
-        } while (predecessor_status != scan_tile_status::inclusive);
-
+        }
         _temp_storage.exclusive_prefix = window_partial;
       }
     }
 
     if constexpr (PARTIAL_AGGREGATION_STRATEGY == 2) {
+      // TODO: T{} is not gauranteed to be an identity value, so use an existing value instead.
+      //       otherwise, this is bugged for multistate.
       auto window_partial = T{};
       if (threadIdx.x < 32) {
         do {
