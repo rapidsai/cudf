@@ -1302,7 +1302,7 @@ def test_is_leap_year():
 
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 def test_days_in_months(dtype):
-    nrows = 10000
+    nrows = 1000
 
     data = dataset_generator.rand_dataframe(
         dtypes_meta=[
@@ -1310,6 +1310,7 @@ def test_days_in_months(dtype):
         ],
         rows=nrows,
         use_threads=False,
+        seed=23
     )
 
     ps = data.to_pandas()["0"]
