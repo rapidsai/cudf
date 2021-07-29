@@ -20,7 +20,6 @@
 #include <cudf/detail/gather.hpp>
 #include <join/join_common_utils.cuh>
 #include <join/join_common_utils.hpp>
-#include <join/join_kernels.cuh>
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>
@@ -39,6 +38,19 @@
 
 namespace cudf {
 namespace detail {
+
+/**
+ * @brief Remaps a hash value to a new value if it is equal to the specified sentinel value.
+ *
+ * @param hash The hash value to potentially remap
+ * @param sentinel The reserved value
+ */
+template <typename H, typename S>
+constexpr auto remap_sentinel_hash(H hash, S sentinel)
+{
+  // Arbitrarily choose hash - 1
+  return (hash == sentinel) ? (hash - 1) : hash;
+}
 
 class make_pair_function {
  public:
