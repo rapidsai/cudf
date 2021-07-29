@@ -331,7 +331,7 @@ struct DeviceRollingVariance {
       for (size_type i = start_index; i < end_index; i++) {
         if (has_nulls and input.is_null_nocheck(i)) { continue; }
 
-        OutputType const& x = static_cast<OutputType>(input.element<DeviceInputType>(i));
+        OutputType const x = static_cast<OutputType>(input.element<DeviceInputType>(i));
 
         running_count++;
         tmp1 = x - m;
