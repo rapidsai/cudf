@@ -313,11 +313,12 @@ struct DeviceRollingVariance {
     using DeviceInputType = device_storage_type_t<InputType>;
 
     // valid counts in the window
-    cudf::size_type const count = has_nulls ?  thrust::count_if(thrust::seq,
-                               thrust::make_counting_iterator(start_index),
-                               thrust::make_counting_iterator(end_index),
-                               [&input](auto i) { return input.is_valid_nocheck(i); })
-                            :  end_index - start_index;
+    cudf::size_type const count =
+      has_nulls ? thrust::count_if(thrust::seq,
+                                   thrust::make_counting_iterator(start_index),
+                                   thrust::make_counting_iterator(end_index),
+                                   [&input](auto i) { return input.is_valid_nocheck(i); })
+                : end_index - start_index;
 
     // Variance/Std is non-negative, thus ddof should be strictly less than valid counts.
     bool output_is_valid = (count >= min_periods) and (ddof < count);
@@ -325,12 +326,13 @@ struct DeviceRollingVariance {
     if (output_is_valid) {
       // Welford algorithm
       // See https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
-      OutputType m{0}, m2(0), tmp1, tmp2;
+      OutputType m{0}, m2(0);
       size_type running_count{0};
 
       for (size_type i = start_index; i < end_index; i++) {
         if (has_nulls and input.is_null_nocheck(i)) { continue; }
 
+        OutputType tmp1, tmp2;
         OutputType const x = static_cast<OutputType>(input.element<DeviceInputType>(i));
 
         running_count++;
