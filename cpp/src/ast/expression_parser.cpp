@@ -205,7 +205,10 @@ cudf::size_type expression_parser::add_data_reference(detail::device_data_refere
 
 }  // namespace detail
 
-cudf::size_type literal::accept(detail::expression_parser& visitor) const { return visitor.visit(*this); }
+cudf::size_type literal::accept(detail::expression_parser& visitor) const
+{
+  return visitor.visit(*this);
+}
 cudf::size_type column_reference::accept(detail::expression_parser& visitor) const
 {
   return visitor.visit(*this);

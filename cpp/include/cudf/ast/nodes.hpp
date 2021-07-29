@@ -40,8 +40,7 @@ struct node {
   virtual cudf::size_type accept(expression_parser& visitor) const = 0;
 };
 
-}
-
+}  // namespace detail
 
 /**
  * @brief Enum of table references.
