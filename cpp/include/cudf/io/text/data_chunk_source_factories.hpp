@@ -27,17 +27,26 @@ namespace {
  *
  */
 class istream_data_chunk_reader : public data_chunk_reader {
+  struct host_ticket {
+    cudaEvent_t event;
+    thrust::host_vector<char, thrust::system::cuda::experimental::pinned_allocator<char>> buffer;
+  };
+
  public:
   istream_data_chunk_reader(std::unique_ptr<std::istream> datastream)
-    : _datastream(std::move(datastream)), _buffers()
+    : _datastream(std::move(datastream)), _buffers(), _tickets(1)
   {
     // create an event to track the completion of the last device-to-host copy.
-    CUDA_TRY(cudaEventCreate(&prev_host_copy_event));  //
+    for (uint32_t i = 0; i < _tickets.size(); i++) {
+      CUDA_TRY(cudaEventCreate(&(_tickets[i].event)));
+    }
   }
 
   ~istream_data_chunk_reader()
   {
-    CUDA_TRY(cudaEventDestroy(prev_host_copy_event));  //
+    for (uint32_t i = 0; i < _tickets.size(); i++) {
+      CUDA_TRY(cudaEventDestroy(_tickets[i].event));
+    }
   }
 
   device_span<char> find_or_create_data(uint32_t size, rmm::cuda_stream_view stream)
@@ -55,14 +64,18 @@ class istream_data_chunk_reader : public data_chunk_reader {
   {
     CUDF_FUNC_RANGE();
 
+    auto& ticket = _tickets[_next_ticket_idx];
+
+    _next_ticket_idx = (_next_ticket_idx + 1) % _tickets.size();
+
     // synchronize on the last host-to-device copy, so we don't clobber the host buffer.
-    CUDA_TRY(cudaEventSynchronize(prev_host_copy_event));
+    CUDA_TRY(cudaEventSynchronize(ticket.event));
 
     // resize the host buffer as necessary to contain the requested number of bytes
-    if (_host_buffer.size() < read_size) { _host_buffer.resize(read_size); }
+    if (ticket.buffer.size() < read_size) { ticket.buffer.resize(read_size); }
 
     // read data from the host istream in to the pinned host memory buffer
-    _datastream->read(_host_buffer.data(), read_size);
+    _datastream->read(ticket.buffer.data(), read_size);
 
     // adjust the read size to reflect how many bytes were actually read from the data stream
     read_size = _datastream->gcount();
@@ -73,24 +86,23 @@ class istream_data_chunk_reader : public data_chunk_reader {
     // copy the host-pinned data on to device
     CUDA_TRY(cudaMemcpyAsync(  //
       chunk_span.data(),
-      _host_buffer.data(),
+      ticket.buffer.data(),
       read_size,
       cudaMemcpyHostToDevice,
       stream.value()));
 
     // record the host-to-device copy.
-    CUDA_TRY(cudaEventRecord(prev_host_copy_event, stream.value()));
+    CUDA_TRY(cudaEventRecord(ticket.event, stream.value()));
 
     // return the view over device memory so it can be processed.
     return data_chunk(chunk_span);
   }
 
  private:
+  uint32_t _next_ticket_idx = 0;
   std::unique_ptr<std::istream> _datastream;
   std::unordered_map<cudaStream_t, rmm::device_buffer> _buffers;
-  cudaEvent_t prev_host_copy_event;
-  thrust::host_vector<char, thrust::system::cuda::experimental::pinned_allocator<char>>
-    _host_buffer{};
+  std::vector<host_ticket> _tickets;
 };
 
 /**

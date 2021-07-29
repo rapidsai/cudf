@@ -251,68 +251,19 @@ struct PatternScan {
   {
     auto thread_multistate = trie.transition_init(thread_data[0]);
 
-    if (blockIdx.x == 0 and threadIdx.x < 2) {
-      for (uint8_t i = 0; i < thread_multistate.size(); i++) {
-        printf("bid(%3u) tid(%3u) |--- : idx(%2u) head(%2u) tail(%2u)\n",
-               blockIdx.x,
-               threadIdx.x,
-               static_cast<uint32_t>(i),
-               static_cast<uint32_t>(thread_multistate.get_head(i)),
-               static_cast<uint32_t>(thread_multistate.get_tail(i)));
-      }
-    }
-
     for (uint32_t i = 1; i < ITEMS_PER_THREAD; i++) {
       thread_multistate = trie.transition(thread_data[i], thread_multistate);
     }
 
     auto prefix_callback = BlockScanCallback(_temp_storage.scan_callback, tile_state, tile_idx);
 
-    if (blockIdx.x == 0 and threadIdx.x < 2) {
-      for (uint8_t i = 0; i < thread_multistate.size(); i++) {
-        printf("bid(%3u) tid(%3u) -|-- : idx(%2u) head(%2u) tail(%2u)\n",
-               blockIdx.x,
-               threadIdx.x,
-               static_cast<uint32_t>(i),
-               static_cast<uint32_t>(thread_multistate.get_head(i)),
-               static_cast<uint32_t>(thread_multistate.get_tail(i)));
-      }
-    }
-
-    // everything is correct up to this point, but exclusive sum produces a multistate with no
-    // segments.
-
     BlockScan(_temp_storage.scan)
       .ExclusiveSum(thread_multistate, thread_multistate, prefix_callback);
-
-    if (blockIdx.x == 0 and threadIdx.x < 2) {
-      for (uint8_t i = 0; i < thread_multistate.size(); i++) {
-        printf("bid(%3u) tid(%3u) --|- : idx(%2u) head(%2u) tail(%2u)\n",
-               blockIdx.x,
-               threadIdx.x,
-               static_cast<uint32_t>(i),
-               static_cast<uint32_t>(thread_multistate.get_head(i)),
-               static_cast<uint32_t>(thread_multistate.get_tail(i)));
-      }
-    }
-
-    __syncthreads();
 
     for (uint32_t i = 0; i < ITEMS_PER_THREAD; i++) {
       thread_multistate = trie.transition(thread_data[i], thread_multistate);
 
       thread_state[i] = thread_multistate.max_tail();
-    }
-
-    if (blockIdx.x == 0 and threadIdx.x < 2) {
-      for (uint8_t i = 0; i < thread_multistate.size(); i++) {
-        printf("bid(%3u) tid(%3u) ---| : idx(%2u) head(%2u) tail(%2u)\n",
-               blockIdx.x,
-               threadIdx.x,
-               static_cast<uint32_t>(i),
-               static_cast<uint32_t>(thread_multistate.get_head(i)),
-               static_cast<uint32_t>(thread_multistate.get_tail(i)));
-      }
     }
   }
 };
