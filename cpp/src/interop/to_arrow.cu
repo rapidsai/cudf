@@ -183,6 +183,51 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
 }
 
 template <>
+std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal32>(
+  column_view input,
+  cudf::type_id,
+  column_metadata const&,
+  arrow::MemoryPool* ar_mr,
+  rmm::cuda_stream_view stream)
+{
+  using DeviceType                = int32_t;
+  size_type const BIT_WIDTH_RATIO = 4;  // Array::Type:type::DECIMAL (128) / int32_t
+
+  rmm::device_uvector<DeviceType> buf(input.size() * BIT_WIDTH_RATIO, stream);
+
+  auto count = thrust::make_counting_iterator(0);
+
+  thrust::for_each(count,
+                   count + input.size(),
+                   [in = input.begin<DeviceType>(), out = buf.data()] __device__(auto in_idx) {
+                     auto const out_idx = in_idx * 4;
+                     out[out_idx]       = in[in_idx];
+                     out[out_idx + 1]   = in[in_idx] < 0 ? -1 : 0;
+                     out[out_idx + 2]   = in[in_idx] < 0 ? -1 : 0;
+                     out[out_idx + 3]   = in[in_idx] < 0 ? -1 : 0;
+                   });
+
+  auto const buf_size_in_bytes = buf.size() * sizeof(DeviceType);
+  auto result                  = arrow::AllocateBuffer(buf_size_in_bytes, ar_mr);
+  CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer for data");
+
+  std::shared_ptr<arrow::Buffer> data_buffer = std::move(result.ValueOrDie());
+
+  CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
+                           buf.data(),
+                           buf_size_in_bytes,
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+
+  auto type    = arrow::decimal(18, -input.type().scale());
+  auto mask    = fetch_mask_buffer(input, ar_mr, stream);
+  auto buffers = std::vector<std::shared_ptr<arrow::Buffer>>{mask, data_buffer};
+  auto data    = std::make_shared<arrow::ArrayData>(type, input.size(), buffers);
+
+  return std::make_shared<arrow::Decimal128Array>(data);
+}
+
+template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<bool>(column_view input,
                                                                   cudf::type_id id,
                                                                   column_metadata const&,

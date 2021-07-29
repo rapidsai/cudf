@@ -392,7 +392,7 @@ TEST_F(ToArrowTest, FixedPointTable32)
     auto const col   = fp_wrapper<int32_t>({-1, 2, 3, 4, 5, 6}, scale_type{i});
     auto const input = cudf::table_view({col});
 
-    auto const expect_data = std::vector<int32_t>{-1, -1, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
+    auto const expect_data = std::vector<int32_t>{-1, -1, -1, -1, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 0};
     std::shared_ptr<arrow::Array> arr;
     arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -i), arrow::default_memory_pool());
     decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(expect_data.data()),
