@@ -208,7 +208,7 @@ class orc_column_view {
   bool nullable() const noexcept { return null_mask() != nullptr; }
   std::optional<bool> user_defined_nullable() const noexcept
   {
-    if (!metadata) return std::nullopt;
+    if (!metadata or not metadata->is_nullability_defined()) return std::nullopt;
     return metadata->nullable();
   }
 

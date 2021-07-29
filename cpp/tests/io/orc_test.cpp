@@ -724,7 +724,8 @@ TEST_F(OrcChunkedWriterTest, Metadata)
 
   auto filepath = temp_env->get_temp_filepath("ChunkedMetadata.orc");
   cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
+    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath})
+      .metadata(&expected_metadata);
   cudf_io::orc_chunked_writer(opts).write(expected).write(expected);
 
   cudf_io::orc_reader_options read_opts =
