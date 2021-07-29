@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <thrust/iterator/discard_iterator.h>
 #include <thrust/uninitialized_fill.h>
 #include <join/hash_join.cuh>
 #include <structs/utilities.hpp>
@@ -157,12 +158,20 @@ probe_join_hash_table(cudf::table_device_view build_table,
                              cudf::detail::pair_type>
     iter(first, pair_func);
 
+  const cudf::size_type probe_table_num_rows = probe_table.num_rows();
+
+  auto out1_zip = thrust::make_zip_iterator(
+    thrust::make_tuple(thrust::make_discard_iterator(), left_indices->begin()));
+  auto out2_zip = thrust::make_zip_iterator(
+    thrust::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
+
   if constexpr (JoinKind == cudf::detail::join_kind::FULL_JOIN or
                 JoinKind == cudf::detail::join_kind::LEFT_JOIN) {
     hash_table.pair_retrieve_outer(
-      iter, iter + join_size, output.begin(), equality, stream.value());
+      iter, iter + probe_table_num_rows, out1_zip, out2_zip, equality, stream.value());
   } else {
-    hash_table.pair_retrieve(iter, iter + join_size, output.begin(), equality, stream.value());
+    hash_table.pair_retrieve(
+      iter, iter + probe_table_num_rows, out1_zip, out2_zip, equality, stream.value());
   }
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
@@ -199,23 +208,29 @@ std::size_t get_full_join_size(cudf::table_device_view build_table,
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
-  auto const hash_table_view = hash_table.get_device_view();
 
-  constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-  detail::grid_1d config(probe_table.num_rows(), block_size);
+  pair_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
 
   row_hash hash_probe{probe_table};
-  pair_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
-  probe_hash_table<cudf::detail::join_kind::LEFT_JOIN, block_size, DEFAULT_JOIN_CACHE_SIZE>
-    <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(hash_table_view,
-                                                                             build_table,
-                                                                             probe_table,
-                                                                             hash_probe,
-                                                                             equality,
-                                                                             left_indices->data(),
-                                                                             right_indices->data(),
-                                                                             write_index.data(),
-                                                                             join_size);
+  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
+  make_pair_function pair_func{hash_probe, empty_key_sentinel};
+
+  thrust::counting_iterator<size_type> first(0);
+  thrust::transform_iterator<make_pair_function,
+                             thrust::counting_iterator<size_type>,
+                             cudf::detail::pair_type>
+    iter(first, pair_func);
+
+  const cudf::size_type probe_table_num_rows = probe_table.num_rows();
+
+  auto out1_zip = thrust::make_zip_iterator(
+    thrust::make_tuple(thrust::make_discard_iterator(), left_indices->begin()));
+  auto out2_zip = thrust::make_zip_iterator(
+    thrust::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
+
+  hash_table.pair_retrieve_outer(
+    iter, iter + probe_table_num_rows, out1_zip, out2_zip, equality, stream.value());
+
   // Release intermediate memory allocation
   left_indices->resize(0, stream);
 
