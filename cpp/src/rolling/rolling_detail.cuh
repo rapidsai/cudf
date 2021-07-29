@@ -312,17 +312,12 @@ struct DeviceRollingVariance {
   {
     using DeviceInputType = device_storage_type_t<InputType>;
 
-    cudf::size_type count{0};  // valid counts in the window
-
-    // Count valid observations in window
-    if (has_nulls) {
-      count = thrust::count_if(thrust::seq,
+    // valid counts in the window
+    cudf::size_type const count = has_nulls ?  thrust::count_if(thrust::seq,
                                thrust::make_counting_iterator(start_index),
                                thrust::make_counting_iterator(end_index),
-                               [&input](auto i) { return input.is_valid_nocheck(i); });
-    } else {
-      count = end_index - start_index;
-    }
+                               [&input](auto i) { return input.is_valid_nocheck(i); })
+                            :  end_index - start_index;
 
     // Variance/Std is non-negative, thus ddof should be strictly less than valid counts.
     bool output_is_valid = (count >= min_periods) and (ddof < count);
