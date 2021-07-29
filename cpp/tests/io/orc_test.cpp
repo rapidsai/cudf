@@ -326,7 +326,7 @@ TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls)
 
 TEST_F(OrcWriterTest, MultiColumn)
 {
-  constexpr auto num_rows = 100;
+  constexpr auto num_rows = 10;
 
   auto col0_data = random_values<bool>(num_rows);
   auto col1_data = random_values<int8_t>(num_rows);
@@ -347,7 +347,9 @@ TEST_F(OrcWriterTest, MultiColumn)
   column_wrapper<float> col4{col4_data.begin(), col4_data.end(), validity};
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), validity};
   column_wrapper<numeric::decimal64> col6{col6_data, col6_data + num_rows, validity};
-  table_view expected({col0, col1, col2, col3, col4, col5, col6});
+  cudf::test::lists_column_wrapper<int64_t> col7{
+    {9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}, {}, {-1, -2}};
+  table_view expected({col0, col1, col2, col3, col4, col5, col6, col7});
 
   cudf_io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("bools");
