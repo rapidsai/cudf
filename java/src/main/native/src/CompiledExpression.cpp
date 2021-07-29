@@ -18,8 +18,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include <cudf/ast/nodes.hpp>
-#include <cudf/ast/operators.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/ast/transform.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
