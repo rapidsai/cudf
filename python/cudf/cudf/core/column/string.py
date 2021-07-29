@@ -749,12 +749,47 @@ class StringMethods(ColumnMethods):
             )
         return self._return_or_inplace(result_col)
 
-    def repeat(
-        self,
-        repeats: Union[int, Sequence]
-    ) -> SeriesOrIndex:
+    def repeat(self, repeats: Union[int, Sequence],) -> SeriesOrIndex:
         """
-        Description here.
+        Duplicate each string in the Series or Index.
+        Equivalent to `str.repeat()
+        <https://pandas.pydata.org/docs/reference/api/pandas.Series.str.repeat.html>`_.
+                
+        Parameters
+        ----------
+        repeats : int or sequence of int
+            Same value for all (int) or different value per (sequence).
+            
+        Returns
+        -------
+        Series or Index of object
+            Series or Index of repeated string objects specified by
+            input parameter repeats.
+        
+        Examples
+        --------
+        >>> s = cudf.Series(['a', 'b', 'c'])
+        >>> s
+        0    a
+        1    b
+        2    c
+        dtype: object
+        
+        Single int repeats string in Series
+        
+        >>> s.str.repeat(repeats=2)
+        0    aa
+        1    bb
+        2    cc
+        dtype: object
+        
+        Sequence of int repeats corresponding string in Series
+        
+        >>> s.str.repeat(repeats=[1, 2, 3])
+        0      a
+        1     bb
+        2    ccc
+        dtype: object
         """
         if can_convert_to_column(repeats):
             return self._return_or_inplace(
@@ -764,7 +799,7 @@ class StringMethods(ColumnMethods):
             )
 
         return self._return_or_inplace(
-            libstrings.repeat(self._column, repeats)
+            libstrings.repeat_scalar(self._column, repeats)
         )
 
     def replace(
