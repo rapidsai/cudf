@@ -209,7 +209,7 @@ std::unique_ptr<cudf::column> is_leap_year(
 /**
  * @brief  Extract the number of days in the month
  *
- * output[i] contains the number of days of date `column[i]`
+ * output[i] contains the number of days in the month of date `column[i]`
  * output[i] is null if `column[i]` is null
  *
  * @param[in] cudf::column_view of the input datetime values

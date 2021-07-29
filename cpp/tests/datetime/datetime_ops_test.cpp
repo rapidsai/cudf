@@ -25,8 +25,6 @@
 #include <cudf/datetime.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include "build/cuda-11.2.0/date-offset/release/_deps/gtest-src/googletest/include/gtest/gtest.h"
-#include "cudf/detail/iterator.cuh"
 
 #define XXX false  // stub for null values
 

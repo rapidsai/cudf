@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/datetime.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/wrappers/timestamps.hpp>
 

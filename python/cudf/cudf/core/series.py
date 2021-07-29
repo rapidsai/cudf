@@ -6441,7 +6441,39 @@ class DatetimeProperties(object):
 
         Example
         -------
-
+        >>> import pandas as pd, cudf
+        >>> s = cudf.Series(
+        ...     pd.date_range(start='2000-02-01', end='2013-02-01', freq='1Y'))
+        >>> s
+        0    2000-12-31
+        1    2001-12-31
+        2    2002-12-31
+        3    2003-12-31
+        4    2004-12-31
+        5    2005-12-31
+        6    2006-12-31
+        7    2007-12-31
+        8    2008-12-31
+        9    2009-12-31
+        10   2010-12-31
+        11   2011-12-31
+        12   2012-12-31
+        dtype: datetime64[ns]
+        >>> s.dt.is_leap_year
+        0      True
+        1     False
+        2     False
+        3     False
+        4      True
+        5     False
+        6     False
+        7     False
+        8      True
+        9     False
+        10    False
+        11    False
+        12     True
+        dtype: bool
         """
         res = libcudf.datetime.is_leap_year(self.series._column).fillna(False)
         return Series._from_data(
@@ -6457,11 +6489,42 @@ class DatetimeProperties(object):
 
         Returns
         -------
-        int
+        Series
+        Integers representing the number of days in month
 
         Example
         -------
-
+        >>> import pandas as pd, cudf
+        >>> s = cudf.Series(
+        ...     pd.date_range(start='2000-08-01', end='2001-08-01', freq='1M'))
+        >>> s
+        0    2000-08-31
+        1    2000-09-30
+        2    2000-10-31
+        3    2000-11-30
+        4    2000-12-31
+        5    2001-01-31
+        6    2001-02-28
+        7    2001-03-31
+        8    2001-04-30
+        9    2001-05-31
+        10   2001-06-30
+        11   2001-07-31
+        dtype: datetime64[ns]
+        >>> s.dt.days_in_month
+        0     31
+        1     30
+        2     31
+        3     30
+        4     31
+        5     31
+        6     28
+        7     31
+        8     30
+        9     31
+        10    30
+        11    31
+        dtype: int16
         """
         res = libcudf.datetime.days_in_month(self.series._column)
         return Series._from_data(
