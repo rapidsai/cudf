@@ -35,20 +35,14 @@ class StructMethods:
 
         except KeyError as e:
             if isinstance(key, int):
-                key_list = [
-                    dict_key
-                    for dict_key in self.d_series._meta.dtype.fields.keys()
+                typ = self.d_series._meta.dtype.fields[
+                    list(self.d_series._meta.dtype.fields)[key]
                 ]
-                typ_key = key_list[key]
-                typ = self.d_series._meta.dtype.fields[typ_key]
 
             else:
-                print(
-                    'Field "'
-                    + str(key)
-                    + '" is not found in the set of existing keys.'
+                raise e(
+                    f"Field '{key}' is not found in the set of existing keys"
                 )
-                raise e
 
         return self.d_series.map_partitions(
             lambda s: s.struct.field(key),

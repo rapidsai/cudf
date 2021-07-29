@@ -440,6 +440,11 @@ def test_sorting(data, ascending, na_position, ignore_index):
     assert_eq(expect, got)
 
 
+#############################################################################
+#                            Struct Accessor                                #
+#############################################################################
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -463,10 +468,11 @@ def test_create_struct_series(data):
         [{"a": 1, "b": 2}],
     ],
 )
-def test_struct_field_a(data):
-    expect = Series(data).struct.field("a")
-    ds_got = dgd.from_cudf(Series(data), 2).struct.field("a")
-    assert_eq(expect, ds_got.compute())
+def test_struct_field_str(data):
+    for test_key in ["a", "b"]:
+        expect = Series(data).struct.field(test_key)
+        ds_got = dgd.from_cudf(Series(data), 2).struct.field(test_key)
+        assert_eq(expect, ds_got.compute())
 
 
 @pytest.mark.parametrize(
@@ -478,7 +484,8 @@ def test_struct_field_a(data):
         [{"b": 3, "c": 4}],
     ],
 )
-def test_struct_field_zero(data):
-    expect = Series(data).struct.field(0)
-    ds_got = dgd.from_cudf(Series(data), 2).struct.field(0)
-    assert_eq(expect, ds_got.compute())
+def test_struct_field_integer(data):
+    for test_key in [0, 1]:
+        expect = Series(data).struct.field(test_key)
+        ds_got = dgd.from_cudf(Series(data), 2).struct.field(test_key)
+        assert_eq(expect, ds_got.compute())
