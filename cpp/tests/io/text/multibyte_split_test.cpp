@@ -47,44 +47,60 @@ TEST_F(MultibyteSplitTest, NondeterministicMatching)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
 }
 
-// TEST_F(MultibyteSplitTest, DelimiterAtEnd)
-// {
-//   auto delimiters = std::vector<std::string>({":"});
-//   auto host_input = std::string("abcdefg:");
+TEST_F(MultibyteSplitTest, DelimiterAtEnd)
+{
+  auto delimiters = std::vector<std::string>({":"});
+  auto host_input = std::string("abcdefg:");
 
-//   auto expected = strings_column_wrapper{"abcdefg:", ""};
+  auto expected = strings_column_wrapper{"abcdefg:", ""};
 
-//   auto source = cudf::io::text::make_source(host_input);
-//   auto out    = cudf::io::text::multibyte_split(*source, delimiters);
+  auto source = cudf::io::text::make_source(host_input);
+  auto out    = cudf::io::text::multibyte_split(*source, delimiters);
 
-//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
-// }
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
 
-// TEST_F(MultibyteSplitTest, LargeInput)
-// {
-//   // 😀 | F0 9F 98 80 | 11110000 10011111 01100010 01010000
-//   // 😎 | F0 9F 98 8E | 11110000 10011111 01100010 11101000
-//   auto delimiters = std::vector<std::string>({"😀", "😎", ",", "::"});
+TEST_F(MultibyteSplitTest, LargeInput)
+{
+  // 😀 | F0 9F 98 80 | 11110000 10011111 01100010 01010000
+  // 😎 | F0 9F 98 8E | 11110000 10011111 01100010 11101000
+  auto delimiters = std::vector<std::string>({"😀", "😎", ",", "::"});
 
-//   // TODO: figure out why CUDF_TEST_EXPECT_COLUMNS_EQUAL fails when the input is larger
-//   //       like when changing std::string(100, ...) -> std::string(1000, ...)
-//   auto host_input = std::string(std::string(100, 'w') + "😀" +  //
-//                                 std::string(100, 'x') + "😀" +  //
-//                                 std::string(100, 'y') + "😀" +  //
-//                                 std::string(100, 'z') + "😀" +  //
-//                                 std::string(100, '_'));
+  // TODO: figure out why CUDF_TEST_EXPECT_COLUMNS_EQUAL fails when the input is larger
+  //       like when changing std::string(100, ...) -> std::string(1000, ...)
+  auto host_input = std::string(std::string(100, 'w') + "😀" +  //
+                                std::string(100, 'x') + "😀" +  //
+                                std::string(100, 'y') + "😀" +  //
+                                std::string(100, 'z') + "😀" +  //
+                                std::string(100, '_'));
 
-//   auto expected = strings_column_wrapper{std::string(100, 'w') + "😀",
-//                                          std::string(100, 'x') + "😀",
-//                                          std::string(100, 'y') + "😀",
-//                                          std::string(100, 'z') + "😀",
-//                                          std::string(100, '_')};
+  auto expected = strings_column_wrapper{std::string(100, 'w') + "😀",
+                                         std::string(100, 'x') + "😀",
+                                         std::string(100, 'y') + "😀",
+                                         std::string(100, 'z') + "😀",
+                                         std::string(100, '_')};
 
-//   auto source = cudf::io::text::make_source(host_input);
-//   auto out    = cudf::io::text::multibyte_split(*source, delimiters);
+  auto source = cudf::io::text::make_source(host_input);
+  auto out    = cudf::io::text::multibyte_split(*source, delimiters);
 
-//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
-// }
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
+
+TEST_F(MultibyteSplitTest, LongDelimiter)
+{
+  auto delimiters = std::vector<std::string>({"===="});
+  auto host_input = std::string(
+    "..............................=="
+    "==..............................");
+
+  auto expected =
+    strings_column_wrapper{"..............................====", ".............................."};
+
+  auto source = cudf::io::text::make_source(host_input);
+  auto out    = cudf::io::text::multibyte_split(*source, delimiters);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+}
 
 // TEST_F(MultibyteSplitTest, MultipleDelimiters)
 // {
@@ -130,5 +146,5 @@ TEST_F(MultibyteSplitTest, NondeterministicMatching)
 //   auto source = cudf::io::text::make_source(host_input);
 //   auto out    = cudf::io::text::multibyte_split(*source, delimiters);
 
-//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
 // }

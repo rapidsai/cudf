@@ -2,7 +2,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
-#include <cudf/io/text/superstate.hpp>
+#include <cudf/io/text/multistate.hpp>
 #include <cudf/io/text/trie.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/span.hpp>
@@ -27,7 +27,7 @@ inline constexpr auto ceil_div(Dividend dividend, Divisor divisor)
   return dividend / divisor + (dividend % divisor != 0);
 }
 
-using superstate = cudf::io::text::superstate<16>;
+using multistate = cudf::io::text::multistate;
 
 enum class scan_tile_status : uint8_t {
   oob,
@@ -138,10 +138,10 @@ struct scan_tile_state {
 auto constexpr PARTIAL_AGGREGATION_STRATEGY = 1;
 
 // keep ITEMS_PER_TILE below input size to force multi-tile execution.
-auto constexpr ITEMS_PER_THREAD = 32;  // influences register pressure
-auto constexpr THREADS_PER_TILE = 32;  // must be >= 32 for warp-reduce. influences shmem usage.
+auto constexpr ITEMS_PER_THREAD = 32;   // influences register pressure
+auto constexpr THREADS_PER_TILE = 128;  // must be >= 32 for warp-reduce. influences shmem usage.
 auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
-auto constexpr TILES_PER_CHUNK  = 1;  // blocks in streaming launch
+auto constexpr TILES_PER_CHUNK  = 512;  // blocks in streaming launch
 auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 
 template <typename T>
@@ -229,8 +229,8 @@ struct scan_tile_state_callback {
 };
 
 struct PatternScan {
-  typedef cub::BlockScan<superstate, THREADS_PER_TILE> BlockScan;
-  typedef scan_tile_state_callback<superstate> BlockScanCallback;
+  typedef cub::BlockScan<multistate, THREADS_PER_TILE> BlockScan;
+  typedef scan_tile_state_callback<multistate> BlockScanCallback;
 
   struct _TempStorage {
     typename BlockScan::TempStorage scan;
@@ -244,50 +244,102 @@ struct PatternScan {
   __device__ inline PatternScan(TempStorage& temp_storage) : _temp_storage(temp_storage.Alias()) {}
 
   __device__ inline void Scan(cudf::size_type tile_idx,
-                              scan_tile_state_view<superstate> tile_state,
+                              scan_tile_state_view<multistate> tile_state,
                               cudf::io::text::trie_device_view trie,
                               char (&thread_data)[ITEMS_PER_THREAD],
                               uint32_t (&thread_state)[ITEMS_PER_THREAD])
   {
-    cudf::io::text::trie_path_part parts[4];
-    uint32_t pos = 0;
-    uint32_t end = 0;
+    auto thread_multistate = trie.transition_init(thread_data[0]);
 
-    trie.transition_init(thread_data[0], parts, pos, end);
-
-    for (uint32_t i = 1; i < ITEMS_PER_THREAD; i++) {
-      trie.transition(thread_data[i], parts, pos, end);
+    if (blockIdx.x == 0 and threadIdx.x < 2) {
+      for (uint8_t i = 0; i < thread_multistate.size(); i++) {
+        printf("bid(%3u) tid(%3u) |--- : idx(%2u) head(%2u) tail(%2u)\n",
+               blockIdx.x,
+               threadIdx.x,
+               static_cast<uint32_t>(i),
+               static_cast<uint32_t>(thread_multistate.get_head(i)),
+               static_cast<uint32_t>(thread_multistate.get_tail(i)));
+      }
     }
 
-    // at this point, `parts` should contain the possible matches for this thread.
+    for (uint32_t i = 1; i < ITEMS_PER_THREAD; i++) {
+      thread_multistate = trie.transition(thread_data[i], thread_multistate);
+    }
 
-    // but now we have to join them across threads. And then across blocks.
+    auto prefix_callback = BlockScanCallback(_temp_storage.scan_callback, tile_state, tile_idx);
+
+    if (blockIdx.x == 0 and threadIdx.x < 2) {
+      for (uint8_t i = 0; i < thread_multistate.size(); i++) {
+        printf("bid(%3u) tid(%3u) -|-- : idx(%2u) head(%2u) tail(%2u)\n",
+               blockIdx.x,
+               threadIdx.x,
+               static_cast<uint32_t>(i),
+               static_cast<uint32_t>(thread_multistate.get_head(i)),
+               static_cast<uint32_t>(thread_multistate.get_tail(i)));
+      }
+    }
+
+    // everything is correct up to this point, but exclusive sum produces a multistate with no
+    // segments.
+
+    BlockScan(_temp_storage.scan)
+      .ExclusiveSum(thread_multistate, thread_multistate, prefix_callback);
+
+    if (blockIdx.x == 0 and threadIdx.x < 2) {
+      for (uint8_t i = 0; i < thread_multistate.size(); i++) {
+        printf("bid(%3u) tid(%3u) --|- : idx(%2u) head(%2u) tail(%2u)\n",
+               blockIdx.x,
+               threadIdx.x,
+               static_cast<uint32_t>(i),
+               static_cast<uint32_t>(thread_multistate.get_head(i)),
+               static_cast<uint32_t>(thread_multistate.get_tail(i)));
+      }
+    }
+
+    __syncthreads();
+
+    for (uint32_t i = 0; i < ITEMS_PER_THREAD; i++) {
+      thread_multistate = trie.transition(thread_data[i], thread_multistate);
+
+      thread_state[i] = thread_multistate.max_tail();
+    }
+
+    if (blockIdx.x == 0 and threadIdx.x < 2) {
+      for (uint8_t i = 0; i < thread_multistate.size(); i++) {
+        printf("bid(%3u) tid(%3u) ---| : idx(%2u) head(%2u) tail(%2u)\n",
+               blockIdx.x,
+               threadIdx.x,
+               static_cast<uint32_t>(i),
+               static_cast<uint32_t>(thread_multistate.get_head(i)),
+               static_cast<uint32_t>(thread_multistate.get_tail(i)));
+      }
+    }
   }
 };
 
 // multibyte_split works by splitting up inputs in to 32 inputs (bytes) per thread, and transforming
-// them in to data structures called "superstates". these superstates are created by searching a
+// them in to data structures called "multistates". these multistates are created by searching a
 // trie, but instead of a tradition trie where the search begins at a single node at the beginning,
 // we allow our search to begin anywhere within the trie tree. The position within the trie tree is
 // stored as a "partial match path", which indicates "we can get from here to there by a set of
-// specific transitions". By scanning together superstates, we effectively know "we can get here
+// specific transitions". By scanning together multistates, we effectively know "we can get here
 // from the beginning by following the inputs". By doing this, each thread knows exactly what state
 // it begins in. From there, each thread can then take deterministic action. In this case, the
 // deterministic action is counting and outputting delimiter offsets when a delimiter is found.
 
 __global__ void multibyte_split_init_kernel(cudf::size_type base_tile_idx,
                                             cudf::size_type num_tiles,
-                                            scan_tile_state_view<superstate> tile_superstates,
+                                            scan_tile_state_view<multistate> tile_multistates,
                                             scan_tile_state_view<uint32_t> tile_output_offsets,
                                             scan_tile_status status = scan_tile_status::invalid)
 {
-  tile_superstates.initialize_status(base_tile_idx, num_tiles, status);
+  tile_multistates.initialize_status(base_tile_idx, num_tiles, status);
   tile_output_offsets.initialize_status(base_tile_idx, num_tiles, status);
 }
 
 __global__ void multibyte_split_kernel(cudf::size_type base_tile_idx,
                                        cudf::size_type num_tiles,
-                                       scan_tile_state_view<superstate> tile_superstates,
+                                       scan_tile_state_view<multistate> tile_multistates,
                                        scan_tile_state_view<uint32_t> tile_output_offsets,
                                        cudf::io::text::trie_device_view trie,
                                        cudf::device_span<char const> data,
@@ -324,7 +376,7 @@ __global__ void multibyte_split_kernel(cudf::size_type base_tile_idx,
   uint32_t thread_states[ITEMS_PER_THREAD];
 
   PatternScan(temp_storage.pattern_scan)  //
-    .Scan(tile_idx, tile_superstates, trie, thread_data, thread_states);
+    .Scan(tile_idx, tile_multistates, trie, thread_data, thread_states);
 
   // STEP 3: Flag matches
 
@@ -429,7 +481,7 @@ void join_pool_to_stream(rmm::cuda_stream_pool& stream_pool, rmm::cuda_stream_vi
 
 cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_source& source,
                                                  cudf::io::text::trie const& trie,
-                                                 scan_tile_state<superstate<16>>& tile_superstates,
+                                                 scan_tile_state<multistate>& tile_multistates,
                                                  scan_tile_state<uint32_t>& tile_offsets,
                                                  device_span<cudf::size_type> output_buffer,
                                                  device_span<char> output_char_buffer,
@@ -444,11 +496,15 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
   multibyte_split_init_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, stream.value()>>>(  //
     -TILES_PER_CHUNK,
     TILES_PER_CHUNK,
-    tile_superstates,
+    tile_multistates,
     tile_offsets,
     scan_tile_status::oob);
 
-  tile_superstates.set_seed_async(superstate<16>(), stream);
+  auto multistate_seed = multistate();
+
+  multistate_seed.enqueue(0, 0);
+
+  tile_multistates.set_seed_async(multistate_seed, stream);
   tile_offsets.set_seed_async(0, stream);
 
   fork_stream_to_pool(stream, stream_pool);
@@ -467,12 +523,12 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
     multibyte_split_init_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, chunk_stream>>>(  //
       base_tile_idx,
       TILES_PER_CHUNK,
-      tile_superstates,
+      tile_multistates,
       tile_offsets);
     multibyte_split_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, chunk_stream>>>(  //
       base_tile_idx,
       TILES_PER_CHUNK,
-      tile_superstates,
+      tile_multistates,
       tile_offsets,
       trie.view(),
       chunk,
@@ -497,7 +553,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source&
   // best when at least 32 more than max possible concurrent tiles, due to rolling `invalid`s
   auto concurrency      = 2;
   auto num_tile_states  = std::max(32, TILES_PER_CHUNK * concurrency + 32);
-  auto tile_superstates = scan_tile_state<superstate<16>>(num_tile_states, stream);
+  auto tile_multistates = scan_tile_state<multistate>(num_tile_states, stream);
   auto tile_offsets     = scan_tile_state<uint32_t>(num_tile_states, stream);
 
   auto stream_pool = rmm::cuda_stream_pool(concurrency);
@@ -505,7 +561,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source&
   auto bytes_total =
     multibyte_split_scan_full_source(source,
                                      trie,
-                                     tile_superstates,
+                                     tile_multistates,
                                      tile_offsets,
                                      cudf::device_span<int32_t>(static_cast<int32_t*>(nullptr), 0),
                                      cudf::device_span<char>(static_cast<char*>(nullptr), 0),
@@ -528,7 +584,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source&
   multibyte_split_scan_full_source(
     source,
     trie,
-    tile_superstates,
+    tile_multistates,
     tile_offsets,
     cudf::device_span<int32_t>(string_offsets).subspan(1, num_results),
     string_chars,

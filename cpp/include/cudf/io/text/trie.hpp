@@ -1,4 +1,5 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/text/multistate.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -41,73 +42,43 @@ struct trie_node {
   uint8_t child_begin;
 };
 
-struct trie_path_part {
-  uint32_t head;
-  uint32_t tail;
-};
-
-struct trie_queue {
-  static uint32_t const N = 8;
-  trie_path_part values[N];
-  uint32_t pos;
-  uint32_t end;
-
-  inline constexpr uint32_t size() { return end - pos; }
-
-  inline constexpr trie_path_part peek() { return values[pos % N]; }
-
-  inline constexpr trie_path_part dequeue() { return values[pos++ % N]; }
-
-  inline constexpr void enqueue(trie_path_part value)
-  {
-    if (size() < N) { values[end++ % N] = value; }
-  }
-};
-
 struct trie_device_view {
   device_span<trie_node const> _nodes;
 
-  template <uint32_t N>
-  inline constexpr void transition_init(  //
-    char c,
-    trie_path_part (&parts)[N],
-    uint32_t& pos,
-    uint32_t& end)
+  inline constexpr multistate transition_init(char c)
   {
-    for (uint32_t curr = 0; curr < _nodes.size() - 1; curr++) {
-      transition_enqueue_all(c, parts, pos, end, curr, curr);
+    auto result = multistate();
+
+    result.enqueue(0, 0);
+
+    for (uint8_t curr = 0; curr < _nodes.size() - 1; curr++) {
+      transition_enqueue_all(c, result, curr, curr);
     }
+    return result;
   }
 
-  template <uint32_t N>
-  inline constexpr void transition(  //
-    char c,
-    trie_path_part (&parts)[N],
-    uint32_t& pos,
-    uint32_t& end)
+  inline constexpr multistate transition(char c, multistate const& states)
   {
-    auto size = end - pos;
-    transition_enqueue_all(c, parts, pos, end, 0, 0);
-    for (uint32_t i = 0; i < size; i++) {
-      auto partial = parts[pos++ % N];
-      transition_enqueue_all(c, parts, pos, end, partial.head, partial.tail);
+    auto result = multistate();
+
+    result.enqueue(0, 0);
+
+    for (uint8_t i = 0; i < states.size(); i++) {
+      transition_enqueue_all(c, result, states.get_head(i), states.get_tail(i));
     }
+
+    return result;
   }
 
-  template <uint32_t N>
   inline constexpr void transition_enqueue_all(  //
     char c,
-    trie_path_part (&parts)[N],
-    uint32_t& pos,
-    uint32_t& end,
-    uint32_t const& head,
-    uint32_t const& curr)
+    multistate& states,
+    uint8_t head,
+    uint8_t curr)
   {
     for (uint32_t tail = _nodes[curr].child_begin; tail < _nodes[curr + 1].child_begin; tail++) {
-      if (end - pos < N) {              //
-        if (_nodes[tail].token == c) {  //
-          parts[end++ % N] = {head, tail};
-        }
+      if (_nodes[tail].token == c) {  //
+        states.enqueue(head, tail);
       }
     }
   }
@@ -116,13 +87,12 @@ struct trie_device_view {
   inline constexpr uint8_t get_match_length(uint16_t idx) { return _nodes[idx].match_length; }
 
   template <uint32_t N>
-  inline constexpr uint8_t get_match_length(trie_path_part (&parts)[N],
-                                            uint32_t& pos,
-                                            uint32_t& end)
+  inline constexpr uint8_t get_match_length(multistate const& states)
   {
     int8_t val = 0;
-    for (uint32_t i = pos; i != end; i++) {
-      val = max(val, get_match_length(parts[i % N].tail));
+    for (uint8_t i = 0; i < states.size(); i++) {
+      auto match_length = get_match_length(states.get_tail(i));
+      if (match_length > val) { val = match_length; }
     }
     return val;
   }
