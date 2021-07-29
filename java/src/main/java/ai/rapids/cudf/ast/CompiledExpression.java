@@ -94,6 +94,11 @@ public class CompiledExpression implements AutoCloseable {
     isClosed = true;
   }
 
+  /** Returns the native address of a compiled expression. Intended for internal cudf use only. */
+  public long getNativeHandle() {
+    return cleaner.nativeHandle;
+  }
+
   private static native long compile(byte[] serializedExpression);
   private static native long computeColumn(long astHandle, long tableHandle);
   private static native void destroy(long handle);

@@ -3633,6 +3633,23 @@ def test_one_row_head():
     assert_eq(head_pdf, head_gdf)
 
 
+@pytest.mark.parametrize("dtype", ALL_TYPES)
+@pytest.mark.parametrize(
+    "np_dtype,pd_dtype",
+    [
+        tuple(item)
+        for item in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes.items()
+    ],
+)
+def test_series_astype_pandas_nullable(dtype, np_dtype, pd_dtype):
+    source = cudf.Series([0, 1, None], dtype=dtype)
+
+    expect = source.astype(np_dtype)
+    got = source.astype(pd_dtype)
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("as_dtype", NUMERIC_TYPES)
 def test_series_astype_numeric_to_numeric(dtype, as_dtype):
