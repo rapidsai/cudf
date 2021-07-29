@@ -853,11 +853,11 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
 
 
 @pytest.mark.parametrize(
-    "data", [["hello", "world", None, "", "!",]],
+    "data", [["hello", "world", None, "", "!"]],
 )
 @pytest.mark.parametrize(
     "repeats",
-    [2, 0, -3, [5, 4, 3, 2, 6], [0, 0, 0, 0, 0], [-1, -2, -3, -4, -5],],
+    [2, 0, -3, [5, 4, 3, 2, 6], [0, 0, 0, 0, 0], [-1, -2, -3, -4, -5]],
 )
 def test_string_repeat(data, repeats):
     ps = pd.Series(data)
