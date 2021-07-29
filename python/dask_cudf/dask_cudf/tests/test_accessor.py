@@ -440,23 +440,13 @@ def test_sorting(data, ascending, na_position, ignore_index):
     assert_eq(expect, got)
 
 
-
-
 @pytest.mark.parametrize(
     "data",
     [
-        [{"a":5, "b":10},
-        {"a":3, "b":7},
-        {"a":-3, "b":11}],
-
-        [{"a":None, "b":1},
-        {"a":None, "b":0},
-        {"a":-3, "b":None}],
-
-        [{'a':1, 'b':2}],
-
-        [{'b':3, 'c':4}],
-
+        [{"a": 5, "b": 10}, {"a": 3, "b": 7}, {"a": -3, "b": 11}],
+        [{"a": None, "b": 1}, {"a": None, "b": 0}, {"a": -3, "b": None}],
+        [{"a": 1, "b": 2}],
+        [{"b": 3, "c": 4}],
     ],
 )
 def test_create_struct_series(data):
@@ -464,45 +454,28 @@ def test_create_struct_series(data):
     ds_got = dgd.from_cudf(Series(data), 2)
     assert_eq(expect, ds_got.compute())
 
+
 @pytest.mark.parametrize(
     "data",
     [
-
-        [{"a":5, "b":10},
-        {"a":3, "b":7},
-        {"a":-3, "b":11}],
-
-        [{"a":None, "b":1},
-        {"a":None, "b":0},
-        {"a":-3, "b":None}],
-
-        [{'a':1, 'b':2}],
-
-        [{'b':3, 'c':4}],
-
+        [{"a": 5, "b": 10}, {"a": 3, "b": 7}, {"a": -3, "b": 11}],
+        [{"a": None, "b": 1}, {"a": None, "b": 0}, {"a": -3, "b": None}],
+        [{"a": 1, "b": 2}],
     ],
 )
 def test_struct_field_a(data):
-    expect = Series(data).struct.field('a')
-    ds_got = dgd.from_cudf(Series(data), 2).struct.field('a')
+    expect = Series(data).struct.field("a")
+    ds_got = dgd.from_cudf(Series(data), 2).struct.field("a")
     assert_eq(expect, ds_got.compute())
+
 
 @pytest.mark.parametrize(
     "data",
     [
-
-        [{"a":5, "b":10},
-        {"a":3, "b":7},
-        {"a":-3, "b":11}],
-
-        [{"a":None, "b":1},
-        {"a":None, "b":0},
-        {"a":-3, "b":None}],
-
-        [{'a':1, 'b':2}],
-
-        [{'b':3, 'c':4}],
-
+        [{"a": 5, "b": 10}, {"a": 3, "b": 7}, {"a": -3, "b": 11}],
+        [{"a": None, "b": 1}, {"a": None, "b": 0}, {"a": -3, "b": None}],
+        [{"a": 1, "b": 2}],
+        [{"b": 3, "c": 4}],
     ],
 )
 def test_struct_field_zero(data):
