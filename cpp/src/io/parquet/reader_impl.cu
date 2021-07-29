@@ -691,8 +691,6 @@ class aggregate_metadata {
     // TODO: Wherever we use this, should use get_schema()
     auto const& schema = per_file_metadata[0].schema;
 
-    std::cout << "here" << std::endl;
-
     auto find_schema_child = [&schema](SchemaElement const& schema_elem,
                                        std::string const& name) -> SchemaElement const& {
       auto const& col_schema_idx =
@@ -769,8 +767,6 @@ class aggregate_metadata {
       build_column(&col, top_level_col_schem_idx, output_columns);
       output_column_schemas.push_back(top_level_col_schem_idx.self_idx);
     }
-
-    std::cout << "here" << std::endl;
 
     return std::make_tuple(
       std::move(input_columns), std::move(output_columns), std::move(output_column_schemas));
