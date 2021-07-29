@@ -577,77 +577,62 @@ TEST_F(BasicDatetimeOpsTest, TestDaysInMonths)
   using namespace cudf::datetime;
   using namespace cuda::std::chrono;
 
-  auto start = time_point_ms(milliseconds(-2500000000000));  // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop  = time_point_ms(milliseconds(2500000000000));   // Mon, 22 Mar 2049 04:26:40 GMT
-  auto step  = months{1};  // std::ratio<2629746>>, 1/12 of avg gregorian year
+  auto timestamps_s =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      {
+        0L,            // NULL
+        -1887541682L,  // 1910-03-10 10:51:58
+        0L,            // NULL
+        -1251006943L,  // 1930-05-11 18:04:17
+        -932134638L,   // 1940-06-18 09:42:42
+        -614354877L,   // 1950-07-14 09:52:03
+        -296070394L,   // 1960-08-14 06:13:26
+        22840404L,     // 1970-09-22 08:33:24
+        339817190L,    // 1980-10-08 01:39:50
+        657928062L,    // 1990-11-06 21:47:42
+        976630837L,    // 2000-12-12 14:20:37
+        1294699018L,   // 2011-01-10 22:36:58
+        1613970182L,   // 2021-02-22 05:03:02 - non leap year February
+        1930963331L,   // 2031-03-11 02:42:11
+        2249867102L,   // 2041-04-18 03:05:02
+        951426858L,    // 2000-02-24 21:14:18 - leap year February
+      },
+      {false,
+       true,
+       false,
+       true,
+       true,
+       true,
+       true,
+       true,
+       true,
+       true,
+       true,
+       true,
+       true,
+       true,
+       true,
+       true}};
 
-  auto count = static_cast<std::size_t>((stop - start) / step);
-
-  auto date_vector = thrust::host_vector<long>(count, start.time_since_epoch().count());
-  auto month_iter  = thrust::make_counting_iterator<int16_t>(0);
-
-  fixed_width_column_wrapper<cudf::timestamp_ms> base_timestamps(date_vector.begin(),
-                                                                 date_vector.end());
-  fixed_width_column_wrapper<int16_t> month_offset(month_iter, month_iter + count);
-
-  auto input = cudf::datetime::add_calendrical_months(base_timestamps, month_offset);
-
-  auto got = cudf::datetime::days_in_month(*input);
-
-  // Extract last day of the month on host
-  auto [host_input, _] = cudf::test::to_host<int64_t>(*input);
-  auto host_expect     = thrust::host_vector<int16_t>(host_input.size());
-
-  std::transform(host_input.begin(), host_input.end(), host_expect.begin(), [](auto rep) {
-    auto tp = time_point_ms(milliseconds{rep});
-    auto dp = floor<days>(tp);
-    year_month_day ymd{dp};
-    year_month_day_last ymdl{ymd.year() / ymd.month() / last};
-    return static_cast<int16_t>(unsigned(ymdl.day()));
-  });
-  fixed_width_column_wrapper<int16_t> expect(host_expect.begin(), host_expect.end());
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expect);
-}
-
-TEST_F(BasicDatetimeOpsTest, TestDaysInMonthsMasked)
-{
-  using namespace cudf::test;
-  using namespace cudf::datetime;
-  using namespace cuda::std::chrono;
-
-  auto start = time_point_ms(milliseconds(-2500000000000));  // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop  = time_point_ms(milliseconds(2500000000000));   // Mon, 22 Mar 2049 04:26:40 GMT
-  auto step  = months{1};  // std::ratio<2629746>>, 1/12 of avg gregorian year
-
-  auto count = static_cast<std::size_t>((stop - start) / step);
-
-  auto date_vector = thrust::host_vector<long>(count, start.time_since_epoch().count());
-  auto month_iter  = thrust::make_counting_iterator<int16_t>(0);
-  auto mask = cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 2 == 0; });
-
-  fixed_width_column_wrapper<cudf::timestamp_ms> base_timestamps(
-    date_vector.begin(), date_vector.end(), mask);
-  fixed_width_column_wrapper<int16_t> month_offset(month_iter, month_iter + count);
-
-  auto input = cudf::datetime::add_calendrical_months(base_timestamps, month_offset);
-
-  auto got = cudf::datetime::days_in_month(*input);
-
-  // Extract last day of the month on host
-  auto [host_input, _] = cudf::test::to_host<int64_t>(*input);
-  auto host_expect     = thrust::host_vector<int16_t>(host_input.size());
-
-  std::transform(host_input.begin(), host_input.end(), host_expect.begin(), [](auto rep) {
-    auto tp = time_point_ms(milliseconds{rep});
-    auto dp = floor<days>(tp);
-    year_month_day ymd{dp};
-    year_month_day_last ymdl{ymd.year() / ymd.month() / last};
-    return static_cast<int16_t>(unsigned(ymdl.day()));
-  });
-  fixed_width_column_wrapper<int16_t> expect(host_expect.begin(), host_expect.end(), mask);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*days_in_month(timestamps_s),
+                                 cudf::test::fixed_width_column_wrapper<int16_t>{
+                                   {-1, 31, -1, 31, 30, 31, 31, 30, 31, 30, 31, 31, 28, 31, 30, 29},
+                                   {false,
+                                    true,
+                                    false,
+                                    true,
+                                    true,
+                                    true,
+                                    true,
+                                    true,
+                                    true,
+                                    true,
+                                    true,
+                                    true,
+                                    true,
+                                    true,
+                                    true,
+                                    true}});
 }
 
 TEST_F(BasicDatetimeOpsTest, TestQuarter)

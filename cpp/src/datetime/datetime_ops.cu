@@ -84,7 +84,6 @@ static __device__ int16_t const days_until_month[2][13] = {
   {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366}   // For leap years
 };
 
-
 // Round up the date to the last day of the month and return the
 // date only (without the time component)
 struct extract_last_day_of_month {
@@ -93,8 +92,22 @@ struct extract_last_day_of_month {
   {
     using namespace cuda::std::chrono;
     const year_month_day ymd(floor<days>(ts));
-    auto const ymdl = year_month_day_last{ymd.year()/ymd.month()/last};
+    auto const ymdl = year_month_day_last{ymd.year() / ymd.month() / last};
     return timestamp_D{sys_days{ymdl}};
+  }
+};
+
+// Extract the number of days of the month
+// A similar operator to `extract_last_day_of_month`, except this returns
+// an integer while the other returns a timestamp.
+struct days_in_month_op {
+  template <typename Timestamp>
+  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
+  {
+    using namespace cuda::std::chrono;
+    auto const date = year_month_day(floor<days>(ts));
+    auto const ymdl = year_month_day_last(date.year() / date.month() / last);
+    return static_cast<int16_t>(unsigned{ymdl.day()});
   }
 };
 
@@ -140,18 +153,6 @@ struct is_leap_year_op {
     auto const days_since_epoch = floor<days>(ts);
     auto const date             = year_month_day(days_since_epoch);
     return date.year().is_leap();
-  }
-};
-
-// Extract the number of days of the month
-struct days_in_month_op {
-  template <typename Timestamp>
-  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
-  {
-    using namespace cuda::std::chrono;
-    auto const date             = year_month_day(floor<days>(ts));
-    auto const ymdl             = year_month_day_last(date.year()/date.month()/last);
-    return static_cast<int16_t>(unsigned{ymdl.day()});
   }
 };
 
@@ -249,11 +250,10 @@ struct add_calendrical_months_functor {
 
                         // If the new date isn't valid, scale it back to the last day of the
                         // month.
-                        if (!ymd.ok()) ymd = ymd.year()/ymd.month()/last;
+                        if (!ymd.ok()) ymd = ymd.year() / ymd.month() / last;
 
                         // Put back the time component to the date
-                        return
-                          sys_days{ymd} + (time_val - days_since_epoch);
+                        return sys_days{ymd} + (time_val - days_since_epoch);
                       });
   }
 };
