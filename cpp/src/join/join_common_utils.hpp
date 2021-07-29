@@ -37,12 +37,13 @@ constexpr size_type JoinNoneValue     = std::numeric_limits<size_type>::min();
 using VectorPair = std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                              std::unique_ptr<rmm::device_uvector<size_type>>>;
 
-using multimap_type =
-  cuco::static_multimap<hash_value_type,
-                        size_type,
-                        cuco::double_hashing<hash_value_type, size_type>,
-                        cuda::thread_scope_device,
-                        default_allocator<thrust::pair<hash_value_type, size_type>>>;
+using pair_type = cuco::pair_type<hash_value_type, size_type>;
+
+using multimap_type = cuco::static_multimap<hash_value_type,
+                                            size_type,
+                                            cuco::double_hashing<hash_value_type, size_type>,
+                                            cuda::thread_scope_device,
+                                            default_allocator<pair_type>>;
 
 using row_hash = cudf::row_hasher<default_hash>;
 
@@ -51,21 +52,19 @@ using row_equality = cudf::row_equality_comparator<true>;
 class pair_equality {
  public:
   pair_equality(table_device_view lhs, table_device_view rhs, bool nulls_are_equal = true)
-    : check_row_equality{lhs, rhs, nulls_are_equal}
+    : _check_row_equality{lhs, rhs, nulls_are_equal}
   {
   }
 
-  __device__ __inline__ bool operator()(
-    const cuco::pair_type<hash_value_type, size_type>& lhs,
-    const cuco::pair_type<hash_value_type, size_type>& rhs) const noexcept
+  __device__ __inline__ bool operator()(const pair_type& lhs, const pair_type& rhs) const noexcept
   {
     bool res = (lhs.first == rhs.first);
-    if (res) { return check_row_equality(rhs.second, lhs.second); }
+    if (res) { return _check_row_equality(rhs.second, lhs.second); }
     return res;
   }
 
  private:
-  cudf::row_equality_comparator<true> check_row_equality;
+  cudf::row_equality_comparator<true> _check_row_equality;
 };
 
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
