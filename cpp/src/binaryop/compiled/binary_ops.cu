@@ -45,7 +45,7 @@ struct scalar_as_column_device_view {
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource* mr)
   {
-    auto h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
+    auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
     auto col_v =
       column_view(s.type(), 1, h_scalar_type_view.data(), (bitmask_type const*)s.validity_data());
     return std::pair{column_device_view::create(col_v, stream), std::unique_ptr<column>(nullptr)};
@@ -63,8 +63,8 @@ scalar_as_column_device_view::operator()<cudf::string_view>(scalar const& s,
                                                             rmm::cuda_stream_view stream,
                                                             rmm::mr::device_memory_resource* mr)
 {
-  using T                 = cudf::string_view;
-  auto h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
+  using T                  = cudf::string_view;
+  auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
 
   // build offsets column from the string size
   auto offsets_transformer_itr =
