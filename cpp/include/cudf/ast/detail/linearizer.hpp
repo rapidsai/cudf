@@ -16,11 +16,9 @@
 #pragma once
 
 #include <cudf/ast/operators.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 namespace ast {
@@ -108,7 +106,7 @@ class linearizer {
    * @param right The right table used for evaluating the abstract syntax tree.
    */
   linearizer(detail::node const& expr, cudf::table_view left, cudf::table_view right)
-    : _left(left), _right(right), _node_count(0), _intermediate_counter()
+    : _left{left}, _right{right}, _node_count{0}, _intermediate_counter{}
   {
     expr.accept(*this);
   }
@@ -120,7 +118,7 @@ class linearizer {
    * @param table The table used for evaluating the abstract syntax tree.
    */
   linearizer(detail::node const& expr, cudf::table_view table)
-    : _left(table), _right(table), _node_count(0), _intermediate_counter()
+    : _left{table}, _right{table}, _node_count{0}, _intermediate_counter{}
   {
     expr.accept(*this);
   }
