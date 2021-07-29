@@ -34,7 +34,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
 
  public:
   istream_data_chunk_reader(std::unique_ptr<std::istream> datastream)
-    : _datastream(std::move(datastream)), _buffers(), _tickets(1)
+    : _datastream(std::move(datastream)), _buffers(), _tickets(2)
   {
     // create an event to track the completion of the last device-to-host copy.
     for (uint32_t i = 0; i < _tickets.size(); i++) {
