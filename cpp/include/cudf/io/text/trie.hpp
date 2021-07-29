@@ -1,4 +1,5 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/text/multistate.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -38,38 +39,63 @@ namespace text {
 struct trie_node {
   char token;
   uint8_t match_length;
-  uint8_t transitions_begin;
+  uint8_t child_begin;
 };
 
 struct trie_device_view {
   device_span<trie_node const> _nodes;
 
-  inline constexpr uint16_t transition(uint16_t idx, char c)
+  inline constexpr multistate transition_init(char c)
   {
-    auto pos = _nodes[idx].transitions_begin;
-    auto end = _nodes[idx + 1].transitions_begin;
-    while (pos < end) {
-      if (c == _nodes[pos].token) { return pos; }
-      pos++;
-    }
+    auto result = multistate();
 
-    return transition_init(c);
+    result.enqueue(0, 0);
+
+    for (uint8_t curr = 0; curr < _nodes.size() - 1; curr++) {
+      transition_enqueue_all(c, result, curr, curr);
+    }
+    return result;
   }
 
-  inline constexpr uint16_t transition_init(char c)
+  inline constexpr multistate transition(char c, multistate const& states)
   {
-    auto pos = _nodes[0].transitions_begin;
-    auto end = _nodes[1].transitions_begin;
-    while (pos < end) {
-      if (c == _nodes[pos].token) { return pos; }
-      pos++;
+    auto result = multistate();
+
+    result.enqueue(0, 0);
+
+    for (uint8_t i = 0; i < states.size(); i++) {
+      transition_enqueue_all(c, result, states.get_head(i), states.get_tail(i));
     }
 
-    return 0;
+    return result;
+  }
+
+  inline constexpr void transition_enqueue_all(  //
+    char c,
+    multistate& states,
+    uint8_t head,
+    uint8_t curr)
+  {
+    for (uint32_t tail = _nodes[curr].child_begin; tail < _nodes[curr + 1].child_begin; tail++) {
+      if (_nodes[tail].token == c) {  //
+        states.enqueue(head, tail);
+      }
+    }
   }
 
   inline constexpr bool is_match(uint16_t idx) { return static_cast<bool>(get_match_length(idx)); }
   inline constexpr uint8_t get_match_length(uint16_t idx) { return _nodes[idx].match_length; }
+
+  template <uint32_t N>
+  inline constexpr uint8_t get_match_length(multistate const& states)
+  {
+    int8_t val = 0;
+    for (uint8_t i = 0; i < states.size(); i++) {
+      auto match_length = get_match_length(states.get_tail(i));
+      if (match_length > val) { val = match_length; }
+    }
+    return val;
+  }
 };
 
 struct trie {
