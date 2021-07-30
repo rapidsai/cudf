@@ -225,7 +225,7 @@ struct add_calendrical_months_functor {
                       timestamp_column.end<Timestamp>(),
                       months_column.begin<int16_t>(),
                       output.begin<Timestamp>(),
-                      add_calendrical_months_impl<Timestamp, int16_t>);
+                      add_calendrical_months_functor_impl<Timestamp, int16_t>);
   }
 };
 

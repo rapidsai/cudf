@@ -23,7 +23,7 @@ struct DateOffset {
   {
     auto result = cuda::std::chrono::time_point_cast<typename Timestamp::duration>(
       base + cuda::std::chrono::nanoseconds{nanoseconds});
-    return add_calendrical_months_impl(result, month);
+    return add_calendrical_months_functor_impl(result, month);
   }
 
   DateOffset __device__ operator*(std::size_t const& n)

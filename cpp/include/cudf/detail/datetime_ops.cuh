@@ -44,7 +44,7 @@ CUDA_DEVICE_CALLABLE timestamp_D compute_sys_days(cuda::std::chrono::year_month_
 }
 
 template <typename Timestamp, typename MonthType>
-__device__ Timestamp add_calendrical_months_impl(Timestamp time_val, MonthType months_val)
+__device__ Timestamp add_calendrical_months_functor_impl(Timestamp time_val, MonthType months_val)
 {
   using namespace cuda::std::chrono;
   using duration_m = duration<int32_t, months::period>;
