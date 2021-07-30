@@ -2044,24 +2044,8 @@ def as_column(
                 memoryview(arbitrary), dtype=dtype, nan_as_null=nan_as_null
             )
         except TypeError:
-            pa_type = None
-            np_type = None
-            try:
-                if dtype is not None:
-                    if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
-                        raise TypeError
-                    if is_list_dtype(dtype):
-                        data = pa.array(arbitrary)
-                        if type(data) not in (pa.ListArray, pa.NullArray):
-                            raise ValueError(
-                                "Cannot create list column from given data"
-                            )
-                        return as_column(data, nan_as_null=nan_as_null)
-                    elif isinstance(
-                        dtype, cudf.StructDtype
-                    ) and not isinstance(dtype, cudf.IntervalDtype):
-                        data = pa.array(arbitrary, type=dtype.to_arrow())
-                        return as_column(data, nan_as_null=nan_as_null)
+            if dtype is not None:
+                try:
                     if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
                         data = pa.array(
                             arbitrary,
@@ -2082,6 +2066,31 @@ def as_column(
                         return cudf.core.column.Decimal32Column.from_arrow(
                             data
                         )
+                except pa.ArrowTypeError as e:
+                    # Arrow throws a type error if the input is of
+                    # mixed-precision and cannot fit into the provided
+                    # decimal type properly, see:
+                    # https://github.com/apache/arrow/pull/9948
+                    raise e
+            pa_type = None
+            np_type = None
+            try:
+                if dtype is not None:
+                    if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
+                        raise TypeError
+                    if is_list_dtype(dtype):
+                        data = pa.array(arbitrary)
+                        if type(data) not in (pa.ListArray, pa.NullArray):
+                            raise ValueError(
+                                "Cannot create list column from given data"
+                            )
+                        return as_column(data, nan_as_null=nan_as_null)
+                    elif isinstance(
+                        dtype, cudf.StructDtype
+                    ) and not isinstance(dtype, cudf.IntervalDtype):
+                        data = pa.array(arbitrary, type=dtype.to_arrow())
+                        return as_column(data, nan_as_null=nan_as_null)
+
                     dtype = pd.api.types.pandas_dtype(dtype)
                     np_type = np.dtype(dtype).type
                     if np_type == np.bool_:
