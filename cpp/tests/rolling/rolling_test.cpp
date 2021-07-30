@@ -766,8 +766,8 @@ TYPED_TEST(RollingVarStdTest, SimpleStaticVarianceStd)
 
   auto const expected_var =
     cudf::is_boolean<TypeParam>()
-      ? std::vector<ResultType>{XXX, XXX, 0, 0, XXX, XXX, 0.5, 0.33333333333333337, 0, 0}
-      : std::vector<ResultType>{XXX, XXX, 8, 8, XXX, XXX, 32, 16.333333333333332, 3, 4.5};
+      ? std::vector<ResultType>{XXX, XXX, 0, 0, XXX, XXX, 0.5, 0.3333333333333333, 0, 0}
+      : std::vector<ResultType>{XXX, XXX, 8, 8, XXX, XXX, 32, 16.33333333333333, 3, 4.5};
   std::vector<ResultType> expected_std(expected_var.size());
   std::transform(expected_var.begin(), expected_var.end(), expected_std.begin(), [](auto const& x) {
     return std::sqrt(x);
@@ -802,7 +802,7 @@ TYPED_TEST(RollingVarStdTest, SimpleStaticVarianceStd)
 #undef XXX
 }
 
-TEST_F(RollingtVarStdTestUntyped, SimpleStaticVarianceStdInf)
+TEST_F(RollingtVarStdTestUntyped, SimpleStaticVarianceStdInfNaN)
 {
 #define XXX 0.  // NULL stub
 
@@ -813,16 +813,17 @@ TEST_F(RollingtVarStdTestUntyped, SimpleStaticVarianceStdInf)
   size_type const ddof = 1, min_periods = 1, preceding_window = 3, following_window = 0;
 
   auto const col_data =
-    cudf::test::make_type_param_vector<double>({5., 4., XXX, inf, 4., 8., 0., XXX, XXX, 5.});
-  const std::vector<bool> col_mask = {1, 1, 0, 1, 1, 1, 1, 0, 0, 1};
+    cudf::test::make_type_param_vector<double>({5., 4., XXX, inf, 4., 8., 0., nan, XXX, 5.});
+  const std::vector<bool> col_mask = {1, 1, 0, 1, 1, 1, 1, 1, 0, 1};
 
-  auto const expected_var = std::vector<ResultType>{XXX, 0.5, 0.5, nan, nan, nan, 16, 32, XXX, XXX};
+  auto const expected_var =
+    std::vector<ResultType>{XXX, 0.5, 0.5, nan, nan, nan, 16, nan, nan, nan};
   std::vector<ResultType> expected_std(expected_var.size());
   std::transform(expected_var.begin(), expected_var.end(), expected_std.begin(), [](auto const& x) {
     return std::sqrt(x);
   });
 
-  const std::vector<bool> expected_mask = {0, 1, 1, 1, 1, 1, 1, 1, 0, 0};
+  const std::vector<bool> expected_mask = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
   fixed_width_column_wrapper<double> input(col_data.begin(), col_data.end(), col_mask.begin());
   fixed_width_column_wrapper<ResultType> var_expect(
