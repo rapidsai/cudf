@@ -214,7 +214,7 @@ std::unique_ptr<cudf::column> is_leap_year(
  *
  * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
  *
- * @param cudf::column_view of the input datetime values *
+ * @param cudf::column_view of the input datetime values
  * @return cudf::column of datatype INT16 of days in month of the corresponding date
  */
 std::unique_ptr<cudf::column> days_in_month(
