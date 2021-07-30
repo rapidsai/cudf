@@ -1463,9 +1463,20 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                         None,
                     )
         elif isinstance(rhs, Series):
-            # Note: This logic will need updating if any of the user-facing
+            # Note: This branch will need updating if any of the user-facing
             # binop methods (e.g. DataFrame.add) ever support axis=0/rows.
-            right_dict = dict(zip(rhs.index.values_host, rhs.values_host))
+
+            # This dict comprehension using get_element is an optimization to
+            # avoid an expensive call to rhs.values_host. Ultimately both
+            # result in D2H copies (the Scalar here is eventually converted in
+            # column.normalize_binop_value) but this approach is still
+            # significantly faster. Unfortunately there is no easy way to
+            # eliminate the index.values_host call.
+            right_dict = {
+                k: cudf.Scalar(libcudf.copying.get_element(rhs._column, i))
+                for i, k in enumerate(rhs.index.values_host)
+            }
+
             left_cols = lhs._column_names
             # mypy thinks lhs._column_names is a List rather than a Tuple, so
             # we have to ignore the type check.
