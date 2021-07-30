@@ -19,13 +19,13 @@
 package ai.rapids.cudf;
 
 /**
- * An Aggregation for a specific column in a table.
+ * A GroupByAggregation for a specific column in a table.
  */
-public class AggregationOnColumn {
-    protected final Aggregation wrapped;
+public class GroupByAggregationOnColumn {
+    protected final GroupByAggregation wrapped;
     protected final int columnIndex;
 
-    AggregationOnColumn(Aggregation wrapped, int columnIndex) {
+    GroupByAggregationOnColumn(GroupByAggregation wrapped, int columnIndex) {
         this.wrapped = wrapped;
         this.columnIndex = columnIndex;
     }
@@ -34,7 +34,7 @@ public class AggregationOnColumn {
         return columnIndex;
     }
 
-    Aggregation getWrapped() {
+    GroupByAggregation getWrapped() {
         return wrapped;
     }
 
@@ -47,8 +47,8 @@ public class AggregationOnColumn {
     public boolean equals(Object other) {
         if (other == this) {
             return true;
-        } else if (other instanceof AggregationOnColumn) {
-            AggregationOnColumn o = (AggregationOnColumn) other;
+        } else if (other instanceof GroupByAggregationOnColumn) {
+            GroupByAggregationOnColumn o = (GroupByAggregationOnColumn) other;
             return wrapped.equals(o.wrapped) && columnIndex == o.columnIndex;
         }
         return false;
