@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,13 +19,13 @@
 package ai.rapids.cudf;
 
 /**
- * An Aggregation for a specific column in a table.
+ * A RollingAggregation for a specific column in a table.
  */
-public class AggregationOnColumn {
-    protected final Aggregation wrapped;
+public class RollingAggregationOnColumn {
+    protected final RollingAggregation wrapped;
     protected final int columnIndex;
 
-    AggregationOnColumn(Aggregation wrapped, int columnIndex) {
+    RollingAggregationOnColumn(RollingAggregation wrapped, int columnIndex) {
         this.wrapped = wrapped;
         this.columnIndex = columnIndex;
     }
@@ -34,8 +34,9 @@ public class AggregationOnColumn {
         return columnIndex;
     }
 
-    Aggregation getWrapped() {
-        return wrapped;
+
+    public AggregationOverWindow overWindow(WindowOptions windowOptions) {
+        return new AggregationOverWindow(this, windowOptions);
     }
 
     @Override
@@ -47,10 +48,18 @@ public class AggregationOnColumn {
     public boolean equals(Object other) {
         if (other == this) {
             return true;
-        } else if (other instanceof AggregationOnColumn) {
-            AggregationOnColumn o = (AggregationOnColumn) other;
+        } else if (other instanceof RollingAggregationOnColumn) {
+            RollingAggregationOnColumn o = (RollingAggregationOnColumn) other;
             return wrapped.equals(o.wrapped) && columnIndex == o.columnIndex;
         }
         return false;
+    }
+
+    long createNativeInstance() {
+        return wrapped.createNativeInstance();
+    }
+
+    long getDefaultOutput() {
+        return wrapped.getDefaultOutput();
     }
 }

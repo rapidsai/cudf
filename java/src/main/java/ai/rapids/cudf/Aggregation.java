@@ -65,7 +65,7 @@ public abstract class Aggregation {
         M2(26),
         MERGE_M2(27),
         RANK(28),
-        DENSE_RANK(29);;
+        DENSE_RANK(29);
 
         final int nativeId;
 
@@ -275,8 +275,7 @@ public abstract class Aggregation {
         }
     }
 
-    public static final class CollectListAggregation extends Aggregation
-        implements RollingAggregation<CollectListAggregation> {
+    public static final class CollectListAggregation extends Aggregation {
         private final NullPolicy nullPolicy;
 
         private CollectListAggregation(NullPolicy nullPolicy) {
@@ -306,8 +305,7 @@ public abstract class Aggregation {
         }
     }
 
-    public static final class CollectSetAggregation extends Aggregation
-        implements RollingAggregation<CollectSetAggregation> {
+    public static final class CollectSetAggregation extends Aggregation {
         private final NullPolicy nullPolicy;
         private final NullEquality nullEquality;
         private final NaNEquality nanEquality;
@@ -392,8 +390,8 @@ public abstract class Aggregation {
      * Add a column to the Aggregation so it can be used on a specific column of data.
      * @param columnIndex the index of the column to operate on.
      */
-    public <T extends Aggregation> AggregationOnColumn<T> onColumn(int columnIndex) {
-        return new AggregationOnColumn((T)this, columnIndex);
+    public AggregationOnColumn onColumn(int columnIndex) {
+        return new AggregationOnColumn(this, columnIndex);
     }
 
     /**
@@ -433,8 +431,7 @@ public abstract class Aggregation {
 
     static native void close(long ptr);
 
-    public static class SumAggregation extends NoParamAggregation
-        implements RollingAggregation<SumAggregation> {
+    public static class SumAggregation extends NoParamAggregation {
         private SumAggregation() {
             super(Kind.SUM);
         }
@@ -460,8 +457,7 @@ public abstract class Aggregation {
         return new ProductAggregation();
     }
 
-    public static class MinAggregation extends NoParamAggregation
-        implements RollingAggregation<MinAggregation> {
+    public static class MinAggregation extends NoParamAggregation {
         private MinAggregation() {
             super(Kind.MIN);
         }
@@ -474,8 +470,7 @@ public abstract class Aggregation {
         return new MinAggregation();
     }
 
-    public static class MaxAggregation extends NoParamAggregation
-        implements RollingAggregation<MaxAggregation> {
+    public static class MaxAggregation extends NoParamAggregation {
         private MaxAggregation() {
             super(Kind.MAX);
         }
@@ -488,8 +483,7 @@ public abstract class Aggregation {
         return new MaxAggregation();
     }
 
-    public static class CountAggregation extends CountLikeAggregation
-        implements RollingAggregation<CountAggregation> {
+    public static class CountAggregation extends CountLikeAggregation {
         private CountAggregation(NullPolicy nullPolicy) {
             super(Kind.COUNT, nullPolicy);
         }
@@ -555,8 +549,7 @@ public abstract class Aggregation {
         return new SumOfSquaresAggregation();
     }
 
-    public static class MeanAggregation extends NoParamAggregation
-        implements RollingAggregation<MeanAggregation>{
+    public static class MeanAggregation extends NoParamAggregation {
         private MeanAggregation() {
             super(Kind.MEAN);
         }
@@ -654,8 +647,7 @@ public abstract class Aggregation {
         return new QuantileAggregation(method, quantiles);
     }
 
-    public static class ArgMaxAggregation extends NoParamAggregation
-        implements RollingAggregation<ArgMaxAggregation>{
+    public static class ArgMaxAggregation extends NoParamAggregation {
         private ArgMaxAggregation() {
             super(Kind.ARGMAX);
         }
@@ -671,8 +663,7 @@ public abstract class Aggregation {
         return new ArgMaxAggregation();
     }
 
-    public static class ArgMinAggregation extends NoParamAggregation
-        implements RollingAggregation<ArgMinAggregation>{
+    public static class ArgMinAggregation extends NoParamAggregation {
         private ArgMinAggregation() {
             super(Kind.ARGMIN);
         }
@@ -731,8 +722,7 @@ public abstract class Aggregation {
         return new NthAggregation(offset, nullPolicy);
     }
 
-    public static class RowNumberAggregation extends NoParamAggregation
-        implements RollingAggregation<RowNumberAggregation>{
+    static class RowNumberAggregation extends NoParamAggregation {
         private RowNumberAggregation() {
             super(Kind.ROW_NUMBER);
         }
@@ -741,12 +731,11 @@ public abstract class Aggregation {
     /**
      * Get the row number, only makes sense for a window operations.
      */
-    public static RowNumberAggregation rowNumber() {
+    static RowNumberAggregation rowNumber() {
         return new RowNumberAggregation();
     }
 
-    public static class RankAggregation extends NoParamAggregation
-        implements RollingAggregation<RankAggregation>{
+    public static class RankAggregation extends NoParamAggregation {
         private RankAggregation() {
             super(Kind.RANK);
         }
@@ -759,8 +748,7 @@ public abstract class Aggregation {
         return new RankAggregation();
     }
 
-    public static class DenseRankAggregation extends NoParamAggregation
-        implements RollingAggregation<DenseRankAggregation>{
+    public static class DenseRankAggregation extends NoParamAggregation {
         private DenseRankAggregation() {
             super(Kind.DENSE_RANK);
         }
@@ -840,19 +828,10 @@ public abstract class Aggregation {
         return new MergeSetsAggregation(nullEquality, nanEquality);
     }
 
-    public static class LeadAggregation extends LeadLagAggregation
-        implements RollingAggregation<LeadAggregation> {
+    static class LeadAggregation extends LeadLagAggregation {
         private LeadAggregation(int offset, ColumnVector defaultOutput) {
             super(Kind.LEAD, offset, defaultOutput);
         }
-    }
-
-    /**
-     * In a rolling window return the value offset entries ahead or null if it is outside of the
-     * window.
-     */
-    public static LeadAggregation lead(int offset) {
-        return lead(offset, null);
     }
 
     /**
@@ -861,24 +840,14 @@ public abstract class Aggregation {
      * defaultOutput and the caller mush ensure that defaultOutput remains valid during the life
      * time of this aggregation operation.
      */
-    public static LeadAggregation lead(int offset, ColumnVector defaultOutput) {
+    static LeadAggregation lead(int offset, ColumnVector defaultOutput) {
         return new LeadAggregation(offset, defaultOutput);
     }
 
-    public static class LagAggregation extends LeadLagAggregation
-        implements RollingAggregation<LagAggregation>{
+    static class LagAggregation extends LeadLagAggregation {
         private LagAggregation(int offset, ColumnVector defaultOutput) {
             super(Kind.LAG, offset, defaultOutput);
         }
-    }
-
-
-    /**
-     * In a rolling window return the value offset entries behind or null if it is outside of the
-     * window.
-     */
-    public static LagAggregation lag(int offset) {
-        return lag(offset, null);
     }
 
     /**
@@ -887,7 +856,7 @@ public abstract class Aggregation {
      * defaultOutput and the caller mush ensure that defaultOutput remains valid during the life
      * time of this aggregation operation.
      */
-    public static LagAggregation lag(int offset, ColumnVector defaultOutput) {
+    static LagAggregation lag(int offset, ColumnVector defaultOutput) {
         return new LagAggregation(offset, defaultOutput);
     }
 

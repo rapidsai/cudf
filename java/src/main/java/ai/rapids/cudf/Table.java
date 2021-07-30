@@ -2471,7 +2471,7 @@ public final class Table implements AutoCloseable {
       for (int outputIndex = 0; outputIndex < aggregates.length; outputIndex++) {
         AggregationOnColumn agg = aggregates[outputIndex];
         ColumnOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnOps());
-        totalOps += ops.add(agg, outputIndex + keysLength);
+        totalOps += ops.add(agg.getWrapped(), outputIndex + keysLength);
       }
       int[] aggColumnIndexes = new int[totalOps];
       long[] aggOperationInstances = new long[totalOps];
@@ -2823,7 +2823,7 @@ public final class Table implements AutoCloseable {
       for (int outputIndex = 0; outputIndex < aggregates.length; outputIndex++) {
         AggregationOnColumn agg = aggregates[outputIndex];
         ColumnOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnOps());
-        totalOps += ops.add(agg, outputIndex + keysLength);
+        totalOps += ops.add(agg.getWrapped(), outputIndex + keysLength);
       }
       int[] aggColumnIndexes = new int[totalOps];
       long[] aggOperationInstances = new long[totalOps];
