@@ -136,8 +136,8 @@ get_conditional_join_indices(table_view const& left,
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
 
-  const auto& join_output_l = left_indices->data();
-  const auto& join_output_r = right_indices->data();
+  auto const& join_output_l = left_indices->data();
+  auto const& join_output_r = right_indices->data();
   if (has_nulls) {
     conditional_join<block_size, DEFAULT_JOIN_CACHE_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(

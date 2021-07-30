@@ -343,11 +343,11 @@ struct expression_evaluator {
    */
   template <typename Input, typename OutputType>
   __device__ void operator()(OutputType& output_object,
-                             const cudf::size_type input_row_index,
-                             const detail::device_data_reference input,
-                             const detail::device_data_reference output,
-                             const cudf::size_type output_row_index,
-                             const ast_operator op) const
+                             cudf::size_type const input_row_index,
+                             detail::device_data_reference const input,
+                             detail::device_data_reference const output,
+                             cudf::size_type const output_row_index,
+                             ast_operator const op) const
   {
     auto const typed_input = resolve_input<Input>(input, input_row_index);
     ast_operator_dispatcher(op,
@@ -376,13 +376,13 @@ struct expression_evaluator {
    */
   template <typename LHS, typename RHS, typename OutputType>
   __device__ void operator()(OutputType& output_object,
-                             const cudf::size_type left_row_index,
-                             const cudf::size_type right_row_index,
-                             const detail::device_data_reference lhs,
-                             const detail::device_data_reference rhs,
-                             const detail::device_data_reference output,
-                             const cudf::size_type output_row_index,
-                             const ast_operator op) const
+                             cudf::size_type const left_row_index,
+                             cudf::size_type const right_row_index,
+                             detail::device_data_reference const lhs,
+                             detail::device_data_reference const rhs,
+                             detail::device_data_reference const output,
+                             cudf::size_type const output_row_index,
+                             ast_operator const op) const
   {
     auto const typed_lhs = resolve_input<LHS>(lhs, left_row_index);
     auto const typed_rhs = resolve_input<RHS>(rhs, right_row_index);
@@ -403,11 +403,11 @@ struct expression_evaluator {
   __device__ void operator()(OutputType& output_object,
                              cudf::size_type left_row_index,
                              cudf::size_type right_row_index,
-                             const detail::device_data_reference lhs,
-                             const detail::device_data_reference rhs,
-                             const detail::device_data_reference output,
+                             detail::device_data_reference const lhs,
+                             detail::device_data_reference const rhs,
+                             detail::device_data_reference const output,
                              cudf::size_type output_row_index,
-                             const ast_operator op) const
+                             ast_operator const op) const
   {
     cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
   }
@@ -529,9 +529,9 @@ struct expression_evaluator {
               typename OutputType,
               CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
     __device__ void resolve_output(OutputType& output_object,
-                                   const detail::device_data_reference device_data_reference,
-                                   const cudf::size_type row_index,
-                                   const possibly_null_value_t<Element, has_nulls> result) const
+                                   detail::device_data_reference const device_data_reference,
+                                   cudf::size_type const row_index,
+                                   possibly_null_value_t<Element, has_nulls> const result) const
     {
       auto const ref_type = device_data_reference.reference_type;
       if (ref_type == detail::device_data_reference_type::COLUMN) {
@@ -549,9 +549,9 @@ struct expression_evaluator {
               typename OutputType,
               CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
     __device__ void resolve_output(OutputType& output_object,
-                                   const detail::device_data_reference device_data_reference,
-                                   const cudf::size_type row_index,
-                                   const possibly_null_value_t<Element, has_nulls> result) const
+                                   detail::device_data_reference const device_data_reference,
+                                   cudf::size_type const row_index,
+                                   possibly_null_value_t<Element, has_nulls> const result) const
     {
       cudf_assert(false && "Invalid type in resolve_output.");
     }
@@ -589,9 +589,9 @@ struct expression_evaluator {
       typename OutputType,
       std::enable_if_t<detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
-                               const cudf::size_type output_row_index,
-                               const possibly_null_value_t<Input, has_nulls> input,
-                               const detail::device_data_reference output) const
+                               cudf::size_type const output_row_index,
+                               possibly_null_value_t<Input, has_nulls> const input,
+                               detail::device_data_reference const output) const
     {
       using OperatorFunctor = detail::operator_functor<op>;
       using Out             = cuda::std::invoke_result_t<OperatorFunctor, Input>;
@@ -611,9 +611,9 @@ struct expression_evaluator {
       typename OutputType,
       std::enable_if_t<!detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
-                               const cudf::size_type output_row_index,
-                               const possibly_null_value_t<Input, has_nulls> input,
-                               const detail::device_data_reference output) const
+                               cudf::size_type const output_row_index,
+                               possibly_null_value_t<Input, has_nulls> const input,
+                               detail::device_data_reference const output) const
     {
       cudf_assert(false && "Invalid unary dispatch operator for the provided input.");
     }
@@ -649,10 +649,10 @@ struct expression_evaluator {
               std::enable_if_t<
                 detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
-                               const cudf::size_type output_row_index,
-                               const possibly_null_value_t<LHS, has_nulls> lhs,
-                               const possibly_null_value_t<RHS, has_nulls> rhs,
-                               const detail::device_data_reference output) const
+                               cudf::size_type const output_row_index,
+                               possibly_null_value_t<LHS, has_nulls> const lhs,
+                               possibly_null_value_t<RHS, has_nulls> const rhs,
+                               detail::device_data_reference const output) const
     {
       using OperatorFunctor = detail::operator_functor<op>;
       using Out             = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
@@ -691,10 +691,10 @@ struct expression_evaluator {
               std::enable_if_t<
                 !detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
-                               const cudf::size_type output_row_index,
-                               const possibly_null_value_t<LHS, has_nulls> lhs,
-                               const possibly_null_value_t<RHS, has_nulls> rhs,
-                               const detail::device_data_reference output) const
+                               cudf::size_type const output_row_index,
+                               possibly_null_value_t<LHS, has_nulls> const lhs,
+                               possibly_null_value_t<RHS, has_nulls> const rhs,
+                               detail::device_data_reference output) const
     {
       cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
     }

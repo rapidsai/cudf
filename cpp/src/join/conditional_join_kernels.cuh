@@ -66,10 +66,10 @@ __global__ void compute_conditional_join_output_size(
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
   cudf::size_type thread_counter(0);
-  const cudf::size_type left_start_idx = threadIdx.x + blockIdx.x * blockDim.x;
-  const cudf::size_type left_stride    = blockDim.x * gridDim.x;
-  const cudf::size_type left_num_rows  = left_table.num_rows();
-  const cudf::size_type right_num_rows = right_table.num_rows();
+  cudf::size_type const left_start_idx = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type const left_stride    = blockDim.x * gridDim.x;
+  cudf::size_type const left_num_rows  = left_table.num_rows();
+  cudf::size_type const right_num_rows = right_table.num_rows();
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data, thread_intermediate_storage, compare_nulls);
@@ -134,7 +134,7 @@ __global__ void conditional_join(table_device_view left_table,
                                  cudf::size_type* join_output_r,
                                  cudf::size_type* current_idx,
                                  cudf::ast::detail::expression_device_view device_expression_data,
-                                 const cudf::size_type max_size)
+                                 cudf::size_type const max_size)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ cudf::size_type current_idx_shared[num_warps];
@@ -151,10 +151,10 @@ __global__ void conditional_join(table_device_view left_table,
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
-  const int warp_id                    = threadIdx.x / detail::warp_size;
-  const int lane_id                    = threadIdx.x % detail::warp_size;
-  const cudf::size_type left_num_rows  = left_table.num_rows();
-  const cudf::size_type right_num_rows = right_table.num_rows();
+  int const warp_id                    = threadIdx.x / detail::warp_size;
+  int const lane_id                    = threadIdx.x % detail::warp_size;
+  cudf::size_type const left_num_rows  = left_table.num_rows();
+  cudf::size_type const right_num_rows = right_table.num_rows();
 
   if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
 
@@ -162,7 +162,7 @@ __global__ void conditional_join(table_device_view left_table,
 
   cudf::size_type left_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
-  const unsigned int activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
+  unsigned int const activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data, thread_intermediate_storage, compare_nulls);

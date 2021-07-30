@@ -57,11 +57,11 @@ struct alignas(8) device_data_reference {
                         cudf::data_type data_type,
                         cudf::size_type data_index);
 
-  const device_data_reference_type reference_type;  // Source of data
-  const cudf::data_type data_type;                  // Type of data
-  const cudf::size_type data_index;                 // The column index of a table, index of a
+  device_data_reference_type const reference_type;  // Source of data
+  cudf::data_type const data_type;                  // Type of data
+  cudf::size_type const data_index;                 // The column index of a table, index of a
                                                     // literal, or index of an intermediate
-  const table_reference table_source;
+  table_reference const table_source;
 
   bool operator==(device_data_reference const& rhs) const
   {
