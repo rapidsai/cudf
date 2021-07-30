@@ -70,11 +70,25 @@ def is_leap_year(Column col):
     return Column.from_unique_ptr(move(c_result))
 
 
-def date_range(DeviceScalar start, size_t n):
+def date_range(DeviceScalar start, size_t n, offset):
     cdef unique_ptr[column] c_result
+    cdef size_t months = (
+        offset.kwds.get("years", 0) * 12
+        + offset.kwds.get("months", 0)
+    )
+    cdef size_t nanos = (
+        offset.kwds.pop("weeks", 0) * 604800
+        + offset.kwds.pop("days", 0) * 86400
+        + offset.kwds.pop("hours", 0) * 3600
+        + offset.kwds.pop("minutes", 0) * 60
+        + offset.kwds.pop("seconds", 0)
+    ) * 1e9
+
     with nogil:
         c_result = move(libcudf_datetime.date_range(
             start.c_value.get()[0],
-            n
+            n,
+            months,
+            nanos
         ))
     return Column.from_unique_ptr(move(c_result))
