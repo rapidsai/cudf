@@ -597,42 +597,12 @@ TEST_F(BasicDatetimeOpsTest, TestDaysInMonths)
         2249867102L,   // 2041-04-18 03:05:02
         951426858L,    // 2000-02-24 21:14:18 - leap year February
       },
-      {false,
-       true,
-       false,
-       true,
-       true,
-       true,
-       true,
-       true,
-       true,
-       true,
-       true,
-       true,
-       true,
-       true,
-       true,
-       true}};
+      iterators::nulls_at({0, 2})};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*days_in_month(timestamps_s),
                                  cudf::test::fixed_width_column_wrapper<int16_t>{
                                    {-1, 31, -1, 31, 30, 31, 31, 30, 31, 30, 31, 31, 28, 31, 30, 29},
-                                   {false,
-                                    true,
-                                    false,
-                                    true,
-                                    true,
-                                    true,
-                                    true,
-                                    true,
-                                    true,
-                                    true,
-                                    true,
-                                    true,
-                                    true,
-                                    true,
-                                    true,
-                                    true}});
+                                   iterators::nulls_at({0, 2})});
 }
 
 TEST_F(BasicDatetimeOpsTest, TestQuarter)
