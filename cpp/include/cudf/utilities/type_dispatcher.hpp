@@ -98,8 +98,8 @@ using id_to_type = typename id_to_type_impl<Id>::type;
 // clang-format off
 template <typename T>
 using device_storage_type_t =
-  std::conditional_t<std::is_same<numeric::decimal32, T>::value, int32_t,
-  std::conditional_t<std::is_same<numeric::decimal64, T>::value, int64_t, T>>;
+  std::conditional_t<std::is_same_v<numeric::decimal32, T>, int32_t,
+  std::conditional_t<std::is_same_v<numeric::decimal64, T>, int64_t, T>>;
 // clang-format on
 
 /**
@@ -129,8 +129,8 @@ inline type_id device_storage_type_id(type_id id)
 template <typename T>
 bool type_id_matches_device_storage_type(type_id id)
 {
-  return (id == type_id::DECIMAL32 && std::is_same<T, int32_t>::value) ||
-         (id == type_id::DECIMAL64 && std::is_same<T, int64_t>::value) || id == type_to_id<T>();
+  return (id == type_id::DECIMAL32 && std::is_same_v<T, int32_t>) ||
+         (id == type_id::DECIMAL64 && std::is_same_v<T, int64_t>) || id == type_to_id<T>();
 }
 
 /**

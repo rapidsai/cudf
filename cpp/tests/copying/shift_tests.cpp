@@ -191,7 +191,7 @@ TYPED_TEST(ShiftTest, MismatchFillValueDtypes)
 {
   using T = TypeParam;
 
-  if (std::is_same<T, int>::value) { return; }
+  if (std::is_same_v<T, int>) { return; }
 
   auto input = fixed_width_column_wrapper<T>{};
 

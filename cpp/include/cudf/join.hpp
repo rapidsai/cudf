@@ -658,6 +658,9 @@ class hash_join {
  * The corresponding values in the second returned vector are
  * the matched row indices from the right table.
  *
+ * If the provided predicate returns NULL for a pair of rows
+ * (left, right), that pair is not included in the output.
+ *
  * @code{.pseudo}
  * Left: {{0, 1, 2}}
  * Right: {{1, 2, 3}}
@@ -672,6 +675,7 @@ class hash_join {
  *
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
+ * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
@@ -702,6 +706,9 @@ conditional_inner_join(
  * from the right table, if there is a match  or  (2) an unspecified
  * out-of-bounds value.
  *
+ * If the provided predicate returns NULL for a pair of rows
+ * (left, right), that pair is not included in the output.
+ *
  * @code{.pseudo}
  * Left: {{0, 1, 2}}
  * Right: {{1, 2, 3}}
@@ -716,6 +723,7 @@ conditional_inner_join(
  *
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
+ * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
@@ -744,6 +752,9 @@ conditional_left_join(table_view left,
  * right tables, (2) a row index and an unspecified out-of-bounds value,
  * representing a row from one table without a match in the other.
  *
+ * If the provided predicate returns NULL for a pair of rows
+ * (left, right), that pair is not included in the output.
+ *
  * @code{.pseudo}
  * Left: {{0, 1, 2}}
  * Right: {{1, 2, 3}}
@@ -758,6 +769,7 @@ conditional_left_join(table_view left,
  *
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
+ * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
@@ -781,6 +793,9 @@ conditional_full_join(table_view left,
  * for which there exists some row in the right table where the predicate
  * evaluates to true.
  *
+ * If the provided predicate returns NULL for a pair of rows
+ * (left, right), that pair is not included in the output.
+ *
  * @code{.pseudo}
  * Left: {{0, 1, 2}}
  * Right: {{1, 2, 3}}
@@ -795,6 +810,7 @@ conditional_full_join(table_view left,
  *
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
+ * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
@@ -818,6 +834,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
  * for which there does not exist any row in the right table where the
  * predicate evaluates to true.
  *
+ * If the provided predicate returns NULL for a pair of rows
+ * (left, right), that pair is not included in the output.
+ *
  * @code{.pseudo}
  * Left: {{0, 1, 2}}
  * Right: {{1, 2, 3}}
@@ -832,6 +851,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
  *
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
+ * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
