@@ -4172,9 +4172,6 @@ class Series(SingleColumnFrame, Serializable):
                 index=self.index,
             )
 
-    def sum_of_squares(self, dtype=None):
-        return self._reduce("sum_of_squares", dtype=dtype)
-
     def median(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
     ):

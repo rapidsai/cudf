@@ -4047,6 +4047,29 @@ class Frame(libcudf.table.Table):
             "any", axis=axis, skipna=skipna, level=level, **kwargs,
         )
 
+    def sum_of_squares(self, dtype=None):
+        """Return the sum of squares of values.
+
+        Parameters
+        ----------
+        dtype: data type
+            Data type to cast the result to.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 0, 10, 10]})
+        >>> df.sum_of_squares()
+        a     38
+        b    249
+        dtype: int64
+        """
+        return self._reduce("sum_of_squares", dtype=dtype)
+
 
 class SingleColumnFrame(Frame):
     """A one-dimensional frame.
