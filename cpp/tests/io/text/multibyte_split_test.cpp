@@ -64,27 +64,40 @@ TEST_F(MultibyteSplitTest, DelimiterAtEnd)
 
 TEST_F(MultibyteSplitTest, LargeInput)
 {
-  auto delimiters = std::vector<std::string>({"😀", "😎", ",", "::"});
+  auto delimiters = std::vector<std::string>({":::::", "....."});
 
-  // TODO: figure out why CUDF_TEST_EXPECT_COLUMNS_EQUAL segfaults when the input is larger
-  //       like when changing std::string(100, ...) -> std::string(1000, ...)
-  auto host_input = std::string(std::string(100, 'w') + "😀" +  //
-                                std::string(100, 'x') + "😀" +  //
-                                std::string(100, 'y') + "😀" +  //
-                                std::string(100, 'z') + "😀" +  //
-                                std::string(100, '_'));
+  auto host_input    = std::string();
+  auto host_expected = std::vector<std::string>();
 
-  auto expected = strings_column_wrapper{std::string(100, 'w') + "😀",
-                                         std::string(100, 'x') + "😀",
-                                         std::string(100, 'y') + "😀",
-                                         std::string(100, 'z') + "😀",
-                                         std::string(100, '_')};
+  for (auto i = 0; i < 1000; i++) {
+    host_input += ":::::";
+    host_input += ".....";
+    host_expected.emplace_back(std::string(":::::"));
+    host_expected.emplace_back(std::string("....."));
+  }
+
+  host_expected.emplace_back(std::string(""));
+
+  auto expected = strings_column_wrapper{host_expected.begin(), host_expected.end()};
 
   auto source = cudf::io::text::make_source(host_input);
   auto out    = cudf::io::text::multibyte_split(*source, delimiters);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
 }
+
+// TEST_F(MultibyteSplitTest, OverlappingMatchErasure)
+// {
+//   auto delimiters = std::vector<std::string>({":::::"});
+
+//   auto host_input = std::string(":::::" ":::::");
+//   auto expected   = strings_column_wrapper{":::::", ":::::"};
+
+//   auto source = cudf::io::text::make_source(host_input);
+//   auto out    = cudf::io::text::multibyte_split(*source, delimiters);
+
+//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+// }
 
 TEST_F(MultibyteSplitTest, MultipleDelimiters)
 {

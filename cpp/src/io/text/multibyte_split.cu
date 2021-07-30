@@ -63,6 +63,8 @@ struct scan_tile_state_view {
   {
     auto thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (thread_idx < count) {  //
+      // this is probably UB without taking in to account tile_states being assigned multiple ties
+      // due to modulo operator
       tile_status[(base_tile_idx + thread_idx) % num_tiles] = status;
     }
   }
@@ -202,12 +204,12 @@ struct scan_tile_state_callback {
   cudf::size_type _tile_idx;
 };
 
-// keep ITEMS_PER_TILE below input size to force multi-tile execution.
-auto constexpr ITEMS_PER_THREAD = 32;   // influences register pressure
-auto constexpr THREADS_PER_TILE = 128;  // must be >= 32 for warp-reduce. influences shmem usage.
+auto constexpr ITEMS_PER_THREAD = 32;  // influences register pressure
+auto constexpr THREADS_PER_TILE = 32;  // must be >= 32 for warp-reduce. bugged for > 32, needs fix
 auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
-auto constexpr TILES_PER_CHUNK  = 512;  // blocks in streaming launch
-auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
+auto constexpr TILES_PER_CHUNK  = 512;
+// keep ITEMS_PER_CHUNK below input size to force multi-tile execution.
+auto constexpr ITEMS_PER_CHUNK = ITEMS_PER_TILE * TILES_PER_CHUNK;
 
 struct PatternScan {
   typedef cub::BlockScan<multistate, THREADS_PER_TILE> BlockScan;
@@ -475,11 +477,11 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source&
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto const trie = cudf::io::text::trie::create(delimiters, stream);
+  auto const trie  = cudf::io::text::trie::create(delimiters, stream);
+  auto concurrency = 2;
   // must be at least 32 when using warp-reduce on partials
   // must be at least 1 more than max possible concurrent tiles
   // best when at least 32 more than max possible concurrent tiles, due to rolling `invalid`s
-  auto concurrency      = 2;
   auto num_tile_states  = std::max(32, TILES_PER_CHUNK * concurrency + 32);
   auto tile_multistates = scan_tile_state<multistate>(num_tile_states, stream);
   auto tile_offsets     = scan_tile_state<uint32_t>(num_tile_states, stream);
