@@ -1,15 +1,29 @@
+/*
+ * Copyright (c) 2021, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
 #include <cudf/io/text/multistate.hpp>
 #include <cudf/io/text/trie.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_pool.hpp>
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <cub/block/block_load.cuh>
@@ -135,15 +149,6 @@ struct scan_tile_state {
   }
 };
 
-auto constexpr PARTIAL_AGGREGATION_STRATEGY = 1;
-
-// keep ITEMS_PER_TILE below input size to force multi-tile execution.
-auto constexpr ITEMS_PER_THREAD = 32;   // influences register pressure
-auto constexpr THREADS_PER_TILE = 128;  // must be >= 32 for warp-reduce. influences shmem usage.
-auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
-auto constexpr TILES_PER_CHUNK  = 512;  // blocks in streaming launch
-auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
-
 template <typename T>
 struct scan_tile_state_callback {
   using WarpReduce = cub::WarpReduce<T>;
@@ -171,47 +176,16 @@ struct scan_tile_state_callback {
     auto predecessor_idx    = _tile_idx - 1 - threadIdx.x;
     auto predecessor_status = scan_tile_status::invalid;
 
-    if constexpr (PARTIAL_AGGREGATION_STRATEGY == 0) {
-      if (threadIdx.x == 0) {
-        _temp_storage.exclusive_prefix = _tile_state.get_inclusive_prefix(predecessor_idx);
+    // scan partials to form prefix
+
+    if (threadIdx.x == 0) {
+      auto window_partial = _tile_state.get_prefix(predecessor_idx, predecessor_status);
+      while (predecessor_status != scan_tile_status::inclusive) {
+        predecessor_idx--;
+        auto predecessor_prefix = _tile_state.get_prefix(predecessor_idx, predecessor_status);
+        window_partial          = predecessor_prefix + window_partial;
       }
-    }
-
-    if constexpr (PARTIAL_AGGREGATION_STRATEGY == 1) {
-      // scan partials to form prefix
-
-      if (threadIdx.x == 0) {
-        auto window_partial = _tile_state.get_prefix(predecessor_idx, predecessor_status);
-        while (predecessor_status != scan_tile_status::inclusive) {
-          predecessor_idx--;
-          auto predecessor_prefix = _tile_state.get_prefix(predecessor_idx, predecessor_status);
-          window_partial          = predecessor_prefix + window_partial;
-        }
-        _temp_storage.exclusive_prefix = window_partial;
-      }
-    }
-
-    if constexpr (PARTIAL_AGGREGATION_STRATEGY == 2) {
-      // TODO: T{} is not gauranteed to be an identity value, so use an existing value instead.
-      //       otherwise, this is bugged for multistate.
-      auto window_partial = T{};
-      if (threadIdx.x < 32) {
-        do {
-          auto predecessor_prefix = _tile_state.get_prefix(predecessor_idx, predecessor_status);
-
-          window_partial =
-            WarpReduce(_temp_storage.reduce)  //
-              .TailSegmentedReduce(predecessor_prefix,
-                                   predecessor_status == scan_tile_status::inclusive,
-                                   [](T const& lhs, T const& rhs) { return rhs + lhs; }) +
-            window_partial;
-          predecessor_idx -= 32;
-        } while (__all_sync(0xffffffff, predecessor_status != scan_tile_status::inclusive));
-      }
-
-      if (threadIdx.x == 0) {
-        _temp_storage.exclusive_prefix = window_partial;  //
-      }
+      _temp_storage.exclusive_prefix = window_partial;
     }
 
     if (threadIdx.x == 0) {
@@ -227,6 +201,13 @@ struct scan_tile_state_callback {
   scan_tile_state_view<T>& _tile_state;
   cudf::size_type _tile_idx;
 };
+
+// keep ITEMS_PER_TILE below input size to force multi-tile execution.
+auto constexpr ITEMS_PER_THREAD = 32;   // influences register pressure
+auto constexpr THREADS_PER_TILE = 128;  // must be >= 32 for warp-reduce. influences shmem usage.
+auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
+auto constexpr TILES_PER_CHUNK  = 512;  // blocks in streaming launch
+auto constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 
 struct PatternScan {
   typedef cub::BlockScan<multistate, THREADS_PER_TILE> BlockScan;
@@ -347,24 +328,20 @@ __global__ void multibyte_split_kernel(cudf::size_type base_tile_idx,
   OffsetScan(temp_storage.offset_scan)
     .ExclusiveSum(thread_offsets, thread_offsets, prefix_callback);
 
-  // Step 5: Assign string_offsets from each thread using match offsets.
+  // Step 5: Assign outputs from each thread using match offsets.
 
-  for (int32_t i = 0; i < ITEMS_PER_THREAD and i < num_valid; i++) {
-    auto const match_length = trie.get_match_length(thread_states[i]);
-
-    if (match_length == 0) { continue; }
-
-    auto const match_end   = char_begin + data_begin + i + 1;
-    auto const match_begin = match_end - match_length;
-
-    if (string_offsets.size() > thread_offsets[i]) {  //
-      string_offsets[thread_offsets[i]] = match_end;
+  if (data_out.size() > 0) {
+    for (int32_t i = 0; i < ITEMS_PER_THREAD and i < num_valid; i++) {
+      data_out[data_begin + i] = thread_data[i];
     }
   }
 
-  if (data_out.size() > 0) {
-    for (int32_t i = 0; i < ITEMS_PER_THREAD and i < num_valid; i++) {  //
-      data_out[data_begin + i] = thread_data[i];
+  if (string_offsets.size() > 0) {
+    for (int32_t i = 0; i < ITEMS_PER_THREAD and i < num_valid; i++) {
+      if (trie.get_match_length(thread_states[i]) > 0) {
+        auto const match_end              = char_begin + data_begin + i + 1;
+        string_offsets[thread_offsets[i]] = match_end;
+      }
     }
   }
 }
