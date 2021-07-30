@@ -117,11 +117,6 @@ struct trie_device_view {
 };
 
 struct trie {
-  // could compress all of this to 32 bits without major perf reduction:
-  // 1) merge is_accepting state in to the most significant bit of the
-  // corrosponding transition, and use a mask to access both values. 2) change
-  // layer_offsets to uint8_t, max string length would be 253 2^8-3 (two values
-  // reserved: empty string, and error state)
  private:
   rmm::device_uvector<trie_node> _nodes;
 
