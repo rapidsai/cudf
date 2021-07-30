@@ -63,7 +63,6 @@ public class ScanAggregation {
     return new ScanAggregation(Aggregation.sum());
   }
 
-
   /**
    * Product Aggregation.
    */
