@@ -1847,6 +1847,7 @@ def gdf(pdf):
         lambda df, **kwargs: df.cumsum(**kwargs),
         lambda df, **kwargs: df.cumprod(**kwargs),
         lambda df, **kwargs: df.mean(**kwargs),
+        lambda df, **kwargs: df.median(**kwargs),
         lambda df, **kwargs: df.sum(**kwargs),
         lambda df, **kwargs: df.max(**kwargs),
         lambda df, **kwargs: df.std(ddof=1, **kwargs),
