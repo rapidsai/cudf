@@ -210,7 +210,7 @@ intersphinx_mapping = {
 numpydoc_show_inherited_class_members = True
 numpydoc_class_members_toctree = False
 
-autoclass_content = "init"
+autoclass_content = "class"
 
 # Replace API shorthands with fullname
 _reftarget_aliases = {
