@@ -19,8 +19,7 @@
 package ai.rapids.cudf;
 
 /**
- * Used to tag an aggregation as something that is compatible with rolling window operations.
- * Do not try to implement this yourself
+ * An aggregation that can be used on rolling windows.
  */
 public class RollingAggregation {
   private final Aggregation wrapped;
@@ -88,7 +87,7 @@ public class RollingAggregation {
    * Count number of valid, a.k.a. non-null, elements.
    */
   public static RollingAggregation count() {
-    return count(NullPolicy.EXCLUDE);
+    return new RollingAggregation(Aggregation.count());
   }
 
   /**

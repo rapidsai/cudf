@@ -2902,12 +2902,12 @@ public class TableTest extends CudfTestBase {
               .withKeysSorted(true)
               .withKeysDescending(false, false)
               .build(), 0, 1)
-          .scan(Aggregation.sum().onColumn(2),
-              Aggregation.count(NullPolicy.INCLUDE).onColumn(2),
-              Aggregation.min().onColumn(2),
-              Aggregation.max().onColumn(2),
-              Aggregation.rank().onColumn(3),
-              Aggregation.denseRank().onColumn(3));
+          .scan(GroupByScanAggregation.sum().onColumn(2),
+              GroupByScanAggregation.count(NullPolicy.INCLUDE).onColumn(2),
+              GroupByScanAggregation.min().onColumn(2),
+              GroupByScanAggregation.max().onColumn(2),
+              GroupByScanAggregation.rank().onColumn(3),
+              GroupByScanAggregation.denseRank().onColumn(3));
            Table expected = new Table.TestBuilder()
                .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
                .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
