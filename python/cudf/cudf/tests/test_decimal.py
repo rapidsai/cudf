@@ -347,3 +347,11 @@ def test_serialize_decimal_columns(data):
     df = cudf.DataFrame(data)
     recreated = df.__class__.deserialize(*df.serialize())
     assert_eq(recreated, df)
+
+
+def test_decimal_invalid_precision():
+    with pytest.raises(pa.ArrowInvalid):
+        _ = cudf.Series([10, 20, 30], dtype=cudf.Decimal64Dtype(2, 2))
+
+    with pytest.raises(pa.ArrowInvalid):
+        _ = cudf.Series([Decimal("300")], dtype=cudf.Decimal64Dtype(2, 1))
