@@ -457,7 +457,7 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
 
     # New pyarrow-dataset base can handle an incosistent
     # schema even without a _metadata file
-    ddf1 = dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()
+    ddf1 = dask_cudf.read_parquet(str(tmpdir), gather_statistics=True)
 
     # Add global metadata file.
     # Dask-CuDF can do this without requiring schema
@@ -466,8 +466,9 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
 
     # Check that we can still read the ddf
     # with the _metadata file present
-    ddf2 = dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()
+    ddf2 = dask_cudf.read_parquet(str(tmpdir), gather_statistics=True)
 
     # Check that the result is the same with
     # and without the _metadata file
-    dd.assert_eq(ddf1, ddf2)
+    dd.assert_eq(ddf1, ddf2, check_dtypes=False)
+    dd.assert_eq(ddf1.compute(), ddf2.compute())
