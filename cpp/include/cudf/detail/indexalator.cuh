@@ -157,8 +157,7 @@ struct base_indexalator {
    */
   CUDA_HOST_DEVICE_CALLABLE difference_type operator-(T const& rhs) const
   {
-    auto derived = static_cast<T const&>(*this);
-    return (derived.p_ - rhs.p_) / width_;
+    return (static_cast<T const&>(*this).p_ - rhs.p_) / width_;
   }
 
   /**

@@ -752,6 +752,45 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dayOfYear(JNIEnv *env, jc
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_quarterOfYear(JNIEnv *env, jclass,
+                                                                     jlong input_ptr) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+    std::unique_ptr<cudf::column> output = cudf::datetime::extract_quarter(*input);
+    return reinterpret_cast<jlong>(output.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_addCalendricalMonths(JNIEnv *env, jclass,
+                                                                            jlong ts_ptr,
+                                                                            jlong months_ptr) {
+  JNI_NULL_CHECK(env, ts_ptr, "ts is null", 0);
+  JNI_NULL_CHECK(env, months_ptr, "months is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const cudf::column_view *ts = reinterpret_cast<cudf::column_view *>(ts_ptr);
+    const cudf::column_view *months = reinterpret_cast<cudf::column_view *>(months_ptr);
+    std::unique_ptr<cudf::column> output = cudf::datetime::add_calendrical_months(*ts, *months);
+    return reinterpret_cast<jlong>(output.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isLeapYear(JNIEnv *env, jclass,
+                                                                  jlong input_ptr) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+    std::unique_ptr<cudf::column> output = cudf::datetime::is_leap_year(*input);
+    return reinterpret_cast<jlong>(output.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclass, jlong handle,
                                                               jint type, jint scale) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
