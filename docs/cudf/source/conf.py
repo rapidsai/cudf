@@ -89,7 +89,7 @@ language = None
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = []
+exclude_patterns = ['venv', "**/includes/**",]
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"
@@ -242,8 +242,24 @@ def ignore_internal_references(app, env, node, contnode):
         node["reftarget"] = ""
         return contnode
 
+def process_class_docstrings(app, what, name, obj, options, lines):
+    """
+    For those classes for which we use ::
+    :template: autosummary/class_without_autosummary.rst
+    the documented attributes/methods have to be listed in the class
+    docstring. However, if one of those lists is empty, we use 'None',
+    which then generates warnings in sphinx / ugly html output.
+    This "autodoc-process-docstring" event connector removes that part
+    from the processed docstring.
+    """
+    if what == "class":
+        if name in {"cudf.RangeIndex", "cudf.Int64Index", "cudf.UInt64Index", "cudf.Float64Index", "cudf.CategoricalIndex"}:
+
+            cut_index = lines.index(':Attributes:')
+            lines[:] = lines[:cut_index]
 
 def setup(app):
     app.add_css_file("params.css")
     app.connect("doctree-read", resolve_aliases)
     app.connect("missing-reference", ignore_internal_references)
+    app.connect("autodoc-process-docstring", process_class_docstrings)

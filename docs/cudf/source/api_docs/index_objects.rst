@@ -20,18 +20,20 @@ Properties
 .. autosummary::
    :toctree: api/
 
-   Index.values
+   Index.empty
+   Index.gpu_values
    Index.is_monotonic
    Index.is_monotonic_increasing
    Index.is_monotonic_decreasing
    Index.is_unique
-   Index.shape
    Index.name
    Index.names
    Index.ndim
+   Index.nlevels
+   Index.shape
    Index.size
-   Index.empty
-   Index.memory_usage
+   Index.values
+   
 
 Modifying and computations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -68,6 +70,13 @@ Missing values
    Index.dropna
    Index.isna
    Index.notna
+
+Memory usage
+~~~~~~~~~~~~
+.. autosummary::
+   :toctree: api/
+
+   Index.memory_usage
 
 Conversion
 ~~~~~~~~~~
@@ -120,21 +129,13 @@ Numeric Index
 -------------
 .. autosummary::
    :toctree: api/
+   :template: autosummary/class_without_autosummary.rst
 
    RangeIndex
    Int64Index
    UInt64Index
    Float64Index
 
-.. We need this autosummary so that the methods are generated.
-.. Separate block, since they aren't classes.
-
-.. autosummary::
-   :toctree: api/
-
-   RangeIndex.start
-   RangeIndex.stop
-   RangeIndex.step
 
 .. _api.categoricalindex:
 
