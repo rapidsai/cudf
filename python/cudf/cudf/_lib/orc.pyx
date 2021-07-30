@@ -10,7 +10,10 @@ from libcpp.vector cimport vector
 
 from cudf._lib.cpp.column.column cimport column
 
-from cudf.utils.dtypes import is_struct_dtype
+from cudf.utils.dtypes import (
+    is_list_dtype, 
+    is_struct_dtype
+)
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.io.orc cimport (
@@ -31,8 +34,8 @@ from cudf._lib.cpp.io.types cimport (
     data_sink,
     sink_info,
     source_info,
+    column_in_metadata,
     table_input_metadata,
-    table_metadata,
     table_with_metadata,
 )
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -139,18 +142,34 @@ cpdef write_orc(Table table,
     cudf.io.orc.read_orc
     """
     cdef compression_type compression_ = _get_comp_type(compression)
-    cdef table_metadata metadata_ = table_metadata()
     cdef unique_ptr[data_sink] data_sink_c
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
+    cdef unique_ptr[table_input_metadata] tbl_meta
 
-    metadata_.column_names.reserve(len(table._column_names))
+    if not isinstance(table._index, cudf.RangeIndex):
+        tv = table.view()
+        tbl_meta = make_unique[table_input_metadata](tv)
+        for level, idx_name in enumerate(table._index.names):
+            tbl_meta.get().column_metadata[level].set_name(
+                str.encode(
+                    _index_level_name(idx_name, level, table._column_names)
+                )
+            )
+        num_index_cols_meta = len(table._index.names)
+    else:
+        tv = table.data_view()
+        tbl_meta = make_unique[table_input_metadata](tv)
+        num_index_cols_meta = 0
 
-    for col_name in table._column_names:
-        metadata_.column_names.push_back(str.encode(col_name))
+    for i, name in enumerate(table._column_names, num_index_cols_meta):
+        tbl_meta.get().column_metadata[i].set_name(name.encode())
+        _set_col_children_names(
+            table[name]._column, tbl_meta.get().column_metadata[i]
+        )
 
     cdef orc_writer_options c_orc_writer_options = move(
         orc_writer_options.builder(sink_info_c, table.data_view())
-        .metadata(&metadata_)
+        .metadata(tbl_meta.get())
         .compression(compression_)
         .enable_statistics(<bool> (True if enable_statistics else False))
         .build()
@@ -225,6 +244,7 @@ cdef class ORCWriter:
     cdef bool enable_stats
     cdef compression_type comp_type
     cdef object index
+    cdef unique_ptr[table_input_metadata] tbl_meta
 
     def __cinit__(self, object path, object index=None,
                   object compression=None, bool enable_statistics=True):
@@ -264,20 +284,44 @@ cdef class ORCWriter:
         """
         Prepare all the values required to build the
         chunked_orc_writer_options anb creates a writer"""
-        cdef unique_ptr[table_input_metadata] tbl_meta
-        tbl_meta = make_unique[table_input_metadata]()
+        cdef table_view tv
 
         # Set the table_metadata
-        tbl_meta.get().column_names = get_column_names(table, self.index)
+        num_index_cols_meta = 0
+        self.tbl_meta = make_unique[table_input_metadata](table.data_view())
+        if self.index is not False:
+            if isinstance(table._index, cudf.core.multiindex.MultiIndex):
+                tv = table.view()
+                self.tbl_meta = make_unique[table_input_metadata](tv)
+                for level, idx_name in enumerate(table._index.names):
+                    self.tbl_meta.get().column_metadata[level].set_name(
+                        (str.encode(idx_name))
+                    )
+                num_index_cols_meta = len(table._index.names)
+            else:
+                if table._index.name is not None:
+                    tv = table.view()
+                    self.tbl_meta = make_unique[table_input_metadata](tv)
+                    self.tbl_meta.get().column_metadata[0].set_name(
+                        str.encode(table._index.name)
+                    )
+                    num_index_cols_meta = 1
+
+        for i, name in enumerate(table._column_names, num_index_cols_meta):
+            self.tbl_meta.get().column_metadata[i].set_name(name.encode())
+            _set_col_children_names(
+                table[name]._column, self.tbl_meta.get().column_metadata[i]
+            )
+
         pandas_metadata = generate_pandas_metadata(table, self.index)
-        tbl_meta.get().user_data[str.encode("pandas")] = \
+        self.tbl_meta.get().user_data[str.encode("pandas")] = \
             str.encode(pandas_metadata)
 
         cdef chunked_orc_writer_options args
         with nogil:
             args = move(
                 chunked_orc_writer_options.builder(self.sink)
-                .metadata(tbl_meta.get())
+                .metadata(self.tbl_meta.get())
                 .compression(self.comp_type)
                 .enable_statistics(self.enable_stats)
                 .build()
@@ -285,3 +329,15 @@ cdef class ORCWriter:
             self.writer.reset(new orc_chunked_writer(args))
 
         self.initialized = True
+
+cdef _set_col_children_names(Column col, column_in_metadata& col_meta):
+    if is_struct_dtype(col):
+        for i, (child_col, name) in enumerate(
+            zip(col.children, list(col.dtype.fields))
+        ):
+            col_meta.child(i).set_name(name.encode())
+            _set_col_children_names(child_col, col_meta.child(i))
+    elif is_list_dtype(col):
+        _set_col_children_names(col.children[1], col_meta.child(1))
+    else:
+        return
