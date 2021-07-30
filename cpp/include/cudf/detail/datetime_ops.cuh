@@ -43,32 +43,30 @@ CUDA_DEVICE_CALLABLE timestamp_D compute_sys_days(cuda::std::chrono::year_month_
   return timestamp_D{duration_D{era * 146097 + static_cast<int>(doe) - 719468}};
 }
 
-struct add_calendrical_months_functor_impl {
-  template <typename Timestamp, typename MonthType>
-  Timestamp __device__ operator()(Timestamp time_val, MonthType months_val)
-  {
-    using namespace cuda::std::chrono;
-    using duration_m = duration<int32_t, months::period>;
+template <typename Timestamp, typename MonthType>
+__device__ Timestamp add_calendrical_months_impl(Timestamp time_val, MonthType months_val)
+{
+  using namespace cuda::std::chrono;
+  using duration_m = duration<int32_t, months::period>;
 
-    // Get the days component from the input
-    auto days_since_epoch = floor<days>(time_val);
+  // Get the days component from the input
+  auto days_since_epoch = floor<days>(time_val);
 
-    // Add the number of months
-    year_month_day ymd{days_since_epoch};
-    ymd += duration_m{months_val};
+  // Add the number of months
+  year_month_day ymd{days_since_epoch};
+  ymd += duration_m{months_val};
 
-    // If the new date isn't valid, scale it back to the last day of the
-    // month.
-    // IDEAL: if (!ymd.ok()) ymd = ymd.year()/ymd.month()/last;
-    auto month_days = days_in_month(ymd.month(), ymd.year().is_leap());
-    if (unsigned{ymd.day()} > month_days) ymd = ymd.year() / ymd.month() / day{month_days};
+  // If the new date isn't valid, scale it back to the last day of the
+  // month.
+  // IDEAL: if (!ymd.ok()) ymd = ymd.year()/ymd.month()/last;
+  auto month_days = days_in_month(ymd.month(), ymd.year().is_leap());
+  if (unsigned{ymd.day()} > month_days) ymd = ymd.year() / ymd.month() / day{month_days};
 
-    // Put back the time component to the date
-    return
-      // IDEAL: sys_days{ymd} + ...
-      compute_sys_days(ymd) + (time_val - days_since_epoch);
-  }
-};
+  // Put back the time component to the date
+  return
+    // IDEAL: sys_days{ymd} + ...
+    compute_sys_days(ymd) + (time_val - days_since_epoch);
+}
 }  // namespace detail
 }  // namespace datetime
 }  // namespace cudf
