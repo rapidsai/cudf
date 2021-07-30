@@ -2007,42 +2007,242 @@ class NumericIndex(GenericIndex):
 
 
 class Int8Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Int8Index is a special case of Index with purely
+    integer(``int8``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Int8Index
+    """
     _dtype = np.int8
 
 
 class Int16Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Int16Index is a special case of Index with purely
+    integer(``int16``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Int16Index
+    """
     _dtype = np.int16
 
 
 class Int32Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Int32Index is a special case of Index with purely
+    integer(``int32``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Int32Index
+    """
     _dtype = np.int32
 
 
 class Int64Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Int64Index is a special case of Index with purely
+    integer(``int64``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Int64Index
+    """
     _dtype = np.int64
 
 
 class UInt8Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    UInt8Index is a special case of Index with purely
+    integer(``uint64``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    UInt8Index
+    """
     _dtype = np.uint8
 
 
 class UInt16Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    UInt16Index is a special case of Index with purely
+    integer(``uint16``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    UInt16Index
+    """
     _dtype = np.uint16
 
 
 class UInt32Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    UInt32Index is a special case of Index with purely
+    integer(``uint32``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    UInt32Index
+    """
     _dtype = np.uint32
 
 
 class UInt64Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    UInt64Index is a special case of Index with purely
+    integer(``uint64``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    UInt64Index
+    """
     _dtype = np.uint64
 
 
 class Float32Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Float32Index is a special case of Index with purely
+    float(``float32``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Float32Index
+    """
     _dtype = np.float32
 
 
 class Float64Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Float64Index is a special case of Index with purely
+    float(``float64``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Float64Index
+    """
     _dtype = np.float64
 
 
