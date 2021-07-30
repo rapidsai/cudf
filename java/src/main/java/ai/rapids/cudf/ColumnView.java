@@ -1419,7 +1419,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * This is just a convenience method for an inclusive scan with a SUM aggregation.
    */
   public final ColumnVector prefixSum() {
-    return scan(Aggregation.sum());
+    return scan(ScanAggregation.sum());
   }
 
   /**
@@ -1430,7 +1430,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                   null policy too. Currently none of those aggregations are supported so
    *                   it is undefined how they would interact with each other.
    */
-  public final ColumnVector scan(Aggregation aggregation, ScanType scanType, NullPolicy nullPolicy) {
+  public final ColumnVector scan(ScanAggregation aggregation, ScanType scanType, NullPolicy nullPolicy) {
     long nativeId = aggregation.createNativeInstance();
     try {
       return new ColumnVector(scan(getNativeView(), nativeId,
@@ -1445,7 +1445,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param aggregation the aggregation to perform
    * @param scanType should the scan be inclusive, include the current row, or exclusive.
    */
-  public final ColumnVector scan(Aggregation aggregation, ScanType scanType) {
+  public final ColumnVector scan(ScanAggregation aggregation, ScanType scanType) {
     return scan(aggregation, scanType, NullPolicy.EXCLUDE);
   }
 
@@ -1453,7 +1453,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Computes an inclusive scan for a column that excludes nulls.
    * @param aggregation the aggregation to perform
    */
-  public final ColumnVector scan(Aggregation aggregation) {
+  public final ColumnVector scan(ScanAggregation aggregation) {
     return scan(aggregation, ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
   }
 
