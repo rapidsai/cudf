@@ -1310,9 +1310,10 @@ def test_quarter():
         "1970-01-01 00:00:00",
         "1969-12-31 12:59:00",
     ]
+    dtype = "datetime64[s]"
 
     # Series
-    ps = pd.Series(data, dtype="datetime64[s]")
+    ps = pd.Series(data, dtype=dtype)
     gs = cudf.from_pandas(ps)
 
     expect = ps.dt.quarter
@@ -1328,3 +1329,32 @@ def test_quarter():
     got2 = gIndex.quarter
 
     assert_eq(expect2, got2)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-05-31",
+            None,
+            "1999-12-01",
+            "2000-12-21",
+            None,
+            "1900-02-28",
+            "1800-03-14",
+            "2100-03-10",
+            "1970-01-01",
+            "1969-12-11",
+        ]
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]"])
+def test_is_month_start(data, dtype):
+    # Series
+    ps = pd.Series(data, dtype=dtype)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.is_month_start
+    got = gs.dt.is_month_start
+
+    assert_eq(expect, got)
