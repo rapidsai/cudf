@@ -19,7 +19,8 @@
 #include <structs/utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/join.hpp>
@@ -201,13 +202,23 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   auto const left_selected  = matched.second.front();
   auto const right_selected = matched.second.back();
 
-  auto gather_map = left_semi_anti_join(kind, left_selected, right_selected, compare_nulls, stream);
+  auto gather_vector =
+    left_semi_anti_join(kind, left_selected, right_selected, compare_nulls, stream);
+
+  // wrapping the device vector with a column view allows calling the non-iterator
+  // version of detail::gather, improving compile time by 10% and reducing the
+  // object file size by 2.2x without affecting performance
+  auto gather_map = column_view(data_type{type_id::INT32},
+                                static_cast<size_type>(gather_vector->size()),
+                                gather_vector->data(),
+                                nullptr,
+                                0);
 
   auto const left_updated = scatter_columns(left_selected, left_on, left);
   return cudf::detail::gather(left_updated,
-                              gather_map->begin(),
-                              gather_map->end(),
+                              gather_map,
                               out_of_bounds_policy::DONT_CHECK,
+                              negative_index_policy::NOT_ALLOWED,
                               stream,
                               mr);
 }
