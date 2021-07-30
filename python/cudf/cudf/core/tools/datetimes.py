@@ -649,3 +649,61 @@ def _isin_datetimelike(
 
     res = lhs._obtain_isin_result(rhs)
     return res
+
+
+def date_range(
+    start=None,
+    end=None,
+    periods=None,
+    freq=None,
+    tz=None,
+    normalize=False,
+    name=None,
+    closed=None,
+    **kwargs,
+):
+    """TBA
+    """
+    if [start, end, periods, freq].count(None) > 1:
+        raise ValueError(
+            "Of the four parameters: start, end, periods, and freq, exactly "
+            "three must be specified"
+        )
+
+    try:
+        dtype = start.dtype if start is not None else end.dtype
+    except AttributeError:
+        dtype = "datetime64[ns]"
+
+    if freq is not None:
+        if isinstance(freq, str):
+            offset = DateOffset._from_freqstr(freq)
+        elif not isinstance(freq, DateOffset):
+            raise TypeError(
+                "`freq` must be a str or a cudf.DateOffset object."
+            )
+
+        if start is None:
+            end_slr = cudf.Scalar(end, dtype=dtype)
+            # TODO: support below
+            start_slr = end_slr - periods * offset
+        else:
+            start_slr = cudf.Scalar(start, dtype=dtype)
+    else:
+        start_slr = cudf.Scalar(start, dtype=dtype)
+        end_slr = cudf.Scalar(end, dtype=dtype)
+        # TODO: investigate precision difference with Pandas
+        delta = (
+            end_slr.value.astype("datetime64[ns]")
+            - start_slr.value.astype("datetime64[ns]")
+        ) / (periods - 1)
+        offset = DateOffset(**{"nanoseconds": int(delta)})
+    if normalize:
+        old_dtype = start_slr.value.dtype
+        start_slr = cudf.Scalar(
+            start_slr.value.astype("datetime64[D]").astype(old_dtype)
+        )
+
+    res = libcudf.datetime.date_range(start_slr.device_value, periods, offset)
+
+    return cudf.DatetimeIndex._from_data({None: res})
