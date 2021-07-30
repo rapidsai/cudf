@@ -3545,6 +3545,9 @@ class Frame(libcudf.table.Table):
     def __rsub__(self, other):
         return self._binaryop(other, "sub", reflect=True)
 
+    def __matmul__(self, other):
+        return self.dot(other)
+
     def __mul__(self, other):
         return self._binaryop(other, "mul")
 

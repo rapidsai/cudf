@@ -1653,6 +1653,13 @@ class Series(SingleColumnFrame, Serializable):
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "mul", fill_value, True)
 
+    def dot(self, other):
+        if isinstance(other, cudf.DataFrame):
+            output = cudf.Series(self.values.dot(other.values))
+        elif isinstance(other, cudf.Series):
+            output = self.values.dot(other.values)
+        return output
+
     def mod(self, other, fill_value=None, axis=0):
         """Modulo of series and other, element-wise
         (binary operator mod).

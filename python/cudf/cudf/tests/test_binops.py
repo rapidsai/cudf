@@ -2913,3 +2913,24 @@ def test_empty_column(binop, data, scalar):
     expected = binop(pdf, scalar)
 
     utils.assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "lhs",
+    [pd.DataFrame([[0, 1, -2, -1], [1, 1, 1, 1]]), pd.Series([1, 1, 2, 1])],
+)
+@pytest.mark.parametrize(
+    "rhs",
+    [
+        pd.DataFrame([[0, 1], [1, 2], [-1, -1], [2, 0]]),
+        pd.Series([1, 1, 2, 1]),
+    ],
+)
+def test_binops_dot(lhs, rhs):
+    glhs = cudf.from_pandas(lhs)
+    grhs = cudf.from_pandas(rhs)
+
+    expected = lhs.dot(rhs)
+    got = glhs.dot(grhs)
+
+    utils.assert_eq(expected, got)
