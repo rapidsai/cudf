@@ -21,9 +21,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <numeric>
-
 #include <thrust/optional.h>
+
+#include <numeric>
 
 namespace cudf {
 namespace ast {
@@ -63,7 +63,7 @@ struct alignas(8) device_data_reference {
                                                     // literal, or index of an intermediate
   const table_reference table_source;
 
-  inline bool operator==(const device_data_reference& rhs) const
+  bool operator==(device_data_reference const& rhs) const
   {
     return std::tie(data_index, reference_type, table_source) ==
            std::tie(rhs.data_index, rhs.reference_type, rhs.table_source);
@@ -101,10 +101,10 @@ using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
  *
  */
 struct expression_device_view {
-  device_span<const detail::device_data_reference> data_references;
-  device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals;
-  device_span<const ast_operator> operators;
-  device_span<const cudf::size_type> operator_source_indices;
+  device_span<detail::device_data_reference const> data_references;
+  device_span<cudf::detail::fixed_width_scalar_device_view_base const> literals;
+  device_span<ast_operator const> operators;
+  device_span<cudf::size_type const> operator_source_indices;
   cudf::size_type num_intermediates;
   int shmem_per_thread;
 };
@@ -238,7 +238,7 @@ class expression_parser {
   template <typename T>
   void extract_size_and_pointer(std::vector<T> const& v,
                                 std::vector<cudf::size_type>& sizes,
-                                std::vector<const void*>& data_pointers)
+                                std::vector<void const*>& data_pointers)
   {
     auto const data_size = sizeof(T) * v.size();
     sizes.push_back(data_size);
@@ -248,7 +248,7 @@ class expression_parser {
   void move_to_device(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
   {
     std::vector<cudf::size_type> sizes;
-    std::vector<const void*> data_pointers;
+    std::vector<void const*> data_pointers;
 
     extract_size_and_pointer(_data_references, sizes, data_pointers);
     extract_size_and_pointer(_literals, sizes, data_pointers);
@@ -260,31 +260,31 @@ class expression_parser {
     auto buffer_offsets    = std::vector<int>(sizes.size());
     thrust::exclusive_scan(sizes.cbegin(), sizes.cend(), buffer_offsets.begin(), 0);
 
-    auto h_data_buffer = std::make_unique<char[]>(buffer_size);
+    auto h_data_buffer = std::vector<char>(buffer_size);
     for (unsigned int i = 0; i < data_pointers.size(); ++i) {
-      std::memcpy(h_data_buffer.get() + buffer_offsets[i], data_pointers[i], sizes[i]);
+      std::memcpy(h_data_buffer.data() + buffer_offsets[i], data_pointers[i], sizes[i]);
     }
 
-    _device_data_buffer = rmm::device_buffer(h_data_buffer.get(), buffer_size, stream, mr);
+    _device_data_buffer = rmm::device_buffer(h_data_buffer.data(), buffer_size, stream, mr);
 
     stream.synchronize();
 
     // Create device pointers to components of plan
-    auto device_data_buffer_ptr            = static_cast<const char*>(_device_data_buffer.data());
-    device_expression_data.data_references = device_span<const detail::device_data_reference>(
-      reinterpret_cast<const detail::device_data_reference*>(device_data_buffer_ptr +
+    auto device_data_buffer_ptr            = static_cast<char const*>(_device_data_buffer.data());
+    device_expression_data.data_references = device_span<detail::device_data_reference const>(
+      reinterpret_cast<detail::device_data_reference const*>(device_data_buffer_ptr +
                                                              buffer_offsets[0]),
       _data_references.size());
     device_expression_data.literals =
-      device_span<const cudf::detail::fixed_width_scalar_device_view_base>(
-        reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
+      device_span<cudf::detail::fixed_width_scalar_device_view_base const>(
+        reinterpret_cast<cudf::detail::fixed_width_scalar_device_view_base const*>(
           device_data_buffer_ptr + buffer_offsets[1]),
         _literals.size());
-    device_expression_data.operators = device_span<const ast_operator>(
-      reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]),
+    device_expression_data.operators = device_span<ast_operator const>(
+      reinterpret_cast<ast_operator const*>(device_data_buffer_ptr + buffer_offsets[2]),
       _operators.size());
-    device_expression_data.operator_source_indices = device_span<const cudf::size_type>(
-      reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
+    device_expression_data.operator_source_indices = device_span<cudf::size_type const>(
+      reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[3]),
       _operator_source_indices.size());
     device_expression_data.num_intermediates = _intermediate_counter.get_max_used();
     device_expression_data.shmem_per_thread  = static_cast<int>(
@@ -306,7 +306,7 @@ class expression_parser {
    * @return The indices of the operands stored in the data references.
    */
   std::vector<cudf::size_type> visit_operands(
-    std::vector<std::reference_wrapper<const node>> operands);
+    std::vector<std::reference_wrapper<node const>> operands);
 
   /**
    * @brief Add a data reference to the internal list.
