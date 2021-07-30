@@ -795,8 +795,11 @@ cdef class _CPackedColumns:
 
         cdef _CPackedColumns p = _CPackedColumns.__new__(_CPackedColumns)
 
-        if keep_index and not input_table.index.equals(
-            RangeIndex(start=0, stop=len(input_table), step=1)
+        if keep_index and (
+            not isinstance(input_table.index, RangeIndex)
+            or input_table.index.start != 0
+            or input_table.index.stop != len(input_table)
+            or input_table.index.step != 1
         ):
             input_table_view = input_table.view()
             p.index_names = input_table._index_names
