@@ -3893,11 +3893,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Examples
         --------
         >>> import cudf
-        >>> a = [0, 1, 2]
-        >>> b = [-3, 2, 0]
         >>> df = cudf.DataFrame()
-        >>> df['a'] = a
-        >>> df['b'] = b
+        >>> df['a'] = [0, 1, 2]
+        >>> df['b'] = [-3, 2, 0]
         >>> df.sort_values('b')
            a  b
         0  0 -3
@@ -3906,7 +3904,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         """
         if inplace:
             raise NotImplementedError("`inplace` not currently implemented.")
-        if kind not in ["quicksort", "mergesort", "heapsort", "stable"]:
+        if kind not in {"quicksort", "mergesort", "heapsort", "stable"}:
             raise AttributeError(
                 f"{kind} is not a valid sorting algorithm for "
                 f"'DataFrame' object"
