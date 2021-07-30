@@ -17,18 +17,19 @@ namespace detail {
 
 struct DateOffset {
   std::size_t month, nanoseconds;
+  add_calendrical_months_functor_impl f;
 
   template <typename Timestamp>
   Timestamp __device__ operator+(Timestamp const& base)
   {
     auto result = cuda::std::chrono::time_point_cast<typename Timestamp::duration>(
       base + cuda::std::chrono::nanoseconds{nanoseconds});
-    return add_calendrical_months_functor_impl(result, month);
+    return f(result, month);
   }
 
   DateOffset __device__ operator*(std::size_t const& n)
   {
-    return DateOffset{month * n, nanoseconds * n};
+    return DateOffset{month * n, nanoseconds * n, add_calendrical_months_functor_impl{}};
   }
 };
 
