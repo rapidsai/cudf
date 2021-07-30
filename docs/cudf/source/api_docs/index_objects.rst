@@ -186,6 +186,7 @@ MultiIndex
 ----------
 .. autosummary::
    :toctree: api/
+   :template: autosummary/class_without_autosummary.rst
 
    MultiIndex
 
@@ -198,6 +199,7 @@ MultiIndex constructors
    MultiIndex.from_tuples
    MultiIndex.from_product
    MultiIndex.from_frame
+   MultiIndex.from_arrow
 
 MultiIndex properties
 ~~~~~~~~~~~~~~~~~~~~~
@@ -231,6 +233,7 @@ DatetimeIndex
 -------------
 .. autosummary::
    :toctree: api/
+   :template: autosummary/class_without_autosummary.rst
 
    DatetimeIndex
 
@@ -267,6 +270,7 @@ TimedeltaIndex
 --------------
 .. autosummary::
    :toctree: api/
+   :template: autosummary/class_without_autosummary.rst
 
    TimedeltaIndex
 
