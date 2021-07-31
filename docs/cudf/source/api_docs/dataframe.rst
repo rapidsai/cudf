@@ -243,7 +243,6 @@ Serialization / IO / conversion
    DataFrame.to_arrow
    DataFrame.to_dlpack
    DataFrame.to_parquet
-   DataFrame.to_pickle
    DataFrame.to_csv
    DataFrame.to_hdf
    DataFrame.to_dict

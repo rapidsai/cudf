@@ -2027,6 +2027,7 @@ class Int8Index(NumericIndex):
     -------
     Int8Index
     """
+
     _dtype = np.int8
 
 
@@ -2051,6 +2052,7 @@ class Int16Index(NumericIndex):
     -------
     Int16Index
     """
+
     _dtype = np.int16
 
 
@@ -2075,6 +2077,7 @@ class Int32Index(NumericIndex):
     -------
     Int32Index
     """
+
     _dtype = np.int32
 
 
@@ -2099,6 +2102,7 @@ class Int64Index(NumericIndex):
     -------
     Int64Index
     """
+
     _dtype = np.int64
 
 
@@ -2123,6 +2127,7 @@ class UInt8Index(NumericIndex):
     -------
     UInt8Index
     """
+
     _dtype = np.uint8
 
 
@@ -2147,6 +2152,7 @@ class UInt16Index(NumericIndex):
     -------
     UInt16Index
     """
+
     _dtype = np.uint16
 
 
@@ -2171,6 +2177,7 @@ class UInt32Index(NumericIndex):
     -------
     UInt32Index
     """
+
     _dtype = np.uint32
 
 
@@ -2195,6 +2202,7 @@ class UInt64Index(NumericIndex):
     -------
     UInt64Index
     """
+
     _dtype = np.uint64
 
 
@@ -2219,6 +2227,7 @@ class Float32Index(NumericIndex):
     -------
     Float32Index
     """
+
     _dtype = np.float32
 
 
@@ -2243,6 +2252,7 @@ class Float64Index(NumericIndex):
     -------
     Float64Index
     """
+
     _dtype = np.float64
 
 
@@ -2693,6 +2703,13 @@ class TimedeltaIndex(GenericIndex):
 
     @property
     def inferred_freq(self):
+        """
+        Infers frequency of TimedeltaIndex.
+
+        Notes
+        -----
+        This property is currently not supported.
+        """
         raise NotImplementedError("inferred_freq is not yet supported")
 
 

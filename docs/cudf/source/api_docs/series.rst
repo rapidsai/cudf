@@ -166,7 +166,6 @@ Reindexing / selection / label manipulation
    Series.take
    Series.tail
    Series.tile
-   Series.truncate
    Series.where
    Series.mask
 
@@ -393,6 +392,7 @@ strings and apply several methods to it. These can be accessed like
     correct template (otherwise they would be created in the Series/Index class page)
 
 ..
+    .. currentmodule:: cudf
     .. autosummary::
        :toctree: api/
        :template: autosummary/accessor.rst
@@ -400,8 +400,6 @@ strings and apply several methods to it. These can be accessed like
        Series.str
        Series.cat
        Series.dt
-       Series.sparse
-       DataFrame.sparse
        Index.str
 
 .. _api.series.cat:

@@ -79,8 +79,6 @@ application to columns of a specific data type.
    DataFrameGroupBy.describe
    DataFrameGroupBy.ffill
    DataFrameGroupBy.fillna
-   DataFrameGroupBy.filter
-   DataFrameGroupBy.hist
    DataFrameGroupBy.idxmax
    DataFrameGroupBy.idxmin
    DataFrameGroupBy.nunique

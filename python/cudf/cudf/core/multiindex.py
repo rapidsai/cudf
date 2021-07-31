@@ -612,6 +612,30 @@ class MultiIndex(BaseIndex):
 
     @property
     def codes(self):
+        """
+        Returns the codes of the underlying MultiIndex.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a':[1, 2, 3], 'b':[10, 11, 12]})
+        >>> cudf.MultiIndex.from_frame(df)
+        MultiIndex([(1, 10),
+                    (2, 11),
+                    (3, 12)],
+                names=['a', 'b'])
+        >>> midx = cudf.MultiIndex.from_frame(df)
+        >>> midx
+        MultiIndex([(1, 10),
+                    (2, 11),
+                    (3, 12)],
+                names=['a', 'b'])
+        >>> midx.codes
+           a  b
+        0  0  0
+        1  1  1
+        2  2  2
+        """
         if self._codes is None:
             self._compute_levels_and_codes()
         return self._codes
@@ -625,6 +649,37 @@ class MultiIndex(BaseIndex):
 
     @property
     def levels(self):
+        """
+        Returns list of levels in the MultiIndex
+
+        Returns
+        -------
+        List of Series objects
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a':[1, 2, 3], 'b':[10, 11, 12]})
+        >>> cudf.MultiIndex.from_frame(df)
+        MultiIndex([(1, 10),
+                    (2, 11),
+                    (3, 12)],
+                names=['a', 'b'])
+        >>> midx = cudf.MultiIndex.from_frame(df)
+        >>> midx
+        MultiIndex([(1, 10),
+                    (2, 11),
+                    (3, 12)],
+                names=['a', 'b'])
+        >>> midx.levels
+        [0    1
+        1    2
+        2    3
+        dtype: int64, 0    10
+        1    11
+        2    12
+        dtype: int64]
+        """
         if self._levels is None:
             self._compute_levels_and_codes()
         return self._levels
@@ -1126,6 +1181,37 @@ class MultiIndex(BaseIndex):
 
     @classmethod
     def from_tuples(cls, tuples, names=None):
+        """
+        Convert list of tuples to MultiIndex.
+
+        Parameters
+        ----------
+        tuples : list / sequence of tuple-likes
+            Each tuple is the index of one row/column.
+        names : list / sequence of str, optional
+            Names for the levels in the index.
+
+        Returns
+        -------
+        MultiIndex
+
+        See Also
+        --------
+        MultiIndex.from_product : Make a MultiIndex from cartesian product
+                                  of iterables.
+        MultiIndex.from_frame : Make a MultiIndex from a DataFrame.
+
+        Examples
+        --------
+        >>> tuples = [(1, 'red'), (1, 'blue'),
+        ...           (2, 'red'), (2, 'blue')]
+        >>> cudf.MultiIndex.from_tuples(tuples, names=('number', 'color'))
+        MultiIndex([(1,  'red'),
+                    (1, 'blue'),
+                    (2,  'red'),
+                    (2, 'blue')],
+                   names=['number', 'color'])
+        """
         # Use Pandas for handling Python host objects
         pdi = pd.MultiIndex.from_tuples(tuples, names=names)
         result = cls.from_pandas(pdi)
@@ -1190,11 +1276,97 @@ class MultiIndex(BaseIndex):
         return self._source_data.values
 
     @classmethod
-    def from_frame(cls, dataframe, names=None):
-        return cls(source_data=dataframe, names=names)
+    def from_frame(cls, df, names=None):
+        """
+        Make a MultiIndex from a DataFrame.
+
+        Parameters
+        ----------
+        df : DataFrame
+            DataFrame to be converted to MultiIndex.
+        names : list-like, optional
+            If no names are provided, use the column names, or tuple of column
+            names if the columns is a MultiIndex. If a sequence, overwrite
+            names with the given sequence.
+
+        Returns
+        -------
+        MultiIndex
+            The MultiIndex representation of the given DataFrame.
+
+        See Also
+        --------
+        MultiIndex.from_tuples : Convert list of tuples to MultiIndex.
+        MultiIndex.from_product : Make a MultiIndex from cartesian product
+                                  of iterables.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame([['HI', 'Temp'], ['HI', 'Precip'],
+        ...                    ['NJ', 'Temp'], ['NJ', 'Precip']],
+        ...                   columns=['a', 'b'])
+        >>> df
+              a       b
+        0    HI    Temp
+        1    HI  Precip
+        2    NJ    Temp
+        3    NJ  Precip
+        >>> cudf.MultiIndex.from_frame(df)
+        MultiIndex([('HI',   'Temp'),
+                    ('HI', 'Precip'),
+                    ('NJ',   'Temp'),
+                    ('NJ', 'Precip')],
+                   names=['a', 'b'])
+
+        Using explicit names, instead of the column names
+
+        >>> cudf.MultiIndex.from_frame(df, names=['state', 'observation'])
+        MultiIndex([('HI',   'Temp'),
+                    ('HI', 'Precip'),
+                    ('NJ',   'Temp'),
+                    ('NJ', 'Precip')],
+                   names=['state', 'observation'])
+        """
+        return cls(source_data=df, names=names)
 
     @classmethod
     def from_product(cls, arrays, names=None):
+        """
+        Make a MultiIndex from the cartesian product of multiple iterables.
+
+        Parameters
+        ----------
+        iterables : list / sequence of iterables
+            Each iterable has unique labels for each level of the index.
+        names : list / sequence of str, optional
+            Names for the levels in the index.
+            If not explicitly provided, names will be inferred from the
+            elements of iterables if an element has a name attribute
+
+        Returns
+        -------
+        MultiIndex
+
+        See Also
+        --------
+        MultiIndex.from_tuples : Convert list of tuples to MultiIndex.
+        MultiIndex.from_frame : Make a MultiIndex from a DataFrame.
+
+        Examples
+        --------
+        >>> numbers = [0, 1, 2]
+        >>> colors = ['green', 'purple']
+        >>> cudf.MultiIndex.from_product([numbers, colors],
+        ...                            names=['number', 'color'])
+        MultiIndex([(0,  'green'),
+                    (0, 'purple'),
+                    (1,  'green'),
+                    (1, 'purple'),
+                    (2,  'green'),
+                    (2, 'purple')],
+                   names=['number', 'color'])
+        """
         # Use Pandas for handling Python host objects
         pdi = pd.MultiIndex.from_product(arrays, names=names)
         result = cls.from_pandas(pdi)

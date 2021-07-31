@@ -59,7 +59,6 @@ Compatibility with MultiIndex
    :toctree: api/
 
    Index.set_names
-   Index.droplevel
 
 Missing values
 ~~~~~~~~~~~~~~
