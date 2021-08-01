@@ -518,7 +518,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_repeatString(JNIEnv *env, jcl
   try {
     cudf::jni::auto_set_device(env);
     auto const str = *reinterpret_cast<cudf::string_scalar *>(handle);
-    return reinterpret_cast<jlong>(cudf::strings::repeat_strings(str, repeat_times).release());
+    return reinterpret_cast<jlong>(cudf::strings::repeat_string(str, repeat_times).release());
   }
   CATCH_STD(env, 0);
 }
