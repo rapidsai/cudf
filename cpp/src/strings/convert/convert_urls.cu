@@ -228,22 +228,22 @@ __global__ void url_decode_char_counter(char const* const in_chars,
   __shared__ char temporary_buffer[num_warps_per_threadblock][char_block_size + halo_size];
   __shared__ typename cub::WarpReduce<int8_t>::TempStorage cub_storage[num_warps_per_threadblock];
 
-  int global_thread_id  = blockIdx.x * blockDim.x + threadIdx.x;
-  int global_warp_id    = global_thread_id / cudf::detail::warp_size;
-  int local_warp_id     = threadIdx.x / cudf::detail::warp_size;
-  int warp_lane         = threadIdx.x % cudf::detail::warp_size;
-  int nwarps            = gridDim.x * blockDim.x / cudf::detail::warp_size;
-  char* in_chars_shared = temporary_buffer[local_warp_id];
+  int const global_thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+  int const global_warp_id   = global_thread_id / cudf::detail::warp_size;
+  int const local_warp_id    = threadIdx.x / cudf::detail::warp_size;
+  int const warp_lane        = threadIdx.x % cudf::detail::warp_size;
+  int const nwarps           = gridDim.x * blockDim.x / cudf::detail::warp_size;
+  char* in_chars_shared      = temporary_buffer[local_warp_id];
 
   // Loop through strings, and assign each string to a warp.
   for (size_type row_idx = global_warp_id; row_idx < num_strings; row_idx += nwarps) {
     auto in_chars_string = in_chars + in_offsets[row_idx];
     auto string_length   = in_offsets[row_idx + 1] - in_offsets[row_idx];
-    int nblocks          = cudf::util::div_rounding_up_unsafe(string_length, char_block_size);
+    int const nblocks    = cudf::util::div_rounding_up_unsafe(string_length, char_block_size);
     offset_type escape_char_count = 0;
 
     for (int block_idx = 0; block_idx < nblocks; block_idx++) {
-      int string_length_block =
+      int const string_length_block =
         std::min(char_block_size, string_length - char_block_size * block_idx);
 
       // Each warp collectively loads input characters of the current block to the shared memory.
@@ -254,7 +254,7 @@ __global__ void url_decode_char_counter(char const* const in_chars,
       // escaped sequence.
       for (int char_idx = warp_lane; char_idx < string_length_block + halo_size;
            char_idx += cudf::detail::warp_size) {
-        int in_idx                = block_idx * char_block_size + char_idx;
+        int const in_idx          = block_idx * char_block_size + char_idx;
         in_chars_shared[char_idx] = in_idx < string_length ? in_chars_string[in_idx] : 0;
       }
 
@@ -263,14 +263,14 @@ __global__ void url_decode_char_counter(char const* const in_chars,
       // `char_idx_start` represents the start character index of the current warp.
       for (int char_idx_start = 0; char_idx_start < string_length_block;
            char_idx_start += cudf::detail::warp_size) {
-        int char_idx = char_idx_start + warp_lane;
-        int8_t is_ichar_escape_char =
+        int const char_idx = char_idx_start + warp_lane;
+        int8_t const is_ichar_escape_char =
           (char_idx < string_length_block && is_escape_char(in_chars_shared + char_idx)) ? 1 : 0;
 
         // Warp-wise reduction to calculate the number of escape characters.
         // All threads in the warp participate in the reduction, even if `char_idx` is beyond
         // `string_length_block`.
-        int8_t total_escape_char =
+        int8_t const total_escape_char =
           cub::WarpReduce<int8_t>(cub_storage[local_warp_id]).Sum(is_ichar_escape_char);
 
         if (warp_lane == 0) { escape_char_count += total_escape_char; }
@@ -310,24 +310,25 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
   __shared__ typename cub::WarpScan<int8_t>::TempStorage cub_storage[num_warps_per_threadblock];
   __shared__ int out_idx[num_warps_per_threadblock];
 
-  int global_thread_id  = blockIdx.x * blockDim.x + threadIdx.x;
-  int global_warp_id    = global_thread_id / cudf::detail::warp_size;
-  int local_warp_id     = threadIdx.x / cudf::detail::warp_size;
-  int warp_lane         = threadIdx.x % cudf::detail::warp_size;
-  int nwarps            = gridDim.x * blockDim.x / cudf::detail::warp_size;
-  char* in_chars_shared = temporary_buffer[local_warp_id];
+  int const global_thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+  int const global_warp_id   = global_thread_id / cudf::detail::warp_size;
+  int const local_warp_id    = threadIdx.x / cudf::detail::warp_size;
+  int const warp_lane        = threadIdx.x % cudf::detail::warp_size;
+  int const nwarps           = gridDim.x * blockDim.x / cudf::detail::warp_size;
+  char* in_chars_shared      = temporary_buffer[local_warp_id];
 
   // Loop through strings, and assign each string to a warp
   for (size_type row_idx = global_warp_id; row_idx < num_strings; row_idx += nwarps) {
     auto in_chars_string  = in_chars + in_offsets[row_idx];
     auto out_chars_string = out_chars + out_offsets[row_idx];
     auto string_length    = in_offsets[row_idx + 1] - in_offsets[row_idx];
-    int nblocks           = cudf::util::div_rounding_up_unsafe(string_length, char_block_size);
+    int const nblocks     = cudf::util::div_rounding_up_unsafe(string_length, char_block_size);
 
+    // Use the last thread of the warp to initialize `out_idx` to 0.
     if (warp_lane == cudf::detail::warp_size - 1) { out_idx[local_warp_id] = 0; }
 
     for (int block_idx = 0; block_idx < nblocks; block_idx++) {
-      int string_length_block =
+      int const string_length_block =
         std::min(char_block_size, string_length - char_block_size * block_idx);
 
       // Each warp collectively loads input characters of the current block to shared memory.
@@ -336,7 +337,7 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
       // without branches.
       for (int char_idx = warp_lane; char_idx < string_length_block + halo_size * 2;
            char_idx += cudf::detail::warp_size) {
-        int in_idx = block_idx * char_block_size + char_idx - halo_size;
+        int const in_idx = block_idx * char_block_size + char_idx - halo_size;
         in_chars_shared[char_idx] =
           in_idx >= 0 && in_idx < string_length ? in_chars_string[in_idx] : 0;
       }
@@ -346,11 +347,11 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
       // `char_idx_start` represents the start character index of the current warp.
       for (int char_idx_start = 0; char_idx_start < string_length_block;
            char_idx_start += cudf::detail::warp_size) {
-        int char_idx = char_idx_start + warp_lane;
+        int const char_idx = char_idx_start + warp_lane;
         // If the current character is part of an escape sequence starting at the previous two
         // locations, the thread with the starting location should output the escaped character, and
         // the current thread should not output a character.
-        int8_t out_size =
+        int8_t const out_size =
           (char_idx >= string_length_block || is_escape_char(in_chars_shared + char_idx) ||
            is_escape_char(in_chars_shared + char_idx + 1))
             ? 0
@@ -363,21 +364,21 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
         cub::WarpScan<int8_t>(cub_storage[local_warp_id]).ExclusiveSum(out_size, out_offset);
 
         if (out_size == 1) {
-          char ch;
-          char* ch_ptr = in_chars_shared + char_idx + halo_size;
-          if (is_escape_char(ch_ptr)) {
-            // If the current location is the start of an escape sequence, load and decode.
-            ch = escaped_sequence_to_byte(ch_ptr);
-          } else {
-            // If the current location is not the start of an escape sequence, load directly.
-            ch = *ch_ptr;
-          }
+          char const* const ch_ptr = in_chars_shared + char_idx + halo_size;
+          char const ch =
+            is_escape_char(ch_ptr)
+              ?
+              // If the current location is the start of an escape sequence, load and decode.
+              escaped_sequence_to_byte(ch_ptr)
+              :
+              // If the current location is not the start of an escape sequence, load directly.
+              *ch_ptr;
           out_chars_string[out_idx[local_warp_id] + out_offset] = ch;
         }
 
         if (warp_lane == cudf::detail::warp_size - 1) {
           out_idx[local_warp_id] += (out_offset + out_size);
-        };
+        }
 
         __syncwarp();
       }
