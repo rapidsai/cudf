@@ -415,17 +415,13 @@ std::unique_ptr<column> url_decode(
   auto offsets_mutable_view = offsets_column->mutable_view();
   url_decode_char_counter<num_warps_per_threadblock, char_block_size>
     <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(
-      d_in_chars, d_in_offsets, offsets_mutable_view.begin<offset_type>() + 1, strings_count);
+      d_in_chars, d_in_offsets, offsets_mutable_view.begin<offset_type>(), strings_count);
 
-  // use inclusive_scan to transform number of bytes into offsets
-  thrust::inclusive_scan(rmm::exec_policy(stream),
-                         offsets_view.begin<offset_type>() + 1,
-                         offsets_view.begin<offset_type>() + offset_count,
-                         offsets_mutable_view.begin<offset_type>() + 1);
-
-  // set the first element of the offset column to 0
-  CUDA_TRY(cudaMemsetAsync(
-    offsets_mutable_view.begin<offset_type>(), 0, sizeof(offset_type), stream.value()));
+  // use scan to transform number of bytes into offsets
+  thrust::exclusive_scan(rmm::exec_policy(stream),
+                         offsets_view.begin<offset_type>(),
+                         offsets_view.end<offset_type>(),
+                         offsets_mutable_view.begin<offset_type>());
 
   // copy the total number of characters of all strings combined (last element of the offset column)
   // to the host memory
