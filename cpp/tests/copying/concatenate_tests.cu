@@ -482,7 +482,7 @@ TEST_F(OverflowTest, Presliced)
     auto offset_gen = cudf::detail::make_counting_transform_iterator(
       0, [string_size](size_type index) { return index * string_size; });
     cudf::test::fixed_width_column_wrapper<int> offsets(offset_gen, offset_gen + num_rows + 1);
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, num_rows);
+    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, total_chars_size);
     auto col        = cudf::make_strings_column(
       num_rows, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{});
 
