@@ -614,13 +614,6 @@ cdef class GroupbyAggregation:
             make_collect_set_aggregation[groupby_aggregation]())
         return agg
 
-    # scan aggregations
-    # TODO: update this after adding per algorithm aggregation derived types
-    # https://github.com/rapidsai/cudf/issues/7106
-    cumsum = sum
-    cummin = min
-    cummax = max
-
 cdef class GroupbyScanAggregation:
     """A Cython wrapper for groupby scan aggregations.
 

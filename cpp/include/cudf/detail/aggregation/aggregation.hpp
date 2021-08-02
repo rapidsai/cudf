@@ -1269,7 +1269,7 @@ struct dispatch_source {
  * a callable.
  *
  * This function expects a callable `f` with an `operator()` template accepting
- * two template parameters. The first is a type dispatche `type`. The
+ * two template parameters. The first is a type dispatched from `type`. The
  * second is an `aggregation::Kind` dispatched from `k`.
  *
  * @param type The `data_type` used to dispatch a type for the first template
