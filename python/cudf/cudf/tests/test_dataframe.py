@@ -5054,6 +5054,18 @@ def test_insert(data):
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize(
+    "data", [{"A": [1, 2, 3], "B": ["a", "b", "c"]}],
+)
+def test_insert_NA(data):
+    pdf = pd.DataFrame.from_dict(data)
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    pdf["C"] = pd.NA
+    gdf["C"] = cudf.NA
+    assert_eq(pdf, gdf)
+
+
 def test_cov():
     gdf = cudf.datasets.randomdata(10)
     pdf = gdf.to_pandas()
