@@ -21,6 +21,7 @@
 namespace cudf {
 namespace io {
 namespace text {
+namespace detail {
 
 /**
  * @brief represents a single (begin, end] pair of possible state transition history.
@@ -106,6 +107,7 @@ inline constexpr multistate operator+(multistate const& lhs, multistate const& r
   return result;
 }
 
+}  // namespace detail
 }  // namespace text
 }  // namespace io
 }  // namespace cudf

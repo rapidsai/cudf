@@ -18,17 +18,16 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
-#include <cudf/io/text/multistate.hpp>
-#include <cudf/io/text/trie.hpp>
+#include <cudf/io/text/detail/multistate.hpp>
+#include <cudf/io/text/detail/tile_state.hpp>
+#include <cudf/io/text/detail/trie.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_pool.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
-#include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
-#include <cub/warp/warp_reduce.cuh>
 
 #include <iostream>
 #include <memory>
@@ -41,168 +40,7 @@ inline constexpr auto ceil_div(Dividend dividend, Divisor divisor)
   return dividend / divisor + (dividend % divisor != 0);
 }
 
-using multistate = cudf::io::text::multistate;
-
-enum class scan_tile_status : uint8_t {
-  oob,
-  invalid,
-  partial,
-  inclusive,
-};
-
-template <typename T>
-struct scan_tile_state_view {
-  uint64_t num_tiles;
-  scan_tile_status* tile_status;
-  T* tile_partial;
-  T* tile_inclusive;
-
-  __device__ inline void initialize_status(cudf::size_type base_tile_idx,
-                                           cudf::size_type count,
-                                           scan_tile_status status)
-  {
-    auto thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (thread_idx < count) {  //
-      // this is probably UB without taking in to account tile_states being assigned multiple ties
-      // due to modulo operator
-      tile_status[(base_tile_idx + thread_idx) % num_tiles] = status;
-    }
-  }
-
-  __device__ inline void set_partial_prefix(cudf::size_type tile_idx, T value)
-  {
-    auto const offset = (tile_idx + num_tiles) % num_tiles;
-    cub::ThreadStore<cub::STORE_CG>(tile_partial + offset, value);
-    __threadfence();
-    cub::ThreadStore<cub::STORE_CG>(tile_status + offset, scan_tile_status::partial);
-  }
-
-  __device__ inline void set_inclusive_prefix(cudf::size_type tile_idx, T value)
-  {
-    auto const offset = (tile_idx + num_tiles) % num_tiles;
-    cub::ThreadStore<cub::STORE_CG>(tile_inclusive + offset, value);
-    __threadfence();
-    cub::ThreadStore<cub::STORE_CG>(tile_status + offset, scan_tile_status::inclusive);
-  }
-
-  __device__ inline T get_prefix(cudf::size_type tile_idx, scan_tile_status& status)
-  {
-    auto const offset = (tile_idx + num_tiles) % num_tiles;
-
-    while ((status = cub::ThreadLoad<cub::LOAD_CG>(tile_status + offset)) ==
-           scan_tile_status::invalid) {
-      __threadfence();
-    }
-
-    if (status == scan_tile_status::partial) {
-      return cub::ThreadLoad<cub::LOAD_CG>(tile_partial + offset);
-    } else {
-      return cub::ThreadLoad<cub::LOAD_CG>(tile_inclusive + offset);
-    }
-  }
-
-  __device__ inline T get_inclusive_prefix(cudf::size_type tile_idx)
-  {
-    auto const offset = (tile_idx + num_tiles) % num_tiles;
-    while (cub::ThreadLoad<cub::LOAD_CG>(tile_status + offset) != scan_tile_status::inclusive) {
-      __threadfence();
-    }
-    return cub::ThreadLoad<cub::LOAD_CG>(tile_inclusive + offset);
-  }
-};
-
-template <typename T>
-struct scan_tile_state {
-  rmm::device_uvector<scan_tile_status> tile_status;
-  rmm::device_uvector<T> tile_state_partial;
-  rmm::device_uvector<T> tile_state_inclusive;
-
-  scan_tile_state(cudf::size_type num_tiles,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : tile_status(rmm::device_uvector<scan_tile_status>(num_tiles, stream, mr)),
-      tile_state_partial(rmm::device_uvector<T>(num_tiles, stream, mr)),
-      tile_state_inclusive(rmm::device_uvector<T>(num_tiles, stream, mr))
-  {
-  }
-
-  operator scan_tile_state_view<T>()
-  {
-    return scan_tile_state_view<T>{tile_status.size(),
-                                   tile_status.data(),
-                                   tile_state_partial.data(),
-                                   tile_state_inclusive.data()};
-  }
-
-  inline void set_seed_async(T const seed, rmm::cuda_stream_view stream)
-  {
-    auto x = tile_status.size();
-    auto y = scan_tile_status::inclusive;
-    tile_state_inclusive.set_element_async(x - 1, seed, stream);
-    tile_status.set_element_async(x - 1, y, stream);
-  }
-
-  // T back_element(rmm::cuda_stream_view stream) const { return tile_state.back_element(stream); }
-
-  inline T get_inclusive_prefix(cudf::size_type tile_idx, rmm::cuda_stream_view stream) const
-  {
-    auto const offset = (tile_idx + tile_status.size()) % tile_status.size();
-    return tile_state_inclusive.element(offset, stream);
-  }
-};
-
-template <typename T>
-struct scan_tile_state_callback {
-  using WarpReduce = cub::WarpReduce<T>;
-
-  struct _TempStorage {
-    typename WarpReduce::TempStorage reduce;
-    T exclusive_prefix;
-  };
-
-  using TempStorage = cub::Uninitialized<_TempStorage>;
-
-  __device__ inline scan_tile_state_callback(TempStorage& temp_storage,
-                                             scan_tile_state_view<T>& tile_state,
-                                             cudf::size_type tile_idx)
-    : _temp_storage(temp_storage.Alias()), _tile_state(tile_state), _tile_idx(tile_idx)
-  {
-  }
-
-  __device__ inline T operator()(T const& block_aggregate)
-  {
-    if (threadIdx.x == 0) {
-      _tile_state.set_partial_prefix(_tile_idx, block_aggregate);  //
-    }
-
-    auto predecessor_idx    = _tile_idx - 1 - threadIdx.x;
-    auto predecessor_status = scan_tile_status::invalid;
-
-    // scan partials to form prefix
-
-    if (threadIdx.x == 0) {
-      auto window_partial = _tile_state.get_prefix(predecessor_idx, predecessor_status);
-      while (predecessor_status != scan_tile_status::inclusive) {
-        predecessor_idx--;
-        auto predecessor_prefix = _tile_state.get_prefix(predecessor_idx, predecessor_status);
-        window_partial          = predecessor_prefix + window_partial;
-      }
-      _temp_storage.exclusive_prefix = window_partial;
-    }
-
-    if (threadIdx.x == 0) {
-      _tile_state.set_inclusive_prefix(_tile_idx, _temp_storage.exclusive_prefix + block_aggregate);
-    }
-
-    __syncthreads();  // TODO: remove if unnecessary.
-
-    return _temp_storage.exclusive_prefix;
-  }
-
-  _TempStorage& _temp_storage;
-  scan_tile_state_view<T>& _tile_state;
-  cudf::size_type _tile_idx;
-};
+using cudf::io::text::detail::multistate;
 
 auto constexpr ITEMS_PER_THREAD = 32;  // influences register pressure
 auto constexpr THREADS_PER_TILE = 32;  // must be >= 32 for warp-reduce. bugged for > 32, needs fix
@@ -213,7 +51,7 @@ auto constexpr ITEMS_PER_CHUNK = ITEMS_PER_TILE * TILES_PER_CHUNK;
 
 struct PatternScan {
   typedef cub::BlockScan<multistate, THREADS_PER_TILE> BlockScan;
-  typedef scan_tile_state_callback<multistate> BlockScanCallback;
+  typedef cudf::io::text::detail::scan_tile_state_callback<multistate> BlockScanCallback;
 
   struct _TempStorage {
     typename BlockScan::TempStorage scan;
@@ -227,8 +65,8 @@ struct PatternScan {
   __device__ inline PatternScan(TempStorage& temp_storage) : _temp_storage(temp_storage.Alias()) {}
 
   __device__ inline void Scan(cudf::size_type tile_idx,
-                              scan_tile_state_view<multistate> tile_state,
-                              cudf::io::text::trie_device_view trie,
+                              cudf::io::text::detail::scan_tile_state_view<multistate> tile_state,
+                              cudf::io::text::detail::trie_device_view trie,
                               char (&thread_data)[ITEMS_PER_THREAD],
                               uint32_t (&thread_state)[ITEMS_PER_THREAD])
   {
@@ -261,27 +99,30 @@ struct PatternScan {
 // it begins in. From there, each thread can then take deterministic action. In this case, the
 // deterministic action is counting and outputting delimiter offsets when a delimiter is found.
 
-__global__ void multibyte_split_init_kernel(cudf::size_type base_tile_idx,
-                                            cudf::size_type num_tiles,
-                                            scan_tile_state_view<multistate> tile_multistates,
-                                            scan_tile_state_view<uint32_t> tile_output_offsets,
-                                            scan_tile_status status = scan_tile_status::invalid)
+__global__ void multibyte_split_init_kernel(
+  cudf::size_type base_tile_idx,
+  cudf::size_type num_tiles,
+  cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
+  cudf::io::text::detail::scan_tile_state_view<uint32_t> tile_output_offsets,
+  cudf::io::text::detail::scan_tile_status status =
+    cudf::io::text::detail::scan_tile_status::invalid)
 {
   tile_multistates.initialize_status(base_tile_idx, num_tiles, status);
   tile_output_offsets.initialize_status(base_tile_idx, num_tiles, status);
 }
 
-__global__ void multibyte_split_kernel(cudf::size_type base_tile_idx,
-                                       cudf::size_type num_tiles,
-                                       scan_tile_state_view<multistate> tile_multistates,
-                                       scan_tile_state_view<uint32_t> tile_output_offsets,
-                                       cudf::io::text::trie_device_view trie,
-                                       cudf::device_span<char const> data,
-                                       cudf::device_span<int32_t> string_offsets,
-                                       cudf::device_span<char> data_out)
+__global__ void multibyte_split_kernel(
+  cudf::size_type base_tile_idx,
+  cudf::size_type num_tiles,
+  cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
+  cudf::io::text::detail::scan_tile_state_view<uint32_t> tile_output_offsets,
+  cudf::io::text::detail::trie_device_view trie,
+  cudf::device_span<char const> data,
+  cudf::device_span<int32_t> string_offsets,
+  cudf::device_span<char> data_out)
 {
   typedef cub::BlockScan<uint32_t, THREADS_PER_TILE> OffsetScan;
-  typedef scan_tile_state_callback<uint32_t> OffsetScanCallback;
+  typedef cudf::io::text::detail::scan_tile_state_callback<uint32_t> OffsetScanCallback;
 
   __shared__ union {
     typename PatternScan::TempStorage pattern_scan;
@@ -410,7 +251,7 @@ void join_pool_to_stream(rmm::cuda_stream_pool& stream_pool, rmm::cuda_stream_vi
 }
 
 cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_source& source,
-                                                 cudf::io::text::trie const& trie,
+                                                 cudf::io::text::detail::trie const& trie,
                                                  scan_tile_state<multistate>& tile_multistates,
                                                  scan_tile_state<uint32_t>& tile_offsets,
                                                  device_span<cudf::size_type> output_buffer,
@@ -428,7 +269,7 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
     TILES_PER_CHUNK,
     tile_multistates,
     tile_offsets,
-    scan_tile_status::oob);
+    cudf::io::text::detail::scan_tile_status::oob);
 
   auto multistate_seed = multistate();
 
@@ -477,7 +318,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source&
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto const trie  = cudf::io::text::trie::create(delimiters, stream);
+  auto const trie  = cudf::io::text::detail::trie::create(delimiters, stream);
   auto concurrency = 2;
   // must be at least 32 when using warp-reduce on partials
   // must be at least 1 more than max possible concurrent tiles

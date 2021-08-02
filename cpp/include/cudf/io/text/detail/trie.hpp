@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/io/text/multistate.hpp>
+#include <cudf/io/text/detail/multistate.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -27,7 +27,10 @@
 #include <string>
 #include <vector>
 
-namespace {
+namespace cudf {
+namespace io {
+namespace text {
+namespace detail {
 
 struct trie_builder_node {
   uint8_t match_length;
@@ -50,12 +53,6 @@ struct trie_builder_node {
     return children[*s]->insert(s + 1, size - 1, depth + 1);
   }
 };
-
-}  // namespace
-
-namespace cudf {
-namespace io {
-namespace text {
 
 struct trie_node {
   char token;
@@ -183,12 +180,13 @@ struct trie {
       trie_nodes.emplace_back(trie_node{tokens[i], match_length[i], transitions[i]});
     }
 
-    return trie{detail::make_device_uvector_async(trie_nodes, stream, mr)};
+    return trie{cudf::detail::make_device_uvector_async(trie_nodes, stream, mr)};
   }
 
   trie_device_view view() const { return trie_device_view{_nodes}; }
 };
 
+}  // namespace detail
 }  // namespace text
 }  // namespace io
 }  // namespace cudf

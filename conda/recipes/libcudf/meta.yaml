@@ -134,9 +134,9 @@ test:
     - test -f $PREFIX/include/cudf/io/parquet.hpp
     - test -f $PREFIX/include/cudf/io/text/data_chunk_source_factories.hpp
     - test -f $PREFIX/include/cudf/io/text/data_chunk_source.hpp
+    - test -f $PREFIX/include/cudf/io/text/detail/multistate.hpp
+    - test -f $PREFIX/include/cudf/io/text/detail/trie.hpp
     - test -f $PREFIX/include/cudf/io/text/multibyte_split.hpp
-    - test -f $PREFIX/include/cudf/io/text/multistate.hpp
-    - test -f $PREFIX/include/cudf/io/text/trie.hpp
     - test -f $PREFIX/include/cudf/io/types.hpp
     - test -f $PREFIX/include/cudf/ipc.hpp
     - test -f $PREFIX/include/cudf/join.hpp
