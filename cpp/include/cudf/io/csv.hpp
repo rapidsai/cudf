@@ -293,12 +293,12 @@ class csv_reader_options {
   std::vector<int> const& get_parse_dates_indexes() const { return _parse_dates_indexes; }
 
   /**
-   * @brief Returns names of columns to read as datetime.
+   * @brief Returns names of columns to read as hexadecimal.
    */
   std::vector<std::string> const& get_parse_hex_names() const { return _parse_hex_names; }
 
   /**
-   * @brief Returns indexes of columns to read as datetime.
+   * @brief Returns indexes of columns to read as hexadecimal.
    */
   std::vector<int> const& get_parse_hex_indexes() const { return _parse_hex_indexes; }
 
@@ -1010,7 +1010,7 @@ class csv_reader_options_builder {
   /**
    * @brief Sets indexes of columns to read as datetime.
    *
-   * @param col_names Vector of column indices to read as datetime.
+   * @param col_ind Vector of column indices to read as datetime
    * @return this for chaining.
    */
   csv_reader_options_builder& parse_dates(std::vector<int> col_ind)
@@ -1034,7 +1034,7 @@ class csv_reader_options_builder {
   /**
    * @brief Sets indexes of columns to parse as hexadecimal.
    *
-   * @param col_names Vector of column indices to parse as hexadecimal
+   * @param col_ind Vector of column indices to parse as hexadecimal
    * @return this for chaining.
    */
   csv_reader_options_builder& parse_hex(std::vector<int> col_ind)

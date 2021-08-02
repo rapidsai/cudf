@@ -167,7 +167,7 @@ class json_reader_options {
   /**
    * @brief Set data types for columns to be read.
    *
-   * @param types Vector dtypes in string format.
+   * @param types Vector of dtypes
    */
 
   void set_dtypes(std::vector<data_type> types) { _dtypes = std::move(types); }
