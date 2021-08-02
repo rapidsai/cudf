@@ -39,6 +39,7 @@ conditional_join(table_view const& left,
                  ast::expression binary_predicate,
                  null_equality compare_nulls,
                  join_kind JoinKind,
+                 size_type output_size,
                  rmm::cuda_stream_view stream,
                  rmm::mr::device_memory_resource* mr)
 {
@@ -78,37 +79,39 @@ conditional_join(table_view const& left,
   auto right_table = table_device_view::create(right, stream);
 
   // Allocate storage for the counter used to get the size of the join output
-  rmm::device_scalar<size_type> size(0, stream, mr);
-  CHECK_CUDA(stream.value());
   detail::grid_1d config(left_table->num_rows(), DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block =
     parser.device_expression_data.shmem_per_thread * config.num_threads_per_block;
-
-  // Determine number of output rows without actually building the output to simply
-  // find what the size of the output will be.
   join_kind KernelJoinKind = JoinKind == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : JoinKind;
-  if (has_nulls) {
-    compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_table,
-        *right_table,
-        KernelJoinKind,
-        compare_nulls,
-        parser.device_expression_data,
-        size.data());
-  } else {
-    compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_table,
-        *right_table,
-        KernelJoinKind,
-        compare_nulls,
-        parser.device_expression_data,
-        size.data());
-  }
-  CHECK_CUDA(stream.value());
 
-  size_type const join_size = size.value(stream);
+  // If the join size was not provided as an input, compute it here.
+  size_type join_size = output_size;
+  if (join_size == CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE) {
+    rmm::device_scalar<size_type> size(0, stream, mr);
+    CHECK_CUDA(stream.value());
+    if (has_nulls) {
+      compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
+        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+          *left_table,
+          *right_table,
+          KernelJoinKind,
+          compare_nulls,
+          parser.device_expression_data,
+          size.data());
+    } else {
+      compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
+        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+          *left_table,
+          *right_table,
+          KernelJoinKind,
+          compare_nulls,
+          parser.device_expression_data,
+          size.data());
+    }
+    CHECK_CUDA(stream.value());
+    join_size = size.value(stream);
+  }
+  CUDF_EXPECTS(join_size >= 0, "You cannot provide a negative output join size.");
 
   // If the output size will be zero, we can return immediately.
   if (join_size == 0) {
@@ -254,6 +257,7 @@ conditional_inner_join(table_view left,
                                   binary_predicate,
                                   compare_nulls,
                                   detail::join_kind::INNER_JOIN,
+                                  detail::CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE,
                                   rmm::cuda_stream_default,
                                   mr);
 }
@@ -272,6 +276,7 @@ conditional_left_join(table_view left,
                                   binary_predicate,
                                   compare_nulls,
                                   detail::join_kind::LEFT_JOIN,
+                                  detail::CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE,
                                   rmm::cuda_stream_default,
                                   mr);
 }
@@ -290,6 +295,7 @@ conditional_full_join(table_view left,
                                   binary_predicate,
                                   compare_nulls,
                                   detail::join_kind::FULL_JOIN,
+                                  detail::CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE,
                                   rmm::cuda_stream_default,
                                   mr);
 }
@@ -307,6 +313,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
                                             binary_predicate,
                                             compare_nulls,
                                             detail::join_kind::LEFT_SEMI_JOIN,
+                                            detail::CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE,
                                             rmm::cuda_stream_default,
                                             mr)
                      .first);
@@ -325,6 +332,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
                                             binary_predicate,
                                             compare_nulls,
                                             detail::join_kind::LEFT_ANTI_JOIN,
+                                            detail::CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE,
                                             rmm::cuda_stream_default,
                                             mr)
                      .first);

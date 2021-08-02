@@ -26,6 +26,8 @@
 namespace cudf {
 namespace detail {
 
+constexpr int CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE = -1;
+
 /**
  * @brief Computes the join operation between two tables and returns the
  * output indices of left and right table as a combined table
@@ -46,8 +48,9 @@ conditional_join(table_view const& left,
                  ast::expression binary_predicate,
                  null_equality compare_nulls,
                  join_kind JoinKind,
-                 rmm::cuda_stream_view stream,
-                 rmm::mr::device_memory_resource* mr);
+                 size_type output_size               = CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE,
+                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Computes the size of a join operation between two tables without
@@ -62,13 +65,14 @@ conditional_join(table_view const& left,
  *
  * @return Join output indices vector pair
  */
-size_type compute_conditional_join_output_size(table_view const& left,
-                                               table_view const& right,
-                                               ast::expression binary_predicate,
-                                               null_equality compare_nulls,
-                                               join_kind JoinKind,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr);
+size_type compute_conditional_join_output_size(
+  table_view const& left,
+  table_view const& right,
+  ast::expression binary_predicate,
+  null_equality compare_nulls,
+  join_kind JoinKind,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf
