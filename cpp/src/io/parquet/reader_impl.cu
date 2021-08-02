@@ -697,7 +697,8 @@ class aggregate_metadata {
         std::find_if(schema_elem.children_idx.begin(),
                      schema_elem.children_idx.end(),
                      [&](size_t col_schema_idx) { return schema[col_schema_idx].name == name; });
-      CUDF_EXPECTS(col_schema_idx != schema_elem.children_idx.end(), "Child not found");
+      CUDF_EXPECTS(col_schema_idx != schema_elem.children_idx.end(),
+                   "Child \"" + name + "\" not found in \"" + schema_elem.name + "\"");
       return schema[*col_schema_idx];
     };
 
@@ -713,9 +714,14 @@ class aggregate_metadata {
         if (schema_elem.is_stub()) {
           // is this legit?
           CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
-          build_column((col_name_info) ? &col_name_info->children[0] : nullptr,
-                       schema[schema_elem.children_idx[0]],
-                       out_col_array);
+          auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
+
+          // if we still have a specified col_name_info at this level then verify if name matches
+          // with child
+          auto& child_schema = (col_name_info)
+                                 ? find_schema_child(schema_elem, col_name_info->children[0].name)
+                                 : schema[schema_elem.children_idx[0]];
+          build_column(child_col_name_info, child_schema, out_col_array);
           return;
         }
 
