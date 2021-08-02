@@ -23,10 +23,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <optional>
+
 namespace cudf {
 namespace detail {
-
-constexpr int CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE = -1;
 
 /**
  * @brief Computes the join operation between two tables and returns the
@@ -48,9 +48,9 @@ conditional_join(table_view const& left,
                  ast::expression binary_predicate,
                  null_equality compare_nulls,
                  join_kind JoinKind,
-                 size_type output_size               = CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE,
-                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                 std::optional<size_type> output_size = {},
+                 rmm::cuda_stream_view stream         = rmm::cuda_stream_default,
+                 rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Computes the size of a join operation between two tables without

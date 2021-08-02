@@ -28,6 +28,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <optional>
+
 namespace cudf {
 namespace detail {
 
@@ -38,7 +40,7 @@ conditional_join(table_view const& left,
                  ast::expression binary_predicate,
                  null_equality compare_nulls,
                  join_kind JoinKind,
-                 size_type output_size,
+                 std::optional<size_type> output_size,
                  rmm::cuda_stream_view stream,
                  rmm::mr::device_memory_resource* mr)
 {
@@ -84,8 +86,10 @@ conditional_join(table_view const& left,
   join_kind KernelJoinKind = JoinKind == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : JoinKind;
 
   // If the join size was not provided as an input, compute it here.
-  size_type join_size = output_size;
-  if (join_size == CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE) {
+  size_type join_size;
+  if (output_size.has_value()) {
+    join_size = *output_size;
+  } else {
     rmm::device_scalar<size_type> size(0, stream, mr);
     CHECK_CUDA(stream.value());
     if (has_nulls) {
@@ -110,7 +114,6 @@ conditional_join(table_view const& left,
     CHECK_CUDA(stream.value());
     join_size = size.value(stream);
   }
-  CUDF_EXPECTS(join_size >= 0, "You cannot provide a negative output join size.");
 
   // If the output size will be zero, we can return immediately.
   if (join_size == 0) {
@@ -248,6 +251,7 @@ conditional_inner_join(table_view left,
                        table_view right,
                        ast::expression binary_predicate,
                        null_equality compare_nulls,
+                       std::optional<size_type> output_size,
                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -256,7 +260,7 @@ conditional_inner_join(table_view left,
                                   binary_predicate,
                                   compare_nulls,
                                   detail::join_kind::INNER_JOIN,
-                                  detail::CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE,
+                                  output_size,
                                   rmm::cuda_stream_default,
                                   mr);
 }
@@ -267,6 +271,7 @@ conditional_left_join(table_view left,
                       table_view right,
                       ast::expression binary_predicate,
                       null_equality compare_nulls,
+                      std::optional<size_type> output_size,
                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -275,7 +280,7 @@ conditional_left_join(table_view left,
                                   binary_predicate,
                                   compare_nulls,
                                   detail::join_kind::LEFT_JOIN,
-                                  detail::CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE,
+                                  output_size,
                                   rmm::cuda_stream_default,
                                   mr);
 }
@@ -286,6 +291,7 @@ conditional_full_join(table_view left,
                       table_view right,
                       ast::expression binary_predicate,
                       null_equality compare_nulls,
+                      std::optional<size_type> output_size,
                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -294,7 +300,7 @@ conditional_full_join(table_view left,
                                   binary_predicate,
                                   compare_nulls,
                                   detail::join_kind::FULL_JOIN,
-                                  detail::CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE,
+                                  output_size,
                                   rmm::cuda_stream_default,
                                   mr);
 }
@@ -304,6 +310,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
   table_view right,
   ast::expression binary_predicate,
   null_equality compare_nulls,
+  std::optional<size_type> output_size,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -312,7 +319,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
                                             binary_predicate,
                                             compare_nulls,
                                             detail::join_kind::LEFT_SEMI_JOIN,
-                                            detail::CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE,
+                                            output_size,
                                             rmm::cuda_stream_default,
                                             mr)
                      .first);
@@ -323,6 +330,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
   table_view right,
   ast::expression binary_predicate,
   null_equality compare_nulls,
+  std::optional<size_type> output_size,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -331,7 +339,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
                                             binary_predicate,
                                             compare_nulls,
                                             detail::join_kind::LEFT_ANTI_JOIN,
-                                            detail::CONDITIONAL_JOIN_UNKNOWN_OUTPUT_SIZE,
+                                            output_size,
                                             rmm::cuda_stream_default,
                                             mr)
                      .first);
