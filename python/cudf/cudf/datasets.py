@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
+from cudf._lib.transform import bools_to_mask
 
 __all__ = ["timeseries", "randomdata"]
 
@@ -9,7 +10,12 @@ __all__ = ["timeseries", "randomdata"]
 # TODO:
 # change default of name from category to str type when nvstring are merged
 def timeseries(
-    start="2000-01-01", end="2000-01-31", freq="1s", dtypes=None, seed=None,
+    start="2000-01-01",
+    end="2000-01-31",
+    freq="1s",
+    dtypes=None,
+    nulls_frequency=0.1,
+    seed=None,
 ):
     """ Create timeseries dataframe with random data
 
@@ -26,6 +32,8 @@ def timeseries(
         ``{"name": "category", "id": int, "x": float, "y": float}``
     freq : string
         String like '2s' or '1H' or '12W' for the time series frequency
+    nulls_frequency : float
+        Fill the series with the specified proportion of nulls.
     seed : int (optional)
         Randomstate seed
 
@@ -54,7 +62,18 @@ def timeseries(
     df = pd.DataFrame(columns, index=index, columns=sorted(columns))
     if df.index[-1] == end:
         df = df.iloc[:-1]
-    return cudf.from_pandas(df)
+
+    gdf = cudf.from_pandas(df)
+    for col in gdf:
+        mask = state.choice(
+            [True, False],
+            size=len(index),
+            p=[1 - nulls_frequency, nulls_frequency],
+        )
+        mask_buf = bools_to_mask(cudf.core.column.as_column(mask))
+        gdf[col] = gdf[col]._column.set_mask(mask_buf)
+
+    return gdf
 
 
 def randomdata(nrows=10, dtypes=None, seed=None):
