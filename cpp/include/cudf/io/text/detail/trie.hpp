@@ -63,7 +63,7 @@ struct trie_node {
 struct trie_device_view {
   device_span<trie_node const> _nodes;
 
-  inline constexpr multistate transition_init(char c)
+  constexpr multistate transition_init(char c)
   {
     auto result = multistate();
 
@@ -75,7 +75,7 @@ struct trie_device_view {
     return result;
   }
 
-  inline constexpr multistate transition(char c, multistate const& states)
+  constexpr multistate transition(char c, multistate const& states)
   {
     auto result = multistate();
 
@@ -88,7 +88,7 @@ struct trie_device_view {
     return result;
   }
 
-  inline constexpr void transition_enqueue_all(  //
+  constexpr void transition_enqueue_all(  //
     char c,
     multistate& states,
     uint8_t head,
@@ -101,11 +101,11 @@ struct trie_device_view {
     }
   }
 
-  inline constexpr bool is_match(uint16_t idx) { return static_cast<bool>(get_match_length(idx)); }
-  inline constexpr uint8_t get_match_length(uint16_t idx) { return _nodes[idx].match_length; }
+  constexpr bool is_match(uint16_t idx) { return static_cast<bool>(get_match_length(idx)); }
+  constexpr uint8_t get_match_length(uint16_t idx) { return _nodes[idx].match_length; }
 
   template <uint32_t N>
-  inline constexpr uint8_t get_match_length(multistate const& states)
+  constexpr uint8_t get_match_length(multistate const& states)
   {
     int8_t val = 0;
     for (uint8_t i = 0; i < states.size(); i++) {

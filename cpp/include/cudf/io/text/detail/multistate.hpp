@@ -29,14 +29,11 @@ namespace detail {
  */
 struct multistate_segment {
  public:
-  inline constexpr multistate_segment() : _data(0) {}
-  inline constexpr multistate_segment(uint8_t head, uint8_t tail)
-    : _data((head & 0b1111) | (tail << 4))
-  {
-  }
+  constexpr multistate_segment() : _data(0) {}
+  constexpr multistate_segment(uint8_t head, uint8_t tail) : _data((head & 0b1111) | (tail << 4)) {}
 
-  inline constexpr uint8_t get_head() const { return _data & 0b1111; }
-  inline constexpr uint8_t get_tail() const { return _data >> 4; }
+  constexpr uint8_t get_head() const { return _data & 0b1111; }
+  constexpr uint8_t get_tail() const { return _data >> 4; }
 
  private:
   uint8_t _data;
@@ -47,14 +44,14 @@ struct multistate_segment {
  */
 struct multistate {
  public:
-  inline constexpr void enqueue(uint8_t head, uint8_t tail)
+  constexpr void enqueue(uint8_t head, uint8_t tail)
   {
     _segments[_size++] = multistate_segment(head, tail);
   }
 
-  inline constexpr uint8_t size() const { return _size; }
+  constexpr uint8_t size() const { return _size; }
 
-  inline constexpr uint8_t max_tail() const
+  constexpr uint8_t max_tail() const
   {
     uint8_t maximum = 0;
 
@@ -65,8 +62,8 @@ struct multistate {
     return maximum;
   }
 
-  inline constexpr uint8_t get_head(uint8_t idx) const { return _segments[idx].get_head(); }
-  inline constexpr uint8_t get_tail(uint8_t idx) const { return _segments[idx].get_tail(); }
+  constexpr uint8_t get_head(uint8_t idx) const { return _segments[idx].get_head(); }
+  constexpr uint8_t get_tail(uint8_t idx) const { return _segments[idx].get_tail(); }
 
  private:
   static auto constexpr N = 7;
@@ -91,7 +88,7 @@ struct multistate {
  * @param rhs future segments
  * @return full join of past and future segments
  */
-inline constexpr multistate operator+(multistate const& lhs, multistate const& rhs)
+constexpr multistate operator+(multistate const& lhs, multistate const& rhs)
 {
   // combine two multistates together by full-joining LHS tails to RHS heads,
   // and taking the corosponding LHS heads and RHS tails.

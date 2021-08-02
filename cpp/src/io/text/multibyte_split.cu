@@ -35,7 +35,7 @@
 namespace {
 
 template <typename Dividend, typename Divisor>
-inline constexpr auto ceil_div(Dividend dividend, Divisor divisor)
+constexpr decltype(auto) ceil_div(Dividend dividend, Divisor divisor)
 {
   return dividend / divisor + (dividend % divisor != 0);
 }
