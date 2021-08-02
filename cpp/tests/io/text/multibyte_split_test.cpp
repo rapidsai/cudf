@@ -25,8 +25,6 @@
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <sstream>
-
 using namespace cudf;
 using namespace test;
 
@@ -86,18 +84,20 @@ TEST_F(MultibyteSplitTest, LargeInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
 }
 
-// TEST_F(MultibyteSplitTest, OverlappingMatchErasure)
-// {
-//   auto delimiters = std::vector<std::string>({":::::"});
+TEST_F(MultibyteSplitTest, OverlappingMatchErasure)
+{
+  auto delimiters = std::vector<std::string>({":::::"});
 
-//   auto host_input = std::string(":::::" ":::::");
-//   auto expected   = strings_column_wrapper{":::::", ":::::"};
+  auto host_input = std::string(
+    ":::::"
+    ":::::");
+  auto expected = strings_column_wrapper{":::::", ":::::"};
 
-//   auto source = cudf::io::text::make_source(host_input);
-//   auto out    = cudf::io::text::multibyte_split(*source, delimiters);
+  auto source = cudf::io::text::make_source(host_input);
+  auto out    = cudf::io::text::multibyte_split(*source, delimiters);
 
-//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
-// }
+  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out); // this use case it not yet supported.
+}
 
 TEST_F(MultibyteSplitTest, MultipleDelimiters)
 {

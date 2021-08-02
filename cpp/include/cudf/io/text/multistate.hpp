@@ -22,6 +22,10 @@ namespace cudf {
 namespace io {
 namespace text {
 
+/**
+ * @brief represents a single (begin, end] pair of possible state transition history.
+ *
+ */
 struct multistate_segment {
  public:
   inline constexpr multistate_segment() : _data(0) {}
@@ -37,6 +41,9 @@ struct multistate_segment {
   uint8_t _data;
 };
 
+/**
+ * @brief Holds up to 7 transition history segments
+ */
 struct multistate {
  public:
   inline constexpr void enqueue(uint8_t head, uint8_t tail)
@@ -68,6 +75,21 @@ struct multistate {
 
 // lhs contains only zero?
 
+/**
+ * @brief associatively inner-joins transition histories.
+ *
+ * Examples:
+ *           <(0, 5]> + <(5, 9]>         = <(0, 9]>
+ *           <(0, 5]> + <(6, 9]>         = <>
+ *   <(0, 1], (0, 2]> + <(2, 3], (1, 4]> = <(0, 4], (0, 3]>
+ *   <(0, 1], (0, 2]> + <(1, 3]>         = <(0, 3]>
+ *
+ * Head and tail value are limited to [0, 1, ..., 16]
+ *
+ * @param lhs past segments
+ * @param rhs future segments
+ * @return full join of past and future segments
+ */
 inline constexpr multistate operator+(multistate const& lhs, multistate const& rhs)
 {
   // combine two multistates together by full-joining LHS tails to RHS heads,

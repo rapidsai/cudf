@@ -35,7 +35,10 @@ struct trie_builder_node {
 
   void insert(std::string s) { insert(s.c_str(), s.size()); }
 
-  trie_builder_node& insert(char const* s, uint16_t size, uint8_t depth = 0)
+  trie_builder_node& insert(char const* s, uint16_t size) { return this->insert(s, size, 0); }
+
+ private:
+  trie_builder_node& insert(char const* s, uint16_t size, uint8_t depth)
   {
     if (size == 0) {
       match_length = depth;
