@@ -861,7 +861,6 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
         2,
         0,
         -3,
-        None,
         [5, 4, 3, 2, 6],
         [5, None, 3, 2, 6],
         [0, 0, 0, 0, 0],
