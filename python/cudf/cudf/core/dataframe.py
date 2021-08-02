@@ -3893,9 +3893,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Examples
         --------
         >>> import cudf
-        >>> a = ('a', [0, 1, 2])
-        >>> b = ('b', [-3, 2, 0])
-        >>> df = cudf.DataFrame([a, b])
+        >>> df = cudf.DataFrame()
+        >>> df['a'] = [0, 1, 2]
+        >>> df['b'] = [-3, 2, 0]
         >>> df.sort_values('b')
            a  b
         0  0 -3
@@ -3904,8 +3904,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         """
         if inplace:
             raise NotImplementedError("`inplace` not currently implemented.")
-        if kind != "quicksort":
-            raise NotImplementedError("`kind` not currently implemented.")
+        if kind not in {"quicksort", "mergesort", "heapsort", "stable"}:
+            raise AttributeError(
+                f"{kind} is not a valid sorting algorithm for "
+                f"'DataFrame' object"
+            )
+        elif kind != "quicksort":
+            msg = (
+                f"GPU-accelerated {kind} is currently not supported, "
+                f"now defaulting to GPU-accelerated quicksort."
+            )
+            warnings.warn(msg)
         if axis != 0:
             raise NotImplementedError("`axis` not currently implemented.")
 
