@@ -241,7 +241,7 @@ class Series(SingleColumnFrame, Serializable):
         if isinstance(data, dict):
             index = data.keys()
             data = column.as_column(
-                data.values(), nan_as_null=nan_as_null, dtype=dtype
+                list(data.values()), nan_as_null=nan_as_null, dtype=dtype
             )
 
         if data is None:
@@ -1240,6 +1240,7 @@ class Series(SingleColumnFrame, Serializable):
             and not is_list_dtype(preprocess.dtype)
             and not is_struct_dtype(preprocess.dtype)
             and not is_decimal_dtype(preprocess.dtype)
+            and not is_struct_dtype(preprocess.dtype)
         ) or isinstance(
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
@@ -2431,6 +2432,9 @@ class Series(SingleColumnFrame, Serializable):
 
         if isinstance(col, cudf.core.column.Decimal64Column):
             col = col._with_type_metadata(objs[0]._column.dtype)
+
+        if isinstance(col, cudf.core.column.StructColumn):
+            col = col._with_type_metadata(objs[0].dtype)
 
         return cls(data=col, index=index, name=name)
 
@@ -6037,6 +6041,45 @@ class Series(SingleColumnFrame, Serializable):
 
         return super()._explode(self._column_names[0], ignore_index)
 
+    def pct_change(
+        self, periods=1, fill_method="ffill", limit=None, freq=None
+    ):
+        """
+        Calculates the percent change between sequential elements
+        in the Series.
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for forming percent change.
+        fill_method : str, default 'ffill'
+            How to handle NAs before computing percent changes.
+        limit : int, optional
+            The number of consecutive NAs to fill before stopping.
+            Not yet implemented.
+        freq : str, optional
+            Increment to use from time series API.
+            Not yet implemented.
+
+        Returns
+        -------
+        Series
+        """
+        if limit is not None:
+            raise NotImplementedError("limit parameter not supported yet.")
+        if freq is not None:
+            raise NotImplementedError("freq parameter not supported yet.")
+        elif fill_method not in {"ffill", "pad", "bfill", "backfill"}:
+            raise ValueError(
+                "fill_method must be one of 'ffill', 'pad', "
+                "'bfill', or 'backfill'."
+            )
+
+        data = self.fillna(method=fill_method, limit=limit)
+        diff = data.diff(periods=periods)
+        change = diff / data.shift(periods=periods, freq=freq)
+        return change
+
 
 class DatetimeProperties(object):
     """
@@ -6402,6 +6445,18 @@ class DatetimeProperties(object):
             index=self.series._index,
             name=self.series.name,
         )
+
+    @property
+    def is_month_start(self):
+        """
+        Boolean indicator if the date is the first day of the month.
+
+        Returns
+        -------
+        Series
+        Booleans indicating if dates are the first day of the month.
+        """
+        return (self.day == 1).fillna(False)
 
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)

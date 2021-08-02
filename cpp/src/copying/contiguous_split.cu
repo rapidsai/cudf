@@ -447,7 +447,7 @@ struct buf_info_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<std::is_same<T, cudf::dictionary32>::value, std::pair<src_buf_info*, size_type>>
+  std::enable_if_t<std::is_same_v<T, cudf::dictionary32>, std::pair<src_buf_info*, size_type>>
   operator()(Args&&...)
   {
     CUDF_FAIL("Unsupported type");

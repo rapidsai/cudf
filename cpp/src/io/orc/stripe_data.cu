@@ -1827,7 +1827,7 @@ __global__ void __launch_bounds__(block_size)
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] first_row Crop all rows below first_row
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void __host__ DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                                DictionaryEntry* global_dictionary,
@@ -1855,7 +1855,7 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
  * @param[in] level nesting level being processed
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
                                   DictionaryEntry* global_dictionary,
