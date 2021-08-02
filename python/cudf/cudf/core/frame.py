@@ -1495,11 +1495,10 @@ class Frame(libcudf.table.Table):
         interpolator = cudf.core.algorithms.get_column_interpolator(method)
         for colname, col in data._data.items():
             if col.nullable:
-                col = col.fillna(np.nan)
+                col = col.astype("float64").fillna(np.nan)
 
             # Interpolation methods may or may not need the index
-            to_interp = Frame(data={colname: col}, index=data._index)
-            result = interpolator(to_interp)
+            result = interpolator(col, index=data._index)
             columns[colname] = result
 
         result = self.__class__(ColumnAccessor(columns), index=data._index)
