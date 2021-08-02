@@ -337,4 +337,84 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
                      .first);
 }
 
+size_type conditional_inner_join_size(table_view left,
+                                      table_view right,
+                                      ast::expression binary_predicate,
+                                      null_equality compare_nulls,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::compute_conditional_join_output_size(left,
+                                                      right,
+                                                      binary_predicate,
+                                                      compare_nulls,
+                                                      detail::join_kind::INNER_JOIN,
+                                                      rmm::cuda_stream_default,
+                                                      mr);
+}
+
+size_type conditional_left_join_size(table_view left,
+                                     table_view right,
+                                     ast::expression binary_predicate,
+                                     null_equality compare_nulls,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::compute_conditional_join_output_size(left,
+                                                      right,
+                                                      binary_predicate,
+                                                      compare_nulls,
+                                                      detail::join_kind::LEFT_JOIN,
+                                                      rmm::cuda_stream_default,
+                                                      mr);
+}
+
+size_type conditional_full_join_size(table_view left,
+                                     table_view right,
+                                     ast::expression binary_predicate,
+                                     null_equality compare_nulls,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::compute_conditional_join_output_size(left,
+                                                      right,
+                                                      binary_predicate,
+                                                      compare_nulls,
+                                                      detail::join_kind::FULL_JOIN,
+                                                      rmm::cuda_stream_default,
+                                                      mr);
+}
+
+size_type conditional_left_semi_join_size(table_view left,
+                                          table_view right,
+                                          ast::expression binary_predicate,
+                                          null_equality compare_nulls,
+                                          rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return std::move(detail::compute_conditional_join_output_size(left,
+                                                                right,
+                                                                binary_predicate,
+                                                                compare_nulls,
+                                                                detail::join_kind::LEFT_SEMI_JOIN,
+                                                                rmm::cuda_stream_default,
+                                                                mr));
+}
+
+size_type conditional_left_anti_join_size(table_view left,
+                                          table_view right,
+                                          ast::expression binary_predicate,
+                                          null_equality compare_nulls,
+                                          rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return std::move(detail::compute_conditional_join_output_size(left,
+                                                                right,
+                                                                binary_predicate,
+                                                                compare_nulls,
+                                                                detail::join_kind::LEFT_ANTI_JOIN,
+                                                                rmm::cuda_stream_default,
+                                                                mr));
+}
+
 }  // namespace cudf
