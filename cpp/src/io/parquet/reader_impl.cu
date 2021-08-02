@@ -575,6 +575,8 @@ class aggregate_metadata {
         schema_elem.children_idx.begin(),
         schema_elem.children_idx.end(),
         [&](size_t col_schema_idx) { return get_schema(col_schema_idx).name == name; });
+      // fut: Maybe it'd be better if we could return the full path in the exception rather than
+      // just the parent
       CUDF_EXPECTS(col_schema_idx != schema_elem.children_idx.end(),
                    "Child \"" + name + "\" not found in \"" + schema_elem.name + "\"");
       return get_schema(*col_schema_idx);
@@ -593,13 +595,7 @@ class aggregate_metadata {
           // is this legit?
           CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
           auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
-
-          // if we still have a specified col_name_info at this level then verify if name matches
-          // with child
-          auto& child_schema = (col_name_info)
-                                 ? find_schema_child(schema_elem, col_name_info->children[0].name)
-                                 : get_schema(schema_elem.children_idx[0]);
-          build_column(child_col_name_info, child_schema, out_col_array);
+          build_column(child_col_name_info, get_schema(schema_elem.children_idx[0]), out_col_array);
           return;
         }
 
