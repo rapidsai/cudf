@@ -968,7 +968,7 @@ class ColumnBase(Column, Serializable):
     ) -> "cudf.core.column.NumericalColumn":
         raise NotImplementedError
 
-    def convert_alias(self, dtype: str):
+    def convert_alias(self, dtype):
         aliases = {
             "UInt8": "uint8",
             "UInt16": "uint16",
