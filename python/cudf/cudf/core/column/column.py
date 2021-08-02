@@ -71,6 +71,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
     np_to_pa_dtype,
     pandas_dtypes_to_cudf_dtypes,
+    pandas_dtypes_alias_to_cudf_alias,
 )
 from cudf.utils.utils import mask_dtype
 
@@ -881,14 +882,13 @@ class ColumnBase(Column, Serializable):
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
 
-        dtype = pandas_dtypes_to_cudf_dtypes.get(dtype, dtype)
+        dtype = (
+            pandas_dtypes_alias_to_cudf_alias.get(dtype, dtype)
+            if isinstance(dtype, str)
+            else pandas_dtypes_to_cudf_dtypes.get(dtype, dtype)
+        )
         if _is_non_decimal_numeric_dtype(dtype):
-            try:
-                return self.as_numerical_column(dtype, **kwargs)
-            except TypeError:
-                return self.as_numerical_column(
-                    self.convert_alias(dtype), **kwargs
-                )
+            return self.as_numerical_column(dtype, **kwargs)
         elif is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif pandas_dtype(dtype).type in {
@@ -967,20 +967,6 @@ class ColumnBase(Column, Serializable):
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         raise NotImplementedError
-
-    def convert_alias(self, dtype):
-        aliases = {
-            "UInt8": "uint8",
-            "UInt16": "uint16",
-            "UInt32": "uint32",
-            "UInt64": "uint64",
-            "Int8": "int8",
-            "Int16": "int16",
-            "Int32": "int32",
-            "Int64": "int64",
-            "boolean": "bool",
-        }
-        return aliases[dtype]
 
     def as_datetime_column(
         self, dtype: Dtype, **kwargs

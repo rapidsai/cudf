@@ -495,6 +495,8 @@ def test_concatenate_large_column_strings():
         ("Int32", "int32"),
         ("Int64", "int64"),
         ("boolean", "bool"),
+        ("Float32", "float32"),
+        ("Float64", "float64"),
     ],
 )
 @pytest.mark.parametrize(
