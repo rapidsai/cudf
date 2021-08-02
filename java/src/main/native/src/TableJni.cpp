@@ -2070,11 +2070,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
       int col_index = n_values[i];
 
       cudf::groupby_aggregation *agg =
-        dynamic_cast<cudf::groupby_aggregation *>(n_agg_instances[i]);
+          dynamic_cast<cudf::groupby_aggregation *>(n_agg_instances[i]);
       JNI_ARG_CHECK(env, agg != nullptr, "aggregation is not an instance of groupby_aggregation",
                     nullptr);
       std::unique_ptr<cudf::groupby_aggregation> cloned(
-        dynamic_cast<cudf::groupby_aggregation *>(agg->clone().release()));
+          dynamic_cast<cudf::groupby_aggregation *>(agg->clone().release()));
 
       if (col_index == previous_index) {
         requests.back().aggregations.push_back(std::move(cloned));
@@ -2132,7 +2132,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByScan(
 
     // Aggregates are passed in already grouped by column, so we just need to fill it in
     // as we go.
-     std::vector<cudf::groupby::scan_request> requests;
+    std::vector<cudf::groupby::scan_request> requests;
 
     int previous_index = -1;
     for (int i = 0; i < n_values.size(); i++) {
@@ -2140,11 +2140,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByScan(
       int col_index = n_values[i];
 
       cudf::groupby_scan_aggregation *agg =
-        dynamic_cast<cudf::groupby_scan_aggregation *>(n_agg_instances[i]);
+          dynamic_cast<cudf::groupby_scan_aggregation *>(n_agg_instances[i]);
       JNI_ARG_CHECK(env, agg != nullptr,
                     "aggregation is not an instance of groupby_scan_aggregation", nullptr);
       std::unique_ptr<cudf::groupby_scan_aggregation> cloned(
-        dynamic_cast<cudf::groupby_scan_aggregation *>(agg->clone().release()));
+          dynamic_cast<cudf::groupby_scan_aggregation *>(agg->clone().release()));
 
       if (col_index == previous_index) {
         requests.back().aggregations.push_back(std::move(cloned));

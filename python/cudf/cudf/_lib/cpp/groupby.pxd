@@ -5,8 +5,10 @@ from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp.aggregation cimport groupby_aggregation
-from cudf._lib.cpp.aggregation cimport groupby_scan_aggregation
+from cudf._lib.cpp.aggregation cimport (
+    groupby_aggregation,
+    groupby_scan_aggregation,
+)
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.libcpp.functional cimport reference_wrapper

@@ -30,10 +30,12 @@ from cudf._lib.scalar import as_device_scalar
 
 cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.aggregation cimport GroupbyAggregation
-from cudf._lib.aggregation cimport make_groupby_aggregation
-from cudf._lib.aggregation cimport GroupbyScanAggregation
-from cudf._lib.aggregation cimport make_groupby_scan_aggregation
+from cudf._lib.aggregation cimport (
+    GroupbyAggregation,
+    GroupbyScanAggregation,
+    make_groupby_aggregation,
+    make_groupby_scan_aggregation,
+)
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.libcpp.functional cimport reference_wrapper

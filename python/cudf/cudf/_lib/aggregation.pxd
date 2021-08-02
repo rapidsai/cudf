@@ -2,9 +2,12 @@
 
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.cpp.aggregation cimport aggregation, rolling_aggregation
-from cudf._lib.cpp.aggregation cimport groupby_aggregation
-from cudf._lib.cpp.aggregation cimport groupby_scan_aggregation
+from cudf._lib.cpp.aggregation cimport (
+    aggregation,
+    groupby_aggregation,
+    groupby_scan_aggregation,
+    rolling_aggregation,
+)
 
 
 cdef class Aggregation:
