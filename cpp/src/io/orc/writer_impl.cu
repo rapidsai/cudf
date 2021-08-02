@@ -141,13 +141,13 @@ class orc_column_view {
    */
   explicit orc_column_view(uint32_t index,
                            int str_idx,
-                           bool is_child,
+                           orc_column_view* parent,
                            column_view const& col,
                            column_in_metadata const& metadata)
     : cudf_column{col},
       _index{index},
       _str_idx{str_idx},
-      _is_child{is_child},
+      _is_child{parent != nullptr},
       _type_width{cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : 0},
       _scale{(to_orc_type(col.type().id()) == TypeKind::DECIMAL) ? -col.type().scale()
                                                                  : to_clockscale(col.type().id())},
@@ -156,7 +156,10 @@ class orc_column_view {
       name{metadata.get_name()}
   {
     if (metadata.is_nullability_defined()) { metadata_nullable = metadata.nullable(); }
+    if (parent != nullptr) parent->add_child(_index);
   }
+
+  void add_child(uint32_t child_idx) { children.emplace_back(child_idx); }
 
   auto is_string() const noexcept { return cudf_column.type().id() == type_id::STRING; }
   void set_dict_stride(size_t stride) noexcept { _dict_stride = stride; }
@@ -201,9 +204,14 @@ class orc_column_view {
   auto index() const noexcept { return _index; }
   // Id in the ORC file
   auto id() const noexcept { return _index + 1; }
+
   auto is_child() const noexcept { return _is_child; }
+  auto child_begin() const noexcept { return children.cbegin(); }
+  auto child_end() const noexcept { return children.cend(); }
+
   auto type_width() const noexcept { return _type_width; }
   auto size() const noexcept { return cudf_column.size(); }
+
   auto null_count() const noexcept { return cudf_column.null_count(); }
   auto null_mask() const noexcept { return cudf_column.null_mask(); }
   bool nullable() const noexcept { return null_mask() != nullptr; }
@@ -247,6 +255,7 @@ class orc_column_view {
   uint32_t* d_decimal_offsets = nullptr;
 
   std::optional<bool> metadata_nullable;
+  std::vector<uint32_t> children;
 };
 
 size_type orc_table_view::num_rows() const noexcept
@@ -1173,25 +1182,27 @@ orc_table_view make_orc_table_view(table_view const& table,
   std::vector<orc_column_view> orc_columns;
   std::vector<uint32_t> str_col_indexes;
 
-  std::function<void(column_view const&, bool, column_in_metadata const&)> append_orc_column =
-    [&](column_view const& col, bool is_child, column_in_metadata const& col_metadata) {
-      int const str_idx =
-        (col.type().id() == type_id::STRING) ? static_cast<int>(str_col_indexes.size()) : -1;
+  std::function<void(column_view const&, orc_column_view*, column_in_metadata const&)>
+    append_orc_column =
+      [&](column_view const& col, orc_column_view* parent_col, column_in_metadata const& col_meta) {
+        int const str_idx =
+          (col.type().id() == type_id::STRING) ? static_cast<int>(str_col_indexes.size()) : -1;
 
-      auto const& new_col =
-        orc_columns.emplace_back(orc_columns.size(), str_idx, is_child, col, col_metadata);
-      if (new_col.is_string()) { str_col_indexes.push_back(new_col.index()); }
-      if (col.type().id() == type_id::LIST)
-        append_orc_column(col.child(lists_column_view::child_column_index),
-                          true,
-                          col_metadata.child(lists_column_view::child_column_index));
-      if (col.type().id() == type_id::STRUCT)
-        for (auto child_idx = 0; child_idx != col.num_children(); ++child_idx)
-          append_orc_column(col.child(child_idx), true, col_metadata.child(child_idx));
-    };
+        auto const new_col_idx = orc_columns.size();
+        orc_columns.emplace_back(new_col_idx, str_idx, parent_col, col, col_meta);
+        if (orc_columns[new_col_idx].is_string()) { str_col_indexes.push_back(new_col_idx); }
+        if (col.type().id() == type_id::LIST)
+          append_orc_column(col.child(lists_column_view::child_column_index),
+                            &orc_columns[new_col_idx],
+                            col_meta.child(lists_column_view::child_column_index));
+        if (col.type().id() == type_id::STRUCT)
+          for (auto child_idx = 0; child_idx != col.num_children(); ++child_idx)
+            append_orc_column(
+              col.child(child_idx), &orc_columns[new_col_idx], col_meta.child(child_idx));
+      };
 
   for (auto col_idx = 0; col_idx < table.num_columns(); ++col_idx) {
-    append_orc_column(table.column(col_idx), false, table_meta.column_metadata[col_idx]);
+    append_orc_column(table.column(col_idx), nullptr, table_meta.column_metadata[col_idx]);
   }
 
   rmm::device_uvector<orc_column_device_view> d_orc_columns(orc_columns.size(), stream);
@@ -1634,6 +1645,12 @@ void writer::impl::write(table_view const& table)
       }
       // In preorder traversal the column after a list column is always the child column
       if (column.orc_kind() == LIST) { schema_type.subtypes.emplace_back(column.id() + 1); }
+      if (column.orc_kind() == STRUCT) {
+        for (auto child_it = column.child_begin(); child_it != column.child_end(); ++child_it) {
+          schema_type.subtypes.emplace_back(orc_table.column(*child_it).id());
+          schema_type.fieldNames.emplace_back(orc_table.column(*child_it).orc_name());
+        }
+      }
     }
   } else {
     // verify the user isn't passing mismatched tables
