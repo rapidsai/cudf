@@ -791,12 +791,18 @@ class StringMethods(ColumnMethods):
         2    ccc
         dtype: object
         """
+        none_flag = False
+        if repeats is None:
+            none_flag = True
+            repeats = [None] * len(self._column)
+
         if can_convert_to_column(repeats):
-            return self._return_or_inplace(
+            result = self._return_or_inplace(
                 libstrings.repeat_sequence(
                     self._column, column.as_column(repeats, dtype="int"),
                 ),
             )
+            return result.astype("float64") if none_flag else result
 
         return self._return_or_inplace(
             libstrings.repeat_scalar(self._column, repeats)
