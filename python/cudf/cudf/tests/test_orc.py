@@ -79,3 +79,44 @@ def test_writer_struct():
 
     pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
     assert_eq(pdf_out, pdf_in)
+
+
+def test_chunked_orc_writer_lists():
+    num_rows = 12345
+    pdf_in = pd.DataFrame(
+        {
+            "ls": [[str(i), str(2 * i)] for i in range(num_rows)],
+            "ld": [[dec(i / 2)] * 5 for i in range(num_rows)],
+        }
+    )
+
+    gdf = cudf.from_pandas(pdf_in)
+    expect = pd.concat([pdf_in, pdf_in]).reset_index(drop=True)
+
+    buffer = BytesIO()
+    writer = ORCWriter(buffer)
+    writer.write_table(gdf)
+    writer.write_table(gdf)
+    writer.close()
+
+    got = pa.orc.ORCFile(buffer).read().to_pandas()
+    assert_eq(expect, got)
+
+
+def test_writer_timestamp_stream_size(datadir, tmpdir):
+    pdf_fname = datadir / "TestOrcFile.largeTimestamps.orc"
+    gdf_fname = tmpdir.join("gdf.orc")
+
+    try:
+        orcfile = pa.orc.ORCFile(pdf_fname)
+    except Exception as excpr:
+        if type(excpr).__name__ == "ArrowIOError":
+            pytest.skip(".orc file is not found")
+        else:
+            print(type(excpr).__name__)
+
+    expect = orcfile.read().to_pandas()
+    cudf.from_pandas(expect).to_orc(gdf_fname.strpath)
+    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+
+    assert_eq(expect, got)

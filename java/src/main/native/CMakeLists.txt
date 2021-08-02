@@ -261,6 +261,7 @@ set(SOURCE_FILES
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
     "src/ColumnViewJni.cpp"
+    "src/CompiledExpression.cpp"
     "src/ContiguousTableJni.cpp"
     "src/HostMemoryBufferNativeUtilsJni.cpp"
     "src/NvcompJni.cpp"
@@ -293,6 +294,14 @@ target_compile_definitions(cudfjni
 
 if(USE_GDS)
     add_library(cufilejni SHARED "src/CuFileJni.cpp")
+    SET_TARGET_PROPERTIES(cufilejni
+        PROPERTIES BUILD_RPATH "\$ORIGIN"
+                   # set target compile options
+                   CXX_STANDARD                        17
+                   CXX_STANDARD_REQUIRED               ON
+                   CUDA_STANDARD                       17
+                   CUDA_STANDARD_REQUIRED              ON
+    )
     target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
     target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
 endif(USE_GDS)
