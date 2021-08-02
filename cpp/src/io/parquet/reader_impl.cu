@@ -767,11 +767,18 @@ class aggregate_metadata {
 
     std::vector<int> output_column_schemas;
 
-    for (auto& col : selected_columns) {
-      auto const& root                    = schema.front();
-      auto const& top_level_col_schem_idx = find_schema_child(root, col.name);
-      build_column(&col, top_level_col_schem_idx, output_columns);
-      output_column_schemas.push_back(top_level_col_schem_idx.self_idx);
+    auto const& root = schema.front();
+    if (use_names.empty()) {
+      for (auto const& schema_idx : root.children_idx) {
+        build_column(nullptr, get_schema(schema_idx), output_columns);
+        output_column_schemas.push_back(schema_idx);
+      }
+    } else {
+      for (auto& col : selected_columns) {
+        auto const& top_level_col_schem_idx = find_schema_child(root, col.name);
+        build_column(&col, top_level_col_schem_idx, output_columns);
+        output_column_schemas.push_back(top_level_col_schem_idx.self_idx);
+      }
     }
 
     return std::make_tuple(
@@ -823,7 +830,7 @@ class aggregate_metadata {
     } else {
       // Load subset of columns; include PANDAS index unless excluded
       std::vector<std::string> local_use_names = use_names;
-      if (include_index) { add_pandas_index_names(local_use_names); }
+      // if (include_index) { add_pandas_index_names(local_use_names); }
       for (const auto& use_name : local_use_names) {
         for (size_t schema_idx = 1; schema_idx < pfm.schema.size(); schema_idx++) {
           auto const& schema = pfm.schema[schema_idx];
