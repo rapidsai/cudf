@@ -301,6 +301,7 @@ add_library(cudf
     src/jit/cache.cpp
     src/jit/parser.cpp
     src/jit/type.cpp
+    src/join/conditional_join.cu
     src/join/cross_join.cu
     src/join/hash_join.cu
     src/join/join.cu
@@ -542,7 +543,7 @@ if(NOT TARGET CUDA::cuda_driver)
     message(FATAL_ERROR "Building libcudf requires `libcuda.so` to be present.
         This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded.")
 endif()
-target_link_libraries(cudf PRIVATE CUDA::cuda_driver)
+target_link_libraries(cudf PUBLIC CUDA::cuda_driver)
 
 # Add cuFile interface if available
 if(TARGET cuFile::cuFile_interface)

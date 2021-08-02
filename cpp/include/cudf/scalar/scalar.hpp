@@ -45,22 +45,9 @@ namespace cudf {
  */
 class scalar {
  public:
-  virtual ~scalar()      = default;
-  scalar(scalar&& other) = default;
-
+  virtual ~scalar() = default;
   scalar& operator=(scalar const& other) = delete;
   scalar& operator=(scalar&& other) = delete;
-
-  /**
-   * @brief Construct a new scalar object by deep copying another.
-   *
-   * @param other The scalar to copy.
-   * @param stream CUDA stream used for device memory operations.
-   * @param mr Device memory resource to use for device memory allocation.
-   */
-  scalar(scalar const& other,
-         rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-         rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Returns the scalar's logical value type.
@@ -102,6 +89,19 @@ class scalar {
   rmm::device_scalar<bool> _is_valid;  ///< Device bool signifying validity
 
   scalar() = delete;
+
+  scalar(scalar&& other) = default;
+
+  /**
+   * @brief Construct a new scalar object by deep copying another.
+   *
+   * @param other The scalar to copy.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
+   */
+  scalar(scalar const& other,
+         rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+         rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new scalar object.

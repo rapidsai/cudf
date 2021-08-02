@@ -3079,6 +3079,14 @@ def test_select_dtype():
         gdf.select_dtypes(include=["int"], exclude=["object"]),
     )
 
+    gdf = cudf.DataFrame(
+        {"int_col": [0, 1, 2], "list_col": [[1, 2], [3, 4], [5, 6]]}
+    )
+    pdf = gdf.to_pandas()
+    assert_eq(
+        pdf.select_dtypes("int64"), gdf.select_dtypes("int64"),
+    )
+
 
 def test_select_dtype_datetime():
     gdf = cudf.datasets.timeseries(
@@ -3623,6 +3631,23 @@ def test_one_row_head():
     head_pdf = pdf.head()
 
     assert_eq(head_pdf, head_gdf)
+
+
+@pytest.mark.parametrize("dtype", ALL_TYPES)
+@pytest.mark.parametrize(
+    "np_dtype,pd_dtype",
+    [
+        tuple(item)
+        for item in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes.items()
+    ],
+)
+def test_series_astype_pandas_nullable(dtype, np_dtype, pd_dtype):
+    source = cudf.Series([0, 1, None], dtype=dtype)
+
+    expect = source.astype(np_dtype)
+    got = source.astype(pd_dtype)
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
