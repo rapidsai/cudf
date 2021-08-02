@@ -1860,26 +1860,18 @@ def test_parquet_writer_list_statistics(tmpdir):
             ]
         },
         # List of Structs
-        pytest.param(
-            {
-                "family": [
-                    [
-                        None,
-                        {"human?": True, "deets": {"weight": 2.4, "age": 27}},
-                    ],
-                    [
-                        {"human?": None, "deets": {"weight": 5.3, "age": 25}},
-                        {"human?": False, "deets": {"weight": 8.0, "age": 31}},
-                        {"human?": False, "deets": None},
-                    ],
-                    [],
-                    [{"human?": None, "deets": {"weight": 6.9, "age": None}}],
-                ]
-            },
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/7561"
-            ),
-        ),
+        {
+            "family": [
+                [None, {"human?": True, "deets": {"weight": 2.4, "age": 27}},],
+                [
+                    {"human?": None, "deets": {"weight": 5.3, "age": 25}},
+                    {"human?": False, "deets": {"weight": 8.0, "age": 31}},
+                    {"human?": False, "deets": None},
+                ],
+                [],
+                [{"human?": None, "deets": {"weight": 6.9, "age": None}}],
+            ]
+        },
         # Struct of Lists
         pytest.param(
             {
