@@ -131,6 +131,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     )
 
     if columns is not None:
+        columns = [c.split(".") for c in columns]
         cpp_columns.reserve(len(columns))
         for col in columns or []:
             cpp_columns.push_back([])

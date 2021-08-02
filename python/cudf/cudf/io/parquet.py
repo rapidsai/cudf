@@ -213,7 +213,6 @@ def read_parquet(
     if columns is not None:
         if not is_list_like(columns):
             raise ValueError("Expected list like for columns")
-        columns = [c.split(".") for c in columns]
 
     if filters is not None:
         # Convert filters to ds.Expression
