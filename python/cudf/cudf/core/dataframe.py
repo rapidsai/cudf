@@ -2987,17 +2987,22 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             result = self
         else:
             result = self.copy()
-        if all(name is None for name in self.index.names):
-            if isinstance(self.index, cudf.MultiIndex):
-                names = tuple(
-                    f"level_{i}" for i, _ in enumerate(self.index.names)
-                )
-            else:
-                names = ("index",)
-        else:
-            names = self.index.names
 
         if not drop:
+            if isinstance(self.index, cudf.MultiIndex):
+                names = tuple(
+                    name if name is not None else f"level_{i}"
+                    for i, name in enumerate(self.index.names)
+                )
+            else:
+                if self.index.name is None:
+                    if "index" in self._data.names:
+                        names = ("level_0",)
+                    else:
+                        names = ("index",)
+                else:
+                    names = (self.index.name,)
+
             index_columns = self.index._data.columns
             for name, index_column in zip(
                 reversed(names), reversed(index_columns)
@@ -3888,9 +3893,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Examples
         --------
         >>> import cudf
-        >>> a = ('a', [0, 1, 2])
-        >>> b = ('b', [-3, 2, 0])
-        >>> df = cudf.DataFrame([a, b])
+        >>> df = cudf.DataFrame()
+        >>> df['a'] = [0, 1, 2]
+        >>> df['b'] = [-3, 2, 0]
         >>> df.sort_values('b')
            a  b
         0  0 -3
@@ -3899,8 +3904,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         """
         if inplace:
             raise NotImplementedError("`inplace` not currently implemented.")
-        if kind != "quicksort":
-            raise NotImplementedError("`kind` not currently implemented.")
+        if kind not in {"quicksort", "mergesort", "heapsort", "stable"}:
+            raise AttributeError(
+                f"{kind} is not a valid sorting algorithm for "
+                f"'DataFrame' object"
+            )
+        elif kind != "quicksort":
+            msg = (
+                f"GPU-accelerated {kind} is currently not supported, "
+                f"now defaulting to GPU-accelerated quicksort."
+            )
+            warnings.warn(msg)
         if axis != 0:
             raise NotImplementedError("`axis` not currently implemented.")
 
@@ -7384,8 +7398,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 # category handling
                 if is_categorical_dtype(i_dtype):
                     include_subtypes.add(i_dtype)
-                elif issubclass(dtype.type, i_dtype):
-                    include_subtypes.add(dtype.type)
+                elif inspect.isclass(dtype.type):
+                    if issubclass(dtype.type, i_dtype):
+                        include_subtypes.add(dtype.type)
 
         # exclude all subtypes
         exclude_subtypes = set()
@@ -7394,8 +7409,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 # category handling
                 if is_categorical_dtype(e_dtype):
                     exclude_subtypes.add(e_dtype)
-                elif issubclass(dtype.type, e_dtype):
-                    exclude_subtypes.add(dtype.type)
+                elif inspect.isclass(dtype.type):
+                    if issubclass(dtype.type, e_dtype):
+                        exclude_subtypes.add(dtype.type)
 
         include_all = set(
             [cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
@@ -7523,8 +7539,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         repeated_index = self.index.repeat(self.shape[1])
         name_index = Frame({0: self._column_names}).tile(self.shape[0])
         new_index = list(repeated_index._columns) + [name_index._columns[0]]
+        if isinstance(self._index, cudf.MultiIndex):
+            index_names = self._index.names + [None]
+        else:
+            index_names = [None] * len(new_index)
         new_index = cudf.core.multiindex.MultiIndex.from_frame(
-            DataFrame(dict(zip(range(0, len(new_index)), new_index)))
+            DataFrame(dict(zip(range(0, len(new_index)), new_index))),
+            names=index_names,
         )
 
         # Collect datatypes and cast columns as that type
@@ -7583,18 +7604,23 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     def to_struct(self, name=None):
         """
         Return a struct Series composed of the columns of the DataFrame.
-        Note that no copies of the data are made.
 
         Parameters
         ----------
         name: optional
             Name of the resulting Series
+
+        Notes
+        -----
+        Note that a copy of the columns is made.
         """
         col = cudf.core.column.build_struct_column(
             names=self._data.names, children=self._data.columns, size=len(self)
         )
         return cudf.Series._from_data(
-            cudf.core.column_accessor.ColumnAccessor({name: col}),
+            cudf.core.column_accessor.ColumnAccessor(
+                {name: col.copy(deep=True)}
+            ),
             index=self.index,
             name=name,
         )

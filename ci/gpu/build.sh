@@ -74,7 +74,7 @@ conda config --show-sources
 conda list --show-channel-urls
 
 gpuci_logger "Install dependencies"
-gpuci_conda_retry install -y \
+gpuci_mamba_retry install -y \
                   "cudatoolkit=$CUDA_REL" \
                   "rapids-build-env=$MINOR_VERSION.*" \
                   "rapids-notebook-env=$MINOR_VERSION.*" \
@@ -83,8 +83,8 @@ gpuci_conda_retry install -y \
                   "ucx-py=0.21.*"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-# gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
-# gpuci_conda_retry install -y "your-pkg=1.0.0"
+# gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
+# gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
 
 gpuci_logger "Check compiler versions"
@@ -195,14 +195,6 @@ else
 fi
 
 # Both regular and Project Flash proceed here
-
-################################################################################
-# BUILD - Build libcudf examples
-################################################################################
-
-# If examples grows too large to build, should move to cpu side
-# gpuci_logger "Building libcudf examples"
-# $WORKSPACE/cpp/examples/build.sh
 
 # set environment variable for numpy 1.16
 # will be enabled for later versions by default

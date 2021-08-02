@@ -10,7 +10,8 @@ from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+from rmm._lib.device_buffer cimport DeviceBuffer
+from cudf.core.buffer import Buffer
 
 from cudf._lib.column cimport Column
 
@@ -794,8 +795,11 @@ cdef class _CPackedColumns:
 
         cdef _CPackedColumns p = _CPackedColumns.__new__(_CPackedColumns)
 
-        if keep_index and not input_table.index.equals(
-            RangeIndex(start=0, stop=len(input_table), step=1)
+        if keep_index and (
+            not isinstance(input_table.index, RangeIndex)
+            or input_table.index.start != 0
+            or input_table.index.stop != len(input_table)
+            or input_table.index.step != 1
         ):
             input_table_view = input_table.view()
             p.index_names = input_table._index_names
@@ -824,14 +828,18 @@ cdef class _CPackedColumns:
         header = {}
         frames = []
 
+        gpu_data = Buffer(self.gpu_data_ptr, self.gpu_data_size, self)
+        data_header, data_frames = gpu_data.serialize()
+        header["data"] = data_header
+        frames.extend(data_frames)
+
         header["column-names"] = self.column_names
         header["index-names"] = self.index_names
-        header["gpu-data-ptr"] = self.gpu_data_ptr
-        header["gpu-data-size"] = self.gpu_data_size
-        header["metadata"] = list(
-            <uint8_t[:self.c_obj.metadata_.get()[0].size()]>
-            self.c_obj.metadata_.get()[0].data()
-        )
+        if self.c_obj.metadata_.get()[0].data() != NULL:
+            header["metadata"] = list(
+                <uint8_t[:self.c_obj.metadata_.get()[0].size()]>
+                self.c_obj.metadata_.get()[0].data()
+            )
 
         column_dtypes = {}
         for name, dtype in self.column_dtypes.items():
@@ -849,15 +857,17 @@ cdef class _CPackedColumns:
     def deserialize(header, frames):
         cdef _CPackedColumns p = _CPackedColumns.__new__(_CPackedColumns)
 
+        gpu_data = Buffer.deserialize(header["data"], frames)
+
         dbuf = DeviceBuffer(
-            ptr=header["gpu-data-ptr"],
-            size=header["gpu-data-size"]
+            ptr=gpu_data.ptr,
+            size=gpu_data.nbytes
         )
 
         cdef cpp_copying.packed_columns data
         data.metadata_ = move(
             make_unique[cpp_copying.metadata](
-                move(<vector[uint8_t]>header["metadata"])
+                move(<vector[uint8_t]>header.get("metadata", []))
             )
         )
         data.gpu_data = move(dbuf.c_obj)
@@ -915,7 +925,10 @@ class PackedColumns(Serializable):
         }
 
     def serialize(self):
-        return self._data.serialize()
+        header, frames = self._data.serialize()
+        header["type-serialized"] = pickle.dumps(type(self))
+
+        return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):

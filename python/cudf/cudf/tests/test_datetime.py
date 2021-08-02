@@ -1297,3 +1297,32 @@ def test_is_leap_year():
     got2 = gIndex.is_leap_year
 
     assert_eq(expect2, got2)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-05-31",
+            None,
+            "1999-12-01",
+            "2000-12-21",
+            None,
+            "1900-02-28",
+            "1800-03-14",
+            "2100-03-10",
+            "1970-01-01",
+            "1969-12-11",
+        ]
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]"])
+def test_is_month_start(data, dtype):
+    # Series
+    ps = pd.Series(data, dtype=dtype)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.is_month_start
+    got = gs.dt.is_month_start
+
+    assert_eq(expect, got)

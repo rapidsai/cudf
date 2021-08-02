@@ -27,17 +27,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
-
-#include <algorithm>
-#include <functional>
-#include <iterator>
-#include <type_traits>
 
 namespace cudf {
 namespace ast {
@@ -93,11 +86,8 @@ std::unique_ptr<column> compute_column(table_view const table,
   // If none of the input columns actually contain nulls, we can still use the
   // non-nullable version of the expression evaluation code path for
   // performance, so we capture that information as well.
-  auto const nullable =
-    std::any_of(table.begin(), table.end(), [](column_view c) { return c.nullable(); });
-  auto const has_nulls = nullable && std::any_of(table.begin(), table.end(), [](column_view c) {
-                           return c.nullable() && c.has_nulls();
-                         });
+  auto const nullable  = cudf::nullable(table);
+  auto const has_nulls = nullable && cudf::has_nulls(table);
 
   auto const plan = ast_plan{expr, table, has_nulls, stream, mr};
 

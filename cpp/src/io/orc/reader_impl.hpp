@@ -53,8 +53,12 @@ class aggregate_orc_metadata;
  */
 struct reader_column_meta {
   std::vector<std::vector<int32_t>>
-    orc_col_map;                          // Mapping between column id in orc to processing order.
-  std::vector<uint32_t> num_child_rows;   // number of rows in child columns
+    orc_col_map;                         // Mapping between column id in orc to processing order.
+  std::vector<uint32_t> num_child_rows;  // number of rows in child columns
+
+  std::vector<column_validity_info>
+    parent_column_data;  // consists of parent column valid_map and null count
+
   std::vector<uint32_t> child_start_row;  // start row of child columns [stripe][column]
   std::vector<uint32_t>
     num_child_rows_per_stripe;  // number of rows of child columns [stripe][column]
@@ -88,7 +92,7 @@ class reader::impl {
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read
    * @param stripes Indices of individual stripes to load if non-empty
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return The set of columns along with metadata
    */
@@ -109,7 +113,7 @@ class reader::impl {
    * @param row_groups Vector of list of row index descriptors
    * @param row_index_stride Distance between each row index
    * @param use_base_stride Whether to use base stride obtained from meta or use the computed value
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Device buffer to decompressed page data
    */
@@ -135,7 +139,7 @@ class reader::impl {
    * @param row_index_stride Distance between each row index
    * @param out_buffers Output columns' device buffers
    * @param level Current nesting level being processed
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   void decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
                           size_t num_dicts,
@@ -151,12 +155,14 @@ class reader::impl {
    * @brief Aggregate child metadata from parent column chunks.
    *
    * @param chunks Vector of list of parent column chunks.
-   * @param chunks Vector of list of parent column row groups.
+   * @param row_groups Vector of list of row index descriptors
+   * @param out_buffers Column buffers for columns.
    * @param list_col Vector of column metadata of list type parent columns.
    * @param level Current nesting level being processed.
    */
   void aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDesc> chunks,
                             cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
+                            std::vector<column_buffer>& out_buffers,
                             std::vector<orc_column_meta> const& list_col,
                             const int32_t level);
 
@@ -177,7 +183,7 @@ class reader::impl {
    * @param col_buffers Column buffers for columns and children.
    * @param out_columns Vector of columns formed from column buffers.
    * @param schema_info Vector of schema information formed from column buffers.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   void create_columns(std::vector<std::vector<column_buffer>>&& col_buffers,
                       std::vector<std::unique_ptr<column>>& out_columns,
@@ -189,7 +195,7 @@ class reader::impl {
    *
    * @param col_buffers Column buffers for columns and children.
    * @param schema_info Vector of schema information formed from column buffers.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return An empty column equivalent to orc column type.
    */
@@ -207,7 +213,7 @@ class reader::impl {
   bool _use_index            = true;
   bool _use_np_dtypes        = true;
   bool _has_timestamp_column = false;
-  bool _has_list_column      = false;
+  bool _has_nested_column    = false;
   std::vector<std::string> _decimal_cols_as_float;
   data_type _timestamp_type{type_id::EMPTY};
   reader_column_meta _col_meta;
