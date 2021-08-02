@@ -41,6 +41,8 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.io.utils cimport make_sink_info, make_source_info
 from cudf._lib.table cimport Table, make_table_view
 
+from pyarrow.lib import NativeFile
+
 ctypedef int32_t underlying_type_t_compression
 
 
@@ -362,7 +364,7 @@ def read_csv(
     """
 
     if not isinstance(datasource, (BytesIO, StringIO, bytes,
-                                   cudf._lib.io.datasource.Datasource)):
+                                   cudf._lib.io.datasource.Datasource, NativeFile)):
         if not os.path.isfile(datasource):
             raise FileNotFoundError(
                 errno.ENOENT, os.strerror(errno.ENOENT), datasource

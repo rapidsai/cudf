@@ -8,6 +8,8 @@ from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 import fsspec
 import fsspec.implementations.local
 import pandas as pd
+import s3fs
+import pyarrow
 from fsspec.core import get_fs_token_paths
 
 from cudf.utils.docutils import docfmt_partial
@@ -1053,6 +1055,8 @@ def is_file_like(obj):
 def _is_local_filesystem(fs):
     return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
 
+def _is_s3_filesystem(fs):
+    return isinstance(fs, s3fs.S3FileSystem)
 
 def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
     """Return False if `path_or_data` resolves to multiple filepaths or buffers
@@ -1154,6 +1158,10 @@ def get_filepath_or_buffer(
             # path_or_data need not be a filepath like string
             if os.path.exists(paths[0]):
                 path_or_data = paths if len(paths) > 1 else paths[0]
+        
+        elif _is_s3_filesystem(fs):
+            fs = pyarrow.fs.S3FileSystem()
+            path_or_data = fs.open_input_file("nyc-tlc/trip data/yellow_tripdata_2020-12.csv") #use just on path[0] for now
 
         else:
             path_or_data = [BytesIO(fs.open(fpath).read()) for fpath in paths]
