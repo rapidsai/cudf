@@ -21,7 +21,7 @@ package ai.rapids.cudf;
 /**
  * An aggregation that can be used for a grouped scan.
  */
-public class GroupByScanAggregation {
+public final class GroupByScanAggregation {
   private final Aggregation wrapped;
 
   private GroupByScanAggregation(Aggregation wrapped) {

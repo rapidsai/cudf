@@ -21,7 +21,7 @@ package ai.rapids.cudf;
 /**
  * An aggregation that can be used on rolling windows.
  */
-public class RollingAggregation {
+public final class RollingAggregation {
   private final Aggregation wrapped;
 
   private RollingAggregation(Aggregation wrapped) {

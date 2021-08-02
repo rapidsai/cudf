@@ -21,7 +21,7 @@ package ai.rapids.cudf;
 /**
  * An aggregation that can be used for a reduce.
  */
-public class GroupByAggregation {
+public final class GroupByAggregation {
   private final Aggregation wrapped;
 
   private GroupByAggregation(Aggregation wrapped) {

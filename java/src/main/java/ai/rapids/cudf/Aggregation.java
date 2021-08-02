@@ -194,7 +194,7 @@ abstract class Aggregation {
         }
     }
 
-    private static class QuantileAggregation extends Aggregation {
+    private static final class QuantileAggregation extends Aggregation {
         private final QuantileMethod method;
         private final double[] quantiles;
 
@@ -423,7 +423,7 @@ abstract class Aggregation {
 
     static native void close(long ptr);
 
-    static class SumAggregation extends NoParamAggregation {
+    static final class SumAggregation extends NoParamAggregation {
         private SumAggregation() {
             super(Kind.SUM);
         }
@@ -436,7 +436,7 @@ abstract class Aggregation {
         return new SumAggregation();
     }
 
-    static class ProductAggregation extends NoParamAggregation {
+    static final class ProductAggregation extends NoParamAggregation {
         private ProductAggregation() {
             super(Kind.PRODUCT);
         }
@@ -449,7 +449,7 @@ abstract class Aggregation {
         return new ProductAggregation();
     }
 
-    static class MinAggregation extends NoParamAggregation {
+    static final class MinAggregation extends NoParamAggregation {
         private MinAggregation() {
             super(Kind.MIN);
         }
@@ -462,7 +462,7 @@ abstract class Aggregation {
         return new MinAggregation();
     }
 
-    static class MaxAggregation extends NoParamAggregation {
+    static final class MaxAggregation extends NoParamAggregation {
         private MaxAggregation() {
             super(Kind.MAX);
         }
@@ -475,7 +475,7 @@ abstract class Aggregation {
         return new MaxAggregation();
     }
 
-    static class CountAggregation extends CountLikeAggregation {
+    static final class CountAggregation extends CountLikeAggregation {
         private CountAggregation(NullPolicy nullPolicy) {
             super(Kind.COUNT, nullPolicy);
         }
@@ -497,7 +497,7 @@ abstract class Aggregation {
         return new CountAggregation(nullPolicy);
     }
 
-    static class AnyAggregation extends NoParamAggregation {
+    static final class AnyAggregation extends NoParamAggregation {
         private AnyAggregation() {
             super(Kind.ANY);
         }
@@ -512,7 +512,7 @@ abstract class Aggregation {
         return new AnyAggregation();
     }
 
-    static class AllAggregation extends NoParamAggregation {
+    static final class AllAggregation extends NoParamAggregation {
         private AllAggregation() {
             super(Kind.ALL);
         }
@@ -527,7 +527,7 @@ abstract class Aggregation {
         return new AllAggregation();
     }
 
-    static class SumOfSquaresAggregation extends NoParamAggregation {
+    static final class SumOfSquaresAggregation extends NoParamAggregation {
         private SumOfSquaresAggregation() {
             super(Kind.SUM_OF_SQUARES);
         }
@@ -540,7 +540,7 @@ abstract class Aggregation {
         return new SumOfSquaresAggregation();
     }
 
-    static class MeanAggregation extends NoParamAggregation {
+    static final class MeanAggregation extends NoParamAggregation {
         private MeanAggregation() {
             super(Kind.MEAN);
         }
@@ -553,7 +553,7 @@ abstract class Aggregation {
         return new MeanAggregation();
     }
 
-    static class M2Aggregation extends NoParamAggregation {
+    static final class M2Aggregation extends NoParamAggregation {
         private M2Aggregation() {
             super(Kind.M2);
         }
@@ -566,7 +566,7 @@ abstract class Aggregation {
         return new M2Aggregation();
     }
 
-    static class VarianceAggregation extends DdofAggregation {
+    static final class VarianceAggregation extends DdofAggregation {
         private VarianceAggregation(int ddof) {
             super(Kind.VARIANCE, ddof);
         }
@@ -589,7 +589,7 @@ abstract class Aggregation {
     }
 
 
-    static class StandardDeviationAggregation extends DdofAggregation {
+    static final class StandardDeviationAggregation extends DdofAggregation {
         private StandardDeviationAggregation(int ddof) {
             super(Kind.STD, ddof);
         }
@@ -611,7 +611,7 @@ abstract class Aggregation {
         return new StandardDeviationAggregation(ddof);
     }
 
-    static class MedianAggregation extends NoParamAggregation {
+    static final class MedianAggregation extends NoParamAggregation {
         private MedianAggregation() {
             super(Kind.MEDIAN);
         }
@@ -638,7 +638,7 @@ abstract class Aggregation {
         return new QuantileAggregation(method, quantiles);
     }
 
-    static class ArgMaxAggregation extends NoParamAggregation {
+    static final class ArgMaxAggregation extends NoParamAggregation {
         private ArgMaxAggregation() {
             super(Kind.ARGMAX);
         }
@@ -654,7 +654,7 @@ abstract class Aggregation {
         return new ArgMaxAggregation();
     }
 
-    static class ArgMinAggregation extends NoParamAggregation {
+    static final class ArgMinAggregation extends NoParamAggregation {
         private ArgMinAggregation() {
             super(Kind.ARGMIN);
         }
@@ -670,7 +670,7 @@ abstract class Aggregation {
         return new ArgMinAggregation();
     }
 
-    static class NuniqueAggregation extends CountLikeAggregation {
+    static final class NuniqueAggregation extends CountLikeAggregation {
         private NuniqueAggregation(NullPolicy nullPolicy) {
             super(Kind.NUNIQUE, nullPolicy);
         }
@@ -713,7 +713,7 @@ abstract class Aggregation {
         return new NthAggregation(offset, nullPolicy);
     }
 
-    static class RowNumberAggregation extends NoParamAggregation {
+    static final class RowNumberAggregation extends NoParamAggregation {
         private RowNumberAggregation() {
             super(Kind.ROW_NUMBER);
         }
@@ -726,7 +726,7 @@ abstract class Aggregation {
         return new RowNumberAggregation();
     }
 
-    static class RankAggregation extends NoParamAggregation {
+    static final class RankAggregation extends NoParamAggregation {
         private RankAggregation() {
             super(Kind.RANK);
         }
@@ -739,7 +739,7 @@ abstract class Aggregation {
         return new RankAggregation();
     }
 
-    static class DenseRankAggregation extends NoParamAggregation {
+    static final class DenseRankAggregation extends NoParamAggregation {
         private DenseRankAggregation() {
             super(Kind.DENSE_RANK);
         }
@@ -819,7 +819,7 @@ abstract class Aggregation {
         return new MergeSetsAggregation(nullEquality, nanEquality);
     }
 
-    static class LeadAggregation extends LeadLagAggregation {
+    static final class LeadAggregation extends LeadLagAggregation {
         private LeadAggregation(int offset, ColumnVector defaultOutput) {
             super(Kind.LEAD, offset, defaultOutput);
         }
@@ -835,7 +835,7 @@ abstract class Aggregation {
         return new LeadAggregation(offset, defaultOutput);
     }
 
-    static class LagAggregation extends LeadLagAggregation {
+    static final class LagAggregation extends LeadLagAggregation {
         private LagAggregation(int offset, ColumnVector defaultOutput) {
             super(Kind.LAG, offset, defaultOutput);
         }

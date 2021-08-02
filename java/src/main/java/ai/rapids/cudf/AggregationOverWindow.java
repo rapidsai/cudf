@@ -22,7 +22,7 @@ package ai.rapids.cudf;
  * An Aggregation instance that also holds a column number and window metadata so the aggregation
  * can be done over a specific window.
  */
-public class AggregationOverWindow {
+public final class AggregationOverWindow {
     private final RollingAggregationOnColumn wrapped;
     protected final WindowOptions windowOptions;
 

@@ -21,7 +21,7 @@ package ai.rapids.cudf;
 /**
  * A GroupByAggregation for a specific column in a table.
  */
-public class GroupByAggregationOnColumn {
+public final class GroupByAggregationOnColumn {
     protected final GroupByAggregation wrapped;
     protected final int columnIndex;
 

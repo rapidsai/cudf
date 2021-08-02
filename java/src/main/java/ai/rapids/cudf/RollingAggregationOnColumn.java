@@ -21,7 +21,7 @@ package ai.rapids.cudf;
 /**
  * A RollingAggregation for a specific column in a table.
  */
-public class RollingAggregationOnColumn {
+public final class RollingAggregationOnColumn {
     protected final RollingAggregation wrapped;
     protected final int columnIndex;
 
