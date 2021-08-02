@@ -552,92 +552,125 @@ class aggregate_metadata {
   }
 
   /**
-   * @brief Build input and output column structures based on schema input. Recursive.
+   * @brief Filters and reduces down to a selection of columns
    *
-   * @param[in,out] schema_idx Schema index to build information for. This value gets
-   * incremented as the function recurses.
-   * @param[out] input_columns Input column information (source data in the file)
-   * @param[out] output_columns Output column structure (resulting cudf columns)
-   * @param[in,out] nesting A stack keeping track of child column indices so we can
-   * reproduce the linear list of output columns that correspond to an input column.
-   * @param[in] strings_to_categorical Type conversion parameter
-   * @param[in] timestamp_type_id Type conversion parameter
-   * @param[in] strict_decimal_types True if it is an error to load an unsupported decimal type
+   * @param use_names List of paths of column names to select
+   * @param include_index Whether to always include the PANDAS index column(s)
+   * @param strings_to_categorical Type conversion parameter
+   * @param timestamp_type_id Type conversion parameter
+   * @param strict_decimal_types Type conversion parameter
    *
+   * @return input column information, output column information, list of output column schema
+   * indices
    */
-  void build_column_info(int& schema_idx,
-                         std::vector<input_column_info>& input_columns,
-                         std::vector<column_buffer>& output_columns,
-                         std::deque<int>& nesting,
-                         bool strings_to_categorical,
-                         type_id timestamp_type_id,
-                         bool strict_decimal_types) const
+  auto select_columns(std::vector<std::vector<std::string>> const& use_names,
+                      bool include_index,
+                      bool strings_to_categorical,
+                      type_id timestamp_type_id,
+                      bool strict_decimal_types) const
   {
-    int start_schema_idx = schema_idx;
-    auto const& schema   = get_schema(schema_idx);
-    schema_idx++;
+    auto find_schema_child = [&](SchemaElement const& schema_elem,
+                                 std::string const& name) -> SchemaElement const& {
+      auto const& col_schema_idx = std::find_if(
+        schema_elem.children_idx.begin(),
+        schema_elem.children_idx.end(),
+        [&](size_t col_schema_idx) { return get_schema(col_schema_idx).name == name; });
+      CUDF_EXPECTS(col_schema_idx != schema_elem.children_idx.end(),
+                   "Child \"" + name + "\" not found in \"" + schema_elem.name + "\"");
+      return get_schema(*col_schema_idx);
+    };
 
-    // if I am a stub, continue on
-    if (schema.is_stub()) {
-      // is this legit?
-      CUDF_EXPECTS(schema.num_children == 1, "Unexpected number of children for stub");
-      build_column_info(schema_idx,
-                        input_columns,
-                        output_columns,
-                        nesting,
-                        strings_to_categorical,
-                        timestamp_type_id,
-                        strict_decimal_types);
-      return;
-    }
+    std::vector<column_buffer> output_columns;
+    std::vector<input_column_info> input_columns;
+    std::deque<int> nesting;
 
-    // if we're at the root, this is a new output column
-    nesting.push_back(static_cast<int>(output_columns.size()));
-    auto const col_type =
-      to_type_id(schema, strings_to_categorical, timestamp_type_id, strict_decimal_types);
-    auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64
-                         ? data_type{col_type, numeric::scale_type{-schema.decimal_scale}}
-                         : data_type{col_type};
-    column_buffer& output_col =
-      output_columns.emplace_back(dtype, schema.repetition_type == OPTIONAL ? true : false);
-    output_col.name = schema.name;
+    std::function<void(column_name_info const*, SchemaElement const&, std::vector<column_buffer>&)>
+      build_column = [&](column_name_info const* col_name_info,
+                         SchemaElement const& schema_elem,
+                         std::vector<column_buffer>& out_col_array) {
+        // if I am a stub, continue on
+        if (schema_elem.is_stub()) {
+          // is this legit?
+          CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
+          auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
 
-    // build each child
-    for (int idx = 0; idx < schema.num_children; idx++) {
-      build_column_info(schema_idx,
-                        input_columns,
-                        output_col.children,
-                        nesting,
-                        strings_to_categorical,
-                        timestamp_type_id,
-                        strict_decimal_types);
-    }
+          // if we still have a specified col_name_info at this level then verify if name matches
+          // with child
+          auto& child_schema = (col_name_info)
+                                 ? find_schema_child(schema_elem, col_name_info->children[0].name)
+                                 : get_schema(schema_elem.children_idx[0]);
+          build_column(child_col_name_info, child_schema, out_col_array);
+          return;
+        }
 
-    // if I have no children, we're at a leaf and I'm an input column (that is, one with actual
-    // data stored) so add me to the list.
-    if (schema.num_children == 0) {
-      input_column_info& input_col =
-        input_columns.emplace_back(input_column_info{start_schema_idx, schema.name});
-      std::copy(nesting.begin(), nesting.end(), std::back_inserter(input_col.nesting));
-    }
+        // if we're at the root, this is a new output column
+        auto const col_type =
+          to_type_id(schema_elem, strings_to_categorical, timestamp_type_id, strict_decimal_types);
+        auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64
+                             ? data_type{col_type, numeric::scale_type{-schema_elem.decimal_scale}}
+                             : data_type{col_type};
 
-    nesting.pop_back();
-  }
+        column_buffer& output_col =
+          out_col_array.emplace_back(dtype, schema_elem.repetition_type == OPTIONAL ? true : false);
+        // store the index of this newly inserted element
+        nesting.push_back(static_cast<int>(out_col_array.size()) - 1);
+        output_col.name = schema_elem.name;
 
-  auto select_columns2(std::vector<std::vector<std::string>> const& use_names,
-                       bool include_index,
-                       bool strings_to_categorical,
-                       type_id timestamp_type_id,
-                       bool strict_decimal_types) const
-  {
-    std::vector<column_name_info> selected_columns;
+        // build each child
+        if (col_name_info == nullptr or col_name_info->children.empty()) {
+          // add all children of schema_elem.
+          // At this point, we can no longer pass a col_name_info to build_column
+          for (int idx = 0; idx < schema_elem.num_children; idx++) {
+            build_column(nullptr, get_schema(schema_elem.children_idx[idx]), output_col.children);
+          }
+        } else {
+          for (size_t idx = 0; idx < col_name_info->children.size(); idx++) {
+            build_column(&col_name_info->children[idx],
+                         find_schema_child(schema_elem, col_name_info->children[idx].name),
+                         output_col.children);
+          }
+        }
+
+        // if I have no children, we're at a leaf and I'm an input column (that is, one with actual
+        // data stored) so add me to the list.
+        if (schema_elem.num_children == 0) {
+          input_column_info& input_col =
+            input_columns.emplace_back(input_column_info{schema_elem.self_idx, schema_elem.name});
+          std::copy(nesting.begin(), nesting.end(), std::back_inserter(input_col.nesting));
+        }
+
+        nesting.pop_back();
+      };
+
+    std::vector<int> output_column_schemas;
+
+    //
+    // there is not necessarily a 1:1 mapping between input columns and output columns.
+    // For example, parquet does not explicitly store a ColumnChunkDesc for struct columns.
+    // The "structiness" is simply implied by the schema.  For example, this schema:
+    //  required group field_id=1 name {
+    //    required binary field_id=2 firstname (String);
+    //    required binary field_id=3 middlename (String);
+    //    required binary field_id=4 lastname (String);
+    // }
+    // will only contain 3 internal columns of data (firstname, middlename, lastname).  But of
+    // course "name" is ultimately the struct column we want to return.
+    //
+    // "firstname", "middlename" and "lastname" represent the input columns in the file that we
+    // process to produce the final cudf "name" column.
+    //
+    // A user can ask for a single field out of the struct e.g. firstname.
+    // In this case they'll pass a fully qualified name to the schema element like
+    // ["name", "firstname"]
+    //
+    auto const& root = get_schema(0);
     if (use_names.empty()) {
-      // select all columns
-      auto const& root = get_schema(0);
-      for (auto const& col_idx : root.children_idx) {
-        selected_columns.emplace_back(get_schema(col_idx).name);
+      for (auto const& schema_idx : root.children_idx) {
+        build_column(nullptr, get_schema(schema_idx), output_columns);
+        output_column_schemas.push_back(schema_idx);
       }
     } else {
+      std::vector<column_name_info> selected_columns;
       if (include_index) {
         std::vector<std::string> index_names = get_pandas_index_names();
         std::transform(index_names.begin(),
@@ -687,176 +720,11 @@ class aggregate_metadata {
           }
         }
       }
-    }
-    // TODO: Wherever we use this, should use get_schema()
-    auto const& schema = per_file_metadata[0].schema;
-
-    auto find_schema_child = [&schema](SchemaElement const& schema_elem,
-                                       std::string const& name) -> SchemaElement const& {
-      auto const& col_schema_idx =
-        std::find_if(schema_elem.children_idx.begin(),
-                     schema_elem.children_idx.end(),
-                     [&](size_t col_schema_idx) { return schema[col_schema_idx].name == name; });
-      CUDF_EXPECTS(col_schema_idx != schema_elem.children_idx.end(),
-                   "Child \"" + name + "\" not found in \"" + schema_elem.name + "\"");
-      return schema[*col_schema_idx];
-    };
-
-    std::vector<column_buffer> output_columns;
-    std::vector<input_column_info> input_columns;
-    std::deque<int> nesting;
-
-    std::function<void(column_name_info const*, SchemaElement const&, std::vector<column_buffer>&)>
-      build_column = [&](column_name_info const* col_name_info,
-                         SchemaElement const& schema_elem,
-                         std::vector<column_buffer>& out_col_array) {
-        // if I am a stub, continue on
-        if (schema_elem.is_stub()) {
-          // is this legit?
-          CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
-          auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
-
-          // if we still have a specified col_name_info at this level then verify if name matches
-          // with child
-          auto& child_schema = (col_name_info)
-                                 ? find_schema_child(schema_elem, col_name_info->children[0].name)
-                                 : schema[schema_elem.children_idx[0]];
-          build_column(child_col_name_info, child_schema, out_col_array);
-          return;
-        }
-
-        // if we're at the root, this is a new output column
-        // TODO: This should be done after out_col_array.emplace_back to signify that we're storing
-        // the idx of the newly created outcol in nesting
-        nesting.push_back(static_cast<int>(out_col_array.size()));
-        auto const col_type =
-          to_type_id(schema_elem, strings_to_categorical, timestamp_type_id, strict_decimal_types);
-        auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64
-                             ? data_type{col_type, numeric::scale_type{-schema_elem.decimal_scale}}
-                             : data_type{col_type};
-
-        column_buffer& output_col =
-          out_col_array.emplace_back(dtype, schema_elem.repetition_type == OPTIONAL ? true : false);
-        output_col.name = schema_elem.name;
-
-        // build each child
-        if (col_name_info == nullptr or col_name_info->children.empty()) {
-          // add all children of schema_elem.
-          // At this point, we can no longer pass a col_name_info to build_column
-          for (int idx = 0; idx < schema_elem.num_children; idx++) {
-            build_column(nullptr, schema[schema_elem.children_idx[idx]], output_col.children);
-          }
-        } else {
-          for (size_t idx = 0; idx < col_name_info->children.size(); idx++) {
-            build_column(&col_name_info->children[idx],
-                         find_schema_child(schema_elem, col_name_info->children[idx].name),
-                         output_col.children);
-          }
-        }
-
-        // if I have no children, we're at a leaf and I'm an input column (that is, one with actual
-        // data stored) so add me to the list.
-        if (schema_elem.num_children == 0) {
-          input_column_info& input_col =
-            input_columns.emplace_back(input_column_info{schema_elem.self_idx, schema_elem.name});
-          std::copy(nesting.begin(), nesting.end(), std::back_inserter(input_col.nesting));
-        }
-
-        nesting.pop_back();
-      };
-
-    std::vector<int> output_column_schemas;
-
-    auto const& root = schema.front();
-    if (use_names.empty()) {
-      for (auto const& schema_idx : root.children_idx) {
-        build_column(nullptr, get_schema(schema_idx), output_columns);
-        output_column_schemas.push_back(schema_idx);
-      }
-    } else {
       for (auto& col : selected_columns) {
-        auto const& top_level_col_schem_idx = find_schema_child(root, col.name);
-        build_column(&col, top_level_col_schem_idx, output_columns);
-        output_column_schemas.push_back(top_level_col_schem_idx.self_idx);
+        auto const& top_level_col_schema = find_schema_child(root, col.name);
+        build_column(&col, top_level_col_schema, output_columns);
+        output_column_schemas.push_back(top_level_col_schema.self_idx);
       }
-    }
-
-    return std::make_tuple(
-      std::move(input_columns), std::move(output_columns), std::move(output_column_schemas));
-  }
-
-  /**
-   * @brief Filters and reduces down to a selection of columns
-   *
-   * @param use_names List of column names to select
-   * @param include_index Whether to always include the PANDAS index column(s)
-   * @param strings_to_categorical Type conversion parameter
-   * @param timestamp_type_id Type conversion parameter
-   *
-   * @return input column information, output column information, list of output column schema
-   * indices
-   */
-  auto select_columns(std::vector<std::string> const& use_names,
-                      bool include_index,
-                      bool strings_to_categorical,
-                      type_id timestamp_type_id,
-                      bool strict_decimal_types) const
-  {
-    auto const& pfm = per_file_metadata[0];
-
-    // determine the list of output columns
-    //
-    // there is not necessarily a 1:1 mapping between input columns and output columns.
-    // For example, parquet does not explicitly store a ColumnChunkDesc for struct columns.
-    // The "structiness" is simply implied by the schema.  For example, this schema:
-    //  required group field_id=1 name {
-    //    required binary field_id=2 firstname (String);
-    //    required binary field_id=3 middlename (String);
-    //    required binary field_id=4 lastname (String);
-    // }
-    // will only contain 3 internal columns of data (firstname, middlename, lastname).  But of
-    // course "name" is ultimately the struct column we want to return.
-    //
-    // "firstname", "middlename" and "lastname" represent the input columns in the file that we
-    // process to produce the final cudf "name" column.
-    //
-    std::vector<int> output_column_schemas;
-    if (use_names.empty()) {  // Will be `not use_names.has_value()`
-      // walk the schema and choose all top level columns
-      for (size_t schema_idx = 1; schema_idx < pfm.schema.size(); schema_idx++) {
-        auto const& schema = pfm.schema[schema_idx];
-        if (schema.parent_idx == 0) { output_column_schemas.push_back(schema_idx); }
-      }
-    } else {
-      // Load subset of columns; include PANDAS index unless excluded
-      std::vector<std::string> local_use_names = use_names;
-      // if (include_index) { add_pandas_index_names(local_use_names); }
-      for (const auto& use_name : local_use_names) {
-        for (size_t schema_idx = 1; schema_idx < pfm.schema.size(); schema_idx++) {
-          auto const& schema = pfm.schema[schema_idx];
-          // We select only top level columns by name. Selecting nested columns by name is not
-          // supported. Top level columns are identified by their parent being the root (idx == 0)
-          if (use_name == schema.name and schema.parent_idx == 0) {
-            output_column_schemas.push_back(schema_idx);
-          }
-        }
-      }
-    }
-
-    // construct input and output output column info
-    std::vector<column_buffer> output_columns;
-    output_columns.reserve(output_column_schemas.size());
-    std::vector<input_column_info> input_columns;
-    std::deque<int> nesting;
-    for (size_t idx = 0; idx < output_column_schemas.size(); idx++) {
-      int schema_index = output_column_schemas[idx];
-      build_column_info(schema_index,
-                        input_columns,
-                        output_columns,
-                        nesting,
-                        strings_to_categorical,
-                        timestamp_type_id,
-                        strict_decimal_types);
     }
 
     return std::make_tuple(
@@ -1566,11 +1434,11 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 
   // Select only columns required by the options
   std::tie(_input_columns, _output_columns, _output_column_schemas) =
-    _metadata->select_columns2(options.get_columns(),
-                               options.is_enabled_use_pandas_metadata(),
-                               _strings_to_categorical,
-                               _timestamp_type.id(),
-                               _strict_decimal_types);
+    _metadata->select_columns(options.get_columns(),
+                              options.is_enabled_use_pandas_metadata(),
+                              _strings_to_categorical,
+                              _timestamp_type.id(),
+                              _strict_decimal_types);
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
