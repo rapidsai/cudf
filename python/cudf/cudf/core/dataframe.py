@@ -3079,8 +3079,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             )
 
         if _is_scalar_or_zero_d_array(value):
-            if value is cudf.NA:
-                value = None
             value = utils.scalar_broadcast_to(value, len(self))
 
         if len(self) == 0:
