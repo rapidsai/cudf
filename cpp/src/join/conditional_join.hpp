@@ -49,6 +49,26 @@ conditional_join(table_view const& left,
                  rmm::cuda_stream_view stream,
                  rmm::mr::device_memory_resource* mr);
 
-}  // namespace detail
+/**
+ * @brief Computes the size of a join operation between two tables without
+ * materializing the result and returns the total size value.
+ *
+ * @param left  Table of left columns to join
+ * @param right Table of right  columns to join
+ * tables have been flipped, meaning the output indices should also be flipped
+ * @param JoinKind The type of join to be performed
+ * @param compare_nulls Controls whether null join-key values should match or not.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return Join output indices vector pair
+ */
+size_type compute_conditional_join_output_size(table_view const& left,
+                                               table_view const& right,
+                                               ast::expression binary_predicate,
+                                               null_equality compare_nulls,
+                                               join_kind JoinKind,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr);
 
+}  // namespace detail
 }  // namespace cudf

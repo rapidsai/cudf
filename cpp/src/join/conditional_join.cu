@@ -80,8 +80,7 @@ conditional_join(table_view const& left,
   // Allocate storage for the counter used to get the size of the join output
   rmm::device_scalar<size_type> size(0, stream, mr);
   CHECK_CUDA(stream.value());
-  constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-  detail::grid_1d config(left_table->num_rows(), block_size);
+  detail::grid_1d config(left_table->num_rows(), DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block =
     parser.device_expression_data.shmem_per_thread * config.num_threads_per_block;
 
@@ -89,7 +88,7 @@ conditional_join(table_view const& left,
   // find what the size of the output will be.
   join_kind KernelJoinKind = JoinKind == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : JoinKind;
   if (has_nulls) {
-    compute_conditional_join_output_size<block_size, true>
+    compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -98,7 +97,7 @@ conditional_join(table_view const& left,
         parser.device_expression_data,
         size.data());
   } else {
-    compute_conditional_join_output_size<block_size, false>
+    compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -125,7 +124,7 @@ conditional_join(table_view const& left,
   auto const& join_output_l = left_indices->data();
   auto const& join_output_r = right_indices->data();
   if (has_nulls) {
-    conditional_join<block_size, DEFAULT_JOIN_CACHE_SIZE, true>
+    conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -137,7 +136,7 @@ conditional_join(table_view const& left,
         parser.device_expression_data,
         join_size);
   } else {
-    conditional_join<block_size, DEFAULT_JOIN_CACHE_SIZE, false>
+    conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -162,6 +161,81 @@ conditional_join(table_view const& left,
     join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
   }
   return join_indices;
+}
+
+size_type compute_conditional_join_output_size(table_view const& left,
+                                               table_view const& right,
+                                               ast::expression binary_predicate,
+                                               null_equality compare_nulls,
+                                               join_kind JoinKind,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
+{
+  // We can immediately filter out cases where the right table is empty. In
+  // some cases, we return all the rows of the left table with a corresponding
+  // null index for the right table; in others, we return an empty output.
+  if (right.num_rows() == 0) {
+    switch (JoinKind) {
+      // Left, left anti, and full (which are effectively left because we are
+      // guaranteed that left has more rows than right) all return a all the
+      // row indices from left with a corresponding NULL from the right.
+      case join_kind::LEFT_JOIN:
+      case join_kind::LEFT_ANTI_JOIN:
+      case join_kind::FULL_JOIN: return left.num_rows();
+      // Inner and left semi joins return empty output because no matches can exist.
+      case join_kind::INNER_JOIN:
+      case join_kind::LEFT_SEMI_JOIN: return 0;
+    }
+  }
+
+  // Prepare output column. Whether or not the output column is nullable is
+  // determined by whether any of the columns in the input table are nullable.
+  // If none of the input columns actually contain nulls, we can still use the
+  // non-nullable version of the expression evaluation code path for
+  // performance, so we capture that information as well.
+  auto const nullable  = cudf::nullable(left) || cudf::nullable(right);
+  auto const has_nulls = nullable && (cudf::has_nulls(left) || cudf::has_nulls(right));
+
+  auto const parser =
+    ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
+  CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
+               "The expression must produce a boolean output.");
+
+  auto left_table  = table_device_view::create(left, stream);
+  auto right_table = table_device_view::create(right, stream);
+
+  // Allocate storage for the counter used to get the size of the join output
+  rmm::device_scalar<size_type> size(0, stream, mr);
+  CHECK_CUDA(stream.value());
+  detail::grid_1d config(left_table->num_rows(), DEFAULT_JOIN_BLOCK_SIZE);
+  auto const shmem_size_per_block =
+    parser.device_expression_data.shmem_per_thread * config.num_threads_per_block;
+
+  // Determine number of output rows without actually building the output to simply
+  // find what the size of the output will be.
+  join_kind KernelJoinKind = JoinKind == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : JoinKind;
+  if (has_nulls) {
+    compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+        *left_table,
+        *right_table,
+        KernelJoinKind,
+        compare_nulls,
+        parser.device_expression_data,
+        size.data());
+  } else {
+    compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+        *left_table,
+        *right_table,
+        KernelJoinKind,
+        compare_nulls,
+        parser.device_expression_data,
+        size.data());
+  }
+  CHECK_CUDA(stream.value());
+
+  return size.value(stream);
 }
 
 }  // namespace detail
