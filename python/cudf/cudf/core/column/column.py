@@ -70,8 +70,8 @@ from cudf.utils.dtypes import (
     get_time_unit,
     min_unsigned_type,
     np_to_pa_dtype,
-    pandas_dtypes_to_cudf_dtypes,
     pandas_dtypes_alias_to_cudf_alias,
+    pandas_dtypes_to_cudf_dtypes,
 )
 from cudf.utils.utils import mask_dtype
 
