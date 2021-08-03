@@ -6283,15 +6283,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         "columns": 1,
     }
 
-    @classmethod
-    def _get_axis_from_axis_arg(cls, axis):
-        try:
-            return cls._SUPPORT_AXIS_LOOKUP[axis]
-        except KeyError:
-            raise ValueError(
-                "Invalid axis argument, must be 0, 1, 'index', 'columns'."
-            )
-
     def _reduce(
         self, op, axis=None, level=None, numeric_only=None, **kwargs,
     ):

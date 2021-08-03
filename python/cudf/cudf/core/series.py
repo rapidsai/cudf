@@ -3899,6 +3899,12 @@ class Series(SingleColumnFrame, Serializable):
     #
     # Stats
     #
+    _SUPPORT_AXIS_LOOKUP = {
+        0: 0,
+        None: 0,
+        "index": 0,
+    }
+
     def _reduce(
         self, op, axis=None, level=None, numeric_only=None, **kwargs,
     ):

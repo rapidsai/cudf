@@ -3605,6 +3605,23 @@ class Frame(libcudf.table.Table):
         return self._unaryop("abs")
 
     # Reductions
+    @classmethod
+    def _get_axis_from_axis_arg(cls, axis):
+        try:
+            return cls._SUPPORT_AXIS_LOOKUP[axis]
+        except KeyError:
+            raise ValueError(
+                "Invalid axis argument, must be one of {}.".format(
+                    ", ".join(
+                        (
+                            ax
+                            for ax in cls._SUPPORT_AXIS_LOOKUP.keys()
+                            if ax is not None
+                        )
+                    )
+                )
+            )
+
     def _reduce(self, *args, **kwargs):
         raise NotImplementedError(
             f"Reductions are not supported for objects of type {type(self)}."
