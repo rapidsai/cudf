@@ -670,10 +670,16 @@ def date_range(
             "three must be specified"
         )
 
-    try:
-        dtype = start.dtype if start is not None else end.dtype
-    except AttributeError:
-        dtype = "datetime64[ns]"
+    # try:
+    #     dtype = start.dtype if start is not None else end.dtype
+    #     # cudf supports datetime scalar up to [s] resolution
+    #     # downcast if coarser
+    #     dtype = np.dtype('<M8[s]') if dtype < np.dtype('<M8[s]') else dtype
+    # except AttributeError:
+    #     dtype = np.dtype('<M8[ns]')
+
+    # TODO: it seems like pandas uses [ns] under *all* circumstances?
+    dtype = np.dtype("<M8[ns]")
 
     if freq is not None:
         if isinstance(freq, str):
@@ -687,16 +693,21 @@ def date_range(
             end_slr = cudf.Scalar(end, dtype=dtype)
             # TODO: support below
             start_slr = end_slr - periods * offset
-        else:
+        elif end is None:
             start_slr = cudf.Scalar(start, dtype=dtype)
+        elif periods is None:
+            start_slr = cudf.Scalar(start, dtype=dtype)
+            end_slr = cudf.Scalar(start, dtype=dtype)
+            # TODO: support below
+            periods = (end_slr - start_slr) / offset
+
     else:
         start_slr = cudf.Scalar(start, dtype=dtype)
         end_slr = cudf.Scalar(end, dtype=dtype)
         # TODO: investigate precision difference with Pandas
-        delta = (
-            end_slr.value.astype("datetime64[ns]")
-            - start_slr.value.astype("datetime64[ns]")
-        ) / (periods - 1)
+        delta = ((end_slr.value - start_slr.value) / (periods - 1)).astype(
+            "<m8[ns]"
+        )
         offset = DateOffset(**{"nanoseconds": int(delta)})
     if normalize:
         old_dtype = start_slr.value.dtype
