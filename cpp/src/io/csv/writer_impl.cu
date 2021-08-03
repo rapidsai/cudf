@@ -114,14 +114,13 @@ struct column_to_strings_fn {
   template <typename column_type>
   constexpr static bool is_not_handled(void)
   {
-    // Note: the case (not std::is_same<column_type, bool>::value)
+    // Note: the case (not std::is_same_v<column_type, bool>)
     // is already covered by is_integral)
     //
-    return not((std::is_same<column_type, cudf::string_view>::value) ||
-               (std::is_integral<column_type>::value) ||
-               (std::is_floating_point<column_type>::value) ||
-               (cudf::is_fixed_point<column_type>()) || (cudf::is_timestamp<column_type>()) ||
-               (cudf::is_duration<column_type>()));
+    return not(
+      (std::is_same_v<column_type, cudf::string_view>) || (std::is_integral<column_type>::value) ||
+      (std::is_floating_point<column_type>::value) || (cudf::is_fixed_point<column_type>()) ||
+      (cudf::is_timestamp<column_type>()) || (cudf::is_duration<column_type>()));
   }
 
   explicit column_to_strings_fn(
@@ -143,7 +142,7 @@ struct column_to_strings_fn {
   // bools:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_same<column_type, bool>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<std::is_same_v<column_type, bool>, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
     return cudf::strings::detail::from_booleans(
@@ -153,7 +152,7 @@ struct column_to_strings_fn {
   // strings:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_same<column_type, cudf::string_view>::value, std::unique_ptr<column>>
+  std::enable_if_t<std::is_same_v<column_type, cudf::string_view>, std::unique_ptr<column>>
   operator()(column_view const& column_v) const
   {
     // handle special characters: {delimiter, '\n', "} in row:
@@ -175,7 +174,7 @@ struct column_to_strings_fn {
   // ints:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_integral<column_type>::value && !std::is_same<column_type, bool>::value,
+  std::enable_if_t<std::is_integral<column_type>::value && !std::is_same_v<column_type, bool>,
                    std::unique_ptr<column>>
   operator()(column_view const& column) const
   {
@@ -207,13 +206,13 @@ struct column_to_strings_fn {
     column_view const& column) const
   {
     std::string format = [&]() {
-      if (std::is_same<cudf::timestamp_s, column_type>::value) {
+      if (std::is_same_v<cudf::timestamp_s, column_type>) {
         return std::string{"%Y-%m-%dT%H:%M:%SZ"};
-      } else if (std::is_same<cudf::timestamp_ms, column_type>::value) {
+      } else if (std::is_same_v<cudf::timestamp_ms, column_type>) {
         return std::string{"%Y-%m-%dT%H:%M:%S.%3fZ"};
-      } else if (std::is_same<cudf::timestamp_us, column_type>::value) {
+      } else if (std::is_same_v<cudf::timestamp_us, column_type>) {
         return std::string{"%Y-%m-%dT%H:%M:%S.%6fZ"};
-      } else if (std::is_same<cudf::timestamp_ns, column_type>::value) {
+      } else if (std::is_same_v<cudf::timestamp_ns, column_type>) {
         return std::string{"%Y-%m-%dT%H:%M:%S.%9fZ"};
       } else {
         return std::string{"%Y-%m-%d"};
@@ -284,24 +283,54 @@ void writer::impl::write_chunked_begin(table_view const& table,
                                        rmm::cuda_stream_view stream)
 {
   if ((metadata != nullptr) && (options_.is_enabled_include_header())) {
-    CUDF_EXPECTS(metadata->column_names.size() == static_cast<size_t>(table.num_columns()),
+    auto const& column_names = metadata->column_names;
+    CUDF_EXPECTS(column_names.size() == static_cast<size_t>(table.num_columns()),
                  "Mismatch between number of column headers and table columns.");
-    std::string delimiter_str{options_.get_inter_column_delimiter()};
 
-    // avoid delimiter after last element:
-    //
+    auto const delimiter  = options_.get_inter_column_delimiter();
+    auto const terminator = options_.get_line_terminator();
+
+    // process header names:
+    // - if the header name includes the delimiter or terminator character,
+    //   it must be double-quoted
+    // - if the header name includes a double-quote, it must be escaped
+    //   with a 2nd double-quote
     std::stringstream ss;
-    std::copy(metadata->column_names.begin(),
-              metadata->column_names.end() - 1,
-              std::ostream_iterator<std::string>(ss, delimiter_str.c_str()));
+    std::transform(column_names.begin(),
+                   column_names.end(),
+                   std::ostream_iterator<std::string>(ss, std::string{delimiter}.c_str()),
+                   [delimiter, terminator](std::string name) {
+                     char const quote = '\"';
+                     if (name.empty() ||           // no header name
+                         name.front() == quote) {  // header already quoted
+                       return name;
+                     }
 
-    if (metadata->column_names.size() > 0) {
-      ss << metadata->column_names.back() << options_.get_line_terminator();
-    } else {
-      ss << options_.get_line_terminator();
+                     // escape any quotes
+                     size_t pos = 0;
+                     while ((pos = name.find(quote, pos)) != name.npos) {
+                       name.insert(pos, 1, quote);
+                       pos += 2;
+                     }
+
+                     // check if overall quotes are required
+                     if (std::any_of(name.begin(), name.end(), [&](auto const chr) {
+                           return chr == quote || chr == delimiter || chr == terminator.front();
+                         })) {
+                       name.insert(name.begin(), quote);
+                       name.insert(name.end(), quote);
+                     }
+                     return name;
+                   });
+
+    // add line terminator
+    std::string header = ss.str();
+    if (!header.empty()) {
+      header.erase(header.end() - 1);  // remove extra final delimiter
     }
+    header.append(terminator);
 
-    out_sink_->host_write(ss.str().data(), ss.str().size());
+    out_sink_->host_write(header.data(), header.size());
   }
 }
 

@@ -76,6 +76,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/nunique_tests.cpp
     groupby/product_tests.cpp
     groupby/quantile_tests.cpp
+    groupby/rank_scan_tests.cpp
     groupby/replace_nulls_tests.cpp
     groupby/shift_tests.cpp
     groupby/std_tests.cpp
@@ -88,6 +89,7 @@ ConfigureTest(GROUPBY_TEST
 # - join tests ------------------------------------------------------------------------------------
 ConfigureTest(JOIN_TEST
     join/join_tests.cpp
+    join/conditional_join_tests.cu
     join/cross_join_tests.cpp
     join/semi_anti_join_tests.cpp)
 
@@ -163,6 +165,8 @@ ConfigureTest(BINARY_TEST
     binaryop/binop-verify-input-test.cpp
     binaryop/binop-null-test.cpp
     binaryop/binop-integration-test.cpp
+    binaryop/binop-compiled-test.cpp
+    binaryop/binop-compiled-fixed_point-test.cpp
     binaryop/binop-generic-ptx-test.cpp
     )
 
@@ -205,7 +209,7 @@ ConfigureTest(SORT_TEST
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
 ConfigureTest(COPYING_TEST
-    copying/concatenate_tests.cpp
+    copying/concatenate_tests.cu
     copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
     copying/copy_tests.cu
@@ -373,7 +377,9 @@ ConfigureTest(STRINGS_TEST
 
 ###################################################################################################
 # - structs test ----------------------------------------------------------------------------------
-ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cu)
+ConfigureTest(STRUCTS_TEST 
+    structs/structs_column_tests.cpp
+    )
 
 ###################################################################################################
 # - nvtext test -----------------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
+from cudf._lib.cpp.copying cimport packed_columns
 from cudf._lib.table cimport Table
 
-from cudf._lib.cpp.copying cimport packed_columns
 
 cdef class _CPackedColumns:
     cdef packed_columns c_obj

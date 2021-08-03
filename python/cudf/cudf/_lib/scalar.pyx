@@ -1,8 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import decimal
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+
 from libc.stdint cimport (
     int8_t,
     int16_t,
@@ -13,50 +15,55 @@ from libc.stdint cimport (
     uint32_t,
     uint64_t,
 )
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-from libcpp cimport bool
 
 import cudf
-from cudf.core.dtypes import ListDtype, StructDtype
 from cudf._lib.types import (
     cudf_to_np_types,
-    duration_unit_map
+    datetime_unit_map,
+    duration_unit_map,
 )
-from cudf._lib.types import datetime_unit_map
-from cudf._lib.types cimport underlying_type_t_type_id, dtype_from_column_view
+from cudf.core.dtypes import ListDtype, StructDtype
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.table cimport Table
-from cudf._lib.interop import to_arrow, from_arrow
+from cudf._lib.table cimport Table, make_table_view
+from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 
-from cudf._lib.cpp.wrappers.timestamps cimport (
-    timestamp_s,
-    timestamp_ms,
-    timestamp_us,
-    timestamp_ns
-)
-from cudf._lib.cpp.wrappers.durations cimport(
-    duration_s,
-    duration_ms,
-    duration_us,
-    duration_ns
-)
-from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type
+from cudf._lib.interop import from_arrow, to_arrow
+
 from cudf._lib.cpp.scalar.scalar cimport (
-    scalar,
-    numeric_scalar,
-    timestamp_scalar,
     duration_scalar,
-    string_scalar,
     fixed_point_scalar,
     list_scalar,
-    struct_scalar
+    numeric_scalar,
+    scalar,
+    string_scalar,
+    struct_scalar,
+    timestamp_scalar,
 )
+from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type
+from cudf._lib.cpp.wrappers.durations cimport (
+    duration_ms,
+    duration_ns,
+    duration_s,
+    duration_us,
+)
+from cudf._lib.cpp.wrappers.timestamps cimport (
+    timestamp_ms,
+    timestamp_ns,
+    timestamp_s,
+    timestamp_us,
+)
+from cudf._lib.utils cimport data_from_table_view
+
 from cudf.utils.dtypes import _decimal_to_int64, is_list_dtype, is_struct_dtype
+
 cimport cudf._lib.cpp.types as libcudf_types
+
 
 cdef class DeviceScalar:
 
@@ -326,14 +333,14 @@ cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
     else:
         pyarrow_table = pa.Table.from_arrays(
             [
-                pa.array([], from_pandas=True, type=f.type)
+                pa.array([cudf.NA], from_pandas=True, type=f.type)
                 for f in arrow_schema
             ],
             names=columns
         )
 
-    cdef Table table = from_arrow(pyarrow_table, column_names=columns)
-    cdef table_view struct_view = table.view()
+    data, _ = from_arrow(pyarrow_table, column_names=columns)
+    cdef table_view struct_view = make_table_view(data.values())
 
     s.reset(
         new struct_scalar(struct_view, valid)
@@ -346,10 +353,13 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
     cdef table_view struct_table_view = (<struct_scalar*>s.get()).view()
     columns = [str(i) for i in range(struct_table_view.num_columns())]
 
-    cdef Table to_arrow_table = Table.from_table_view(
+    data, _ = data_from_table_view(
         struct_table_view,
         None,
         column_names=columns
+    )
+    cdef Table to_arrow_table = Table(
+        cudf.core.column_accessor.ColumnAccessor(data)
     )
 
     python_dict = to_arrow(to_arrow_table, columns).to_pydict()

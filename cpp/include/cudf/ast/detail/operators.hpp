@@ -295,8 +295,8 @@ struct operator_functor<ast_operator::MOD> {
 
   template <typename LHS,
             typename RHS,
-            typename CommonType = std::common_type_t<LHS, RHS>,
-            std::enable_if_t<std::is_same<CommonType, float>::value>* = nullptr>
+            typename CommonType                                  = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_same_v<CommonType, float>>* = nullptr>
   CUDA_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
     -> decltype(fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)))
   {
@@ -305,8 +305,8 @@ struct operator_functor<ast_operator::MOD> {
 
   template <typename LHS,
             typename RHS,
-            typename CommonType = std::common_type_t<LHS, RHS>,
-            std::enable_if_t<std::is_same<CommonType, double>::value>* = nullptr>
+            typename CommonType                                   = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_same_v<CommonType, double>>* = nullptr>
   CUDA_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
     -> decltype(fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)))
   {
@@ -334,8 +334,8 @@ struct operator_functor<ast_operator::PYMOD> {
 
   template <typename LHS,
             typename RHS,
-            typename CommonType = std::common_type_t<LHS, RHS>,
-            std::enable_if_t<std::is_same<CommonType, float>::value>* = nullptr>
+            typename CommonType                                  = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_same_v<CommonType, float>>* = nullptr>
   CUDA_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
     -> decltype(fmodf(fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)) +
                         static_cast<CommonType>(rhs),
@@ -348,8 +348,8 @@ struct operator_functor<ast_operator::PYMOD> {
 
   template <typename LHS,
             typename RHS,
-            typename CommonType = std::common_type_t<LHS, RHS>,
-            std::enable_if_t<std::is_same<CommonType, double>::value>* = nullptr>
+            typename CommonType                                   = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_same_v<CommonType, double>>* = nullptr>
   CUDA_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
     -> decltype(fmod(fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)) +
                        static_cast<CommonType>(rhs),
@@ -784,14 +784,6 @@ struct single_dispatch_binary_operator_types {
 #else
     cudf_assert(false && "Invalid binary operation.");
 #endif
-  }
-};
-
-struct single_dispatch_binary_operator {
-  template <typename LHS, typename F, typename... Ts>
-  CUDA_DEVICE_CALLABLE auto operator()(F&& f, Ts&&... args)
-  {
-    f.template operator()<LHS, LHS>(std::forward<Ts>(args)...);
   }
 };
 

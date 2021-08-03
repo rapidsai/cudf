@@ -28,7 +28,7 @@ elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
   set(CUDF_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
-project(CUDF VERSION 21.08.00 LANGUAGES C CXX)
+project(CUDF VERSION 21.10.00 LANGUAGES C CXX)
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake,
 # causing subsequent runs to have different values for the `Threads::Threads` target.
@@ -151,10 +151,38 @@ add_library(cudf
     src/aggregation/aggregation.cpp
     src/aggregation/aggregation.cu
     src/aggregation/result_cache.cpp
-    src/ast/linearizer.cpp
+    src/ast/expression_parser.cpp
     src/ast/transform.cu
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
+    src/binaryop/compiled/Add.cu
+    src/binaryop/compiled/ATan2.cu
+    src/binaryop/compiled/BitwiseAnd.cu
+    src/binaryop/compiled/BitwiseOr.cu
+    src/binaryop/compiled/BitwiseXor.cu
+    src/binaryop/compiled/Less.cu
+    src/binaryop/compiled/Greater.cu
+    src/binaryop/compiled/LessEqual.cu
+    src/binaryop/compiled/GreaterEqual.cu
+    src/binaryop/compiled/Div.cu
+    src/binaryop/compiled/equality_ops.cu
+    src/binaryop/compiled/FloorDiv.cu
+    src/binaryop/compiled/LogBase.cu
+    src/binaryop/compiled/LogicalAnd.cu
+    src/binaryop/compiled/LogicalOr.cu
+    src/binaryop/compiled/Mod.cu
+    src/binaryop/compiled/Mul.cu
+    src/binaryop/compiled/NullMax.cu
+    src/binaryop/compiled/NullMin.cu
+    src/binaryop/compiled/PMod.cu
+    src/binaryop/compiled/Pow.cu
+    src/binaryop/compiled/PyMod.cu
+    src/binaryop/compiled/ShiftLeft.cu
+    src/binaryop/compiled/ShiftRight.cu
+    src/binaryop/compiled/ShiftRightUnsigned.cu
+    src/binaryop/compiled/Sub.cu
+    src/binaryop/compiled/TrueDiv.cu
+    src/binaryop/compiled/util.cpp
     src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
     src/bitmask/is_element_valid.cpp
@@ -176,7 +204,7 @@ add_library(cudf
     src/copying/sample.cu
     src/copying/scatter.cu
     src/copying/shift.cu
-    src/copying/slice.cpp
+    src/copying/slice.cu
     src/copying/split.cpp
     src/copying/segmented_shift.cu
     src/datetime/datetime_ops.cu
@@ -214,8 +242,10 @@ add_library(cudf
     src/groupby/sort/group_sum.cu
     src/groupby/sort/scan.cpp
     src/groupby/sort/group_count_scan.cu
+    src/groupby/sort/group_dense_rank_scan.cu
     src/groupby/sort/group_max_scan.cu
     src/groupby/sort/group_min_scan.cu
+    src/groupby/sort/group_rank_scan.cu
     src/groupby/sort/group_sum_scan.cu
     src/groupby/sort/group_replace_nulls.cu
     src/groupby/sort/sort_helper.cu
@@ -271,6 +301,7 @@ add_library(cudf
     src/jit/cache.cpp
     src/jit/parser.cpp
     src/jit/type.cpp
+    src/join/conditional_join.cu
     src/join/cross_join.cu
     src/join/hash_join.cu
     src/join/join.cu
@@ -498,13 +529,21 @@ if(CUDA_STATIC_RUNTIME)
     # Tell CMake what CUDA language runtime to use
     set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Static)
     # Make sure to export to consumers what runtime we used
-    target_link_libraries(cudf PUBLIC CUDA::cudart_static CUDA::cuda_driver)
+    target_link_libraries(cudf PUBLIC CUDA::cudart_static)
 else()
     # Tell CMake what CUDA language runtime to use
     set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
     # Make sure to export to consumers what runtime we used
-    target_link_libraries(cudf PUBLIC CUDA::cudart CUDA::cuda_driver)
+    target_link_libraries(cudf PUBLIC CUDA::cudart)
 endif()
+
+# The CUDA::cuda_driver is needed due to JITIFY sources which
+# directly call the cuda driver API
+if(NOT TARGET CUDA::cuda_driver)
+    message(FATAL_ERROR "Building libcudf requires `libcuda.so` to be present.
+        This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded.")
+endif()
+target_link_libraries(cudf PUBLIC CUDA::cuda_driver)
 
 # Add cuFile interface if available
 if(TARGET cuFile::cuFile_interface)

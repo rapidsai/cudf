@@ -20,8 +20,7 @@
 
 extern "C" {
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Aggregation_close(JNIEnv *env,
-                                                             jclass class_object,
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Aggregation_close(JNIEnv *env, jclass class_object,
                                                              jlong ptr) {
   try {
     cudf::jni::auto_set_device(env);
@@ -36,64 +35,60 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
                                                                          jint kind) {
   try {
     cudf::jni::auto_set_device(env);
-    std::unique_ptr<cudf::aggregation> ret;
-    // These numbers come from Aggregation.java and must stay in sync
-    switch (kind) {
-      case 0: // SUM
-        ret = cudf::make_sum_aggregation();
-        break;
-      case 1: // PRODUCT
-        ret = cudf::make_product_aggregation();
-        break;
-      case 2: // MIN
-        ret = cudf::make_min_aggregation();
-        break;
-      case 3: // MAX
-        ret = cudf::make_max_aggregation();
-        break;
-      //case 4 COUNT
-      case 5: // ANY
-        ret = cudf::make_any_aggregation();
-        break;
-      case 6: // ALL
-        ret = cudf::make_all_aggregation();
-        break;
-      case 7: // SUM_OF_SQUARES
-        ret = cudf::make_sum_of_squares_aggregation();
-        break;
-      case 8: // MEAN
-        ret = cudf::make_mean_aggregation();
-        break;
-      // case 9: VARIANCE
-      // case 10: STD
-      case 11: // MEDIAN
-        ret = cudf::make_median_aggregation();
-        break;
-      // case 12: QUANTILE
-      case 13: // ARGMAX
-        ret = cudf::make_argmax_aggregation();
-        break;
-      case 14: // ARGMIN
-        ret = cudf::make_argmin_aggregation();
-        break;
-      // case 15: NUNIQUE
-      // case 16: NTH_ELEMENT
-      case 17: // ROW_NUMBER
-        ret = cudf::make_row_number_aggregation();
-        break;
-      // case 18: COLLECT_LIST
-      // case 19: COLLECT_SET
-      // case 20: MERGE_LISTS
-      case 20:
-        ret = cudf::make_merge_lists_aggregation();
-        break;
-      // case 21: MERGE_SETS
-      // case 22: LEAD
-      // case 23: LAG
-      // case 24: PTX
-      // case 25: CUDA
-      default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
-    }
+    auto ret = [&] {
+      // These numbers come from Aggregation.java and must stay in sync
+      switch (kind) {
+        case 0: // SUM
+          return cudf::make_sum_aggregation();
+        case 1: // PRODUCT
+          return cudf::make_product_aggregation();
+        case 2: // MIN
+          return cudf::make_min_aggregation();
+        case 3: // MAX
+          return cudf::make_max_aggregation();
+        // case 4 COUNT
+        case 5: // ANY
+          return cudf::make_any_aggregation();
+        case 6: // ALL
+          return cudf::make_all_aggregation();
+        case 7: // SUM_OF_SQUARES
+          return cudf::make_sum_of_squares_aggregation();
+        case 8: // MEAN
+          return cudf::make_mean_aggregation();
+        // case 9: VARIANCE
+        // case 10: STD
+        case 11: // MEDIAN
+          return cudf::make_median_aggregation();
+        // case 12: QUANTILE
+        case 13: // ARGMAX
+          return cudf::make_argmax_aggregation();
+        case 14: // ARGMIN
+          return cudf::make_argmin_aggregation();
+        // case 15: NUNIQUE
+        // case 16: NTH_ELEMENT
+        case 17: // ROW_NUMBER
+          return cudf::make_row_number_aggregation();
+        // case 18: COLLECT_LIST
+        // case 19: COLLECT_SET
+        case 20: // MERGE_LISTS
+          return cudf::make_merge_lists_aggregation();
+        // case 21: MERGE_SETS
+        // case 22: LEAD
+        // case 23: LAG
+        // case 24: PTX
+        // case 25: CUDA
+        case 26: // M2
+          return cudf::make_m2_aggregation();
+        case 27: // MERGE_M2
+          return cudf::make_merge_m2_aggregation();
+        case 28: // RANK
+          return cudf::make_rank_aggregation();
+        case 29: // DENSE_RANK
+          return cudf::make_dense_rank_aggregation();
+
+        default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
+      }
+    }();
 
     return reinterpret_cast<jlong>(ret.release());
   }
@@ -107,9 +102,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNthAgg(JNIEnv *env
   try {
     cudf::jni::auto_set_device(env);
 
-    std::unique_ptr<cudf::aggregation> ret = 
-        cudf::make_nth_element_aggregation(offset,
-                include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE);
+    std::unique_ptr<cudf::aggregation> ret = cudf::make_nth_element_aggregation(
+        offset, include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
@@ -117,8 +111,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNthAgg(JNIEnv *env
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createDdofAgg(JNIEnv *env,
                                                                       jclass class_object,
-                                                                      jint kind,
-                                                                      jint ddof) {
+                                                                      jint kind, jint ddof) {
   try {
     cudf::jni::auto_set_device(env);
 
@@ -184,8 +177,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createQuantAgg(JNIEnv *e
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createLeadLagAgg(JNIEnv *env,
                                                                          jclass class_object,
-                                                                         jint kind,
-                                                                         jint offset) {
+                                                                         jint kind, jint offset) {
   try {
     cudf::jni::auto_set_device(env);
 
@@ -205,9 +197,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createLeadLagAgg(JNIEnv 
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCollectListAgg(JNIEnv *env,
-                                                                             jclass class_object,
-                                                                             jboolean include_nulls) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCollectListAgg(
+    JNIEnv *env, jclass class_object, jboolean include_nulls) {
   try {
     cudf::jni::auto_set_device(env);
     cudf::null_policy policy =
@@ -231,9 +222,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCollectSetAgg(JNIE
         nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     cudf::nan_equality nan_equality =
         nans_equal ? cudf::nan_equality::ALL_EQUAL : cudf::nan_equality::UNEQUAL;
-    std::unique_ptr<cudf::aggregation> ret = cudf::make_collect_set_aggregation(null_policy,
-                                                                                null_equality,
-                                                                                nan_equality);
+    std::unique_ptr<cudf::aggregation> ret =
+        cudf::make_collect_set_aggregation(null_policy, null_equality, nan_equality);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
@@ -249,8 +239,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createMergeSetsAgg(JNIEn
         nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     cudf::nan_equality nan_equality =
         nans_equal ? cudf::nan_equality::ALL_EQUAL : cudf::nan_equality::UNEQUAL;
-    std::unique_ptr<cudf::aggregation> ret = cudf::make_merge_sets_aggregation(null_equality,
-                                                                               nan_equality);
+    std::unique_ptr<cudf::aggregation> ret =
+        cudf::make_merge_sets_aggregation(null_equality, nan_equality);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);

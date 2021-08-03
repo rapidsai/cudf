@@ -12,7 +12,7 @@ dlpack
 fastavro>=0.22.9
 fsspec>=0.6.0
 hypothesis
-mimesis
+mimesis<4.1
 mypy==0.782
 nbsphinx
 numba>=0.53.1

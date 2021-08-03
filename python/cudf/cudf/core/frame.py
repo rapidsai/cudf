@@ -6,7 +6,7 @@ import copy
 import functools
 import warnings
 from collections import abc
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, Mapping, Optional, Tuple, TypeVar, Union
 
 import cupy
 import numpy as np
@@ -17,16 +17,19 @@ from nvtx import annotate
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
-from cudf.api.types import is_dict_like, is_dtype_equal
+from cudf.api.types import is_dict_like, is_dtype_equal, issubdtype
 from cudf.core.column import (
     ColumnBase,
     as_column,
     build_categorical_column,
     column_empty,
+    concat_columns,
 )
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
     _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
     find_common_type,
     is_categorical_dtype,
     is_column_like,
@@ -38,9 +41,6 @@ from cudf.utils.dtypes import (
 )
 
 T = TypeVar("T", bound="Frame")
-
-if TYPE_CHECKING:
-    from cudf.core.column_accessor import ColumnAccessor
 
 
 class Frame(libcudf.table.Table):
@@ -64,8 +64,12 @@ class Frame(libcudf.table.Table):
         cls._accessors = set()
 
     @classmethod
-    def _from_table(cls, table: Frame):
-        return cls(table._data, index=table._index)
+    def _from_data(
+        cls, data: Mapping, index: Optional[cudf.core.index.BaseIndex] = None,
+    ):
+        obj = cls.__new__(cls)
+        libcudf.table.Table.__init__(obj, data, index)
+        return obj
 
     def _mimic_inplace(
         self: T, result: Frame, inplace: bool = False
@@ -476,8 +480,8 @@ class Frame(libcudf.table.Table):
             )
 
         # Concatenate the Tables
-        out = cls._from_table(
-            libcudf.concat.concat_tables(tables, ignore_index=ignore_index)
+        out = cls._from_data(
+            *libcudf.concat.concat_tables(tables, ignore_index)
         )
 
         # If ignore_index is True, all input frames are empty, and at
@@ -612,10 +616,11 @@ class Frame(libcudf.table.Table):
         if not ignore_index and self._index is not None:
             explode_column_num += self._index.nlevels
 
-        res_tbl = libcudf.lists.explode_outer(
-            self, explode_column_num, ignore_index
+        res = self.__class__._from_data(  # type: ignore
+            *libcudf.lists.explode_outer(
+                self, explode_column_num, ignore_index
+            )
         )
-        res = self.__class__._from_table(res_tbl)
 
         res._data.multiindex = self._data.multiindex
         res._data._level_names = self._data._level_names
@@ -644,14 +649,15 @@ class Frame(libcudf.table.Table):
     def _gather(self, gather_map, keep_index=True, nullify=False):
         if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
-        result = self.__class__._from_table(
-            libcudf.copying.gather(
+        result = self.__class__._from_data(
+            *libcudf.copying.gather(
                 self,
                 as_column(gather_map),
                 keep_index=keep_index,
                 nullify=nullify,
             )
         )
+
         result._copy_type_metadata(self, include_index=keep_index)
         if keep_index and self._index is not None:
             result._index.names = self._index.names
@@ -663,10 +669,10 @@ class Frame(libcudf.table.Table):
     def _hash_partition(
         self, columns_to_hash, num_partitions, keep_index=True
     ):
-        output, offsets = libcudf.hash.hash_partition(
+        output_data, output_index, offsets = libcudf.hash.hash_partition(
             self, columns_to_hash, num_partitions, keep_index
         )
-        output = self.__class__._from_table(output)
+        output = self.__class__._from_data(output_data, output_index)
         output._copy_type_metadata(self, include_index=keep_index)
         return output, offsets
 
@@ -684,14 +690,16 @@ class Frame(libcudf.table.Table):
         return self._data[None].copy(deep=False)
 
     def _scatter(self, key, value):
-        result = self._from_table(libcudf.copying.scatter(value, key, self))
+        result = self.__class__._from_data(
+            *libcudf.copying.scatter(value, key, self)
+        )
 
         result._copy_type_metadata(self)
         return result
 
     def _empty_like(self, keep_index=True):
-        result = self._from_table(
-            libcudf.copying.table_empty_like(self, keep_index)
+        result = self.__class__._from_data(
+            *libcudf.copying.table_empty_like(self, keep_index)
         )
 
         result._copy_type_metadata(self, include_index=keep_index)
@@ -944,10 +952,10 @@ class Frame(libcudf.table.Table):
 
     def _partition(self, scatter_map, npartitions, keep_index=True):
 
-        output_table, output_offsets = libcudf.partitioning.partition(
+        data, index, output_offsets = libcudf.partitioning.partition(
             self, scatter_map, npartitions, keep_index
         )
-        partitioned = self.__class__._from_table(output_table)
+        partitioned = self.__class__._from_data(data, index)
 
         # due to the split limitation mentioned
         # here: https://github.com/rapidsai/cudf/issues/4607
@@ -1296,8 +1304,15 @@ class Frame(libcudf.table.Table):
         if value is not None and method is not None:
             raise ValueError("Cannot specify both 'value' and 'method'.")
 
-        if method and method not in {"ffill", "bfill"}:
-            raise NotImplementedError(f"Fill method {method} is not supported")
+        if method:
+            if method not in {"ffill", "bfill", "pad", "backfill"}:
+                raise NotImplementedError(
+                    f"Fill method {method} is not supported"
+                )
+            if method == "pad":
+                method = "ffill"
+            elif method == "backfill":
+                method = "bfill"
 
         if isinstance(value, cudf.Series):
             value = value.reindex(self._data.names)
@@ -1325,7 +1340,7 @@ class Frame(libcudf.table.Table):
             ) or method is not None
             if should_fill:
                 copy_data[name] = copy_data[name].fillna(value[name], method)
-        result = self._from_table(Frame(copy_data, self._index))
+        result = self._from_data(copy_data, self._index)
 
         return self._mimic_inplace(result, inplace=inplace)
 
@@ -1374,12 +1389,16 @@ class Frame(libcudf.table.Table):
                 else:
                     frame._data[name] = col
 
-        result = frame.__class__._from_table(
-            libcudf.stream_compaction.drop_nulls(
+        result = self.__class__._from_data(
+            *libcudf.stream_compaction.drop_nulls(
                 frame, how=how, keys=subset, thresh=thresh
             )
         )
         result._copy_type_metadata(frame)
+        if self._index is not None:
+            result._index.name = self._index.name
+            if isinstance(self._index, cudf.MultiIndex):
+                result._index.names = self._index.names
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -1416,8 +1435,8 @@ class Frame(libcudf.table.Table):
         """
         boolean_mask = as_column(boolean_mask)
 
-        result = self.__class__._from_table(
-            libcudf.stream_compaction.apply_boolean_mask(
+        result = self.__class__._from_data(
+            *libcudf.stream_compaction.apply_boolean_mask(
                 self, as_column(boolean_mask)
             )
         )
@@ -1442,8 +1461,8 @@ class Frame(libcudf.table.Table):
             libcudf.types.NullOrder[key] for key in null_precedence
         ]
 
-        result = self.__class__._from_table(
-            libcudf.quantiles.quantiles(
+        result = self.__class__._from_data(
+            *libcudf.quantiles.quantiles(
                 self,
                 q,
                 interpolation,
@@ -1454,6 +1473,17 @@ class Frame(libcudf.table.Table):
         )
 
         result._copy_type_metadata(self)
+        return result
+
+    @annotate("APPLY", color="purple", domain="cudf_python")
+    def _apply(self, func):
+        """
+        Apply `func` across the rows of the frame.
+        """
+        output_dtype, ptx = cudf.core.udf.pipeline.compile_masked_udf(
+            func, self.dtypes
+        )
+        result = cudf._lib.transform.masked_udf(self, ptx, output_dtype)
         return result
 
     def rank(
@@ -1526,11 +1556,11 @@ class Frame(libcudf.table.Table):
             if source.empty:
                 return source.astype("float64")
 
-        out_rank_table = libcudf.sort.rank_columns(
+        data, index = libcudf.sort.rank_columns(
             source, method_enum, na_option, ascending, pct
         )
 
-        return self._from_table(out_rank_table).astype(np.float64)
+        return self._from_data(data, index).astype(np.float64)
 
     def repeat(self, repeats, axis=None):
         """Repeats elements consecutively.
@@ -1617,24 +1647,24 @@ class Frame(libcudf.table.Table):
         if not is_scalar(count):
             count = as_column(count)
 
-        result = self.__class__._from_table(
-            libcudf.filling.repeat(self, count)
+        result = self.__class__._from_data(
+            *libcudf.filling.repeat(self, count)
         )
 
         result._copy_type_metadata(self)
         return result
 
     def _reverse(self):
-        result = self.__class__._from_table(libcudf.copying.reverse(self))
-        return result
+        return self.__class__._from_data(*libcudf.copying.reverse(self))
 
     def _fill(self, fill_values, begin, end, inplace):
         col_and_fill = zip(self._columns, fill_values)
 
         if not inplace:
             data_columns = (c._fill(v, begin, end) for (c, v) in col_and_fill)
-            data = zip(self._column_names, data_columns)
-            return self.__class__._from_table(Frame(data, self._index))
+            return self.__class__._from_data(
+                zip(self._column_names, data_columns), self._index
+            )
 
         for (c, v) in col_and_fill:
             c.fill(v, begin, end, inplace=True)
@@ -1649,8 +1679,9 @@ class Frame(libcudf.table.Table):
 
     def _shift(self, offset, fill_value=None):
         data_columns = (col.shift(offset, fill_value) for col in self._columns)
-        data = zip(self._column_names, data_columns)
-        return self.__class__._from_table(Frame(data, self._index))
+        return self.__class__._from_data(
+            zip(self._column_names, data_columns), self._index
+        )
 
     def __array__(self, dtype=None):
         raise TypeError(
@@ -1770,13 +1801,11 @@ class Frame(libcudf.table.Table):
                 "decimals must be an integer, a dict-like or a Series"
             )
 
-        return self.__class__._from_table(
-            Frame(
-                data=cudf.core.column_accessor.ColumnAccessor(
-                    cols,
-                    multiindex=self._data.multiindex,
-                    level_names=self._data.level_names,
-                )
+        return self.__class__._from_data(
+            data=cudf.core.column_accessor.ColumnAccessor(
+                cols,
+                multiindex=self._data.multiindex,
+                level_names=self._data.level_names,
             ),
             index=self._index,
         )
@@ -1901,8 +1930,8 @@ class Frame(libcudf.table.Table):
             else:
                 seed = np.int64(random_state)
 
-            result = self._from_table(
-                libcudf.copying.sample(
+            result = self.__class__._from_data(
+                *libcudf.copying.sample(
                     self,
                     n=n,
                     replace=replace,
@@ -2042,25 +2071,22 @@ class Frame(libcudf.table.Table):
                 )
 
         # Handle dict arrays
-        cudf_category_frame = libcudf.table.Table()
+        cudf_category_frame = {}
         if len(dict_indices):
 
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
-            cudf_indices_frame = libcudf.interop.from_arrow(
+            cudf_indices_frame, _ = libcudf.interop.from_arrow(
                 dict_indices_table, dict_indices_table.column_names
             )
             # as dictionary size can vary, it can't be a single table
             cudf_dictionaries_columns = {
-                name: cudf.core.column.ColumnBase.from_arrow(
-                    dict_dictionaries[name]
-                )
+                name: ColumnBase.from_arrow(dict_dictionaries[name])
                 for name in dict_dictionaries.keys()
             }
 
-            for name in cudf_indices_frame._data.names:
-                codes = cudf_indices_frame._data[name]
-                cudf_category_frame._data[name] = build_categorical_column(
+            for name, codes in cudf_indices_frame.items():
+                cudf_category_frame[name] = build_categorical_column(
                     cudf_dictionaries_columns[name],
                     codes,
                     mask=codes.base_mask,
@@ -2070,30 +2096,20 @@ class Frame(libcudf.table.Table):
 
         # Handle non-dict arrays
         cudf_non_category_frame = (
-            libcudf.table.Table()
+            {}
             if data.num_columns == 0
-            else libcudf.interop.from_arrow(data, data.column_names)
+            else libcudf.interop.from_arrow(data, data.column_names)[0]
         )
 
-        if (
-            cudf_non_category_frame._num_columns > 0
-            and cudf_category_frame._num_columns > 0
-        ):
-            result = cudf_non_category_frame
-            for name in cudf_category_frame._data.names:
-                result._data[name] = cudf_category_frame._data[name]
-        elif cudf_non_category_frame._num_columns > 0:
-            result = cudf_non_category_frame
-        else:
-            result = cudf_category_frame
+        result = {**cudf_non_category_frame, **cudf_category_frame}
 
         # There are some special cases that need to be handled
         # based on metadata.
         if pandas_dtypes:
-            for name in result._data.names:
+            for name in result:
                 dtype = None
                 if (
-                    len(result._data[name]) == 0
+                    len(result[name]) == 0
                     and pandas_dtypes[name] == "categorical"
                 ):
                     # When pandas_dtype is a categorical column and the size
@@ -2119,18 +2135,14 @@ class Frame(libcudf.table.Table):
                     # struct fields, hence renaming the struct fields is
                     # necessary by extracting the field names from arrow
                     # struct types.
-                    result._data[name] = result._data[name]._rename_fields(
+                    result[name] = result[name]._rename_fields(
                         [field.name for field in data[name].type]
                     )
 
                 if dtype is not None:
-                    result._data[name] = result._data[name].astype(dtype)
+                    result[name] = result[name].astype(dtype)
 
-        result = libcudf.table.Table(
-            result._data.select_by_label(column_names)
-        )
-
-        return cls._from_table(result)
+        return cls._from_data({name: result[name] for name in column_names})
 
     @annotate("TO_ARROW", color="orange", domain="cudf_python")
     def to_arrow(self):
@@ -2189,8 +2201,8 @@ class Frame(libcudf.table.Table):
         if len(subset_cols) == 0:
             return self.copy(deep=True)
 
-        result = self._from_table(
-            libcudf.stream_compaction.drop_duplicates(
+        result = self.__class__._from_data(
+            *libcudf.stream_compaction.drop_duplicates(
                 self,
                 keys=subset,
                 keep=keep,
@@ -2236,7 +2248,7 @@ class Frame(libcudf.table.Table):
         else:
             copy_data = self._data.copy(deep=True)
 
-        result = self._from_table(Frame(copy_data, self._index))
+        result = self._from_data(copy_data, self._index)
 
         return result
 
@@ -2258,15 +2270,17 @@ class Frame(libcudf.table.Table):
         if include_index:
             if self._index is not None and other._index is not None:
                 self._index._copy_type_metadata(other._index)
-                # When other._index is a CategoricalIndex, there is
+                # When other._index is a CategoricalIndex, the current index
+                # will be a NumericalIndex with an underlying CategoricalColumn
+                # (the above _copy_type_metadata call will have converted the
+                # column). Calling cudf.Index on that column generates the
+                # appropriate index.
                 if isinstance(
                     other._index, cudf.core.index.CategoricalIndex
                 ) and not isinstance(
                     self._index, cudf.core.index.CategoricalIndex
                 ):
-                    self._index = cudf.core.index.Index._from_table(
-                        self._index
-                    )
+                    self._index = cudf.Index(self._index._column)
 
         return self
 
@@ -2281,11 +2295,6 @@ class Frame(libcudf.table.Table):
         self._copy_categories(other, include_index=include_index)
         self._copy_struct_names(other, include_index=include_index)
         self._copy_interval_data(other, include_index=include_index)
-
-    def _unaryop(self, op):
-        data_columns = (col.unary_operator(op) for col in self._columns)
-        data = zip(self._column_names, data_columns)
-        return self.__class__._from_table(Frame(data, self._index))
 
     def isnull(self):
         """
@@ -2361,8 +2370,9 @@ class Frame(libcudf.table.Table):
         GenericIndex([False, False, True, True, False, False], dtype='bool')
         """
         data_columns = (col.isnull() for col in self._columns)
-        data = zip(self._column_names, data_columns)
-        return self.__class__._from_table(Frame(data, self._index))
+        return self.__class__._from_data(
+            zip(self._column_names, data_columns), self._index
+        )
 
     # Alias for isnull
     isna = isnull
@@ -2441,8 +2451,9 @@ class Frame(libcudf.table.Table):
         GenericIndex([True, True, False, False, True, True], dtype='bool')
         """
         data_columns = (col.notnull() for col in self._columns)
-        data = zip(self._column_names, data_columns)
-        return self.__class__._from_table(Frame(data, self._index))
+        return self.__class__._from_data(
+            zip(self._column_names, data_columns), self._index
+        )
 
     # Alias for notnull
     notna = notnull
@@ -2511,7 +2522,7 @@ class Frame(libcudf.table.Table):
         -------
         The table containing the tiled "rows".
         """
-        result = self.__class__._from_table(libcudf.reshape.tile(self, count))
+        result = self.__class__._from_data(*libcudf.reshape.tile(self, count))
         result._copy_type_metadata(self)
         return result
 
@@ -3249,15 +3260,16 @@ class Frame(libcudf.table.Table):
         )
 
     def _split(self, splits, keep_index=True):
-        result = libcudf.copying.table_split(
+        results = libcudf.copying.table_split(
             self, splits, keep_index=keep_index
         )
-        result = [self.__class__._from_table(tbl) for tbl in result]
-        return result
+        return [self.__class__._from_data(*result) for result in results]
 
     def _encode(self):
-        keys, indices = libcudf.transform.table_encode(self)
-        keys = self.__class__._from_table(keys)
+        data, index, indices = libcudf.transform.table_encode(self)
+        for name, col in data.items():
+            data[name] = col._with_type_metadata(self._data[name].dtype)
+        keys = self.__class__._from_data(data, index)
         return keys, indices
 
     def _reindex(
@@ -3324,31 +3336,273 @@ class Frame(libcudf.table.Table):
             for name in names
         }
 
-        result = self.__class__._from_table(
-            Frame(
-                data=cudf.core.column_accessor.ColumnAccessor(
-                    cols,
-                    multiindex=self._data.multiindex,
-                    level_names=self._data.level_names,
-                )
+        result = self.__class__._from_data(
+            data=cudf.core.column_accessor.ColumnAccessor(
+                cols,
+                multiindex=self._data.multiindex,
+                level_names=self._data.level_names,
             ),
             index=index,
         )
 
         return self._mimic_inplace(result, inplace=inplace)
 
+    def _unaryop(self, op):
+        data_columns = (col.unary_operator(op) for col in self._columns)
+        return self.__class__._from_data(
+            zip(self._column_names, data_columns), self._index
+        )
 
-_truediv_int_dtype_corrections = {
-    np.int8: np.float32,
-    np.int16: np.float32,
-    np.int32: np.float32,
-    np.int64: np.float64,
-    np.uint8: np.float32,
-    np.uint16: np.float32,
-    np.uint32: np.float64,
-    np.uint64: np.float64,
-    np.bool_: np.float32,
-}
+    def _binaryop(
+        self,
+        other: T,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        *args,
+        **kwargs,
+    ) -> Frame:
+        raise NotImplementedError
+
+    @classmethod
+    def _colwise_binop(
+        cls,
+        operands: Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+        fn: str,
+    ):
+        """Implement binary ops between two frame-like objects.
+
+        Binary operations for Frames can be reduced to a sequence of binary
+        operations between column-like objects. Different types of frames need
+        to preprocess different inputs, so subclasses should implement binary
+        operations as a preprocessing step that calls this method.
+
+        Parameters
+        ----------
+        operands : Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]]
+            A mapping from column names to a tuple containing left and right
+            operands as well as a boolean indicating whether or not to reflect
+            an operation and fill value for nulls.
+        fn : str
+            The operation to perform.
+
+        Returns
+        -------
+        Frame
+            A subclass of Frame constructed from the result of performing the
+            requested operation on the operands.
+        """
+
+        # Now actually perform the binop on the columns in left and right.
+        output = {}
+        for (
+            col,
+            (left_column, right_column, reflect, fill_value),
+        ) in operands.items():
+
+            # Handle object columns that are empty or
+            # all nulls when performing binary operations
+            if (
+                left_column.dtype == "object"
+                and left_column.null_count == len(left_column)
+                and fill_value is None
+            ):
+                if fn in (
+                    "add",
+                    "sub",
+                    "mul",
+                    "mod",
+                    "pow",
+                    "truediv",
+                    "floordiv",
+                ):
+                    output[col] = left_column
+                elif fn in ("eq", "lt", "le", "gt", "ge"):
+                    output[col] = left_column.notnull()
+                elif fn == "ne":
+                    output[col] = left_column.isnull()
+                continue
+
+            if right_column is cudf.NA:
+                right_column = cudf.Scalar(
+                    right_column, dtype=left_column.dtype
+                )
+            elif not isinstance(right_column, ColumnBase):
+                right_column = left_column.normalize_binop_value(right_column)
+
+            fn_apply = fn
+            if fn == "truediv":
+                # Decimals in libcudf don't support truediv, see
+                # https://github.com/rapidsai/cudf/pull/7435 for explanation.
+                if is_decimal_dtype(left_column.dtype):
+                    fn_apply = "div"
+
+                # Division with integer types results in a suitable float.
+                truediv_type = {
+                    np.int8: np.float32,
+                    np.int16: np.float32,
+                    np.int32: np.float32,
+                    np.int64: np.float64,
+                    np.uint8: np.float32,
+                    np.uint16: np.float32,
+                    np.uint32: np.float64,
+                    np.uint64: np.float64,
+                    np.bool_: np.float32,
+                }.get(left_column.dtype.type)
+                if truediv_type is not None:
+                    left_column = left_column.astype(truediv_type)
+
+            output_mask = None
+            if fill_value is not None:
+                if is_scalar(right_column):
+                    if left_column.nullable:
+                        left_column = left_column.fillna(fill_value)
+                else:
+                    # If both columns are nullable, pandas semantics dictate
+                    # that nulls that are present in both left_column and
+                    # right_column are not filled.
+                    if left_column.nullable and right_column.nullable:
+                        lmask = as_column(left_column.nullmask)
+                        rmask = as_column(right_column.nullmask)
+                        output_mask = (lmask | rmask).data
+                        left_column = left_column.fillna(fill_value)
+                        right_column = right_column.fillna(fill_value)
+                    elif left_column.nullable:
+                        left_column = left_column.fillna(fill_value)
+                    elif right_column.nullable:
+                        right_column = right_column.fillna(fill_value)
+
+            # For bitwise operations we must verify whether the input column
+            # types are valid, and if so, whether we need to coerce the output
+            # columns to booleans.
+            coerce_to_bool = False
+            if fn_apply in {"and", "or", "xor"}:
+                err_msg = (
+                    f"Operation 'bitwise {fn_apply}' not supported between "
+                    f"{left_column.dtype.type.__name__} and {{}}"
+                )
+                if right_column is None:
+                    raise TypeError(err_msg.format(type(None)))
+
+                try:
+                    left_is_bool = issubdtype(left_column.dtype, np.bool_)
+                    right_is_bool = issubdtype(right_column.dtype, np.bool_)
+                except TypeError:
+                    raise TypeError(err_msg.format(type(right_column)))
+
+                coerce_to_bool = left_is_bool or right_is_bool
+
+                if not (
+                    (left_is_bool or issubdtype(left_column.dtype, np.integer))
+                    and (
+                        right_is_bool
+                        or issubdtype(right_column.dtype, np.integer)
+                    )
+                ):
+                    raise TypeError(
+                        err_msg.format(right_column.dtype.type.__name__)
+                    )
+
+            outcol = (
+                left_column.binary_operator(
+                    fn_apply, right_column, reflect=reflect
+                )
+                if right_column is not None
+                else column_empty(
+                    left_column.size, left_column.dtype, masked=True
+                )
+            )
+
+            if output_mask is not None:
+                outcol = outcol.set_mask(output_mask)
+
+            if coerce_to_bool:
+                outcol = outcol.astype(np.bool_)
+
+            output[col] = outcol
+
+        return output
+
+    # Binary arithmetic operations.
+    def __add__(self, other):
+        return self._binaryop(other, "add")
+
+    def __radd__(self, other):
+        return self._binaryop(other, "add", reflect=True)
+
+    def __sub__(self, other):
+        return self._binaryop(other, "sub")
+
+    def __rsub__(self, other):
+        return self._binaryop(other, "sub", reflect=True)
+
+    def __mul__(self, other):
+        return self._binaryop(other, "mul")
+
+    def __rmul__(self, other):
+        return self._binaryop(other, "mul", reflect=True)
+
+    def __mod__(self, other):
+        return self._binaryop(other, "mod")
+
+    def __rmod__(self, other):
+        return self._binaryop(other, "mod", reflect=True)
+
+    def __pow__(self, other):
+        return self._binaryop(other, "pow")
+
+    def __rpow__(self, other):
+        return self._binaryop(other, "pow", reflect=True)
+
+    def __floordiv__(self, other):
+        return self._binaryop(other, "floordiv")
+
+    def __rfloordiv__(self, other):
+        return self._binaryop(other, "floordiv", reflect=True)
+
+    def __truediv__(self, other):
+        return self._binaryop(other, "truediv")
+
+    def __rtruediv__(self, other):
+        return self._binaryop(other, "truediv", reflect=True)
+
+    def __and__(self, other):
+        return self._binaryop(other, "and")
+
+    def __or__(self, other):
+        return self._binaryop(other, "or")
+
+    def __xor__(self, other):
+        return self._binaryop(other, "xor")
+
+    # Binary rich comparison operations.
+    def __eq__(self, other):
+        return self._binaryop(other, "eq")
+
+    def __ne__(self, other):
+        return self._binaryop(other, "ne")
+
+    def __lt__(self, other):
+        return self._binaryop(other, "lt")
+
+    def __le__(self, other):
+        return self._binaryop(other, "le")
+
+    def __gt__(self, other):
+        return self._binaryop(other, "gt")
+
+    def __ge__(self, other):
+        return self._binaryop(other, "ge")
+
+    # Unary logical operators
+    def __neg__(self):
+        return -1 * self
+
+    def __pos__(self):
+        return self.copy(deep=True)
+
+    def __abs__(self):
+        return self._unaryop("abs")
 
 
 class SingleColumnFrame(Frame):
@@ -3357,6 +3611,19 @@ class SingleColumnFrame(Frame):
     Frames with only a single column share certain logic that is encoded in
     this class.
     """
+
+    @classmethod
+    def _from_data(
+        cls,
+        data: Mapping,
+        index: Optional[cudf.core.index.BaseIndex] = None,
+        name: Any = None,
+    ):
+
+        out = super()._from_data(data, index)
+        if name is not None:
+            out.name = name
+        return out
 
     @property
     def name(self):
@@ -3527,7 +3794,7 @@ class SingleColumnFrame(Frame):
         2    <NA>
         dtype: object
         """
-        return cls(cudf.core.column.column.ColumnBase.from_arrow(array))
+        return cls(ColumnBase.from_arrow(array))
 
     def to_arrow(self):
         """
@@ -3644,14 +3911,13 @@ class SingleColumnFrame(Frame):
 
     def _binaryop(
         self,
-        other,
-        fn,
-        fill_value=None,
-        reflect=False,
-        lhs=None,
+        other: T,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
         *args,
         **kwargs,
-    ):
+    ) -> SingleColumnFrame:
         """Perform a binary operation between two single column frames.
 
         Parameters
@@ -3675,37 +3941,6 @@ class SingleColumnFrame(Frame):
         SingleColumnFrame
             A new instance containing the result of the operation.
         """
-        if lhs is None:
-            lhs = self
-
-        rhs = self._normalize_binop_value(other)
-
-        if fn == "truediv":
-            truediv_type = _truediv_int_dtype_corrections.get(lhs.dtype.type)
-            if truediv_type is not None:
-                lhs = lhs.astype(truediv_type)
-
-        output_mask = None
-        if fill_value is not None:
-            if is_scalar(rhs):
-                if lhs.nullable:
-                    lhs = lhs.fillna(fill_value)
-            else:
-                # If both columns are nullable, pandas semantics dictate that
-                # nulls that are present in both lhs and rhs are not filled.
-                if lhs.nullable and rhs.nullable:
-                    # Note: lhs is a Frame, while rhs is already a column.
-                    lmask = as_column(lhs._column.nullmask)
-                    rmask = as_column(rhs.nullmask)
-                    output_mask = (lmask | rmask).data
-                    lhs = lhs.fillna(fill_value)
-                    rhs = rhs.fillna(fill_value)
-                elif lhs.nullable:
-                    lhs = lhs.fillna(fill_value)
-                elif rhs.nullable:
-                    rhs = rhs.fillna(fill_value)
-
-        outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
 
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
@@ -3718,140 +3953,24 @@ class SingleColumnFrame(Frame):
         else:
             result_name = self.name
 
-        output = lhs._copy_construct(data=outcol, name=result_name)
-
-        if output_mask is not None:
-            output._column = output._column.set_mask(output_mask)
-        return output
-
-    def _normalize_binop_value(self, other):
-        """Returns a *column* (not a Series) or scalar for performing
-        binary operations with self._column.
-        """
-        if isinstance(other, ColumnBase):
-            return other
+        # This needs to be tested correctly
         if isinstance(other, SingleColumnFrame):
-            return other._column
-        if other is cudf.NA:
-            return cudf.Scalar(other, dtype=self.dtype)
-        else:
-            return self._column.normalize_binop_value(other)
+            other = other._column
+        elif not _is_scalar_or_zero_d_array(other):
+            # Non-scalar right operands are valid iff they convert to columns.
+            try:
+                other = as_column(other)
+            except Exception:
+                return NotImplemented
 
-    def _bitwise_binop(self, other, op):
-        """Type-coercing wrapper around _binaryop for bitwise operations."""
-        # This will catch attempts at bitwise ops on extension dtypes.
-        try:
-            self_is_bool = np.issubdtype(self.dtype, np.bool_)
-            other_is_bool = np.issubdtype(other.dtype, np.bool_)
-        except TypeError:
-            raise TypeError(
-                f"Operation 'bitwise {op}' not supported between "
-                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
-            )
+        operands: Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]] = {
+            result_name: (self._column, other, reflect, fill_value)
+        }
 
-        if (self_is_bool or np.issubdtype(self.dtype, np.integer)) and (
-            other_is_bool or np.issubdtype(other.dtype, np.integer)
-        ):
-            # TODO: This doesn't work on Series (op) DataFrame
-            # because dataframe doesn't have dtype
-            ser = self._binaryop(other, op)
-            if self_is_bool or other_is_bool:
-                ser = ser.astype(np.bool_)
-            return ser
-        else:
-            raise TypeError(
-                f"Operation 'bitwise {op}' not supported between "
-                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
-            )
-
-    # Binary arithmetic operations.
-    def __add__(self, other):
-        return self._binaryop(other, "add")
-
-    def __radd__(self, other):
-        return self._binaryop(other, "add", reflect=True)
-
-    def __sub__(self, other):
-        return self._binaryop(other, "sub")
-
-    def __rsub__(self, other):
-        return self._binaryop(other, "sub", reflect=True)
-
-    def __mul__(self, other):
-        return self._binaryop(other, "mul")
-
-    def __rmul__(self, other):
-        return self._binaryop(other, "mul", reflect=True)
-
-    def __mod__(self, other):
-        return self._binaryop(other, "mod")
-
-    def __rmod__(self, other):
-        return self._binaryop(other, "mod", reflect=True)
-
-    def __pow__(self, other):
-        return self._binaryop(other, "pow")
-
-    def __rpow__(self, other):
-        return self._binaryop(other, "pow", reflect=True)
-
-    def __floordiv__(self, other):
-        return self._binaryop(other, "floordiv")
-
-    def __rfloordiv__(self, other):
-        return self._binaryop(other, "floordiv", reflect=True)
-
-    def __truediv__(self, other):
-        if is_decimal_dtype(self.dtype):
-            return self._binaryop(other, "div")
-        else:
-            return self._binaryop(other, "truediv")
-
-    def __rtruediv__(self, other):
-        if is_decimal_dtype(self.dtype):
-            return self._binaryop(other, "div", reflect=True)
-        else:
-            return self._binaryop(other, "truediv", reflect=True)
-
-    __div__ = __truediv__
-
-    def __and__(self, other):
-        return self._bitwise_binop(other, "and")
-
-    def __or__(self, other):
-        return self._bitwise_binop(other, "or")
-
-    def __xor__(self, other):
-        return self._bitwise_binop(other, "xor")
-
-    # Binary rich comparison operations.
-    def __eq__(self, other):
-        return self._binaryop(other, "eq")
-
-    def __ne__(self, other):
-        return self._binaryop(other, "ne")
-
-    def __lt__(self, other):
-        return self._binaryop(other, "lt")
-
-    def __le__(self, other):
-        return self._binaryop(other, "le")
-
-    def __gt__(self, other):
-        return self._binaryop(other, "gt")
-
-    def __ge__(self, other):
-        return self._binaryop(other, "ge")
-
-    # Unary logical operators
-    def __neg__(self):
-        return -1 * self
-
-    def __pos__(self):
-        return self.copy(deep=True)
-
-    def __abs__(self):
-        return self._unaryop("abs")
+        return self._copy_construct(
+            data=type(self)._colwise_binop(operands, fn)[result_name],
+            name=result_name,
+        )
 
 
 def _get_replacement_values_for_columns(
@@ -3889,7 +4008,7 @@ def _get_replacement_values_for_columns(
         to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
         values_columns = {col: [value] for col in columns_dtype_map}
     elif cudf.utils.dtypes.is_list_like(to_replace) or isinstance(
-        to_replace, cudf.core.column.ColumnBase
+        to_replace, ColumnBase
     ):
         if is_scalar(value):
             to_replace_columns = {col: to_replace for col in columns_dtype_map}
@@ -4054,8 +4173,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
         ):
             # Combine and de-dupe the categories
             categories[idx] = (
-                cudf.concat([col.cat().categories for col in cols])
-                .to_series()
+                cudf.Series(concat_columns([col.categories for col in cols]))
                 .drop_duplicates(ignore_index=True)
                 ._column
             )
@@ -4085,12 +4203,7 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
                 if idx in categories:
                     cols[idx] = (
                         cols[idx]
-                        .cat()
-                        ._set_categories(
-                            cols[idx].cat().categories,
-                            categories[idx],
-                            is_unique=True,
-                        )
+                        ._set_categories(categories[idx], is_unique=True,)
                         .codes
                     )
                 cols[idx] = cols[idx].astype(dtype)

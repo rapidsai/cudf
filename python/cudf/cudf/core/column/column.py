@@ -70,6 +70,8 @@ from cudf.utils.dtypes import (
     get_time_unit,
     min_unsigned_type,
     np_to_pa_dtype,
+    pandas_dtypes_alias_to_cudf_alias,
+    pandas_dtypes_to_cudf_dtypes,
 )
 from cudf.utils.utils import mask_dtype
 
@@ -81,7 +83,7 @@ class ColumnBase(Column, Serializable):
         """
         Converts a Column to Frame
         """
-        return cudf.core.frame.Frame({None: self.copy(deep=False)})
+        return cudf.core.frame.SingleColumnFrame({None: self.copy(deep=False)})
 
     @property
     def data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
@@ -261,10 +263,10 @@ class ColumnBase(Column, Serializable):
 
             codes = libcudf.interop.from_arrow(
                 indices_table, indices_table.column_names
-            )._data["None"]
+            )[0]["None"]
             categories = libcudf.interop.from_arrow(
                 dictionaries_table, dictionaries_table.column_names
-            )._data["None"]
+            )[0]["None"]
 
             return build_categorical_column(
                 categories=categories,
@@ -282,9 +284,7 @@ class ColumnBase(Column, Serializable):
         elif isinstance(array.type, pa.Decimal128Type):
             return cudf.core.column.Decimal64Column.from_arrow(array)
 
-        result = libcudf.interop.from_arrow(data, data.column_names)._data[
-            "None"
-        ]
+        result = libcudf.interop.from_arrow(data, data.column_names)[0]["None"]
 
         result = result._with_type_metadata(
             cudf_dtype_from_pa_type(array.type)
@@ -677,7 +677,7 @@ class ColumnBase(Column, Serializable):
         return indices[-1]
 
     def append(self, other: ColumnBase) -> ColumnBase:
-        return _concat_columns([self, as_column(other)])
+        return concat_columns([self, as_column(other)])
 
     def quantile(
         self,
@@ -877,6 +877,14 @@ class ColumnBase(Column, Serializable):
         raise NotImplementedError()
 
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
+        if is_categorical_dtype(dtype):
+            return self.as_categorical_column(dtype, **kwargs)
+
+        dtype = (
+            pandas_dtypes_alias_to_cudf_alias.get(dtype, dtype)
+            if isinstance(dtype, str)
+            else pandas_dtypes_to_cudf_dtypes.get(dtype, dtype)
+        )
         if _is_non_decimal_numeric_dtype(dtype):
             return self.as_numerical_column(dtype, **kwargs)
         elif is_categorical_dtype(dtype):
@@ -1230,57 +1238,6 @@ class ColumnBase(Column, Serializable):
             )
         return result_col
 
-    def scatter_to_table(
-        self,
-        row_indices: ColumnBase,
-        column_indices: ColumnBase,
-        names: List[Any],
-        nrows: int = None,
-        ncols: int = None,
-    ) -> "cudf.core.frame.Frame":
-        """
-        Scatters values from the column into a table.
-
-        Parameters
-        ----------
-        row_indices
-            A column of the same size as `self` specifying the
-            row index to scatter each value to
-        column_indices
-            A column of the same size as `self` specifying the
-            column index to scatter each value to
-        names
-            The column names of the resulting table
-
-        Returns
-        -------
-        """
-        if nrows is None:
-            nrows = 0
-            if len(row_indices) > 0:
-                nrows = int(row_indices.max() + 1)
-
-        if ncols is None:
-            ncols = 0
-            if len(column_indices) > 0:
-                ncols = int(column_indices.max() + 1)
-
-        if nrows * ncols == 0:
-            return cudf.core.frame.Frame({})
-
-        scatter_map = (column_indices * np.int32(nrows)) + row_indices
-        target = cudf.core.frame.Frame(
-            {None: column_empty_like(self, masked=True, newsize=nrows * ncols)}
-        )
-        target._data[None][scatter_map] = self
-        result_frames = target._split(range(nrows, nrows * ncols, nrows))
-        return cudf.core.frame.Frame(
-            {
-                name: next(iter(f._columns))
-                for name, f in zip(names, result_frames)
-            }
-        )
-
     def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
         """
         Copies type metadata from self onto other, returning a new column.
@@ -1345,7 +1302,13 @@ def column_empty(
     dtype = pandas_dtype(dtype)
     children = ()  # type: Tuple[ColumnBase, ...]
 
-    if is_categorical_dtype(dtype):
+    if is_struct_dtype(dtype):
+        data = None
+        children = tuple(
+            column_empty(row_count, field_dtype)
+            for field_dtype in dtype.fields.values()
+        )
+    elif is_categorical_dtype(dtype):
         data = None
         children = (
             build_column(
@@ -1483,6 +1446,7 @@ def build_column(
             data=data,
             dtype=dtype,
             size=size,
+            offset=offset,
             mask=mask,
             null_count=null_count,
             children=children,
@@ -2026,7 +1990,6 @@ def as_column(
         mask = bools_to_mask(as_column(mask).unary_operator("not"))
 
         data = data.set_mask(mask)
-
     else:
         try:
             data = as_column(
@@ -2037,12 +2000,19 @@ def as_column(
             np_type = None
             try:
                 if dtype is not None:
+                    if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
+                        raise TypeError
                     if is_list_dtype(dtype):
                         data = pa.array(arbitrary)
                         if type(data) not in (pa.ListArray, pa.NullArray):
                             raise ValueError(
                                 "Cannot create list column from given data"
                             )
+                        return as_column(data, nan_as_null=nan_as_null)
+                    elif isinstance(
+                        dtype, cudf.StructDtype
+                    ) and not isinstance(dtype, cudf.IntervalDtype):
+                        data = pa.array(arbitrary, type=dtype.to_arrow())
                         return as_column(data, nan_as_null=nan_as_null)
                     if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
                         data = pa.array(
@@ -2065,14 +2035,11 @@ def as_column(
                             data
                         )
                     dtype = pd.api.types.pandas_dtype(dtype)
-                    if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
-                        raise TypeError
+                    np_type = np.dtype(dtype).type
+                    if np_type == np.bool_:
+                        pa_type = pa.bool_()
                     else:
-                        np_type = np.dtype(dtype).type
-                        if np_type == np.bool_:
-                            pa_type = pa.bool_()
-                        else:
-                            pa_type = np_to_pa_dtype(np.dtype(dtype))
+                        pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(
                     pa.array(
                         arbitrary,
@@ -2094,6 +2061,17 @@ def as_column(
                 elif is_interval_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="interval")
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
+                elif (
+                    isinstance(arbitrary, Sequence)
+                    and len(arbitrary) > 0
+                    and any(
+                        cudf.utils.dtypes.is_column_like(arb)
+                        for arb in arbitrary
+                    )
+                ):
+                    return cudf.core.column.ListColumn.from_sequences(
+                        arbitrary
+                    )
                 else:
                     data = as_column(
                         _construct_array(arbitrary, dtype),
@@ -2299,7 +2277,7 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
 
 
-def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
+def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
         dtype = pandas_dtype(None)
@@ -2361,7 +2339,7 @@ def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         try:
             col = libcudf.concat.concat_columns(objs)
         except RuntimeError as e:
-            if "concatenated rows exceeds size_type range" in str(e):
+            if "exceeds size_type range" in str(e):
                 raise OverflowError(
                     "total size of output is too large for a cudf column"
                 ) from e

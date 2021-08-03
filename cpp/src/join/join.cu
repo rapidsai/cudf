@@ -16,10 +16,10 @@
 #include <join/hash_join.cuh>
 #include <join/join_common_utils.hpp>
 
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 

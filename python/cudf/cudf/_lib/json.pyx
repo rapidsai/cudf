@@ -3,24 +3,26 @@
 # cython: boundscheck = False
 
 
-import cudf
 import collections.abc as abc
 import io
 import os
 
+import cudf
+
 from libcpp cimport bool
 from libcpp.string cimport string
-from libcpp.vector cimport vector
 from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
+cimport cudf._lib.cpp.io.types as cudf_io_types
 from cudf._lib.cpp.io.json cimport (
+    json_reader_options,
     read_json as libcudf_read_json,
-    json_reader_options
 )
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.io.utils cimport make_source_info
 from cudf._lib.table cimport Table
-cimport cudf._lib.cpp.io.types as cudf_io_types
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 cpdef read_json(object filepaths_or_buffers,
@@ -111,5 +113,5 @@ cpdef read_json(object filepaths_or_buffers,
         c_out_table = move(libcudf_read_json(opts))
 
     column_names = [x.decode() for x in c_out_table.metadata.column_names]
-    return Table.from_unique_ptr(move(c_out_table.tbl),
-                                 column_names=column_names)
+    return data_from_unique_ptr(move(c_out_table.tbl),
+                                column_names=column_names)

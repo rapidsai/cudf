@@ -56,7 +56,7 @@ class lists_column_view : private column_view {
   using column_view::null_mask;
   using column_view::offset;
   using column_view::size;
-  static_assert(std::is_same<offset_type, size_type>::value,
+  static_assert(std::is_same_v<offset_type, size_type>,
                 "offset_type is expected to be the same as size_type.");
   using offset_iterator = offset_type const*;
 

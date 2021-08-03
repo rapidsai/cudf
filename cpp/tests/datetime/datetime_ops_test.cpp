@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/timestamp_utilities.cuh>
 #include <cudf_test/type_lists.hpp>
 
@@ -25,6 +26,10 @@
 #include <cudf/datetime.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
+
+#define XXX false  // stub for null values
+
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
 template <typename T>
 struct NonTimestampTest : public cudf::test::BaseFixture {
@@ -192,7 +197,7 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents)
   auto expected_seconds = fixed_width_column_wrapper<int16_t>{20, 40, 0, 20, 40, 0, 20, 40, 0, 20};
 
   // Special cases for timestamp_D: zero out the expected hh/mm/ss cols
-  if (std::is_same<TypeParam, cudf::timestamp_D>::value) {
+  if (std::is_same_v<TypeParam, cudf::timestamp_D>) {
     expected_hours   = fixed_width_column_wrapper<int16_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     expected_minutes = fixed_width_column_wrapper<int16_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     expected_seconds = fixed_width_column_wrapper<int16_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -242,7 +247,7 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedNullableDatetimeComponen
     {true, false, true, false, true, false, true, false, true, false}};
 
   // Special cases for timestamp_D: zero out the expected hh/mm/ss cols
-  if (std::is_same<TypeParam, cudf::timestamp_D>::value) {
+  if (std::is_same_v<TypeParam, cudf::timestamp_D>) {
     expected_hours = fixed_width_column_wrapper<int16_t>{
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
       {true, false, true, false, true, false, true, false, true, false}};
@@ -300,7 +305,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
       30,     // This is the UNIX epoch - when rounded up becomes 1970-01-31
       -1523   // 1965-10-31
     },
-    true);
+    verbosity);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
@@ -340,7 +345,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
         111     // Random nullable field
       },
       {false, true, true, true, false, true, true, false}},
-    true);
+    verbosity);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
@@ -382,7 +387,7 @@ TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
                                    },
                                    {false, true, true, true, false, true, true, false, true},
                                  },
-                                 true);
+                                 verbosity);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithEmptyColumn)
@@ -478,7 +483,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSeconds)
       -128952000L,  // 1965-11-30 12:00:00 GMT
       -123587928L   // 1966-01-31 14:01:12 GMT
     },
-    true);
+    verbosity);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSecondsAndNullValues)
@@ -529,7 +534,75 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSecondsAndNullValues)
         -123587928L   // 1966-01-31 14:01:12 GMT
       },
       {false, false, true, false, true, false, true, false, true, true, true, true}},
-    true);
+    verbosity);
+}
+
+TEST_F(BasicDatetimeOpsTest, TestIsLeapYear)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace cuda::std::chrono;
+
+  // Time in seconds since epoch
+  // Dates converted using epochconverter.com
+  auto timestamps_s =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      {
+        1594332839L,    // 2020-07-09 10:13:59 GMT - leap year
+        0L,             // null
+        915148800L,     // 1999-01-01 00:00:00 GMT - non leap year
+        -11663029161L,  // 1600-5-31 05:40:39 GMT - leap year
+        707904541L,     // 1992-06-07 08:09:01 GMT - leap year
+        -2181005247L,   // 1900-11-20 09:12:33 GMT - non leap year
+        0L,             // UNIX EPOCH 1970-01-01 00:00:00 GMT - non leap year
+        -12212553600L,  // First full year of Gregorian Calandar 1583-01-01 00:00:00 - non-leap-year
+        0L,             // null
+        13591632822L,   // 2400-09-13 13:33:42 GMT - leap year
+        4539564243L,    // 2113-11-08 06:04:03 GMT - non leap year
+        0L              // null
+      },
+      {true, false, true, true, true, true, true, true, false, true, true, false}};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *is_leap_year(timestamps_s),
+    cudf::test::fixed_width_column_wrapper<bool>{
+      {true, XXX, false, true, true, false, false, false, XXX, true, false, XXX},
+      {true, false, true, true, true, true, true, true, false, true, true, false}});
+}
+
+TEST_F(BasicDatetimeOpsTest, TestQuarter)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace cuda::std::chrono;
+  using namespace cudf::test::iterators;
+
+  // Time in seconds since epoch
+  // Dates converted using epochconverter.com
+  auto timestamps_s =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      {
+        1594332839L,    // 2020-07-09 10:13:59 GMT
+        0L,             // null
+        915148800L,     // 1999-01-01 00:00:00 GMT
+        -11663029161L,  // 1600-5-31 05:40:39 GMT
+        707904541L,     // 1992-06-07 08:09:01 GMT
+        -2181005247L,   // 1900-11-20 09:12:33 GMT
+        0L,             // UNIX EPOCH 1970-01-01 00:00:00 GMT
+        -12212553600L,  // First full year of Gregorian Calandar 1583-01-01 00:00:00
+        0L,             // null
+        13591632822L,   // 2400-09-13 13:33:42 GMT
+        4539564243L,    // 2113-11-08 06:04:03 GMT
+        0L,             // null
+        1608581568L,    // 2020-12-21 08:12:48 GMT
+        1584821568L,    // 2020-03-21 08:12:48 GMT
+      },
+      nulls_at({1, 8, 11})};
+
+  auto quarter = cudf::test::fixed_width_column_wrapper<int16_t>{
+    {3, 0 /*null*/, 1, 2, 2, 4, 1, 1, 0 /*null*/, 3, 4, 0 /*null*/, 4, 1}, nulls_at({1, 8, 11})};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_quarter(timestamps_s), quarter);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

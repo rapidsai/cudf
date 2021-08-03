@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -160,6 +160,42 @@ TEST_F(groupby_max_string_test, zero_valid_values)
 
   auto agg2 = cudf::make_max_aggregation();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
+}
+
+TEST_F(groupby_max_string_test, max_sorted_strings)
+{
+  // testcase replicated in issue #8717
+  cudf::test::strings_column_wrapper keys(
+    {"",   "",   "",   "",   "",   "",   "06", "06", "06", "06", "10", "10", "10", "10", "14", "14",
+     "14", "14", "18", "18", "18", "18", "22", "22", "22", "22", "26", "26", "26", "26", "30", "30",
+     "30", "30", "34", "34", "34", "34", "38", "38", "38", "38", "42", "42", "42", "42"},
+    {0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::strings_column_wrapper vals(
+    {"", "", "",   "", "", "", "06", "", "", "", "10", "", "", "", "14", "",
+     "", "", "18", "", "", "", "22", "", "", "", "26", "", "", "", "30", "",
+     "", "", "34", "", "", "", "38", "", "", "", "42", "", "", ""},
+    {0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1,
+     0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0});
+  cudf::test::strings_column_wrapper expect_keys(
+    {"06", "10", "14", "18", "22", "26", "30", "34", "38", "42", ""},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  cudf::test::strings_column_wrapper expect_vals(
+    {"06", "10", "14", "18", "22", "26", "30", "34", "38", "42", ""},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+
+  // fixed_width_column_wrapper<size_type> expect_argmax(
+  // {6, 10, 14, 18, 22, 26, 30, 34, 38, 42, -1},
+  // {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  auto agg = cudf::make_max_aggregation();
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  std::move(agg),
+                  force_use_sort_impl::NO,
+                  null_policy::INCLUDE,
+                  sorted::YES);
 }
 
 struct groupby_dictionary_max_test : public cudf::test::BaseFixture {

@@ -189,6 +189,38 @@ std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
   cudf::column_view const& months,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief  Check if the year of the given date is a leap year
+ *
+ * `output[i] == true` if year of `column[i]` is a leap year
+ * `output[i] == false` if year of `column[i]` is not a leap year
+ * `output[i] is null` if `column[i]` is null
+ *
+ * @param[in] cudf::column_view of the input datetime values
+ *
+ * @returns cudf::column of datatype BOOL8 truth value of the corresponding date
+ * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
+ */
+std::unique_ptr<cudf::column> is_leap_year(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief  Returns the quarter of the date
+ *
+ * `output[i]` will be a value from {1, 2, 3, 4} corresponding to the quater of month given by
+ * `column[i]`. It will be null if the input row at `column[i]` is null.
+ *
+ * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
+ *
+ * @param The input column containing datetime values
+ * @return A column of INT16 type indicating which quarter the date is in
+ */
+std::unique_ptr<cudf::column> extract_quarter(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 }  // namespace datetime
 }  // namespace cudf

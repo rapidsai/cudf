@@ -139,13 +139,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_getListAsColumnView(JNIEnv *e
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Scalar_getChildrenFromStructScalar(JNIEnv *env, jclass,
-                                                                                    jlong scalar_handle) {
+JNIEXPORT jlongArray JNICALL
+Java_ai_rapids_cudf_Scalar_getChildrenFromStructScalar(JNIEnv *env, jclass, jlong scalar_handle) {
   JNI_NULL_CHECK(env, scalar_handle, "scalar handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    const auto s                  = reinterpret_cast<cudf::struct_scalar*>(scalar_handle);
-    const cudf::table_view& table = s->view();
+    const auto s = reinterpret_cast<cudf::struct_scalar *>(scalar_handle);
+    const cudf::table_view &table = s->view();
     cudf::jni::native_jpointerArray<cudf::column_view> column_handles(env, table.num_columns());
     for (int i = 0; i < table.num_columns(); i++) {
       column_handles[i] = new cudf::column_view(table.column(i));
@@ -502,12 +502,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeStructScalar(JNIEnv *env,
     cudf::jni::native_jpointerArray<cudf::column_view> column_pointers(env, handles);
     std::vector<cudf::column_view> columns;
     columns.reserve(column_pointers.size());
-    std::transform(column_pointers.data(),
-                   column_pointers.data() + column_pointers.size(),
-                   std::back_inserter(columns),
-                   [](auto const& col_ptr) { return *col_ptr; });
+    std::transform(column_pointers.data(), column_pointers.data() + column_pointers.size(),
+                   std::back_inserter(columns), [](auto const &col_ptr) { return *col_ptr; });
     auto s = std::make_unique<cudf::struct_scalar>(
-      cudf::host_span<cudf::column_view const>{columns}, is_valid);
+        cudf::host_span<cudf::column_view const>{columns}, is_valid);
     return reinterpret_cast<jlong>(s.release());
   }
   CATCH_STD(env, 0);
@@ -519,7 +517,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_repeatString(JNIEnv *env, jcl
   try {
     cudf::jni::auto_set_device(env);
     auto const str = *reinterpret_cast<cudf::string_scalar *>(handle);
-    return reinterpret_cast<jlong>(cudf::strings::repeat_strings(str, repeat_times).release());
+    return reinterpret_cast<jlong>(cudf::strings::repeat_string(str, repeat_times).release());
   }
   CATCH_STD(env, 0);
 }
