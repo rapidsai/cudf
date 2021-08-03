@@ -5384,14 +5384,6 @@ def test_change_column_dtype_in_empty():
     assert_eq(pdf, gdf)
 
 
-def test_dataframe_from_table_empty_index():
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    odict = df._data
-    tbl = cudf._lib.table.Table(odict)
-
-    result = cudf.DataFrame._from_table(tbl)  # noqa: F841
-
-
 @pytest.mark.parametrize("dtype", ["int64", "str"])
 def test_dataframe_from_dictionary_series_same_name_index(dtype):
     pd_idx1 = pd.Index([1, 2, 0], name="test_index").astype(dtype)
