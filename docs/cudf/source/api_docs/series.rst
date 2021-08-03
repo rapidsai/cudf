@@ -7,6 +7,7 @@ Constructor
 -----------
 .. autosummary::
    :toctree: api/
+   :template: autosummary/class_with_autosummary.rst
 
    Series
 
@@ -19,14 +20,20 @@ Attributes
 
    Series.index
    Series.values
+   Series.data
    Series.dtype
    Series.shape
    Series.ndim
+   Series.nullable
+   Series.nullmask
+   Series.null_count
    Series.size
    Series.memory_usage
    Series.has_nulls
    Series.empty
    Series.name
+   Series.valid_count
+   Series.values_host
 
 Conversion
 ----------
