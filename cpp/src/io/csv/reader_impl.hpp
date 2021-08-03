@@ -192,7 +192,7 @@ class reader::impl {
   /**
    * @brief Selects the columns' data types from the list of dtypes.
    *
-   * @param col_type_map Vector of data types specifying the columns' target data types
+   * @param dtypes Vector of data types specifying the columns' target data types
    * @return Sorted list of selected columns' data types
    */
   std::vector<data_type> select_data_types(std::vector<data_type> const& dtypes);

@@ -404,7 +404,7 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
     }
   }
 
-  // User can specify which columns should be parsed as datetime
+  // User can specify which columns should be parsed as hexadecimal
   if (!opts_.get_parse_hex_indexes().empty() || !opts_.get_parse_hex_names().empty()) {
     for (const auto index : opts_.get_parse_hex_indexes()) {
       column_flags_[index] |= column_parse::as_hexadecimal;
