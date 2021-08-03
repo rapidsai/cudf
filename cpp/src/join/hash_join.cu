@@ -80,7 +80,7 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type*)>> build_join_h
 
   auto hash_table = std::make_unique<multimap_type>(hash_table_size,
                                                     std::numeric_limits<hash_value_type>::max(),
-                                                    std::numeric_limits<size_type>::max());
+                                                    JoinNoneValue);
 
   auto const row_bitmask = (compare_nulls == null_equality::EQUAL)
                              ? rmm::device_buffer{0, stream}
