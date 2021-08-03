@@ -627,6 +627,8 @@ endif()
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
 
+include(CPack)
+
 include(GNUInstallDirs)
 
 set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/cudf)
