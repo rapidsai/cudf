@@ -71,8 +71,6 @@ struct multistate {
   multistate_segment _segments[N];
 };
 
-// lhs contains only zero?
-
 /**
  * @brief associatively inner-joins transition histories.
  *
@@ -91,7 +89,7 @@ struct multistate {
 constexpr multistate operator+(multistate const& lhs, multistate const& rhs)
 {
   // combine two multistates together by full-joining LHS tails to RHS heads,
-  // and taking the corosponding LHS heads and RHS tails.
+  // and taking the corresponding LHS heads and RHS tails.
 
   multistate result;
   for (uint8_t lhs_idx = 0; lhs_idx < lhs.size(); lhs_idx++) {

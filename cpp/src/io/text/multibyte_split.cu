@@ -114,7 +114,6 @@ __global__ void multibyte_split_init_kernel(
 
 __global__ void multibyte_split_kernel(
   cudf::size_type base_tile_idx,
-  cudf::size_type num_tiles,
   cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
   cudf::io::text::detail::scan_tile_state_view<uint32_t> tile_output_offsets,
   cudf::io::text::detail::trie_device_view trie,
@@ -177,10 +176,6 @@ __global__ void multibyte_split_kernel(
     .ExclusiveSum(thread_offsets, thread_offsets, prefix_callback);
 
   // Step 5: Assign outputs from each thread using match offsets.
-
-  if (blockIdx.x == 0 and threadIdx.x == 0) {
-    printf("tile(%2u), cio(%9i)\n", tile_idx, chunk_input_offset);
-  }
 
   if (abs_output_chars.size() > 0) {
     for (int32_t i = 0; i < ITEMS_PER_THREAD and i < thread_input_size; i++) {
@@ -271,8 +266,6 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
   CUDF_FUNC_RANGE();
   cudf::size_type chunk_offset = 0;
 
-  // this function interleaves three kernel executions
-
   multibyte_split_init_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, stream.value()>>>(  //
     -TILES_PER_CHUNK,
     TILES_PER_CHUNK,
@@ -281,8 +274,7 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
     cudf::io::text::detail::scan_tile_status::oob);
 
   auto multistate_seed = multistate();
-
-  multistate_seed.enqueue(0, 0);
+  multistate_seed.enqueue(0, 0);  // this represents the first state in the pattern.
 
   tile_multistates.set_seed_async(multistate_seed, stream);
   tile_offsets.set_seed_async(0, stream);
@@ -297,15 +289,17 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
 
     if (chunk.size() == 0) { break; }
 
+    auto tiles_in_launch = ceil_div(chunk.size(), ITEMS_PER_TILE);
+
     // reset the next chunk of tile state
-    multibyte_split_init_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, chunk_stream>>>(  //
+    multibyte_split_init_kernel<<<tiles_in_launch, THREADS_PER_TILE, 0, chunk_stream>>>(  //
       base_tile_idx,
-      TILES_PER_CHUNK,
+      tiles_in_launch,
       tile_multistates,
       tile_offsets);
-    multibyte_split_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, chunk_stream>>>(  //
+
+    multibyte_split_kernel<<<tiles_in_launch, THREADS_PER_TILE, 0, chunk_stream>>>(  //
       base_tile_idx,
-      TILES_PER_CHUNK,
       tile_multistates,
       tile_offsets,
       trie.view(),

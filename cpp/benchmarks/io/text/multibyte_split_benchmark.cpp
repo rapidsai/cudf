@@ -35,11 +35,19 @@ using cudf::test::fixed_width_column_wrapper;
 
 temp_directory const temp_dir("cudf_gbench");
 
+enum data_chunk_source_type {
+  file,
+  host,
+  device,
+};
+
 static void BM_multibyte_split(benchmark::State& state)
 {
-  auto delimiters = std::vector<std::string>({"😀", "😎", ",", "::"});
+  auto num_chars   = state.range(0);
+  auto source_type = static_cast<data_chunk_source_type>(state.range(1));
 
-  int32_t num_chars = state.range(0);
+  // it would be better if we initialized these chars on gpu, then scattered-in some delimiters,
+  // then copied them back to host
   auto host_input   = std::string(num_chars, 'x');
   auto device_input = cudf::string_scalar(host_input);
 
@@ -54,9 +62,25 @@ static void BM_multibyte_split(benchmark::State& state)
 
   cudaDeviceSynchronize();
 
-  auto source = cudf::io::text::make_source_from_file(temp_file_name);
-  // auto source = cudf::io::text::make_source(device_input);
-  // auto source = cudf::io::text::make_source(host_input);
+  auto source = std::unique_ptr<cudf::io::text::data_chunk_source>(nullptr);
+
+  switch (source_type) {
+    case data_chunk_source_type::file:  //
+      source = cudf::io::text::make_source_from_file(temp_file_name);
+      state.SetLabel("from file");
+      break;
+    case data_chunk_source_type::host:  //
+      source = cudf::io::text::make_source(host_input);
+      state.SetLabel("from host");
+      break;
+    case data_chunk_source_type::device:  //
+      source = cudf::io::text::make_source(device_input);
+      state.SetLabel("from device");
+      break;
+    default: CUDF_FAIL();
+  }
+
+  auto delimiters = std::vector<std::string>({"x"});
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
@@ -75,8 +99,11 @@ class MultibyteSplitBenchmark : public cudf::benchmark {
     BM_multibyte_split(state);                                                  \
   }                                                                             \
   BENCHMARK_REGISTER_F(MultibyteSplitBenchmark, name)                           \
-    ->Range(1 << 30, 1 << 30)                                                   \
+    ->ArgsProduct({{1 << 15, 1 << 30},                                          \
+                   {data_chunk_source_type::file,                               \
+                    data_chunk_source_type::host,                               \
+                    data_chunk_source_type::device}})                           \
     ->UseManualTime()                                                           \
-    ->Unit(benchmark::kMillisecond);
+    ->Unit(::benchmark::kMillisecond);
 
 TRANSPOSE_BM_BENCHMARK_DEFINE(multibyte_split_simple);
