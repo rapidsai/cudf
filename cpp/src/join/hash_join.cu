@@ -35,9 +35,9 @@ namespace detail {
 
 namespace {
 
-class build_predicate {
+class row_contains_null {
  public:
-  build_predicate(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
+  row_contains_null(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
 
   __device__ __inline__ bool operator()(const pair_type& pair) const noexcept
   {
@@ -84,7 +84,7 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type*)>> build_join_h
   auto const row_bitmask = (compare_nulls == null_equality::EQUAL)
                              ? rmm::device_buffer{0, stream}
                              : cudf::detail::bitmask_and(build, stream);
-  build_predicate pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+  row_contains_null pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
   row_hash hash_build{*build_device_table};
   auto const empty_key_sentinel = hash_table->get_empty_key_sentinel();
