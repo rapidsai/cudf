@@ -3642,6 +3642,12 @@ class SingleColumnFrame(Frame):
         return (len(self),)
 
     def __iter__(self):
+        """
+        Iterating over a GPU object is not effecient and hence not supported.
+
+        Consider using ``.to_arrow()``, ``.to_pandas()`` or ``.values_host``
+        if you wish to iterate over the values.
+        """
         cudf.utils.utils.raise_iteration_error(obj=self)
 
     def __len__(self):

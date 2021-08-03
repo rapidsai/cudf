@@ -2355,17 +2355,17 @@ class Series(SingleColumnFrame, Serializable):
     def cat(self):
         return CategoricalAccessor(parent=self)
 
-    @copy_docstring(StringMethods.__init__)  # type: ignore
+    @copy_docstring(StringMethods)  # type: ignore
     @property
     def str(self):
         return StringMethods(parent=self)
 
-    @copy_docstring(ListMethods.__init__)  # type: ignore
+    @copy_docstring(ListMethods)  # type: ignore
     @property
     def list(self):
         return ListMethods(parent=self)
 
-    @copy_docstring(StructMethods.__init__)  # type: ignore
+    @copy_docstring(StructMethods)  # type: ignore
     @property
     def struct(self):
         return StructMethods(parent=self)

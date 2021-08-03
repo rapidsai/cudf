@@ -353,14 +353,15 @@ class Rolling(GetAttrGetItemMixin):
 
 
 class RollingGroupby(Rolling):
-    def __init__(self, groupby, window, min_periods=None, center=False):
-        """
-        Grouped rolling window calculation.
+    """
+    Grouped rolling window calculation.
 
-        See also
-        --------
-        cudf.core.window.Rolling
-        """
+    See also
+    --------
+    cudf.core.window.Rolling
+    """
+
+    def __init__(self, groupby, window, min_periods=None, center=False):
         sort_order = groupby.grouping.keys.argsort()
 
         # TODO: there may be overlap between the columns
