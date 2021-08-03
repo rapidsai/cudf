@@ -690,9 +690,9 @@ conditional_inner_join(
   table_view left,
   table_view right,
   ast::expression binary_predicate,
-  null_equality compare_nulls          = null_equality::EQUAL,
-  std::optional<size_type> output_size = {},
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls            = null_equality::EQUAL,
+  std::optional<std::size_t> output_size = {},
+  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs
@@ -736,8 +736,8 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 conditional_left_join(table_view left,
                       table_view right,
                       ast::expression binary_predicate,
-                      null_equality compare_nulls          = null_equality::EQUAL,
-                      std::optional<size_type> output_size = {},
+                      null_equality compare_nulls            = null_equality::EQUAL,
+                      std::optional<std::size_t> output_size = {},
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -781,8 +781,8 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 conditional_full_join(table_view left,
                       table_view right,
                       ast::expression binary_predicate,
-                      null_equality compare_nulls          = null_equality::EQUAL,
-                      std::optional<size_type> output_size = {},
+                      null_equality compare_nulls            = null_equality::EQUAL,
+                      std::optional<std::size_t> output_size = {},
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -821,9 +821,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
   table_view left,
   table_view right,
   ast::expression binary_predicate,
-  null_equality compare_nulls          = null_equality::EQUAL,
-  std::optional<size_type> output_size = {},
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls            = null_equality::EQUAL,
+  std::optional<std::size_t> output_size = {},
+  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns an index vector corresponding to all rows in the left table
@@ -861,9 +861,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
   table_view left,
   table_view right,
   ast::expression binary_predicate,
-  null_equality compare_nulls          = null_equality::EQUAL,
-  std::optional<size_type> output_size = {},
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls            = null_equality::EQUAL,
+  std::optional<std::size_t> output_size = {},
+  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
@@ -883,7 +883,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  *
  * @return The size that would result from performing the requested join.
  */
-size_type conditional_inner_join_size(
+std::size_t conditional_inner_join_size(
   table_view left,
   table_view right,
   ast::expression binary_predicate,
@@ -908,7 +908,7 @@ size_type conditional_inner_join_size(
  *
  * @return The size that would result from performing the requested join.
  */
-size_type conditional_left_join_size(
+std::size_t conditional_left_join_size(
   table_view left,
   table_view right,
   ast::expression binary_predicate,
@@ -933,7 +933,7 @@ size_type conditional_left_join_size(
  *
  * @return The size that would result from performing the requested join.
  */
-size_type conditional_full_join_size(
+std::size_t conditional_full_join_size(
   table_view left,
   table_view right,
   ast::expression binary_predicate,
@@ -958,7 +958,7 @@ size_type conditional_full_join_size(
  *
  * @return The size that would result from performing the requested join.
  */
-size_type conditional_left_semi_join_size(
+std::size_t conditional_left_semi_join_size(
   table_view left,
   table_view right,
   ast::expression binary_predicate,
@@ -983,7 +983,7 @@ size_type conditional_left_semi_join_size(
  *
  * @return The size that would result from performing the requested join.
  */
-size_type conditional_left_anti_join_size(
+std::size_t conditional_left_anti_join_size(
   table_view left,
   table_view right,
   ast::expression binary_predicate,

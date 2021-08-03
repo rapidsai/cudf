@@ -40,7 +40,7 @@ conditional_join(table_view const& left,
                  ast::expression binary_predicate,
                  null_equality compare_nulls,
                  join_kind JoinKind,
-                 std::optional<size_type> output_size,
+                 std::optional<std::size_t> output_size,
                  rmm::cuda_stream_view stream,
                  rmm::mr::device_memory_resource* mr)
 {
@@ -86,11 +86,11 @@ conditional_join(table_view const& left,
   join_kind KernelJoinKind = JoinKind == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : JoinKind;
 
   // If the join size was not provided as an input, compute it here.
-  size_type join_size;
+  std::size_t join_size;
   if (output_size.has_value()) {
     join_size = *output_size;
   } else {
-    rmm::device_scalar<size_type> size(0, stream, mr);
+    rmm::device_scalar<std::size_t> size(0, stream, mr);
     CHECK_CUDA(stream.value());
     if (has_nulls) {
       compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
@@ -168,13 +168,13 @@ conditional_join(table_view const& left,
   return join_indices;
 }
 
-size_type compute_conditional_join_output_size(table_view const& left,
-                                               table_view const& right,
-                                               ast::expression binary_predicate,
-                                               null_equality compare_nulls,
-                                               join_kind JoinKind,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+std::size_t compute_conditional_join_output_size(table_view const& left,
+                                                 table_view const& right,
+                                                 ast::expression binary_predicate,
+                                                 null_equality compare_nulls,
+                                                 join_kind JoinKind,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr)
 {
   // We can immediately filter out cases where the right table is empty. In
   // some cases, we return all the rows of the left table with a corresponding
@@ -210,7 +210,7 @@ size_type compute_conditional_join_output_size(table_view const& left,
   auto right_table = table_device_view::create(right, stream);
 
   // Allocate storage for the counter used to get the size of the join output
-  rmm::device_scalar<size_type> size(0, stream, mr);
+  rmm::device_scalar<std::size_t> size(0, stream, mr);
   CHECK_CUDA(stream.value());
   detail::grid_1d config(left_table->num_rows(), DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block =
@@ -251,7 +251,7 @@ conditional_inner_join(table_view left,
                        table_view right,
                        ast::expression binary_predicate,
                        null_equality compare_nulls,
-                       std::optional<size_type> output_size,
+                       std::optional<std::size_t> output_size,
                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -271,7 +271,7 @@ conditional_left_join(table_view left,
                       table_view right,
                       ast::expression binary_predicate,
                       null_equality compare_nulls,
-                      std::optional<size_type> output_size,
+                      std::optional<std::size_t> output_size,
                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -291,7 +291,7 @@ conditional_full_join(table_view left,
                       table_view right,
                       ast::expression binary_predicate,
                       null_equality compare_nulls,
-                      std::optional<size_type> output_size,
+                      std::optional<std::size_t> output_size,
                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -310,7 +310,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
   table_view right,
   ast::expression binary_predicate,
   null_equality compare_nulls,
-  std::optional<size_type> output_size,
+  std::optional<std::size_t> output_size,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -330,7 +330,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
   table_view right,
   ast::expression binary_predicate,
   null_equality compare_nulls,
-  std::optional<size_type> output_size,
+  std::optional<std::size_t> output_size,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -345,11 +345,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
                      .first);
 }
 
-size_type conditional_inner_join_size(table_view left,
-                                      table_view right,
-                                      ast::expression binary_predicate,
-                                      null_equality compare_nulls,
-                                      rmm::mr::device_memory_resource* mr)
+std::size_t conditional_inner_join_size(table_view left,
+                                        table_view right,
+                                        ast::expression binary_predicate,
+                                        null_equality compare_nulls,
+                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_conditional_join_output_size(left,
@@ -361,11 +361,11 @@ size_type conditional_inner_join_size(table_view left,
                                                       mr);
 }
 
-size_type conditional_left_join_size(table_view left,
-                                     table_view right,
-                                     ast::expression binary_predicate,
-                                     null_equality compare_nulls,
-                                     rmm::mr::device_memory_resource* mr)
+std::size_t conditional_left_join_size(table_view left,
+                                       table_view right,
+                                       ast::expression binary_predicate,
+                                       null_equality compare_nulls,
+                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_conditional_join_output_size(left,
@@ -377,11 +377,11 @@ size_type conditional_left_join_size(table_view left,
                                                       mr);
 }
 
-size_type conditional_full_join_size(table_view left,
-                                     table_view right,
-                                     ast::expression binary_predicate,
-                                     null_equality compare_nulls,
-                                     rmm::mr::device_memory_resource* mr)
+std::size_t conditional_full_join_size(table_view left,
+                                       table_view right,
+                                       ast::expression binary_predicate,
+                                       null_equality compare_nulls,
+                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_conditional_join_output_size(left,
@@ -393,11 +393,11 @@ size_type conditional_full_join_size(table_view left,
                                                       mr);
 }
 
-size_type conditional_left_semi_join_size(table_view left,
-                                          table_view right,
-                                          ast::expression binary_predicate,
-                                          null_equality compare_nulls,
-                                          rmm::mr::device_memory_resource* mr)
+std::size_t conditional_left_semi_join_size(table_view left,
+                                            table_view right,
+                                            ast::expression binary_predicate,
+                                            null_equality compare_nulls,
+                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return std::move(detail::compute_conditional_join_output_size(left,
@@ -409,11 +409,11 @@ size_type conditional_left_semi_join_size(table_view left,
                                                                 mr));
 }
 
-size_type conditional_left_anti_join_size(table_view left,
-                                          table_view right,
-                                          ast::expression binary_predicate,
-                                          null_equality compare_nulls,
-                                          rmm::mr::device_memory_resource* mr)
+std::size_t conditional_left_anti_join_size(table_view left,
+                                            table_view right,
+                                            ast::expression binary_predicate,
+                                            null_equality compare_nulls,
+                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return std::move(detail::compute_conditional_join_output_size(left,

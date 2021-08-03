@@ -52,7 +52,7 @@ __global__ void compute_conditional_join_output_size(
   join_kind JoinKind,
   null_equality compare_nulls,
   ast::detail::expression_device_view device_expression_data,
-  cudf::size_type* output_size)
+  std::size_t* output_size)
 {
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
@@ -64,7 +64,7 @@ __global__ void compute_conditional_join_output_size(
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
-  cudf::size_type thread_counter(0);
+  std::size_t thread_counter{0};
   cudf::size_type const left_start_idx = threadIdx.x + blockIdx.x * blockDim.x;
   cudf::size_type const left_stride    = blockDim.x * gridDim.x;
   cudf::size_type const left_num_rows  = left_table.num_rows();
@@ -96,7 +96,7 @@ __global__ void compute_conditional_join_output_size(
 
   using BlockReduce = cub::BlockReduce<cudf::size_type, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
-  cudf::size_type block_counter = BlockReduce(temp_storage).Sum(thread_counter);
+  std::size_t block_counter = BlockReduce(temp_storage).Sum(thread_counter);
 
   // Add block counter to global counter
   if (threadIdx.x == 0) atomicAdd(output_size, block_counter);
