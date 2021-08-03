@@ -1783,25 +1783,25 @@ class RangeIndex(BaseIndex):
 
 
 class GenericIndex(BaseIndex):
-    """An array of orderable values that represent the indices of another Column
+    """
+    An array of orderable values that represent the indices of another Column
 
     Attributes
     ----------
     _values: A Column object
     name: A string
+
+    Parameters
+    ----------
+    data : Column
+        The Column of data for this index
+    name : str optional
+        The name of the Index. If not provided, the Index adopts the value
+        Column's name. Otherwise if this name is different from the value
+        Column's, the data Column will be cloned to adopt this name.
     """
 
     def __init__(self, data, **kwargs):
-        """
-        Parameters
-        ----------
-        data : Column
-            The Column of data for this index
-        name : str optional
-            The name of the Index. If not provided, the Index adopts the value
-            Column's name. Otherwise if this name is different from the value
-            Column's, the data Column will be cloned to adopt this name.
-        """
         kwargs = _setdefault_name(data, **kwargs)
 
         # normalize the input
