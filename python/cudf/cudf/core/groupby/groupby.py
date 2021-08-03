@@ -472,6 +472,8 @@ class GroupBy(Serializable):
             result.index.names = self.grouping.names
         else:
             result = cudf.concat(chunk_results)
+        if isinstance(self, SeriesGroupBy):
+            result.name = self.obj.name
 
         if self._sort:
             result = result.sort_index()
