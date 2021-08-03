@@ -374,6 +374,9 @@ doc_read_orc = docfmt_partial(docstring=_docstring_read_orc)
 _docstring_to_orc = """
 Write a DataFrame to the ORC format.
 
+Note: Support for reading files with struct columns is currently experimental,
+the output may not be correct in all cases.
+
 Parameters
 ----------
 fname : str
