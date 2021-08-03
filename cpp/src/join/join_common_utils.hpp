@@ -40,7 +40,7 @@ using multimap_type = cuco::static_multimap<hash_value_type,
                                             size_type,
                                             cuco::double_hashing<hash_value_type, size_type>,
                                             cuda::thread_scope_device,
-                                            default_allocator<pair_type>>;
+                                            default_allocator<char>>;
 
 using row_hash = cudf::row_hasher<default_hash>;
 
