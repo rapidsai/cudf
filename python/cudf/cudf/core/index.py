@@ -326,7 +326,7 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         See Also
         --------
-        cudf.core.index.Index.rename : Able to set new names without level.
+        cudf.Index.rename : Able to set new names without level.
 
         Examples
         --------
@@ -529,9 +529,9 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         See Also
         --------
-        cudf.core.index.Index.max : Return the maximum value in an Index.
-        cudf.core.series.Series.min : Return the minimum value in a Series.
-        cudf.core.dataframe.DataFrame.min : Return the minimum values in
+        cudf.Index.max : Return the maximum value in an Index.
+        cudf.Series.min : Return the minimum value in a Series.
+        cudf.DataFrame.min : Return the minimum values in
             a DataFrame.
 
         Examples
@@ -554,9 +554,9 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         See Also
         --------
-        cudf.core.index.Index.min : Return the minimum value in an Index.
-        cudf.core.series.Series.max : Return the maximum value in a Series.
-        cudf.core.dataframe.DataFrame.max : Return the maximum values in
+        cudf.Index.min : Return the minimum value in an Index.
+        cudf.Series.max : Return the maximum value in a Series.
+        cudf.DataFrame.max : Return the maximum values in
             a DataFrame.
 
         Examples
@@ -780,8 +780,8 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         See Also
         --------
-        cudf.core.series.Series.min : Sort values of a Series.
-        cudf.core.dataframe.DataFrame.sort_values : Sort values in a DataFrame.
+        cudf.Series.min : Sort values of a Series.
+        cudf.DataFrame.sort_values : Sort values in a DataFrame.
 
         Examples
         --------
@@ -1350,9 +1350,9 @@ class BaseIndex(SingleColumnFrame, Serializable):
         >>> import numpy as np
         >>> data = [10, 20, 30, np.nan]
         >>> pdi = pd.Index(data)
-        >>> cudf.core.index.Index.from_pandas(pdi)
+        >>> cudf.Index.from_pandas(pdi)
         Float64Index([10.0, 20.0, 30.0, <NA>], dtype='float64')
-        >>> cudf.core.index.Index.from_pandas(pdi, nan_as_null=False)
+        >>> cudf.Index.from_pandas(pdi, nan_as_null=False)
         Float64Index([10.0, 20.0, 30.0, nan], dtype='float64')
         """
         if not isinstance(index, pd.Index):

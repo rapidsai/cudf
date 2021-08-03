@@ -31,6 +31,7 @@ from cudf.core import (
     IntervalIndex,
     MultiIndex,
     RangeIndex,
+    StringIndex,
     Scalar,
     Series,
     TimedeltaIndex,

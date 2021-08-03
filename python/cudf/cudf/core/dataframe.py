@@ -3463,7 +3463,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if index:
             if (
                 any(type(item) == str for item in index.values())
-                and type(self.index) != cudf.core.index.StringIndex
+                and type(self.index) != cudf.StringIndex
             ):
                 raise NotImplementedError(
                     "Implicit conversion of index to "
@@ -6759,9 +6759,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         See Also
         --------
-        cudf.core.series.Series.mode : Return the highest frequency value
+        cudf.Series.mode : Return the highest frequency value
             in a Series.
-        cudf.core.series.Series.value_counts : Return the counts of values
+        cudf.Series.value_counts : Return the counts of values
             in a Series.
 
         Notes

@@ -2503,7 +2503,7 @@ class StringMethods(ColumnMethods):
 
         Also available on indices:
 
-        >>> idx = cudf.core.index.StringIndex(['X 123', 'Y 999'])
+        >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
         StringIndex(['X 123' 'Y 999'], dtype='object')
 
@@ -2570,7 +2570,7 @@ class StringMethods(ColumnMethods):
 
         Also available on indices:
 
-        >>> idx = cudf.core.index.StringIndex(['X 123', 'Y 999'])
+        >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
         StringIndex(['X 123' 'Y 999'], dtype='object')
 
@@ -3242,7 +3242,7 @@ class StringMethods(ColumnMethods):
 
         This is also available on Index.
 
-        >>> index = cudf.core.index.StringIndex(['A', 'A', 'Aaba', 'cat'])
+        >>> index = cudf.Index(['A', 'A', 'Aaba', 'cat'])
         >>> index.str.count('a')
         Int64Index([0, 0, 2, 1], dtype='int64')
         """  # noqa W605

@@ -3616,9 +3616,7 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     pds = pd.Series(pd.Index(["1", "18", "9"]), dtype="int")
-    gds = cudf.Series(
-        cudf.core.index.StringIndex(["1", "18", "9"]), dtype="int"
-    )
+    gds = cudf.Series(cudf.StringIndex(["1", "18", "9"]), dtype="int")
 
     assert_eq(pds, gds)
 

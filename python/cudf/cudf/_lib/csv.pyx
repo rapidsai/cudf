@@ -359,7 +359,7 @@ def read_csv(
 
     See Also
     --------
-    cudf.io.csv.read_csv
+    cudf.read_csv
     """
 
     if not isinstance(datasource, (BytesIO, StringIO, bytes,
@@ -429,7 +429,7 @@ cpdef write_csv(
 
     See Also
     --------
-    cudf.io.csv.to_csv
+    cudf.to_csv
     """
     cdef table_view input_table_view = \
         table.view() if index is True else table.data_view()

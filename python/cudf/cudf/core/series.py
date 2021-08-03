@@ -458,7 +458,7 @@ class Series(SingleColumnFrame, Serializable):
             Return series without null values
         Series.drop_duplicates
             Return series with duplicate values removed
-        cudf.core.dataframe.DataFrame.drop
+        cudf.DataFrame.drop
             Drop specified labels from rows or columns in dataframe
 
         Examples
@@ -875,7 +875,7 @@ class Series(SingleColumnFrame, Serializable):
 
         See Also
         --------
-        cudf.core.dataframe.DataFrame.memory_usage : Bytes consumed by
+        cudf.DataFrame.memory_usage : Bytes consumed by
             a DataFrame.
 
         Examples
@@ -2499,10 +2499,10 @@ class Series(SingleColumnFrame, Serializable):
 
         Series.fillna : Replace null values.
 
-        cudf.core.dataframe.DataFrame.dropna : Drop rows or columns which
+        cudf.DataFrame.dropna : Drop rows or columns which
             contain null values.
 
-        cudf.core.index.Index.dropna : Drop null indices.
+        cudf.Index.dropna : Drop null indices.
 
         Examples
         --------
@@ -2932,7 +2932,7 @@ class Series(SingleColumnFrame, Serializable):
 
         See also
         --------
-        cudf.core.dataframe.DataFrame.loc
+        cudf.DataFrame.loc
 
         Examples
         --------
@@ -2955,7 +2955,7 @@ class Series(SingleColumnFrame, Serializable):
 
         See also
         --------
-        cudf.core.dataframe.DataFrame.iloc
+        cudf.DataFrame.iloc
 
         Examples
         --------
@@ -5140,7 +5140,7 @@ class Series(SingleColumnFrame, Serializable):
         Series.count
             Number of non-NA elements in a Series.
 
-        cudf.core.dataframe.DataFrame.count
+        cudf.DataFrame.count
             Number of non-NA elements in a DataFrame.
 
         Examples

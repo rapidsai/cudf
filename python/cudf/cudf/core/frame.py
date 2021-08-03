@@ -1116,19 +1116,19 @@ class Frame(libcudf.table.Table):
 
         See also
         --------
-        cudf.core.dataframe.DataFrame.isna
+        cudf.DataFrame.isna
             Indicate null values.
 
-        cudf.core.dataframe.DataFrame.notna
+        cudf.DataFrame.notna
             Indicate non-null values.
 
-        cudf.core.dataframe.DataFrame.fillna
+        cudf.DataFrame.fillna
             Replace null values.
 
-        cudf.core.series.Series.dropna
+        cudf.Series.dropna
             Drop null values.
 
-        cudf.core.index.Index.dropna
+        cudf.Index.dropna
             Drop null indices.
 
         Examples

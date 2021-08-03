@@ -258,12 +258,12 @@ class Rolling(GetAttrGetItemMixin):
 
         See also
         --------
-        cudf.core.series.Series.applymap : Apply an elementwise function to
+        cudf.Series.applymap : Apply an elementwise function to
             transform the values in the Column.
 
         Notes
         -----
-        See notes of the :meth:`cudf.core.series.Series.applymap`
+        See notes of the :meth:`cudf.Series.applymap`
 
         """
         has_nulls = False

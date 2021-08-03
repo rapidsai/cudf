@@ -348,10 +348,10 @@ class GroupBy(Serializable):
 
         See also
         --------
-        cudf.core.series.Series.pipe
+        cudf.Series.pipe
             Apply a function with arguments to a series.
 
-        cudf.core.dataframe.DataFrame.pipe
+        cudf.DataFrame.pipe
             Apply a function with arguments to a dataframe.
 
         apply

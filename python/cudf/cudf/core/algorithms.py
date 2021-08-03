@@ -35,7 +35,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
 
     See Also
     --------
-    cudf.core.series.Series.factorize : Encode the input values of Series.
+    cudf.Series.factorize : Encode the input values of Series.
 
     """
     if sort:
