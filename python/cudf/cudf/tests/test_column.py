@@ -481,3 +481,29 @@ def test_concatenate_large_column_strings():
         match="total size of output is too large for a cudf column",
     ):
         cudf.concat([s_1, s_2])
+
+
+@pytest.mark.parametrize(
+    "alias,expect_dtype",
+    [
+        ("UInt8", "uint8"),
+        ("UInt16", "uint16"),
+        ("UInt32", "uint32"),
+        ("UInt64", "uint64"),
+        ("Int8", "int8"),
+        ("Int16", "int16"),
+        ("Int32", "int32"),
+        ("Int64", "int64"),
+        ("boolean", "bool"),
+        ("Float32", "float32"),
+        ("Float64", "float64"),
+    ],
+)
+@pytest.mark.parametrize(
+    "data", [[1, 2, 0]],
+)
+def test_astype_with_aliases(alias, expect_dtype, data):
+    pd_data = pd.Series(data)
+    gd_data = cudf.Series.from_pandas(pd_data)
+
+    assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))
