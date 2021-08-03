@@ -114,7 +114,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   // result = [6, 1, 11, 1, 1]
   //
-  auto validity_iter = cudf::detail::make_counting_transform_iterator(
+  auto is_output_row = cudf::detail::make_counting_transform_iterator(
     0,
     [row_indices = row_indices.begin<size_type>(),
      validity    = c.null_mask(),
@@ -139,7 +139,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
                      output_row_iter,
                      output_row_iter + row_indices.size(),
                      output_row_start->view().begin<size_type>(),
-                     validity_iter,
+                     is_output_row,
                      result->mutable_view().begin<size_type>());
 
   // generate keys for each output row
@@ -153,10 +153,10 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
                    keys->mutable_view().end<size_type>(),
                    [] __device__() { return 0; });
   thrust::scatter_if(rmm::exec_policy(),
-                     validity_iter,
-                     validity_iter + row_indices.size(),
+                     is_output_row,
+                     is_output_row + row_indices.size(),
                      output_row_start->view().begin<size_type>(),
-                     validity_iter,
+                     is_output_row,
                      keys->mutable_view().begin<size_type>());
   thrust::inclusive_scan(rmm::exec_policy(),
                          keys->view().begin<size_type>(),

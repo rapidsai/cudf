@@ -513,7 +513,7 @@ TEST_F(OverflowTest, Presliced)
                            offsets->view().begin<offset_type>(),
                            offsets->view().end<offset_type>(),
                            offsets->mutable_view().begin<offset_type>());
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, num_rows);
+    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, total_chars_size);
     auto col        = cudf::make_strings_column(
       num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
 
