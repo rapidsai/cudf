@@ -46,7 +46,12 @@ struct data_chunk {
 class data_chunk_reader {
  public:
   /**
-   * @brief Get the next chunk of data
+   * @brief Get the next chunk of bytes from the data source
+   *
+   * Performs any necessary work to read and prepare the underlying data source for consumption as a
+   * view over device memory. Common implementations may read from a file, copy data from host
+   * memory, allocate temporary memory, perform iterative decompression, or even launch device
+   * kernels.
    *
    * @param size desired number of bytes
    * @param stream stream to associate allocations or perform work required to obtain chunk
