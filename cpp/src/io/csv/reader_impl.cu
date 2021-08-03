@@ -27,6 +27,7 @@
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/table/table.hpp>
@@ -48,18 +49,6 @@ using std::vector;
 using cudf::device_span;
 using cudf::host_span;
 using cudf::detail::make_device_uvector_async;
-
-namespace {
-/**
- * @brief Helper class to support inline-overloading for all of a variant's alternative types
- */
-template <class... Ts>
-struct VisitorOverload : Ts... {
-  using Ts::operator()...;
-};
-template <class... Ts>
-VisitorOverload(Ts...) -> VisitorOverload<Ts...>;
-}  // namespace
 
 namespace cudf {
 namespace io {
@@ -432,7 +421,7 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
     column_types = infer_column_types(data, row_offsets, stream);
   } else {
     column_types = std::visit(
-      VisitorOverload{
+      cudf::detail::visitor_overload{
         [&](const std::vector<data_type>& data_types) { return select_data_types(data_types); },
         [&](const std::map<std::string, data_type>& data_types) {
           return select_data_types(data_types);

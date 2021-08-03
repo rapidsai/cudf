@@ -27,6 +27,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/strings/detail/replace.hpp>
@@ -50,16 +51,6 @@ namespace json {
 using namespace cudf::io;
 
 namespace {
-/**
- * @brief Helper class to support inline-overloading for all of a variant's alternative types
- */
-template <class... Ts>
-struct VisitorOverload : Ts... {
-  using Ts::operator()...;
-};
-template <class... Ts>
-VisitorOverload(Ts...) -> VisitorOverload<Ts...>;
-
 /**
  * @brief Estimates the maximum expected length or a row, based on the number
  * of columns
@@ -524,7 +515,7 @@ void reader::impl::set_data_types(device_span<uint64_t const> rec_starts,
     std::visit([](const auto& dtypes) { return dtypes.empty(); }, options_.get_dtypes());
   if (!has_to_infer_column_types) {
     dtypes_ = std::visit(
-      VisitorOverload{
+      cudf::detail::visitor_overload{
         [&](const std::vector<data_type>& dtypes) { return dtypes; },
         [&](const std::map<std::string, data_type>& dtypes) {
           std::vector<data_type> sorted_dtypes;
