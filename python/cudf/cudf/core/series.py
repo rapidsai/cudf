@@ -2350,7 +2350,7 @@ class Series(SingleColumnFrame, Serializable):
                 f"Operation `~` not supported on {self.dtype.type.__name__}"
             )
 
-    @copy_docstring(CategoricalAccessor.__init__)  # type: ignore
+    @copy_docstring(CategoricalAccessor)  # type: ignore
     @property
     def cat(self):
         return CategoricalAccessor(parent=self)
@@ -5756,7 +5756,7 @@ class Series(SingleColumnFrame, Serializable):
 
         return Series(output_col, name=self.name, index=self.index)
 
-    @copy_docstring(SeriesGroupBy.__init__)
+    @copy_docstring(SeriesGroupBy)
     def groupby(
         self,
         by=None,
