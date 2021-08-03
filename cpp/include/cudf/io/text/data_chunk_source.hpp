@@ -67,7 +67,7 @@ class data_chunk_reader {
  */
 class data_chunk_source {
  public:
-  virtual std::unique_ptr<data_chunk_reader> create_reader() = 0;
+  virtual std::unique_ptr<data_chunk_reader> create_reader() const = 0;
 };
 
 }  // namespace text

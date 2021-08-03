@@ -259,7 +259,7 @@ void join_pool_to_stream(rmm::cuda_stream_pool& stream_pool, rmm::cuda_stream_vi
   cudaEventDestroy(event);
 }
 
-cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_source& source,
+cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_source const& source,
                                                  cudf::io::text::detail::trie const& trie,
                                                  scan_tile_state<multistate>& tile_multistates,
                                                  scan_tile_state<uint32_t>& tile_offsets,
@@ -322,7 +322,7 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
   return chunk_offset;
 }
 
-std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source& source,
+std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
                                               std::vector<std::string> const& delimiters,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
@@ -379,7 +379,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source&
 
 }  // namespace detail
 
-std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source& source,
+std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
                                               std::vector<std::string> const& delimiters,
                                               rmm::mr::device_memory_resource* mr)
 {

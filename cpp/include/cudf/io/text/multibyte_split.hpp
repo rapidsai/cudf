@@ -29,7 +29,7 @@ namespace io {
 namespace text {
 
 std::unique_ptr<cudf::column> multibyte_split(
-  data_chunk_source& source,
+  data_chunk_source const& source,
   std::vector<std::string> const& delimiters,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
