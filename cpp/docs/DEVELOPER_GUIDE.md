@@ -144,6 +144,16 @@ The following guidelines apply to organizing `#include` lines.
  * Always check that includes are only necessary for the file in which they are included. 
    Try to avoid excessive including especially in header files. Double check this when you remove 
    code.
+ * Use quotes `"` to include local headers from the same relative source directory. This should only
+   occur in source files and non-public header files. Otherwise use angle brackets `<>` around 
+   included header filenames.
+ * Avoid relative paths with `..` when possible. Paths with `..` are necessary when including 
+   (internal) headers from source paths not in the same directory as the including file, 
+   because source paths are not passed with `-I`.
+ * Avoid including library internal headers from non-internal files. For example, try not to include
+   headers from libcudf `src` directories in tests or in libcudf public headers. If you find 
+   yourself doing this, start a discussion about moving (parts of) the included internal header 
+   to a public header.
 
 # libcudf Data Structures
 
@@ -246,7 +256,20 @@ An *immutable*, non-owning view of a table.
 
 ### `cudf::mutable_table_view`
 
-A *mutable*, non-owning view of a table. 
+A *mutable*, non-owning view of a table.
+
+## Spans
+
+libcudf provides `span` classes that mimic C++20 `std::span`, which is a lightweight
+view of a contiguous sequence of objects. libcudf provides two classes, `host_span` and 
+`device_span`, which can be constructed from multiple container types, or from a pointer 
+(host or device, respectively) and size, or from iterators. `span` types are useful for defining 
+generic (internal) interfaces which work with multiple input container types. `device_span` can be
+constructed from `thrust::device_vector`, `rmm::device_vector`, or `rmm::device_uvector`. 
+`host_span` can be constructed from `thrust::host_vector`, `std::vector`, or `std::basic_string`.
+
+If you are definining internal (detail) functions that operate on vectors, use spans for the input 
+vector parameters rather than a specific vector type, to make your functions more widely applicable.
 
 ## `cudf::scalar`
 
