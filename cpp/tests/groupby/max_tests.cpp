@@ -224,12 +224,13 @@ TEST_F(groupby_dictionary_max_test, basic)
 }
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
+struct FixedPointTest_32_64_Reps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
+using RepTypes = ::testing::Types<int32_t, int64_t>;
+TYPED_TEST_CASE(FixedPointTest_32_64_Reps, RepTypes);
 
-TYPED_TEST(FixedPointTestAllReps, GroupBySortMaxDecimalAsValue)
+TYPED_TEST(FixedPointTest_32_64_Reps, GroupBySortMaxDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -253,7 +254,7 @@ TYPED_TEST(FixedPointTestAllReps, GroupBySortMaxDecimalAsValue)
   }
 }
 
-TYPED_TEST(FixedPointTestAllReps, GroupByHashMaxDecimalAsValue)
+TYPED_TEST(FixedPointTest_32_64_Reps, GroupByHashMaxDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
