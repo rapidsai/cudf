@@ -355,7 +355,7 @@ class orc_reader_options_builder {
  * @endcode
  *
  * Note: Support for reading files with struct columns is currently experimental, the output may not
- * be correct in all cases.
+ * be as reliable as reading for other datatypes.
  *
  * @param options Settings for controlling reading behavior.
  * @param mr Device memory resource used to allocate device memory of the table in the returned
