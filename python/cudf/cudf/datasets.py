@@ -3,6 +3,7 @@ import pandas as pd
 
 import cudf
 from cudf._lib.transform import bools_to_mask
+from cudf.core.column_accessor import ColumnAccessor
 
 __all__ = ["timeseries", "randomdata"]
 
@@ -14,7 +15,7 @@ def timeseries(
     end="2000-01-31",
     freq="1s",
     dtypes=None,
-    nulls_frequency=0.1,
+    nulls_frequency=0,
     seed=None,
 ):
     """ Create timeseries dataframe with random data
@@ -33,7 +34,7 @@ def timeseries(
     freq : string
         String like '2s' or '1H' or '12W' for the time series frequency
     nulls_frequency : float
-        Fill the series with the specified proportion of nulls.
+        Fill the series with the specified proportion of nulls. Default is 0.
     seed : int (optional)
         Randomstate seed
 
@@ -71,7 +72,10 @@ def timeseries(
             p=[1 - nulls_frequency, nulls_frequency],
         )
         mask_buf = bools_to_mask(cudf.core.column.as_column(mask))
-        gdf[col] = gdf[col]._column.set_mask(mask_buf)
+        masked_col = gdf[col]._column.set_mask(mask_buf)
+        gdf[col] = cudf.Series._from_data(
+            ColumnAccessor({None: masked_col}), index=gdf.index
+        )
 
     return gdf
 
