@@ -207,5 +207,9 @@ std::unique_ptr<cudf::column> is_leap_year(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
+
+std::unique_ptr<cudf::column> ceil_day(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace datetime
 }  // namespace cudf

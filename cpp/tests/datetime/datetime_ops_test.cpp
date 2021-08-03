@@ -347,6 +347,37 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
     verbosity);
 }
 
+TEST_F(BasicDatetimeOpsTest, TestCeilDay)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace cuda::std::chrono;
+
+  auto timestamps_s =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      {
+        // null
+        915148800L,     // 1999-01-01 00:00:00 GMT - non leap year
+        -11663029161L,  // 1600-5-31 05:40:39 GMT - leap year
+        707904541L,     // 1992-06-07 08:09:01 GMT - leap year
+        2181048447L,    // 1900-11-20 09:12:33 GMT - non leap year
+      },
+      {true, true, true, true}};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *ceil_day(timestamps_s),
+    fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      {
+        // null
+        915148800L,     // 1999-01-01 00:00:00 GMT - non leap year
+        -11662963200L,  // 1600-5-31 05:40:39 GMT - leap year
+        707961600L,     // 1992-06-07 08:09:01 GMT - leap year
+        2181081600L,    // 1900-11-20 09:12:33 GMT - non leap year
+      },
+      {true, true, true, true}},
+    verbosity);
+}
+
 TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
 {
   using namespace cudf::test;
