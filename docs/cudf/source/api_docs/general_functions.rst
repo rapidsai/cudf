@@ -1,10 +1,32 @@
 =================
 General Functions
 =================
+.. currentmodule:: cudf
 
-.. automodule:: cudf.core.reshape
-    :members:
+Data manipulations
+------------------
 
-.. autofunction:: cudf.to_datetime
+.. autosummary::
+   :toctree: api/
 
-.. autofunction:: cudf.to_numeric
+   cudf.concat
+   cudf.melt
+   cudf.get_dummies
+   cudf.merge_sorted
+   cudf.pivot
+   cudf.unstack
+
+Top-level conversions
+---------------------
+.. autosummary::
+   :toctree: api/
+
+    cudf.to_numeric
+
+Top-level dealing with datetimelike
+-----------------------------------
+
+.. autosummary::
+   :toctree: api/
+
+    cudf.to_datetime
