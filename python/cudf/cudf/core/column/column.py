@@ -70,6 +70,7 @@ from cudf.utils.dtypes import (
     get_time_unit,
     min_unsigned_type,
     np_to_pa_dtype,
+    pandas_dtypes_alias_to_cudf_alias,
     pandas_dtypes_to_cudf_dtypes,
 )
 from cudf.utils.utils import mask_dtype
@@ -82,7 +83,7 @@ class ColumnBase(Column, Serializable):
         """
         Converts a Column to Frame
         """
-        return cudf.core.frame.Frame({None: self.copy(deep=False)})
+        return cudf.core.frame.SingleColumnFrame({None: self.copy(deep=False)})
 
     @property
     def data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
@@ -262,10 +263,10 @@ class ColumnBase(Column, Serializable):
 
             codes = libcudf.interop.from_arrow(
                 indices_table, indices_table.column_names
-            )._data["None"]
+            )[0]["None"]
             categories = libcudf.interop.from_arrow(
                 dictionaries_table, dictionaries_table.column_names
-            )._data["None"]
+            )[0]["None"]
 
             return build_categorical_column(
                 categories=categories,
@@ -283,9 +284,7 @@ class ColumnBase(Column, Serializable):
         elif isinstance(array.type, pa.Decimal128Type):
             return cudf.core.column.Decimal64Column.from_arrow(array)
 
-        result = libcudf.interop.from_arrow(data, data.column_names)._data[
-            "None"
-        ]
+        result = libcudf.interop.from_arrow(data, data.column_names)[0]["None"]
 
         result = result._with_type_metadata(
             cudf_dtype_from_pa_type(array.type)
@@ -881,7 +880,11 @@ class ColumnBase(Column, Serializable):
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
 
-        dtype = pandas_dtypes_to_cudf_dtypes.get(dtype, dtype)
+        dtype = (
+            pandas_dtypes_alias_to_cudf_alias.get(dtype, dtype)
+            if isinstance(dtype, str)
+            else pandas_dtypes_to_cudf_dtypes.get(dtype, dtype)
+        )
         if _is_non_decimal_numeric_dtype(dtype):
             return self.as_numerical_column(dtype, **kwargs)
         elif is_categorical_dtype(dtype):
@@ -1234,57 +1237,6 @@ class ColumnBase(Column, Serializable):
                 f"default to 0."
             )
         return result_col
-
-    def scatter_to_table(
-        self,
-        row_indices: ColumnBase,
-        column_indices: ColumnBase,
-        names: List[Any],
-        nrows: int = None,
-        ncols: int = None,
-    ) -> "cudf.core.frame.Frame":
-        """
-        Scatters values from the column into a table.
-
-        Parameters
-        ----------
-        row_indices
-            A column of the same size as `self` specifying the
-            row index to scatter each value to
-        column_indices
-            A column of the same size as `self` specifying the
-            column index to scatter each value to
-        names
-            The column names of the resulting table
-
-        Returns
-        -------
-        """
-        if nrows is None:
-            nrows = 0
-            if len(row_indices) > 0:
-                nrows = int(row_indices.max() + 1)
-
-        if ncols is None:
-            ncols = 0
-            if len(column_indices) > 0:
-                ncols = int(column_indices.max() + 1)
-
-        if nrows * ncols == 0:
-            return cudf.core.frame.Frame({})
-
-        scatter_map = (column_indices * np.int32(nrows)) + row_indices
-        target = cudf.core.frame.Frame(
-            {None: column_empty_like(self, masked=True, newsize=nrows * ncols)}
-        )
-        target._data[None][scatter_map] = self
-        result_frames = target._split(range(nrows, nrows * ncols, nrows))
-        return cudf.core.frame.Frame(
-            {
-                name: next(iter(f._columns))
-                for name, f in zip(names, result_frames)
-            }
-        )
 
     def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
         """
