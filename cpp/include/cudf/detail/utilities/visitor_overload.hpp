@@ -27,4 +27,4 @@ struct visitor_overload : Ts... {
 template <class... Ts>
 visitor_overload(Ts...) -> visitor_overload<Ts...>;
 
-}
+}  // namespace cudf::detail
