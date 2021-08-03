@@ -256,9 +256,9 @@ def process_class_docstrings(app, what, name, obj, options, lines):
     if what == "class":
         if name in {"cudf.RangeIndex", "cudf.Int64Index", "cudf.UInt64Index", "cudf.Float64Index", "cudf.CategoricalIndex", "cudf.IntervalIndex", "cudf.MultiIndex", "cudf.DatetimeIndex", "cudf.TimedeltaIndex", "cudf.TimedeltaIndex"}:
 
-            # cut_index = lines.index(':Attributes:')
-            # lines[:] = lines[:cut_index]
-            pass
+            cut_index = lines.index('.. rubric:: Attributes')
+            lines[:] = lines[:cut_index]
+
 
 
 

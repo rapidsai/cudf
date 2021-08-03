@@ -4468,6 +4468,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         )
         return df
 
+    @copy_docstring(DataFrameGroupBy)
     def groupby(
         self,
         by=None,
@@ -4512,6 +4513,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             sort=sort,
         )
 
+    @copy_docstring(Rolling)
     def rolling(
         self, window, min_periods=None, center=False, axis=0, win_type=None
     ):

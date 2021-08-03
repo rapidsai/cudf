@@ -12,6 +12,7 @@ used before calling these methods directly.**
 
 .. autosummary::
    :toctree: api/
+   :template: autosummary/class_with_autosummary.rst
 
    Index
 
