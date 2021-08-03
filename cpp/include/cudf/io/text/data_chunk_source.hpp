@@ -45,6 +45,13 @@ struct data_chunk {
  */
 class data_chunk_reader {
  public:
+  /**
+   * @brief Get the next chunk of data
+   *
+   * @param size desired number of bytes
+   * @param stream stream to associate allocations or perform work required to obtain chunk
+   * @return a chunk of data up to @param size bytes, or less if no more data is avaialable
+   */
   virtual data_chunk get_next_chunk(uint32_t size, rmm::cuda_stream_view stream) = 0;
 };
 

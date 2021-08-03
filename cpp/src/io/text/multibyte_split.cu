@@ -27,6 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
+#include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
 
 #include <iostream>
@@ -42,12 +43,12 @@ constexpr decltype(auto) ceil_div(Dividend dividend, Divisor divisor)
 
 using cudf::io::text::detail::multistate;
 
-auto constexpr ITEMS_PER_THREAD = 32;  // influences register pressure
-auto constexpr THREADS_PER_TILE = 32;  // must be >= 32 for warp-reduce. bugged for > 32, needs fix
-auto constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
-auto constexpr TILES_PER_CHUNK  = 512;
+int32_t constexpr ITEMS_PER_THREAD = 32;  // influences register pressure
+int32_t constexpr THREADS_PER_TILE = 32;  // must be >= 32. bugged for > 32, needs fix
+int32_t constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
+int32_t constexpr TILES_PER_CHUNK  = 512;
 // keep ITEMS_PER_CHUNK below input size to force multi-tile execution.
-auto constexpr ITEMS_PER_CHUNK = ITEMS_PER_TILE * TILES_PER_CHUNK;
+int32_t constexpr ITEMS_PER_CHUNK = ITEMS_PER_TILE * TILES_PER_CHUNK;
 
 struct PatternScan {
   typedef cub::BlockScan<multistate, THREADS_PER_TILE> BlockScan;
@@ -117,14 +118,18 @@ __global__ void multibyte_split_kernel(
   cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
   cudf::io::text::detail::scan_tile_state_view<uint32_t> tile_output_offsets,
   cudf::io::text::detail::trie_device_view trie,
-  cudf::device_span<char const> data,
-  cudf::device_span<int32_t> string_offsets,
-  cudf::device_span<char> data_out)
+  int32_t chunk_input_offset,
+  cudf::device_span<char const> chunk_input_chars,
+  cudf::device_span<int32_t> abs_output_delimiter_offsets,
+  cudf::device_span<char> abs_output_chars)
 {
-  typedef cub::BlockScan<uint32_t, THREADS_PER_TILE> OffsetScan;
-  typedef cudf::io::text::detail::scan_tile_state_callback<uint32_t> OffsetScanCallback;
+  using InputLoad =
+    cub::BlockLoad<char, THREADS_PER_TILE, ITEMS_PER_THREAD, cub::BLOCK_LOAD_VECTORIZE>;
+  using OffsetScan         = cub::BlockScan<uint32_t, THREADS_PER_TILE>;
+  using OffsetScanCallback = cudf::io::text::detail::scan_tile_state_callback<uint32_t>;
 
   __shared__ union {
+    typename InputLoad::TempStorage input_load;
     typename PatternScan::TempStorage pattern_scan;
     struct {
       typename OffsetScan::TempStorage offset_scan;
@@ -132,39 +137,39 @@ __global__ void multibyte_split_kernel(
     };
   } temp_storage;
 
-  int32_t const tile_idx   = base_tile_idx + blockIdx.x;
-  int32_t const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
-  int32_t const data_begin = thread_idx * ITEMS_PER_THREAD;
-  int32_t const num_valid  = data.size() - data_begin;
-  int32_t const char_begin = base_tile_idx * ITEMS_PER_TILE;
+  int32_t const tile_idx            = base_tile_idx + blockIdx.x;
+  int32_t const tile_input_offset   = blockIdx.x * ITEMS_PER_TILE;
+  int32_t const thread_input_offset = tile_input_offset + threadIdx.x * ITEMS_PER_THREAD;
+  int32_t const thread_input_size   = chunk_input_chars.size() - thread_input_offset;
 
   // STEP 1: Load inputs
 
-  char thread_data[ITEMS_PER_THREAD];
+  char thread_chars[ITEMS_PER_THREAD];
 
-  for (int32_t i = 0; i < ITEMS_PER_THREAD and i < num_valid; i++) {  //
-    thread_data[i] = data[data_begin + i];
-  }
+  InputLoad(temp_storage.input_load)
+    .Load(chunk_input_chars.data() + tile_input_offset,
+          thread_chars,
+          chunk_input_chars.size() - tile_input_offset);
 
   // STEP 2: Scan inputs to determine absolute thread states
 
   uint32_t thread_states[ITEMS_PER_THREAD];
 
+  __syncthreads();                        // required before temp_memory re-use
   PatternScan(temp_storage.pattern_scan)  //
-    .Scan(tile_idx, tile_multistates, trie, thread_data, thread_states);
+    .Scan(tile_idx, tile_multistates, trie, thread_chars, thread_states);
 
   // STEP 3: Flag matches
 
   uint32_t thread_offsets[ITEMS_PER_THREAD];
 
   for (int32_t i = 0; i < ITEMS_PER_THREAD; i++) {
-    thread_offsets[i] = i < num_valid and trie.is_match(thread_states[i]);
+    thread_offsets[i] = i < thread_input_size and trie.is_match(thread_states[i]);
   }
 
   // STEP 4: Scan flags to determine absolute thread output offset
 
   __syncthreads();  // required before temp_memory re-use
-
   auto prefix_callback =
     OffsetScanCallback(temp_storage.offset_scan_callback, tile_output_offsets, tile_idx);
 
@@ -173,17 +178,21 @@ __global__ void multibyte_split_kernel(
 
   // Step 5: Assign outputs from each thread using match offsets.
 
-  if (data_out.size() > 0) {
-    for (int32_t i = 0; i < ITEMS_PER_THREAD and i < num_valid; i++) {
-      data_out[data_begin + i] = thread_data[i];
+  if (blockIdx.x == 0 and threadIdx.x == 0) {
+    printf("tile(%2u), cio(%9i)\n", tile_idx, chunk_input_offset);
+  }
+
+  if (abs_output_chars.size() > 0) {
+    for (int32_t i = 0; i < ITEMS_PER_THREAD and i < thread_input_size; i++) {
+      abs_output_chars[chunk_input_offset + thread_input_offset + i] = thread_chars[i];
     }
   }
 
-  if (string_offsets.size() > 0) {
-    for (int32_t i = 0; i < ITEMS_PER_THREAD and i < num_valid; i++) {
+  if (abs_output_delimiter_offsets.size() > 0) {
+    for (int32_t i = 0; i < ITEMS_PER_THREAD and i < thread_input_size; i++) {
       if (trie.get_match_length(thread_states[i]) > 0) {
-        auto const match_end              = char_begin + data_begin + i + 1;
-        string_offsets[thread_offsets[i]] = match_end;
+        auto const match_end = base_tile_idx * ITEMS_PER_TILE + thread_input_offset + i + 1;
+        abs_output_delimiter_offsets[thread_offsets[i]] = match_end;
       }
     }
   }
@@ -260,7 +269,7 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
                                                  rmm::cuda_stream_pool& stream_pool)
 {
   CUDF_FUNC_RANGE();
-  cudf::size_type bytes_total = 0;
+  cudf::size_type chunk_offset = 0;
 
   // this function interleaves three kernel executions
 
@@ -288,8 +297,6 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
 
     if (chunk.size() == 0) { break; }
 
-    bytes_total += chunk.size();
-
     // reset the next chunk of tile state
     multibyte_split_init_kernel<<<TILES_PER_CHUNK, THREADS_PER_TILE, 0, chunk_stream>>>(  //
       base_tile_idx,
@@ -302,14 +309,17 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
       tile_multistates,
       tile_offsets,
       trie.view(),
+      chunk_offset,
       chunk,
       output_buffer,
       output_char_buffer);
+
+    chunk_offset += chunk.size();
   }
 
   join_pool_to_stream(stream_pool, stream);
 
-  return bytes_total;
+  return chunk_offset;
 }
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source& source,
