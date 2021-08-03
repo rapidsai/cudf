@@ -2,7 +2,12 @@
 General Utilities
 =================
 
-.. currentmodule:: cudf.testing
+Testing functions
+-----------------
+.. autosummary::
+   :toctree: api/
 
-.. automodule:: cudf.testing.testing
-    :members:
+   cudf.testing.testing.assert_column_equal
+   cudf.testing.testing.assert_frame_equal
+   cudf.testing.testing.assert_index_equal
+   cudf.testing.testing.assert_series_equal
