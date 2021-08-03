@@ -6459,6 +6459,16 @@ class DatetimeProperties(object):
         -------
         Series
         Integer indicating which quarter the date belongs to.
+
+        Examples
+        -------
+        >>> import cudf
+        >>> s = cudf.Series(["2020-05-31 08:00:00","1999-12-31 18:40:00"],
+        ...     dtype="datetime64[ms]")
+        >>> s.dt.quarter
+        0    2
+        1    4
+        dtype: int16
         """
         res = libcudf.datetime.extract_quarter(self.series._column)
         return Series._from_data(
