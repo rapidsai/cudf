@@ -70,6 +70,10 @@ def is_leap_year(Column col):
 
 
 def extract_quarter(Column col):
+    """
+    Returns a column which contains the corresponding quarter of the year
+    for every timestamp inside the input column.
+    """
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
 

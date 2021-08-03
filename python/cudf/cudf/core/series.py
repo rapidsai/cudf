@@ -6454,16 +6454,13 @@ class DatetimeProperties(object):
         There are 4 quarters in a year. With the first quarter being from
         January - March, second quarter being April - June, third quarter
         being July - September and fourth quarter being October - December.
-                Boolean indicator if the date is the first day of the month.
 
         Returns
         -------
         Series
         Integer indicating which quarter the date belongs to.
         """
-        res = libcudf.datetime.extract_quarter(self.series._column).fillna(
-            False
-        )
+        res = libcudf.datetime.extract_quarter(self.series._column)
         return Series._from_data(
             ColumnAccessor({None: res}),
             index=self.series._index,
@@ -6473,7 +6470,6 @@ class DatetimeProperties(object):
     @property
     def is_month_start(self):
         """
-
         Booleans indicating if dates are the first day of the month.
         """
         return (self.day == 1).fillna(False)
