@@ -78,9 +78,8 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type*)>> build_join_h
   size_type const build_table_num_rows{build_device_table->num_rows()};
   std::size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
 
-  auto hash_table = std::make_unique<multimap_type>(hash_table_size,
-                                                    std::numeric_limits<hash_value_type>::max(),
-                                                    JoinNoneValue);
+  auto hash_table = std::make_unique<multimap_type>(
+    hash_table_size, std::numeric_limits<hash_value_type>::max(), JoinNoneValue);
 
   auto const row_bitmask = (compare_nulls == null_equality::EQUAL)
                              ? rmm::device_buffer{0, stream}
