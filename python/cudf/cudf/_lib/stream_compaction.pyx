@@ -25,6 +25,7 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 from cudf._lib.table cimport Table
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
@@ -78,7 +79,7 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=(
@@ -115,7 +116,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=(
@@ -192,7 +193,7 @@ def drop_duplicates(Table source_table,
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=(
