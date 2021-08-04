@@ -34,6 +34,10 @@ def dtype(arbitrary):
             np_dtype = np.dtype("float32")
         elif np_dtype.name in ("object", "str"):
             np_dtype = np.dtype("object")
+        elif np_dtype.str == "<m8":
+            np_dtype = np.dtype("<m8[ns]")
+        elif np_dtype.str == "<M8":
+            np_dtype = np.dtype("<M8[ns]")
         return np_dtype
     except TypeError:
         pass

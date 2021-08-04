@@ -274,6 +274,16 @@ def test_lists_of_structs_dtype(data):
         (cudf.ListDtype("int64"), cudf.ListDtype("int64")),
         ("float16", np.dtype("float32")),
         (np.dtype("U"), np.dtype("object")),
+        ("timedelta64", np.dtype("<m8[ns]")),
+        ("timedelta64[ns]", np.dtype("<m8[ns]")),
+        ("timedelta64[ms]", np.dtype("<m8[ms]")),
+        ("timedelta64[D]", np.dtype("<m8[D]")),
+        ("<m8[s]", np.dtype("<m8[s]")),
+        ("datetime64", np.dtype("<M8[ns]")),
+        ("datetime64[ns]", np.dtype("<M8[ns]")),
+        ("datetime64[ms]", np.dtype("<M8[ms]")),
+        ("datetime64[D]", np.dtype("<M8[D]")),
+        ("<M8[s]", np.dtype("<M8[s]")),
     ],
 )
 def test_dtype(in_dtype, expect):
