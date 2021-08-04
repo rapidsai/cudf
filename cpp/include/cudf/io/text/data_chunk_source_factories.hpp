@@ -80,18 +80,18 @@ class istream_data_chunk_reader : public data_chunk_reader {
   {
     CUDF_FUNC_RANGE();
 
-    auto& ticket = _tickets[_next_ticket_idx];
+    auto& h_ticket = _tickets[_next_ticket_idx];
 
     _next_ticket_idx = (_next_ticket_idx + 1) % _tickets.size();
 
     // synchronize on the last host-to-device copy, so we don't clobber the host buffer.
-    CUDA_TRY(cudaEventSynchronize(ticket.event));
+    CUDA_TRY(cudaEventSynchronize(h_ticket.event));
 
     // resize the host buffer as necessary to contain the requested number of bytes
-    if (ticket.buffer.size() < read_size) { ticket.buffer.resize(read_size); }
+    if (h_ticket.buffer.size() < read_size) { h_ticket.buffer.resize(read_size); }
 
     // read data from the host istream in to the pinned host memory buffer
-    _datastream->read(ticket.buffer.data(), read_size);
+    _datastream->read(h_ticket.buffer.data(), read_size);
 
     // adjust the read size to reflect how many bytes were actually read from the data stream
     read_size = _datastream->gcount();
@@ -102,13 +102,13 @@ class istream_data_chunk_reader : public data_chunk_reader {
     // copy the host-pinned data on to device
     CUDA_TRY(cudaMemcpyAsync(  //
       chunk_span.data(),
-      ticket.buffer.data(),
+      h_ticket.buffer.data(),
       read_size,
       cudaMemcpyHostToDevice,
       stream.value()));
 
     // record the host-to-device copy.
-    CUDA_TRY(cudaEventRecord(ticket.event, stream.value()));
+    CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
 
     // return the view over device memory so it can be processed.
     return chunk_span;
