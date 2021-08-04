@@ -232,26 +232,35 @@ std::unique_ptr<column> create_strings_column(rmm::device_uvector<char>&& chars,
     num_strings, std::move(offsets_column), std::move(chars_column), 0, {}, stream, mr);
 }
 
-void fork_stream_to_pool(rmm::cuda_stream_view stream, rmm::cuda_stream_pool& stream_pool)
+void fork_stream(std::vector<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
 {
   cudaEvent_t event;
   cudaEventCreate(&event);
   cudaEventRecord(event, stream);
-  for (uint32_t i = 0; i < stream_pool.get_pool_size(); i++) {
-    cudaStreamWaitEvent(stream_pool.get_stream(i), event, 0);
+  for (uint32_t i = 0; i < streams.size(); i++) {
+    cudaStreamWaitEvent(streams[i], event, 0);
   }
   cudaEventDestroy(event);
 }
 
-void join_pool_to_stream(rmm::cuda_stream_pool& stream_pool, rmm::cuda_stream_view stream)
+void join_stream(std::vector<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
 {
   cudaEvent_t event;
   cudaEventCreate(&event);
-  for (uint32_t i = 0; i < stream_pool.get_pool_size(); i++) {
-    cudaEventRecord(event, stream_pool.get_stream(i));
+  for (uint32_t i = 0; i < streams.size(); i++) {
+    cudaEventRecord(event, streams[i]);
     cudaStreamWaitEvent(stream, event, 0);
   }
   cudaEventDestroy(event);
+}
+
+std::vector<rmm::cuda_stream_view> get_streams(int32_t count, rmm::cuda_stream_pool& stream_pool)
+{
+  auto streams = std::vector<rmm::cuda_stream_view>();
+  for (int32_t i = 0; i < count; i++) {
+    streams.emplace_back(stream_pool.get_stream());
+  }
+  return streams;
 }
 
 cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_source const& source,
@@ -261,7 +270,7 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
                                                  device_span<cudf::size_type> output_buffer,
                                                  device_span<char> output_char_buffer,
                                                  rmm::cuda_stream_view stream,
-                                                 rmm::cuda_stream_pool& stream_pool)
+                                                 std::vector<rmm::cuda_stream_view> const& streams)
 {
   CUDF_FUNC_RANGE();
   cudf::size_type chunk_offset = 0;
@@ -279,13 +288,14 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
   tile_multistates.set_seed_async(multistate_seed, stream);
   tile_offsets.set_seed_async(0, stream);
 
-  fork_stream_to_pool(stream, stream_pool);
+  fork_stream(streams, stream);
 
   auto reader = source.create_reader();
 
-  for (auto base_tile_idx = 0; true; base_tile_idx += TILES_PER_CHUNK) {
-    auto chunk_stream = stream_pool.get_stream();
-    auto chunk        = reader->get_next_chunk(ITEMS_PER_CHUNK, chunk_stream);
+  for (int32_t i = 0; true; i++) {
+    auto base_tile_idx = i * TILES_PER_CHUNK;
+    auto chunk_stream  = streams[i % streams.size()];
+    auto chunk         = reader->get_next_chunk(ITEMS_PER_CHUNK, chunk_stream);
 
     if (chunk.size() == 0) { break; }
 
@@ -311,7 +321,7 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
     chunk_offset += chunk.size();
   }
 
-  join_pool_to_stream(stream_pool, stream);
+  join_stream(streams, stream);
 
   return chunk_offset;
 }
@@ -319,7 +329,8 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
                                               std::vector<std::string> const& delimiters,
                                               rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+                                              rmm::mr::device_memory_resource* mr,
+                                              rmm::cuda_stream_pool& stream_pool)
 {
   CUDF_FUNC_RANGE();
   auto const trie  = cudf::io::text::detail::trie::create(delimiters, stream);
@@ -331,7 +342,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto tile_multistates = scan_tile_state<multistate>(num_tile_states, stream);
   auto tile_offsets     = scan_tile_state<uint32_t>(num_tile_states, stream);
 
-  auto stream_pool = rmm::cuda_stream_pool(concurrency);
+  auto streams = get_streams(concurrency, stream_pool);
 
   auto bytes_total =
     multibyte_split_scan_full_source(source,
@@ -341,10 +352,9 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                      cudf::device_span<int32_t>(static_cast<int32_t*>(nullptr), 0),
                                      cudf::device_span<char>(static_cast<char*>(nullptr), 0),
                                      stream,
-                                     stream_pool);
+                                     streams);
 
-  // allocate string offsets
-
+  // allocate results
   auto num_tiles      = ceil_div(bytes_total, ITEMS_PER_TILE);
   auto num_results    = tile_offsets.get_inclusive_prefix(num_tiles - 1, stream);
   auto string_offsets = rmm::device_uvector<int32_t>(num_results + 2, stream, mr);
@@ -364,7 +374,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     cudf::device_span<int32_t>(string_offsets).subspan(1, num_results),
     string_chars,
     stream,
-    stream_pool);
+    streams);
 
   auto res = create_strings_column(std::move(string_chars), std::move(string_offsets), stream, mr);
 
@@ -377,9 +387,12 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               std::vector<std::string> const& delimiters,
                                               rmm::mr::device_memory_resource* mr)
 {
-  auto stream = rmm::cuda_stream_default;
-  auto result = detail::multibyte_split(source, delimiters, stream, mr);
+  auto stream      = rmm::cuda_stream_default;
+  auto stream_pool = rmm::cuda_stream_pool(2);
+  auto result      = detail::multibyte_split(source, delimiters, stream, mr, stream_pool);
+
   stream.synchronize();
+
   return result;
 }
 
