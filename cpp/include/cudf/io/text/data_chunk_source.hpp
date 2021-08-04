@@ -26,21 +26,13 @@ namespace io {
 namespace text {
 
 /**
- * @brief represents a possibly-shared view over device memory.
- */
-struct data_chunk {
-  data_chunk(device_span<char const> data) : _data(data) {}
-
-  operator cudf::device_span<char const>() { return _data; }
-
-  uint32_t size() const { return _data.size(); }
-
- private:
-  device_span<char const> _data;
-};
-
-/**
- * @brief a reader capable of producing views over device memory
+ * @brief a reader capable of producing views over device memory.
+ *
+ * The data chunk reader API encapsulates the idea of statefully traversing and loading a data
+ * source. A data source may be a file, a region of device memory, or a region of host memory.
+ * Reading data from these data sources efficiently requires different strategies dependings on the
+ * type of data source, type of compression, capabilities of the host and device, the data's
+ * destination. Whole-file decompression should be hidden behind this interface
  *
  */
 class data_chunk_reader {
@@ -57,7 +49,7 @@ class data_chunk_reader {
    * @param stream stream to associate allocations or perform work required to obtain chunk
    * @return a chunk of data up to @param size bytes, or less if no more data is avaialable
    */
-  virtual data_chunk get_next_chunk(uint32_t size, rmm::cuda_stream_view stream) = 0;
+  virtual device_span<char const> get_next_chunk(uint32_t size, rmm::cuda_stream_view stream) = 0;
 };
 
 /**

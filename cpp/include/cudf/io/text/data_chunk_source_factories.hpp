@@ -76,7 +76,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
     return device_span<char>(static_cast<char*>(_buffers[stream.value()].data()), size);
   }
 
-  data_chunk get_next_chunk(uint32_t read_size, rmm::cuda_stream_view stream) override
+  device_span<char const> get_next_chunk(uint32_t read_size, rmm::cuda_stream_view stream) override
   {
     CUDF_FUNC_RANGE();
 
@@ -111,7 +111,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
     CUDA_TRY(cudaEventRecord(ticket.event, stream.value()));
 
     // return the view over device memory so it can be processed.
-    return data_chunk(chunk_span);
+    return chunk_span;
   }
 
  private:
@@ -130,7 +130,7 @@ class device_span_data_chunk_reader : public data_chunk_reader {
  public:
   device_span_data_chunk_reader(device_span<char const> data) : _data(data) {}
 
-  data_chunk get_next_chunk(uint32_t read_size, rmm::cuda_stream_view stream) override
+  device_span<char const> get_next_chunk(uint32_t read_size, rmm::cuda_stream_view stream) override
   {
     // limit the read size to the number of bytes remaining in the device_span.
     if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
@@ -142,7 +142,7 @@ class device_span_data_chunk_reader : public data_chunk_reader {
     _position += read_size;
 
     // return the view over device memory so it can be processed.
-    return data_chunk(chunk_span);
+    return chunk_span;
   }
 
  private:
