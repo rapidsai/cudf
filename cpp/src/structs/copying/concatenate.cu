@@ -53,7 +53,16 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                    return cudf::detail::concatenate(cols, stream, mr);
                  });
 
-  size_type const total_length = children[0]->size();
+  // get total length from concatenated children; if no child exists, we would compute it
+  size_type total_length;
+  if (!children.empty()) {
+    total_length = children[0]->size();
+  } else {
+    total_length = 0;
+    for (const auto& column : columns) {
+      total_length += column.size();
+    }
+  }
 
   // if any of the input columns have nulls, construct the output mask
   bool const has_nulls =
