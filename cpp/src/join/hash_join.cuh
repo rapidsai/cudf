@@ -66,7 +66,7 @@ class make_pair_function {
   }
 
  private:
-  row_hash const& _hash;
+  row_hash _hash;
   hash_value_type const _empty_key_sentinel;
 };
 
