@@ -1700,6 +1700,8 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
         val = cudf.dtype(dtype).type(4, "s")
     elif dtype == "category":
         val = np.int64(4)
+    elif dtype == "str":
+        val = str(4)
     else:
         val = cudf.dtype(dtype).type(4)
 
