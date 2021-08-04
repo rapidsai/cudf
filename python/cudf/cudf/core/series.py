@@ -703,7 +703,7 @@ class Series(SingleColumnFrame, Serializable):
             if inplace is True:
                 self._index = RangeIndex(len(self))
             else:
-                return self._copy_construct(index=RangeIndex(len(self)))
+                return self._from_data(self._data, index=RangeIndex(len(self)))
 
     def set_index(self, index):
         """Returns a new Series with a different index.
@@ -738,7 +738,7 @@ class Series(SingleColumnFrame, Serializable):
         dtype: int64
         """
         index = index if isinstance(index, BaseIndex) else as_index(index)
-        return self._copy_construct(index=index)
+        return self._from_data(self._data, index, self.name)
 
     def as_index(self):
         """Returns a new Series with a RangeIndex.
@@ -850,8 +850,9 @@ class Series(SingleColumnFrame, Serializable):
         4       5
         dtype: int64
         """
-        col = self._column.set_mask(mask)
-        return self._copy_construct(data=col)
+        return self._from_data(
+            {self.name: self._column.set_mask(mask)}, self._index
+        )
 
     def __sizeof__(self):
         return self._column.__sizeof__() + self._index.__sizeof__()
@@ -1092,8 +1093,9 @@ class Series(SingleColumnFrame, Serializable):
             return self.iloc[indices]
         else:
             col_inds = as_column(indices)
-            data = self._column.take(col_inds, keep_index=False)
-            return self._copy_construct(data=data, index=None)
+            return self._from_data(
+                {self.name: self._column.take(col_inds, keep_index=False)}
+            )
 
     def head(self, n=5):
         """
@@ -2722,8 +2724,9 @@ class Series(SingleColumnFrame, Serializable):
         4    10.0
         dtype: float64
         """
-        result_col = self._column.nans_to_nulls()
-        return self._copy_construct(data=result_col)
+        return self._from_data(
+            {self.name: self._column.nans_to_nulls()}, self._index
+        )
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         """
@@ -3100,9 +3103,11 @@ class Series(SingleColumnFrame, Serializable):
             return self.copy(deep=copy)
         try:
             data = self._column.astype(dtype)
+            if copy:
+                data = data.copy(deep=True)
 
-            return self._copy_construct(
-                data=data.copy(deep=True) if copy else data, index=self.index
+            return self._from_data(
+                {self.name: data.copy(deep=True)}, index=self._index
             )
 
         except Exception as e:
@@ -3416,8 +3421,8 @@ class Series(SingleColumnFrame, Serializable):
         col_keys, col_inds = self._column.sort_by_values(
             ascending=ascending, na_position=na_position
         )
-        sr_keys = self._copy_construct(data=col_keys)
-        sr_inds = self._copy_construct(data=col_inds)
+        sr_keys = self._from_data({self.name: col_keys}, self._index)
+        sr_inds = self._from_data({self.name: col_inds}, self._index)
         return sr_keys, sr_inds
 
     def replace(
@@ -3720,9 +3725,9 @@ class Series(SingleColumnFrame, Serializable):
         dtype: int64
         """
         rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
-        col = self._column[rinds]
-        index = self.index._values[rinds]
-        return self._copy_construct(data=col, index=index)
+        return self._from_data(
+            {self.name: self._column[rinds]}, self.index._values[rinds]
+        )
 
     def one_hot_encoding(self, cats, dtype="float64"):
         """Perform one-hot-encoding
@@ -3876,7 +3881,9 @@ class Series(SingleColumnFrame, Serializable):
         codes = codes.merge(value, on="value", how="left")
         codes = codes.sort_values("order")["code"].fillna(na_sentinel)
 
-        return codes._copy_construct(name=None, index=self.index)
+        codes.name = None
+        codes.index = self._index
+        return codes
 
     # UDF related
 
@@ -3990,7 +3997,7 @@ class Series(SingleColumnFrame, Serializable):
         """
         if not callable(udf):
             raise ValueError("Input UDF must be a callable object.")
-        return self._copy_construct(data=self._unaryop(udf))
+        return self._from_data({self.name: self._unaryop(udf)}, self._index)
 
     #
     # Stats
@@ -5255,7 +5262,8 @@ class Series(SingleColumnFrame, Serializable):
         vmin = self.min()
         vmax = self.max()
         scaled = (self - vmin) / (vmax - vmin)
-        return self._copy_construct(data=scaled)
+        scaled._index = self._index.copy(deep=False)
+        return scaled
 
     # Absolute
     def abs(self):
