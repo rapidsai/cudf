@@ -4,7 +4,7 @@ from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Dict, Optional, Tuple, Type, Union
+from typing import Any, Dict, MutableMapping, Optional, Tuple, Type, Union
 
 import cupy
 import numpy as np
@@ -1362,12 +1362,14 @@ class BaseIndex(SingleColumnFrame, Serializable):
         ind.name = index.name
         return ind
 
-    @property
-    def _copy_construct_defaults(self):
-        return {"data": self._column, "name": self.name}
-
     @classmethod
-    def _from_data(cls, data, index=None):
+    def _from_data(
+        cls,
+        data: MutableMapping,
+        index: Optional[BaseIndex] = None,
+        name: Any = None,
+    ) -> BaseIndex:
+        assert index is None
         if not isinstance(data, cudf.core.column_accessor.ColumnAccessor):
             data = cudf.core.column_accessor.ColumnAccessor(data)
         if len(data) == 0:

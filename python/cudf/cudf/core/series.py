@@ -7,7 +7,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, Mapping, Optional
+from typing import Any, MutableMapping, Optional
 from uuid import uuid4
 
 import cupy
@@ -269,7 +269,7 @@ class Series(SingleColumnFrame, Serializable):
     @classmethod
     def _from_data(
         cls,
-        data: Mapping,
+        data: MutableMapping,
         index: Optional[BaseIndex] = None,
         name: Any = None,
     ) -> Series:
@@ -385,6 +385,11 @@ class Series(SingleColumnFrame, Serializable):
     @property
     def _copy_construct_defaults(self):
         return {"data": self._column, "index": self._index, "name": self.name}
+
+    def _copy_construct(self, **kwargs):
+        """Shallow copy this object by replacing certain ctor args.
+        """
+        return self.__class__(**{**self._copy_construct_defaults, **kwargs})
 
     def _get_columns_by_label(self, labels, downcast=False):
         """Return the column specified by `labels`

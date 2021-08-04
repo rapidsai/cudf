@@ -10,7 +10,7 @@ import sys
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from typing import Any, Mapping, Optional, TypeVar
+from typing import Any, MutableMapping, Optional, TypeVar
 
 import cupy
 import numpy as np
@@ -458,7 +458,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     @classmethod
     def _from_data(
         cls,
-        data: Mapping,
+        data: MutableMapping,
         index: Optional[BaseIndex] = None,
         columns: Any = None,
     ) -> DataFrame:

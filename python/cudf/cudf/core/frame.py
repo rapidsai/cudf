@@ -6,7 +6,15 @@ import copy
 import functools
 import warnings
 from collections import abc
-from typing import Any, Dict, Mapping, Optional, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Dict,
+    MutableMapping,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import cupy
 import numpy as np
@@ -65,7 +73,9 @@ class Frame(libcudf.table.Table):
 
     @classmethod
     def _from_data(
-        cls, data: Mapping, index: Optional[cudf.core.index.BaseIndex] = None,
+        cls,
+        data: MutableMapping,
+        index: Optional[cudf.core.index.BaseIndex] = None,
     ):
         obj = cls.__new__(cls)
         libcudf.table.Table.__init__(obj, data, index)
@@ -3615,7 +3625,7 @@ class SingleColumnFrame(Frame):
     @classmethod
     def _from_data(
         cls,
-        data: Mapping,
+        data: MutableMapping,
         index: Optional[cudf.core.index.BaseIndex] = None,
         name: Any = None,
     ):
@@ -3899,16 +3909,6 @@ class SingleColumnFrame(Frame):
         """
         return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
-    @property
-    def _copy_construct_defaults(self):
-        """A default dictionary of kwargs to be used for copy construction."""
-        raise NotImplementedError
-
-    def _copy_construct(self, **kwargs):
-        """Shallow copy this object by replacing certain ctor args.
-        """
-        return self.__class__(**{**self._copy_construct_defaults, **kwargs})
-
     def _binaryop(
         self,
         other: T,
@@ -3967,8 +3967,9 @@ class SingleColumnFrame(Frame):
             result_name: (self._column, other, reflect, fill_value)
         }
 
-        return self._copy_construct(
-            data=type(self)._colwise_binop(operands, fn)[result_name],
+        return self._from_data(
+            data=type(self)._colwise_binop(operands, fn),
+            index=self._index,
             name=result_name,
         )
 
