@@ -1161,7 +1161,7 @@ def get_filepath_or_buffer(
         
         elif _is_s3_filesystem(fs):
             fs = pyarrow.fs.S3FileSystem()
-            path_or_data = fs.open_input_file("nyc-tlc/trip data/yellow_tripdata_2020-12.csv") #use just on path[0] for now
+            path_or_data = fs.open_input_file(paths[0]) 
 
         else:
             path_or_data = [BytesIO(fs.open(fpath).read()) for fpath in paths]

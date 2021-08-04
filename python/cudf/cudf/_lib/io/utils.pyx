@@ -3,7 +3,7 @@
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
 from libcpp.map cimport map
-from libcpp.memory cimport unique_ptr, shared_ptr, make_shared
+from libcpp.memory cimport unique_ptr, shared_ptr
 from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -41,16 +41,6 @@ from cudf.utils.dtypes import is_struct_dtype
 cdef source_info make_source_info(list src) except*:
     if not src:
         raise ValueError("Need to pass at least one source")
-    
-    cdef shared_ptr[CRandomAccessFile] ra_src
-    cdef arrow_io_source arrow_src
-    cdef source_info new_source
-    
-    if isinstance(src[0], NativeFile):
-        ra_src = (<NativeFile>src[0]).get_random_access_file()
-        arrow_src = arrow_io_source(ra_src)
-        return source_info(<datasource *>(&arrow_src))
-
     cdef const unsigned char[::1] c_buffer
     cdef vector[host_buffer] c_host_buffers
     cdef vector[string] c_files
@@ -80,12 +70,9 @@ cdef source_info make_source_info(list src) except*:
     elif isinstance(src[0], (int, float, complex, basestring, os.PathLike)):
         # If source is a file, return source_info where type=FILEPATH
         if not all(os.path.isfile(file) for file in src):
-            cstr = <string> str(src[0]).encode()
-            asrc = arrow_io_source(cstr)
-            return source_info(<datasource *>&asrc)
-            #raise FileNotFoundError(errno.ENOENT,
-            #                        os.strerror(errno.ENOENT),
-            #                        src)
+            raise FileNotFoundError(errno.ENOENT,
+                                    os.strerror(errno.ENOENT),
+                                    src)
 
         files = [<string> str(elem).encode() for elem in src]
         c_files = files
