@@ -831,8 +831,8 @@ TEST_F(StructsColumnTest, ConcatenateEmptyStructs)
   using namespace cudf::test;
 
   auto expected = cudf::make_structs_column(10, {}, 0, rmm::device_buffer());
-  auto first = cudf::make_structs_column(5, {}, 0, rmm::device_buffer());
-  auto second = cudf::make_structs_column(5, {}, 0, rmm::device_buffer());
+  auto first    = cudf::make_structs_column(5, {}, 0, rmm::device_buffer());
+  auto second   = cudf::make_structs_column(5, {}, 0, rmm::device_buffer());
 
   // concatenate
   auto result = cudf::concatenate(std::vector<column_view>({*first, *second}));
