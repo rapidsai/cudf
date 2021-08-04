@@ -2456,7 +2456,7 @@ public final class Table implements AutoCloseable {
      *                  1,   2
      *                  2,   1 ==> aggregated count
      */
-    public Table aggregate(AggregationOnColumn... aggregates) {
+    public Table aggregate(GroupByAggregationOnColumn... aggregates) {
       assert aggregates != null;
 
       // To improve performance and memory we want to remove duplicate operations
@@ -2469,9 +2469,9 @@ public final class Table implements AutoCloseable {
       int keysLength = operation.indices.length;
       int totalOps = 0;
       for (int outputIndex = 0; outputIndex < aggregates.length; outputIndex++) {
-        AggregationOnColumn agg = aggregates[outputIndex];
+        GroupByAggregationOnColumn agg = aggregates[outputIndex];
         ColumnOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnOps());
-        totalOps += ops.add(agg, outputIndex + keysLength);
+        totalOps += ops.add(agg.getWrapped().getWrapped(), outputIndex + keysLength);
       }
       int[] aggColumnIndexes = new int[totalOps];
       long[] aggOperationInstances = new long[totalOps];
@@ -2808,7 +2808,7 @@ public final class Table implements AutoCloseable {
       }
     }
 
-    public Table scan(AggregationOnColumn... aggregates) {
+    public Table scan(GroupByScanAggregationOnColumn... aggregates) {
       assert aggregates != null;
 
       // To improve performance and memory we want to remove duplicate operations
@@ -2821,9 +2821,9 @@ public final class Table implements AutoCloseable {
       int keysLength = operation.indices.length;
       int totalOps = 0;
       for (int outputIndex = 0; outputIndex < aggregates.length; outputIndex++) {
-        AggregationOnColumn agg = aggregates[outputIndex];
+        GroupByScanAggregationOnColumn agg = aggregates[outputIndex];
         ColumnOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnOps());
-        totalOps += ops.add(agg, outputIndex + keysLength);
+        totalOps += ops.add(agg.getWrapped().getWrapped(), outputIndex + keysLength);
       }
       int[] aggColumnIndexes = new int[totalOps];
       long[] aggOperationInstances = new long[totalOps];
