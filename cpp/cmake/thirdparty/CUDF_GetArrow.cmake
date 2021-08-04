@@ -40,12 +40,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
         list(APPEND ARROW_PYTHON_OPTIONS "ARROW_PYTHON ON")
         # Arrow's logic to build Boost from source is busted, so we have to get it from the system.
         list(APPEND ARROW_PYTHON_OPTIONS "BOOST_SOURCE SYSTEM")
-        # Arrow's logic to find Thrift is busted, so we have to build it from
-        # source. Why can't we use `THRIFT_SOURCE BUNDLED` you might ask?
-        # Because that's _also_ busted. The only thing that seems to is to set
-        # _all_ dependencies to bundled, then optionall un-set BOOST_SOURCE to
-        # SYSTEM.
-        list(APPEND ARROW_PYTHON_OPTIONS "ARROW_DEPENDENCY_SOURCE BUNDLED")
+        list(APPEND ARROW_PYTHON_OPTIONS "Thrift_SOURCE BUNDLED")
+        list(APPEND ARROW_PYTHON_OPTIONS "ARROW_DEPENDENCY_SOURCE AUTO")
     endif()
 
     # Set this so Arrow correctly finds the CUDA toolkit when the build machine
