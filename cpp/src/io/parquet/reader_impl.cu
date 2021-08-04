@@ -569,8 +569,7 @@ class aggregate_metadata {
                       type_id timestamp_type_id,
                       bool strict_decimal_types) const
   {
-    auto find_schema_child = [&](SchemaElement const& schema_elem,
-                                 std::string const& name) -> SchemaElement const& {
+    auto find_schema_child = [&](SchemaElement const& schema_elem, std::string const& name) {
       auto const& col_schema_idx = std::find_if(
         schema_elem.children_idx.begin(),
         schema_elem.children_idx.end(),
@@ -579,23 +578,27 @@ class aggregate_metadata {
       // just the parent
       CUDF_EXPECTS(col_schema_idx != schema_elem.children_idx.end(),
                    "Child \"" + name + "\" not found in \"" + schema_elem.name + "\"");
-      return get_schema(*col_schema_idx);
+      return (col_schema_idx != schema_elem.children_idx.end()) ? static_cast<int>(*col_schema_idx)
+                                                                : -1;
     };
 
     std::vector<column_buffer> output_columns;
     std::vector<input_column_info> input_columns;
     std::deque<int> nesting;
 
-    std::function<void(column_name_info const*, SchemaElement const&, std::vector<column_buffer>&)>
-      build_column = [&](column_name_info const* col_name_info,
-                         SchemaElement const& schema_elem,
-                         std::vector<column_buffer>& out_col_array) {
+    std::function<void(column_name_info const*, int, std::vector<column_buffer>&)> build_column =
+      [&](column_name_info const* col_name_info,
+          int schema_idx,
+          std::vector<column_buffer>& out_col_array) {
+        if (schema_idx < 0) { return; }
+        auto const& schema_elem = get_schema(schema_idx);
+
         // if I am a stub, continue on
         if (schema_elem.is_stub()) {
           // is this legit?
           CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
           auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
-          build_column(child_col_name_info, get_schema(schema_elem.children_idx[0]), out_col_array);
+          build_column(child_col_name_info, schema_elem.children_idx[0], out_col_array);
           return;
         }
 
@@ -617,7 +620,7 @@ class aggregate_metadata {
           // add all children of schema_elem.
           // At this point, we can no longer pass a col_name_info to build_column
           for (int idx = 0; idx < schema_elem.num_children; idx++) {
-            build_column(nullptr, get_schema(schema_elem.children_idx[idx]), output_col.children);
+            build_column(nullptr, schema_elem.children_idx[idx], output_col.children);
           }
         } else {
           for (size_t idx = 0; idx < col_name_info->children.size(); idx++) {
@@ -631,7 +634,7 @@ class aggregate_metadata {
         // data stored) so add me to the list.
         if (schema_elem.num_children == 0) {
           input_column_info& input_col =
-            input_columns.emplace_back(input_column_info{schema_elem.self_idx, schema_elem.name});
+            input_columns.emplace_back(input_column_info{schema_idx, schema_elem.name});
           std::copy(nesting.begin(), nesting.end(), std::back_inserter(input_col.nesting));
         }
 
@@ -662,7 +665,7 @@ class aggregate_metadata {
     auto const& root = get_schema(0);
     if (use_names.empty()) {
       for (auto const& schema_idx : root.children_idx) {
-        build_column(nullptr, get_schema(schema_idx), output_columns);
+        build_column(nullptr, schema_idx, output_columns);
         output_column_schemas.push_back(schema_idx);
       }
     } else {
@@ -717,9 +720,9 @@ class aggregate_metadata {
         }
       }
       for (auto& col : selected_columns) {
-        auto const& top_level_col_schema = find_schema_child(root, col.name);
-        build_column(&col, top_level_col_schema, output_columns);
-        output_column_schemas.push_back(top_level_col_schema.self_idx);
+        auto const& top_level_col_schema_idx = find_schema_child(root, col.name);
+        build_column(&col, top_level_col_schema_idx, output_columns);
+        output_column_schemas.push_back(top_level_col_schema_idx);
       }
     }
 
