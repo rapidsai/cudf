@@ -676,6 +676,8 @@ def date_range(
 
     dtype = np.dtype("<M8[ns]")
 
+    _periods_not_specified = False
+
     if freq is not None:
         if isinstance(freq, str):
             offset = DateOffset._from_freqstr(freq)
@@ -699,8 +701,8 @@ def date_range(
             start = cudf.Scalar(start, dtype=dtype)
             end = cudf.Scalar(end, dtype=dtype)
             # TODO: support below
-            periods = (end - start) / offset
-
+            periods = int(end - start) / _min_offset(offset)
+            _periods_not_specified = True
     else:
         start = cudf.Scalar(start, dtype=dtype)
         end = cudf.Scalar(end, dtype=dtype)
@@ -713,6 +715,29 @@ def date_range(
         )
 
     res = libcudf.datetime.date_range(start.device_value, periods, offset)
-    res[-1] = end
+
+    if _periods_not_specified:
+        res = res[res <= end]
+
+    if not _periods_not_specified:
+        res[-1] = end
 
     return cudf.DatetimeIndex._from_data({None: res})
+
+
+def _min_offset(offset):
+    # TODO: rename this function
+    nanoseconds_per_day = 24 * 60 * 60 * 1e9
+    kwds = offset.kwds
+    return (
+        kwds.get("years", 0) * (365 * nanoseconds_per_day)
+        + kwds.get("months", 0) * (28 * nanoseconds_per_day)
+        + kwds.get("weeks", 0) * (7 * nanoseconds_per_day)
+        + kwds.get("days", 0) * nanoseconds_per_day
+        + kwds.get("hours", 0) * 3600 * 1e9
+        + kwds.get("minutes", 0) * 60 * 1e9
+        + kwds.get("seconds", 0) * 1e9
+        + kwds.get("milliseconds", 0) * 1e6
+        + kwds.get("microseconds", 0) * 1e3
+        + kwds.get("nanoseconds", 0)
+    )

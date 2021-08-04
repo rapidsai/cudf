@@ -22,9 +22,8 @@ struct DateOffset {
   template <typename Timestamp>
   Timestamp __device__ operator+(Timestamp const& base)
   {
-    auto result = cuda::std::chrono::time_point_cast<typename Timestamp::duration>(
-      base + cuda::std::chrono::nanoseconds{nanoseconds});
-    return f(result, month);
+    return cuda::std::chrono::time_point_cast<typename Timestamp::duration>(
+      f(base, month) + cuda::std::chrono::nanoseconds{nanoseconds});
   }
 
   DateOffset __device__ operator*(std::size_t const& n)

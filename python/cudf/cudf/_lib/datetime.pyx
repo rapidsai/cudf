@@ -77,15 +77,15 @@ def date_range(DeviceScalar start, size_t n, offset):
         + offset.kwds.get("months", 0)
     )
     cdef size_t nanos = (
-        offset.kwds.pop("weeks", 0) * 604800
-        + offset.kwds.pop("days", 0) * 86400
-        + offset.kwds.pop("hours", 0) * 3600
-        + offset.kwds.pop("minutes", 0) * 60
-        + offset.kwds.pop("seconds", 0)
+        offset.kwds.get("weeks", 0) * 604800
+        + offset.kwds.get("days", 0) * 86400
+        + offset.kwds.get("hours", 0) * 3600
+        + offset.kwds.get("minutes", 0) * 60
+        + offset.kwds.get("seconds", 0)
     ) * 1e9 + (
-        + offset.kwds.pop("milliseconds", 0) * 1e6
-        + offset.kwds.pop("microseconds", 0) * 1e3
-        + offset.kwds.pop("nanoseconds", 0)
+        + offset.kwds.get("milliseconds", 0) * 1e6
+        + offset.kwds.get("microseconds", 0) * 1e3
+        + offset.kwds.get("nanoseconds", 0)
     )
 
     with nogil:
