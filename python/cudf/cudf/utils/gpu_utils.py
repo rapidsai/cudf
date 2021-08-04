@@ -139,6 +139,15 @@ def validate_setup():
             # CUDA Driver Version Check:
             # Driver Runtime version is >= Runtime version
             pass
+        elif (
+            cuda_driver_supported_rt_version >= 11000
+            and cuda_runtime_version >= 11000
+        ):
+            # With cuda enhanced compatibitlity any code compiled
+            # with 11.x version of cuda can now run on any
+            # driver >= 450.80.02. 11000 is the minimum cuda
+            # version 450.80.02 supports.
+            pass
         else:
             from cudf.errors import UnSupportedCUDAError
 
