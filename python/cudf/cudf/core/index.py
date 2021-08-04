@@ -518,74 +518,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
         """
         return self._values.data_array_view
 
-    def min(self):
-        """
-        Return the minimum value of the Index.
-
-        Returns
-        -------
-        scalar
-            Minimum value.
-
-        See Also
-        --------
-        cudf.core.index.Index.max : Return the maximum value in an Index.
-        cudf.core.series.Series.min : Return the minimum value in a Series.
-        cudf.core.dataframe.DataFrame.min : Return the minimum values in
-            a DataFrame.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([3, 2, 1])
-        >>> idx.min()
-        1
-        """
-        return self._values.min()
-
-    def max(self):
-        """
-        Return the maximum value of the Index.
-
-        Returns
-        -------
-        scalar
-            Maximum value.
-
-        See Also
-        --------
-        cudf.core.index.Index.min : Return the minimum value in an Index.
-        cudf.core.series.Series.max : Return the maximum value in a Series.
-        cudf.core.dataframe.DataFrame.max : Return the maximum values in
-            a DataFrame.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([3, 2, 1])
-        >>> idx.max()
-        3
-        """
-        return self._values.max()
-
-    def sum(self):
-        """
-        Return the sum of all values of the Index.
-
-        Returns
-        -------
-        scalar
-            Sum of all values.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([3, 2, 1])
-        >>> idx.sum()
-        6
-        """
-        return self._values.sum()
-
     @classmethod
     def _concat(cls, objs):
         data = concat_columns([o._values for o in objs])
@@ -1361,6 +1293,15 @@ class BaseIndex(SingleColumnFrame, Serializable):
         ind = as_index(column.as_column(index, nan_as_null=nan_as_null))
         ind.name = index.name
         return ind
+
+    def _reduce(
+        # self, op, axis=None, level=None, numeric_only=None, **kwargs,
+        self,
+        op,
+        *args,
+        **kwargs,
+    ):
+        raise AttributeError(f"{type(self)} object has no attribute {op}.")
 
     @property
     def _copy_construct_defaults(self):
