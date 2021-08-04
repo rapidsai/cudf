@@ -1504,7 +1504,7 @@ public class TableTest extends CudfTestBase {
              .column(inv, inv, 0, 1, 3, inv, inv, 0, 1, inv, 1, inv, 0, 1)
              .build();
          CompiledExpression condition = expr.compile()) {
-      GatherMap[] maps = left.leftJoinGatherMaps(right, condition, false);
+      GatherMap[] maps = left.conditionalLeftJoinGatherMaps(right, condition, false);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -1532,7 +1532,65 @@ public class TableTest extends CudfTestBase {
              .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
              .build();
          CompiledExpression condition = expr.compile()) {
-      GatherMap[] maps = left.leftJoinGatherMaps(right, condition, true);
+      GatherMap[] maps = left.conditionalLeftJoinGatherMaps(right, condition, true);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testConditionalLeftJoinGatherMapsWithCount() {
+    final int inv = Integer.MIN_VALUE;
+    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5).build();
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2, 2, 2,   3,   4, 5, 5,   6, 7,   8, 9, 9)
+             .column(inv, inv, 0, 1, 3, inv, inv, 0, 1, inv, 1, inv, 0, 1)
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalLeftJoinRowCount(right, condition, false);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = left.conditionalLeftJoinGatherMaps(right, condition, false, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testConditionalLeftJoinGatherMapsNullsWithCount() {
+    final int inv = Integer.MIN_VALUE;
+    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table right = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2,   3,   4,   5,   6, 7, 7, 8, 8, 9) // left
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalLeftJoinRowCount(right, condition, true);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = left.conditionalLeftJoinGatherMaps(right, condition, true, rowCount);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -1599,7 +1657,7 @@ public class TableTest extends CudfTestBase {
              .column(0, 1, 3, 0, 1, 1, 0, 1)
              .build();
          CompiledExpression condition = expr.compile()) {
-      GatherMap[] maps = left.innerJoinGatherMaps(right, condition, false);
+      GatherMap[] maps = left.conditionalInnerJoinGatherMaps(right, condition, false);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -1626,7 +1684,63 @@ public class TableTest extends CudfTestBase {
              .column(2, 0, 1, 0, 1, 3) // right
              .build();
          CompiledExpression condition = expr.compile()) {
-      GatherMap[] maps = left.innerJoinGatherMaps(right, condition, true);
+      GatherMap[] maps = left.conditionalInnerJoinGatherMaps(right, condition, true);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testConditionalInnerJoinGatherMapsWithCount() {
+    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5).build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 2, 2, 5, 5, 7, 9, 9)
+             .column(0, 1, 3, 0, 1, 1, 0, 1)
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalInnerJoinRowCount(right, condition, false);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = left.conditionalInnerJoinGatherMaps(right, condition, false, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testConditionalInnerJoinGatherMapsNullsWithCount() {
+    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table right = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 7, 8, 8, 9) // left
+             .column(2, 0, 1, 0, 1, 3) // right
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalInnerJoinRowCount(right, condition, true);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = left.conditionalInnerJoinGatherMaps(right, condition, true, rowCount);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -1696,7 +1810,7 @@ public class TableTest extends CudfTestBase {
              .column(  2,   4,   5, inv, inv, 0, 1, 3, inv, inv, 0, 1, inv, 1, inv, 0, 1)
              .build();
          CompiledExpression condition = expr.compile()) {
-      GatherMap[] maps = left.fullJoinGatherMaps(right, condition, false);
+      GatherMap[] maps = left.conditionalFullJoinGatherMaps(right, condition, false);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -1724,7 +1838,7 @@ public class TableTest extends CudfTestBase {
              .column(  4,   5, inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
              .build();
          CompiledExpression condition = expr.compile()) {
-      GatherMap[] maps = left.fullJoinGatherMaps(right, condition, true);
+      GatherMap[] maps = left.conditionalFullJoinGatherMaps(right, condition, true);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -1776,7 +1890,7 @@ public class TableTest extends CudfTestBase {
              .column(2, 5, 7, 9) // left
              .build();
          CompiledExpression condition = expr.compile();
-         GatherMap map = left.leftSemiJoinGatherMap(right, condition, false)) {
+         GatherMap map = left.conditionalLeftSemiJoinGatherMap(right, condition, false)) {
       verifySemiJoinGatherMap(map, expected);
     }
   }
@@ -1796,8 +1910,54 @@ public class TableTest extends CudfTestBase {
              .column(2, 7, 8, 9) // left
              .build();
          CompiledExpression condition = expr.compile();
-         GatherMap map = left.leftSemiJoinGatherMap(right, condition, true)) {
+         GatherMap map = left.conditionalLeftSemiJoinGatherMap(right, condition, true)) {
       verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testConditionalLeftSemiJoinGatherMapWithCount() {
+    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5).build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 5, 7, 9) // left
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalLeftSemiJoinRowCount(right, condition, false);
+      assertEquals(expected.getRowCount(), rowCount);
+      try (GatherMap map =
+               left.conditionalLeftSemiJoinGatherMap(right, condition, false, rowCount)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
+    }
+  }
+
+  @Test
+  void testConditionalLeftSemiJoinGatherMapNullsWithCount() {
+    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table right = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8, 9) // left
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalLeftSemiJoinRowCount(right, condition, true);
+      assertEquals(expected.getRowCount(), rowCount);
+      try (GatherMap map =
+               left.conditionalLeftSemiJoinGatherMap(right, condition, true, rowCount)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
     }
   }
 
@@ -1842,7 +2002,7 @@ public class TableTest extends CudfTestBase {
              .column(0, 1, 3, 4, 6, 8) // left
              .build();
          CompiledExpression condition = expr.compile();
-         GatherMap map = left.leftAntiJoinGatherMap(right, condition, false)) {
+         GatherMap map = left.conditionalLeftAntiJoinGatherMap(right, condition, false)) {
       verifySemiJoinGatherMap(map, expected);
     }
   }
@@ -1862,8 +2022,54 @@ public class TableTest extends CudfTestBase {
              .column(0, 1, 3, 4, 5, 6) // left
              .build();
          CompiledExpression condition = expr.compile();
-         GatherMap map = left.leftAntiJoinGatherMap(right, condition, true)) {
+         GatherMap map = left.conditionalLeftAntiJoinGatherMap(right, condition, true)) {
       verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testConditionalLeftAntiJoinGatherMapWithCount() {
+    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5).build();
+         Table expected = new Table.TestBuilder()
+             .column(0, 1, 3, 4, 6, 8) // left
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalLeftAntiJoinRowCount(right, condition, false);
+      assertEquals(expected.getRowCount(), rowCount);
+      try (GatherMap map =
+               left.conditionalLeftAntiJoinGatherMap(right, condition, false, rowCount)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
+    }
+  }
+
+  @Test
+  void testConditionalAntiSemiJoinGatherMapNullsWithCount() {
+    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table right = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(0, 1, 3, 4, 5, 6) // left
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalLeftAntiJoinRowCount(right, condition, true);
+      assertEquals(expected.getRowCount(), rowCount);
+      try (GatherMap map =
+               left.conditionalLeftAntiJoinGatherMap(right, condition, true, rowCount)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
     }
   }
 
