@@ -559,6 +559,12 @@ class IntervalDtype(StructDtype):
             pa.from_numpy_dtype(self.subtype), self.closed
         )
 
+    @classmethod
+    def from_pandas(cls, pd_dtype: pd.IntervalDtype) -> "IntervalDtype":
+        return cls(
+            subtype=pd_dtype.subtype
+        )  # TODO: needs `closed` when we upgrade Pandas
+
 
 def is_categorical_dtype(obj):
     """Check whether an array-like or dtype is of the Categorical dtype.

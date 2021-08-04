@@ -29,12 +29,27 @@ from cudf.core.dtypes import (  # noqa: F401
 
 def dtype(arbitrary):
     try:
-        return np.dtype(arbitrary)
+        np_dtype = np.dtype(arbitrary)
+        if np_dtype.name == "float16":
+            np_dtype = np.dtype("float32")
+        elif np_dtype.name in ("object", "str"):
+            np_dtype = np.dtype("object")
+        return np_dtype
     except TypeError:
         pass
     if isinstance(arbitrary, cudf.core.dtypes._BaseDtype):
         return arbitrary
-    return pd.api.types.pandas_type(arbitrary)
+    elif isinstance(arbitrary, pd.CategoricalDtype):
+        return cudf.CategoricalDtype.from_pandas(arbitrary)
+    elif isinstance(arbitrary, pd.IntervalDtype):
+        return cudf.IntervalDtype.from_pandas(arbitrary)
+    pd_dtype = pd.api.types.pandas_dtype(arbitrary)
+    try:
+        return pd_dtype.numpy_dtype
+    except AttributeError:
+        # no NumPy type corresponding to this type
+        # always object?
+        return np.dtype("object")
 
 
 def is_numeric_dtype(obj):

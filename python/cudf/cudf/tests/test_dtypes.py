@@ -257,3 +257,24 @@ def test_lists_of_structs_dtype(data):
 
     assert_column_array_dtype_equal(got._column, expected)
     assert expected.equals(got._column.to_arrow())
+
+
+@pytest.mark.parametrize(
+    "in_dtype,expect",
+    [
+        (np.dtype("int8"), np.dtype("int8")),
+        (np.int8, np.dtype("int8")),
+        (np.float16, np.dtype("float32")),
+        (pd.Int8Dtype(), np.dtype("int8")),
+        (pd.StringDtype(), np.dtype("object")),
+        ("int8", np.dtype("int8")),
+        ("boolean", np.dtype("bool")),
+        (int, np.dtype("int64")),
+        (float, np.dtype("float64")),
+        (cudf.ListDtype("int64"), cudf.ListDtype("int64")),
+        ("float16", np.dtype("float32")),
+        (np.dtype("U"), np.dtype("object")),
+    ],
+)
+def test_dtype(in_dtype, expect):
+    assert_eq(cudf.dtype(in_dtype), expect)
