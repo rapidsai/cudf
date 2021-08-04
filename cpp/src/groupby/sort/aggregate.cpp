@@ -518,6 +518,34 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
       get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr));
 };
 
+template <>
+void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) { return; }
+
+  auto const delta =
+    dynamic_cast<cudf::detail::tdigest_aggregation const&>(agg).delta;
+  cache.add_result(
+    col_idx,
+    agg,
+    detail::group_tdigest(
+      get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), delta, stream, mr));
+};
+
+template <>
+void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) { return; }
+
+  auto const delta =
+    dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).delta;
+  cache.add_result(
+    col_idx,
+    agg,
+    detail::group_merge_tdigest(
+      get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), delta, stream, mr));
+};
+
 }  // namespace detail
 
 // Sort-based groupby

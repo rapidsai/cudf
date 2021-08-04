@@ -442,6 +442,20 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr);
 
+std::unique_ptr<column> group_tdigest(column_view const& values,
+                                      cudf::device_span<size_type const> group_offsets,
+                                      size_type num_groups,
+                                      int delta,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr);
+
+std::unique_ptr<column> group_merge_tdigest(column_view const& values,
+                                      cudf::device_span<size_type const> group_offsets,
+                                      size_type num_groups,
+                                      int delta,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr);
+
 /** @endinternal
  *
  */

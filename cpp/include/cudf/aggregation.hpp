@@ -87,7 +87,9 @@ class aggregation {
     CUDA,            ///< CUDA UDF based reduction
     MERGE_LISTS,     ///< merge multiple lists values into one list
     MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
-    MERGE_M2         ///< merge partial values of M2 aggregation
+    MERGE_M2,        ///< merge partial values of M2 aggregation
+    TDIGEST,         ///< create a tdigest from a set of input values
+    MERGE_TDIGEST    ///< create a tdigest by merging multiple tdigests together
   };
 
   aggregation() = delete;
@@ -487,6 +489,12 @@ std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal = nu
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_m2_aggregation();
+
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_tdigest_aggregation(int delta = 1000);
+
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_tdigest_aggregation(int delta = 1000);
 
 /** @} */  // end of group
 }  // namespace cudf

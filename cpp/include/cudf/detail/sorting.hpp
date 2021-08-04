@@ -32,7 +32,7 @@ namespace detail {
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> sorted_order(
-  table_view input,
+  table_view const& input,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = rmm::cuda_stream_default,
@@ -44,7 +44,7 @@ std::unique_ptr<column> sorted_order(
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> stable_sorted_order(
-  table_view input,
+  table_view const& input,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = rmm::cuda_stream_default,
@@ -89,6 +89,12 @@ std::unique_ptr<table> segmented_sort_by_key(
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<table> sort(table_view const& values,
+                            std::vector<order> const& column_order = {},
+                            std::vector<null_order> const& null_precedence = {},
+                            rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+                            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf

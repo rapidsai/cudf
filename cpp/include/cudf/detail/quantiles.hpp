@@ -49,5 +49,11 @@ std::unique_ptr<table> quantiles(
   rmm::cuda_stream_view stream                   = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
+std::unique_ptr<column> percentile_approx(
+  column_view const& input,
+  column_view const& percentages,
+  rmm::cuda_stream_view stream                   = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+
 }  // namespace detail
 }  // namespace cudf

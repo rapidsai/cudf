@@ -94,5 +94,11 @@ std::unique_ptr<table> quantiles(
   std::vector<null_order> const& null_precedence = {},
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
+std::unique_ptr<column> percentile_approx(
+  column_view const& input,
+  column_view const& percentages,
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+
+
 /** @} */  // end of group
 }  // namespace cudf
