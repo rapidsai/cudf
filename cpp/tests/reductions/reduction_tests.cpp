@@ -1454,7 +1454,7 @@ TEST_F(Decimal128Only, Decimal128ProductReduction3)
   auto const values   = std::vector(127, -2);
   auto const scale    = scale_type{0};
   auto const column   = fp_wrapper{values.cbegin(), values.cend(), scale};
-  auto const lowest   = numeric::detail::numeric_limits::lowest<RepType>();
+  auto const lowest   = cuda::std::numeric_limits<RepType>::lowest();
   auto const expected = decimal128{scaled_integer<RepType>{lowest, scale}};
 
   auto const out_type      = cudf::data_type{cudf::type_id::DECIMAL128, scale};

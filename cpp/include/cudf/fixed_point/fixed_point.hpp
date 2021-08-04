@@ -57,7 +57,7 @@ constexpr inline auto is_supported_representation_type()
 template <typename T>
 constexpr inline auto is_supported_construction_value_type()
 {
-  return numeric::detail::is_integral<T>() || cuda::std::is_floating_point<T>::value;
+  return cuda::std::is_integral<T>() || cuda::std::is_floating_point<T>::value;
 }
 
 // Helper functions for `fixed_point` type
@@ -279,7 +279,7 @@ class fixed_point {
    * @return The `fixed_point` number in base 10 (aka human readable format)
    */
   template <typename U,
-            typename cuda::std::enable_if_t<numeric::detail::is_integral<U>()>* = nullptr>
+            typename cuda::std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
   explicit constexpr operator U() const
   {
     // Don't cast to U until converting to Rep because in certain cases casting to U before shifting

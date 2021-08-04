@@ -64,7 +64,7 @@ __device__ inline size_type integer_to_string(IntegerType value, char* d_buffer)
     *d_buffer = '0';
     return 1;
   }
-  bool const is_negative = numeric::detail::is_signed<IntegerType>() ? (value < 0) : false;
+  bool const is_negative = cuda::std::is_signed<IntegerType>() ? (value < 0) : false;
 
   constexpr IntegerType base = 10;
   constexpr int MAX_DIGITS   = 20;  // largest 64-bit integer is 20 digits
@@ -98,7 +98,7 @@ constexpr size_type count_digits(IntegerType value)
 {
   // TODO definitely broken
   if (value == 0) return 1;
-  bool is_negative = numeric::detail::is_signed<IntegerType>() ? (value < 0) : false;
+  bool is_negative = cuda::std::is_signed<IntegerType>() ? (value < 0) : false;
   // abs(std::numeric_limits<IntegerType>::min()) is negative;
   // for all integer types, the max() and min() values have the same number of digits
   value = (value == std::numeric_limits<IntegerType>::min())

@@ -99,7 +99,7 @@ struct DeviceMin {
                               !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
-    return numeric::detail::numeric_limits::max<T>();
+    return cuda::std::numeric_limits<T>::max();
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
@@ -137,7 +137,7 @@ struct DeviceMax {
                               !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
-    return numeric::detail::numeric_limits::lowest<T>();
+    return cuda::std::numeric_limits<T>::lowest();
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
