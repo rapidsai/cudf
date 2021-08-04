@@ -191,13 +191,13 @@ struct mutable_column_expression_result
 };
 
 /**
- * @brief Despite to a binary operator based on a single data type.
+ * @brief Dispatch to a binary operator based on a single data type.
  *
  * This functor is a dispatcher for binary operations that assumes that both
- * operands to a binary operation are of the same type. This assumption is
- * encoded in the one non-deducible template parameter LHS, the type of the
- * left-hand operand, which is then used as the template parameter for both the
- * left and right operands to the binary operator f.
+ * operands are of the same type. This assumption is encoded in the
+ * non-deducible template parameter LHS, the type of the left-hand operand,
+ * which is then used as the template parameter for both the left and right
+ * operands to the binary operator f.
  */
 struct single_dispatch_binary_operator {
   /**
