@@ -215,7 +215,7 @@ class Rolling(GetAttrGetItemMixin):
                 self.center,
                 agg_name,
             )
-        return sr._copy_construct(data=result_col)
+        return sr._from_data({sr.name: result_col}, sr._index)
 
     def _apply_agg_dataframe(self, df, agg_name):
         result_df = cudf.DataFrame({})

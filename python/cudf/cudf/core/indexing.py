@@ -98,6 +98,8 @@ class _SeriesIlocIndexer(object):
             or _is_null_host_scalar(data)
         ):
             return data
+        # return self._sr._from_data(
+        #     {self._sr.name: data}, self._sr.index.take(arg))
         index = self._sr.index.take(arg)
         return self._sr._copy_construct(data=data, index=index)
 

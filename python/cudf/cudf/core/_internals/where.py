@@ -378,6 +378,6 @@ def where(
         if isinstance(frame, Index):
             result = Index(result, name=frame.name)
         else:
-            result = frame._copy_construct(data=result)
+            result = frame._from_data({frame.name: result}, frame._index)
 
         return frame._mimic_inplace(result, inplace=inplace)
