@@ -245,7 +245,7 @@ def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
 
 
 def gen_rand(dtype, size, **kwargs):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     if dtype.kind == "f":
         res = np.random.random(size=size).astype(dtype)
         if kwargs.get("positive_only", False):

@@ -71,7 +71,7 @@ class DatetimeColumn(column.ColumnBase):
         mask : Buffer; optional
             The validity mask
         """
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
@@ -236,7 +236,7 @@ class DatetimeColumn(column.ColumnBase):
         return output
 
     def as_datetime_column(self, dtype: Dtype, **kwargs) -> DatetimeColumn:
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)

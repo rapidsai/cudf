@@ -5054,7 +5054,7 @@ class StringColumn(column.ColumnBase):
     def as_numerical_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
-        out_dtype = np.dtype(dtype)
+        out_dtype = cudf.dtype(dtype)
 
         if out_dtype.kind in {"i", "u"}:
             if not libstrings.is_integer(self).all():
@@ -5096,7 +5096,7 @@ class StringColumn(column.ColumnBase):
     def as_datetime_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DatetimeColumn":
-        out_dtype = np.dtype(dtype)
+        out_dtype = cudf.dtype(dtype)
 
         # infer on host from the first not na element
         # or return all null column if all values
@@ -5120,7 +5120,7 @@ class StringColumn(column.ColumnBase):
     def as_timedelta_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.TimeDeltaColumn":
-        out_dtype = np.dtype(dtype)
+        out_dtype = cudf.dtype(dtype)
         format = "%D days %H:%M:%S"
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
@@ -5379,7 +5379,7 @@ class StringColumn(column.ColumnBase):
             raise ValueError(
                 "Can not produce a view of a string column with nulls"
             )
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         str_byte_offset = self.base_children[0].element_indexing(self.offset)
         str_end_byte_offset = self.base_children[0].element_indexing(
             self.offset + self.size

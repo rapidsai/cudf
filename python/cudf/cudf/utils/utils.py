@@ -70,7 +70,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
     dtype = scalar.dtype
 
-    if np.dtype(dtype).kind in ("O", "U"):
+    if cudf.dtype(dtype).kind in ("O", "U"):
         gather_map = column.full(size, 0, dtype="int32")
         scalar_str_col = column.as_column([scalar], dtype="str")
         return scalar_str_col[gather_map]

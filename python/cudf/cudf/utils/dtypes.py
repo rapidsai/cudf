@@ -140,7 +140,7 @@ def np_to_pa_dtype(dtype):
             return pa.duration(time_unit)
         # default fallback unit is ns
         return pa.duration("ns")
-    return _np_pa_dtypes[np.dtype(dtype).type]
+    return _np_pa_dtypes[cudf.dtype(dtype).type]
 
 
 def get_numeric_type_info(dtype):
@@ -202,7 +202,7 @@ def cudf_dtype_to_pa_type(dtype):
     ):
         return dtype.to_arrow()
     else:
-        return np_to_pa_dtype(np.dtype(dtype))
+        return np_to_pa_dtype(cudf.dtype(dtype))
 
 
 def cudf_dtype_from_pa_type(typ):
@@ -404,7 +404,7 @@ def check_cast_unsupported_dtype(dtype):
     if isinstance(dtype, pd.core.arrays.numpy_.PandasDtype):
         dtype = dtype.numpy_dtype
     else:
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
 
     if dtype in cudf._lib.types.np_to_cudf_types:
         return dtype
@@ -438,7 +438,7 @@ def get_time_unit(obj):
 
 
 def _get_nan_for_dtype(dtype):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     if pd.api.types.is_datetime64_dtype(
         dtype
     ) or pd.api.types.is_timedelta64_dtype(dtype):

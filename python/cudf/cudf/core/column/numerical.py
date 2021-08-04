@@ -53,7 +53,7 @@ class NumericalColumn(NumericalBaseColumn):
             The dtype associated with the data Buffer
         mask : Buffer, optional
         """
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
@@ -253,7 +253,7 @@ class NumericalColumn(NumericalBaseColumn):
         return libcudf.unary.cast(self, dtype)
 
     def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
@@ -608,7 +608,7 @@ def _safe_cast_to_int(col: ColumnBase, dtype: DtypeObj) -> ColumnBase:
     else:
         raise TypeError(
             f"Cannot safely cast non-equivalent "
-            f"{col.dtype.type.__name__} to {np.dtype(dtype).type.__name__}"
+            f"{col.dtype.type.__name__} to {cudf.dtype(dtype).type.__name__}"
         )
 
 

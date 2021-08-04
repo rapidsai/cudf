@@ -6,6 +6,7 @@ from itertools import product
 import numpy as np
 import pytest
 
+import cudf
 from cudf.core import DataFrame, Series
 
 
@@ -18,7 +19,7 @@ def _random_int(nelem, dtype):
 
 
 def _random(nelem, dtype):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     if dtype.kind in {"i", "u"}:
         return _random_int(nelem, dtype)
     elif dtype.kind == "f":

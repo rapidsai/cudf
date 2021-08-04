@@ -432,7 +432,7 @@ class ColumnBase(Column, Serializable):
 
         """
 
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
 
         if dtype.kind in ("o", "u", "s"):
             raise TypeError(
@@ -2078,11 +2078,11 @@ def as_column(
                             data
                         )
                     dtype = pd.api.types.pandas_dtype(dtype)
-                    np_type = np.dtype(dtype).type
+                    np_type = cudf.dtype(dtype).type
                     if np_type == np.bool_:
                         pa_type = pa.bool_()
                     else:
-                        pa_type = np_to_pa_dtype(np.dtype(dtype))
+                        pa_type = np_to_pa_dtype(cudf.dtype(dtype))
                 data = as_column(
                     pa.array(
                         arbitrary,
@@ -2131,7 +2131,7 @@ def _construct_array(
     Construct a CuPy or NumPy array from `arbitrary`
     """
     try:
-        dtype = dtype if dtype is None else np.dtype(dtype)
+        dtype = dtype if dtype is None else cudf.dtype(dtype)
         arbitrary = cupy.asarray(arbitrary, dtype=dtype)
     except (TypeError, ValueError):
         native_dtype = dtype

@@ -810,7 +810,7 @@ def test_join_datetimes_index(dtype):
     pdf = pdf_lhs.join(pdf_rhs, sort=True)
     gdf = gdf_lhs.join(gdf_rhs, sort=True)
 
-    assert gdf["d"].dtype == np.dtype(dtype)
+    assert gdf["d"].dtype == cudf.dtype(dtype)
 
     assert_join_results_equal(pdf, gdf, how="inner")
 

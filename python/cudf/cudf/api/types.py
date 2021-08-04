@@ -27,6 +27,16 @@ from cudf.core.dtypes import (  # noqa: F401
 )
 
 
+def dtype(arbitrary):
+    try:
+        return np.dtype(arbitrary)
+    except TypeError:
+        pass
+    if isinstance(arbitrary, cudf.core.dtypes._BaseDtype):
+        return arbitrary
+    return pd.api.types.pandas_type(arbitrary)
+
+
 def is_numeric_dtype(obj):
     """Check whether the provided array or dtype is of a numeric dtype.
 

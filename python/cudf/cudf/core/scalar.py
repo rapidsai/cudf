@@ -5,6 +5,7 @@ import numpy as np
 import pyarrow as pa
 from pandas._libs.missing import NAType as pd_NAType
 
+import cudf
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import Decimal64Dtype, ListDtype, StructDtype
@@ -171,7 +172,7 @@ class Scalar(object):
                 dtype = value.dtype
 
         if not isinstance(dtype, Decimal64Dtype):
-            dtype = np.dtype(dtype)
+            dtype = cudf.dtype(dtype)
 
         if not valid:
             value = NA

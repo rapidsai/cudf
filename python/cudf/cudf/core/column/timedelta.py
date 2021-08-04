@@ -60,7 +60,7 @@ class TimeDeltaColumn(column.ColumnBase):
             The number of null values.
             If None, it is calculated automatically.
         """
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
@@ -353,7 +353,7 @@ class TimeDeltaColumn(column.ColumnBase):
             )
 
     def as_timedelta_column(self, dtype: Dtype, **kwargs) -> TimeDeltaColumn:
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)

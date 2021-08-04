@@ -380,7 +380,7 @@ def rand_dataframe(
                 )
             )
         else:
-            dtype = np.dtype(dtype)
+            dtype = cudf.dtype(dtype)
             if dtype.kind in ("i", "u"):
                 column_params.append(
                     ColumnParameters(
@@ -428,7 +428,7 @@ def rand_dataframe(
                             dtype=dtype, size=cardinality
                         ),
                         is_sorted=False,
-                        dtype=np.dtype(dtype),
+                        dtype=cudf.dtype(dtype),
                     )
                 )
             elif dtype.kind == "m":
@@ -440,7 +440,7 @@ def rand_dataframe(
                             dtype=dtype, size=cardinality
                         ),
                         is_sorted=False,
-                        dtype=np.dtype(dtype),
+                        dtype=cudf.dtype(dtype),
                     )
                 )
             elif dtype.kind == "b":
@@ -450,7 +450,7 @@ def rand_dataframe(
                         null_frequency=null_frequency,
                         generator=boolean_generator(cardinality),
                         is_sorted=False,
-                        dtype=np.dtype(dtype),
+                        dtype=cudf.dtype(dtype),
                     )
                 )
             else:
@@ -538,7 +538,7 @@ def get_values_for_nested_data(dtype, lists_max_length):
     Returns list of values based on dtype.
     """
     cardinality = np.random.randint(0, lists_max_length)
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     if dtype.kind in ("i", "u"):
         values = int_generator(dtype=dtype, size=cardinality)()
     elif dtype.kind == "f":

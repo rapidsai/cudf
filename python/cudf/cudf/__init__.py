@@ -15,6 +15,7 @@ from cudf.api.extensions import (
     register_index_accessor,
     register_series_accessor,
 )
+from cudf.api.types import dtype
 from cudf.core import (
     NA,
     BaseIndex,
