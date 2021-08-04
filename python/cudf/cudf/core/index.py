@@ -2373,11 +2373,10 @@ class DatetimeIndex(GenericIndex):
 
         Examples
         --------
-        >>> import pandas as pd
         >>> import cudf
-        >>> pIndex = pd.DatetimeIndex(["2020-05-31 08:00:00",
+        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:00:00",
         ...    "1999-12-31 18:40:00"])
-        >>> cudf.from_pandas(pIndex).quarter
+        >>> gIndex.quarter
         Int64Index([2, 4], dtype='int64')
         """
         res = extract_quarter(self._values)
