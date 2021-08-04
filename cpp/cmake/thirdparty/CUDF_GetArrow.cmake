@@ -14,7 +14,7 @@
 # limitations under the License.
 #=============================================================================
 
-function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_PYTHON ENABLE_PARQUET)
+function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENABLE_PYTHON ENABLE_PARQUET)
 
     set(ARROW_BUILD_SHARED ON)
     set(ARROW_BUILD_STATIC OFF)
@@ -68,6 +68,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_PYTHON E
                         "ARROW_CXXFLAGS -w"
                         "ARROW_JEMALLOC OFF"
                         "ARROW_S3 ${ENABLE_S3}"
+                        "ARROW_ORC ${ENABLE_ORC}"
                         # e.g. needed by blazingsql-io
                         "ARROW_PARQUET ${ENABLE_PARQUET}"
                         ${ARROW_PYTHON_OPTIONS}
@@ -152,6 +153,7 @@ find_and_configure_arrow(
     ${CUDF_VERSION_Arrow}
     ${CUDF_USE_ARROW_STATIC}
     ${CUDF_ENABLE_ARROW_S3}
+    ${CUDF_ENABLE_ARROW_ORC}
     ${CUDF_ENABLE_ARROW_PYTHON}
     ${CUDF_ENABLE_ARROW_PARQUET}
 )
