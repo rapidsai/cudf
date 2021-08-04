@@ -77,8 +77,7 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
                          d_token_counts.template begin<int32_t>(),
                          d_token_counts.template end<int32_t>(),
                          token_offsets.begin() + 1);
-  int32_t const zero = 0;
-  token_offsets.set_element_async(0, zero, stream);
+  token_offsets.set_element_to_zero_async(0, stream);
   auto const total_tokens = token_offsets.back_element(stream);
   // build a list of pointers to each token
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);

@@ -1239,7 +1239,7 @@ class lists_column_wrapper : public detail::column_wrapper {
 
   /**
    * @brief  Construct a lists column containing a single list of fixed-width
-   * type from an interator range.
+   * type from an iterator range.
    *
    * Example:
    * @code{.cpp}
@@ -1621,7 +1621,7 @@ class lists_column_wrapper : public detail::column_wrapper {
                    std::back_inserter(cols),
                    [&](lists_column_wrapper const& l) -> column_view {
                      // depth mismatch.  attempt to normalize the short column.
-                     // this function will also catch if this is a legitmately broken
+                     // this function will also catch if this is a legitimately broken
                      // set of input
                      if (l.depth < expected_depth) {
                        if (l.root) {

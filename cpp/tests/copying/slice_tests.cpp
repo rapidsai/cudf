@@ -493,3 +493,47 @@ TEST_F(SliceTableCornerCases, MiscOffset)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col3, result_column);
 }
+
+TEST_F(SliceTableCornerCases, PreSlicedInputs)
+{
+  {
+    using LCW = cudf::test::lists_column_wrapper<float>;
+
+    cudf::test::fixed_width_column_wrapper<int> a{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+                                                  {1, 1, 0, 1, 1, 1, 0, 0, 1, 0}};
+
+    cudf::test::fixed_width_column_wrapper<int> b{{0, -1, -2, -3, -4, -5, -6, -7, -8, -9},
+                                                  {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+
+    cudf::test::strings_column_wrapper c{{"aa", "b", "", "ccc", "ddd", "e", "ff", "", "", "gggg"},
+                                         {0, 0, 1, 1, 0, 0, 1, 1, 1, 0}};
+
+    std::vector<bool> list_validity{1, 0, 1, 0, 1, 1, 0, 0, 1, 1};
+    cudf::test::lists_column_wrapper<float> d{
+      {{0, 1}, {2}, {3, 4, 5}, {6}, {7, 7}, {8, 9}, {10, 11}, {12, 13}, {}, {14, 15, 16}},
+      list_validity.begin()};
+
+    cudf::table_view t({a, b, c, d});
+
+    auto pre_sliced = cudf::slice(t, {0, 4, 4, 10});
+
+    auto result = cudf::slice(pre_sliced[1], {0, 1, 1, 6});
+
+    cudf::test::fixed_width_column_wrapper<int> e0_a({4}, {1});
+    cudf::test::fixed_width_column_wrapper<int> e0_b({-4}, {0});
+    cudf::test::strings_column_wrapper e0_c({""}, {0});
+    std::vector<bool> e0_list_validity{1};
+    cudf::test::lists_column_wrapper<float> e0_d({LCW{7, 7}}, e0_list_validity.begin());
+    cudf::table_view expected0({e0_a, e0_b, e0_c, e0_d});
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result[0], expected0);
+
+    cudf::test::fixed_width_column_wrapper<int> e1_a{{5, 6, 7, 8, 9}, {1, 0, 0, 1, 0}};
+    cudf::test::fixed_width_column_wrapper<int> e1_b{{-5, -6, -7, -8, -9}, {0, 0, 0, 0, 0}};
+    cudf::test::strings_column_wrapper e1_c{{"e", "ff", "", "", "gggg"}, {0, 1, 1, 1, 0}};
+    std::vector<bool> e1_list_validity{1, 0, 0, 1, 1};
+    cudf::test::lists_column_wrapper<float> e1_d{{{8, 9}, {10, 11}, {12, 13}, {}, {14, 15, 16}},
+                                                 e1_list_validity.begin()};
+    cudf::table_view expected1({e1_a, e1_b, e1_c, e1_d});
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result[1], expected1);
+  }
+}

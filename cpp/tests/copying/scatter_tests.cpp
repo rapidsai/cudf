@@ -738,7 +738,7 @@ struct BooleanMaskScalarScatter : public cudf::test::BaseFixture {
     }
 
     static_cast<ScalarType*>(scalar.get())->set_value(value);
-    static_cast<ScalarType*>(scalar.get())->set_valid(validity);
+    static_cast<ScalarType*>(scalar.get())->set_valid_async(validity);
 
     return scalar;
   }
@@ -774,7 +774,7 @@ TYPED_TEST(BooleanMaskScalarScatter, WithNull)
   bool validity = false;
   auto scalar_1 = this->form_scalar(source, validity);
   auto scalar_2 = cudf::make_string_scalar("cudf");
-  scalar_2->set_valid(true);
+  scalar_2->set_valid_async(true);
   std::vector<std::reference_wrapper<const cudf::scalar>> scalar_vect;
   scalar_vect.push_back(*scalar_1);
   scalar_vect.push_back(*scalar_2);
@@ -804,7 +804,7 @@ class BooleanMaskScatterScalarString : public cudf::test::BaseFixture {
 TEST_F(BooleanMaskScatterScalarString, NoNUll)
 {
   auto scalar = cudf::make_string_scalar("cudf");
-  scalar->set_valid(true);
+  scalar->set_valid_async(true);
   std::vector<std::reference_wrapper<const cudf::scalar>> scalar_vect;
   scalar_vect.push_back(*scalar);
 
@@ -823,7 +823,7 @@ TEST_F(BooleanMaskScatterScalarString, NoNUll)
 TEST_F(BooleanMaskScatterScalarString, WithNUll)
 {
   auto scalar = cudf::make_string_scalar("cudf");
-  scalar->set_valid(true);
+  scalar->set_valid_async(true);
   std::vector<std::reference_wrapper<const cudf::scalar>> scalar_vect;
   scalar_vect.push_back(*scalar);
   cudf::test::strings_column_wrapper target({"is", "is", "a", "udf", "api"}, {1, 0, 0, 1, 1});

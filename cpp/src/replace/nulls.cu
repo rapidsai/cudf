@@ -198,10 +198,10 @@ struct replace_nulls_column_kernel_forwarder {
   }
 
   template <typename col_type, CUDF_ENABLE_IF(not cudf::is_rep_layout_compatible<col_type>())>
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
-                                           cudf::column_view const& replacement,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const&,
+                                           cudf::column_view const&,
+                                           rmm::cuda_stream_view,
+                                           rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("No specialization exists for the given type.");
   }
@@ -253,9 +253,8 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
     cudf::detail::get_value<int32_t>(offsets_view, offsets_view.size() - 1, stream);
 
   // Allocate chars array and output null mask
-  cudf::size_type null_count = input.size() - valid_counter.value(stream);
   std::unique_ptr<cudf::column> output_chars =
-    cudf::strings::detail::create_chars_child_column(input.size(), bytes, stream, mr);
+    cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
 
   auto output_chars_view = output_chars->mutable_view();
 
@@ -327,10 +326,10 @@ struct replace_nulls_scalar_kernel_forwarder {
   }
 
   template <typename col_type, std::enable_if_t<not cudf::is_fixed_width<col_type>()>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
-                                           cudf::scalar const& replacement,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const&,
+                                           cudf::scalar const&,
+                                           rmm::cuda_stream_view,
+                                           rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("No specialization exists for the given type.");
   }
@@ -393,7 +392,8 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
                                      gather_map.begin(),
                                      gather_map.end(),
                                      cudf::out_of_bounds_policy::DONT_CHECK,
-                                     stream);
+                                     stream,
+                                     mr);
 
   return std::move(output->release()[0]);
 }

@@ -34,7 +34,7 @@ struct interleave_columns_functor {
                      not std::is_same<T, cudf::string_view>::value and
                      not std::is_same<T, cudf::list_view>::value,
                    std::unique_ptr<cudf::column>>
-  operator()(Args&&... args)
+  operator()(Args&&...)
   {
     CUDF_FAIL("Called `interleave_columns` on none-supported data type.");
   }
@@ -62,7 +62,7 @@ struct interleave_columns_functor {
 
     auto strings_count = strings_columns.num_rows();
     if (strings_count == 0)  // All columns have 0 rows
-      return strings::detail::make_empty_strings_column(stream, mr);
+      return make_empty_column(data_type{type_id::STRING});
 
     // Create device views from the strings columns.
     auto table       = table_device_view::create(strings_columns, stream);
@@ -104,7 +104,7 @@ struct interleave_columns_functor {
     // Create the chars column
     auto const bytes =
       cudf::detail::get_value<int32_t>(offsets_column->view(), num_strings, stream);
-    auto chars_column = strings::detail::create_chars_child_column(num_strings, bytes, stream, mr);
+    auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
     // Fill the chars column
     auto d_results_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(

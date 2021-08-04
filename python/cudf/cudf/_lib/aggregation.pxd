@@ -1,8 +1,8 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
-from cudf._lib.cpp.aggregation cimport aggregation
-from cudf._lib.cpp.aggregation cimport rolling_aggregation
+
+from cudf._lib.cpp.aggregation cimport aggregation, rolling_aggregation
 
 
 cdef class Aggregation:

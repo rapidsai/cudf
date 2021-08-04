@@ -67,7 +67,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   }();
 
   // set scalar is valid
-  result->set_valid((col.null_count() < col.size()), stream);
+  result->set_valid_async(col.null_count() < col.size(), stream);
   return result;
 }
 
@@ -147,7 +147,7 @@ std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
   }();
 
   // set scalar is valid
-  result->set_valid((col.null_count() < col.size()), stream);
+  result->set_valid_async(col.null_count() < col.size(), stream);
   return result;
 }
 

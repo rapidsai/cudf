@@ -217,3 +217,23 @@ TEST_F(StringsConvertTest, IsFixedPoint)
     cudf::test::fixed_width_column_wrapper<bool>({true, true, true, false, false, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected64_scaled);
 }
+
+#include <cudf/strings/convert/convert_floats.hpp>
+
+TEST_F(StringsConvertTest, FloatFixedPoint)
+{
+  using DecimalType = numeric::decimal64;
+  // using RepType     = cudf::device_storage_type_t<DecimalType>;
+  // using fp_wrapper  = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  cudf::test::fixed_width_column_wrapper<double> floats(
+    {1.234E3, -876.0, 543.2, -0.12, .25, -2E-3, -.0027, 0.0});
+  auto strings_col = cudf::strings::from_floats(floats);
+
+  auto results = cudf::strings::to_fixed_point(
+    cudf::strings_column_view(strings_col->view()),
+    cudf::data_type{cudf::type_to_id<DecimalType>(), numeric::scale_type{-2}});
+
+  cudf::test::print(strings_col->view());
+  cudf::test::print(results->view());
+}

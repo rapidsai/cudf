@@ -6528,7 +6528,7 @@ static const brotli_dictionary_s g_dictionary = {
    136, 224, 164, 184, 224, 164, 149, 224, 165, 141, 224, 164, 176, 224, 164, 191, 224, 164, 175,
    224, 164, 164, 224, 164, 190}};
 
-const brotli_dictionary_s *get_brotli_dictionary(void) { return &g_dictionary; }
+const brotli_dictionary_s* get_brotli_dictionary(void) { return &g_dictionary; }
 
 }  // namespace io
 }  // namespace cudf

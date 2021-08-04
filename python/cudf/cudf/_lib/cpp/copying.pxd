@@ -1,17 +1,14 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from rmm._lib.device_buffer cimport device_buffer
-
+from libc.stdint cimport int32_t, int64_t, uint8_t
 from libcpp cimport bool
-from libc.stdint cimport int32_t, int64_t
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
+from rmm._lib.device_buffer cimport device_buffer
+
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport (
-    column_view,
-    mutable_column_view
-)
+from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
@@ -19,6 +16,12 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 
 ctypedef const scalar constscalar
+
+cdef extern from "cudf/copying.hpp" namespace "cudf::packed_columns" nogil:
+    cdef struct metadata:
+        metadata(vector[uint8_t]&& v)
+        const uint8_t* data () except +
+        size_type size () except +
 
 cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     ctypedef enum out_of_bounds_policy:
@@ -29,6 +32,14 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         const table_view& source_table,
         const column_view& gather_map,
         out_of_bounds_policy policy
+    ) except +
+
+    cdef unique_ptr[table] reverse (
+        const table_view& source_table
+    ) except +
+
+    cdef unique_ptr[column] reverse (
+        const column_view& source_column
     ) except +
 
     cdef unique_ptr[column] shift(
@@ -111,6 +122,10 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         vector[size_type] splits
     ) except +
 
+    cdef struct packed_columns:
+        unique_ptr[metadata] metadata_
+        unique_ptr[device_buffer] gpu_data
+
     cdef struct contiguous_split_result:
         table_view table
         vector[device_buffer] all_data
@@ -119,6 +134,10 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         table_view input_table,
         vector[size_type] splits
     ) except +
+
+    cdef packed_columns pack (const table_view& input) except +
+
+    cdef table_view unpack (const packed_columns& input) except +
 
     cdef unique_ptr[column] copy_if_else (
         column_view lhs,

@@ -8,7 +8,7 @@ from numba import cuda
 
 from cudf.comm.gpuarrow import GpuArrowReader
 from cudf.core import DataFrame, Series
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 def read_data():

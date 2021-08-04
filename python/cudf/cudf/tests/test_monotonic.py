@@ -16,7 +16,7 @@ from cudf.core.index import (
     RangeIndex,
     StringIndex,
 )
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize("testrange", [(10, 20, 1), (0, -10, -1), (5, 5, 1)])

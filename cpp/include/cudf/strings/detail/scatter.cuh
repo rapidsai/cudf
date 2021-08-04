@@ -61,7 +61,7 @@ std::unique_ptr<column> scatter(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (target.is_empty()) return make_empty_strings_column(stream, mr);
+  if (target.is_empty()) return make_empty_column(data_type{type_id::STRING});
 
   // create vector of string_view's to scatter into
   rmm::device_uvector<string_view> target_vector = create_string_vector_from_column(target, stream);

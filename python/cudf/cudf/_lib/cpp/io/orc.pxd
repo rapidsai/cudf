@@ -1,14 +1,15 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint8_t
 from libcpp cimport bool
+from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-from libcpp.memory cimport shared_ptr, unique_ptr
-from libc.stdint cimport uint8_t
 
-from cudf._lib.cpp.types cimport data_type, size_type
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.table.table_view as cudf_table_view
+from cudf._lib.cpp.types cimport data_type, size_type
+
 
 cdef extern from "cudf/io/orc.hpp" \
         namespace "cudf::io" nogil:
@@ -18,7 +19,7 @@ cdef extern from "cudf/io/orc.hpp" \
 
         cudf_io_types.source_info get_source() except+
         vector[string] get_columns() except+
-        vector[size_type] get_stripes() except+
+        vector[vector[size_type]] get_stripes() except+
         size_type get_skip_rows() except+
         size_type get_num_rows() except+
         bool is_enabled_use_index() except+
@@ -28,12 +29,13 @@ cdef extern from "cudf/io/orc.hpp" \
         int get_forced_decimals_scale() except+
 
         void set_columns(vector[string] col_names) except+
-        void set_stripes(vector[size_type] strps) except+
+        void set_stripes(vector[vector[size_type]] strps) except+
         void set_skip_rows(size_type rows) except+
         void set_num_rows(size_type nrows) except+
         void enable_use_index(bool val) except+
         void enable_use_np_dtypes(bool val) except+
         void set_timestamp_type(data_type type) except+
+        void set_decimal_cols_as_float(vector[string] val) except+
 
         @staticmethod
         orc_reader_options_builder builder(
@@ -45,12 +47,16 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options_builder(cudf_io_types.source_info &src) except+
 
         orc_reader_options_builder& columns(vector[string] col_names) except+
-        orc_reader_options_builder& stripes(vector[size_type] strps) except+
+        orc_reader_options_builder& \
+            stripes(vector[vector[size_type]] strps) except+
         orc_reader_options_builder& skip_rows(size_type rows) except+
         orc_reader_options_builder& num_rows(size_type nrows) except+
         orc_reader_options_builder& use_index(bool val) except+
         orc_reader_options_builder& use_np_dtypes(bool val) except+
         orc_reader_options_builder& timestamp_type(data_type type) except+
+        orc_reader_options_builder& decimal_cols_as_float(
+            vector[string] val
+        ) except+
 
         orc_reader_options build() except+
 

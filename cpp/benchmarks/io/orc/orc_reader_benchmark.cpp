@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,12 +58,14 @@ void BM_orc_read_varying_input(benchmark::State& state)
   cudf_io::orc_reader_options read_opts =
     cudf_io::orc_reader_options::builder(source_sink.make_source_info());
 
+  auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::read_orc(read_opts);
   }
 
   state.SetBytesProcessed(data_size * state.iterations());
+  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
 }
 
 std::vector<std::string> get_col_names(std::vector<char> const& orc_data)
@@ -110,6 +112,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
 
   auto const num_stripes              = data_size / (64 << 20);
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
+  auto mem_stats_logger               = cudf::memory_stats_logger();
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
 
@@ -124,7 +127,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
             // Need to assume that an additional "overflow" stripe is present
             stripes_to_read.push_back(num_stripes);
           }
-          read_options.set_stripes(stripes_to_read);
+          read_options.set_stripes({stripes_to_read});
         } break;
         case row_selection::NROWS:
           read_options.set_skip_rows(chunk * chunk_row_cnt);
@@ -139,8 +142,10 @@ void BM_orc_read_varying_options(benchmark::State& state)
 
     CUDF_EXPECTS(rows_read == view.num_rows(), "Benchmark did not read the entire table");
   }
+
   auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
   state.SetBytesProcessed(data_processed * state.iterations());
+  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
 }
 
 #define ORC_RD_BM_INPUTS_DEFINE(name, type_or_group, src_type)                               \
@@ -155,6 +160,7 @@ RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, integral, type_group_id
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, list, cudf::type_id::LIST);
 
 BENCHMARK_DEFINE_F(OrcRead, column_selection)
 (::benchmark::State& state) { BM_orc_read_varying_options(state); }

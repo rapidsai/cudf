@@ -412,6 +412,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(replaceNullsColumn(getNativeView(), replacements.getNativeView()));
   }
 
+  public final ColumnVector replaceNulls(ReplacePolicy policy) {
+    return new ColumnVector(replaceNullsPolicy(getNativeView(), policy.isPreceding));
+  }
+
   /**
    * For a BOOL8 vector, computes a vector whose rows are selected from two other vectors
    * based on the boolean value of this vector in the corresponding row.
@@ -594,12 +598,80 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new ColumnVector array with slices from the original ColumnVector
    */
   public final ColumnVector[] split(int... indices) {
-    long[] nativeHandles = split(this.getNativeView(), indices);
-    ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
-    for (int i = 0; i < nativeHandles.length; i++) {
-      columnVectors[i] = new ColumnVector(nativeHandles[i]);
+    ColumnView[] views = splitAsViews(indices);
+    ColumnVector[] columnVectors = new ColumnVector[views.length];
+    try {
+      for (int i = 0; i < views.length; i++) {
+        columnVectors[i] = views[i].copyToColumnVector();
+      }
+      return columnVectors;
+    } catch (Throwable t) {
+      for (ColumnVector cv : columnVectors) {
+        if (cv != null) {
+          cv.close();
+        }
+      }
+      throw t;
+    } finally {
+      for (ColumnView view : views) {
+        view.close();
+      }
     }
-    return columnVectors;
+  }
+
+  /**
+   * Splits a ColumnView (including null values) into a set of ColumnViews
+   * according to a set of indices. No data is moved or copied.
+   *
+   * IMPORTANT NOTE: Nothing is copied out from the vector and the slices will only be relevant for
+   * the lifecycle of the underlying ColumnVector.
+   *
+   * The "split" function divides the input column into multiple intervals
+   * of rows using the splits indices values and it stores the intervals into the
+   * output columns. Regarding the interval of indices, a pair of values are taken
+   * from the indices array in a consecutive manner. The pair of indices are
+   * left-closed and right-open.
+   *
+   * The indices array ('splits') is required to be a monotonic non-decreasing set.
+   * The indices in the array are required to comply with the following conditions:
+   * a, b belongs to Range[0, input column size]
+   * a <= b, where the position of 'a' is less or equal to the position of 'b'.
+   *
+   * The split function will take a pair of indices from the indices array
+   * ('splits') in a consecutive manner. For the first pair, the function will
+   * take the value 0 and the first element of the indices array. For the last pair,
+   * the function will take the last element of the indices array and the size of
+   * the input column.
+   *
+   * Exceptional cases for the indices array are:
+   * When the values in the pair are equal, the function return an empty column.
+   * When the values in the pair are 'strictly decreasing', the outcome is
+   * undefined.
+   * When any of the values in the pair don't belong to the range[0, input column
+   * size), the outcome is undefined.
+   * When the indices array is empty, an empty array of ColumnViews is returned.
+   *
+   * The output columns may have different sizes. The number of
+   * columns must be equal to the number of indices in the array plus one.
+   *
+   * Example:
+   * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
+   * splits: {2, 5, 9}
+   * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
+   *
+   * Note that this is very similar to the output from a PartitionedTable.
+   *
+   *
+   * @param indices the indices to split with
+   * @return A new ColumnView array with slices from the original ColumnView
+   */
+  public ColumnView[] splitAsViews(int... indices) {
+    long[] nativeHandles = split(this.getNativeView(), indices);
+    ColumnView[] columnViews = new ColumnView[nativeHandles.length];
+    for (int i = 0; i < nativeHandles.length; i++) {
+      columnViews[i] = new ColumnView(nativeHandles[i]);
+    }
+    return columnViews;
   }
 
   /**
@@ -1316,16 +1388,49 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Compute the cumulative sum/prefix sum of the values in this column.
-   * This is similar to a rolling window SUM with unbounded preceding and none following.
-   * Input values 1, 2, 3
-   * Output values 1, 3, 6
-   * This currently only works for long values that are not nullable as this is currently a
-   * very simple implementation. It may be expanded in the future if needed.
+   * Compute the prefix sum (aka cumulative sum) of the values in this column.
+   * This is just a convenience method for an inclusive scan with a SUM aggregation.
    */
   public final ColumnVector prefixSum() {
-    return new ColumnVector(prefixSum(getNativeView()));
+    return scan(Aggregation.sum());
   }
+
+  /**
+   * Computes a scan for a column. This is very similar to a running window on the column.
+   * @param aggregation the aggregation to perform
+   * @param scanType should the scan be inclusive, include the current row, or exclusive.
+   * @param nullPolicy how should nulls be treated. Note that some aggregations also include a
+   *                   null policy too. Currently none of those aggregations are supported so
+   *                   it is undefined how they would interact with each other.
+   */
+  public final ColumnVector scan(Aggregation aggregation, ScanType scanType, NullPolicy nullPolicy) {
+    long nativeId = aggregation.createNativeInstance();
+    try {
+      return new ColumnVector(scan(getNativeView(), nativeId,
+          scanType.isInclusive, nullPolicy.includeNulls));
+    } finally {
+      Aggregation.close(nativeId);
+    }
+  }
+
+  /**
+   * Computes a scan for a column that excludes nulls.
+   * @param aggregation the aggregation to perform
+   * @param scanType should the scan be inclusive, include the current row, or exclusive.
+   */
+  public final ColumnVector scan(Aggregation aggregation, ScanType scanType) {
+    return scan(aggregation, scanType, NullPolicy.EXCLUDE);
+  }
+
+  /**
+   * Computes an inclusive scan for a column that excludes nulls.
+   * @param aggregation the aggregation to perform
+   */
+  public final ColumnVector scan(Aggregation aggregation) {
+    return scan(aggregation, ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+  }
+
+
 
   /////////////////////////////////////////////////////////////////////////////
   // LOGICAL
@@ -1391,6 +1496,33 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector toTitle() {
     assert type.equals(DType.STRING);
     return new ColumnVector(title(getNativeView()));
+  }
+
+  /**
+   * Returns a column of capitalized strings.
+   *
+   * If the `delimiters` is an empty string, then only the first character of each
+   * row is capitalized. Otherwise, a non-delimiter character is capitalized after
+   * any delimiter character is found.
+   *
+   * Example:
+   *     input = ["tesT1", "a Test", "Another Test", "a\tb"];
+   *     delimiters = ""
+   *     output is ["Test1", "A test", "Another test", "A\tb"]
+   *     delimiters = " "
+   *     output is ["Test1", "A Test", "Another Test", "A\tb"]
+   *
+   * Any null string entries return corresponding null output column entries.
+   *
+   * @param delimiters Used if identifying words to capitalize. Should not be null.
+   * @return a column of capitalized strings. Users should close the returned column.
+   */
+  public final ColumnVector capitalize(Scalar delimiters) {
+    if (DType.STRING.equals(type) && DType.STRING.equals(delimiters.getType())) {
+      return new ColumnVector(capitalize(getNativeView(), delimiters.getScalarHandle()));
+    }
+    throw new IllegalArgumentException("Both input column and delimiters scalar should be" +
+        " string type. But got column: " + type + ", scalar: " + delimiters.getType());
   }
   /////////////////////////////////////////////////////////////////////////////
   // TYPE CAST
@@ -2194,6 +2326,25 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         emptyStringOutputIfEmptyList));
   }
 
+  /**
+   * Given a strings column, each string in the given column is repeated a number of times
+   * specified by the <code>repeatTimes</code> parameter. If the parameter has a non-positive value,
+   * all the rows of the output strings column will be an empty string. Any null row will result
+   * in a null row regardless of the value of <code>repeatTimes</code>.
+   *
+   * Note that this function cannot handle the cases when the size of the output column exceeds
+   * the maximum value that can be indexed by int type (i.e., {@link Integer#MAX_VALUE}).
+   * In such situations, the output result is undefined.
+   *
+   * @param repeatTimes The number of times each input string is copied to the output.
+   * @return A new java column vector containing repeated strings.
+   */
+  public final ColumnVector repeatStrings(int repeatTimes) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+
+    return new ColumnVector(repeatStrings(getNativeView(), repeatTimes));
+  }
+
    /**
    * Apply a JSONPath string to all rows in an input strings column.
    *
@@ -2738,6 +2889,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(listContainsColumn(getNativeView(), key.getNativeView()));
   }
 
+  /**
+   * Segmented sort of the elements within a list in each row of a list column.
+   * NOTICE: list columns with nested child are NOT supported yet.
+   *
+   * @param isDescending   whether sorting each row with descending order (or ascending order)
+   * @param isNullSmallest whether to regard the null value as the min value (or the max value)
+   * @return a List ColumnVector with elements in each list sorted
+   */
+  public final ColumnVector listSortRows(boolean isDescending, boolean isNullSmallest) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    return new ColumnVector(listSortRows(getNativeView(), isDescending, isNullSmallest));
+  }
+
+  /**
+   * Get a single item from the column at the specified index as a Scalar.
+   *
+   * Be careful. This is expensive and may involve running a kernel to copy the data out.
+   *
+   * @param index the index to look at
+   * @return the value at that index as a scalar.
+   * @throws CudfException if the index is out of bounds.
+   */
+  public final Scalar getScalarElement(int index) {
+    return new Scalar(getType(), getElement(getNativeView(), index));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2843,6 +3020,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
                                                              long narep,
                                                              boolean separateNulls,
                                                              boolean emptyStringOutputIfEmptyList);
+
+  /**
+   * Native method to repeat each string in the given strings column a number of times
+   * specified by the <code>repeatTimes</code> parameter. If the parameter has a non-positive value,
+   * all the rows of the output strings column will be an empty string. Any null row will result
+   * in a null row regardless of the value of <code>repeatTimes</code>.
+   *
+   * Note that this function cannot handle the cases when the size of the output column exceeds
+   * the maximum value that can be indexed by int type (i.e., {@link Integer#MAX_VALUE}).
+   * In such situations, the output result is undefined.
+   *
+   * @param viewHandle long holding the native handle of the column containing strings to repeat.
+   * @param repeatTimes The number of times each input string is copied to the output.
+   * @return native handle of the resulting cudf column containing repeated strings.
+   */
+  private static native long repeatStrings(long viewHandle, int repeatTimes);
+
 
   private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
 
@@ -3042,6 +3236,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long listContainsColumn(long nativeView, long keyColumn);
 
+  private static native long listSortRows(long nativeView, boolean isDescending, boolean isNullSmallest);
+
+  private static native long getElement(long nativeView, int index);
+
   private static native long castTo(long nativeHandle, int type, int scale);
 
   private static native long bitCastTo(long nativeHandle, int type, int scale);
@@ -3083,7 +3281,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       long preceding_col,
       long following_col);
 
-  private static native long prefixSum(long viewHandle) throws CudfException;
+  private static native long scan(long viewHandle, long aggregation,
+      boolean isInclusive, boolean includeNulls) throws CudfException;
 
   private static native long nansToNulls(long viewHandle) throws CudfException;
 
@@ -3092,6 +3291,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long replaceNullsScalar(long viewHandle, long scalarHandle) throws CudfException;
 
   private static native long replaceNullsColumn(long viewHandle, long replaceViewHandle) throws CudfException;
+
+  private static native long replaceNullsPolicy(long nativeView, boolean isPreceding) throws CudfException;
 
   private static native long ifElseVV(long predVec, long trueVec, long falseVec) throws CudfException;
 
@@ -3147,6 +3348,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
                                      long hiScalarHandle, long hiScalarReplaceHandle);
 
   protected static native long title(long handle);
+
+  private static native long capitalize(long strsColHandle, long delimitersHandle);
 
   private static native long makeStructView(long[] handles, long rowCount);
 

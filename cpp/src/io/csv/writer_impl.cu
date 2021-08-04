@@ -246,7 +246,7 @@ struct column_to_strings_fn {
   //
   template <typename column_type>
   std::enable_if_t<is_not_handled<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const& column) const
+    column_view const&) const
   {
     CUDF_FAIL("Unsupported column type.");
   }
@@ -286,7 +286,6 @@ void writer::impl::write_chunked_begin(table_view const& table,
   if ((metadata != nullptr) && (options_.is_enabled_include_header())) {
     CUDF_EXPECTS(metadata->column_names.size() == static_cast<size_t>(table.num_columns()),
                  "Mismatch between number of column headers and table columns.");
-
     std::string delimiter_str{options_.get_inter_column_delimiter()};
 
     // avoid delimiter after last element:
@@ -295,7 +294,12 @@ void writer::impl::write_chunked_begin(table_view const& table,
     std::copy(metadata->column_names.begin(),
               metadata->column_names.end() - 1,
               std::ostream_iterator<std::string>(ss, delimiter_str.c_str()));
-    ss << metadata->column_names.back() << options_.get_line_terminator();
+
+    if (metadata->column_names.size() > 0) {
+      ss << metadata->column_names.back() << options_.get_line_terminator();
+    } else {
+      ss << options_.get_line_terminator();
+    }
 
     out_sink_->host_write(ss.str().data(), ss.str().size());
   }
@@ -355,8 +359,6 @@ void writer::impl::write(table_view const& table,
                          const table_metadata* metadata,
                          rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(table.num_columns() > 0, "Empty table.");
-
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //

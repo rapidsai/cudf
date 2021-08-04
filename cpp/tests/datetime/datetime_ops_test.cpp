@@ -26,6 +26,10 @@
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
+#define XXX false  // stub for null values
+
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
+
 template <typename T>
 struct NonTimestampTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
@@ -300,7 +304,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
       30,     // This is the UNIX epoch - when rounded up becomes 1970-01-31
       -1523   // 1965-10-31
     },
-    true);
+    verbosity);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
@@ -340,7 +344,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
         111     // Random nullable field
       },
       {false, true, true, true, false, true, true, false}},
-    true);
+    verbosity);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
@@ -382,7 +386,7 @@ TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
                                    },
                                    {false, true, true, true, false, true, true, false, true},
                                  },
-                                 true);
+                                 verbosity);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithEmptyColumn)
@@ -478,7 +482,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSeconds)
       -128952000L,  // 1965-11-30 12:00:00 GMT
       -123587928L   // 1966-01-31 14:01:12 GMT
     },
-    true);
+    verbosity);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSecondsAndNullValues)
@@ -529,7 +533,40 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSecondsAndNullValues)
         -123587928L   // 1966-01-31 14:01:12 GMT
       },
       {false, false, true, false, true, false, true, false, true, true, true, true}},
-    true);
+    verbosity);
+}
+
+TEST_F(BasicDatetimeOpsTest, TestIsLeapYear)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace cuda::std::chrono;
+
+  // Time in seconds since epoch
+  // Dates converted using epochconverter.com
+  auto timestamps_s =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      {
+        1594332839L,    // 2020-07-09 10:13:59 GMT - leap year
+        0L,             // null
+        915148800L,     // 1999-01-01 00:00:00 GMT - non leap year
+        -11663029161L,  // 1600-5-31 05:40:39 GMT - leap year
+        707904541L,     // 1992-06-07 08:09:01 GMT - leap year
+        2181048447L,    // 1900-11-20 09:12:33 GMT - non leap year
+        0L,             // UNIX EPOCH 1970-01-01 00:00:00 GMT - non leap year
+        -12212553600L,  // First full year of Gregorian Calandar 1583-01-01 00:00:00 - non-leap-year
+        0L,             // null
+        13591632822L,   // 2400-09-13 13:33:42 GMT - leap year
+        4539564243L,    // 2113-11-08 06:04:03 GMT - non leap year
+        0L              // null
+      },
+      {true, false, true, true, true, true, true, true, false, true, true, false}};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *is_leap_year(timestamps_s),
+    cudf::test::fixed_width_column_wrapper<bool>{
+      {true, XXX, false, true, true, false, false, false, XXX, true, false, XXX},
+      {true, false, true, true, true, true, true, true, false, true, true, false}});
 }
 
 CUDF_TEST_PROGRAM_MAIN()

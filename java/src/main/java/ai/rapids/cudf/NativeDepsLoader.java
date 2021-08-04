@@ -55,7 +55,6 @@ public class NativeDepsLoader {
    */
   private static final String[][] loadOrder = new String[][]{
       new String[]{
-          "nvcomp",
           "cudf"
       },
       new String[]{

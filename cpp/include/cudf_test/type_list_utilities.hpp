@@ -32,7 +32,7 @@
  * template <class T>
  * class TestFixture : ::testing::Test { };
  *
- * TYPED_TEST_CASE(TestFixure, TestTypes);
+ * TYPED_TEST_CASE(TestFixture, TestTypes);
  *
  * TYPED_TEST(TestFixture, mytest){
  *   using Type0 = GetType<TypeParam,0>; // the first type element
@@ -169,7 +169,7 @@ struct ConcatImpl<> {
 };
 
 /**
- * @brief Concantenates compile-time lists of types into a single type list.
+ * @brief Concatenates compile-time lists of types into a single type list.
  *
  * Example:
  * ```

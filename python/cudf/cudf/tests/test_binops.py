@@ -7,6 +7,7 @@ import operator
 import random
 from itertools import product
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -14,7 +15,7 @@ import pytest
 import cudf
 from cudf.core import Series
 from cudf.core.index import as_index
-from cudf.tests import utils
+from cudf.testing import _utils as utils
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
@@ -34,6 +35,15 @@ _binops = [
     operator.truediv,
     operator.mod,
     operator.pow,
+]
+
+_binops_compare = [
+    operator.eq,
+    operator.ne,
+    operator.lt,
+    operator.le,
+    operator.gt,
+    operator.ge,
 ]
 
 
@@ -1697,7 +1707,7 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     got = val == data
 
     # In case of index, expected would be a numpy array
-    if isinstance(data, cudf.Index):
+    if isinstance(data, cudf.BaseIndex):
         expected = pd.Index(expected)
 
     utils.assert_eq(expected, got)
@@ -1740,12 +1750,6 @@ def test_binops_with_NA_consistent(dtype, op):
         assert (result == expect_all).all()
     elif dtype in DATETIME_TYPES & TIMEDELTA_TYPES:
         assert result._column.null_count == len(data)
-
-
-def _decimal_series(input, dtype):
-    return cudf.Series(
-        [x if x is None else decimal.Decimal(x) for x in input], dtype=dtype,
-    )
 
 
 @pytest.mark.parametrize(
@@ -2080,10 +2084,10 @@ def _decimal_series(input, dtype):
 def test_binops_decimal(args):
     op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype = args
 
-    a = _decimal_series(lhs, l_dtype)
-    b = _decimal_series(rhs, r_dtype)
+    a = utils._decimal_series(lhs, l_dtype)
+    b = utils._decimal_series(rhs, r_dtype)
     expect = (
-        _decimal_series(expect, expect_dtype)
+        utils._decimal_series(expect, expect_dtype)
         if isinstance(expect_dtype, cudf.Decimal64Dtype)
         else cudf.Series(expect, dtype=expect_dtype)
     )
@@ -2242,7 +2246,7 @@ def test_binops_decimal(args):
         ),
     ],
 )
-@pytest.mark.parametrize("integer_dtype", cudf.tests.utils.INTEGER_TYPES)
+@pytest.mark.parametrize("integer_dtype", utils.INTEGER_TYPES)
 @pytest.mark.parametrize("reflected", [True, False])
 def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
     """
@@ -2258,7 +2262,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
     else:
         op, ldata, ldtype, rdata, _, expected = args
 
-    lhs = _decimal_series(ldata, ldtype)
+    lhs = utils._decimal_series(ldata, ldtype)
     rhs = cudf.Series(rdata, dtype=integer_dtype)
 
     if reflected:
@@ -2746,7 +2750,7 @@ def test_binops_decimal_scalar_compare(args, reflected):
     else:
         op, ldata, ldtype, rdata, _, expected = args
 
-    lhs = _decimal_series(ldata, ldtype)
+    lhs = utils._decimal_series(ldata, ldtype)
     rhs = rdata
 
     if reflected:
@@ -2870,3 +2874,42 @@ def generate_test_null_equals_columnops_data():
 )
 def test_null_equals_columnops(lcol, rcol, ans, case):
     assert lcol._null_equals(rcol).all() == ans
+
+
+def test_add_series_to_dataframe():
+    """Verify that missing columns result in NaNs, not NULLs."""
+    assert cp.all(
+        cp.isnan(
+            (
+                cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+                + cudf.Series([1, 2, 3], index=["a", "b", "c"])
+            )["c"]
+        )
+    )
+
+
+@pytest.mark.parametrize("obj_class", [cudf.Series, cudf.Index])
+@pytest.mark.parametrize("binop", _binops)
+@pytest.mark.parametrize("other_type", [np.array, cp.array, pd.Series, list])
+def test_binops_non_cudf_types(obj_class, binop, other_type):
+    # Skip 0 to not deal with NaNs from division.
+    data = range(1, 100)
+    lhs = obj_class(data)
+    rhs = other_type(data)
+    assert cp.all((binop(lhs, rhs) == binop(lhs, lhs)).values)
+
+
+@pytest.mark.parametrize("binop", _binops + _binops_compare)
+@pytest.mark.parametrize("data", [None, [-9, 7], [5, -2], [12, 18]])
+@pytest.mark.parametrize("scalar", [1, 3, 12, np.nan])
+def test_empty_column(binop, data, scalar):
+    gdf = cudf.DataFrame(columns=["a", "b"])
+    if data is not None:
+        gdf["a"] = data
+
+    pdf = gdf.to_pandas()
+
+    got = binop(gdf, scalar)
+    expected = binop(pdf, scalar)
+
+    utils.assert_eq(expected, got)

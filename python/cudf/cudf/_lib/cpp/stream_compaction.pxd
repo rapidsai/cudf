@@ -1,17 +1,20 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
-from libcpp cimport bool
 
-from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
+from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
 
-from cudf._lib.cpp.types cimport (
-    size_type, null_policy, nan_policy, null_equality
-)
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.types cimport (
+    nan_policy,
+    null_equality,
+    null_policy,
+    size_type,
+)
 
 
 cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" \

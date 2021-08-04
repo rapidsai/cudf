@@ -873,7 +873,7 @@ public class TableTest extends CudfTestBase {
         .column(  2,   3,   9,   0,   1,   7,   4, null, null,   8)
         .column(100, 101, 102, 103, 104, 105, 106,  107,  108, 109)
         .build();
-         
+
          Table rightTable = new Table.TestBuilder()
              .column(null, null,   9,   8,  10,  32)
              .column( 201,  202, 203, 204, 205, 206)
@@ -2659,6 +2659,65 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByScan() {
+    try (Table t1 = new Table.TestBuilder()
+        .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
+        .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
+        .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, 10.0)
+        .column(  -9, null,   -5,   0,     4,    4,    8,    2,    2,    2, null)
+        .build()) {
+      try (Table result = t1
+          .groupBy(GroupByOptions.builder()
+              .withKeysSorted(true)
+              .withKeysDescending(false, false)
+              .build(), 0, 1)
+          .scan(Aggregation.sum().onColumn(2),
+              Aggregation.count(NullPolicy.INCLUDE).onColumn(2),
+              Aggregation.min().onColumn(2),
+              Aggregation.max().onColumn(2),
+              Aggregation.rank().onColumn(3),
+              Aggregation.denseRank().onColumn(3));
+           Table expected = new Table.TestBuilder()
+               .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
+               .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
+               .column(12.0, 14.0, 13.0, 30.0, 17.0, 34.0, null, null, 11.0, null, 21.0)
+               .column(   0,    0,    0,    1,    0,    1,    2,    0,    1,    2,    3) // odd why is this not 1 based?
+               .column(12.0, 14.0, 13.0, 13.0, 17.0, 17.0, null, null, 11.0, null, 10.0)
+               .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, 11.0)
+               .column(1, 1, 1, 2, 1, 1, 3, 1, 1, 1, 4)
+               .column(1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 2)
+               .build()) {
+        assertTablesAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByReplaceNulls() {
+    try (Table t1 = new Table.TestBuilder()
+        .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
+        .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
+        .column(null, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, null)
+        .build()) {
+      try (Table result = t1
+          .groupBy(GroupByOptions.builder()
+              .withKeysSorted(true)
+              .withKeysDescending(false, false)
+              .build(), 0, 1)
+          .replaceNulls(ReplacePolicy.PRECEDING.onColumn(2),
+              ReplacePolicy.FOLLOWING.onColumn(2));
+           Table expected = new Table.TestBuilder()
+               .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
+               .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
+               .column(null, 14.0, 13.0, 17.0, 17.0, 17.0, 17.0, null, 11.0, 11.0, 11.0)
+               .column(null, 14.0, 13.0, 17.0, 17.0, 17.0, null, 11.0, 11.0, null, null)
+               .build()) {
+        assertTablesAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
   void testGroupByUniqueCount() {
     try (Table t1 = new Table.TestBuilder()
             .column( "1",  "1",  "1",  "1",  "1",  "1")
@@ -3044,6 +3103,109 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testWindowingCollectSet() {
+    Aggregation aggCollect = Aggregation.collectSet();
+    Aggregation aggCollectWithEqNulls = Aggregation.collectSet(NullPolicy.INCLUDE,
+        NullEquality.EQUAL, NaNEquality.UNEQUAL);
+    Aggregation aggCollectWithUnEqNulls = Aggregation.collectSet(NullPolicy.INCLUDE,
+        NullEquality.UNEQUAL, NaNEquality.UNEQUAL);
+    Aggregation aggCollectWithEqNaNs = Aggregation.collectSet(NullPolicy.INCLUDE,
+        NullEquality.EQUAL, NaNEquality.ALL_EQUAL);
+
+    try (Scalar two = Scalar.fromInt(2);
+         Scalar one = Scalar.fromInt(1);
+         WindowOptions winOpts = WindowOptions.builder()
+             .minPeriods(1)
+             .window(two, one)
+             .build()) {
+      try (Table raw = new Table.TestBuilder()
+          .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+          .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+          .column(1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8) // OBY Key
+          .column(5, 5, 1, 1, 1, 4, 3, 4, null, null, 6, 7) // Agg Column of INT32
+          .column(1.1, 1.1, null, 2.2, -3.0, 1.3e-7, -3.0, Double.NaN, 1e-3, null, Double.NaN, Double.NaN) // Agg Column of FLOAT64
+          .build();
+           ColumnVector expectSortedAggColumn = ColumnVector
+               .fromBoxedInts(5, 5, 1, 1, 1, 4, 3, 4, null, null, 6, 7)) {
+        try (Table sorted = raw.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(2))) {
+          ColumnVector sortedAggColumn = sorted.getColumn(3);
+          assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+          // Primitive type: INT32
+          //  a) excluding NULLs
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+              .aggregateWindows(aggCollect.onColumn(3).overWindow(winOpts));
+               ColumnVector expected = ColumnVector.fromLists(
+                   new ListType(false, new BasicType(false, DType.INT32)),
+                   Arrays.asList(5), Arrays.asList(1, 5), Arrays.asList(1, 5), Arrays.asList(1),
+                   Arrays.asList(1, 4), Arrays.asList(1, 3, 4), Arrays.asList(3, 4), Arrays.asList(3, 4),
+                   Arrays.asList(), Arrays.asList(6), Arrays.asList(6, 7), Arrays.asList(6, 7))) {
+            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+          }
+          //  b) including NULLs AND NULLs are equal
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+              .aggregateWindows(aggCollectWithEqNulls.onColumn(3).overWindow(winOpts));
+               ColumnVector expected = ColumnVector.fromLists(
+                   new ListType(false, new BasicType(false, DType.INT32)),
+                   Arrays.asList(5), Arrays.asList(1, 5), Arrays.asList(1, 5), Arrays.asList(1),
+                   Arrays.asList(1, 4), Arrays.asList(1, 3, 4), Arrays.asList(3, 4), Arrays.asList(3, 4),
+                   Arrays.asList((Integer) null), Arrays.asList(6, null), Arrays.asList(6, 7, null), Arrays.asList(6, 7))) {
+            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+          }
+          //  c) including NULLs AND NULLs are unequal
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+              .aggregateWindows(aggCollectWithUnEqNulls.onColumn(3).overWindow(winOpts));
+               ColumnVector expected = ColumnVector.fromLists(
+                   new ListType(false, new BasicType(false, DType.INT32)),
+                   Arrays.asList(5), Arrays.asList(1, 5), Arrays.asList(1, 5), Arrays.asList(1),
+                   Arrays.asList(1, 4), Arrays.asList(1, 3, 4), Arrays.asList(3, 4), Arrays.asList(3, 4),
+                   Arrays.asList(null, null), Arrays.asList(6, null, null), Arrays.asList(6, 7, null), Arrays.asList(6, 7))) {
+            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+          }
+
+          // Primitive type: FLOAT64
+          //  a) excluding NULLs
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+              .aggregateWindows(aggCollect.onColumn(4).overWindow(winOpts));
+               ColumnVector expected = ColumnVector.fromLists(
+                   new ListType(false, new BasicType(false, DType.FLOAT64)),
+                   Arrays.asList(1.1), Arrays.asList(1.1), Arrays.asList(1.1, 2.2), Arrays.asList(2.2),
+                   Arrays.asList(-3.0, 1.3e-7), Arrays.asList(-3.0, 1.3e-7),
+                   Arrays.asList(-3.0, 1.3e-7, Double.NaN), Arrays.asList(-3.0, Double.NaN),
+                   Arrays.asList(1e-3), Arrays.asList(1e-3, Double.NaN),
+                   Arrays.asList(Double.NaN, Double.NaN), Arrays.asList(Double.NaN, Double.NaN))) {
+            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+          }
+          //  b) including NULLs AND NULLs are equal
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+              .aggregateWindows(aggCollectWithEqNulls.onColumn(4).overWindow(winOpts));
+               ColumnVector expected = ColumnVector.fromLists(
+                   new ListType(false, new BasicType(false, DType.FLOAT64)),
+                   Arrays.asList(1.1), Arrays.asList(1.1, null), Arrays.asList(1.1, 2.2, null), Arrays.asList(2.2, null),
+                   Arrays.asList(-3.0, 1.3e-7), Arrays.asList(-3.0, 1.3e-7),
+                   Arrays.asList(-3.0, 1.3e-7, Double.NaN), Arrays.asList(-3.0, Double.NaN),
+                   Arrays.asList(1e-3, null), Arrays.asList(1e-3, Double.NaN, null),
+                   Arrays.asList(Double.NaN, Double.NaN, null), Arrays.asList(Double.NaN, Double.NaN))) {
+            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+          }
+          //  c) including NULLs AND NULLs are equal AND NaNs are equal
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+              .aggregateWindows(aggCollectWithEqNaNs.onColumn(4).overWindow(winOpts));
+               ColumnVector expected = ColumnVector.fromLists(
+                   new ListType(false, new BasicType(false, DType.FLOAT64)),
+                   Arrays.asList(1.1), Arrays.asList(1.1, null), Arrays.asList(1.1, 2.2, null), Arrays.asList(2.2, null),
+                   Arrays.asList(-3.0, 1.3e-7), Arrays.asList(-3.0, 1.3e-7),
+                   Arrays.asList(-3.0, 1.3e-7, Double.NaN), Arrays.asList(-3.0, Double.NaN),
+                   Arrays.asList(1e-3, null), Arrays.asList(1e-3, Double.NaN, null),
+                   Arrays.asList(Double.NaN, null), Arrays.asList(Double.NaN))) {
+            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   void testWindowingLead() {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
@@ -3218,9 +3380,7 @@ public class TableTest extends CudfTestBase {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
           assertColumnsAreEqual(decExpectAggResult, decWindowAggResults.getColumn(0));
           assertColumnsAreEqual(listExpectAggResult, listWindowAggResults.getColumn(0));
-
-          // TODO  this is not gonna work, since libcudf has some issue for lead on struct with default values
-          // assertColumnsAreEqual(structExpectAggResult, structWindowAggResults.getColumn(0));
+          assertColumnsAreEqual(structExpectAggResult, structWindowAggResults.getColumn(0));
         }
 
         // Outside bounds
@@ -3439,8 +3599,7 @@ public class TableTest extends CudfTestBase {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
           assertColumnsAreEqual(decExpectAggResult, decWindowAggResults.getColumn(0));
           assertColumnsAreEqual(listExpectAggResult, listWindowAggResults.getColumn(0));
-          // TODO  this is not gonna work, since libcudf has some issue for lag on struct with default values
-          // assertColumnsAreEqual(structExpectAggResult, structWindowAggResults.getColumn(0));
+          assertColumnsAreEqual(structExpectAggResult, structWindowAggResults.getColumn(0));
         }
 
         // Outside bounds
@@ -4726,6 +4885,135 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByM2() {
+    // A trivial test:
+    try (Table input = new Table.TestBuilder().column(1, 2, 3, 1, 2, 2, 1, 3, 3, 2)
+             .column(0, 1, -2, 3, -4, -5, -6, 7, -8, 9)
+             .build();
+         Table results = input.groupBy(0).aggregate(Aggregation.M2()
+               .onColumn(1));
+         Table expected = new Table.TestBuilder().column(1, 2, 3)
+             .column(42.0, 122.75, 114.0)
+             .build()) {
+      assertTablesAreEqual(expected, results);
+    }
+
+    // Test with values have nulls (the values associated with key=2 has both nulls and non-nulls,
+    // while the values associated with key=5 are all nulls):
+    try (Table input = new Table.TestBuilder().column(1, 2, 5, 3, 4, 5, 2, 3, 2, 5)
+             .column(0, null, null, 2, 3, null, 5, 6, 7, null)
+             .build();
+         Table results = input.groupBy(0).aggregate(Aggregation.M2()
+             .onColumn(1));
+         Table expected = new Table.TestBuilder().column(1, 2, 3, 4, 5)
+             .column(0.0, 2.0, 8.0, 0.0, null)
+             .build()) {
+      assertTablesAreEqual(expected, results);
+    }
+
+    // Test with floating-point values having NaN:
+    try (Table input = new Table.TestBuilder().column(4, 3, 1, 2, 3, 1, 2, 2, 1, null, 3, 2, 4, 4)
+             .column(null, null, 0.0, 1.0, 2.0, 3.0, 4.0, Double.NaN, 6.0, 7.0, 8.0, 9.0, 10.0, Double.NaN)
+             .build();
+         Table results = input.groupBy(0).aggregate(Aggregation.M2()
+             .onColumn(1));
+         Table expected = new Table.TestBuilder().column(1, 2, 3, 4, null)
+             .column(18.0, Double.NaN, 18.0, Double.NaN, 0.0)
+             .build()) {
+      assertTablesAreEqual(expected, results);
+    }
+
+    // Test with floating-point values having NaN and +/- Inf
+    // (The values associated with:
+    //   key=1: have only NaN
+    //   key=2: have only +Inf
+    //   key=3: have only -Inf
+    //   key=4: have NaN and +/- Inf,
+    //   key=5: have normal numbers):
+    try (Table input = new Table.TestBuilder().column(1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4)
+             .column(Double.NaN,
+                     Double.POSITIVE_INFINITY,
+                     Double.NEGATIVE_INFINITY,
+                     Double.POSITIVE_INFINITY,
+                     5.0,
+                     //
+                     Double.NaN,
+                     Double.POSITIVE_INFINITY,
+                     Double.NEGATIVE_INFINITY,
+                     Double.NEGATIVE_INFINITY,
+                     10.0,
+                     //
+                     Double.NaN,
+                     Double.POSITIVE_INFINITY,
+                     Double.NEGATIVE_INFINITY,
+                     Double.POSITIVE_INFINITY)
+             .build();
+         Table results = input.groupBy(0).aggregate(Aggregation.M2()
+             .onColumn(1));
+         Table expected = new Table.TestBuilder().column(1, 2, 3, 4, 5)
+             .column(Double.NaN, Double.NaN, Double.NaN, Double.NaN, 12.5)
+             .build()) {
+      assertTablesAreEqual(expected, results);
+    }
+  }
+
+  @Test
+  void testGroupByMergeM2() {
+    StructType nestedType = new StructType(false,
+        new BasicType(true, DType.INT32),
+        new BasicType(true, DType.FLOAT64),
+        new BasicType(true, DType.FLOAT64));
+
+    try (Table partialResults1 = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(nestedType,
+                 struct(1, 0.0, 0.0),
+                 struct(1, 1.0, 0.0),
+                 struct(0, null, null),
+                 struct(0, null, null))
+             .build();
+         Table partialResults2 = new Table.TestBuilder()
+             .column(1, 2, 3)
+             .column(nestedType,
+                 struct(1, 3.0, 0.0),
+                 struct(1, 4.0, 0.0),
+                 struct(1, 2.0, 0.0))
+             .build();
+         Table partialResults3 = new Table.TestBuilder()
+             .column(1, 2)
+             .column(nestedType,
+                 struct(1, 6.0, 0.0),
+                 struct(1, Double.NaN, Double.NaN))
+             .build();
+         Table partialResults4 = new Table.TestBuilder()
+             .column(2, 3, 4)
+             .column(nestedType,
+                 struct(1, 9.0, 0.0),
+                 struct(1, 8.0, 0.0),
+                 struct(2, Double.NaN, Double.NaN))
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(nestedType,
+                 struct(3, 3.0, 18.0),
+                 struct(4, Double.NaN, Double.NaN),
+                 struct(2, 5.0, 18.0),
+                 struct(2, Double.NaN, Double.NaN))
+             .build()) {
+      try (Table concatenatedResults = Table.concatenate(
+             partialResults1,
+             partialResults2,
+             partialResults3,
+             partialResults4);
+           Table finalResults = concatenatedResults.groupBy(0).aggregate(
+             Aggregation.mergeM2().onColumn(1))
+           ) {
+        assertTablesAreEqual(expected, finalResults);
+      }
+    }
+  }
+
+  @Test
   void testGroupByFirstExcludeNulls() {
     try (Table input = new Table.TestBuilder()
             .column(  1,   1,    1,  1,  2,    2,  2,    2)
@@ -5004,6 +5292,54 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByMergeLists() {
+    ListType listOfInts = new ListType(false, new BasicType(false, DType.INT32));
+    ListType listOfStructs = new ListType(false, new StructType(false,
+        new BasicType(false, DType.INT32), new BasicType(false, DType.STRING)));
+    try (Table input = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 4)
+        .column(listOfInts,
+            Arrays.asList(1, 2), Arrays.asList(3), Arrays.asList(7, 8), Arrays.asList(4, 5, 6),
+            Arrays.asList(8, 9), Arrays.asList(8, 9, 10), Arrays.asList(10, 11), Arrays.asList(11, 12),
+            Arrays.asList(13, 13), Arrays.asList(14, 15, 15))
+        .column(listOfStructs,
+            Arrays.asList(new StructData(1, "s1"), new StructData(2, "s2")),
+            Arrays.asList(new StructData(2, "s3"), new StructData(3, "s4")),
+            Arrays.asList(new StructData(2, "s2")),
+            Arrays.asList(),
+            Arrays.asList(new StructData(11, "s11")),
+            Arrays.asList(new StructData(22, "s22"), new StructData(33, "s33")),
+            Arrays.asList(),
+            Arrays.asList(new StructData(22, "s22"), new StructData(33, "s33"), new StructData(44, "s44")),
+            Arrays.asList(new StructData(333, "s333"), new StructData(222, "s222"), new StructData(111, "s111")),
+            Arrays.asList(new StructData(222, "s222"), new StructData(444, "s444")))
+        .build();
+         Table expectedListOfInts = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(listOfInts,
+                 Arrays.asList(1, 2, 3, 7 ,8, 4, 5, 6),
+                 Arrays.asList(8, 9, 8, 9, 10, 10, 11, 11, 12),
+                 Arrays.asList(13, 13),
+                 Arrays.asList(14, 15, 15))
+             .build();
+         Table expectedListOfStructs = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(listOfStructs,
+                 Arrays.asList(new StructData(1, "s1"), new StructData(2, "s2"),
+                     new StructData(2, "s3"), new StructData(3, "s4"), new StructData(2, "s2")),
+                 Arrays.asList(new StructData(11, "s11"), new StructData(22, "s22"), new StructData(33, "s33"),
+                     new StructData(22, "s22"), new StructData(33, "s33"), new StructData(44, "s44")),
+                 Arrays.asList(new StructData(333, "s333"), new StructData(222, "s222"), new StructData(111, "s111")),
+                 Arrays.asList(new StructData(222, "s222"), new StructData(444, "s444")))
+             .build();
+         Table retListOfInts = input.groupBy(0).aggregate(Aggregation.mergeLists().onColumn(1));
+         Table retListOfStructs = input.groupBy(0).aggregate(Aggregation.mergeLists().onColumn(2))) {
+      assertTablesAreEqual(expectedListOfInts, retListOfInts);
+      assertTablesAreEqual(expectedListOfStructs, retListOfStructs);
+    }
+  }
+
+  @Test
   void testGroupByCollectSetIncludeNulls() {
     // test with null unequal and nan unequal
     Aggregation collectSet = Aggregation.collectSet(NullPolicy.INCLUDE,
@@ -5062,6 +5398,55 @@ public class TableTest extends CudfTestBase {
              .build();
          Table found = input.groupBy(0).aggregate(collectSet.onColumn(1))) {
       assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByMergeSets() {
+    ListType listOfInts = new ListType(false, new BasicType(false, DType.INT32));
+    ListType listOfDoubles = new ListType(false, new BasicType(false, DType.FLOAT64));
+    try (Table input = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 4)
+        .column(listOfInts,
+            Arrays.asList(1, 2), Arrays.asList(3), Arrays.asList(7, 8), Arrays.asList(4, 5, 6),
+            Arrays.asList(8, 9), Arrays.asList(8, 9, 10), Arrays.asList(10, 11), Arrays.asList(11, 12),
+            Arrays.asList(13, 13), Arrays.asList(14, 15, 15))
+        .column(listOfDoubles,
+            Arrays.asList(Double.NaN, 1.2), Arrays.asList(), Arrays.asList(Double.NaN), Arrays.asList(-3e10),
+            Arrays.asList(1.1, 2.2, 3.3), Arrays.asList(3.3, 2.2), Arrays.asList(), Arrays.asList(),
+            Arrays.asList(1e3, Double.NaN, 1e-3, Double.NaN), Arrays.asList())
+        .build();
+         Table expectedListOfInts = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(listOfInts,
+                 Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8),
+                 Arrays.asList(8, 9, 10, 11, 12),
+                 Arrays.asList(13),
+                 Arrays.asList(14, 15))
+             .build();
+         Table expectedListOfDoubles = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(listOfDoubles,
+                 Arrays.asList(-3e10, 1.2, Double.NaN, Double.NaN),
+                 Arrays.asList(1.1, 2.2, 3.3),
+                 Arrays.asList(1e-3, 1e3, Double.NaN, Double.NaN),
+                 Arrays.asList())
+             .build();
+         Table expectedListOfDoublesNaNEq = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(listOfDoubles,
+                 Arrays.asList(-3e10, 1.2, Double.NaN),
+                 Arrays.asList(1.1, 2.2, 3.3),
+                 Arrays.asList(1e-3, 1e3, Double.NaN),
+                 Arrays.asList())
+             .build();
+         Table retListOfInts = input.groupBy(0).aggregate(Aggregation.mergeSets().onColumn(1));
+         Table retListOfDoubles = input.groupBy(0).aggregate(Aggregation.mergeSets().onColumn(2));
+         Table retListOfDoublesNaNEq = input.groupBy(0).aggregate(
+             Aggregation.mergeSets(NullEquality.UNEQUAL, NaNEquality.ALL_EQUAL).onColumn(2))) {
+      assertTablesAreEqual(expectedListOfInts, retListOfInts);
+      assertTablesAreEqual(expectedListOfDoubles, retListOfDoubles);
+      assertTablesAreEqual(expectedListOfDoublesNaNEq, retListOfDoublesNaNEq);
     }
   }
 

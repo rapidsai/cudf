@@ -32,7 +32,7 @@ elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
   set(CUDF_JNI_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
-project(CUDF_JNI VERSION 21.06.01 LANGUAGES C CXX)
+project(CUDF_JNI VERSION 21.08.00 LANGUAGES C CXX)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -42,15 +42,21 @@ option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
+option(CUDF_JNI_ARROW_STATIC "Statically link Arrow" ON)
 
 message(VERBOSE "CUDF_JNI: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF_JNI: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF_JNI: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
 message(VERBOSE "CUDF_JNI: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
 message(VERBOSE "CUDF_JNI: Build with GPUDirect Storage support: ${USE_GDS}")
+message(VERBOSE "CUDF_JNI: Build with static Arrow library: ${CUDF_JNI_ARROW_STATIC}")
 
 set(CUDF_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp")
-set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
+if (DEFINED ENV{CUDF_CPP_BUILD_DIR}) 
+  set(CUDF_CPP_BUILD_DIR "$ENV{CUDF_CPP_BUILD_DIR}")
+else()
+  set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
+endif()
 
 set(CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/"
@@ -109,20 +115,25 @@ endif(CUDA_STATIC_RUNTIME)
 
 ###################################################################################################
 # - Thrust/CUB/libcudacxx ------------------------------------------------------------------------------------
-
 find_path(THRUST_INCLUDE "thrust"
     HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src"
           "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src"
           "$ENV{CONDA_PREFIX}/include")
+
+message(STATUS "THRUST: THRUST_INCLUDE set to ${THRUST_INCLUDE}")
 
 find_path(CUB_INCLUDE "cub"
     HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src"
           "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src"
           "$ENV{CONDA_PREFIX}/include")
 
+message(STATUS "CUB: CUB_INCLUDE set to ${CUB_INCLUDE}")
+
 find_path(LIBCUDACXX_INCLUDE "cuda"
     HINTS "$ENV{CUDF_ROOT}/_deps/libcudacxx-src/include"
           "${CUDF_CPP_BUILD_DIR}/_deps/libcudacxx-src/include")
+
+message(STATUS "LIBCUDACXX: LIBCUDACXX_INCLUDE set to ${LIBCUDACXX_INCLUDE}")
 
 find_path(SPDLOG_INCLUDE "spdlog"
     HINTS "${CUDF_CPP_BUILD_DIR}/_deps/spdlog-src/include"
@@ -130,6 +141,7 @@ find_path(SPDLOG_INCLUDE "spdlog"
           "$ENV{RMM_ROOT}/include"
           "$ENV{CONDA_PREFIX}/include")
 
+message(STATUS "SPDLOG: SPDLOG_INCLUDE set to ${SPDLOG_INCLUDE}")
 ###################################################################################################
 # - CUDF ------------------------------------------------------------------------------------------
 
@@ -161,19 +173,27 @@ message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
 
 find_path(ARROW_INCLUDE "arrow"
           HINTS "$ENV{ARROW_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include"
                 "${CUDF_CPP_BUILD_DIR}/_deps/arrow-src/cpp/src")
 
 message(STATUS "ARROW: ARROW_INCLUDE set to ${ARROW_INCLUDE}")
 
-# Find static version of Arrow lib
-find_library(ARROW_LIBRARY libarrow.a
+if(CUDF_JNI_ARROW_STATIC)
+  # Find static version of Arrow lib
+  set(CUDF_JNI_ARROW_LIBNAME "libarrow.a")
+else()
+  set(CUDF_JNI_ARROW_LIBNAME "arrow")
+endif(CUDF_JNI_ARROW_STATIC)
+
+find_library(ARROW_LIBRARY ${CUDF_JNI_ARROW_LIBNAME} REQUIRED
   HINTS "$ENV{ARROW_ROOT}/lib"
-        "$ENV{CONDA_PREFIX}/lib"
         "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/release")
 
 if(NOT ARROW_LIBRARY)
-  message(FATAL_ERROR "Arrow static libs not found. Was libcudf built with CUDF_USE_ARROW_STATIC=ON?")
+  if(CUDF_JNI_ARROW_STATIC)
+    message(FATAL_ERROR "Arrow static library not found. Was libcudf built with CUDF_USE_ARROW_STATIC=ON?")
+  else()
+    message(FATAL_ERROR "Arrow dynamic library not found.")
+  endif(CUDF_JNI_ARROW_STATIC)
 else()
   message(STATUS "ARROW: ARROW_LIBRARY set to ${ARROW_LIBRARY}")
 endif(NOT ARROW_LIBRARY)
@@ -248,7 +268,6 @@ set(SOURCE_FILES
     "src/RmmJni.cpp"
     "src/ScalarJni.cpp"
     "src/TableJni.cpp"
-    "src/prefix_sum.cu"
     "src/map_lookup.cu")
 add_library(cudfjni SHARED ${SOURCE_FILES})
 
@@ -292,4 +311,4 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni ${CUDF_LIB} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda)
+target_link_libraries(cudfjni ${NVCOMP_LIB} ${CUDF_LIB} ${ARROW_LIBRARY} ${CUDART_LIBRARY} cuda)

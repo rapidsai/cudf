@@ -89,7 +89,7 @@ struct count_checker {
   }
 
   template <typename T>
-  std::enable_if_t<not std::is_integral<T>::value, void> operator()(rmm::cuda_stream_view stream)
+  std::enable_if_t<not std::is_integral<T>::value, void> operator()(rmm::cuda_stream_view)
   {
     CUDF_FAIL("count value type should be integral.");
   }

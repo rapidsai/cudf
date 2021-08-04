@@ -46,7 +46,7 @@ template <typename T, std::enable_if_t<cudf::is_numeric<T>(), void>* = nullptr>
 auto create_scalar_search_key(T const& value)
 {
   auto search_key = make_numeric_scalar(data_type{type_to_id<T>()});
-  search_key->set_valid(true);
+  search_key->set_valid_async(true);
   static_cast<scalar_type_t<T>*>(search_key.get())->set_value(value);
   return search_key;
 }
@@ -61,7 +61,7 @@ template <typename T, std::enable_if_t<cudf::is_timestamp<T>(), void>* = nullptr
 auto create_scalar_search_key(typename T::rep const& value)
 {
   auto search_key = make_timestamp_scalar(data_type{type_to_id<T>()});
-  search_key->set_valid(true);
+  search_key->set_valid_async(true);
   static_cast<scalar_type_t<typename T::rep>*>(search_key.get())->set_value(value);
   return search_key;
 }
@@ -70,7 +70,7 @@ template <typename T, std::enable_if_t<cudf::is_duration<T>(), void>* = nullptr>
 auto create_scalar_search_key(typename T::rep const& value)
 {
   auto search_key = make_duration_scalar(data_type{type_to_id<T>()});
-  search_key->set_valid(true);
+  search_key->set_valid_async(true);
   static_cast<scalar_type_t<typename T::rep>*>(search_key.get())->set_value(value);
   return search_key;
 }
@@ -79,7 +79,7 @@ template <typename T, std::enable_if_t<cudf::is_numeric<T>(), void>* = nullptr>
 auto create_null_search_key()
 {
   auto search_key = make_numeric_scalar(data_type{type_to_id<T>()});
-  search_key->set_valid(false);
+  search_key->set_valid_async(false);
   return search_key;
 }
 
@@ -87,7 +87,7 @@ template <typename T, std::enable_if_t<cudf::is_timestamp<T>(), void>* = nullptr
 auto create_null_search_key()
 {
   auto search_key = make_timestamp_scalar(data_type{type_to_id<T>()});
-  search_key->set_valid(false);
+  search_key->set_valid_async(false);
   return search_key;
 }
 
@@ -95,7 +95,7 @@ template <typename T, std::enable_if_t<cudf::is_duration<T>(), void>* = nullptr>
 auto create_null_search_key()
 {
   auto search_key = make_duration_scalar(data_type{type_to_id<T>()});
-  search_key->set_valid(false);
+  search_key->set_valid_async(false);
   return search_key;
 }
 

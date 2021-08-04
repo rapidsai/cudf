@@ -107,14 +107,6 @@ std::unique_ptr<column> sorted_order(table_view input,
                  "Mismatch between number of columns and null_precedence size.");
   }
 
-  std::unique_ptr<column> sorted_indices = cudf::make_numeric_column(
-    data_type(type_to_id<size_type>()), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
-  mutable_column_view mutable_indices_view = sorted_indices->mutable_view();
-  thrust::sequence(rmm::exec_policy(stream),
-                   mutable_indices_view.begin<size_type>(),
-                   mutable_indices_view.end<size_type>(),
-                   0);
-
   // fast-path for single column sort
   if (input.num_columns() == 1 and not cudf::is_nested(input.column(0).type())) {
     auto const single_col = input.column(0);
@@ -123,6 +115,14 @@ std::unique_ptr<column> sorted_order(table_view input,
     return stable ? sorted_order<true>(single_col, col_order, null_prec, stream, mr)
                   : sorted_order<false>(single_col, col_order, null_prec, stream, mr);
   }
+
+  std::unique_ptr<column> sorted_indices = cudf::make_numeric_column(
+    data_type(type_to_id<size_type>()), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
+  mutable_column_view mutable_indices_view = sorted_indices->mutable_view();
+  thrust::sequence(rmm::exec_policy(stream),
+                   mutable_indices_view.begin<size_type>(),
+                   mutable_indices_view.end<size_type>(),
+                   0);
 
   auto flattened = structs::detail::flatten_nested_columns(input, column_order, null_precedence);
   auto& input_flattened     = std::get<0>(flattened);

@@ -166,8 +166,7 @@ auto make_strings_children(
 
   // Now build the chars column
   auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
-  std::unique_ptr<column> chars_column =
-    create_chars_child_column(strings_count, bytes, stream, mr);
+  std::unique_ptr<column> chars_column = create_chars_child_column(bytes, stream, mr);
 
   // Execute the function fn again to fill the chars column.
   // Note that if the output chars column has zero size, the function fn should not be called to
@@ -261,7 +260,7 @@ make_strings_children_with_null_mask(
 
   // Now build the chars column
   auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
-  auto chars_column = create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
 
   // Execute the function fn again to fill the chars column.
   // Note that if the output chars column has zero size, the function fn should not be called to

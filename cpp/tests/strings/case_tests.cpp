@@ -97,69 +97,72 @@ TEST_F(StringsCaseTest, Swapcase)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringsCaseTest, EmptyStringsColumn)
-{
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-  auto results      = cudf::strings::to_lower(strings_view);
-  auto view         = results->view();
-  cudf::test::expect_strings_empty(results->view());
-}
-
 TEST_F(StringsCaseTest, Capitalize)
 {
-  std::vector<const char*> h_strings{
-    "SȺȺnich xyZ", "Examples aBc", "thesé", nullptr, "ARE THE", "tést strings", ""};
-  std::vector<const char*> h_expected{
-    "Sⱥⱥnich xyz", "Examples abc", "Thesé", nullptr, "Are the", "Tést strings", ""};
-
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    {"SȺȺnich xyZ", "Examples aBc", "thesé", "", "ARE\tTHE", "tést\tstrings", ""},
+    {1, 1, 1, 0, 1, 1, 1});
   auto strings_view = cudf::strings_column_view(strings);
 
-  auto results = cudf::strings::capitalize(strings_view);
-
-  cudf::test::strings_column_wrapper expected(
-    h_expected.begin(),
-    h_expected.end(),
-    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  {
+    auto results = cudf::strings::capitalize(strings_view);
+    cudf::test::strings_column_wrapper expected(
+      {"Sⱥⱥnich xyz", "Examples abc", "Thesé", "", "Are\tthe", "Tést\tstrings", ""},
+      {1, 1, 1, 0, 1, 1, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto results = cudf::strings::capitalize(strings_view, std::string(" "));
+    cudf::test::strings_column_wrapper expected(
+      {"Sⱥⱥnich Xyz", "Examples Abc", "Thesé", "", "Are\tthe", "Tést\tstrings", ""},
+      {1, 1, 1, 0, 1, 1, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto results = cudf::strings::capitalize(strings_view, std::string(" \t"));
+    cudf::test::strings_column_wrapper expected(
+      {"Sⱥⱥnich Xyz", "Examples Abc", "Thesé", "", "Are\tThe", "Tést\tStrings", ""},
+      {1, 1, 1, 0, 1, 1, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
 }
 
 TEST_F(StringsCaseTest, Title)
 {
-  std::vector<const char*> h_strings{
-    "SȺȺnich", "Examples aBc", "thesé", nullptr, "ARE THE", "tést strings", ""};
-  std::vector<const char*> h_expected{
-    "Sⱥⱥnich", "Examples Abc", "Thesé", nullptr, "Are The", "Tést Strings", ""};
-
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  auto strings_view = cudf::strings_column_view(strings);
+  cudf::test::strings_column_wrapper input(
+    {"SȺȺnich", "Examples aBc", "thesé", "", "ARE THE", "tést strings", "", "n2viDIA corp"},
+    {1, 1, 1, 0, 1, 1, 1, 1});
+  auto strings_view = cudf::strings_column_view(input);
 
   auto results = cudf::strings::title(strings_view);
 
   cudf::test::strings_column_wrapper expected(
-    h_expected.begin(),
-    h_expected.end(),
-    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+    {"Sⱥⱥnich", "Examples Abc", "Thesé", "", "Are The", "Tést Strings", "", "N2Vidia Corp"},
+    {1, 1, 1, 0, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = cudf::strings::title(strings_view, cudf::strings::string_character_types::ALPHANUM);
+
+  cudf::test::strings_column_wrapper expected2(
+    {"Sⱥⱥnich", "Examples Abc", "Thesé", "", "Are The", "Tést Strings", "", "N2vidia Corp"},
+    {1, 1, 1, 0, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
 }
 
 TEST_F(StringsCaseTest, MultiCharUpper)
 {
-  cudf::test::strings_column_wrapper strings{"\u1f52", "\u1f83", "\u1e98", "\ufb05", "\u0149"};
+  cudf::test::strings_column_wrapper strings{"\u1f52 \u1f83", "\u1e98 \ufb05", "\u0149"};
   cudf::test::strings_column_wrapper expected{
-    "\u03a5\u0313\u0300", "\u1f0b\u0399", "\u0057\u030a", "\u0053\u0054", "\u02bc\u004e"};
+    "\u03a5\u0313\u0300 \u1f0b\u0399", "\u0057\u030a \u0053\u0054", "\u02bc\u004e"};
   auto strings_view = cudf::strings_column_view(strings);
 
   auto results = cudf::strings::to_upper(strings_view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
+  results = cudf::strings::capitalize(strings_view, std::string(" "));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = cudf::strings::title(strings_view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -173,4 +176,34 @@ TEST_F(StringsCaseTest, MultiCharLower)
   auto results = cudf::strings::to_lower(strings_view);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsCaseTest, EmptyStringsColumn)
+{
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto strings_view = cudf::strings_column_view(zero_size_strings_column);
+
+  auto results = cudf::strings::to_lower(strings_view);
+  cudf::test::expect_strings_empty(results->view());
+
+  results = cudf::strings::to_upper(strings_view);
+  cudf::test::expect_strings_empty(results->view());
+
+  results = cudf::strings::swapcase(strings_view);
+  cudf::test::expect_strings_empty(results->view());
+
+  results = cudf::strings::capitalize(strings_view);
+  cudf::test::expect_strings_empty(results->view());
+
+  results = cudf::strings::title(strings_view);
+  cudf::test::expect_strings_empty(results->view());
+}
+
+TEST_F(StringsCaseTest, ErrorTest)
+{
+  cudf::test::strings_column_wrapper input{"the column intentionally left blank"};
+  auto view = cudf::strings_column_view(input);
+
+  EXPECT_THROW(cudf::strings::capitalize(view, cudf::string_scalar("", false)), cudf::logic_error);
 }

@@ -22,7 +22,7 @@
 
 /**
  * @file column_view.hpp
- * @brief column view class definitons
+ * @brief column view class definitions
  */
 
 namespace cudf {

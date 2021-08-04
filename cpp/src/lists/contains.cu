@@ -88,7 +88,7 @@ struct lookup_functor {
                             cudf::mutable_column_device_view mutable_ret_bools,
                             cudf::mutable_column_device_view mutable_ret_validity,
                             rmm::cuda_stream_view stream,
-                            rmm::mr::device_memory_resource* mr)
+                            rmm::mr::device_memory_resource*)
   {
     thrust::for_each(
       rmm::exec_policy(stream),
@@ -162,8 +162,6 @@ struct lookup_functor {
     auto const device_view = column_device_view::create(lists.parent(), stream);
     auto const d_lists     = lists_column_device_view(*device_view);
     auto const d_skeys     = get_search_keys_device_iterable_view(search_key, stream);
-
-    auto const lists_column_has_nulls = lists.has_nulls() || lists.child().has_nulls();
 
     auto result_validity = make_fixed_width_column(
       data_type{type_id::BOOL8}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);

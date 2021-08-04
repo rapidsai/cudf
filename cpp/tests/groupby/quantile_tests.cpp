@@ -18,9 +18,12 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
+
+using namespace cudf::test::iterators;
 
 namespace cudf {
 namespace test {
@@ -45,7 +48,7 @@ TYPED_TEST(groupby_quantile_test, basic)
   //                                       {1, 1, 1, 2, 2, 2, 2, 3, 3, 3}
   fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
   //                                       {0, 3, 6, 1, 4, 5, 9, 2, 7, 8}
-  fixed_width_column_wrapper<R> expect_vals({3., 4.5, 7.}, all_valid());
+  fixed_width_column_wrapper<R> expect_vals({3., 4.5, 7.}, no_nulls());
   // clang-format on
 
   auto agg = cudf::make_quantile_aggregation({0.5}, interpolation::LINEAR);
@@ -72,7 +75,7 @@ TYPED_TEST(groupby_quantile_test, zero_valid_keys)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::QUANTILE>;
 
-  fixed_width_column_wrapper<K> keys({1, 2, 3}, all_null());
+  fixed_width_column_wrapper<K> keys({1, 2, 3}, all_nulls());
   fixed_width_column_wrapper<V> vals{3, 4, 5};
 
   fixed_width_column_wrapper<K> expect_keys{};
@@ -88,10 +91,10 @@ TYPED_TEST(groupby_quantile_test, zero_valid_values)
   using R = cudf::detail::target_type_t<V, aggregation::QUANTILE>;
 
   fixed_width_column_wrapper<K> keys{1, 1, 1};
-  fixed_width_column_wrapper<V> vals({3, 4, 5}, all_null());
+  fixed_width_column_wrapper<V> vals({3, 4, 5}, all_nulls());
 
   fixed_width_column_wrapper<K> expect_keys{1};
-  fixed_width_column_wrapper<R> expect_vals({0}, all_null());
+  fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
   auto agg = cudf::make_quantile_aggregation({0.5}, interpolation::LINEAR);
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -108,7 +111,7 @@ TYPED_TEST(groupby_quantile_test, null_keys_and_values)
                                      {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
   //  { 1, 1,     2, 2, 2,   3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, all_valid());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
   //  { 3, 6,     1, 4, 9,   2, 8,    -}
   fixed_width_column_wrapper<R> expect_vals({4.5, 4., 5., 0.}, {1, 1, 1, 0});
 
@@ -128,7 +131,7 @@ TYPED_TEST(groupby_quantile_test, multiple_quantile)
   //                                       {1, 1, 1,   2, 2, 2, 2, 3, 3, 3}
   fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
   //                                        {0, 3, 6,  1, 4, 5, 9, 2, 7, 8}
-  fixed_width_column_wrapper<R> expect_vals({1.5, 4.5, 3.25, 6.,   4.5, 7.5}, all_valid());
+  fixed_width_column_wrapper<R> expect_vals({1.5, 4.5, 3.25, 6.,   4.5, 7.5}, no_nulls());
   // clang-format on
 
   auto agg = cudf::make_quantile_aggregation({0.25, 0.75}, interpolation::LINEAR);
@@ -148,27 +151,27 @@ TYPED_TEST(groupby_quantile_test, interpolation_types)
   fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
 
   //                                         {0, 3, 6,  1, 4, 5, 9,  2, 7}
-  fixed_width_column_wrapper<R> expect_vals1({2.4,      4.2,         4.}, all_valid());
+  fixed_width_column_wrapper<R> expect_vals1({2.4,      4.2,         4.}, no_nulls());
   auto agg1 = cudf::make_quantile_aggregation({0.4}, interpolation::LINEAR);
   test_single_agg(keys, vals, expect_keys, expect_vals1, std::move(agg1));
 
   //                                         {0, 3, 6,  1, 4, 5, 9,  2, 7}
-  fixed_width_column_wrapper<R> expect_vals2({3,        4,           2}, all_valid());
+  fixed_width_column_wrapper<R> expect_vals2({3,        4,           2}, no_nulls());
   auto agg2 = cudf::make_quantile_aggregation({0.4}, interpolation::NEAREST);
   test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg2));
 
   //                                         {0, 3, 6,  1, 4, 5, 9,  2, 7}
-  fixed_width_column_wrapper<R> expect_vals3({0,        4,          2}, all_valid());
+  fixed_width_column_wrapper<R> expect_vals3({0,        4,          2}, no_nulls());
   auto agg3 = cudf::make_quantile_aggregation({0.4}, interpolation::LOWER);
   test_single_agg(keys, vals, expect_keys, expect_vals3, std::move(agg3));
 
   //                                         {0, 3, 6,  1, 4, 5, 9,  2, 7}
-  fixed_width_column_wrapper<R> expect_vals4({3,        5,           7}, all_valid());
+  fixed_width_column_wrapper<R> expect_vals4({3,        5,           7}, no_nulls());
   auto agg4 = cudf::make_quantile_aggregation({0.4}, interpolation::HIGHER);
   test_single_agg(keys, vals, expect_keys, expect_vals4, std::move(agg4));
 
   //                                         {0, 3, 6,  1, 4, 5, 9,  2, 7}
-  fixed_width_column_wrapper<R> expect_vals5({1.5,      4.5,         4.5}, all_valid());
+  fixed_width_column_wrapper<R> expect_vals5({1.5,      4.5,         4.5}, no_nulls());
   auto agg5 = cudf::make_quantile_aggregation({0.4}, interpolation::MIDPOINT);
   test_single_agg(keys, vals, expect_keys, expect_vals5, std::move(agg5));
   // clang-format on
@@ -186,7 +189,7 @@ TYPED_TEST(groupby_quantile_test, dictionary)
   //                                        {1, 1, 1, 2, 2, 2, 2, 3, 3, 3}
   fixed_width_column_wrapper<K> expect_keys({1, 2, 3});
   //                                        {0, 3, 6, 1, 4, 5, 9, 2, 7, 8}
-  fixed_width_column_wrapper<R> expect_vals({3.,      4.5,        7.}, all_valid());
+  fixed_width_column_wrapper<R> expect_vals({3.,      4.5,        7.}, no_nulls());
   // clang-format on
 
   test_single_agg(keys,

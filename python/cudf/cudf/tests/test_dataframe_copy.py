@@ -7,7 +7,7 @@ import pytest
 from numba import cuda
 
 from cudf.core.dataframe import DataFrame
-from cudf.tests.utils import ALL_TYPES, assert_eq
+from cudf.testing._utils import ALL_TYPES, assert_eq
 
 """
 DataFrame copy expectations

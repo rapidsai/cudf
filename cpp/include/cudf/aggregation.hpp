@@ -67,8 +67,9 @@ class aggregation {
     ALL,             ///< all reduction
     SUM_OF_SQUARES,  ///< sum of squares reduction
     MEAN,            ///< arithmetic mean reduction
-    VARIANCE,        ///< groupwise variance
-    STD,             ///< groupwise standard deviation
+    M2,              ///< sum of squares of differences from the mean
+    VARIANCE,        ///< variance
+    STD,             ///< standard deviation
     MEDIAN,          ///< median reduction
     QUANTILE,        ///< compute specified quantile(s)
     ARGMAX,          ///< Index of max element
@@ -76,12 +77,17 @@ class aggregation {
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
+    RANK,            ///< get rank       of current index
+    DENSE_RANK,      ///< get dense rank of current index
     COLLECT_LIST,    ///< collect values into a list
     COLLECT_SET,     ///< collect values into a list without duplicate entries
     LEAD,            ///< window function, accesses row at specified offset following current row
     LAG,             ///< window function, accesses row at specified offset preceding current row
     PTX,             ///< PTX  UDF based reduction
-    CUDA             ///< CUDA UDF based reduction
+    CUDA,            ///< CUDA UDF based reduction
+    MERGE_LISTS,     ///< merge multiple lists values into one list
+    MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
+    MERGE_M2         ///< merge partial values of M2 aggregation
   };
 
   aggregation() = delete;
@@ -156,6 +162,20 @@ std::unique_ptr<Base> make_sum_of_squares_aggregation();
 /// Factory to create a MEAN aggregation
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_mean_aggregation();
+
+/**
+ * @brief Factory to create a M2 aggregation
+ *
+ * A M2 aggregation is sum of squares of differences from the mean. That is:
+ *  `M2 = SUM((x - MEAN) * (x - MEAN))`.
+ *
+ * This aggregation produces the intermediate values that are used to compute variance and standard
+ * deviation across multiple discrete sets. See
+ * `https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm` for more
+ * detail.
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_m2_aggregation();
 
 /**
  * @brief Factory to create a VARIANCE aggregation
@@ -236,6 +256,110 @@ template <typename Base = aggregation>
 std::unique_ptr<Base> make_row_number_aggregation();
 
 /**
+ * @brief Factory to create a RANK aggregation
+ *
+ * `RANK` returns a non-nullable column of size_type "ranks": the number of rows preceding or
+ * equal to the current row plus one. As a result, ranks are not unique and gaps will appear in
+ * the ranking sequence.
+ *
+ * This aggregation only works with "scan" algorithms. The input column into the group or
+ * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
+ * If rows are ordered by more than one column, the orderby input column should be a struct
+ * column containing the ordering columns.
+ *
+ * Note:
+ *  1. This method requires that the rows are presorted by the group keys and order_by columns.
+ *  2. `RANK` aggregations will return a fully valid column regardless of null_handling policy
+ *     specified in the scan.
+ *  3. `RANK` aggregations are not compatible with exclusive scans.
+ *
+ * @code{.pseudo}
+ * Example: Consider an motor-racing statistics dataset, containing the following columns:
+ *   1. driver_name:   (STRING) Name of the car driver
+ *   2. num_overtakes: (INT32)  Number of times the driver overtook another car in a lap
+ *   3. lap_number:    (INT32)  The number of the lap
+ *
+ * For the following presorted data:
+ *
+ *  [ // driver_name,  num_overtakes,  lap_number
+ *    {   "bottas",        2,            3        },
+ *    {   "bottas",        2,            7        },
+ *    {   "bottas",        2,            7        },
+ *    {   "bottas",        1,            1        },
+ *    {   "bottas",        1,            2        },
+ *    {   "hamilton",      4,            1        },
+ *    {   "hamilton",      4,            1        },
+ *    {   "hamilton",      3,            4        },
+ *    {   "hamilton",      2,            4        }
+ *  ]
+ *
+ * A grouped rank aggregation scan with:
+ *   groupby column      : driver_name
+ *   input orderby column: struct_column{num_overtakes, lap_number}
+ *  result: column<size_type>{1, 2, 2, 4, 5, 1, 1, 3, 4}
+ *
+ * A grouped rank aggregation scan with:
+ *   groupby column      : driver_name
+ *   input orderby column: num_overtakes
+ *  result: column<size_type>{1, 1, 1, 4, 4, 1, 1, 3, 4}
+ * @endcode
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_rank_aggregation();
+
+/**
+ * @brief Factory to create a DENSE_RANK aggregation
+ *
+ * `DENSE_RANK` returns a non-nullable column of size_type "dense ranks": the preceding unique
+ * value's rank plus one. As a result, ranks are not unique but there are no gaps in the ranking
+ * sequence (unlike RANK aggregations).
+ *
+ * This aggregation only works with "scan" algorithms. The input column into the group or
+ * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
+ * If rows are ordered by more than one column, the orderby input column should be a struct
+ * column containing the ordering columns.
+ *
+ * Note:
+ *  1. This method requires that the rows are presorted by the group keys and order_by columns.
+ *  2. `DENSE_RANK` aggregations will return a fully valid column regardless of null_handling
+ *     policy specified in the scan.
+ *  3. `DENSE_RANK` aggregations are not compatible with exclusive scans.
+ *
+ * @code{.pseudo}
+ * Example: Consider an motor-racing statistics dataset, containing the following columns:
+ *   1. driver_name:   (STRING) Name of the car driver
+ *   2. num_overtakes: (INT32)  Number of times the driver overtook another car in a lap
+ *   3. lap_number:    (INT32)  The number of the lap
+ *
+ * For the following presorted data:
+ *
+ *  [ // driver_name,  num_overtakes,  lap_number
+ *    {   "bottas",        2,            3        },
+ *    {   "bottas",        2,            7        },
+ *    {   "bottas",        2,            7        },
+ *    {   "bottas",        1,            1        },
+ *    {   "bottas",        1,            2        },
+ *    {   "hamilton",      4,            1        },
+ *    {   "hamilton",      4,            1        },
+ *    {   "hamilton",      3,            4        },
+ *    {   "hamilton",      2,            4        }
+ *  ]
+ *
+ * A grouped dense rank aggregation scan with:
+ *   groupby column      : driver_name
+ *   input orderby column: struct_column{num_overtakes, lap_number}
+ *  result: column<size_type>{1, 2, 2, 3, 4, 1, 1, 2, 3}
+ *
+ * A grouped dense rank aggregation scan with:
+ *   groupby column      : driver_name
+ *   input orderby column: num_overtakes
+ *  result: column<size_type>{1, 1, 1, 2, 2, 1, 1, 2, 3}
+ * @endcode
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_dense_rank_aggregation();
+
+/**
  * @brief Factory to create a COLLECT_LIST aggregation
  *
  * `COLLECT_LIST` returns a list column of all included elements in the group/series.
@@ -259,10 +383,10 @@ std::unique_ptr<Base> make_collect_list_aggregation(
  * of the list rows.
  *
  * @param null_handling Indicates whether to include/exclude nulls during collection
- * @param nulls_equal   Flag to specify whether null entries within each list should be considered
- * equal
- * @param nans_equal    Flag to specify whether NaN values in floating point column should be
- * considered equal
+ * @param nulls_equal Flag to specify whether null entries within each list should be considered
+ *        equal.
+ * @param nans_equal Flag to specify whether NaN values in floating point column should be
+ *        considered equal.
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
@@ -290,6 +414,58 @@ template <typename Base = aggregation>
 std::unique_ptr<Base> make_udf_aggregation(udf_type type,
                                            std::string const& user_defined_aggregator,
                                            data_type output_type);
+
+/**
+ * @brief Factory to create a MERGE_LISTS aggregation.
+ *
+ * Given a lists column, this aggregation merges all the lists corresponding to the same key value
+ * into one list. It is designed specifically to merge the partial results of multiple (distributed)
+ * groupby `COLLECT_LIST` aggregations into a final `COLLECT_LIST` result. As such, it requires the
+ * input lists column to be non-nullable (the child column containing list entries is not subjected
+ * to this requirement).
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_lists_aggregation();
+
+/**
+ * @brief Factory to create a MERGE_SETS aggregation.
+ *
+ * Given a lists column, this aggregation firstly merges all the lists corresponding to the same key
+ * value into one list, then it drops all the duplicate entries in each lists, producing a lists
+ * column containing non-repeated entries.
+ *
+ * This aggregation is designed specifically to merge the partial results of multiple (distributed)
+ * groupby `COLLECT_LIST` or `COLLECT_SET` aggregations into a final `COLLECT_SET` result. As such,
+ * it requires the input lists column to be non-nullable (the child column containing list entries
+ * is not subjected to this requirement).
+ *
+ * In practice, the input (partial results) to this aggregation should be generated by (distributed)
+ * `COLLECT_LIST` aggregations, not `COLLECT_SET`, to avoid unnecessarily removing duplicate entries
+ * for the partial results.
+ *
+ * @param nulls_equal Flag to specify whether nulls within each list should be considered equal
+ *        during dropping duplicate list entries.
+ * @param nans_equal Flag to specify whether NaN values in floating point column should be
+ *        considered equal during dropping duplicate list entries.
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal = null_equality::EQUAL,
+                                                  nan_equality nans_equal = nan_equality::UNEQUAL);
+
+/**
+ * @brief Factory to create a MERGE_M2 aggregation
+ *
+ * Merges the results of `M2` aggregations on independent sets into a new `M2` value equivalent to
+ * if a single `M2` aggregation was done across all of the sets at once. This aggregation is only
+ * valid on structs whose members are the result of the `COUNT_VALID`, `MEAN`, and `M2` aggregations
+ * on the same sets. The output of this aggregation is a struct containing the merged `COUNT_VALID`,
+ * `MEAN`, and `M2` aggregations.
+ *
+ * The input `M2` aggregation values are expected to be all non-negative numbers, since they
+ * were output from `M2` aggregation.
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_m2_aggregation();
 
 /** @} */  // end of group
 }  // namespace cudf

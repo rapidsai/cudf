@@ -65,7 +65,9 @@ def _check_and_cast_columns_with_other(
     else:
         if (
             cudf.utils.dtypes.is_scalar(other)
-            and cudf.utils.dtypes.is_numerical_dtype(source_col.dtype)
+            and cudf.utils.dtypes._is_non_decimal_numeric_dtype(
+                source_col.dtype
+            )
             and cudf.utils.dtypes._can_cast(other, source_col.dtype)
         ):
             common_dtype = source_col.dtype
@@ -149,19 +151,17 @@ def _normalize_columns_and_scalars_type(
             )
 
         elif isinstance(frame, DataFrame):
-            if cudf.utils.dtypes.is_scalar(other):
-                other = [other for i in range(len(frame._column_names))]
-
             source_df = frame.copy(deep=False)
             others = []
-            for col_name, other_sclr in zip(frame._column_names, other):
-
+            for i, col_name in enumerate(frame._column_names):
                 (
                     source_col,
                     other_scalar,
                 ) = _check_and_cast_columns_with_other(
                     source_col=source_df._data[col_name],
-                    other=other_sclr,
+                    other=other
+                    if cudf.utils.dtypes.is_scalar(other)
+                    else other[i],
                     inplace=inplace,
                 )
                 source_df._data[col_name] = source_col
@@ -265,7 +265,7 @@ def where(
         (source_df, others,) = _normalize_columns_and_scalars_type(
             frame, other
         )
-        if isinstance(other, Frame):
+        if isinstance(others, Frame):
             others = others._data.columns
 
         out_df = DataFrame(index=frame.index)

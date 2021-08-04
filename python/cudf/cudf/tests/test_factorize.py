@@ -7,7 +7,7 @@ import pytest
 
 import cudf
 from cudf.core import DataFrame, Index
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize("ncats,nelem", [(2, 2), (2, 10), (10, 100)])
@@ -128,12 +128,12 @@ def test_factorize_result_classes():
     labels, cats = cudf.factorize(cudf.Series(data))
 
     assert isinstance(labels, cp.ndarray)
-    assert isinstance(cats, cudf.Index)
+    assert isinstance(cats, cudf.BaseIndex)
 
     labels, cats = cudf.factorize(cudf.Index(data))
 
     assert isinstance(labels, cp.ndarray)
-    assert isinstance(cats, cudf.Index)
+    assert isinstance(cats, cudf.BaseIndex)
 
     labels, cats = cudf.factorize(cp.array(data))
 

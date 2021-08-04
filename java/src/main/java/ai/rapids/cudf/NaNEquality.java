@@ -18,11 +18,19 @@
 
 package ai.rapids.cudf;
 
-/*
- * This is analogous to the native 'nan_equality'.
+/**
+ * How should NaNs be compared in an operation. In floating point there are multiple
+ * different binary representations for NaN.
  */
 public enum NaNEquality {
+  /**
+   * No NaN representation is considered equal to any NaN representation, even for the
+   * exact same representation.
+   */
   UNEQUAL(false),
+  /**
+   * All representations of NaN are considered to be equal.
+   */
   ALL_EQUAL(true);
 
   NaNEquality(boolean nansEqual) {

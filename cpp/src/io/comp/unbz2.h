@@ -82,25 +82,25 @@ namespace io {
 // If BZ_OUTBUFF_FULL is returned and block_start is non-NULL, dstlen will be updated to point to
 // the end of the last valid block, and block_start will contain the offset in bits of the beginning
 // of the block, so it can be passed in to resume decoding later on.
-#define BZ_OK 0
-#define BZ_RUN_OK 1
-#define BZ_FLUSH_OK 2
-#define BZ_FINISH_OK 3
-#define BZ_STREAM_END 4
-#define BZ_SEQUENCE_ERROR (-1)
-#define BZ_PARAM_ERROR (-2)
-#define BZ_MEM_ERROR (-3)
-#define BZ_DATA_ERROR (-4)
+#define BZ_OK               0
+#define BZ_RUN_OK           1
+#define BZ_FLUSH_OK         2
+#define BZ_FINISH_OK        3
+#define BZ_STREAM_END       4
+#define BZ_SEQUENCE_ERROR   (-1)
+#define BZ_PARAM_ERROR      (-2)
+#define BZ_MEM_ERROR        (-3)
+#define BZ_DATA_ERROR       (-4)
 #define BZ_DATA_ERROR_MAGIC (-5)
-#define BZ_IO_ERROR (-6)
-#define BZ_UNEXPECTED_EOF (-7)
-#define BZ_OUTBUFF_FULL (-8)
+#define BZ_IO_ERROR         (-6)
+#define BZ_UNEXPECTED_EOF   (-7)
+#define BZ_OUTBUFF_FULL     (-8)
 
-int32_t cpu_bz2_uncompress(const uint8_t *input,
+int32_t cpu_bz2_uncompress(const uint8_t* input,
                            size_t inlen,
-                           uint8_t *dst,
-                           size_t *dstlen,
-                           uint64_t *block_start = nullptr);
+                           uint8_t* dst,
+                           size_t* dstlen,
+                           uint64_t* block_start = nullptr);
 
 }  // namespace io
 }  // namespace cudf

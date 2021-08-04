@@ -232,7 +232,9 @@ __inline__ __device__ void extract_time(
   if (*last == 'M' || *last == 'm') {
     if (*(last - 1) == 'P' || *(last - 1) == 'p') { hour_adjust = 12; }
     last = last - 2;
-    while (*last == ' ') { --last; }
+    while (*last == ' ') {
+      --last;
+    }
   }
   end = last + 1;
 

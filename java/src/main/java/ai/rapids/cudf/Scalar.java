@@ -495,7 +495,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native long makeDecimal64Scalar(long value, int scale, boolean isValid);
   private static native long makeListScalar(long viewHandle, boolean isValid);
   private static native long makeStructScalar(long[] viewHandles, boolean isValid);
-
+  private static native long repeatString(long scalarHandle, int repeatTimes);
 
   Scalar(DType type, long scalarHandle) {
     this.type = type;
@@ -863,6 +863,20 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     sb.append(Long.toHexString(offHeap.scalarHandle));
     sb.append(")");
     return sb.toString();
+  }
+
+
+  /**
+   * Repeat the given string scalar a number of times specified by the <code>repeatTimes</code>
+   * parameter. If that parameter has a non-positive value, an empty (valid) string scalar will be
+   * returned. An invalid input scalar will always result in an invalid output scalar regardless
+   * of the value of <code>repeatTimes</code>.
+   *
+   * @param repeatTimes The number of times the input string is copied to the output.
+   * @return The resulting scalar containing repeated result of the current string.
+   */
+  public Scalar repeatString(int repeatTimes) {
+    return new Scalar(DType.STRING, repeatString(getScalarHandle(), repeatTimes));
   }
 
   /**

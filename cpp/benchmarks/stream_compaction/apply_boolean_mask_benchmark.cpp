@@ -35,13 +35,15 @@ constexpr cudf::size_type fifty_percent = 50;
 void percent_range(benchmark::internal::Benchmark* b)
 {
   b->Unit(benchmark::kMillisecond);
-  for (int percent = 0; percent <= 100; percent += 10) b->Args({hundredM, percent});
+  for (int percent = 0; percent <= 100; percent += 10)
+    b->Args({hundredM, percent});
 }
 
 void size_range(benchmark::internal::Benchmark* b)
 {
   b->Unit(benchmark::kMillisecond);
-  for (int size = tenK; size <= hundredM; size *= 10) b->Args({size, fifty_percent});
+  for (int size = tenK; size <= hundredM; size *= 10)
+    b->Args({size, fifty_percent});
 }
 
 template <typename T>
@@ -64,9 +66,9 @@ void calculate_bandwidth(benchmark::State& state, cudf::size_type num_columns)
   cudf::size_type const column_size_out = fraction * column_size;
   int64_t const mask_size =
     sizeof(bool) * column_size + cudf::bitmask_allocation_size_bytes(column_size);
-  int64_t const validity_bytes_in = (fraction >= 1.0f / 32)
-                                      ? cudf::bitmask_allocation_size_bytes(column_size)
-                                      : 4 * column_size_out;
+  int64_t const validity_bytes_in  = (fraction >= 1.0f / 32)
+                                       ? cudf::bitmask_allocation_size_bytes(column_size)
+                                       : 4 * column_size_out;
   int64_t const validity_bytes_out = cudf::bitmask_allocation_size_bytes(column_size_out);
   int64_t const column_bytes_out   = sizeof(T) * column_size_out;
   int64_t const column_bytes_in    = column_bytes_out;  // we only read unmasked inputs

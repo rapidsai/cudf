@@ -82,16 +82,16 @@ class schema_parser {
 
  public:
   schema_parser() {}
-  bool parse(std::vector<schema_entry> &schema, const std::string &str);
+  bool parse(std::vector<schema_entry>& schema, const std::string& str);
 
  protected:
   bool more_data() const { return (m_cur < m_end); }
   std::string get_str();
 
  protected:
-  const char *m_base;
-  const char *m_cur;
-  const char *m_end;
+  const char* m_base;
+  const char* m_cur;
+  const char* m_end;
 };
 
 /**
@@ -99,7 +99,7 @@ class schema_parser {
  */
 class container {
  public:
-  container(uint8_t const *base, size_t len) noexcept : m_base{base}, m_cur{base}, m_end{base + len}
+  container(uint8_t const* base, size_t len) noexcept : m_base{base}, m_cur{base}, m_end{base + len}
   {
   }
 
@@ -119,12 +119,12 @@ class container {
   T get_encoded();
 
  public:
-  bool parse(file_metadata *md, size_t max_num_rows = 0x7fffffff, size_t first_row = 0);
+  bool parse(file_metadata* md, size_t max_num_rows = 0x7fffffff, size_t first_row = 0);
 
  protected:
-  const uint8_t *m_base;
-  const uint8_t *m_cur;
-  const uint8_t *m_end;
+  const uint8_t* m_base;
+  const uint8_t* m_cur;
+  const uint8_t* m_end;
 };
 
 }  // namespace avro

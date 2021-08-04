@@ -18,8 +18,7 @@ from cudf import concat
 from cudf.core._compat import PANDAS_GE_110
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
-from cudf.tests.test_joining import assert_join_results_equal
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,
@@ -201,11 +200,7 @@ def test_string_astype(dtype):
     ps = pd.Series(data)
     gs = cudf.Series(data)
 
-    # Pandas str --> bool typecasting always returns True if there's a string
-    if dtype.startswith("bool"):
-        expect = ps == "True"
-    else:
-        expect = ps.astype(dtype)
+    expect = ps.astype(dtype)
     got = gs.astype(dtype)
 
     assert_eq(expect, got)
@@ -917,196 +912,6 @@ def test_string_split(data, pat, n, expand):
     got = gs.str.split(pat=pat, n=n, expand=expand)
 
     assert_eq(expect, got)
-
-
-@pytest.mark.parametrize(
-    "str_data",
-    [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]],
-)
-@pytest.mark.parametrize("num_keys", [1, 2, 3])
-@pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
-def test_string_join_key(str_data, num_keys, how):
-    other_data = [1, 2, 3, 4, 5][: len(str_data)]
-
-    pdf = pd.DataFrame()
-    gdf = cudf.DataFrame()
-    for i in range(num_keys):
-        pdf[i] = pd.Series(str_data, dtype="str")
-        gdf[i] = cudf.Series(str_data, dtype="str")
-    pdf["a"] = other_data
-    gdf["a"] = other_data
-
-    pdf2 = pdf.copy()
-    gdf2 = gdf.copy()
-
-    expect = pdf.merge(pdf2, on=list(range(num_keys)), how=how)
-    got = gdf.merge(gdf2, on=list(range(num_keys)), how=how)
-
-    if len(expect) == 0 and len(got) == 0:
-        expect = expect.reset_index(drop=True)
-        got = got[expect.columns]  # reorder columns
-
-    if how == "right":
-        got = got[expect.columns]  # reorder columns
-
-    assert_join_results_equal(expect, got, how=how)
-
-
-@pytest.mark.parametrize(
-    "str_data_nulls",
-    [
-        ["a", "b", "c"],
-        ["a", "b", "f", "g"],
-        ["f", "g", "h", "i", "j"],
-        ["f", "g", "h"],
-        [None, None, None, None, None],
-        [],
-    ],
-)
-def test_string_join_key_nulls(str_data_nulls):
-    str_data = ["a", "b", "c", "d", "e"]
-    other_data = [1, 2, 3, 4, 5]
-
-    other_data_nulls = [6, 7, 8, 9, 10][: len(str_data_nulls)]
-
-    pdf = pd.DataFrame()
-    gdf = cudf.DataFrame()
-    pdf["key"] = pd.Series(str_data, dtype="str")
-    gdf["key"] = cudf.Series(str_data, dtype="str")
-    pdf["vals"] = other_data
-    gdf["vals"] = other_data
-
-    pdf2 = pd.DataFrame()
-    gdf2 = cudf.DataFrame()
-    pdf2["key"] = pd.Series(str_data_nulls, dtype="str")
-    gdf2["key"] = cudf.Series(str_data_nulls, dtype="str")
-    pdf2["vals"] = pd.Series(other_data_nulls, dtype="int64")
-    gdf2["vals"] = cudf.Series(other_data_nulls, dtype="int64")
-
-    expect = pdf.merge(pdf2, on="key", how="left")
-    got = gdf.merge(gdf2, on="key", how="left")
-    got["vals_y"] = got["vals_y"].fillna(-1)
-
-    if len(expect) == 0 and len(got) == 0:
-        expect = expect.reset_index(drop=True)
-        got = got[expect.columns]
-
-    expect["vals_y"] = expect["vals_y"].fillna(-1).astype("int64")
-
-    assert_join_results_equal(expect, got, how="left")
-
-
-@pytest.mark.parametrize(
-    "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
-)
-@pytest.mark.parametrize("num_cols", [1, 2, 3])
-@pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
-def test_string_join_non_key(str_data, num_cols, how):
-    other_data = [1, 2, 3, 4, 5][: len(str_data)]
-
-    pdf = pd.DataFrame()
-    gdf = cudf.DataFrame()
-    for i in range(num_cols):
-        pdf[i] = pd.Series(str_data, dtype="str")
-        gdf[i] = cudf.Series(str_data, dtype="str")
-    pdf["a"] = other_data
-    gdf["a"] = other_data
-
-    pdf2 = pdf.copy()
-    gdf2 = gdf.copy()
-
-    expect = pdf.merge(pdf2, on=["a"], how=how)
-    got = gdf.merge(gdf2, on=["a"], how=how)
-
-    if len(expect) == 0 and len(got) == 0:
-        expect = expect.reset_index(drop=True)
-        got = got[expect.columns]
-
-    if how == "right":
-        got = got[expect.columns]  # reorder columns
-
-    assert_join_results_equal(expect, got, how=how)
-
-
-@pytest.mark.parametrize(
-    "str_data_nulls",
-    [
-        ["a", "b", "c"],
-        ["a", "b", "f", "g"],
-        ["f", "g", "h", "i", "j"],
-        ["f", "g", "h"],
-        [None, None, None, None, None],
-        [],
-    ],
-)
-def test_string_join_non_key_nulls(str_data_nulls):
-    str_data = ["a", "b", "c", "d", "e"]
-    other_data = [1, 2, 3, 4, 5]
-
-    other_data_nulls = [6, 7, 8, 9, 10][: len(str_data_nulls)]
-
-    pdf = pd.DataFrame()
-    gdf = cudf.DataFrame()
-    pdf["vals"] = pd.Series(str_data, dtype="str")
-    gdf["vals"] = cudf.Series(str_data, dtype="str")
-    pdf["key"] = other_data
-    gdf["key"] = other_data
-
-    pdf2 = pd.DataFrame()
-    gdf2 = cudf.DataFrame()
-    pdf2["vals"] = pd.Series(str_data_nulls, dtype="str")
-    gdf2["vals"] = cudf.Series(str_data_nulls, dtype="str")
-    pdf2["key"] = pd.Series(other_data_nulls, dtype="int64")
-    gdf2["key"] = cudf.Series(other_data_nulls, dtype="int64")
-
-    expect = pdf.merge(pdf2, on="key", how="left")
-    got = gdf.merge(gdf2, on="key", how="left")
-
-    if len(expect) == 0 and len(got) == 0:
-        expect = expect.reset_index(drop=True)
-        got = got[expect.columns]
-
-    assert_join_results_equal(expect, got, how="left")
-
-
-def test_string_join_values_nulls():
-    left_dict = [
-        {"b": "MATCH 1", "a": 1.0},
-        {"b": "MATCH 1", "a": 1.0},
-        {"b": "LEFT NO MATCH 1", "a": -1.0},
-        {"b": "MATCH 2", "a": 2.0},
-        {"b": "MATCH 2", "a": 2.0},
-        {"b": "MATCH 1", "a": 1.0},
-        {"b": "MATCH 1", "a": 1.0},
-        {"b": "MATCH 2", "a": 2.0},
-        {"b": "MATCH 2", "a": 2.0},
-        {"b": "LEFT NO MATCH 2", "a": -2.0},
-        {"b": "MATCH 3", "a": 3.0},
-        {"b": "MATCH 3", "a": 3.0},
-    ]
-
-    right_dict = [
-        {"b": "RIGHT NO MATCH 1", "c": -1.0},
-        {"b": "MATCH 3", "c": 3.0},
-        {"b": "MATCH 2", "c": 2.0},
-        {"b": "RIGHT NO MATCH 2", "c": -2.0},
-        {"b": "RIGHT NO MATCH 3", "c": -3.0},
-        {"b": "MATCH 1", "c": 1.0},
-    ]
-
-    left_pdf = pd.DataFrame(left_dict)
-    right_pdf = pd.DataFrame(right_dict)
-
-    left_gdf = cudf.DataFrame.from_pandas(left_pdf)
-    right_gdf = cudf.DataFrame.from_pandas(right_pdf)
-
-    expect = left_pdf.merge(right_pdf, how="left", on="b")
-    got = left_gdf.merge(right_gdf, how="left", on="b")
-
-    expect = expect.sort_values(by=["a", "b", "c"]).reset_index(drop=True)
-    got = got.sort_values(by=["a", "b", "c"]).reset_index(drop=True)
-
-    assert_join_results_equal(expect, got, how="left")
 
 
 @pytest.mark.parametrize(

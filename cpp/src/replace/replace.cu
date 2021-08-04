@@ -87,7 +87,7 @@ __device__ auto get_new_value(cudf::size_type idx,
 __device__ int get_new_string_value(cudf::size_type idx,
                                     cudf::column_device_view& input,
                                     cudf::column_device_view& values_to_replace,
-                                    cudf::column_device_view& replacement_values)
+                                    cudf::column_device_view&)
 {
   cudf::string_view input_string = input.element<cudf::string_view>(idx);
   int match                      = -1;
@@ -342,11 +342,11 @@ struct replace_kernel_forwarder {
   }
 
   template <typename col_type, std::enable_if_t<not cudf::is_fixed_width<col_type>()>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input_col,
-                                           cudf::column_view const& values_to_replace,
-                                           cudf::column_view const& replacement_values,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const&,
+                                           cudf::column_view const&,
+                                           cudf::column_view const&,
+                                           rmm::cuda_stream_view,
+                                           rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("No specialization exists for this type");
   }
@@ -419,7 +419,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   // Allocate chars array and output null mask
   cudf::size_type null_count = input_col.size() - valid_counter.value(stream);
   std::unique_ptr<cudf::column> output_chars =
-    cudf::strings::detail::create_chars_child_column(input_col.size(), bytes, stream, mr);
+    cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
 
   auto output_chars_view = output_chars->mutable_view();
   auto device_chars      = cudf::mutable_column_device_view::create(output_chars_view);
