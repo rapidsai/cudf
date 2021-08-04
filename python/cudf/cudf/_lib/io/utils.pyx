@@ -3,7 +3,7 @@
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
 from libcpp.map cimport map
-from libcpp.memory cimport unique_ptr, shared_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -45,8 +45,6 @@ cdef source_info make_source_info(list src) except*:
     cdef vector[host_buffer] c_host_buffers
     cdef vector[string] c_files
     cdef Datasource csrc
-    cdef arrow_io_source asrc
-    cdef string c_str
     empty_buffer = False
     if isinstance(src[0], bytes):
         empty_buffer = True

@@ -1,6 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libcpp.memory cimport unique_ptr, shared_ptr
+from libcpp.memory cimport shared_ptr
 from libcpp.utility cimport move
 
 from cudf._lib.cpp.io.types cimport (

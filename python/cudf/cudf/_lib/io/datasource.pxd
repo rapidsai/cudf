@@ -1,7 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libcpp.memory cimport shared_ptr
-
 from cudf._lib.cpp.io.types cimport datasource, arrow_io_source
 
 

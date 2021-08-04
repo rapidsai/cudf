@@ -7,8 +7,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.cpp.io.types cimport datasource
-from cudf._lib.io.datasource cimport Datasource
-from cudf._lib.io.datasource cimport NativeFileDatasource
+from cudf._lib.io.datasource cimport Datasource, NativeFileDatasource
 
 import numpy as np
 import pandas as pd
