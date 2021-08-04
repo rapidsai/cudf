@@ -82,7 +82,11 @@ def date_range(DeviceScalar start, size_t n, offset):
         + offset.kwds.pop("hours", 0) * 3600
         + offset.kwds.pop("minutes", 0) * 60
         + offset.kwds.pop("seconds", 0)
-    ) * 1e9
+    ) * 1e9 + (
+        + offset.kwds.pop("milliseconds", 0) * 1e6
+        + offset.kwds.pop("microseconds", 0) * 1e3
+        + offset.kwds.pop("nanoseconds", 0)
+    )
 
     with nogil:
         c_result = move(libcudf_datetime.date_range(

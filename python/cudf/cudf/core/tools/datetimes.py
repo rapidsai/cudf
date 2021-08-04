@@ -4,6 +4,7 @@ import warnings
 from typing import Sequence, Union
 
 import numpy as np
+import pandas as pd
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
@@ -610,6 +611,9 @@ class DateOffset:
 
         return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
 
+    def to_pandas(self):
+        return pd.DateOffset(**self.kwds, n=1)
+
 
 def _isin_datetimelike(
     lhs: Union[column.TimeDeltaColumn, column.DatetimeColumn], values: Sequence
@@ -649,3 +653,66 @@ def _isin_datetimelike(
 
     res = lhs._obtain_isin_result(rhs)
     return res
+
+
+def date_range(
+    start=None,
+    end=None,
+    periods=None,
+    freq=None,
+    tz=None,
+    normalize=False,
+    name=None,
+    closed=None,
+    **kwargs,
+):
+    """TBA
+    """
+    if [start, end, periods, freq].count(None) > 1:
+        raise ValueError(
+            "Of the four parameters: start, end, periods, and freq, exactly "
+            "three must be specified"
+        )
+
+    dtype = np.dtype("<M8[ns]")
+
+    if freq is not None:
+        if isinstance(freq, str):
+            offset = DateOffset._from_freqstr(freq)
+        elif isinstance(freq, DateOffset):
+            offset = freq
+        else:
+            raise TypeError(
+                "`freq` must be a str or a cudf.DateOffset object."
+            )
+
+        offset = offset.to_pandas()
+
+        if start is None:
+            end = cudf.Scalar(end, dtype=dtype)
+            start = cudf.Scalar(
+                pd.Timestamp(end.value) - (periods - 1) * offset, dtype=dtype
+            )
+        elif end is None:
+            start = cudf.Scalar(start, dtype=dtype)
+        elif periods is None:
+            start = cudf.Scalar(start, dtype=dtype)
+            end = cudf.Scalar(end, dtype=dtype)
+            # TODO: support below
+            periods = (end - start) / offset
+
+    else:
+        start = cudf.Scalar(start, dtype=dtype)
+        end = cudf.Scalar(end, dtype=dtype)
+        delta = ((end.value - start.value) / (periods - 1)).astype("<m8[ns]")
+        offset = DateOffset(**{"nanoseconds": int(delta)})
+    if normalize:
+        old_dtype = start.value.dtype
+        start = cudf.Scalar(
+            start.value.astype("datetime64[D]").astype(old_dtype)
+        )
+
+    res = libcudf.datetime.date_range(start.device_value, periods, offset)
+    res[-1] = end
+
+    return cudf.DatetimeIndex._from_data({None: res})
