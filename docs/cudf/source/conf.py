@@ -24,7 +24,10 @@ import sys
 
 from docutils.nodes import Text
 from sphinx.addnodes import pending_xref
+import cudf
 
+sys.path.insert(0, os.path.abspath(cudf.__path__[0]))
+sys.path.insert(0, os.path.abspath("."))
 sys.path.insert(0, os.path.abspath("../.."))
 sys.path.append(os.path.abspath("./_ext"))
 
@@ -52,6 +55,8 @@ extensions = [
 copybutton_prompt_text = ">>> "
 autosummary_generate = True
 ipython_mplbackend = "str"
+
+html_use_modindex = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
