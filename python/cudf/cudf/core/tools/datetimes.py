@@ -4,6 +4,7 @@ import warnings
 from typing import Sequence, Union
 
 import numpy as np
+import pandas as pd
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
@@ -610,6 +611,9 @@ class DateOffset:
 
         return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
 
+    def to_pandas(self):
+        return pd.DateOffset(**self.kwds, n=1)
+
 
 def _isin_datetimelike(
     lhs: Union[column.TimeDeltaColumn, column.DatetimeColumn], values: Sequence
@@ -670,51 +674,45 @@ def date_range(
             "three must be specified"
         )
 
-    # try:
-    #     dtype = start.dtype if start is not None else end.dtype
-    #     # cudf supports datetime scalar up to [s] resolution
-    #     # downcast if coarser
-    #     dtype = np.dtype('<M8[s]') if dtype < np.dtype('<M8[s]') else dtype
-    # except AttributeError:
-    #     dtype = np.dtype('<M8[ns]')
-
-    # TODO: it seems like pandas uses [ns] under *all* circumstances?
     dtype = np.dtype("<M8[ns]")
 
     if freq is not None:
         if isinstance(freq, str):
             offset = DateOffset._from_freqstr(freq)
-        elif not isinstance(freq, DateOffset):
+        elif isinstance(freq, DateOffset):
+            offset = freq
+        else:
             raise TypeError(
                 "`freq` must be a str or a cudf.DateOffset object."
             )
 
+        offset = offset.to_pandas()
+
         if start is None:
-            end_slr = cudf.Scalar(end, dtype=dtype)
-            # TODO: support below
-            start_slr = end_slr - periods * offset
+            end = cudf.Scalar(end, dtype=dtype)
+            start = cudf.Scalar(
+                pd.Timestamp(end.value) - (periods - 1) * offset, dtype=dtype
+            )
         elif end is None:
-            start_slr = cudf.Scalar(start, dtype=dtype)
+            start = cudf.Scalar(start, dtype=dtype)
         elif periods is None:
-            start_slr = cudf.Scalar(start, dtype=dtype)
-            end_slr = cudf.Scalar(start, dtype=dtype)
+            start = cudf.Scalar(start, dtype=dtype)
+            end = cudf.Scalar(end, dtype=dtype)
             # TODO: support below
-            periods = (end_slr - start_slr) / offset
+            periods = (end - start) / offset
 
     else:
-        start_slr = cudf.Scalar(start, dtype=dtype)
-        end_slr = cudf.Scalar(end, dtype=dtype)
-        # TODO: investigate precision difference with Pandas
-        delta = ((end_slr.value - start_slr.value) / (periods - 1)).astype(
-            "<m8[ns]"
-        )
+        start = cudf.Scalar(start, dtype=dtype)
+        end = cudf.Scalar(end, dtype=dtype)
+        delta = ((end.value - start.value) / (periods - 1)).astype("<m8[ns]")
         offset = DateOffset(**{"nanoseconds": int(delta)})
     if normalize:
-        old_dtype = start_slr.value.dtype
-        start_slr = cudf.Scalar(
-            start_slr.value.astype("datetime64[D]").astype(old_dtype)
+        old_dtype = start.value.dtype
+        start = cudf.Scalar(
+            start.value.astype("datetime64[D]").astype(old_dtype)
         )
 
-    res = libcudf.datetime.date_range(start_slr.device_value, periods, offset)
+    res = libcudf.datetime.date_range(start.device_value, periods, offset)
+    res[-1] = end
 
     return cudf.DatetimeIndex._from_data({None: res})
