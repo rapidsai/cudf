@@ -6458,7 +6458,7 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the first day of the month.
         """
-        return (self.day_of_year==1).fillna(False)
+        return (self.day_of_year == 1).fillna(False)
 
     @property
     def is_year_end(self):
@@ -6470,7 +6470,7 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the first day of the month.
         """
-        return (self.day_of_year==365).fillna(False)
+        return (self.day_of_year == 365).fillna(False)
 
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
