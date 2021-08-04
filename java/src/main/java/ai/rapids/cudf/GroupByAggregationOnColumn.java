@@ -19,47 +19,23 @@
 package ai.rapids.cudf;
 
 /**
- * An Aggregation instance that also holds a column number so the aggregation can be done on
- * a specific column of data in a table.
+ * A GroupByAggregation for a specific column in a table.
  */
-public class AggregationOnColumn<T extends Aggregation> extends Aggregation {
-    protected final T wrapped;
+public final class GroupByAggregationOnColumn {
+    protected final GroupByAggregation wrapped;
     protected final int columnIndex;
 
-    AggregationOnColumn(T wrapped, int columnIndex) {
-        super(wrapped.kind);
+    GroupByAggregationOnColumn(GroupByAggregation wrapped, int columnIndex) {
         this.wrapped = wrapped;
         this.columnIndex = columnIndex;
-    }
-
-    @Override
-    public AggregationOnColumn<T> onColumn(int columnIndex) {
-        if (columnIndex == getColumnIndex()) {
-            return this; // NOOP
-        } else {
-            return new AggregationOnColumn(this.wrapped, columnIndex);
-        }
-    }
-
-    /**
-     * Do the aggregation over a given Window.
-     */
-    public <R extends Aggregation & RollingAggregation<R>> AggregationOverWindow<R> overWindow(WindowOptions windowOptions) {
-        return new AggregationOverWindow(wrapped, columnIndex, windowOptions);
     }
 
     public int getColumnIndex() {
         return columnIndex;
     }
 
-    @Override
-    long createNativeInstance() {
-        return wrapped.createNativeInstance();
-    }
-
-    @Override
-    long getDefaultOutput() {
-        return wrapped.getDefaultOutput();
+    GroupByAggregation getWrapped() {
+        return wrapped;
     }
 
     @Override
@@ -71,8 +47,8 @@ public class AggregationOnColumn<T extends Aggregation> extends Aggregation {
     public boolean equals(Object other) {
         if (other == this) {
             return true;
-        } else if (other instanceof AggregationOnColumn) {
-            AggregationOnColumn o = (AggregationOnColumn) other;
+        } else if (other instanceof GroupByAggregationOnColumn) {
+            GroupByAggregationOnColumn o = (GroupByAggregationOnColumn) other;
             return wrapped.equals(o.wrapped) && columnIndex == o.columnIndex;
         }
         return false;
