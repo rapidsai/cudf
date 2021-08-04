@@ -53,9 +53,11 @@ struct scan_tile_state_view {
   {
     auto const offset = (tile_idx + num_tiles) % num_tiles;
 
-    while ((status = cub::ThreadLoad<cub::LOAD_CG>(tile_status + offset)) ==
-           scan_tile_status::invalid) {
+    while (true) {
+      status = cub::ThreadLoad<cub::LOAD_CG>(tile_status + offset);
+      // prevent break-condition from being hoisted out of the loop?
       __threadfence();
+      if (status != scan_tile_status::invalid) { break; }
     }
 
     if (status == scan_tile_status::partial) {
@@ -63,15 +65,6 @@ struct scan_tile_state_view {
     } else {
       return cub::ThreadLoad<cub::LOAD_CG>(tile_inclusive + offset);
     }
-  }
-
-  __device__ inline T get_inclusive_prefix(cudf::size_type tile_idx)
-  {
-    auto const offset = (tile_idx + num_tiles) % num_tiles;
-    while (cub::ThreadLoad<cub::LOAD_CG>(tile_status + offset) != scan_tile_status::inclusive) {
-      __threadfence();
-    }
-    return cub::ThreadLoad<cub::LOAD_CG>(tile_inclusive + offset);
   }
 };
 
@@ -100,13 +93,11 @@ struct scan_tile_state {
 
   inline void set_seed_async(T const seed, rmm::cuda_stream_view stream)
   {
-    auto x = tile_status.size();
-    auto y = scan_tile_status::inclusive;
-    tile_state_inclusive.set_element_async(x - 1, seed, stream);
-    tile_status.set_element_async(x - 1, y, stream);
+    auto size   = tile_status.size();
+    auto status = scan_tile_status::inclusive;
+    tile_state_inclusive.set_element_async(size - 1, seed, stream);
+    tile_status.set_element_async(size - 1, status, stream);
   }
-
-  // T back_element(rmm::cuda_stream_view stream) const { return tile_state.back_element(stream); }
 
   inline T get_inclusive_prefix(cudf::size_type tile_idx, rmm::cuda_stream_view stream) const
   {
@@ -117,10 +108,7 @@ struct scan_tile_state {
 
 template <typename T>
 struct scan_tile_state_callback {
-  using WarpReduce = cub::WarpReduce<T>;
-
   struct _TempStorage {
-    typename WarpReduce::TempStorage reduce;
     T exclusive_prefix;
   };
 
