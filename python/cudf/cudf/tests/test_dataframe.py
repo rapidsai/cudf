@@ -8748,7 +8748,9 @@ def test_frame_series_where_other(data):
     expected = gdf.where(gdf["b"] == 1, cudf.NA)
     actual = pdf.where(pdf["b"] == 1, pd.NA)
     for col in actual.columns:  # dtypes will be different
-        assert_eq(actual[col].fillna(-1).values, expected[col].fillna(-1).values)
+        assert_eq(
+            actual[col].fillna(-1).values, expected[col].fillna(-1).values
+        )
 
     expected = gdf.where(gdf["b"] == 1, 0)
     actual = pdf.where(pdf["b"] == 1, 0)
