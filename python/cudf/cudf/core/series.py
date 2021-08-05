@@ -3899,27 +3899,6 @@ class Series(SingleColumnFrame, Serializable):
     #
     # Stats
     #
-    _SUPPORT_AXIS_LOOKUP = {
-        0: 0,
-        None: 0,
-        "index": 0,
-    }
-
-    def _reduce(
-        self, op, axis=None, level=None, numeric_only=None, **kwargs,
-    ):
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-        return getattr(self._column, op)(**kwargs)
-
     def count(self, level=None, **kwargs):
         """
         Return number of non-NA/null observations in the Series

@@ -1294,15 +1294,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
         ind.name = index.name
         return ind
 
-    def _reduce(
-        # self, op, axis=None, level=None, numeric_only=None, **kwargs,
-        self,
-        op,
-        *args,
-        **kwargs,
-    ):
-        raise AttributeError(f"{type(self)} object has no attribute {op}.")
-
     @property
     def _copy_construct_defaults(self):
         return {"data": self._column, "name": self.name}
