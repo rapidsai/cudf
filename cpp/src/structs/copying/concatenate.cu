@@ -54,14 +54,8 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                  });
 
   // get total length from concatenated children; if no child exists, we would compute it
-  size_type total_length;
-  if (!children.empty()) {
-    total_length = children[0]->size();
-  } else {
-    total_length = 0;
-    for (const auto& column : columns) {
-      total_length += column.size();
-    }
+  auto const total_length = !children.empty() ? 
+children[0]->size() : std::accumulate(columns.begin(), columns.end(), size_type{0});
   }
 
   // if any of the input columns have nulls, construct the output mask
