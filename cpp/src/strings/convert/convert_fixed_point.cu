@@ -115,7 +115,7 @@ struct string_to_decimal_check_fn {
     return (exp_ten < scale)
              ? true
              : value <= static_cast<uint64_t>(
-                          std::numeric_limits<DecimalType>::max() /  // TODO probably broken
+                          cuda::std::numeric_limits<DecimalType>::max() /
                           static_cast<DecimalType>(exp10(static_cast<double>(exp_ten - scale))));
   }
 };

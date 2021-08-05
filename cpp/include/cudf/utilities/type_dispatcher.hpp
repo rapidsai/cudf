@@ -121,7 +121,12 @@ constexpr bool type_id_matches_device_storage_type(type_id id)
          (id == type_id::DECIMAL128 && std::is_same_v<T, __int128_t>) || id == type_to_id<T>();
 }
 
-// TODO docs
+/**
+ * @brief Checks if `id` is fixed_point (DECIMAL32/64/128)
+ *
+ * @return    `true` if `id` is `DECIMAL32`, `DECIMAL64` or `DECIMAL128`
+ * @return    `false` otherwise
+ */
 constexpr bool is_fixed_point(cudf::type_id id)
 {
   return id == type_id::DECIMAL32 or  //

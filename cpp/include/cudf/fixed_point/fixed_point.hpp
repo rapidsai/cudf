@@ -53,7 +53,6 @@ constexpr inline auto is_supported_representation_type()
          cuda::std::is_same_v<T, __int128_t>;
 }
 
-// TODO make a temporary::is_integral function
 template <typename T>
 constexpr inline auto is_supported_construction_value_type()
 {
