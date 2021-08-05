@@ -4416,7 +4416,7 @@ class Series(SingleColumnFrame, Serializable):
         if method not in ("pearson",):
             raise ValueError(f"Unknown method {method}")
 
-        if min_periods not in ("None",):
+        if min_periods not in (None,):
             raise NotImplementedError("Unsupported argument 'min_periods'")
 
         if self.empty or other.empty:
