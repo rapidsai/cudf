@@ -24,6 +24,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 namespace cudf {
@@ -103,14 +104,19 @@ class csv_reader_options {
   // Whether a quote inside a value is double-quoted
   bool _doublequote = true;
   // Names of columns to read as datetime
-  std::vector<std::string> _infer_date_names;
+  std::vector<std::string> _parse_dates_names;
   // Indexes of columns to read as datetime
-  std::vector<int> _infer_date_indexes;
+  std::vector<int> _parse_dates_indexes;
+  // Names of columns to parse as hexadecimal
+  std::vector<std::string> _parse_hex_names;
+  // Indexes of columns to parse as hexadecimal
+  std::vector<int> _parse_hex_indexes;
 
   // Conversion settings
 
   // Per-column types; disables type inference on those columns
-  std::vector<std::string> _dtypes;
+  std::variant<std::vector<std::string>, std::vector<data_type>, std::map<std::string, data_type>>
+    _dtypes;
   // Additional values to recognize as boolean true values
   std::vector<std::string> _true_values{"True", "TRUE", "true"};
   // Additional values to recognize as boolean false values
@@ -279,17 +285,33 @@ class csv_reader_options {
   /**
    * @brief Returns names of columns to read as datetime.
    */
-  std::vector<std::string> const& get_infer_date_names() const { return _infer_date_names; }
+  std::vector<std::string> const& get_parse_dates_names() const { return _parse_dates_names; }
 
   /**
    * @brief Returns indexes of columns to read as datetime.
    */
-  std::vector<int> const& get_infer_date_indexes() const { return _infer_date_indexes; }
+  std::vector<int> const& get_parse_dates_indexes() const { return _parse_dates_indexes; }
+
+  /**
+   * @brief Returns names of columns to read as hexadecimal.
+   */
+  std::vector<std::string> const& get_parse_hex_names() const { return _parse_hex_names; }
+
+  /**
+   * @brief Returns indexes of columns to read as hexadecimal.
+   */
+  std::vector<int> const& get_parse_hex_indexes() const { return _parse_hex_indexes; }
 
   /**
    * @brief Returns per-column types.
    */
-  std::vector<std::string> const& get_dtypes() const { return _dtypes; }
+  std::variant<std::vector<std::string>,
+               std::vector<data_type>,
+               std::map<std::string, data_type>> const&
+  get_dtypes() const
+  {
+    return _dtypes;
+  }
 
   /**
    * @brief Returns additional values to recognize as boolean true values.
@@ -543,9 +565,9 @@ class csv_reader_options {
    *
    * @param col_names Vector of column names to infer as datetime.
    */
-  void set_infer_date_names(std::vector<std::string> col_names)
+  void set_parse_dates(std::vector<std::string> col_names)
   {
-    _infer_date_names = std::move(col_names);
+    _parse_dates_names = std::move(col_names);
   }
 
   /**
@@ -553,17 +575,52 @@ class csv_reader_options {
    *
    * @param col_names Vector of column indices to infer as datetime.
    */
-  void set_infer_date_indexes(std::vector<int> col_ind)
+  void set_parse_dates(std::vector<int> col_ind) { _parse_dates_indexes = std::move(col_ind); }
+
+  /**
+   * @brief Sets names of columns to parse as hexadecimal
+   *
+   * @param col_names Vector of column names to parse as hexadecimal
+   */
+  void set_parse_hex(std::vector<std::string> col_names)
   {
-    _infer_date_indexes = std::move(col_ind);
+    _parse_hex_names = std::move(col_names);
   }
 
   /**
-   * @brief Sets per-column types.
+   * @brief Sets indexes of columns to parse as hexadecimal
+   *
+   * @param col_names Vector of column indices to parse as hexadecimal
+   */
+  void set_parse_hex(std::vector<int> col_ind) { _parse_hex_indexes = std::move(col_ind); }
+
+  /**
+   * @brief Sets per-column types
+   *
+   * @param types Column name -> data type map specifying the columns' target data types
+   */
+  void set_dtypes(std::map<std::string, data_type> types) { _dtypes = std::move(types); }
+
+  /**
+   * @brief Sets per-column types
+   *
+   * @param types Vector specifying the columns' target data types.
+   */
+  void set_dtypes(std::vector<data_type> types) { _dtypes = std::move(types); }
+
+  /**
+   * @brief Sets per-column types, specified by the type's respective string representation.
    *
    * @param types Vector of dtypes in which the column needs to be read.
    */
-  void set_dtypes(std::vector<std::string> types) { _dtypes = std::move(types); }
+  [[deprecated(
+    "The string-based interface will be deprecated."
+    "Use dtypes(std::vector<data_type>) or "
+    "dtypes(std::map<std::string, data_type>) instead.")]] void
+  set_dtypes(std::vector<std::string> types)
+  {
+    _dtypes = std::move(types);
+  }
 
   /**
    * @brief Sets additional values to recognize as boolean true values.
@@ -941,34 +998,86 @@ class csv_reader_options_builder {
   /**
    * @brief Sets names of columns to read as datetime.
    *
-   * @param col_names Vector of column names to infer as datetime.
+   * @param col_names Vector of column names to read as datetime.
    * @return this for chaining.
    */
-  csv_reader_options_builder& infer_date_names(std::vector<std::string> col_names)
+  csv_reader_options_builder& parse_dates(std::vector<std::string> col_names)
   {
-    options._infer_date_names = std::move(col_names);
+    options._parse_dates_names = std::move(col_names);
     return *this;
   }
 
   /**
    * @brief Sets indexes of columns to read as datetime.
    *
-   * @param col_names Vector of column indices to infer as datetime.
+   * @param col_ind Vector of column indices to read as datetime
    * @return this for chaining.
    */
-  csv_reader_options_builder& infer_date_indexes(std::vector<int> col_ind)
+  csv_reader_options_builder& parse_dates(std::vector<int> col_ind)
   {
-    options._infer_date_indexes = std::move(col_ind);
+    options._parse_dates_indexes = std::move(col_ind);
+    return *this;
+  }
+
+  /**
+   * @brief Sets names of columns to parse as hexadecimal.
+   *
+   * @param col_names Vector of column names to parse as hexadecimal
+   * @return this for chaining.
+   */
+  csv_reader_options_builder& parse_hex(std::vector<std::string> col_names)
+  {
+    options._parse_hex_names = std::move(col_names);
+    return *this;
+  }
+
+  /**
+   * @brief Sets indexes of columns to parse as hexadecimal.
+   *
+   * @param col_ind Vector of column indices to parse as hexadecimal
+   * @return this for chaining.
+   */
+  csv_reader_options_builder& parse_hex(std::vector<int> col_ind)
+  {
+    options._parse_hex_indexes = std::move(col_ind);
     return *this;
   }
 
   /**
    * @brief Sets per-column types.
    *
+   * @param types Column name -> data type map specifying the columns' target data types
+   * @return this for chaining.
+   */
+  csv_reader_options_builder& dtypes(std::map<std::string, data_type> types)
+  {
+    options._dtypes = std::move(types);
+    return *this;
+  }
+
+  /**
+   * @brief Sets per-column types.
+   *
+   * @param types Vector of data types in which the column needs to be read.
+   * @return this for chaining.
+   */
+  csv_reader_options_builder& dtypes(std::vector<data_type> types)
+  {
+    options._dtypes = std::move(types);
+    return *this;
+  }
+
+  /**
+   * @brief Sets per-column types, specified by the type's respective string representation.
+   *
    * @param types Vector of dtypes in which the column needs to be read.
    * @return this for chaining.
    */
-  csv_reader_options_builder& dtypes(std::vector<std::string> types)
+  [[deprecated(
+    "The string-based interface will be deprecated."
+    "Use dtypes(std::vector<data_type>) or "
+    "dtypes(std::map<std::string, data_type>) instead.")]] csv_reader_options_builder&
+  dtypes(std::vector<std::string> types)
   {
     options._dtypes = std::move(types);
     return *this;
@@ -1061,7 +1170,7 @@ class csv_reader_options_builder {
   /**
    * @brief move csv_reader_options member once it's built.
    */
-  operator csv_reader_options &&() { return std::move(options); }
+  operator csv_reader_options&&() { return std::move(options); }
 
   /**
    * @brief move csv_reader_options member once it's built.
@@ -1390,7 +1499,7 @@ class csv_writer_options_builder {
   /**
    * @brief move `csv_writer_options` member once it's built.
    */
-  operator csv_writer_options &&() { return std::move(options); }
+  operator csv_writer_options&&() { return std::move(options); }
 
   /**
    * @brief move `csv_writer_options` member once it's built.

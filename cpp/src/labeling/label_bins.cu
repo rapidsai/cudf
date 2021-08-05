@@ -161,7 +161,7 @@ constexpr auto is_supported_bin_type()
 struct bin_type_dispatcher {
   template <typename T, typename... Args>
   std::enable_if_t<not detail::is_supported_bin_type<T>(), std::unique_ptr<column>> operator()(
-    Args&&... args)
+    Args&&...)
   {
     CUDF_FAIL("Type not support for cudf::bin");
   }

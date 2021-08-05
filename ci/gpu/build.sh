@@ -74,7 +74,7 @@ conda config --show-sources
 conda list --show-channel-urls
 
 gpuci_logger "Install dependencies"
-gpuci_conda_retry install -y \
+gpuci_mamba_retry install -y \
                   "cudatoolkit=$CUDA_REL" \
                   "rapids-build-env=$MINOR_VERSION.*" \
                   "rapids-notebook-env=$MINOR_VERSION.*" \
@@ -83,8 +83,8 @@ gpuci_conda_retry install -y \
                   "ucx-py=0.21.*"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-# gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
-# gpuci_conda_retry install -y "your-pkg=1.0.0"
+# gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
+# gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
 
 gpuci_logger "Check compiler versions"
@@ -103,7 +103,9 @@ function install_dask {
     set -x
     pip install "git+https://github.com/dask/distributed.git@main" --upgrade --no-deps
     pip install "git+https://github.com/dask/dask.git@main" --upgrade --no-deps
-    pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
+    # Need to uninstall streamz that is already in the env.
+    pip uninstall -y streamz
+    pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade --no-deps
     set +x
 }
 
@@ -189,6 +191,7 @@ else
     else
         "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka -l --ptds
     fi
+
 fi
 
 # Both regular and Project Flash proceed here
@@ -200,14 +203,13 @@ if [ "$np_ver" == "1.16" ];then
     export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
 fi
 
-
 ################################################################################
 # TEST - Run py.test, notebooks
 ################################################################################
 
 cd "$WORKSPACE/python/cudf"
 gpuci_logger "Python py.test for cuDF"
-py.test -n 6 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term
+py.test -n 6 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term
 
 cd "$WORKSPACE/python/dask_cudf"
 gpuci_logger "Python py.test for dask-cudf"

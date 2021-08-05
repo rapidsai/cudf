@@ -36,34 +36,34 @@ namespace parquet {
  */
 class CompactProtocolWriter {
  public:
-  CompactProtocolWriter(std::vector<uint8_t> *output) : m_buf(*output) {}
+  CompactProtocolWriter(std::vector<uint8_t>* output) : m_buf(*output) {}
 
-  size_t write(const FileMetaData &);
-  size_t write(const SchemaElement &);
-  size_t write(const RowGroup &);
-  size_t write(const KeyValue &);
-  size_t write(const ColumnChunk &);
-  size_t write(const ColumnChunkMetaData &);
+  size_t write(const FileMetaData&);
+  size_t write(const SchemaElement&);
+  size_t write(const RowGroup&);
+  size_t write(const KeyValue&);
+  size_t write(const ColumnChunk&);
+  size_t write(const ColumnChunkMetaData&);
 
  protected:
-  std::vector<uint8_t> &m_buf;
+  std::vector<uint8_t>& m_buf;
   friend class CompactProtocolFieldWriter;
 };
 
 class CompactProtocolFieldWriter {
-  CompactProtocolWriter &writer;
+  CompactProtocolWriter& writer;
   size_t struct_start_pos;
   int current_field_value;
 
  public:
-  CompactProtocolFieldWriter(CompactProtocolWriter &caller)
+  CompactProtocolFieldWriter(CompactProtocolWriter& caller)
     : writer(caller), struct_start_pos(writer.m_buf.size()), current_field_value(0)
   {
   }
 
   void put_byte(uint8_t v);
 
-  void put_byte(const uint8_t *raw, uint32_t len);
+  void put_byte(const uint8_t* raw, uint32_t len);
 
   uint32_t put_uint(uint64_t v);
 
@@ -76,25 +76,25 @@ class CompactProtocolFieldWriter {
   inline void field_int(int field, int64_t val);
 
   template <typename Enum>
-  inline void field_int_list(int field, const std::vector<Enum> &val);
+  inline void field_int_list(int field, const std::vector<Enum>& val);
 
   template <typename T>
-  inline void field_struct(int field, const T &val);
+  inline void field_struct(int field, const T& val);
 
   template <typename T>
-  inline void field_struct_list(int field, const std::vector<T> &val);
+  inline void field_struct_list(int field, const std::vector<T>& val);
 
   inline size_t value();
 
-  inline void field_struct_blob(int field, const std::vector<uint8_t> &val);
+  inline void field_struct_blob(int field, const std::vector<uint8_t>& val);
 
-  inline void field_string(int field, const std::string &val);
+  inline void field_string(int field, const std::string& val);
 
-  inline void field_string_list(int field, const std::vector<std::string> &val);
+  inline void field_string_list(int field, const std::vector<std::string>& val);
 
   inline int current_field();
 
-  inline void set_current_field(const int &field);
+  inline void set_current_field(const int& field);
 };
 
 }  // namespace parquet

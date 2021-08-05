@@ -494,11 +494,11 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
 
     using ScalarType = cudf::scalar_type_t<cudf::size_type>;
     auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32), stream.value());
-    zero->set_valid(true, stream);
+    zero->set_valid_async(true, stream);
     static_cast<ScalarType *>(zero.get())->set_value(0, stream);
 
     auto step = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32), stream.value());
-    step->set_valid(true, stream);
+    step->set_valid_async(true, stream);
     static_cast<ScalarType *>(step.get())
         ->set_value(static_cast<cudf::size_type>(size_per_row), stream);
 

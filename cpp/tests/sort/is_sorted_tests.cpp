@@ -36,7 +36,7 @@ namespace testdata {
 // ----- most numerics
 
 template <typename T>
-typename std::enable_if<std::is_arithmetic<T>::value && !std::is_same<T, bool>::value,
+typename std::enable_if<std::is_arithmetic<T>::value && !std::is_same_v<T, bool>,
                         fixed_width_column_wrapper<T>>::type
 ascending()
 {
@@ -58,7 +58,7 @@ ascending()
 }
 
 template <typename T>
-typename std::enable_if<std::is_arithmetic<T>::value && !std::is_same<T, bool>::value,
+typename std::enable_if<std::is_arithmetic<T>::value && !std::is_same_v<T, bool>,
                         fixed_width_column_wrapper<T>>::type
 descending()
 {
@@ -101,14 +101,13 @@ auto nulls_before()
 // ----- bool
 
 template <typename T>
-typename std::enable_if<std::is_same<T, bool>::value, fixed_width_column_wrapper<bool>>::type
-ascending()
+typename std::enable_if<std::is_same_v<T, bool>, fixed_width_column_wrapper<bool>>::type ascending()
 {
   return fixed_width_column_wrapper<bool>({false, false, true, true});
 }
 
 template <typename T>
-typename std::enable_if<std::is_same<T, bool>::value, fixed_width_column_wrapper<bool>>::type
+typename std::enable_if<std::is_same_v<T, bool>, fixed_width_column_wrapper<bool>>::type
 descending()
 {
   return fixed_width_column_wrapper<bool>({true, true, false, false});
@@ -131,14 +130,14 @@ typename std::enable_if<cudf::is_chrono<T>(), fixed_width_column_wrapper<T>>::ty
 // ----- string_view
 
 template <typename T>
-typename std::enable_if<std::is_same<T, cudf::string_view>::value, strings_column_wrapper>::type
+typename std::enable_if<std::is_same_v<T, cudf::string_view>, strings_column_wrapper>::type
 ascending()
 {
   return strings_column_wrapper({"A", "B"});
 }
 
 template <typename T>
-typename std::enable_if<std::is_same<T, cudf::string_view>::value, strings_column_wrapper>::type
+typename std::enable_if<std::is_same_v<T, cudf::string_view>, strings_column_wrapper>::type
 descending()
 {
   return strings_column_wrapper({"B", "A"});
@@ -165,7 +164,7 @@ auto nulls_before<cudf::string_view>()
 // ----- struct_view {"nestedInt" : {"Int" : 0 }, "float" : 1}
 
 template <typename T>
-typename std::enable_if<std::is_same<T, cudf::struct_view>::value, structs_column_wrapper>::type
+typename std::enable_if<std::is_same_v<T, cudf::struct_view>, structs_column_wrapper>::type
 ascending()
 {
   using T1           = int32_t;
@@ -184,7 +183,7 @@ ascending()
 }
 
 template <typename T>
-typename std::enable_if<std::is_same<T, cudf::struct_view>::value, structs_column_wrapper>::type
+typename std::enable_if<std::is_same_v<T, cudf::struct_view>, structs_column_wrapper>::type
 descending()
 {
   using T1           = int32_t;
@@ -257,7 +256,7 @@ TYPED_TEST(IsSortedTest, NoRows)
 {
   using T = TypeParam;
 
-  if (std::is_same<T, cudf::string_view>::value) {
+  if (std::is_same_v<T, cudf::string_view>) {
     // strings_column_wrapper does not yet support empty columns.
     return;
   } else {

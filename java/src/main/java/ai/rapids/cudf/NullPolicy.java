@@ -18,8 +18,8 @@
 
 package ai.rapids.cudf;
 
-/*
- * This is analogous to the native 'null_policy'.
+/**
+ * Specify whether to include nulls or exclude nulls in an operation.
  */
 public enum NullPolicy {
   EXCLUDE(false),

@@ -51,7 +51,6 @@ map_lookup(column_view const &map_column, string_scalar lookup_key, bool has_nul
            rmm::cuda_stream_view stream = rmm::cuda_stream_default,
            rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
-
 /**
  * @brief Looks up a "map" column by specified key to see if the key exists or not,
  *        and returns a cudf column of bool value.
@@ -80,8 +79,8 @@ map_lookup(column_view const &map_column, string_scalar lookup_key, bool has_nul
  */
 std::unique_ptr<column>
 map_contains(column_view const &map_column, string_scalar lookup_key, bool has_nulls = true,
-           rmm::cuda_stream_view stream = rmm::cuda_stream_default,
-           rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+             rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+             rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 } // namespace jni
 

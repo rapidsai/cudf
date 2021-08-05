@@ -7,18 +7,18 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 from uuid import uuid4
 
 import cupy
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
-from pandas.api.types import is_dict_like
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
+from cudf.api.types import is_bool_dtype, is_dict_like, is_dtype_equal
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     DatetimeColumn,
@@ -32,14 +32,14 @@ from cudf.core.column import (
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
 )
-from cudf.core.column.column import _concat_columns
+from cudf.core.column.column import concat_columns
 from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import SingleColumnFrame, _drop_rows_by_labels
+from cudf.core.frame import Frame, SingleColumnFrame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
-from cudf.core.index import Index, RangeIndex, as_index
+from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
 from cudf.utils import cudautils, docutils, ioutils
@@ -47,11 +47,14 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
     find_common_type,
+    is_categorical_dtype,
     is_decimal_dtype,
+    is_interval_dtype,
     is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
     is_scalar,
+    is_struct_dtype,
     min_scalar_type,
 )
 from cudf.utils.utils import (
@@ -219,7 +222,7 @@ class Series(SingleColumnFrame, Serializable):
         elif isinstance(data, pd.Index):
             name = data.name
             data = data.values
-        elif isinstance(data, Index):
+        elif isinstance(data, BaseIndex):
             name = data.name
             data = data._values
             if dtype is not None:
@@ -238,7 +241,7 @@ class Series(SingleColumnFrame, Serializable):
         if isinstance(data, dict):
             index = data.keys()
             data = column.as_column(
-                data.values(), nan_as_null=nan_as_null, dtype=dtype
+                list(data.values()), nan_as_null=nan_as_null, dtype=dtype
             )
 
         if data is None:
@@ -255,7 +258,7 @@ class Series(SingleColumnFrame, Serializable):
             if dtype is not None:
                 data = data.astype(dtype)
 
-        if index is not None and not isinstance(index, Index):
+        if index is not None and not isinstance(index, BaseIndex):
             index = as_index(index)
 
         assert isinstance(data, column.ColumnBase)
@@ -264,28 +267,18 @@ class Series(SingleColumnFrame, Serializable):
         self._index = RangeIndex(len(data)) if index is None else index
 
     @classmethod
-    def _from_table(cls, table, index=None):
-        name, data = next(iter(table._data.items()))
-        if index is None:
-            if table._index is not None:
-                index = Index._from_table(table._index)
-        return cls(data=data, index=index, name=name)
-
-    @classmethod
     def _from_data(
         cls,
-        data: ColumnAccessor,
-        index: Optional[Index] = None,
+        data: Mapping,
+        index: Optional[BaseIndex] = None,
         name: Any = None,
     ) -> Series:
         """
         Construct the Series from a ColumnAccessor
         """
-        out = cls.__new__(cls)
-        out._data = data
-        out._index = index if index is not None else RangeIndex(data.nrows)
-        if name is not None:
-            out.name = name
+        out: Series = super()._from_data(data, index, name)
+        if index is None:
+            out._index = RangeIndex(out._data.nrows)
         return out
 
     def __contains__(self, item):
@@ -739,7 +732,7 @@ class Series(SingleColumnFrame, Serializable):
         e    14
         dtype: int64
         """
-        index = index if isinstance(index, Index) else as_index(index)
+        index = index if isinstance(index, BaseIndex) else as_index(index)
         return self._copy_construct(index=index)
 
     def as_index(self):
@@ -1222,15 +1215,12 @@ class Series(SingleColumnFrame, Serializable):
             if get_option("display.max_rows") == 0
             else get_option("display.max_rows")
         )
-
-        if len(self) > max_rows and max_rows != 0:
+        if max_rows not in (0, None) and len(self) > max_rows:
             top = self.head(int(max_rows / 2 + 1))
             bottom = self.tail(int(max_rows / 2 + 1))
-
             preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self.copy()
-
         preprocess.index = preprocess.index._clean_nulls_from_index()
         if (
             preprocess.nullable
@@ -1238,7 +1228,9 @@ class Series(SingleColumnFrame, Serializable):
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
             and not is_list_dtype(preprocess.dtype)
+            and not is_struct_dtype(preprocess.dtype)
             and not is_decimal_dtype(preprocess.dtype)
+            and not is_struct_dtype(preprocess.dtype)
         ) or isinstance(
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
@@ -1253,7 +1245,7 @@ class Series(SingleColumnFrame, Serializable):
         ):
             min_rows = (
                 height
-                if get_option("display.max_rows") == 0
+                if get_option("display.min_rows") == 0
                 else get_option("display.min_rows")
             )
             show_dimensions = get_option("display.show_dimensions")
@@ -1271,6 +1263,14 @@ class Series(SingleColumnFrame, Serializable):
                     )
                 )
             else:
+                if is_categorical_dtype(self):
+                    if is_interval_dtype(
+                        self.dtype.categories
+                    ) and is_struct_dtype(preprocess._column.categories):
+                        # with a series input the IntervalIndex's are turn
+                        # into a struct dtype this line will change the
+                        # categories back to an intervalIndex.
+                        preprocess.dtype._categories = self.dtype.categories
                 pd_series = preprocess.to_pandas()
             output = pd_series.to_string(
                 name=self.name,
@@ -1321,16 +1321,29 @@ class Series(SingleColumnFrame, Serializable):
         return "\n".join(lines)
 
     def _binaryop(
-        self, other, fn, fill_value=None, reflect=False, can_reindex=False
+        self,
+        other: Frame,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
     ):
-        if isinstance(other, cudf.DataFrame):
-            return NotImplemented
-
-        if isinstance(other, Series):
+        if isinstance(other, SingleColumnFrame):
             if (
+                # TODO: The can_reindex logic also needs to be applied for
+                # DataFrame (the methods that need it just don't exist yet).
                 not can_reindex
                 and fn in cudf.utils.utils._EQUALITY_OPS
-                and not self.index.equals(other.index)
+                and (
+                    isinstance(other, Series)
+                    # TODO: mypy doesn't like this line because the index
+                    # property is not defined on SingleColumnFrame (or Index,
+                    # for that matter). Ignoring is the easy solution for now,
+                    # a cleaner fix requires reworking the type hierarchy.
+                    and not self.index.equals(other.index)  # type: ignore
+                )
             ):
                 raise ValueError(
                     "Can only compare identically-labeled " "Series objects"
@@ -1339,7 +1352,8 @@ class Series(SingleColumnFrame, Serializable):
         else:
             lhs = self
 
-        return super()._binaryop(other, fn, fill_value, reflect, lhs)
+        # Note that we call the super on lhs, not self.
+        return super(Series, lhs)._binaryop(other, fn, fill_value, reflect)
 
     def add(self, other, fill_value=None, axis=0):
         """
@@ -2328,22 +2342,22 @@ class Series(SingleColumnFrame, Serializable):
     @copy_docstring(CategoricalAccessor.__init__)  # type: ignore
     @property
     def cat(self):
-        return CategoricalAccessor(column=self._column, parent=self)
+        return CategoricalAccessor(parent=self)
 
     @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
-        return StringMethods(column=self._column, parent=self)
+        return StringMethods(parent=self)
 
     @copy_docstring(ListMethods.__init__)  # type: ignore
     @property
     def list(self):
-        return ListMethods(column=self._column, parent=self)
+        return ListMethods(parent=self)
 
     @copy_docstring(StructMethods.__init__)  # type: ignore
     @property
     def struct(self):
-        return StructMethods(column=self._column, parent=self)
+        return StructMethods(parent=self)
 
     @property
     def dtype(self):
@@ -2404,10 +2418,13 @@ class Series(SingleColumnFrame, Serializable):
                 common_dtype = find_common_type([obj.dtype for obj in objs])
                 objs = [obj.astype(common_dtype) for obj in objs]
 
-        col = _concat_columns([o._column for o in objs])
+        col = concat_columns([o._column for o in objs])
 
-        if isinstance(col, cudf.core.column.DecimalColumn):
-            col = objs[0]._column._copy_type_metadata(col)
+        if isinstance(col, cudf.core.column.Decimal64Column):
+            col = col._with_type_metadata(objs[0]._column.dtype)
+
+        if isinstance(col, cudf.core.column.StructColumn):
+            col = col._with_type_metadata(objs[0].dtype)
 
         return cls(data=col, index=index, name=name)
 
@@ -2865,7 +2882,6 @@ class Series(SingleColumnFrame, Serializable):
         3    30.0
         dtype: float64
         """
-
         if index is True:
             index = self.index.to_pandas()
         s = self._column.to_pandas(index=index, nullable=nullable)
@@ -2981,7 +2997,7 @@ class Series(SingleColumnFrame, Serializable):
                  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0],
              dtype=uint8)
         """
-        if not pd.api.types.is_bool_dtype(self.dtype):
+        if not is_bool_dtype(self.dtype):
             raise TypeError(
                 f"Series must of boolean dtype, found: {self.dtype}"
             )
@@ -3075,7 +3091,7 @@ class Series(SingleColumnFrame, Serializable):
                 )
             dtype = dtype[self.name]
 
-        if pd.api.types.is_dtype_equal(dtype, self.dtype):
+        if is_dtype_equal(dtype, self.dtype):
             return self.copy(deep=copy)
         try:
             data = self._column.astype(dtype)
@@ -4748,7 +4764,7 @@ class Series(SingleColumnFrame, Serializable):
 
         return Series(val_counts.index.sort_values(), name=self.name)
 
-    def round(self, decimals=0):
+    def round(self, decimals=0, how="half_even"):
         """
         Round each value in a Series to the given number of decimals.
 
@@ -4758,6 +4774,9 @@ class Series(SingleColumnFrame, Serializable):
             Number of decimal places to round to. If decimals is negative,
             it specifies the number of positions to the left of the decimal
             point.
+        how : str, optional
+            Type of rounding. Can be either "half_even" (default)
+            of "half_up" rounding.
 
         Returns
         -------
@@ -4773,9 +4792,8 @@ class Series(SingleColumnFrame, Serializable):
         2    3.0
         dtype: float64
         """
-
         return Series(
-            self._column.round(decimals=decimals),
+            self._column.round(decimals=decimals, how=how),
             name=self.name,
             index=self.index,
             dtype=self.dtype,
@@ -5180,7 +5198,6 @@ class Series(SingleColumnFrame, Serializable):
         1.0     1
         dtype: int32
         """
-
         if bins is not None:
             raise NotImplementedError("bins is not yet supported")
 
@@ -5595,7 +5612,7 @@ class Series(SingleColumnFrame, Serializable):
             # pandas defaults
             percentiles = np.array([0.25, 0.5, 0.75])
 
-        if pd.api.types.is_bool_dtype(self.dtype):
+        if is_bool_dtype(self.dtype):
             return _describe_categorical(self)
         elif isinstance(self._column, cudf.core.column.NumericalColumn):
             return _describe_numeric(self)
@@ -6014,6 +6031,45 @@ class Series(SingleColumnFrame, Serializable):
 
         return super()._explode(self._column_names[0], ignore_index)
 
+    def pct_change(
+        self, periods=1, fill_method="ffill", limit=None, freq=None
+    ):
+        """
+        Calculates the percent change between sequential elements
+        in the Series.
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for forming percent change.
+        fill_method : str, default 'ffill'
+            How to handle NAs before computing percent changes.
+        limit : int, optional
+            The number of consecutive NAs to fill before stopping.
+            Not yet implemented.
+        freq : str, optional
+            Increment to use from time series API.
+            Not yet implemented.
+
+        Returns
+        -------
+        Series
+        """
+        if limit is not None:
+            raise NotImplementedError("limit parameter not supported yet.")
+        if freq is not None:
+            raise NotImplementedError("freq parameter not supported yet.")
+        elif fill_method not in {"ffill", "pad", "bfill", "backfill"}:
+            raise ValueError(
+                "fill_method must be one of 'ffill', 'pad', "
+                "'bfill', or 'backfill'."
+            )
+
+        data = self.fillna(method=fill_method, limit=limit)
+        diff = data.diff(periods=periods)
+        change = diff / data.shift(periods=periods, freq=freq)
+        return change
+
 
 class DatetimeProperties(object):
     """
@@ -6283,6 +6339,114 @@ class DatetimeProperties(object):
         dtype: int16
         """
         return self._get_dt_field("weekday")
+
+    @property
+    def dayofyear(self):
+        """
+        The day of the year, from 1-365 in non-leap years and
+        from 1-366 in leap years.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range('2016-12-31',
+        ...     '2017-01-08', freq='D'))
+        >>> datetime_series
+        0   2016-12-31
+        1   2017-01-01
+        2   2017-01-02
+        3   2017-01-03
+        4   2017-01-04
+        5   2017-01-05
+        6   2017-01-06
+        7   2017-01-07
+        8   2017-01-08
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.dayofyear
+        0    366
+        1      1
+        2      2
+        3      3
+        4      4
+        5      5
+        6      6
+        7      7
+        8      8
+        dtype: int16
+        """
+        return self._get_dt_field("day_of_year")
+
+    @property
+    def day_of_year(self):
+        """
+        The day of the year, from 1-365 in non-leap years and
+        from 1-366 in leap years.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range('2016-12-31',
+        ...     '2017-01-08', freq='D'))
+        >>> datetime_series
+        0   2016-12-31
+        1   2017-01-01
+        2   2017-01-02
+        3   2017-01-03
+        4   2017-01-04
+        5   2017-01-05
+        6   2017-01-06
+        7   2017-01-07
+        8   2017-01-08
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.day_of_year
+        0    366
+        1      1
+        2      2
+        3      3
+        4      4
+        5      5
+        6      6
+        7      7
+        8      8
+        dtype: int16
+        """
+        return self._get_dt_field("day_of_year")
+
+    @property
+    def is_leap_year(self):
+        """
+        Boolean indicator if the date belongs to a leap year.
+
+        A leap year is a year, which has 366 days (instead of 365) including
+        29th of February as an intercalary day. Leap years are years which are
+        multiples of four with the exception of years divisible by 100 but not
+        by 400.
+
+        Returns
+        -------
+        Series
+        Booleans indicating if dates belong to a leap year.
+        """
+        res = libcudf.datetime.is_leap_year(self.series._column).fillna(False)
+        return Series._from_data(
+            ColumnAccessor({None: res}),
+            index=self.series._index,
+            name=self.series.name,
+        )
+
+    @property
+    def is_month_start(self):
+        """
+        Boolean indicator if the date is the first day of the month.
+
+        Returns
+        -------
+        Series
+        Booleans indicating if dates are the first day of the month.
+        """
+        return (self.day == 1).fillna(False)
 
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)

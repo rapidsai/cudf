@@ -28,7 +28,7 @@ function(find_and_configure_cudf VERSION)
     endif()
 endfunction()
 
-set(CUDA_KAFKA_MIN_VERSION_cudf "${CUDA_KAFKA_VERSION_MAJOR}.${CUDA_KAFKA_VERSION_MINOR}.00")
+set(CUDA_KAFKA_MIN_VERSION_cudf "${CUDA_KAFKA_VERSION_MAJOR}.${CUDA_KAFKA_VERSION_MINOR}.${CUDA_KAFKA_VERSION_PATCH}")
 find_and_configure_cudf(${CUDA_KAFKA_MIN_VERSION_cudf})
 
 if(cudf_ADDED)

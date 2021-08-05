@@ -362,7 +362,7 @@ class ColumnAccessor(MutableMapping):
             start, stop, step = index.indices(len(self._data))
             keys = self.names[start:stop:step]
         elif pd.api.types.is_integer(index):
-            keys = self.names[index : index + 1]
+            keys = [self.names[index]]
         else:
             keys = (self.names[i] for i in index)
         data = {k: self._data[k] for k in keys}

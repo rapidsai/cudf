@@ -31,11 +31,11 @@ constexpr int hash_bits = 12;
  * @brief snappy compressor state
  */
 struct snap_state_s {
-  const uint8_t *src;                 ///< Ptr to uncompressed data
+  const uint8_t* src;                 ///< Ptr to uncompressed data
   uint32_t src_len;                   ///< Uncompressed data length
-  uint8_t *dst_base;                  ///< Base ptr to output compressed data
-  uint8_t *dst;                       ///< Current ptr to uncompressed data
-  uint8_t *end;                       ///< End of uncompressed data buffer
+  uint8_t* dst_base;                  ///< Base ptr to output compressed data
+  uint8_t* dst;                       ///< Current ptr to uncompressed data
+  uint8_t* end;                       ///< End of uncompressed data buffer
   volatile uint32_t literal_length;   ///< Number of literal bytes
   volatile uint32_t copy_length;      ///< Number of copy bytes
   volatile uint32_t copy_distance;    ///< Distance for copy bytes
@@ -53,10 +53,10 @@ static inline __device__ uint32_t snap_hash(uint32_t v)
 /**
  * @brief Fetches four consecutive bytes
  */
-static inline __device__ uint32_t fetch4(const uint8_t *src)
+static inline __device__ uint32_t fetch4(const uint8_t* src)
 {
   uint32_t src_align    = 3 & reinterpret_cast<uintptr_t>(src);
-  const uint32_t *src32 = reinterpret_cast<const uint32_t *>(src - src_align);
+  const uint32_t* src32 = reinterpret_cast<const uint32_t*>(src - src_align);
   uint32_t v            = src32[0];
   return (src_align) ? __funnelshift_r(v, src32[1], src_align * 8) : v;
 }
@@ -72,8 +72,8 @@ static inline __device__ uint32_t fetch4(const uint8_t *src)
  *
  * @return Updated pointer to compressed byte stream
  */
-static __device__ uint8_t *StoreLiterals(
-  uint8_t *dst, uint8_t *end, const uint8_t *src, uint32_t len_minus1, uint32_t t)
+static __device__ uint8_t* StoreLiterals(
+  uint8_t* dst, uint8_t* end, const uint8_t* src, uint32_t len_minus1, uint32_t t)
 {
   if (len_minus1 < 60) {
     if (!t && dst < end) dst[0] = (len_minus1 << 2);
@@ -125,8 +125,8 @@ static __device__ uint8_t *StoreLiterals(
  *
  * @return Updated pointer to compressed byte stream
  */
-static __device__ uint8_t *StoreCopy(uint8_t *dst,
-                                     uint8_t *end,
+static __device__ uint8_t* StoreCopy(uint8_t* dst,
+                                     uint8_t* end,
                                      uint32_t copy_len,
                                      uint32_t distance)
 {
@@ -178,8 +178,8 @@ static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
  *
  * @return Number of bytes before first match (literal length)
  */
-static __device__ uint32_t FindFourByteMatch(snap_state_s *s,
-                                             const uint8_t *src,
+static __device__ uint32_t FindFourByteMatch(snap_state_s* s,
+                                             const uint8_t* src,
                                              uint32_t pos0,
                                              uint32_t t)
 {
@@ -233,8 +233,8 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s,
 }
 
 /// @brief Returns the number of matching bytes for two byte sequences up to 63 bytes
-static __device__ uint32_t Match60(const uint8_t *src1,
-                                   const uint8_t *src2,
+static __device__ uint32_t Match60(const uint8_t* src1,
+                                   const uint8_t* src2,
                                    uint32_t len,
                                    uint32_t t)
 {
@@ -258,21 +258,21 @@ static __device__ uint32_t Match60(const uint8_t *src1,
  * @param[in] count Number of blocks to compress
  */
 extern "C" __global__ void __launch_bounds__(128)
-  snap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int count)
+  snap_kernel(gpu_inflate_input_s* inputs, gpu_inflate_status_s* outputs, int count)
 {
   __shared__ __align__(16) snap_state_s state_g;
 
-  snap_state_s *const s = &state_g;
+  snap_state_s* const s = &state_g;
   uint32_t t            = threadIdx.x;
   uint32_t pos;
-  const uint8_t *src;
+  const uint8_t* src;
 
   if (!t) {
-    const uint8_t *src = static_cast<const uint8_t *>(inputs[blockIdx.x].srcDevice);
+    const uint8_t* src = static_cast<const uint8_t*>(inputs[blockIdx.x].srcDevice);
     uint32_t src_len   = static_cast<uint32_t>(inputs[blockIdx.x].srcSize);
-    uint8_t *dst       = static_cast<uint8_t *>(inputs[blockIdx.x].dstDevice);
+    uint8_t* dst       = static_cast<uint8_t*>(inputs[blockIdx.x].dstDevice);
     uint32_t dst_len   = static_cast<uint32_t>(inputs[blockIdx.x].dstSize);
-    uint8_t *end       = dst + dst_len;
+    uint8_t* end       = dst + dst_len;
     s->src             = src;
     s->src_len         = src_len;
     s->dst_base        = dst;
@@ -289,7 +289,7 @@ extern "C" __global__ void __launch_bounds__(128)
     s->copy_distance  = 0;
   }
   for (uint32_t i = t; i < sizeof(s->hash_map) / sizeof(uint32_t); i += 128) {
-    *reinterpret_cast<volatile uint32_t *>(&s->hash_map[i * 2]) = 0;
+    *reinterpret_cast<volatile uint32_t*>(&s->hash_map[i * 2]) = 0;
   }
   __syncthreads();
   src = s->src;
@@ -301,8 +301,8 @@ extern "C" __global__ void __launch_bounds__(128)
     __syncthreads();
     if (t < 32) {
       // WARP0: Encode literals and copies
-      uint8_t *dst = s->dst;
-      uint8_t *end = s->end;
+      uint8_t* dst = s->dst;
+      uint8_t* end = s->end;
       if (literal_len > 0) {
         dst = StoreLiterals(dst, end, src + pos, literal_len - 1, t);
         pos += literal_len;
@@ -341,8 +341,8 @@ extern "C" __global__ void __launch_bounds__(128)
   }
 }
 
-cudaError_t __host__ gpu_snap(gpu_inflate_input_s *inputs,
-                              gpu_inflate_status_s *outputs,
+cudaError_t __host__ gpu_snap(gpu_inflate_input_s* inputs,
+                              gpu_inflate_status_s* outputs,
                               int count,
                               rmm::cuda_stream_view stream)
 {

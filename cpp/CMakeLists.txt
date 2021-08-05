@@ -28,7 +28,7 @@ elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
   set(CUDF_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
-project(CUDF VERSION 21.08.00 LANGUAGES C CXX)
+project(CUDF VERSION 21.10.00 LANGUAGES C CXX)
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake,
 # causing subsequent runs to have different values for the `Threads::Threads` target.
@@ -40,10 +40,13 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
-option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
+option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
+option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
+option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
@@ -53,10 +56,11 @@ option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
-message(VERBOSE "CUDF: Configure CMake to build (google) benchmarks: ${BUILD_BENCHMARKS}")
+message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
 message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
+message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_ENABLE_ARROW_S3}")
 message(VERBOSE "CUDF: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
 message(VERBOSE "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}")
 message(VERBOSE "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler: ${CUDA_ENABLE_LINEINFO}")
@@ -149,10 +153,38 @@ add_library(cudf
     src/aggregation/aggregation.cpp
     src/aggregation/aggregation.cu
     src/aggregation/result_cache.cpp
-    src/ast/linearizer.cpp
+    src/ast/expression_parser.cpp
     src/ast/transform.cu
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
+    src/binaryop/compiled/Add.cu
+    src/binaryop/compiled/ATan2.cu
+    src/binaryop/compiled/BitwiseAnd.cu
+    src/binaryop/compiled/BitwiseOr.cu
+    src/binaryop/compiled/BitwiseXor.cu
+    src/binaryop/compiled/Less.cu
+    src/binaryop/compiled/Greater.cu
+    src/binaryop/compiled/LessEqual.cu
+    src/binaryop/compiled/GreaterEqual.cu
+    src/binaryop/compiled/Div.cu
+    src/binaryop/compiled/equality_ops.cu
+    src/binaryop/compiled/FloorDiv.cu
+    src/binaryop/compiled/LogBase.cu
+    src/binaryop/compiled/LogicalAnd.cu
+    src/binaryop/compiled/LogicalOr.cu
+    src/binaryop/compiled/Mod.cu
+    src/binaryop/compiled/Mul.cu
+    src/binaryop/compiled/NullMax.cu
+    src/binaryop/compiled/NullMin.cu
+    src/binaryop/compiled/PMod.cu
+    src/binaryop/compiled/Pow.cu
+    src/binaryop/compiled/PyMod.cu
+    src/binaryop/compiled/ShiftLeft.cu
+    src/binaryop/compiled/ShiftRight.cu
+    src/binaryop/compiled/ShiftRightUnsigned.cu
+    src/binaryop/compiled/Sub.cu
+    src/binaryop/compiled/TrueDiv.cu
+    src/binaryop/compiled/util.cpp
     src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
     src/bitmask/is_element_valid.cpp
@@ -170,10 +202,11 @@ add_library(cudf
     src/copying/gather.cu
     src/copying/get_element.cu
     src/copying/pack.cpp
+    src/copying/reverse.cu
     src/copying/sample.cu
     src/copying/scatter.cu
     src/copying/shift.cu
-    src/copying/slice.cpp
+    src/copying/slice.cu
     src/copying/split.cpp
     src/copying/segmented_shift.cu
     src/datetime/datetime_ops.cu
@@ -193,13 +226,16 @@ add_library(cudf
     src/filling/sequence.cu
     src/groupby/groupby.cu
     src/groupby/hash/groupby.cu
+    src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_argmax.cu
     src/groupby/sort/group_argmin.cu
-    src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_collect.cu
     src/groupby/sort/group_count.cu
+    src/groupby/sort/group_m2.cu
     src/groupby/sort/group_max.cu
     src/groupby/sort/group_min.cu
+    src/groupby/sort/group_merge_lists.cu
+    src/groupby/sort/group_merge_m2.cu
     src/groupby/sort/group_nth_element.cu
     src/groupby/sort/group_nunique.cu
     src/groupby/sort/group_product.cu
@@ -208,8 +244,10 @@ add_library(cudf
     src/groupby/sort/group_sum.cu
     src/groupby/sort/scan.cpp
     src/groupby/sort/group_count_scan.cu
+    src/groupby/sort/group_dense_rank_scan.cu
     src/groupby/sort/group_max_scan.cu
     src/groupby/sort/group_min_scan.cu
+    src/groupby/sort/group_rank_scan.cu
     src/groupby/sort/group_sum_scan.cu
     src/groupby/sort/group_replace_nulls.cu
     src/groupby/sort/sort_helper.cu
@@ -265,17 +303,20 @@ add_library(cudf
     src/jit/cache.cpp
     src/jit/parser.cpp
     src/jit/type.cpp
+    src/join/conditional_join.cu
     src/join/cross_join.cu
     src/join/hash_join.cu
     src/join/join.cu
+    src/join/join_utils.cu
     src/join/semi_join.cu
     src/lists/contains.cu
-    src/lists/combine/concatenate_list_elements.cu		
+    src/lists/combine/concatenate_list_elements.cu
     src/lists/combine/concatenate_rows.cu
     src/lists/copying/concatenate.cu
     src/lists/copying/copying.cu
     src/lists/copying/gather.cu
     src/lists/copying/segmented_gather.cu
+    src/lists/copying/scatter_helper.cu
     src/lists/count_elements.cu
     src/lists/drop_list_duplicates.cu
     src/lists/explode.cu
@@ -351,6 +392,7 @@ add_library(cudf
     src/strings/convert/convert_urls.cu
     src/strings/copying/concatenate.cu
     src/strings/copying/copying.cu
+    src/strings/copying/shift.cu
     src/strings/extract.cu
     src/strings/filling/fill.cu
     src/strings/filter_chars.cu
@@ -361,9 +403,8 @@ add_library(cudf
     src/strings/json/json_path.cu
     src/strings/regex/regcomp.cpp
     src/strings/regex/regexec.cu
+    src/strings/repeat_strings.cu
     src/strings/replace/backref_re.cu
-    src/strings/replace/backref_re_large.cu
-    src/strings/replace/backref_re_medium.cu
     src/strings/replace/multi_re.cu
     src/strings/replace/replace.cu
     src/strings/replace/replace_re.cu
@@ -409,6 +450,7 @@ add_library(cudf
     src/unary/nan_ops.cu
     src/unary/null_ops.cu
     src/utilities/default_stream.cpp
+    src/utilities/type_checks.cpp
 )
 
 set_target_properties(cudf
@@ -491,13 +533,21 @@ if(CUDA_STATIC_RUNTIME)
     # Tell CMake what CUDA language runtime to use
     set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Static)
     # Make sure to export to consumers what runtime we used
-    target_link_libraries(cudf PUBLIC CUDA::cudart_static CUDA::cuda_driver)
+    target_link_libraries(cudf PUBLIC CUDA::cudart_static)
 else()
     # Tell CMake what CUDA language runtime to use
     set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
     # Make sure to export to consumers what runtime we used
-    target_link_libraries(cudf PUBLIC CUDA::cudart CUDA::cuda_driver)
+    target_link_libraries(cudf PUBLIC CUDA::cudart)
 endif()
+
+# The CUDA::cuda_driver is needed due to JITIFY sources which
+# directly call the cuda driver API
+if(NOT TARGET CUDA::cuda_driver)
+    message(FATAL_ERROR "Building libcudf requires `libcuda.so` to be present.
+        This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded.")
+endif()
+target_link_libraries(cudf PUBLIC CUDA::cuda_driver)
 
 # Add cuFile interface if available
 if(TARGET cuFile::cuFile_interface)
@@ -574,6 +624,8 @@ if(CUDF_BUILD_BENCHMARKS)
         GIT_SHALLOW     TRUE
         OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
                         "BENCHMARK_ENABLE_INSTALL OFF")
+    # Find or install NVBench
+    include(cmake/thirdparty/CUDF_GetNVBench.cmake)
     add_subdirectory(benchmarks)
 endif()
 
@@ -599,16 +651,6 @@ install(DIRECTORY
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
-
-install(DIRECTORY ${Thrust_SOURCE_DIR}/
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust
-  PATTERN "*.py" EXCLUDE
-  PATTERN "benchmark" EXCLUDE
-  PATTERN "build" EXCLUDE
-  PATTERN "doc" EXCLUDE
-  PATTERN "examples" EXCLUDE
-  PATTERN "test" EXCLUDE
-  PATTERN "testing" EXCLUDE)
 
 include(CMakePackageConfigHelpers)
 

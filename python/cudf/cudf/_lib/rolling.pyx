@@ -1,21 +1,20 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from __future__ import print_function
-import cudf
+
 import pandas as pd
+
+import cudf
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.column cimport Column
 from cudf._lib.aggregation cimport RollingAggregation, make_rolling_aggregation
-
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.rolling cimport (
-    rolling_window as cpp_rolling_window
-)
+from cudf._lib.cpp.rolling cimport rolling_window as cpp_rolling_window
+from cudf._lib.cpp.types cimport size_type
 
 
 def rolling(Column source_column, Column pre_column_window,

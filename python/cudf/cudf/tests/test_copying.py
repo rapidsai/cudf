@@ -6,7 +6,7 @@ import pytest
 
 import cudf
 from cudf.core import Series
-from cudf.tests.utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)

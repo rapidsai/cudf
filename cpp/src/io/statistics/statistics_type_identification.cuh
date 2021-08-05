@@ -55,8 +55,8 @@ struct conversion_map<io_file_format::ORC> {
                            std::pair<cudf::duration_ns, cudf::duration_ms>>;
 };
 
-// In Parquet timestamps and durations with second resoluion are converted to
-// milliseconds. Timestamps and durations with nanosecond resoluion are
+// In Parquet timestamps and durations with second resolution are converted to
+// milliseconds. Timestamps and durations with nanosecond resolution are
 // converted to microseconds.
 template <>
 struct conversion_map<io_file_format::PARQUET> {
@@ -242,16 +242,18 @@ template <typename T, io_file_format IO>
 class statistics_type_category {
  public:
   // Types that calculate the sum of elements encountered
-  static constexpr bool is_aggregated =
+  static constexpr bool include_aggregate =
     (IO == io_file_format::PARQUET) ? false : aggregation_type<T>::is_supported;
 
-  // Types for which sum does not make sense
-  static constexpr bool is_not_aggregated =
-    (IO == io_file_format::PARQUET) ? aggregation_type<T>::is_supported or cudf::is_timestamp<T>()
-                                    : cudf::is_timestamp<T>();
+  // Types for which sum does not make sense, but extrema do
+  static constexpr bool include_extrema =
+    aggregation_type<T>::is_supported or cudf::is_timestamp<T>();
+
+  // Types for which only value count makes sense (e.g. nested)
+  static constexpr bool include_count = (IO == io_file_format::ORC) ? true : include_extrema;
 
   // Do not calculate statistics for any other type
-  static constexpr bool is_ignored = not(is_aggregated or is_not_aggregated);
+  static constexpr bool ignore = not(include_count);
 };
 
 }  // namespace detail

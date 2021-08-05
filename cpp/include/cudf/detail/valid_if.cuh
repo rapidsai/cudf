@@ -117,7 +117,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
 *         input ranges.
 
  * Given a set of bitmasks, `masks`, the state of bit `j` in mask `i` is
- * determined by `p( *(begin1 + i), *(begin2 + j))`. If the predivate evaluates
+ * determined by `p( *(begin1 + i), *(begin2 + j))`. If the predicate evaluates
  * to true, the the bit is set to `1`. If false, set to `0`.
  *
  * Example Arguments:

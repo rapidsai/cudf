@@ -8,7 +8,7 @@ import pytest
 import cudf
 from cudf._lib.transform import mask_to_bools
 from cudf.core.column.column import as_column
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 from cudf.utils import dtypes as dtypeutils
 
 dtypes = sorted(
@@ -140,8 +140,8 @@ def test_column_series_multi_dim(data):
 @pytest.mark.parametrize(
     ("data", "error"),
     [
-        ([1, "1.0", "2", -3], TypeError),
-        ([np.nan, 0, "null", cp.nan], TypeError),
+        ([1, "1.0", "2", -3], pa.lib.ArrowInvalid),
+        ([np.nan, 0, "null", cp.nan], pa.lib.ArrowInvalid),
         (
             [np.int32(4), np.float64(1.5), np.float32(1.290994), np.int8(0)],
             None,
@@ -152,7 +152,7 @@ def test_column_mixed_dtype(data, error):
     if error is None:
         cudf.Series(data)
     else:
-        with pytest.raises(TypeError):
+        with pytest.raises(error):
             cudf.Series(data)
 
 
@@ -368,6 +368,32 @@ def test_as_column_buffer(data, expected):
 
 
 @pytest.mark.parametrize(
+    "data,expected",
+    [
+        (
+            pa.array([100, 200, 300], type=pa.decimal128(3)),
+            cudf.core.column.as_column(
+                [100, 200, 300], dtype=cudf.core.dtypes.Decimal64Dtype(3, 0)
+            ),
+        ),
+        (
+            pa.array([{"a": 1, "b": 3}, {"c": 2, "d": 4}]),
+            cudf.core.column.as_column([{"a": 1, "b": 3}, {"c": 2, "d": 4}]),
+        ),
+        (
+            pa.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]),
+            cudf.core.column.as_column(
+                [[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]
+            ),
+        ),
+    ],
+)
+def test_as_column_arrow_array(data, expected):
+    actual_column = cudf.core.column.as_column(data)
+    assert_eq(cudf.Series(actual_column), cudf.Series(expected))
+
+
+@pytest.mark.parametrize(
     "pd_dtype,expect_dtype",
     [
         # TODO: Nullable float is coming
@@ -455,3 +481,29 @@ def test_concatenate_large_column_strings():
         match="total size of output is too large for a cudf column",
     ):
         cudf.concat([s_1, s_2])
+
+
+@pytest.mark.parametrize(
+    "alias,expect_dtype",
+    [
+        ("UInt8", "uint8"),
+        ("UInt16", "uint16"),
+        ("UInt32", "uint32"),
+        ("UInt64", "uint64"),
+        ("Int8", "int8"),
+        ("Int16", "int16"),
+        ("Int32", "int32"),
+        ("Int64", "int64"),
+        ("boolean", "bool"),
+        ("Float32", "float32"),
+        ("Float64", "float64"),
+    ],
+)
+@pytest.mark.parametrize(
+    "data", [[1, 2, 0]],
+)
+def test_astype_with_aliases(alias, expect_dtype, data):
+    pd_data = pd.Series(data)
+    gd_data = cudf.Series.from_pandas(pd_data)
+
+    assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))

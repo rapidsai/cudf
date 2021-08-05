@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 try:
     import tables  # noqa F401

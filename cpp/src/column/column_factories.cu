@@ -63,7 +63,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   // any of the children in the strings column which would otherwise cause an exception.
   column_view sc{
     data_type{type_id::STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
-  auto sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
+  auto& sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
   // fill the column with the scalar
   auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, stream, mr);
   output->set_null_mask(rmm::device_buffer{}, 0);  // should be no nulls
@@ -72,10 +72,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
 
 template <>
 std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::dictionary32>(
-  scalar const& value,
-  size_type size,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
+  scalar const&, size_type, rmm::cuda_stream_view, rmm::mr::device_memory_resource*) const
 {
   CUDF_FAIL("dictionary not supported when creating from scalar");
 }
@@ -99,7 +96,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stru
   rmm::mr::device_memory_resource* mr) const
 {
   if (size == 0) CUDF_FAIL("0-length struct column is unsupported.");
-  auto ss   = static_cast<scalar_type_t<cudf::struct_view> const&>(value);
+  auto& ss  = static_cast<scalar_type_t<cudf::struct_view> const&>(value);
   auto iter = thrust::make_constant_iterator(0);
 
   auto children =

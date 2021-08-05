@@ -35,7 +35,23 @@ function(find_and_configure_thrust VERSION)
 
     thrust_create_target(cudf::Thrust FROM_OPTIONS)
     set(THRUST_LIBRARY "cudf::Thrust" PARENT_SCOPE)
-    set(Thrust_SOURCE_DIR "${Thrust_SOURCE_DIR}" PARENT_SCOPE)
+
+    include(GNUInstallDirs)
+    install(DIRECTORY "${Thrust_SOURCE_DIR}/thrust"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/"
+        FILES_MATCHING
+            PATTERN "*.h"
+            PATTERN "*.inl")
+    install(DIRECTORY "${Thrust_SOURCE_DIR}/dependencies/cub/cub"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/dependencies/"
+        FILES_MATCHING
+            PATTERN "*.cuh")
+
+    install(DIRECTORY "${Thrust_SOURCE_DIR}/thrust/cmake"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/thrust/")
+    install(DIRECTORY "${Thrust_SOURCE_DIR}/dependencies/cub/cub/cmake"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/dependencies/cub/")
+
 endfunction()
 
 set(CUDF_MIN_VERSION_Thrust 1.12.0)

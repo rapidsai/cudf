@@ -169,17 +169,17 @@ struct contains_scalar_dispatch {
 };
 
 template <>
-bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& col,
-                                                           scalar const& value,
-                                                           rmm::cuda_stream_view stream)
+bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const&,
+                                                           scalar const&,
+                                                           rmm::cuda_stream_view)
 {
   CUDF_FAIL("list_view type not supported yet");
 }
 
 template <>
-bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& col,
-                                                             scalar const& value,
-                                                             rmm::cuda_stream_view stream)
+bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const&,
+                                                             scalar const&,
+                                                             rmm::cuda_stream_view)
 {
   CUDF_FAIL("struct_view type not supported yet");
 }

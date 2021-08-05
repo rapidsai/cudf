@@ -350,7 +350,7 @@ struct dispatch_from_integers_fn {
 
     // build chars column
     auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
-    auto chars_column = detail::create_chars_child_column(strings_count, bytes, stream, mr);
+    auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
     auto chars_view   = chars_column->mutable_view();
     auto d_chars      = chars_view.template data<char>();
     thrust::for_each_n(rmm::exec_policy(stream),
@@ -392,7 +392,7 @@ std::unique_ptr<column> from_integers(column_view const& integers,
                                       rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = integers.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   return type_dispatcher(integers.type(), dispatch_from_integers_fn{}, integers, stream, mr);
 }

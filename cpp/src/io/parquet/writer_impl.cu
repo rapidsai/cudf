@@ -87,14 +87,14 @@ struct linked_column_view : public column_view {
   //       copy of this object. Options:
   // 1. Inherit from column_view_base. Only lose out on children vector. That is not needed.
   // 2. Don't inherit at all. make linked_column_view keep a reference wrapper to its column_view
-  linked_column_view(column_view const &col) : column_view(col), parent(nullptr)
+  linked_column_view(column_view const& col) : column_view(col), parent(nullptr)
   {
     for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
       children.push_back(std::make_shared<linked_column_view>(this, *child_it));
     }
   }
 
-  linked_column_view(linked_column_view *parent, column_view const &col)
+  linked_column_view(linked_column_view* parent, column_view const& col)
     : column_view(col), parent(parent)
   {
     for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
@@ -102,7 +102,7 @@ struct linked_column_view : public column_view {
     }
   }
 
-  linked_column_view *parent;  //!< Pointer to parent of this column. Nullptr if root
+  linked_column_view* parent;  //!< Pointer to parent of this column. Nullptr if root
   LinkedColVector children;
 };
 
@@ -112,10 +112,10 @@ struct linked_column_view : public column_view {
  * @param table table of columns to convert
  * @return Vector of converted linked_column_views
  */
-LinkedColVector input_table_to_linked_columns(table_view const &table)
+LinkedColVector input_table_to_linked_columns(table_view const& table)
 {
   LinkedColVector result;
-  for (column_view const &col : table) {
+  for (column_view const& col : table) {
     result.emplace_back(std::make_shared<linked_column_view>(col));
   }
 
@@ -144,20 +144,20 @@ struct schema_tree_node : public SchemaElement {
 };
 
 struct leaf_schema_fn {
-  schema_tree_node &col_schema;
-  LinkedColPtr const &col;
-  column_in_metadata const &col_meta;
+  schema_tree_node& col_schema;
+  LinkedColPtr const& col;
+  column_in_metadata const& col_meta;
   bool timestamp_is_int96;
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, bool>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, bool>, void> operator()()
   {
     col_schema.type        = Type::BOOLEAN;
     col_schema.stats_dtype = statistics_dtype::dtype_bool;
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, int8_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, int8_t>, void> operator()()
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::INT_8;
@@ -165,7 +165,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, int16_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, int16_t>, void> operator()()
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::INT_16;
@@ -173,21 +173,21 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, int32_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, int32_t>, void> operator()()
   {
     col_schema.type        = Type::INT32;
     col_schema.stats_dtype = statistics_dtype::dtype_int32;
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, int64_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, int64_t>, void> operator()()
   {
     col_schema.type        = Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_int64;
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, uint8_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, uint8_t>, void> operator()()
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_8;
@@ -195,7 +195,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, uint16_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, uint16_t>, void> operator()()
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_16;
@@ -203,7 +203,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, uint32_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, uint32_t>, void> operator()()
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_32;
@@ -211,7 +211,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, uint64_t>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, uint64_t>, void> operator()()
   {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::UINT_64;
@@ -219,21 +219,21 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, float>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, float>, void> operator()()
   {
     col_schema.type        = Type::FLOAT;
     col_schema.stats_dtype = statistics_dtype::dtype_float32;
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, double>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, double>, void> operator()()
   {
     col_schema.type        = Type::DOUBLE;
     col_schema.stats_dtype = statistics_dtype::dtype_float64;
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::string_view>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> operator()()
   {
     col_schema.type           = Type::BYTE_ARRAY;
     col_schema.converted_type = ConvertedType::UTF8;
@@ -241,7 +241,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::timestamp_D>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::timestamp_D>, void> operator()()
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::DATE;
@@ -249,7 +249,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::timestamp_s>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::timestamp_s>, void> operator()()
   {
     col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.converted_type =
@@ -259,7 +259,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::timestamp_ms>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::timestamp_ms>, void> operator()()
   {
     col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.converted_type =
@@ -268,7 +268,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::timestamp_us>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::timestamp_us>, void> operator()()
   {
     col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.converted_type =
@@ -277,7 +277,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::timestamp_ns>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
     col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.converted_type =
@@ -288,7 +288,7 @@ struct leaf_schema_fn {
 
   //  unsupported outside cudf for parquet 1.0.
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::duration_D>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
@@ -296,7 +296,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::duration_s>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
   {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
@@ -305,7 +305,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::duration_ms>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
   {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
@@ -313,7 +313,7 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::duration_us>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::duration_us>, void> operator()()
   {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::TIME_MICROS;
@@ -322,7 +322,7 @@ struct leaf_schema_fn {
 
   //  unsupported outside cudf for parquet 1.0.
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::duration_ns>::value, void> operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
   {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::TIME_MICROS;
@@ -333,10 +333,10 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
   {
-    if (std::is_same<T, numeric::decimal32>::value) {
+    if (std::is_same_v<T, numeric::decimal32>) {
       col_schema.type        = Type::INT32;
       col_schema.stats_dtype = statistics_dtype::dtype_int32;
-    } else if (std::is_same<T, numeric::decimal64>::value) {
+    } else if (std::is_same_v<T, numeric::decimal64>) {
       col_schema.type        = Type::INT64;
       col_schema.stats_dtype = statistics_dtype::dtype_decimal64;
     } else {
@@ -370,8 +370,8 @@ struct leaf_schema_fn {
  * Recursively traverses through linked_columns and corresponding metadata to construct schema tree.
  * The resulting schema tree is stored in a vector in pre-order traversal order.
  */
-std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linked_columns,
-                                                    table_input_metadata const &metadata,
+std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linked_columns,
+                                                    table_input_metadata const& metadata,
                                                     bool single_write_mode,
                                                     bool int96_timestamps)
 {
@@ -384,8 +384,8 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
   root.parent_idx      = -1;  // root schema has no parent
   schema.push_back(std::move(root));
 
-  std::function<void(LinkedColPtr const &, column_in_metadata const &, size_t)> add_schema =
-    [&](LinkedColPtr const &col, column_in_metadata const &col_meta, size_t parent_idx) {
+  std::function<void(LinkedColPtr const&, column_in_metadata const&, size_t)> add_schema =
+    [&](LinkedColPtr const& col, column_in_metadata const& col_meta, size_t parent_idx) {
       bool col_nullable = [&]() {
         if (single_write_mode) {
           return col->nullable();
@@ -500,8 +500,8 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const &linke
  *
  */
 struct parquet_column_view {
-  parquet_column_view(schema_tree_node const &schema_node,
-                      std::vector<schema_tree_node> const &schema_tree,
+  parquet_column_view(schema_tree_node const& schema_node,
+                      std::vector<schema_tree_node> const& schema_tree,
                       rmm::cuda_stream_view stream);
 
   column_view leaf_column_view() const;
@@ -510,7 +510,7 @@ struct parquet_column_view {
   column_view cudf_column_view() const { return cudf_col; }
   parquet::Type physical_type() const { return schema_node.type; }
 
-  std::vector<std::string> const &get_path_in_schema() { return path_in_schema; }
+  std::vector<std::string> const& get_path_in_schema() { return path_in_schema; }
 
   // LIST related member functions
   uint8_t max_def_level() const noexcept { return _max_def_level; }
@@ -538,8 +538,8 @@ struct parquet_column_view {
   size_type _data_count = 0;
 };
 
-parquet_column_view::parquet_column_view(schema_tree_node const &schema_node,
-                                         std::vector<schema_tree_node> const &schema_tree,
+parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
+                                         std::vector<schema_tree_node> const& schema_tree,
                                          rmm::cuda_stream_view stream)
   : schema_node(schema_node),
     _d_nullability(0, stream),
@@ -551,7 +551,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const &schema_node,
   auto curr_col                           = schema_node.leaf_column.get();
   column_view single_inheritance_cudf_col = *curr_col;
   while (curr_col->parent) {
-    auto const &parent = *curr_col->parent;
+    auto const& parent = *curr_col->parent;
 
     // For list columns, we still need to retain the offset child column.
     auto children =
@@ -678,7 +678,7 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
   return desc;
 }
 
-void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragment> &frag,
+void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragment>& frag,
                                        device_span<gpu::parquet_column_device_view const> col_desc,
                                        uint32_t num_rows,
                                        uint32_t fragment_size)
@@ -704,7 +704,7 @@ void writer::impl::gather_fragment_statistics(
   stream.synchronize();
 }
 
-void writer::impl::init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
+void writer::impl::init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                                    device_span<gpu::parquet_column_device_view const> col_desc,
                                    uint32_t num_columns)
 {
@@ -713,7 +713,7 @@ void writer::impl::init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk> &chu
   chunks.device_to_host(stream, true);
 }
 
-auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
+auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                               host_span<gpu::parquet_column_device_view const> col_desc,
                               uint32_t num_rows,
                               rmm::cuda_stream_view stream)
@@ -731,12 +731,12 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
   // Allocate slots for each chunk
   std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
   hash_maps_storage.reserve(h_chunks.size());
-  for (auto &chunk : h_chunks) {
+  for (auto& chunk : h_chunks) {
     if (col_desc[chunk.col_desc_id].physical_type == Type::BOOLEAN) {
       chunk.use_dictionary = false;
     } else {
       chunk.use_dictionary = true;
-      auto &inserted_map   = hash_maps_storage.emplace_back(chunk.num_values, stream);
+      auto& inserted_map   = hash_maps_storage.emplace_back(chunk.num_values, stream);
       chunk.dict_map_slots = inserted_map.data();
       chunk.dict_map_size  = inserted_map.size();
     }
@@ -751,7 +751,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
   stream.synchronize();
 
   // Make decision about which chunks have dictionary
-  for (auto &ck : h_chunks) {
+  for (auto& ck : h_chunks) {
     if (not ck.use_dictionary) { continue; }
     std::tie(ck.use_dictionary, ck.dict_rle_bits) = [&]() {
       // We don't use dictionary if the indices are > 16 bits
@@ -784,11 +784,11 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
 
   dict_data.reserve(h_chunks.size());
   dict_index.reserve(h_chunks.size());
-  for (auto &chunk : h_chunks) {
+  for (auto& chunk : h_chunks) {
     if (not chunk.use_dictionary) { continue; }
 
-    auto &inserted_dict_data  = dict_data.emplace_back(MAX_DICT_SIZE, stream);
-    auto &inserted_dict_index = dict_index.emplace_back(chunk.num_values, stream);
+    auto& inserted_dict_data  = dict_data.emplace_back(MAX_DICT_SIZE, stream);
+    auto& inserted_dict_index = dict_index.emplace_back(chunk.num_values, stream);
     chunk.dict_data           = inserted_dict_data.data();
     chunk.dict_index          = inserted_dict_index.data();
   }
@@ -799,11 +799,11 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
   return std::make_pair(std::move(dict_data), std::move(dict_index));
 }
 
-void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
+void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                                       device_span<gpu::parquet_column_device_view const> col_desc,
                                       device_span<gpu::EncPage> pages,
-                                      statistics_chunk *page_stats,
-                                      statistics_chunk *frag_stats,
+                                      statistics_chunk* page_stats,
+                                      statistics_chunk* frag_stats,
                                       uint32_t num_columns,
                                       uint32_t num_pages,
                                       uint32_t num_stats_bfr)
@@ -832,14 +832,14 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &
   stream.synchronize();
 }
 
-void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
+void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                                 device_span<gpu::EncPage> pages,
                                 uint32_t pages_in_batch,
                                 uint32_t first_page_in_batch,
                                 uint32_t rowgroups_in_batch,
                                 uint32_t first_rowgroup,
-                                const statistics_chunk *page_stats,
-                                const statistics_chunk *chunk_stats)
+                                const statistics_chunk* page_stats,
+                                const statistics_chunk* chunk_stats)
 {
   auto batch_pages = pages.subspan(first_page_in_batch, pages_in_batch);
 
@@ -881,10 +881,10 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   parquet_writer_options const &options,
+                   parquet_writer_options const& options,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource *mr)
+                   rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
     compression_(to_parquet_compression(options.get_compression())),
@@ -900,10 +900,10 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   chunked_parquet_writer_options const &options,
+                   chunked_parquet_writer_options const& options,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource *mr)
+                   rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
     compression_(to_parquet_compression(options.get_compression())),
@@ -929,7 +929,7 @@ void writer::impl::init_state()
   current_chunk_offset = sizeof(file_header_s);
 }
 
-void writer::impl::write(table_view const &table)
+void writer::impl::write(table_view const& table)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
 
@@ -938,8 +938,8 @@ void writer::impl::write(table_view const &table)
   if (not table_meta) { table_meta = std::make_unique<table_input_metadata>(table); }
 
   // Fill unnamed columns' names in table_meta
-  std::function<void(column_in_metadata &, std::string)> add_default_name =
-    [&](column_in_metadata &col_meta, std::string default_name) {
+  std::function<void(column_in_metadata&, std::string)> add_default_name =
+    [&](column_in_metadata& col_meta, std::string default_name) {
       if (col_meta.get_name().empty()) col_meta.set_name(default_name);
       for (size_type i = 0; i < col_meta.num_children(); ++i) {
         add_default_name(col_meta.child(i), col_meta.get_name() + "_" + std::to_string(i));
@@ -954,14 +954,16 @@ void writer::impl::write(table_view const &table)
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;
 
-  for (schema_tree_node const &schema_node : schema_tree) {
+  for (schema_tree_node const& schema_node : schema_tree) {
     if (schema_node.leaf_column) { parquet_columns.emplace_back(schema_node, schema_tree, stream); }
   }
 
   // Mass allocation of column_device_views for each parquet_column_view
   std::vector<column_view> cudf_cols;
   cudf_cols.reserve(parquet_columns.size());
-  for (auto const &parq_col : parquet_columns) { cudf_cols.push_back(parq_col.cudf_column_view()); }
+  for (auto const& parq_col : parquet_columns) {
+    cudf_cols.push_back(parq_col.cudf_column_view());
+  }
   table_view single_streams_table(cudf_cols);
   size_type num_columns = single_streams_table.num_columns();
 
@@ -975,7 +977,7 @@ void writer::impl::write(table_view const &table)
     std::transform(table_meta->user_data.begin(),
                    table_meta->user_data.end(),
                    std::back_inserter(md.key_value_metadata),
-                   [](auto const &kv) {
+                   [](auto const& kv) {
                      return KeyValue{kv.first, kv.second};
                    });
     md.schema = this_table_schema;
@@ -995,7 +997,7 @@ void writer::impl::write(table_view const &table)
   // Initialize column description
   hostdevice_vector<gpu::parquet_column_device_view> col_desc(parquet_columns.size(), stream);
   std::transform(
-    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [&](auto const &pcol) {
+    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [&](auto const& pcol) {
       return pcol.get_device_view(stream);
     });
 
@@ -1073,7 +1075,7 @@ void writer::impl::write(table_view const &table)
     md.row_groups[global_r].total_byte_size = 0;
     md.row_groups[global_r].columns.resize(num_columns);
     for (int i = 0; i < num_columns; i++) {
-      gpu::EncColumnChunk *ck = &chunks[r][i];
+      gpu::EncColumnChunk* ck = &chunks[r][i];
 
       *ck             = {};
       ck->col_desc    = col_desc.device_ptr() + i;
@@ -1129,7 +1131,7 @@ void writer::impl::write(table_view const &table)
     size_t rowgroup_size = 0;
     if (r < num_rowgroups) {
       for (int i = 0; i < num_columns; i++) {
-        gpu::EncColumnChunk *ck = &chunks[r][i];
+        gpu::EncColumnChunk* ck = &chunks[r][i];
         ck->first_page          = num_pages;
         num_pages += ck->num_pages;
         pages_in_batch += ck->num_pages;
@@ -1168,11 +1170,11 @@ void writer::impl::write(table_view const &table)
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
   for (uint32_t b = 0, r = 0; b < (uint32_t)batch_list.size(); b++) {
-    uint8_t *bfr   = static_cast<uint8_t *>(uncomp_bfr.data());
-    uint8_t *bfr_c = static_cast<uint8_t *>(comp_bfr.data());
+    uint8_t* bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
+    uint8_t* bfr_c = static_cast<uint8_t*>(comp_bfr.data());
     for (uint32_t j = 0; j < batch_list[b]; j++, r++) {
       for (int i = 0; i < num_columns; i++) {
-        gpu::EncColumnChunk *ck = &chunks[r][i];
+        gpu::EncColumnChunk* ck = &chunks[r][i];
         ck->uncompressed_bfr    = bfr;
         ck->compressed_bfr      = bfr_c;
         bfr += ck->bfr_size;
@@ -1216,8 +1218,8 @@ void writer::impl::write(table_view const &table)
                                                                : nullptr);
     for (; r < rnext; r++, global_r++) {
       for (auto i = 0; i < num_columns; i++) {
-        gpu::EncColumnChunk *ck = &chunks[r][i];
-        uint8_t *dev_bfr;
+        gpu::EncColumnChunk* ck = &chunks[r][i];
+        uint8_t* dev_bfr;
         if (ck->is_compressed) {
           md.row_groups[global_r].columns[i].meta_data.codec = compression_;
           dev_bfr                                            = ck->compressed_bfr;
@@ -1242,7 +1244,7 @@ void writer::impl::write(table_view const &table)
         } else {
           if (!host_bfr) {
             host_bfr = pinned_buffer<uint8_t>{[](size_t size) {
-                                                uint8_t *ptr = nullptr;
+                                                uint8_t* ptr = nullptr;
                                                 CUDA_TRY(cudaMallocHost(&ptr, size));
                                                 return ptr;
                                               }(max_chunk_bfr_size),
@@ -1277,7 +1279,7 @@ void writer::impl::write(table_view const &table)
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
-  std::string const &column_chunks_file_path)
+  std::string const& column_chunks_file_path)
 {
   if (closed) { return nullptr; }
   closed = true;
@@ -1295,15 +1297,17 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     file_header_s fhdr = {parquet_magic};
     buffer_.resize(0);
     buffer_.insert(buffer_.end(),
-                   reinterpret_cast<const uint8_t *>(&fhdr),
-                   reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
-    for (auto &rowgroup : md.row_groups) {
-      for (auto &col : rowgroup.columns) { col.file_path = column_chunks_file_path; }
+                   reinterpret_cast<const uint8_t*>(&fhdr),
+                   reinterpret_cast<const uint8_t*>(&fhdr) + sizeof(fhdr));
+    for (auto& rowgroup : md.row_groups) {
+      for (auto& col : rowgroup.columns) {
+        col.file_path = column_chunks_file_path;
+      }
     }
     fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
     buffer_.insert(buffer_.end(),
-                   reinterpret_cast<const uint8_t *>(&fendr),
-                   reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));
+                   reinterpret_cast<const uint8_t*>(&fendr),
+                   reinterpret_cast<const uint8_t*>(&fendr) + sizeof(fendr));
     return std::make_unique<std::vector<uint8_t>>(std::move(buffer_));
   } else {
     return {nullptr};
@@ -1312,19 +1316,19 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
 
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
-               parquet_writer_options const &options,
+               parquet_writer_options const& options,
                SingleWriteMode mode,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource *mr)
+               rmm::mr::device_memory_resource* mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
 {
 }
 
 writer::writer(std::unique_ptr<data_sink> sink,
-               chunked_parquet_writer_options const &options,
+               chunked_parquet_writer_options const& options,
                SingleWriteMode mode,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource *mr)
+               rmm::mr::device_memory_resource* mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
 {
 }
@@ -1333,23 +1337,23 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write(table_view const &table) { _impl->write(table); }
+void writer::write(table_view const& table) { _impl->write(table); }
 
 // Forward to implementation
-std::unique_ptr<std::vector<uint8_t>> writer::close(std::string const &column_chunks_file_path)
+std::unique_ptr<std::vector<uint8_t>> writer::close(std::string const& column_chunks_file_path)
 {
   return _impl->close(column_chunks_file_path);
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
-  const std::vector<std::unique_ptr<std::vector<uint8_t>>> &metadata_list)
+  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
 {
   std::vector<uint8_t> output;
   CompactProtocolWriter cpw(&output);
   FileMetaData md;
 
   md.row_groups.reserve(metadata_list.size());
-  for (const auto &blob : metadata_list) {
+  for (const auto& blob : metadata_list) {
     CompactProtocolReader cpreader(
       blob.get()->data(),
       std::max<size_t>(blob.get()->size(), sizeof(file_ender_s)) - sizeof(file_ender_s));
@@ -1378,13 +1382,13 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
   file_ender_s fendr;
   fhdr.magic = parquet_magic;
   output.insert(output.end(),
-                reinterpret_cast<const uint8_t *>(&fhdr),
-                reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
+                reinterpret_cast<const uint8_t*>(&fhdr),
+                reinterpret_cast<const uint8_t*>(&fhdr) + sizeof(fhdr));
   fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
   fendr.magic      = parquet_magic;
   output.insert(output.end(),
-                reinterpret_cast<const uint8_t *>(&fendr),
-                reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));
+                reinterpret_cast<const uint8_t*>(&fendr),
+                reinterpret_cast<const uint8_t*>(&fendr) + sizeof(fendr));
   return std::make_unique<std::vector<uint8_t>>(std::move(output));
 }
 

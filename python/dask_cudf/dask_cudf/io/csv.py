@@ -8,9 +8,8 @@ from fsspec.utils import infer_compression
 
 from dask import dataframe as dd
 from dask.base import tokenize
-from dask.compatibility import apply
 from dask.dataframe.io.csv import make_reader
-from dask.utils import parse_bytes
+from dask.utils import apply, parse_bytes
 
 import cudf
 

@@ -63,7 +63,7 @@ void do_bit_cast(cudf::column_view const& column_view, Iterator begin, Iterator 
   auto mutable_column_view = reinterpret_cast<cudf::mutable_column_view const&>(column_view);
   cudf::data_type to_type{cudf::type_to_id<ToType>()};
 
-  if (std::is_same<FromType, ToType>::value) {
+  if (std::is_same_v<FromType, ToType>) {
     // Cast to same to_type
     auto output  = cudf::bit_cast(column_view, column_view.type());
     auto output1 = cudf::bit_cast(mutable_column_view, mutable_column_view.type());

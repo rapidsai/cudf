@@ -116,7 +116,7 @@ class groupby {
   /**
    * @brief Performs grouped aggregations on the specified values.
    *
-   * The values to aggregate and the aggregations to perform are specifed in an
+   * The values to aggregate and the aggregations to perform are specified in an
    * `aggregation_request`. Each request contains a `column_view` of values to
    * aggregate and a set of `aggregation`s to perform on those elements.
    *
@@ -173,7 +173,7 @@ class groupby {
   /**
    * @brief Performs grouped scans on the specified values.
    *
-   * The values to aggregate and the aggregations to perform are specifed in an
+   * The values to aggregate and the aggregations to perform are specified in an
    * `aggregation_request`. Each request contains a `column_view` of values to
    * aggregate and a set of `aggregation`s to perform on those elements.
    *

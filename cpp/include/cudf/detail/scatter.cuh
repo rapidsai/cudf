@@ -305,7 +305,7 @@ struct column_scatterer_impl<struct_view> {
                                             [](auto const& col) { return col.nullable(); });
     if (child_nullable) {
       auto const gather_map =
-        scatter_to_gather(scatter_map_begin, scatter_map_end, source.size(), stream);
+        scatter_to_gather(scatter_map_begin, scatter_map_end, target.size(), stream);
       gather_bitmask(cudf::table_view{std::vector<cudf::column_view>{structs_src.child_begin(),
                                                                      structs_src.child_end()}},
                      gather_map.begin(),

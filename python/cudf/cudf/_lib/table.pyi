@@ -1,12 +1,12 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-from typing import List, Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, List, Optional
 
 import cudf
 
 class Table(object):
     _data: cudf.core.column_accessor.ColumnAccessor
-    _index: Optional[cudf.core.index.Index]
+    _index: Optional[cudf.core.index.BaseIndex]
 
     def __init__(self, data: object = None, index: object = None) -> None: ...
 

@@ -232,7 +232,9 @@ __inline__ __device__ void extract_time(
   if (*last == 'M' || *last == 'm') {
     if (*(last - 1) == 'P' || *(last - 1) == 'p') { hour_adjust = 12; }
     last = last - 2;
-    while (*last == ' ') { --last; }
+    while (*last == ' ') {
+      --last;
+    }
   }
   end = last + 1;
 
@@ -398,7 +400,7 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
   auto cur         = begin;
   auto const value = parse_integer<int32_t>(&cur, end);
   cur              = skip_spaces(cur, end);
-  if (std::is_same<T, cudf::duration_D>::value || cur >= end) {  // %value
+  if (std::is_same_v<T, cudf::duration_D> || cur >= end) {  // %value
     return value;
   }
   // " days [+]"
@@ -417,7 +419,7 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
   auto const second = parse_optional_integer<int8_t>(&cur, end, sep);
 
   int nanosecond = 0;
-  if (std::is_same<T, cudf::duration_s>::value) {
+  if (std::is_same_v<T, cudf::duration_s>) {
     return ((days * 24L + hour) * 60L + minute) * 60L + second;
   } else if (*cur == '.') {  //.n
     auto const start_subsecond        = ++cur;

@@ -46,10 +46,10 @@ class reader {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::vector<std::string> const &filepaths,
-                  avro_reader_options const &options,
+  explicit reader(std::vector<std::string> const& filepaths,
+                  avro_reader_options const& options,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource *mr);
+                  rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Constructor from an array of datasources
@@ -59,10 +59,10 @@ class reader {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-                  avro_reader_options const &options,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                  avro_reader_options const& options,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource *mr);
+                  rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -77,7 +77,7 @@ class reader {
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(avro_reader_options const &options,
+  table_with_metadata read(avro_reader_options const& options,
                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 };
 }  // namespace avro

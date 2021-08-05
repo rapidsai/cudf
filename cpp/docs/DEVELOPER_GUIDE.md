@@ -342,6 +342,7 @@ namespace detail{
 } // namespace detail
 
 void external_function(...){
+    CUDF_FUNC_RANGE(); // Auto generates NVTX range for lifetime of this function
     detail::external_function(...);
 }
 ```
@@ -354,6 +355,12 @@ asynchrony if and when we add an asynchronous API to libcudf.
 
 **Note:** `cudaDeviceSynchronize()` should *never* be used.
  This limits the ability to do any multi-stream/multi-threaded work with libcudf APIs.
+
+ ### NVTX Ranges
+
+ In order to aid in performance optimization and debugging, all compute intensive libcudf functions should have a corresponding NVTX range.
+ In libcudf, we have a convenience macro `CUDF_FUNC_RANGE()` that will automatically annotate the lifetime of the enclosing function and use the functions name as the name of the NVTX range. 
+ For more information about NVTX, see [here](https://github.com/NVIDIA/NVTX/tree/dev/cpp).
 
  ### Stream Creation
 
@@ -463,7 +470,7 @@ libcudf, and you should not use it in new code in libcudf without careful consid
 use `rmm::device_uvector` along with the utility factories in `device_factories.hpp`. These 
 utilities enable creation of `uvector`s from host-side vectors, or creating zero-initialized
 `uvector`s, so that they are as convenient to use as `device_vector`. Avoiding `device_vector` has
-a number of benefits, as described in the folling section on `rmm::device_uvector`.
+a number of benefits, as described in the following section on `rmm::device_uvector`.
 
 #### `rmm::device_uvector<T>`
 

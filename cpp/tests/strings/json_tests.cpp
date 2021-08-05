@@ -76,10 +76,10 @@ std::unique_ptr<cudf::column> drop_whitespace(cudf::column_view const& col)
   return cudf::strings::replace(strings, targets, replacements);
 }
 
-struct JsonTests : public cudf::test::BaseFixture {
+struct JsonPathTests : public cudf::test::BaseFixture {
 };
 
-TEST_F(JsonTests, GetJsonObjectRootOp)
+TEST_F(JsonPathTests, GetJsonObjectRootOp)
 {
   // root
   cudf::test::strings_column_wrapper input{json_string};
@@ -92,7 +92,7 @@ TEST_F(JsonTests, GetJsonObjectRootOp)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
 }
 
-TEST_F(JsonTests, GetJsonObjectChildOp)
+TEST_F(JsonPathTests, GetJsonObjectChildOp)
 {
   {
     cudf::test::strings_column_wrapper input{json_string};
@@ -187,7 +187,7 @@ TEST_F(JsonTests, GetJsonObjectChildOp)
   }
 }
 
-TEST_F(JsonTests, GetJsonObjectWildcardOp)
+TEST_F(JsonPathTests, GetJsonObjectWildcardOp)
 {
   {
     cudf::test::strings_column_wrapper input{json_string};
@@ -291,7 +291,7 @@ TEST_F(JsonTests, GetJsonObjectWildcardOp)
   }
 }
 
-TEST_F(JsonTests, GetJsonObjectSubscriptOp)
+TEST_F(JsonPathTests, GetJsonObjectSubscriptOp)
 {
   {
     cudf::test::strings_column_wrapper input{json_string};
@@ -378,7 +378,7 @@ TEST_F(JsonTests, GetJsonObjectSubscriptOp)
   }
 }
 
-TEST_F(JsonTests, GetJsonObjectFilter)
+TEST_F(JsonPathTests, GetJsonObjectFilter)
 {
   // queries that result in filtering/collating results (mostly meaning - generates new
   // json instead of just returning parts of the existing string
@@ -449,7 +449,7 @@ TEST_F(JsonTests, GetJsonObjectFilter)
   }
 }
 
-TEST_F(JsonTests, GetJsonObjectNullInputs)
+TEST_F(JsonPathTests, GetJsonObjectNullInputs)
 {
   {
     std::string str("{\"a\" : \"b\"}");
@@ -466,7 +466,7 @@ TEST_F(JsonTests, GetJsonObjectNullInputs)
   }
 }
 
-TEST_F(JsonTests, GetJsonObjectEmptyQuery)
+TEST_F(JsonPathTests, GetJsonObjectEmptyQuery)
 {
   // empty query -> null
   {
@@ -480,7 +480,7 @@ TEST_F(JsonTests, GetJsonObjectEmptyQuery)
   }
 }
 
-TEST_F(JsonTests, GetJsonObjectEmptyInputsAndOutputs)
+TEST_F(JsonPathTests, GetJsonObjectEmptyInputsAndOutputs)
 {
   // empty input -> null
   {
@@ -508,7 +508,7 @@ TEST_F(JsonTests, GetJsonObjectEmptyInputsAndOutputs)
 }
 
 // badly formed JSONpath strings
-TEST_F(JsonTests, GetJsonObjectIllegalQuery)
+TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
 {
   // can't have more than one root operator, or a root operator anywhere other
   // than the beginning
@@ -581,7 +581,7 @@ TEST_F(JsonTests, GetJsonObjectIllegalQuery)
 }
 
 // queries that are legal, but reference invalid parts of the input
-TEST_F(JsonTests, GetJsonObjectInvalidQuery)
+TEST_F(JsonPathTests, GetJsonObjectInvalidQuery)
 {
   // non-existent field
   {
@@ -628,7 +628,7 @@ TEST_F(JsonTests, GetJsonObjectInvalidQuery)
   }
 }
 
-TEST_F(JsonTests, MixedOutput)
+TEST_F(JsonPathTests, MixedOutput)
 {
   // various queries on:
   // clang-format off
@@ -760,7 +760,7 @@ TEST_F(JsonTests, MixedOutput)
   }
 }
 
-TEST_F(JsonTests, StripQuotes)
+TEST_F(JsonPathTests, StripQuotes)
 {
   // we normally expect our outputs here to be
   // b     (no quotes)
@@ -801,7 +801,7 @@ TEST_F(JsonTests, StripQuotes)
   }
 }
 
-TEST_F(JsonTests, AllowSingleQuotes)
+TEST_F(JsonPathTests, AllowSingleQuotes)
 {
   // Tests allowing single quotes for strings.
   // Note:  this flag allows a mix of single and double quotes. it doesn't explicitly require
@@ -873,6 +873,98 @@ TEST_F(JsonTests, AllowSingleQuotes)
       {1, 1, 0, 1, 1, 1, 1, 1});
     // clang-format on
 
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  }
+}
+
+TEST_F(JsonPathTests, StringsWithSpecialChars)
+{
+  // make sure we properly handle strings containing special characters
+  // like { } [ ], etc
+  // various queries on:
+
+  {
+    std::vector<std::string> input_strings{
+      // clang-format off
+      "{\"item\" : [{\"key\" : \"value[\"}]}",
+      // clang-format on
+    };
+
+    cudf::test::strings_column_wrapper input(input_strings.begin(), input_strings.end());
+    {
+      std::string json_path("$.item");
+
+      cudf::strings::get_json_object_options options;
+      options.set_allow_single_quotes(true);
+
+      auto result =
+        cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
+
+      // clang-format off
+      cudf::test::strings_column_wrapper expected({
+        "[{\"key\" : \"value[\"}]",
+      });
+      // clang-format on
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+    }
+  }
+
+  {
+    std::vector<std::string> input_strings{
+      // clang-format off
+      "{\"a\" : \"[}{}][][{[\\\"}}[\\\"]\"}",
+      // clang-format on
+    };
+
+    cudf::test::strings_column_wrapper input(input_strings.begin(), input_strings.end());
+    {
+      std::string json_path("$.a");
+
+      cudf::strings::get_json_object_options options;
+      options.set_allow_single_quotes(true);
+
+      auto result =
+        cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
+
+      // clang-format off
+      cudf::test::strings_column_wrapper expected({
+        "[}{}][][{[\\\"}}[\\\"]",
+      });
+      // clang-format on
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+    }
+  }
+}
+
+TEST_F(JsonPathTests, EscapeSequences)
+{
+  // valid escape sequences in JSON include
+  // \" \\ \/ \b \f \n \r \t
+  // \uXXXX  where X is a valid hex digit
+
+  std::vector<std::string> input_strings{
+    // clang-format off
+    "{\"a\" : \"\\\" \\\\ \\/ \\b \\f \\n \\r \\t\"}",
+    "{\"a\" : \"\\u1248 \\uacdf \\uACDF \\u10EF\"}"
+    // clang-format on
+  };
+
+  cudf::test::strings_column_wrapper input(input_strings.begin(), input_strings.end());
+  {
+    std::string json_path("$.a");
+
+    cudf::strings::get_json_object_options options;
+    options.set_allow_single_quotes(true);
+
+    auto result =
+      cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
+
+    // clang-format off
+    cudf::test::strings_column_wrapper expected({
+      "\\\" \\\\ \\/ \\b \\f \\n \\r \\t",
+      "\\u1248 \\uacdf \\uACDF \\u10EF"
+    });
+    // clang-format on
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
   }
 }

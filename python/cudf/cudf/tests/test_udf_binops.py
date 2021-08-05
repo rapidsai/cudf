@@ -3,13 +3,12 @@ from __future__ import division
 
 import numpy as np
 import pytest
+from numba.cuda import compile_ptx
+from numba.np import numpy_support
 
 from cudf import _lib as libcudf
 from cudf.core import Series
 from cudf.utils import dtypes as dtypeutils
-
-from numba.cuda import compile_ptx
-from numba.np import numpy_support
 
 
 @pytest.mark.parametrize(

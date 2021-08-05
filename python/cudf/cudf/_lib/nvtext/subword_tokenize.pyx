@@ -1,22 +1,21 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint32_t, uintptr_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
 from libcpp.string cimport string
-from libc.stdint cimport uint32_t
-from libc.stdint cimport uintptr_t
+from libcpp.utility cimport move
 
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.nvtext.subword_tokenize cimport(
-    subword_tokenize as cpp_subword_tokenize,
+from cudf._lib.cpp.nvtext.subword_tokenize cimport (
     hashed_vocabulary as cpp_hashed_vocabulary,
     load_vocabulary_file as cpp_load_vocabulary_file,
-    tokenizer_result as cpp_tokenizer_result,
     move as tr_move,
+    subword_tokenize as cpp_subword_tokenize,
+    tokenizer_result as cpp_tokenizer_result,
 )
-from cudf._lib.column cimport Column
 
 
 cdef class Hashed_Vocabulary:

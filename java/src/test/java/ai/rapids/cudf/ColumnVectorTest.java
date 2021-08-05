@@ -1776,6 +1776,18 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testReplaceNullsPolicy() {
+    try (ColumnVector input = ColumnVector.fromBoxedInts(null, 1, 2, null, 4, null);
+         ColumnVector preceding = input.replaceNulls(ReplacePolicy.PRECEDING);
+         ColumnVector expectedPre = ColumnVector.fromBoxedInts(null, 1, 2, 2, 4, 4);
+         ColumnVector following = input.replaceNulls(ReplacePolicy.FOLLOWING);
+         ColumnVector expectedFol = ColumnVector.fromBoxedInts(1, 1, 2, 4, 4, null)) {
+      assertColumnsAreEqual(expectedPre, preceding);
+      assertColumnsAreEqual(expectedFol, following);
+    }
+  }
+
+  @Test
   void testReplaceNullsColumnEmptyColumn() {
     try (ColumnVector input = ColumnVector.fromBoxedBooleans();
          ColumnVector r = ColumnVector.fromBoxedBooleans();
@@ -2622,6 +2634,120 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testRepeatStringsWithScalarRepeatTimes() {
+    // Empty strings column.
+    try (ColumnVector input = ColumnVector.fromStrings("", "", "");
+         ColumnVector results = input.repeatStrings(1)) {
+      assertColumnsAreEqual(input, results);
+    }
+
+    // Zero repeatTimes.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "xyz", "123");
+         ColumnVector results = input.repeatStrings(0);
+         ColumnVector expected = ColumnVector.fromStrings("", "", "")) {
+      assertColumnsAreEqual(expected, results);
+    }
+
+    // Negative repeatTimes.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "xyz", "123");
+         ColumnVector results = input.repeatStrings(-1);
+         ColumnVector expected = ColumnVector.fromStrings("", "", "")) {
+      assertColumnsAreEqual(expected, results);
+    }
+
+    // Strings column containing both null and empty, output is copied exactly from input.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector results = input.repeatStrings(1)) {
+      assertColumnsAreEqual(input, results);
+    }
+
+    // Strings column containing both null and empty.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector results = input.repeatStrings( 2);
+         ColumnVector expected = ColumnVector.fromStrings("abcabc", "", null, "123123", null)) {
+      assertColumnsAreEqual(expected, results);
+    }
+  }
+
+  @Test
+  void testRepeatStringsWithColumnRepeatTimes() {
+    // Empty strings column.
+    try (ColumnVector input = ColumnVector.fromStrings("", "", "");
+         ColumnVector repeatTimes = ColumnVector.fromInts(-1, 0, 1);
+         ColumnVector results = input.repeatStrings(repeatTimes)) {
+      assertColumnsAreEqual(input, results);
+    }
+
+    // Zero and negative repeatTimes.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "xyz", "123", "456", "789", "a1");
+         ColumnVector repeatTimes = ColumnVector.fromInts(-200, -100, 0, 0, 1, 2);
+         ColumnVector results = input.repeatStrings(repeatTimes);
+         ColumnVector expected = ColumnVector.fromStrings("", "", "", "", "789", "a1a1")) {
+      assertColumnsAreEqual(expected, results);
+    }
+
+    // Strings column contains both null and empty, output is copied exactly from input.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector repeatTimes = ColumnVector.fromInts(1, 1, 1, 1, 1);
+         ColumnVector results = input.repeatStrings(repeatTimes)) {
+      assertColumnsAreEqual(input, results);
+    }
+
+    // Strings column contains both null and empty.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector repeatTimes = ColumnVector.fromInts(2, 3, 1, 3, 2);
+         ColumnVector results = input.repeatStrings(repeatTimes);
+         ColumnVector expected = ColumnVector.fromStrings("abcabc", "", null, "123123123", null)) {
+      assertColumnsAreEqual(expected, results);
+    }
+  }
+
+  @Test
+  void testRepeatStringsWithColumnRepeatTimesAndPrecomputedOutputSizes() {
+    // Empty strings column.
+    try (ColumnVector input = ColumnVector.fromStrings("", "", "");
+         ColumnVector repeatTimes = ColumnVector.fromInts(-1, 0, 1);
+         ColumnView.StringSizes outputSizes = input.repeatStringsSizes(repeatTimes)) {
+      assertEquals(0, outputSizes.getTotalSize());
+      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.getStringSizes())) {
+        assertColumnsAreEqual(input, results);
+      }
+    }
+
+    // Zero and negative repeatTimes.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "xyz", "123", "456", "789", "a1");
+         ColumnVector repeatTimes = ColumnVector.fromInts(-200, -100, 0, 0, 1, 2);
+         ColumnVector expected = ColumnVector.fromStrings("", "", "", "", "789", "a1a1");
+         ColumnView.StringSizes outputSizes = input.repeatStringsSizes(repeatTimes)) {
+      assertEquals(7, outputSizes.getTotalSize());
+      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.getStringSizes())) {
+        assertColumnsAreEqual(expected, results);
+      }
+    }
+
+    // Strings column contains both null and empty, output is copied exactly from input.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector repeatTimes = ColumnVector.fromInts(1, 1, 1, 1, 1);
+         ColumnView.StringSizes outputSizes = input.repeatStringsSizes(repeatTimes)) {
+      assertEquals(6, outputSizes.getTotalSize());
+      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.getStringSizes())) {
+        assertColumnsAreEqual(input, results);
+      }
+    }
+
+    // Strings column contains both null and empty.
+    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
+         ColumnVector repeatTimes = ColumnVector.fromInts(2, 3, 1, 3, 2);
+         ColumnVector expected = ColumnVector.fromStrings("abcabc", "", null, "123123123", null);
+         ColumnView.StringSizes outputSizes = input.repeatStringsSizes(repeatTimes)) {
+      assertEquals(15, outputSizes.getTotalSize());
+      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.getStringSizes())) {
+        assertColumnsAreEqual(expected, results);
+      }
+    }
+  }
+
+  @Test
   void testListConcatByRow() {
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
             new HostColumnVector.BasicType(true, DType.INT32)),
@@ -2771,21 +2897,147 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testPrefixSumErrors() {
-    try (ColumnVector v1 = ColumnVector.fromBoxedLongs(1L, 2L, 3L, 5L, 8L, null)) {
-      assertThrows(CudfException.class, () -> {
-        try(ColumnVector ignored = v1.prefixSum()) {
-          // empty
-        }
-      });
-    }
+  void testScanSum() {
+    try (ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, null, 3, 5, 8, 10)) {
+      try (ColumnVector result = v1.scan(ScanAggregation.sum(), ScanType.INCLUSIVE, NullPolicy.INCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1, 3, null, null, null, null, null)) {
+        assertColumnsAreEqual(expected, result);
+      }
 
-    try (ColumnVector v1 = ColumnVector.fromInts(1, 2, 3, 5, 8, 10)) {
-      assertThrows(CudfException.class, () -> {
-        try(ColumnVector ignored = v1.prefixSum()) {
-          // empty
-        }
-      });
+      try (ColumnVector result = v1.scan(ScanAggregation.sum(), ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1, 3, null, 6, 11, 19, 29)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector result = v1.scan(ScanAggregation.sum(), ScanType.EXCLUSIVE, NullPolicy.INCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(0, 1, 3, null, null, null, null)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector result = v1.scan(ScanAggregation.sum(), ScanType.EXCLUSIVE, NullPolicy.EXCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(0, 1, null, 3, 6, 11, 19)) {
+        assertColumnsAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
+  void testScanMax() {
+    try (ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, null, 3, 5, 8, 10)) {
+      try (ColumnVector result = v1.scan(ScanAggregation.max(), ScanType.INCLUSIVE, NullPolicy.INCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, null, null, null, null)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector result = v1.scan(ScanAggregation.max(), ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, 3, 5, 8, 10)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector result = v1.scan(ScanAggregation.max(), ScanType.EXCLUSIVE, NullPolicy.INCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(Integer.MIN_VALUE, 1, 2, null, null, null, null)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector result = v1.scan(ScanAggregation.max(), ScanType.EXCLUSIVE, NullPolicy.EXCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(Integer.MIN_VALUE, 1, null, 2, 3, 5, 8)) {
+        assertColumnsAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
+  void testScanMin() {
+    try (ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, null, 3, 5, 8, 10)) {
+      try (ColumnVector result = v1.scan(ScanAggregation.min(), ScanType.INCLUSIVE, NullPolicy.INCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1, 1, null, null, null, null, null)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector result = v1.scan(ScanAggregation.min(), ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1, 1, null, 1, 1, 1, 1)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector result = v1.scan(ScanAggregation.min(), ScanType.EXCLUSIVE, NullPolicy.INCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(Integer.MAX_VALUE, 1, 1, null, null, null, null)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector result = v1.scan(ScanAggregation.min(), ScanType.EXCLUSIVE, NullPolicy.EXCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(Integer.MAX_VALUE, 1, null, 1, 1, 1, 1)) {
+        assertColumnsAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
+  void testScanProduct() {
+    try (ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, null, 3, 5, 8, 10)) {
+      try (ColumnVector result = v1.scan(ScanAggregation.product(), ScanType.INCLUSIVE, NullPolicy.INCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, null, null, null, null)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector result = v1.scan(ScanAggregation.product(), ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, 6, 30, 240, 2400)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector result = v1.scan(ScanAggregation.product(), ScanType.EXCLUSIVE, NullPolicy.INCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1, 1, 2, null, null, null, null)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector result = v1.scan(ScanAggregation.product(), ScanType.EXCLUSIVE, NullPolicy.EXCLUDE);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1, 1, null, 2, 6, 30, 240)) {
+        assertColumnsAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
+  void testScanRank() {
+    try (ColumnVector col1 = ColumnVector.fromBoxedInts(-97, -97, -97, null, -16, 5, null, null, 6, 6, 34, null);
+         ColumnVector col2 = ColumnVector.fromBoxedInts(3, 3, 4, 7, 7, 7, 7, 7, 8, 8, 8, 9);
+         ColumnVector struct_order = ColumnVector.makeStruct(col1, col2);
+         ColumnVector expected = ColumnVector.fromBoxedInts(
+            1, 1, 3, 4, 5, 6, 7, 7, 9, 9, 11, 12)) {
+      try (ColumnVector result = struct_order.scan(ScanAggregation.rank(),
+              ScanType.INCLUSIVE, NullPolicy.INCLUDE)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      // Exclude should have identical results
+      try (ColumnVector result = struct_order.scan(ScanAggregation.rank(),
+              ScanType.INCLUSIVE, NullPolicy.EXCLUDE)
+              ) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      // Rank aggregations do not support ScanType.EXCLUSIVE
+    }
+  }
+
+  @Test
+  void testScanDenseRank() {
+    try (ColumnVector col1 = ColumnVector.fromBoxedInts(-97, -97, -97, null, -16, 5, null, null, 6, 6, 34, null);
+         ColumnVector col2 = ColumnVector.fromBoxedInts(3, 3, 4, 7, 7, 7, 7, 7, 8, 8, 8, 9);
+         ColumnVector struct_order = ColumnVector.makeStruct(col1, col2);
+         ColumnVector expected = ColumnVector.fromBoxedInts(
+            1, 1, 2, 3, 4, 5, 6, 6, 7, 7, 8, 9)) {
+      try (ColumnVector result = struct_order.scan(ScanAggregation.denseRank(),
+              ScanType.INCLUSIVE, NullPolicy.INCLUDE)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      // Exclude should have identical results
+      try (ColumnVector result = struct_order.scan(ScanAggregation.denseRank(),
+              ScanType.INCLUSIVE, NullPolicy.EXCLUDE)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      // Dense rank aggregations do not support ScanType.EXCLUSIVE
     }
   }
 
@@ -2798,39 +3050,39 @@ public class ColumnVectorTest extends CudfTestBase {
              .minPeriods(2).build()) {
       try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8)) {
         try (ColumnVector expected = ColumnVector.fromLongs(9, 16, 17, 21, 14);
-             ColumnVector result = v1.rollingWindow(Aggregation.sum(), options)) {
+             ColumnVector result = v1.rollingWindow(RollingAggregation.sum(), options)) {
           assertColumnsAreEqual(expected, result);
         }
 
         try (ColumnVector expected = ColumnVector.fromInts(4, 4, 4, 6, 6);
-             ColumnVector result = v1.rollingWindow(Aggregation.min(), options)) {
+             ColumnVector result = v1.rollingWindow(RollingAggregation.min(), options)) {
           assertColumnsAreEqual(expected, result);
         }
 
         try (ColumnVector expected = ColumnVector.fromInts(5, 7, 7, 8, 8);
-             ColumnVector result = v1.rollingWindow(Aggregation.max(), options)) {
+             ColumnVector result = v1.rollingWindow(RollingAggregation.max(), options)) {
           assertColumnsAreEqual(expected, result);
         }
 
         // The rolling window produces the same result type as the input
         try (ColumnVector expected = ColumnVector.fromDoubles(4.5, 16.0 / 3, 17.0 / 3, 7, 7);
-             ColumnVector result = v1.rollingWindow(Aggregation.mean(), options)) {
+             ColumnVector result = v1.rollingWindow(RollingAggregation.mean(), options)) {
           assertColumnsAreEqual(expected, result);
         }
 
         try (ColumnVector expected = ColumnVector.fromBoxedInts(4, 7, 6, 8, null);
-             ColumnVector result = v1.rollingWindow(Aggregation.lead(1), options)) {
+             ColumnVector result = v1.rollingWindow(RollingAggregation.lead(1), options)) {
           assertColumnsAreEqual(expected, result);
         }
 
         try (ColumnVector expected = ColumnVector.fromBoxedInts(null, 5, 4, 7, 6);
-             ColumnVector result = v1.rollingWindow(Aggregation.lag(1), options)) {
+             ColumnVector result = v1.rollingWindow(RollingAggregation.lag(1), options)) {
           assertColumnsAreEqual(expected, result);
         }
 
         try (ColumnVector defaultOutput = ColumnVector.fromInts(-1, -2, -3, -4, -5);
              ColumnVector expected = ColumnVector.fromBoxedInts(-1, 5, 4, 7, 6);
-             ColumnVector result = v1.rollingWindow(Aggregation.lag(1, defaultOutput), options)) {
+             ColumnVector result = v1.rollingWindow(RollingAggregation.lag(1, defaultOutput), options)) {
           assertColumnsAreEqual(expected, result);
         }
       }
@@ -2846,11 +3098,11 @@ public class ColumnVectorTest extends CudfTestBase {
              .minPeriods(2).build()) {
       try (ColumnVector v1 = ColumnVector.fromBoxedInts(5, 4, null, 6, 8)) {
         try (ColumnVector expected = ColumnVector.fromInts(2, 2, 2, 2, 2);
-             ColumnVector result = v1.rollingWindow(Aggregation.count(NullPolicy.EXCLUDE), options)) {
+             ColumnVector result = v1.rollingWindow(RollingAggregation.count(NullPolicy.EXCLUDE), options)) {
           assertColumnsAreEqual(expected, result);
         }
         try (ColumnVector expected = ColumnVector.fromInts(2, 3, 3, 3, 2);
-             ColumnVector result = v1.rollingWindow(Aggregation.count(NullPolicy.INCLUDE), options)) {
+             ColumnVector result = v1.rollingWindow(RollingAggregation.count(NullPolicy.INCLUDE), options)) {
           assertColumnsAreEqual(expected, result);
         }
       }
@@ -2865,7 +3117,7 @@ public class ColumnVectorTest extends CudfTestBase {
           .minPeriods(2).window(precedingCol, followingCol).build()) {
         try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
              ColumnVector expected = ColumnVector.fromBoxedLongs(null, null, 9L, 16L, 25L);
-             ColumnVector result = v1.rollingWindow(Aggregation.sum(), window)) {
+             ColumnVector result = v1.rollingWindow(RollingAggregation.sum(), window)) {
           assertColumnsAreEqual(expected, result);
         }
       }
@@ -2881,7 +3133,7 @@ public class ColumnVectorTest extends CudfTestBase {
              .window(two, negOne).build()) {
       try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
            ColumnVector expected = ColumnVector.fromBoxedInts(null, 5, 4, 7, 6);
-           ColumnVector result = v1.rollingWindow(Aggregation.max(), window)) {
+           ColumnVector result = v1.rollingWindow(RollingAggregation.max(), window)) {
         assertColumnsAreEqual(expected, result);
       }
     }
@@ -2895,7 +3147,7 @@ public class ColumnVectorTest extends CudfTestBase {
           .window(precedingCol, followingCol).build()) {
         try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
              ColumnVector expected = ColumnVector.fromLongs(16, 22, 30, 14, 14);
-             ColumnVector result = v1.rollingWindow(Aggregation.sum(), window)) {
+             ColumnVector result = v1.rollingWindow(RollingAggregation.sum(), window)) {
           assertColumnsAreEqual(expected, result);
         }
       }
@@ -2921,7 +3173,7 @@ public class ColumnVectorTest extends CudfTestBase {
             .minPeriods(1)
             .orderByColumnIndex(0)
             .build()) {
-          arraywindowCol.rollingWindow(Aggregation.sum(), options);
+          arraywindowCol.rollingWindow(RollingAggregation.sum(), options);
         }
       });
     }
@@ -4220,6 +4472,46 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testReplaceRegex() {
+    try (ColumnVector v =
+             ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
+         Scalar repl = Scalar.fromString("Repl");
+         ColumnVector actual = v.replaceRegex("[tT]itle", repl);
+         ColumnVector expected =
+             ColumnVector.fromStrings("Repl and Repl with Repl", "nothing", null, "Repl")) {
+      assertColumnsAreEqual(expected, actual);
+    }
+
+    try (ColumnVector v =
+             ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
+         Scalar repl = Scalar.fromString("Repl");
+         ColumnVector actual = v.replaceRegex("[tT]itle", repl, 0)) {
+      assertColumnsAreEqual(v, actual);
+    }
+
+    try (ColumnVector v =
+             ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
+         Scalar repl = Scalar.fromString("Repl");
+         ColumnVector actual = v.replaceRegex("[tT]itle", repl, 1);
+         ColumnVector expected =
+             ColumnVector.fromStrings("Repl and Title with title", "nothing", null, "Repl")) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testReplaceMultiRegex() {
+    try (ColumnVector v =
+             ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
+         ColumnVector repls = ColumnVector.fromStrings("Repl", "**");
+         ColumnVector actual = v.replaceMultiRegex(new String[] { "[tT]itle", "and|th" }, repls);
+         ColumnVector expected =
+             ColumnVector.fromStrings("Repl ** Repl wi** Repl", "no**ing", null, "Repl")) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
   void testStringReplaceWithBackrefs() {
 
     try (ColumnVector v = ColumnVector.fromStrings("<h1>title</h1>", "<h1>another title</h1>",
@@ -4318,6 +4610,31 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector result = cv.toTitle();
          ColumnVector expected = ColumnVector.fromStrings("Spark", "Sql", "Lowercase", null, "", "Uppercase")) {
       assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testStringCapitalize() {
+    try (ColumnVector cv = ColumnVector.fromStrings("s Park", "S\nqL", "lower \tcase",
+                                                    null, "", "UPPER\rCASE")) {
+      try (Scalar deli = Scalar.fromString("");
+           ColumnVector result = cv.capitalize(deli);
+           ColumnVector expected = ColumnVector.fromStrings("S park", "S\nql", "Lower \tcase",
+                                                            null, "", "Upper\rcase")) {
+        assertColumnsAreEqual(expected, result);
+      }
+      try (Scalar deli = Scalar.fromString(" ");
+           ColumnVector result = cv.capitalize(deli);
+           ColumnVector expected = ColumnVector.fromStrings("S Park", "S\nql", "Lower \tcase",
+                                                            null, "", "Upper\rcase")) {
+        assertColumnsAreEqual(expected, result);
+      }
+      try (Scalar deli = Scalar.fromString(" \t\n");
+           ColumnVector result = cv.capitalize(deli);
+           ColumnVector expected = ColumnVector.fromStrings("S Park", "S\nQl", "Lower \tCase",
+                                                             null, "", "Upper\rcase")) {
+        assertColumnsAreEqual(expected, result);
+      }
     }
   }
 

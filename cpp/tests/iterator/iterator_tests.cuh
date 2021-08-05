@@ -83,18 +83,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
     EXPECT_EQ(thrust::distance(d_in, d_in_last), num_items);
     auto dev_expected = cudf::detail::make_device_uvector_sync(expected);
 
-    // Can't use this because time_point make_pair bug in libcudacxx
-    // bool result = thrust::equal(thrust::device, d_in, d_in_last, dev_expected.begin());
-    bool result = thrust::transform_reduce(
-      rmm::exec_policy(),
-      thrust::make_zip_iterator(thrust::make_tuple(d_in, dev_expected.begin())),
-      thrust::make_zip_iterator(thrust::make_tuple(d_in_last, dev_expected.end())),
-      [] __device__(auto it) {
-        return static_cast<T_output>(thrust::get<0>(it)) == T_output(thrust::get<1>(it));
-      },
-      true,
-      thrust::logical_and<bool>());
-
+    bool result = thrust::equal(thrust::device, d_in, d_in_last, dev_expected.begin());
     EXPECT_TRUE(result) << "thrust test";
   }
 

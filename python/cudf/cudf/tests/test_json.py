@@ -12,7 +12,7 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -186,6 +186,56 @@ def json_input(request, tmp_path_factory):
 def test_json_lines_basic(json_input, engine):
     cu_df = cudf.read_json(json_input, engine=engine, lines=True)
     pd_df = pd.read_json(json_input, lines=True)
+
+    assert all(cu_df.dtypes == ["int64", "int64", "int64"])
+    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
+        assert str(cu_col) == str(pd_col)
+        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_array())
+
+
+@pytest.mark.filterwarnings("ignore:Using CPU")
+@pytest.mark.parametrize("engine", ["auto", "cudf"])
+def test_json_lines_multiple(tmpdir, json_input, engine):
+    tmp_file1 = tmpdir.join("MultiInputs1.json")
+    tmp_file2 = tmpdir.join("MultiInputs2.json")
+
+    pdf = pd.read_json(json_input, lines=True)
+    pdf.to_json(tmp_file1, compression="infer", lines=True, orient="records")
+    pdf.to_json(tmp_file2, compression="infer", lines=True, orient="records")
+
+    cu_df = cudf.read_json([tmp_file1, tmp_file2], engine=engine, lines=True)
+    pd_df = pd.concat([pdf, pdf])
+
+    assert all(cu_df.dtypes == ["int64", "int64", "int64"])
+    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
+        assert str(cu_col) == str(pd_col)
+        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_array())
+
+
+@pytest.mark.parametrize("engine", ["auto", "cudf"])
+def test_json_read_directory(tmpdir, json_input, engine):
+    pdf = pd.read_json(json_input, lines=True)
+    pdf.to_json(
+        tmpdir.join("MultiInputs1.json"),
+        compression="infer",
+        lines=True,
+        orient="records",
+    )
+    pdf.to_json(
+        tmpdir.join("MultiInputs2.json"),
+        compression="infer",
+        lines=True,
+        orient="records",
+    )
+    pdf.to_json(
+        tmpdir.join("MultiInputs3.json"),
+        compression="infer",
+        lines=True,
+        orient="records",
+    )
+
+    cu_df = cudf.read_json(tmpdir, engine=engine, lines=True)
+    pd_df = pd.concat([pdf, pdf, pdf])
 
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
     for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):

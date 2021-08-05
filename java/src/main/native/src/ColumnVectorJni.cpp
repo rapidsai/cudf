@@ -17,18 +17,18 @@
 #include <arrow/api.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
-#include <cudf/filling.hpp>
-#include <cudf/interop.hpp>
-#include <cudf/hashing.hpp>
-#include <cudf/reshape.hpp>
-#include <cudf/utilities/bit.hpp>
 #include <cudf/detail/interop.hpp>
+#include <cudf/filling.hpp>
+#include <cudf/hashing.hpp>
+#include <cudf/interop.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/reshape.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/utilities/bit.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
@@ -54,13 +54,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sequence(JNIEnv *env, j
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, jclass,
-                                                                   jint j_type,
-                                                                   jlong j_col_length,
-                                                                   jlong j_null_count,
-                                                                   jobject j_data_obj,
-                                                                   jobject j_validity_obj,
-                                                                   jobject j_offsets_obj) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(
+    JNIEnv *env, jclass, jint j_type, jlong j_col_length, jlong j_null_count, jobject j_data_obj,
+    jobject j_validity_obj, jobject j_offsets_obj) {
   try {
     cudf::jni::auto_set_device(env);
     cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
@@ -83,17 +79,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
       offsets_address = env->GetDirectBufferAddress(j_offsets_obj);
       offsets_length = env->GetDirectBufferCapacity(j_offsets_obj);
     }
-    auto data_buffer = arrow::Buffer::Wrap(static_cast<const char *>(data_address), static_cast<int>(data_length));
-    auto null_buffer = arrow::Buffer::Wrap(static_cast<const char *>(validity_address), static_cast<int>(validity_length));
-    auto offsets_buffer = arrow::Buffer::Wrap(static_cast<const char *>(offsets_address), static_cast<int>(offsets_length));
+    auto data_buffer =
+        arrow::Buffer::Wrap(static_cast<const char *>(data_address), static_cast<int>(data_length));
+    auto null_buffer = arrow::Buffer::Wrap(static_cast<const char *>(validity_address),
+                                           static_cast<int>(validity_length));
+    auto offsets_buffer = arrow::Buffer::Wrap(static_cast<const char *>(offsets_address),
+                                              static_cast<int>(offsets_length));
 
     std::shared_ptr<arrow::Array> arrow_array;
     switch (n_type) {
       case cudf::type_id::DECIMAL32:
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DECIMAL32 yet", 0);
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DECIMAL32 yet",
+                      0);
         break;
       case cudf::type_id::DECIMAL64:
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DECIMAL64 yet", 0);
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DECIMAL64 yet",
+                      0);
         break;
       case cudf::type_id::STRUCT:
         JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting STRUCT yet", 0);
@@ -102,19 +103,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
         JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting LIST yet", 0);
         break;
       case cudf::type_id::DICTIONARY32:
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DICTIONARY32 yet", 0);
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS,
+                      "Don't support converting DICTIONARY32 yet", 0);
         break;
       case cudf::type_id::STRING:
-        arrow_array = std::make_shared<arrow::StringArray>(j_col_length, offsets_buffer, data_buffer, null_buffer, j_null_count);
+        arrow_array = std::make_shared<arrow::StringArray>(j_col_length, offsets_buffer,
+                                                           data_buffer, null_buffer, j_null_count);
         break;
       default:
         // this handles the primitive types
-        arrow_array = cudf::detail::to_arrow_array(n_type, j_col_length, data_buffer, null_buffer, j_null_count);
+        arrow_array = cudf::detail::to_arrow_array(n_type, j_col_length, data_buffer, null_buffer,
+                                                   j_null_count);
     }
     auto name_and_type = arrow::field("col", arrow_array->type());
     std::vector<std::shared_ptr<arrow::Field>> fields = {name_and_type};
     std::shared_ptr<arrow::Schema> schema = std::make_shared<arrow::Schema>(fields);
-    auto arrow_table = arrow::Table::Make(schema, std::vector<std::shared_ptr<arrow::Array>>{arrow_array});
+    auto arrow_table =
+        arrow::Table::Make(schema, std::vector<std::shared_ptr<arrow::Array>>{arrow_array});
     std::unique_ptr<cudf::table> table_result = cudf::from_arrow(*(arrow_table));
     std::vector<std::unique_ptr<cudf::column>> retCols = table_result->release();
     if (retCols.size() != 1) {
@@ -125,65 +130,57 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenation(JNIEnv *env, jclass,
-                                                                             jlongArray column_handles,
-                                                                             jlong separator,
-                                                                             jlong narep,
-                                                                             jboolean separate_nulls) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenation(
+    JNIEnv *env, jclass, jlongArray column_handles, jlong separator, jlong narep,
+    jboolean separate_nulls) {
   JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
   JNI_NULL_CHECK(env, separator, "separator string scalar object is null", 0);
   JNI_NULL_CHECK(env, narep, "narep string scalar object is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    const auto& separator_scalar = *reinterpret_cast<cudf::string_scalar*>(separator);
-    const auto& narep_scalar     = *reinterpret_cast<cudf::string_scalar*>(narep);
-    auto null_policy = separate_nulls ? cudf::strings::separator_on_nulls::YES
-                                      : cudf::strings::separator_on_nulls::NO;
+    const auto &separator_scalar = *reinterpret_cast<cudf::string_scalar *>(separator);
+    const auto &narep_scalar = *reinterpret_cast<cudf::string_scalar *>(narep);
+    auto null_policy = separate_nulls ? cudf::strings::separator_on_nulls::YES :
+                                        cudf::strings::separator_on_nulls::NO;
 
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
     std::vector<cudf::column_view> column_views;
-    std::transform(n_cudf_columns.data(),
-                   n_cudf_columns.data() + n_cudf_columns.size(),
+    std::transform(n_cudf_columns.data(), n_cudf_columns.data() + n_cudf_columns.size(),
                    std::back_inserter(column_views),
                    [](auto const &p_column) { return *p_column; });
 
-    std::unique_ptr<cudf::column> result =
-      cudf::strings::concatenate(cudf::table_view(column_views), separator_scalar,
-                                 narep_scalar, null_policy);
+    std::unique_ptr<cudf::column> result = cudf::strings::concatenate(
+        cudf::table_view(column_views), separator_scalar, narep_scalar, null_policy);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenationSepCol(JNIEnv *env, jclass,
-                                                                                   jlongArray column_handles,
-                                                                                   jlong sep_handle,
-                                                                                   jlong separator_narep,
-                                                                                   jlong col_narep,
-                                                                                   jboolean separate_nulls) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenationSepCol(
+    JNIEnv *env, jclass, jlongArray column_handles, jlong sep_handle, jlong separator_narep,
+    jlong col_narep, jboolean separate_nulls) {
   JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
   JNI_NULL_CHECK(env, sep_handle, "separator column handle is null", 0);
   JNI_NULL_CHECK(env, separator_narep, "separator narep string scalar object is null", 0);
   JNI_NULL_CHECK(env, col_narep, "column narep string scalar object is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    const auto& separator_narep_scalar = *reinterpret_cast<cudf::string_scalar*>(separator_narep);
-    const auto& col_narep_scalar = *reinterpret_cast<cudf::string_scalar*>(col_narep);
-    auto null_policy = separate_nulls ? cudf::strings::separator_on_nulls::YES
-                                      : cudf::strings::separator_on_nulls::NO;
+    const auto &separator_narep_scalar = *reinterpret_cast<cudf::string_scalar *>(separator_narep);
+    const auto &col_narep_scalar = *reinterpret_cast<cudf::string_scalar *>(col_narep);
+    auto null_policy = separate_nulls ? cudf::strings::separator_on_nulls::YES :
+                                        cudf::strings::separator_on_nulls::NO;
 
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
     std::vector<cudf::column_view> column_views;
-    std::transform(n_cudf_columns.data(),
-                   n_cudf_columns.data() + n_cudf_columns.size(),
+    std::transform(n_cudf_columns.data(), n_cudf_columns.data() + n_cudf_columns.size(),
                    std::back_inserter(column_views),
                    [](auto const &p_column) { return *p_column; });
 
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(sep_handle);
     cudf::strings_column_view strings_column(*column);
     std::unique_ptr<cudf::column> result =
-      cudf::strings::concatenate(cudf::table_view(column_views), strings_column,
-                                 separator_narep_scalar, col_narep_scalar, null_policy);
+        cudf::strings::concatenate(cudf::table_view(column_views), strings_column,
+                                   separator_narep_scalar, col_narep_scalar, null_policy);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -195,28 +192,25 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatListByRow(JNIEnv 
   JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    auto null_policy = ignore_null ? cudf::lists::concatenate_null_policy::IGNORE
-                                   : cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW;
+    auto null_policy = ignore_null ? cudf::lists::concatenate_null_policy::IGNORE :
+                                     cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW;
 
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
     std::vector<cudf::column_view> column_views;
-    std::transform(n_cudf_columns.data(),
-                   n_cudf_columns.data() + n_cudf_columns.size(),
+    std::transform(n_cudf_columns.data(), n_cudf_columns.data() + n_cudf_columns.size(),
                    std::back_inserter(column_views),
                    [](auto const &p_column) { return *p_column; });
 
     std::unique_ptr<cudf::column> result =
-      cudf::lists::concatenate_rows(cudf::table_view(column_views), null_policy);
+        cudf::lists::concatenate_rows(cudf::table_view(column_views), null_policy);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, jobject j_object,
-                                                                  jlongArray handles,
-                                                                  jlong j_type,
-                                                                  jint scale,
-                                                                  jlong row_count) {
+                                                                  jlongArray handles, jlong j_type,
+                                                                  jint scale, jlong row_count) {
   using ScalarType = cudf::scalar_type_t<cudf::size_type>;
   JNI_NULL_CHECK(env, handles, "native view handles are null", 0)
   try {
@@ -228,7 +222,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
       children_vector[i] = *children[i];
     }
     auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-    zero->set_valid(true);
+    zero->set_valid_async(true);
     static_cast<ScalarType *>(zero.get())->set_value(0);
 
     if (children.size() == 0) {
@@ -236,17 +230,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
       auto offsets = cudf::make_column_from_scalar(*zero, row_count + 1);
       cudf::data_type n_data_type = cudf::jni::make_data_type(j_type, scale);
       auto empty_col = cudf::make_empty_column(n_data_type);
-      ret = cudf::make_lists_column(row_count, std::move(offsets), std::move(empty_col),
-              0, rmm::device_buffer());
+      ret = cudf::make_lists_column(row_count, std::move(offsets), std::move(empty_col), 0,
+                                    rmm::device_buffer());
     } else {
       auto count = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-      count->set_valid(true);
+      count->set_valid_async(true);
       static_cast<ScalarType *>(count.get())->set_value(children.size());
 
       std::unique_ptr<cudf::column> offsets = cudf::sequence(row_count + 1, *zero, *count);
       auto data_col = cudf::interleave_columns(cudf::table_view(children_vector));
-      ret = cudf::make_lists_column(row_count, std::move(offsets), std::move(data_col),
-              0, rmm::device_buffer());
+      ret = cudf::make_lists_column(row_count, std::move(offsets), std::move(data_col), 0,
+                                    rmm::device_buffer());
     }
 
     return reinterpret_cast<jlong>(ret.release());
@@ -288,7 +282,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
   CATCH_STD(env, 0);
 }
 
-
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env, jclass clazz,
                                                                      jlongArray column_handles) {
   JNI_NULL_CHECK(env, column_handles, "input columns are null", 0);
@@ -313,12 +306,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env,
-                                                              jobject j_object,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env, jobject j_object,
                                                               jlongArray column_handles,
                                                               jint hash_function_id,
-                                                              jintArray initial_values,
-                                                              jint seed) {
+                                                              jintArray initial_values, jint seed) {
   JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
   JNI_NULL_CHECK(env, initial_values, "array of initial values is null", 0);
 
@@ -330,13 +321,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env,
                    [](auto const &p_column) { return *p_column; });
     cudf::table_view *input_table = new cudf::table_view(column_views);
 
-    cudf::jni::native_jintArray native_iv (env, initial_values);
+    cudf::jni::native_jintArray native_iv(env, initial_values);
     std::vector<uint32_t> vector_iv;
     std::transform(native_iv.data(), native_iv.data() + native_iv.size(),
-                   std::back_inserter(vector_iv),
-                   [](auto const &iv) { return iv; });
+                   std::back_inserter(vector_iv), [](auto const &iv) { return iv; });
 
-    std::unique_ptr<cudf::column> result = cudf::hash(*input_table, static_cast<cudf::hash_id>(hash_function_id), vector_iv, seed);
+    std::unique_ptr<cudf::column> result =
+        cudf::hash(*input_table, static_cast<cudf::hash_id>(hash_function_id), vector_iv, seed);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -386,8 +377,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeColumnView(JNI
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeEmptyCudfColumn(JNIEnv *env,
-                                                                             jclass,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeEmptyCudfColumn(JNIEnv *env, jclass,
                                                                              jint j_type,
                                                                              jint scale) {
 

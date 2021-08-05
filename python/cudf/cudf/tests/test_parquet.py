@@ -18,8 +18,8 @@ from pyarrow import parquet as pq
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
-from cudf.tests import dataset_generator as dg
-from cudf.tests.utils import (
+from cudf.testing import dataset_generator as dg
+from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
@@ -1956,3 +1956,24 @@ def test_parquet_writer_column_validation():
         lfunc_args_and_kwargs=(["cudf.parquet"],),
         rfunc_args_and_kwargs=(["pandas.parquet"],),
     )
+
+
+def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
+    if "col_bool" in pdf.columns:
+        pdf.drop(columns="col_bool", inplace=True)
+    if "col_category" in pdf.columns:
+        pdf.drop(columns="col_category", inplace=True)
+    gdf = cudf.from_pandas(pdf)
+
+    num_rows = len(gdf)
+    if num_rows > 0:
+        for col in gdf.columns:
+            gdf[col][random.randint(0, num_rows - 1)] = None
+
+    fname = tmpdir.join("test_parquet_writer_nulls_pandas_read.parquet")
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    nullable = True if num_rows > 0 else False
+    assert_eq(gdf.to_pandas(nullable=nullable), got)

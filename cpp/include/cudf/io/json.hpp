@@ -23,7 +23,9 @@
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <map>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace cudf {
@@ -66,7 +68,8 @@ class json_reader_options {
   source_info _source;
 
   // Data types of the column; empty to infer dtypes
-  std::vector<std::string> _dtypes;
+  std::variant<std::vector<std::string>, std::vector<data_type>, std::map<std::string, data_type>>
+    _dtypes;
   // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
 
@@ -114,7 +117,13 @@ class json_reader_options {
   /**
    * @brief Returns data types of the columns.
    */
-  std::vector<std::string> const& get_dtypes() const { return _dtypes; }
+  std::variant<std::vector<std::string>,
+               std::vector<data_type>,
+               std::map<std::string, data_type>> const&
+  get_dtypes() const
+  {
+    return _dtypes;
+  }
 
   /**
    * @brief Returns compression format of the source.
@@ -144,16 +153,37 @@ class json_reader_options {
   /**
    * @brief Set data types for columns to be read.
    *
+   * @param types Vector of dtypes in string format.
+   */
+  [[deprecated(
+    "The string-based interface will be deprecated."
+    "Use dtypes(std::vector<data_type>) or "
+    "dtypes(std::map<std::string, data_type>) instead.")]] void
+  set_dtypes(std::vector<std::string> types)
+  {
+    _dtypes = std::move(types);
+  }
+
+  /**
+   * @brief Set data types for columns to be read.
+   *
+   * @param types Vector of dtypes
+   */
+  void set_dtypes(std::vector<data_type> types) { _dtypes = std::move(types); }
+
+  /**
+   * @brief Set data types for columns to be read.
+   *
    * @param types Vector dtypes in string format.
    */
-  void dtypes(std::vector<std::string> types) { _dtypes = std::move(types); }
+  void set_dtypes(std::map<std::string, data_type> types) { _dtypes = std::move(types); }
 
   /**
    * @brief Set the compression type.
    *
    * @param comp_type The compression type used.
    */
-  void compression(compression_type comp_type) { _compression = comp_type; }
+  void set_compression(compression_type comp_type) { _compression = comp_type; }
 
   /**
    * @brief Set number of bytes to skip from source start.
@@ -205,10 +235,38 @@ class json_reader_options_builder {
   /**
    * @brief Set data types for columns to be read.
    *
-   * @param types Vector dtypes in string format.
-   * @return this for chaining.
+   * @param types Vector of dtypes in string format
+   * @return this for chaining
    */
-  json_reader_options_builder& dtypes(std::vector<std::string> types)
+  [[deprecated(
+    "The string-based interface will be deprecated."
+    "Use dtypes(std::vector<data_type>) or "
+    "dtypes(std::map<std::string, data_type>) instead.")]] json_reader_options_builder&
+  dtypes(std::vector<std::string> types)
+  {
+    options._dtypes = std::move(types);
+    return *this;
+  }
+
+  /**
+   * @brief Set data types for columns to be read.
+   *
+   * @param types Vector of dtypes
+   * @return this for chaining
+   */
+  json_reader_options_builder& dtypes(std::vector<data_type> types)
+  {
+    options._dtypes = std::move(types);
+    return *this;
+  }
+
+  /**
+   * @brief Set data types for columns to be read.
+   *
+   * @param types Column name -> dtype map.
+   * @return this for chaining
+   */
+  json_reader_options_builder& dtypes(std::map<std::string, data_type> types)
   {
     options._dtypes = std::move(types);
     return *this;
@@ -277,7 +335,7 @@ class json_reader_options_builder {
   /**
    * @brief move json_reader_options member once it's built.
    */
-  operator json_reader_options &&() { return std::move(options); }
+  operator json_reader_options&&() { return std::move(options); }
 
   /**
    * @brief move json_reader_options member once it's built.

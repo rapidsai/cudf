@@ -23,6 +23,7 @@
 #include <cudf/dictionary/detail/merge.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/strings/detail/merge.cuh>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 
@@ -49,21 +50,20 @@ using index_type = detail::index_type;
 /**
  * @brief Merges the bits of two validity bitmasks.
  *
- * Merges the bits from two column_device_views into the destination column_device_view
- * according to `merged_indices` map such that bit `i` in `out_col`
+ * Merges the bits from two column_device_views into the destination validity buffer
+ * according to `merged_indices` map such that bit `i` in `out_validity`
  * will be equal to bit `thrust::get<1>(merged_indices[i])` from `left_dcol`
  * if `thrust::get<0>(merged_indices[i])` equals `side::LEFT`; otherwise,
  * from `right_dcol`.
  *
- * `left_dcol`, `right_dcol` and `out_dcol` must not
- * overlap.
+ * `left_dcol` and `right_dcol` must not overlap.
  *
  * @tparam left_have_valids Indicates whether left_dcol mask is unallocated (hence, ALL_VALID)
  * @tparam right_have_valids Indicates whether right_dcol mask is unallocated (hence ALL_VALID)
  * @param[in] left_dcol The left column_device_view whose bits will be merged
  * @param[in] right_dcol The right column_device_view whose bits will be merged
- * @param[out] out_dcol The output mutable_column_device_view after merging the left and right
- * @param[in] num_destination_rows The number of rows in the out_dcol
+ * @param[out] out_validity The output validity buffer after merging the left and right buffers
+ * @param[in] num_destination_rows The number of rows in the out_validity buffer
  * @param[in] merged_indices The map that indicates the source of the input and index
  * to be copied to the output. Length must be equal to `num_destination_rows`
  */
@@ -71,7 +71,7 @@ template <bool left_have_valids, bool right_have_valids>
 __global__ void materialize_merged_bitmask_kernel(
   column_device_view left_dcol,
   column_device_view right_dcol,
-  mutable_column_device_view out_dcol,
+  bitmask_type* out_validity,
   size_type const num_destination_rows,
   index_type const* const __restrict__ merged_indices)
 {
@@ -95,10 +95,8 @@ __global__ void materialize_merged_bitmask_kernel(
     // bitmask element
     bitmask_type const result_mask{__ballot_sync(active_threads, source_bit_is_valid)};
 
-    size_type const output_element = word_index(destination_row);
-
     // Only one thread writes output
-    if (0 == threadIdx.x % warpSize) { out_dcol.set_mask_word(output_element, result_mask); }
+    if (0 == threadIdx.x % warpSize) { out_validity[word_index(destination_row)] = result_mask; }
 
     destination_row += blockDim.x * gridDim.x;
     active_threads = __ballot_sync(active_threads, destination_row < num_destination_rows);
@@ -107,36 +105,35 @@ __global__ void materialize_merged_bitmask_kernel(
 
 void materialize_bitmask(column_view const& left_col,
                          column_view const& right_col,
-                         mutable_column_view& out_col,
+                         bitmask_type* out_validity,
+                         size_type num_elements,
                          index_type const* merged_indices,
                          rmm::cuda_stream_view stream)
 {
   constexpr size_type BLOCK_SIZE{256};
-  detail::grid_1d grid_config{out_col.size(), BLOCK_SIZE};
+  detail::grid_1d grid_config{num_elements, BLOCK_SIZE};
 
   auto p_left_dcol  = column_device_view::create(left_col);
   auto p_right_dcol = column_device_view::create(right_col);
-  auto p_out_dcol   = mutable_column_device_view::create(out_col);
 
   auto left_valid  = *p_left_dcol;
   auto right_valid = *p_right_dcol;
-  auto out_valid   = *p_out_dcol;
 
   if (left_col.has_nulls()) {
     if (right_col.has_nulls()) {
       materialize_merged_bitmask_kernel<true, true>
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
-          left_valid, right_valid, out_valid, out_col.size(), merged_indices);
+          left_valid, right_valid, out_validity, num_elements, merged_indices);
     } else {
       materialize_merged_bitmask_kernel<true, false>
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
-          left_valid, right_valid, out_valid, out_col.size(), merged_indices);
+          left_valid, right_valid, out_validity, num_elements, merged_indices);
     }
   } else {
     if (right_col.has_nulls()) {
       materialize_merged_bitmask_kernel<false, true>
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
-          left_valid, right_valid, out_valid, out_col.size(), merged_indices);
+          left_valid, right_valid, out_validity, num_elements, merged_indices);
     } else {
       CUDF_FAIL("materialize_merged_bitmask_kernel<false, false>() should never be called.");
     }
@@ -220,8 +217,6 @@ index_vector generate_merged_indices(table_view const& left_table,
   return merged_indices;
 }
 
-}  // namespace
-
 /**
  * @brief Generate merged column given row-order of merged tables
  *  (ordered according to indices of key_cols) and the 2 columns to merge.
@@ -301,7 +296,8 @@ struct column_merger {
     if (lcol.has_nulls() || rcol.has_nulls()) {
       // resolve null mask:
       //
-      materialize_bitmask(lcol, rcol, merged_view, row_order_.data(), stream);
+      materialize_bitmask(
+        lcol, rcol, merged_view.null_mask(), merged_view.size(), row_order_.data(), stream);
     }
 
     return merged_col;
@@ -327,7 +323,8 @@ std::unique_ptr<column> column_merger::operator()<cudf::string_view>(
                                                    mr);
   if (lcol.has_nulls() || rcol.has_nulls()) {
     auto merged_view = column->mutable_view();
-    materialize_bitmask(lcol, rcol, merged_view, row_order_.data(), stream);
+    materialize_bitmask(
+      lcol, rcol, merged_view.null_mask(), merged_view.size(), row_order_.data(), stream);
   }
   return column;
 }
@@ -342,17 +339,61 @@ std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(
 {
   auto result = cudf::dictionary::detail::merge(
     cudf::dictionary_column_view(lcol), cudf::dictionary_column_view(rcol), row_order_, stream, mr);
+
   // set the validity mask
   if (lcol.has_nulls() || rcol.has_nulls()) {
     auto merged_view = result->mutable_view();
-    materialize_bitmask(lcol, rcol, merged_view, row_order_.data(), stream);
+    materialize_bitmask(
+      lcol, rcol, merged_view.null_mask(), merged_view.size(), row_order_.data(), stream);
   }
   return result;
 }
 
+// specialization for structs
+template <>
+std::unique_ptr<column> column_merger::operator()<cudf::struct_view>(
+  column_view const& lcol,
+  column_view const& rcol,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr) const
+{
+  // merge each child.
+  auto const lhs = structs_column_view{lcol};
+  auto const rhs = structs_column_view{rcol};
+
+  auto it = cudf::detail::make_counting_transform_iterator(
+    0, [&, merger = column_merger{row_order_}](size_type i) {
+      return cudf::type_dispatcher<dispatch_storage_type>(
+        lhs.child(i).type(), merger, lhs.get_sliced_child(i), rhs.get_sliced_child(i), stream, mr);
+    });
+
+  auto merged_children   = std::vector<std::unique_ptr<column>>(it, it + lhs.num_children());
+  auto const merged_size = lcol.size() + rcol.size();
+
+  // materialize the output buffer
+  rmm::device_buffer validity =
+    lcol.has_nulls() || rcol.has_nulls()
+      ? create_null_mask(merged_size, mask_state::UNINITIALIZED, stream, mr)
+      : rmm::device_buffer{};
+  if (lcol.has_nulls() || rcol.has_nulls()) {
+    materialize_bitmask(lcol,
+                        rcol,
+                        static_cast<bitmask_type*>(validity.data()),
+                        merged_size,
+                        row_order_.data(),
+                        stream);
+  }
+
+  return make_structs_column(merged_size,
+                             std::move(merged_children),
+                             lcol.null_count() + rcol.null_count(),
+                             std::move(validity),
+                             stream,
+                             mr);
+}
+
 using table_ptr_type = std::unique_ptr<cudf::table>;
 
-namespace {
 table_ptr_type merge(cudf::table_view const& left_table,
                      cudf::table_view const& right_table,
                      std::vector<cudf::size_type> const& key_cols,
@@ -415,7 +456,7 @@ T top_and_pop(std::priority_queue<T>& q)
   return moved;
 }
 
-}  // namespace
+}  // anonymous namespace
 
 table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
                      std::vector<cudf::size_type> const& key_cols,

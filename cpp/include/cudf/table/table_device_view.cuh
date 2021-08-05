@@ -20,6 +20,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 
 #include <cassert>
 #include <memory>
@@ -27,7 +28,7 @@
 
 /**
  * @file table_device_view.cuh
- * @brief Table device view class definitons
+ * @brief Table device view class definitions
  */
 
 namespace cudf {

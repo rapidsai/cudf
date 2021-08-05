@@ -588,7 +588,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          rmm::mr::device_memory_resource* mr)
 {
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
-    return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
+    return experimental::binary_operation(lhs, rhs, op, output_type, mr);
 
   if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
     return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
@@ -615,7 +615,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr)
 {
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
-    return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
+    return experimental::binary_operation(lhs, rhs, op, output_type, mr);
 
   if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
     return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
@@ -644,7 +644,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
 
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
-    return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
+    return experimental::binary_operation(lhs, rhs, op, output_type, mr);
 
   if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
     return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
@@ -757,4 +757,78 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   return detail::binary_operation(lhs, rhs, ptx, output_type, rmm::cuda_stream_default, mr);
 }
 
+// Experimental Compiled Binary operation
+namespace experimental {
+namespace detail {
+/**
+ * @copydoc cudf::experimental::binary_operation(column_view const&, column_view const&,
+ * binary_operator, data_type, rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+template <typename LhsType, typename RhsType>
+std::unique_ptr<column> binary_operation(LhsType const& lhs,
+                                         RhsType const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  if constexpr (std::is_same_v<LhsType, column_view> and std::is_same_v<RhsType, column_view>)
+    CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
+
+  if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING and
+      output_type.id() == type_id::STRING and
+      (op == binary_operator::NULL_MAX or op == binary_operator::NULL_MIN))
+    return binops::compiled::string_null_min_max(lhs, rhs, op, output_type, stream, mr);
+
+  if (not binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
+    CUDF_FAIL("Unsupported operator for these types");
+
+  // TODO check if scale conversion required?
+  // if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
+  //  CUDF_FAIL("Not yet supported fixed_point");
+  // return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
+
+  auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
+
+  if constexpr (std::is_same_v<LhsType, column_view>)
+    if (lhs.is_empty()) return out;
+  if constexpr (std::is_same_v<RhsType, column_view>)
+    if (rhs.is_empty()) return out;
+
+  auto out_view = out->mutable_view();
+  cudf::binops::compiled::binary_operation(out_view, lhs, rhs, op, stream);
+  return out;
+}
+}  // namespace detail
+
+std::unique_ptr<column> binary_operation(scalar const& lhs,
+                                         column_view const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::binary_operation(lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
+}
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         scalar const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::binary_operation(lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
+}
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         column_view const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::binary_operation(lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
+}
+}  // namespace experimental
 }  // namespace cudf

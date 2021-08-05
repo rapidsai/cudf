@@ -167,22 +167,39 @@ TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest2)
+TEST_F(StringsReplaceTests, ReplaceBackrefsRegexReversedTest)
 {
   cudf::test::strings_column_wrapper strings(
     {"A543", "Z756", "", "tést-string", "two-thréé four-fivé", "abcd-éfgh", "tést-string-again"});
   auto strings_view         = cudf::strings_column_view(strings);
   std::string pattern       = "([a-z])-([a-zé])";
-  std::string repl_template = "X\\1+\\2Z";
+  std::string repl_template = "X\\2+\\1Z";
   auto results = cudf::strings::replace_with_backrefs(strings_view, pattern, repl_template);
 
   cudf::test::strings_column_wrapper expected({"A543",
                                                "Z756",
                                                "",
-                                               "tésXt+sZtring",
-                                               "twXo+tZhréé fouXr+fZivé",
-                                               "abcXd+éZfgh",
-                                               "tésXt+sZtrinXg+aZgain"});
+                                               "tésXs+tZtring",
+                                               "twXt+oZhréé fouXf+rZivé",
+                                               "abcXé+dZfgh",
+                                               "tésXs+tZtrinXa+gZgain"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsReplaceTests, BackrefWithGreedyQuantifier)
+{
+  cudf::test::strings_column_wrapper input(
+    {"<h1>title</h1><h2>ABC</h2>", "<h1>1234567</h1><h2>XYZ</h2>"});
+  std::string replacement = "<h2>\\1</h2><p>\\2</p>";
+
+  auto results = cudf::strings::replace_with_backrefs(
+    cudf::strings_column_view(input), "<h1>(.*)</h1><h2>(.*)</h2>", replacement);
+  cudf::test::strings_column_wrapper expected(
+    {"<h2>title</h2><p>ABC</p>", "<h2>1234567</h2><p>XYZ</p>"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = cudf::strings::replace_with_backrefs(
+    cudf::strings_column_view(input), "<h1>([a-z\\d]+)</h1><h2>([A-Z]+)</h2>", replacement);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

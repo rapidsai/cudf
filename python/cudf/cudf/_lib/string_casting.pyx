@@ -3,56 +3,58 @@
 import numpy as np
 
 from cudf._lib.column cimport Column
+
 from cudf._lib.scalar import as_device_scalar
+
 from cudf._lib.scalar cimport DeviceScalar
+
 from cudf._lib.types import np_to_cudf_types
+
 from cudf._lib.types cimport underlying_type_t_type_id
 
 from cudf.core.column.column import as_column
+
+from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
+from libcpp.utility cimport move
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.strings.convert.convert_booleans cimport (
+    from_booleans as cpp_from_booleans,
     to_booleans as cpp_to_booleans,
-    from_booleans as cpp_from_booleans
 )
 from cudf._lib.cpp.strings.convert.convert_datetime cimport (
-    to_timestamps as cpp_to_timestamps,
     from_timestamps as cpp_from_timestamps,
-    is_timestamp as cpp_is_timestamp
-)
-from cudf._lib.cpp.strings.convert.convert_floats cimport (
-    to_floats as cpp_to_floats,
-    from_floats as cpp_from_floats
-)
-from cudf._lib.cpp.strings.convert.convert_integers cimport (
-    to_integers as cpp_to_integers,
-    from_integers as cpp_from_integers,
-    hex_to_integers as cpp_hex_to_integers,
-    is_hex as cpp_is_hex
-)
-from cudf._lib.cpp.strings.convert.convert_ipv4 cimport (
-    ipv4_to_integers as cpp_ipv4_to_integers,
-    integers_to_ipv4 as cpp_integers_to_ipv4,
-    is_ipv4 as cpp_is_ipv4
-)
-from cudf._lib.cpp.strings.convert.convert_urls cimport (
-    url_encode as cpp_url_encode,
-    url_decode as cpp_url_decode
+    is_timestamp as cpp_is_timestamp,
+    to_timestamps as cpp_to_timestamps,
 )
 from cudf._lib.cpp.strings.convert.convert_durations cimport (
+    from_durations as cpp_from_durations,
     to_durations as cpp_to_durations,
-    from_durations as cpp_from_durations
 )
-from cudf._lib.cpp.types cimport (
-    type_id,
-    data_type,
+from cudf._lib.cpp.strings.convert.convert_floats cimport (
+    from_floats as cpp_from_floats,
+    to_floats as cpp_to_floats,
 )
-
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-from libcpp.string cimport string
+from cudf._lib.cpp.strings.convert.convert_integers cimport (
+    from_integers as cpp_from_integers,
+    hex_to_integers as cpp_hex_to_integers,
+    integers_to_hex as cpp_integers_to_hex,
+    is_hex as cpp_is_hex,
+    to_integers as cpp_to_integers,
+)
+from cudf._lib.cpp.strings.convert.convert_ipv4 cimport (
+    integers_to_ipv4 as cpp_integers_to_ipv4,
+    ipv4_to_integers as cpp_ipv4_to_integers,
+    is_ipv4 as cpp_is_ipv4,
+)
+from cudf._lib.cpp.strings.convert.convert_urls cimport (
+    url_decode as cpp_url_decode,
+    url_encode as cpp_url_encode,
+)
+from cudf._lib.cpp.types cimport data_type, type_id
 
 
 def floating_to_string(Column input_col):
@@ -769,5 +771,28 @@ def is_hex(Column source_strings):
         c_result = move(cpp_is_hex(
             source_view
         ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def itoh(Column input_col):
+    """
+    Converting input column of type integer to a string
+    column with hexadecimal character digits.
+
+    Parameters
+    ----------
+    input_col : input column of type integer
+
+    Returns
+    -------
+    A Column of strings with hexadecimal characters.
+    """
+
+    cdef column_view input_column_view = input_col.view()
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(
+            cpp_integers_to_hex(input_column_view))
 
     return Column.from_unique_ptr(move(c_result))

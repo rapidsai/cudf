@@ -183,8 +183,7 @@ std::unique_ptr<column> copy_range(
       thrust::device_pointer_cast(p_offsets_column->view().template data<size_type>());
     auto const chars_bytes =
       cudf::detail::get_value<int32_t>(p_offsets_column->view(), target.size(), stream);
-    auto p_chars_column =
-      strings::detail::create_chars_child_column(target.size(), chars_bytes, stream, mr);
+    auto p_chars_column = strings::detail::create_chars_child_column(chars_bytes, stream, mr);
 
     // copy to the chars column
 

@@ -76,7 +76,7 @@ struct timezone_file {
   {
     return (is_64bit ? sizeof(uint64_t) : sizeof(uint32_t)) + sizeof(uint32_t);
   }
-  static constexpr auto file_content_size_32(timezone_file_header const &header) noexcept
+  static constexpr auto file_content_size_32(timezone_file_header const& header) noexcept
   {
     return header.timecnt * sizeof(uint32_t) +                 // transition times
            header.timecnt * sizeof(uint8_t) +                  // transition time index
@@ -100,9 +100,9 @@ struct timezone_file {
     header.charcnt  = __builtin_bswap32(header.charcnt);
   }
 
-  void read_header(std::ifstream &input_file, size_t file_size)
+  void read_header(std::ifstream& input_file, size_t file_size)
   {
-    input_file.read(reinterpret_cast<char *>(&header), sizeof(header));
+    input_file.read(reinterpret_cast<char*>(&header), sizeof(header));
     CUDF_EXPECTS(!input_file.fail() && header.magic == tzif_magic,
                  "Error reading time zones file header.");
     header_to_little_endian();
@@ -113,7 +113,7 @@ struct timezone_file {
         // skip the 32-bit content
         input_file.seekg(file_content_size_32(header), std::ios_base::cur);
         // read the 64-bit header
-        input_file.read(reinterpret_cast<char *>(&header), sizeof(header));
+        input_file.read(reinterpret_cast<char*>(&header), sizeof(header));
         header_to_little_endian();
         is_header_from_64bit = true;
       }
@@ -125,7 +125,7 @@ struct timezone_file {
                  "Number of transition times is larger than the file size.");
   }
 
-  timezone_file(std::string const &timezone_name)
+  timezone_file(std::string const& timezone_name)
   {
     using std::ios_base;
 
@@ -142,23 +142,25 @@ struct timezone_file {
     // Read transition times (convert from 32-bit to 64-bit if necessary)
     transition_times.resize(timecnt());
     if (is_header_from_64bit) {
-      fin.read(reinterpret_cast<char *>(transition_times.data()),
+      fin.read(reinterpret_cast<char*>(transition_times.data()),
                transition_times.size() * sizeof(int64_t));
-      for (auto &tt : transition_times) { tt = __builtin_bswap64(tt); }
+      for (auto& tt : transition_times) {
+        tt = __builtin_bswap64(tt);
+      }
     } else {
       std::vector<int32_t> tt32(timecnt());
-      fin.read(reinterpret_cast<char *>(tt32.data()), tt32.size() * sizeof(int32_t));
+      fin.read(reinterpret_cast<char*>(tt32.data()), tt32.size() * sizeof(int32_t));
       std::transform(
-        tt32.cbegin(), tt32.cend(), std::back_inserter(transition_times), [](auto &tt) {
+        tt32.cbegin(), tt32.cend(), std::back_inserter(transition_times), [](auto& tt) {
           return __builtin_bswap32(tt);
         });
     }
     ttime_idx.resize(timecnt());
-    fin.read(reinterpret_cast<char *>(ttime_idx.data()), timecnt() * sizeof(uint8_t));
+    fin.read(reinterpret_cast<char*>(ttime_idx.data()), timecnt() * sizeof(uint8_t));
 
     // Read time types
     ttype.resize(typecnt());
-    fin.read(reinterpret_cast<char *>(ttype.data()), typecnt() * sizeof(localtime_type_record_s));
+    fin.read(reinterpret_cast<char*>(ttype.data()), typecnt() * sizeof(localtime_type_record_s));
     CUDF_EXPECTS(!fin.fail(), "Failed to read time types from the time zone file.");
     for (uint32_t i = 0; i < typecnt(); i++) {
       ttype[i].utcoff = __builtin_bswap32(ttype[i].utcoff);
@@ -182,7 +184,7 @@ struct timezone_file {
 template <class Container>
 class posix_parser {
  public:
-  posix_parser(Container const &tz_string) : cur{tz_string.begin()}, end{tz_string.end()} {}
+  posix_parser(Container const& tz_string) : cur{tz_string.begin()}, end{tz_string.end()} {}
 
   /**
    * @brief Advances the parser past a name from the posix TZ string.
@@ -340,7 +342,7 @@ static int days_in_month(int month, bool is_leap_year)
  *
  * @return transition time in seconds from the beginning of the year
  */
-static int64_t get_transition_time(dst_transition_s const &trans, int year)
+static int64_t get_transition_time(dst_transition_s const& trans, int year)
 {
   auto day = trans.day;
 
@@ -365,7 +367,9 @@ static int64_t get_transition_time(dst_transition_s const &trans, int year)
       day += 7;
     }
     // Add months
-    for (int m = 1; m < month; m++) { day += days_in_month(m, is_leap); }
+    for (int m = 1; m < month; m++) {
+      day += days_in_month(m, is_leap);
+    }
   } else if (trans.type == 'J') {
     // Account for 29th of February on leap years
     day += (day > 31 + 29 && is_leap_year(year));
@@ -374,7 +378,7 @@ static int64_t get_transition_time(dst_transition_s const &trans, int year)
   return trans.time + day * day_seconds;
 }
 
-timezone_table build_timezone_transition_table(std::string const &timezone_name,
+timezone_table build_timezone_transition_table(std::string const& timezone_name,
                                                rmm::cuda_stream_view stream)
 {
   if (timezone_name == "UTC" || timezone_name.empty()) {

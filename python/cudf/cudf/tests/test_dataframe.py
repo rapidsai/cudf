@@ -20,8 +20,8 @@ from numba import cuda
 import cudf
 from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
 from cudf.core.column import column
-from cudf.tests import utils
-from cudf.tests.utils import (
+from cudf.testing import _utils as utils
+from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -734,6 +734,17 @@ def test_dataframe_astype(nelem):
     df["b"] = df["a"].astype(np.float32)
     assert df["b"].dtype is np.dtype(np.float32)
     np.testing.assert_equal(df["a"].to_array(), df["b"].to_array())
+
+
+def test_astype_dict():
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": ["1", "2", "3"]})
+    pdf = gdf.to_pandas()
+
+    assert_eq(pdf.astype({"a": "str"}), gdf.astype({"a": "str"}))
+    assert_eq(
+        pdf.astype({"a": "str", "b": np.int64}),
+        gdf.astype({"a": "str", "b": np.int64}),
+    )
 
 
 @pytest.mark.parametrize("nelem", [0, 100])
@@ -3068,6 +3079,14 @@ def test_select_dtype():
         gdf.select_dtypes(include=["int"], exclude=["object"]),
     )
 
+    gdf = cudf.DataFrame(
+        {"int_col": [0, 1, 2], "list_col": [[1, 2], [3, 4], [5, 6]]}
+    )
+    pdf = gdf.to_pandas()
+    assert_eq(
+        pdf.select_dtypes("int64"), gdf.select_dtypes("int64"),
+    )
+
 
 def test_select_dtype_datetime():
     gdf = cudf.datasets.timeseries(
@@ -3612,6 +3631,23 @@ def test_one_row_head():
     head_pdf = pdf.head()
 
     assert_eq(head_pdf, head_gdf)
+
+
+@pytest.mark.parametrize("dtype", ALL_TYPES)
+@pytest.mark.parametrize(
+    "np_dtype,pd_dtype",
+    [
+        tuple(item)
+        for item in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes.items()
+    ],
+)
+def test_series_astype_pandas_nullable(dtype, np_dtype, pd_dtype):
+    source = cudf.Series([0, 1, None], dtype=dtype)
+
+    expect = source.astype(np_dtype)
+    got = source.astype(pd_dtype)
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
@@ -5018,6 +5054,18 @@ def test_insert(data):
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize(
+    "data", [{"A": [1, 2, 3], "B": ["a", "b", "c"]}],
+)
+def test_insert_NA(data):
+    pdf = pd.DataFrame.from_dict(data)
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    pdf["C"] = pd.NA
+    gdf["C"] = cudf.NA
+    assert_eq(pdf, gdf)
+
+
 def test_cov():
     gdf = cudf.datasets.randomdata(10)
     pdf = gdf.to_pandas()
@@ -5206,8 +5254,8 @@ def test_memory_usage_cat():
     gdf = cudf.from_pandas(df)
 
     expected = (
-        gdf.B._column.cat().categories.__sizeof__()
-        + gdf.B._column.cat().codes.__sizeof__()
+        gdf.B._column.categories.__sizeof__()
+        + gdf.B._column.codes.__sizeof__()
     )
 
     # Check cat column
@@ -5334,14 +5382,6 @@ def test_change_column_dtype_in_empty():
     pdf["b"] = pdf["b"].astype("int64")
     gdf["b"] = gdf["b"].astype("int64")
     assert_eq(pdf, gdf)
-
-
-def test_dataframe_from_table_empty_index():
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    odict = df._data
-    tbl = cudf._lib.table.Table(odict)
-
-    result = cudf.DataFrame._from_table(tbl)  # noqa: F841
 
 
 @pytest.mark.parametrize("dtype", ["int64", "str"])
@@ -8144,13 +8184,23 @@ def test_dataframe_constructor_columns(df, columns, index):
 
     gdf = cudf.from_pandas(df)
     host_columns = (
-        columns.to_pandas() if isinstance(columns, cudf.Index) else columns
+        columns.to_pandas() if isinstance(columns, cudf.BaseIndex) else columns
     )
 
     expected = pd.DataFrame(df, columns=host_columns, index=index)
     actual = cudf.DataFrame(gdf, columns=columns, index=index)
 
     assert_local_eq(actual, df, expected, host_columns)
+
+
+def test_dataframe_constructor_column_index_only():
+    columns = ["a", "b", "c"]
+    index = ["r1", "r2", "r3"]
+
+    gdf = cudf.DataFrame(index=index, columns=columns)
+    assert not id(gdf["a"]._column) == id(gdf["b"]._column) and not id(
+        gdf["b"]._column
+    ) == id(gdf["c"]._column)
 
 
 @pytest.mark.parametrize(
@@ -8676,3 +8726,13 @@ def test_is_homogeneous_index(data, expected):
     actual = cudf.Index(data)._is_homogeneous
 
     assert actual == expected
+
+
+def test_frame_series_where():
+    gdf = cudf.DataFrame(
+        {"a": [1.0, 2.0, None, 3.0, None], "b": [None, 10.0, 11.0, None, 23.0]}
+    )
+    pdf = gdf.to_pandas()
+    expected = gdf.where(gdf.notna(), gdf.mean())
+    actual = pdf.where(pdf.notna(), pdf.mean(), axis=1)
+    assert_eq(expected, actual)

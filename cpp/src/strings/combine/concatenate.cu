@@ -22,7 +22,6 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -130,7 +129,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                "All columns must be of type string");
   auto const strings_count = strings_columns.num_rows();
   if (strings_count == 0)  // empty begets empty
-    return detail::make_empty_strings_column(stream, mr);
+    return make_empty_column(data_type{type_id::STRING});
 
   CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be a valid string_scalar");
   string_view d_separator(separator.data(), separator.size());
@@ -222,7 +221,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   CUDF_EXPECTS(strings_count == separators.size(),
                "Separators column should be the same size as the strings columns");
   if (strings_count == 0)  // Empty begets empty
-    return detail::make_empty_strings_column(stream, mr);
+    return make_empty_column(data_type{type_id::STRING});
 
   // Invalid output column strings - null rows
   string_view const invalid_str{nullptr, 0};

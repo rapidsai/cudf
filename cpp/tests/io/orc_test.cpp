@@ -37,7 +37,7 @@ namespace cudf_io = cudf::io;
 
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
-  typename std::conditional<std::is_same<T, cudf::string_view>::value,
+  typename std::conditional<std::is_same_v<T, cudf::string_view>,
                             cudf::test::strings_column_wrapper,
                             cudf::test::fixed_width_column_wrapper<T, SourceElementT>>::type;
 using column     = cudf::column;
@@ -134,7 +134,7 @@ inline auto random_values(size_t size)
 
   using T1 = T;
   using uniform_distribution =
-    typename std::conditional_t<std::is_same<T1, bool>::value,
+    typename std::conditional_t<std::is_same_v<T1, bool>,
                                 std::bernoulli_distribution,
                                 std::conditional_t<std::is_floating_point<T1>::value,
                                                    std::uniform_real_distribution<T1>,
@@ -526,7 +526,7 @@ TEST_F(OrcWriterTest, Strings)
 
 TEST_F(OrcWriterTest, SlicedTable)
 {
-  // This test checks for writing zero copy, offseted views into existing cudf tables
+  // This test checks for writing zero copy, offsetted views into existing cudf tables
 
   std::vector<const char*> strings{
     "Monday", "Monday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
@@ -609,7 +609,7 @@ TEST_F(OrcWriterTest, HostBuffer)
 TEST_F(OrcWriterTest, negTimestampsNano)
 {
   // This is a separate test because ORC format has a bug where writing a timestamp between -1 and 0
-  // seconds from UNIX epoch is read as that timestamp + 1 second. We mimic that behaviour and so
+  // seconds from UNIX epoch is read as that timestamp + 1 second. We mimic that behavior and so
   // this test has to hardcode test values which are < -1 second.
   // Details: https://github.com/rapidsai/cudf/pull/5529#issuecomment-648768925
   using namespace cudf::test;
@@ -634,7 +634,9 @@ TEST_F(OrcWriterTest, negTimestampsNano)
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
   auto result = cudf_io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view().column(0), result.tbl->view().column(0), true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view().column(0),
+                                 result.tbl->view().column(0),
+                                 cudf::test::debug_output_level::ALL_ERRORS);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
@@ -831,7 +833,7 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
   cudf_io::orc_chunked_writer(opts).write(*table1).write(*table2);
 
   cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).stripes({1, 0, 1});
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).stripes({{1, 0, 1}});
   auto result = cudf_io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
@@ -848,9 +850,9 @@ TEST_F(OrcChunkedWriterTest, ReadStripesError)
   cudf_io::orc_chunked_writer(opts).write(*table1);
 
   cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).stripes({0, 1});
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).stripes({{0, 1}});
   EXPECT_THROW(cudf_io::read_orc(read_opts), cudf::logic_error);
-  read_opts.set_stripes({-1});
+  read_opts.set_stripes({{-1}});
   EXPECT_THROW(cudf_io::read_orc(read_opts), cudf::logic_error);
 }
 
@@ -1077,6 +1079,48 @@ TEST_F(OrcWriterTest, SlicedValidMask)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(tbl, result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+}
+
+TEST_F(OrcReaderTest, SingleInputs)
+{
+  srand(31533);
+  auto table1 = create_random_fixed_table<int>(5, 5, true);
+
+  auto filepath1 = temp_env->get_temp_filepath("SimpleTable1.orc");
+  cudf_io::chunked_orc_writer_options opts1 =
+    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath1});
+  cudf_io::orc_chunked_writer(opts1).write(*table1);
+
+  cudf_io::orc_reader_options read_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{{filepath1}});
+  auto result = cudf_io::read_orc(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
+}
+
+TEST_F(OrcReaderTest, MultipleInputs)
+{
+  srand(31537);
+  auto table1 = create_random_fixed_table<int>(5, 5, true);
+  auto table2 = create_random_fixed_table<int>(5, 5, true);
+
+  auto full_table = cudf::concatenate(std::vector<table_view>({*table1, *table2}));
+
+  auto filepath1 = temp_env->get_temp_filepath("SimpleTable1.orc");
+  cudf_io::chunked_orc_writer_options opts1 =
+    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath1});
+  cudf_io::orc_chunked_writer(opts1).write(*table1);
+
+  auto filepath2 = temp_env->get_temp_filepath("SimpleTable2.orc");
+  cudf_io::chunked_orc_writer_options opts2 =
+    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath2});
+  cudf_io::orc_chunked_writer(opts2).write(*table2);
+
+  cudf_io::orc_reader_options read_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{{filepath1, filepath2}});
+  auto result = cudf_io::read_orc(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
 struct OrcWriterTestDecimal : public OrcWriterTest,
