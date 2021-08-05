@@ -2097,7 +2097,7 @@ def test_groupby_describe(data, group):
         {"a": [2, 1, 1], "b": [None, 1, 0], "c": [None, 0, 1]},
     ],
 )
-@pytest.mark.parametrize("agg", ["first", "last"])
+@pytest.mark.parametrize("agg", ["first", "last", ["first", "last"]])
 def test_groupby_first(data, agg):
     pdf = pd.DataFrame(data)
     gdf = cudf.from_pandas(pdf)

@@ -594,3 +594,22 @@ def test_groupby_unique_lists():
     dd.assert_eq(
         gdf.groupby("a").b.unique(), gddf.groupby("a").b.unique().compute(),
     )
+
+
+@pytest.mark.parametrize("agg", ["first", "last"])
+def test_groupby_first_last(agg):
+    pdf = pd.DataFrame(
+        {"a": [2, 1, 2, 1, 1, 3], "b": [None, 1, 2, None, 2, None]}
+    )
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    ddf = dask_cudf.from_cudf(gdf, npartitions=2)
+
+    a = ddf.groupby("a").agg(agg)
+    b = ddf.groupby("a").agg(agg)
+
+    dd.assert_eq(a, b)
+
+    a = getattr(ddf.groupby("a"), agg)()
+    b = getattr(ddf.groupby("a"), agg)()
+
+    dd.assert_eq(a, b)
