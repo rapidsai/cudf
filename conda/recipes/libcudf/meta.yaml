@@ -102,6 +102,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/utilities/integer_utils.hpp
     - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
     - test -f $PREFIX/include/cudf/detail/utilities/vector_factories.hpp
+    - test -f $PREFIX/include/cudf/detail/utilities/visitor_overload.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/encode.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/merge.hpp
