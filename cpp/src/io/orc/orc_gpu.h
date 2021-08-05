@@ -138,7 +138,7 @@ struct EncChunk {
   int32_t scale;                     // scale for decimals or timestamps
 
   uint32_t* dict_index;  // dictionary index from row index
-  device_span<uint32_t> decimal_offsets;
+  uint32_t* decimal_offsets;
   column_device_view const* leaf_column;
 };
 

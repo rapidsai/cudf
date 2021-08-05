@@ -678,9 +678,7 @@ encoded_data writer::impl::encode_columns(orc_table_view const& orc_table,
           ck.dtype_len = column.type_width();
         }
         ck.scale = column.scale();
-        if (ck.type_kind == TypeKind::DECIMAL) {
-          ck.decimal_offsets = device_span<uint32_t>{column.decimal_offsets(), ck.num_rows};
-        }
+        if (ck.type_kind == TypeKind::DECIMAL) { ck.decimal_offsets = column.decimal_offsets(); }
       }
     }
   }
