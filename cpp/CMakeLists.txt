@@ -681,22 +681,6 @@ configure_package_config_file(cmake/cudf-build-config.cmake.in ${CUDF_BINARY_DIR
 write_basic_package_version_file(${CUDF_BINARY_DIR}/cudf-config-version.cmake
                                  COMPATIBILITY SameMinorVersion)
 
-if(TARGET arrow_shared)
-    get_target_property(arrow_is_imported arrow_shared IMPORTED)
-    if(NOT arrow_is_imported)
-        export(TARGETS arrow_shared arrow_cuda_shared
-            FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
-            NAMESPACE   cudf::)
-    endif()
-elseif(TARGET arrow_static)
-    get_target_property(arrow_is_imported arrow_static IMPORTED)
-    if(NOT arrow_is_imported)
-        export(TARGETS arrow_static arrow_cuda_static
-            FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
-            NAMESPACE   cudf::)
-    endif()
-endif()
-
 if(TARGET gtest)
     get_target_property(gtest_is_imported gtest IMPORTED)
     if(NOT gtest_is_imported)

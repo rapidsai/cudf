@@ -16,6 +16,24 @@
 
 function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENABLE_PYTHON ENABLE_PARQUET)
 
+    if(BUILD_STATIC)
+        if(TARGET arrow_static AND TARGET arrow_cuda_static)
+            list(APPEND ARROW_LIBRARIES arrow_static)
+            list(APPEND ARROW_LIBRARIES arrow_cuda_static)
+            set(ARROW_FOUND TRUE PARENT_SCOPE)
+            set(ARROW_LIBRARIES ${ARROW_LIBRARIES} PARENT_SCOPE)
+            return()
+        endif()
+    else()
+        if(TARGET arrow_shared AND TARGET arrow_cuda_shared)
+            list(APPEND ARROW_LIBRARIES arrow_shared)
+            list(APPEND ARROW_LIBRARIES arrow_cuda_shared)
+            set(ARROW_FOUND TRUE PARENT_SCOPE)
+            set(ARROW_LIBRARIES ${ARROW_LIBRARIES} PARENT_SCOPE)
+            return()
+        endif()
+    endif()
+
     set(ARROW_BUILD_SHARED ON)
     set(ARROW_BUILD_STATIC OFF)
     set(CPMAddOrFindPackage CPMFindPackage)
@@ -140,6 +158,22 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
 
     set(ARROW_FOUND "${ARROW_FOUND}" PARENT_SCOPE)
     set(ARROW_LIBRARIES "${ARROW_LIBRARIES}" PARENT_SCOPE)
+
+    if(TARGET arrow_shared)
+        get_target_property(arrow_is_imported arrow_shared IMPORTED)
+        if(NOT arrow_is_imported)
+            export(TARGETS arrow_shared arrow_cuda_shared
+                FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
+                NAMESPACE   cudf::)
+        endif()
+    elseif(TARGET arrow_static)
+        get_target_property(arrow_is_imported arrow_static IMPORTED)
+        if(NOT arrow_is_imported)
+            export(TARGETS arrow_static arrow_cuda_static
+                FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
+                NAMESPACE   cudf::)
+        endif()
+    endif()
 
 endfunction()
 
