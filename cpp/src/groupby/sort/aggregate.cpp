@@ -518,32 +518,70 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
       get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr));
 };
 
+/**
+ * @brief Generate a tdigest column from a grouped set of scalar input values.
+ *
+ * The input values are expected to be numeric types.
+ *
+ * The tdigest column produced is of the following structure:
+ *
+ * list {
+ *   struct {
+ *     double    // mean
+ *     double    // weight
+ *   }
+ * }
+ *
+ * Where each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
+ */
 template <>
 void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) { return; }
 
-  auto const delta =
-    dynamic_cast<cudf::detail::tdigest_aggregation const&>(agg).delta;
-  cache.add_result(
-    col_idx,
-    agg,
-    detail::group_tdigest(
-      get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), delta, stream, mr));
+  auto const delta = dynamic_cast<cudf::detail::tdigest_aggregation const&>(agg).delta;
+  cache.add_result(col_idx,
+                   agg,
+                   detail::group_tdigest(get_grouped_values(),
+                                         helper.group_offsets(stream),
+                                         helper.num_groups(stream),
+                                         delta,
+                                         stream,
+                                         mr));
 };
 
+/**
+ * @brief Generate a merged tdigest column from a grouped set of input tdigest columns.
+ *
+ * The input values are expected to be tdigests.
+ *
+ * The tdigest column produced is of the following structure:
+ *
+ * list {
+ *   struct {
+ *     double    // mean
+ *     double    // weight
+ *   }
+ * }
+ *
+ * Where each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
+ */
 template <>
 void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) { return; }
 
-  auto const delta =
-    dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).delta;
-  cache.add_result(
-    col_idx,
-    agg,
-    detail::group_merge_tdigest(
-      get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), delta, stream, mr));
+  auto const delta = dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).delta;
+  cache.add_result(col_idx,
+                   agg,
+                   detail::group_merge_tdigest(get_grouped_values(),
+                                               helper.group_offsets(stream),
+                                               helper.num_groups(stream),
+                                               delta,
+                                               stream,
+                                               mr));
 };
 
 }  // namespace detail

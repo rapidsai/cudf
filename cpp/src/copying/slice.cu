@@ -64,8 +64,8 @@ std::vector<column_view> slice(column_view const& input,
 }
 
 std::vector<table_view> slice(table_view const& input,
-                               std::vector<size_type> const& indices,
-                               rmm::cuda_stream_view stream)
+                              std::vector<size_type> const& indices,
+                              rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
@@ -106,7 +106,7 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
                                     std::vector<size_type> const& indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, rmm::cuda_stream_default); 
+  return detail::slice(input, indices, rmm::cuda_stream_default);
 }
 
 }  // namespace cudf

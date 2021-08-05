@@ -442,6 +442,33 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr);
 
+/**
+ * @brief Generate a tdigest column from a grouped set of scalar input values.
+ *
+ * The input values are expected to be numeric types.
+ *
+ * The tdigest column produced is of the following structure:
+ *
+ * list {
+ *   struct {
+ *     double    // mean
+ *     double    // weight
+ *   }
+ * }
+ *
+ * where each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
+ *
+ * @param values Grouped values to merge.
+ * @param group_offsets Offsets of groups' starting points within @p values.
+ * @param num_groups Number of groups.
+ * @param delta Parameter controlling the level of compression of the tdigest. Higher
+ * values result in a larger, more precise tdigest.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ *
+ * @returns tdigest column, with 1 tdigest per row
+ */
 std::unique_ptr<column> group_tdigest(column_view const& values,
                                       cudf::device_span<size_type const> group_offsets,
                                       size_type num_groups,
@@ -449,12 +476,39 @@ std::unique_ptr<column> group_tdigest(column_view const& values,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr);
 
+/**
+ * @brief Generate a merged tdigest column from a grouped set of input tdigest columns.
+ *
+ * The input values are expected to be tdigests.
+ *
+ * The tdigest column produced is of the following structure:
+ *
+ * list {
+ *   struct {
+ *     double    // mean
+ *     double    // weight
+ *   }
+ * }
+ *
+ * where each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
+ *
+ * @param values Grouped tdigests to merge.
+ * @param group_offsets Offsets of groups' starting points within @p values.
+ * @param num_groups Number of groups.
+ * @param delta Parameter controlling the level of compression of the tdigest. Higher
+ * values result in a larger, more precise tdigest.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ *
+ * @returns tdigest column, with 1 tdigest per row
+ */
 std::unique_ptr<column> group_merge_tdigest(column_view const& values,
-                                      cudf::device_span<size_type const> group_offsets,
-                                      size_type num_groups,
-                                      int delta,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                            cudf::device_span<size_type const> group_offsets,
+                                            size_type num_groups,
+                                            int delta,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr);
 
 /** @endinternal
  *

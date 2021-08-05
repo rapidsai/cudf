@@ -93,8 +93,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
                                                           class merge_m2_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class tdigest_aggregation const& agg);
-  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                          class merge_tdigest_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(
+    data_type col_type, class merge_tdigest_aggregation const& agg);
 };
 
 class aggregation_finalizer {  // Declares the interface for the finalizer
@@ -932,7 +932,6 @@ class merge_tdigest_aggregation final : public groupby_aggregation {
   int delta;
 };
 
-
 /**
  * @brief Sentinel value used for `ARGMAX` aggregation.
  *
@@ -1169,10 +1168,9 @@ struct target_type_impl<SourceType, aggregation::MERGE_M2> {
 
 // Always use numeric types for TDIGEST
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<
-  Source,
-  k,
-  std::enable_if_t<is_numeric<Source>() && k == aggregation::TDIGEST>> {
+struct target_type_impl<Source,
+                        k,
+                        std::enable_if_t<is_numeric<Source>() && k == aggregation::TDIGEST>> {
   using type = list_view;
 };
 
@@ -1184,7 +1182,6 @@ struct target_type_impl<
   std::enable_if_t<std::is_same_v<Source, cudf::list_view> && k == aggregation::MERGE_TDIGEST>> {
   using type = list_view;
 };
-
 
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation

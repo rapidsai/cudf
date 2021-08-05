@@ -490,9 +490,21 @@ std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal = nu
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_m2_aggregation();
 
+/**
+ * @brief Factory to create a TDIGEST aggregation
+ *
+ * Produces a tdigest (https://arxiv.org/pdf/1902.04023.pdf) column from input values.
+ * The input aggregation values are expected to be fixed-width numeric types.
+ */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_tdigest_aggregation(int delta = 1000);
 
+/**
+ * @brief Factory to create a MERGE_TDIGEST aggregation by merging multiple tdigests together.
+ *
+ * Produces a tdigest (https://arxiv.org/pdf/1902.04023.pdf) column from input values.
+ * The input aggregation values are be tdigests produced by the TDIGEST aggregation.
+ */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_tdigest_aggregation(int delta = 1000);
 
