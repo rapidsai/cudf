@@ -27,7 +27,9 @@ def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> ScalarLike:
             f"{type(other).__name__} to {col.dtype.name}"
         )
 
-    return cudf.Scalar(other, dtype=col.dtype if other is None else None)
+    return cudf.Scalar(
+        other, dtype=col.dtype if other in {None, cudf.NA} else None
+    )
 
 
 def _check_and_cast_columns_with_other(
@@ -234,9 +236,16 @@ def where(
 
     if isinstance(frame, DataFrame):
         if hasattr(cond, "__cuda_array_interface__"):
-            cond = DataFrame(
-                cond, columns=frame._column_names, index=frame.index
-            )
+            if isinstance(cond, DataFrame):
+                cond = DataFrame(
+                    cond, columns=frame._column_names, index=frame.index
+                )
+            else:
+                cond = DataFrame(
+                    {name: cond for name in frame.columns},
+                    columns=frame._column_names,
+                    index=frame.index,
+                )
         elif (
             hasattr(cond, "__array_interface__")
             and cond.__array_interface__["shape"] != frame.shape
