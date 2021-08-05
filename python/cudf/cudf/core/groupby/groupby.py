@@ -195,9 +195,9 @@ class GroupBy(Serializable):
         # Note: When there are no key columns, the below produces
         # a Float64Index, while Pandas returns an Int64Index
         # (GH: 6945)
-        result = self._groupby.aggregate(self.obj, normalized_aggs)
-
-        result = cudf.DataFrame._from_table(result)
+        result = cudf.DataFrame._from_data(
+            *self._groupby.aggregate(self.obj, normalized_aggs)
+        )
 
         if self._sort:
             result = result.sort_index()
@@ -220,13 +220,17 @@ class GroupBy(Serializable):
                     else:
                         raise
 
+        if libgroupby._is_all_scan_aggregate(normalized_aggs):
+            # Scan aggregations return rows in original index order
+            return self._mimic_pandas_order(result)
+
         # set index names to be group key names
         if len(result):
             result.index.names = self.grouping.names
 
         # copy categorical information from keys to the result index:
         result.index._copy_type_metadata(self.grouping.keys)
-        result._index = cudf.core.index.Index._from_table(result._index)
+        result._index = cudf.Index(result._index)
 
         if not self._as_index:
             for col_name in reversed(self.grouping._named_columns):
@@ -288,9 +292,7 @@ class GroupBy(Serializable):
 
     def _grouped(self):
         grouped_keys, grouped_values, offsets = self._groupby.groups(self.obj)
-
-        grouped_keys = cudf.Index._from_table(grouped_keys)
-        grouped_values = self.obj.__class__._from_table(grouped_values)
+        grouped_values = self.obj.__class__._from_data(*grouped_values)
         grouped_values._copy_type_metadata(self.obj)
         group_names = grouped_keys.unique()
         return (group_names, offsets, grouped_keys, grouped_values)
@@ -420,6 +422,30 @@ class GroupBy(Serializable):
           4    2    4    8
           5    2    5   10
           6    2    6   12
+
+        .. pandas-compat::
+            **groupby.apply**
+
+            cuDF's ``groupby.apply`` is limited compared to pandas.
+            In some situations, Pandas returns the grouped keys as part of
+            the index while cudf does not due to redundancy. For example:
+
+            .. code-block::
+
+                >>> df = pd.DataFrame({
+                    'a': [1, 1, 2, 2],
+                    'b': [1, 2, 1, 2],
+                    'c': [1, 2, 3, 4]})
+                >>> gdf = cudf.from_pandas(df)
+                >>> df.groupby('a').apply(lambda x: x.iloc[[0]])
+                        a  b  c
+                    a
+                    1 0  1  1  1
+                    2 2  2  1  3
+                >>> gdf.groupby('a').apply(lambda x: x.iloc[[0]])
+                        a  b  c
+                    0  1  1  1
+                    2  2  1  3
         """
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
@@ -795,10 +821,9 @@ class GroupBy(Serializable):
         """Internal implementation for `ffill` and `bfill`
         """
         value_columns = self.grouping.values
-        result = self._groupby.replace_nulls(
-            Table(value_columns._data), method
+        result = self.obj.__class__._from_data(
+            self._groupby.replace_nulls(Table(value_columns._data), method)
         )
-        result = self.obj.__class__._from_table(result)
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(value_columns)
 
@@ -866,6 +891,28 @@ class GroupBy(Serializable):
         Returns
         -------
         DataFrame or Series
+
+        .. pandas-compat::
+            **groupby.fillna**
+
+            This function may return result in different format to the method
+            Pandas supports. For example:
+
+            .. code-block::
+
+                >>> df = pd.DataFrame({'k': [1, 1, 2], 'v': [2, None, 4]})
+                >>> gdf = cudf.from_pandas(df)
+                >>> df.groupby('k').fillna({'v': 4}) # pandas
+                        v
+                k
+                1 0  2.0
+                    1  4.0
+                2 2  4.0
+                >>> gdf.groupby('k').fillna({'v': 4}) # cudf
+                        v
+                0  2.0
+                1  4.0
+                2  4.0
         """
         if inplace:
             raise NotImplementedError("Does not support inplace yet.")
@@ -890,9 +937,9 @@ class GroupBy(Serializable):
             return getattr(self, method, limit)()
 
         value_columns = self.grouping.values
-        _, grouped_values, _ = self._groupby.groups(Table(value_columns._data))
+        _, (data, index), _ = self._groupby.groups(Table(value_columns._data))
 
-        grouped = self.obj.__class__._from_data(grouped_values._data)
+        grouped = self.obj.__class__._from_data(data, index)
         result = grouped.fillna(
             value=value, inplace=inplace, axis=axis, limit=limit
         )
@@ -938,21 +985,20 @@ class GroupBy(Serializable):
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
-        value_column_names = [
-            x for x in self.obj._column_names if x not in self.grouping.names
-        ]
-        num_columns_to_shift = len(value_column_names)
+        value_columns = self.grouping.values
         if is_list_like(fill_value):
-            if not len(fill_value) == num_columns_to_shift:
+            if not len(fill_value) == len(value_columns._data):
                 raise ValueError(
                     "Mismatched number of columns and values to fill."
                 )
         else:
-            fill_value = [fill_value] * num_columns_to_shift
+            fill_value = [fill_value] * len(value_columns._data)
 
-        value_columns = self.obj._data.select_by_label(value_column_names)
-        result = self._groupby.shift(Table(value_columns), periods, fill_value)
-        return self.obj.__class__._from_table(result)
+        result = self.obj.__class__._from_data(
+            *self._groupby.shift(Table(value_columns), periods, fill_value)
+        )
+        result = self._mimic_pandas_order(result)
+        return result._copy_type_metadata(value_columns)
 
     def _mimic_pandas_order(
         self, result: DataFrameOrSeries
@@ -961,11 +1007,10 @@ class GroupBy(Serializable):
         matching that of pandas. This also adds appropriate indices.
         """
         sorted_order_column = arange(0, result._data.nrows)
-        _, order, _ = self._groupby.groups(
+        _, (order, _), _ = self._groupby.groups(
             Table({"sorted_order_column": sorted_order_column})
         )
-        order = order._data["sorted_order_column"]
-        gather_map = order.argsort()
+        gather_map = order["sorted_order_column"].argsort()
         result = result.take(gather_map)
         result.index = self.obj.index
         return result

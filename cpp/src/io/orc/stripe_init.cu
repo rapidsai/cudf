@@ -456,8 +456,10 @@ extern "C" __global__ void __launch_bounds__(128, 8)
         ((uint32_t*)&row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x])[j] =
           ((volatile uint32_t*)&s->rowgroups[i])[j];
       }
-      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_rows  = num_rows;
-      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].start_row = start_row;
+      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_rows = num_rows;
+      // Updating in case of struct
+      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_child_rows = num_rows;
+      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].start_row      = start_row;
     }
     __syncthreads();
     if (t == 0) { s->rowgroup_start += num_rowgroups; }
@@ -497,9 +499,8 @@ void __host__ PostDecompressionReassemble(CompressedStreamInfo* strm_info,
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
  * @param[in] rowidx_stride Row index stride
- * @param[in] use_base_stride Whether to use base stride obtained from meta or use the computed
- * value
- * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ * @param[in] use_base_stride Whether to use base stride obtained from meta or the computed value
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void __host__ ParseRowGroupIndex(RowGroup* row_groups,
                                  CompressedStreamInfo* strm_info,

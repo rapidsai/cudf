@@ -828,6 +828,34 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Get the quarter of the year from a timestamp.
+   * @return A new INT16 vector allocated on the GPU. It will be a value from {1, 2, 3, 4}
+   * corresponding to the quarter of the year.
+   */
+  public final ColumnVector quarterOfYear() {
+    assert type.isTimestampType();
+    return new ColumnVector(quarterOfYear(getNativeView()));
+  }
+
+  /**
+   * Add the specified number of months to the timestamp.
+   * @param months must be a INT16 column indicating the number of months to add. A negative number
+   *               of months works too.
+   * @return the updated timestamp
+   */
+  public final ColumnVector addCalendricalMonths(ColumnView months) {
+    return new ColumnVector(addCalendricalMonths(getNativeView(), months.getNativeView()));
+  }
+
+  /**
+   * Check to see if the year for this timestamp is a leap year or not.
+   * @return BOOL8 vector of results
+   */
+  public final ColumnVector isLeapYear() {
+    return new ColumnVector(isLeapYear(getNativeView()));
+  }
+
+  /**
    * Rounds all the values in a column to the specified number of decimal places.
    *
    * @param decimalPlaces Number of decimal places to round to. If negative, this
@@ -1107,7 +1135,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar sum(DType outType) {
-    return reduce(Aggregation.sum(), outType);
+    return reduce(ReductionAggregation.sum(), outType);
   }
 
   /**
@@ -1115,7 +1143,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the same type as this column.
    */
   public Scalar min() {
-    return reduce(Aggregation.min(), type);
+    return reduce(ReductionAggregation.min(), type);
   }
 
   /**
@@ -1132,7 +1160,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         return tmp.min(outType);
       }
     }
-    return reduce(Aggregation.min(), outType);
+    return reduce(ReductionAggregation.min(), outType);
   }
 
   /**
@@ -1140,7 +1168,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the same type as this column.
    */
   public Scalar max() {
-    return reduce(Aggregation.max(), type);
+    return reduce(ReductionAggregation.max(), type);
   }
 
   /**
@@ -1157,7 +1185,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         return tmp.max(outType);
       }
     }
-    return reduce(Aggregation.max(), outType);
+    return reduce(ReductionAggregation.max(), outType);
   }
 
   /**
@@ -1173,7 +1201,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar product(DType outType) {
-    return reduce(Aggregation.product(), outType);
+    return reduce(ReductionAggregation.product(), outType);
   }
 
   /**
@@ -1189,7 +1217,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * scalar of the specified type.
    */
   public Scalar sumOfSquares(DType outType) {
-    return reduce(Aggregation.sumOfSquares(), outType);
+    return reduce(ReductionAggregation.sumOfSquares(), outType);
   }
 
   /**
@@ -1213,7 +1241,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                types are currently supported.
    */
   public Scalar mean(DType outType) {
-    return reduce(Aggregation.mean(), outType);
+    return reduce(ReductionAggregation.mean(), outType);
   }
 
   /**
@@ -1237,7 +1265,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                types are currently supported.
    */
   public Scalar variance(DType outType) {
-    return reduce(Aggregation.variance(), outType);
+    return reduce(ReductionAggregation.variance(), outType);
   }
 
   /**
@@ -1262,7 +1290,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                types are currently supported.
    */
   public Scalar standardDeviation(DType outType) {
-    return reduce(Aggregation.standardDeviation(), outType);
+    return reduce(ReductionAggregation.standardDeviation(), outType);
   }
 
   /**
@@ -1281,7 +1309,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Null values are skipped.
    */
   public Scalar any(DType outType) {
-    return reduce(Aggregation.any(), outType);
+    return reduce(ReductionAggregation.any(), outType);
   }
 
   /**
@@ -1302,7 +1330,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   @Deprecated
   public Scalar all(DType outType) {
-    return reduce(Aggregation.all(), outType);
+    return reduce(ReductionAggregation.all(), outType);
   }
 
   /**
@@ -1315,7 +1343,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(Aggregation aggregation) {
+  public Scalar reduce(ReductionAggregation aggregation) {
     return reduce(aggregation, type);
   }
 
@@ -1332,7 +1360,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(Aggregation aggregation, DType outType) {
+  public Scalar reduce(ReductionAggregation aggregation, DType outType) {
     long nativeId = aggregation.createNativeInstance();
     try {
       return new Scalar(outType, reduce(getNativeView(), nativeId, outType.typeId.getNativeId(), outType.getScale()));
@@ -1362,20 +1390,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws IllegalArgumentException if unsupported window specification * (i.e. other than {@link WindowOptions.FrameType#ROWS} is used.
    */
   public final ColumnVector rollingWindow(RollingAggregation op, WindowOptions options) {
-    Aggregation agg = op.getBaseAggregation();
     // Check that only row-based windows are used.
     if (!options.getFrameType().equals(WindowOptions.FrameType.ROWS)) {
       throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
           + options.getFrameType());
     }
 
-    long nativePtr = agg.createNativeInstance();
+    long nativePtr = op.createNativeInstance();
     try {
       Scalar p = options.getPrecedingScalar();
       Scalar f = options.getFollowingScalar();
       return new ColumnVector(
           rollingWindow(this.getNativeView(),
-              agg.getDefaultOutput(),
+              op.getDefaultOutput(),
               options.getMinPeriods(),
               nativePtr,
               p == null || !p.isValid() ? 0 : p.getInt(),
@@ -1392,7 +1419,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * This is just a convenience method for an inclusive scan with a SUM aggregation.
    */
   public final ColumnVector prefixSum() {
-    return scan(Aggregation.sum());
+    return scan(ScanAggregation.sum());
   }
 
   /**
@@ -1403,7 +1430,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                   null policy too. Currently none of those aggregations are supported so
    *                   it is undefined how they would interact with each other.
    */
-  public final ColumnVector scan(Aggregation aggregation, ScanType scanType, NullPolicy nullPolicy) {
+  public final ColumnVector scan(ScanAggregation aggregation, ScanType scanType, NullPolicy nullPolicy) {
     long nativeId = aggregation.createNativeInstance();
     try {
       return new ColumnVector(scan(getNativeView(), nativeId,
@@ -1418,7 +1445,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param aggregation the aggregation to perform
    * @param scanType should the scan be inclusive, include the current row, or exclusive.
    */
-  public final ColumnVector scan(Aggregation aggregation, ScanType scanType) {
+  public final ColumnVector scan(ScanAggregation aggregation, ScanType scanType) {
     return scan(aggregation, scanType, NullPolicy.EXCLUDE);
   }
 
@@ -1426,7 +1453,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Computes an inclusive scan for a column that excludes nulls.
    * @param aggregation the aggregation to perform
    */
-  public final ColumnVector scan(Aggregation aggregation) {
+  public final ColumnVector scan(ScanAggregation aggregation) {
     return scan(aggregation, ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
   }
 
@@ -2327,22 +2354,101 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Given a strings column, each string in the given column is repeated a number of times
-   * specified by the <code>repeatTimes</code> parameter. If the parameter has a non-positive value,
-   * all the rows of the output strings column will be an empty string. Any null row will result
-   * in a null row regardless of the value of <code>repeatTimes</code>.
+   * Given a strings column, each string in it is repeated a number of times specified by the
+   * <code>repeatTimes</code> parameter.
    *
-   * Note that this function cannot handle the cases when the size of the output column exceeds
-   * the maximum value that can be indexed by int type (i.e., {@link Integer#MAX_VALUE}).
-   * In such situations, the output result is undefined.
+   * In special cases:
+   *  - If <code>repeatTimes</code> is not a positive number, a non-null input string will always
+   *    result in an empty output string.
+   *  - A null input string will always result in a null output string regardless of the value of
+   *    the <code>repeatTimes</code> parameter.
    *
-   * @param repeatTimes The number of times each input string is copied to the output.
+   * The caller is responsible for checking the output column size will not exceed the maximum size
+   * of a strings column (number of total characters is less than the value {@link Integer#MAX_VALUE}).
+   *
+   * @param repeatTimes The number of times each input string is repeated.
    * @return A new java column vector containing repeated strings.
    */
   public final ColumnVector repeatStrings(int repeatTimes) {
-    assert type.equals(DType.STRING) : "column type must be a String";
-
+    assert type.equals(DType.STRING) : "column type must be String";
     return new ColumnVector(repeatStrings(getNativeView(), repeatTimes));
+  }
+
+  /**
+   * Given a strings column, an output strings column is generated by repeating each of the input
+   * string by a number of times given by the corresponding row in a <code>repeatTimes</code>
+   * numeric column.
+   *
+   * In special cases:
+   *  - Any null row (from either the input strings column or the <code>repeatTimes</code> column)
+   *    will always result in a null output string.
+   *  - If any value in the <code>repeatTimes</code> column is not a positive number and its
+   *    corresponding input string is not null, the output string will be an empty string.
+   *
+   * The caller is responsible for checking the output column size will not exceed the maximum size
+   * of a strings column (number of total characters is less than the value {@link Integer#MAX_VALUE}).
+   *
+   * @param repeatTimes The column containing numbers of times each input string is repeated.
+   * @return A new java column vector containing repeated strings.
+   */
+  public final ColumnVector repeatStrings(ColumnView repeatTimes) {
+    assert type.equals(DType.STRING) : "column type must be String";
+    return new ColumnVector(repeatStringsWithColumnRepeatTimes(getNativeView(),
+            repeatTimes.getNativeView(), 0));
+  }
+
+  /**
+   * This function is an overloaded version of {@link #repeatStrings(ColumnView) repeatStrings},
+   * with an additional parameter <code>outputStringSizes</code> that provides a column containing
+   * the pre-computed sizes of the output strings.
+   *
+   * @param repeatTimes The column containing numbers of times each input string is repeated.
+   * @param outputStringSizes A numeric column providing the pre-computed sizes of the output strings.
+   * @return A new java column vector containing repeated strings.
+   */
+  public final ColumnVector repeatStrings(ColumnView repeatTimes, ColumnView outputStringSizes) {
+    assert type.equals(DType.STRING) : "column type must be String";
+    return new ColumnVector(repeatStringsWithColumnRepeatTimes(getNativeView(),
+            repeatTimes.getNativeView(), outputStringSizes.getNativeView()));
+  }
+
+  /** Struct to return the computed strings size column and total size */
+  public static final class StringSizes implements AutoCloseable {
+    private final ColumnVector stringSizes;
+    private final long totalSize;
+
+    StringSizes(ColumnVector stringSizes, long totalSize) {
+      this.stringSizes = stringSizes;
+      this.totalSize = totalSize;
+    }
+
+    public ColumnVector getStringSizes() { return stringSizes; }
+    public long getTotalSize() { return totalSize; }
+
+    /** Close the underlying resources */
+    @Override
+    public void close() {
+      if (stringSizes != null) {
+        stringSizes.close();
+      }
+    }
+  };
+
+  /**
+   * Compute sizes of the output strings if each string in an input strings column is repeated by
+   * a different number of times given by the corresponding row in a <code>repeatTimes</code>
+   * numeric column (i.e., compute sizes of the strings resulted from
+   * {@link #repeatStringsWithColumnRepeatTimes}).
+   *
+   * @param repeatTimes The column containing numbers of times each input string is repeated.
+   * @return An instance of StringSizes class which stores a Java column vector containing
+   *         the computed sizes of the repeated strings, and a long value storing sum of all these
+   *         computed sizes.
+   */
+  public final StringSizes repeatStringsSizes(ColumnView repeatTimes) {
+    assert type.equals(DType.STRING) : "column type must be String";
+    final long[] sizes = repeatStringsSizes(getNativeView(), repeatTimes.getNativeView());
+    return new StringSizes(new ColumnVector(sizes[0]), sizes[1]);
   }
 
    /**
@@ -2384,6 +2490,48 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
     return new ColumnVector(stringReplace(getNativeView(), target.getScalarHandle(),
         replace.getScalarHandle()));
+  }
+
+  /**
+   * For each string, replaces any character sequence matching the given pattern using the
+   * replacement string scalar.
+   *
+   * @param pattern The regular expression pattern to search within each string.
+   * @param repl The string scalar to replace for each pattern match.
+   * @return A new column vector containing the string results.
+   */
+  public final ColumnVector replaceRegex(String pattern, Scalar repl) {
+    return replaceRegex(pattern, repl, -1);
+  }
+
+  /**
+   * For each string, replaces any character sequence matching the given pattern using the
+   * replacement string scalar.
+   *
+   * @param pattern The regular expression pattern to search within each string.
+   * @param repl The string scalar to replace for each pattern match.
+   * @param maxRepl The maximum number of times a replacement should occur within each string.
+   * @return A new column vector containing the string results.
+   */
+  public final ColumnVector replaceRegex(String pattern, Scalar repl, int maxRepl) {
+    if (!repl.getType().equals(DType.STRING)) {
+      throw new IllegalArgumentException("Replacement must be a string scalar");
+    }
+    return new ColumnVector(replaceRegex(getNativeView(), pattern, repl.getScalarHandle(),
+        maxRepl));
+  }
+
+  /**
+   * For each string, replaces any character sequence matching any of the regular expression
+   * patterns with the corresponding replacement strings.
+   *
+   * @param patterns The regular expression patterns to search within each string.
+   * @param repls The string scalars to replace for each corresponding pattern match.
+   * @return A new column vector containing the string results.
+   */
+  public final ColumnVector replaceMultiRegex(String[] patterns, ColumnView repls) {
+    return new ColumnVector(replaceMultiRegex(getNativeView(), patterns,
+        repls.getNativeView()));
   }
 
   /**
@@ -3022,21 +3170,66 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
                                                              boolean emptyStringOutputIfEmptyList);
 
   /**
-   * Native method to repeat each string in the given strings column a number of times
-   * specified by the <code>repeatTimes</code> parameter. If the parameter has a non-positive value,
-   * all the rows of the output strings column will be an empty string. Any null row will result
-   * in a null row regardless of the value of <code>repeatTimes</code>.
+   * Native method to repeat each string in the given input strings column a number of times
+   * specified by the <code>repeatTimes</code> parameter.
    *
-   * Note that this function cannot handle the cases when the size of the output column exceeds
-   * the maximum value that can be indexed by int type (i.e., {@link Integer#MAX_VALUE}).
-   * In such situations, the output result is undefined.
+   * In special cases:
+   *  - If <code>repeatTimes</code> is not a positive number, a non-null input string will always
+   *    result in an empty output string.
+   *  - A null input string will always result in a null output string regardless of the value of
+   *    the <code>repeatTimes</code> parameter.
+   *
+   * The caller is responsible for checking the output column size will not exceed the maximum size
+   * of a strings column (number of total characters is less than the value {@link Integer#MAX_VALUE}).
    *
    * @param viewHandle long holding the native handle of the column containing strings to repeat.
-   * @param repeatTimes The number of times each input string is copied to the output.
-   * @return native handle of the resulting cudf column containing repeated strings.
+   * @param repeatTimes The number of times each input string is repeated.
+   * @return native handle of the resulting cudf strings column containing repeated strings.
    */
   private static native long repeatStrings(long viewHandle, int repeatTimes);
 
+  /**
+   * Native method to repeat strings in the given input strings column, each string is repeated
+   * by a different number of times given by the corresponding row in a <code>repeatTimes</code>
+   * numeric column.
+   *
+   * In special cases:
+   *  - Any null row (from either the input strings column or the <code>repeatTimes</code> column)
+   *    will always result in a null output string.
+   *  - If any value in the <code>repeatTimes</code> column is not a positive number and its
+   *    corresponding input string is not null, the output string will be an empty string.
+   *
+   * The caller is responsible for checking the output column size will not exceed the maximum size
+   * of a strings column (number of total characters is less than the value {@link Integer#MAX_VALUE}).
+   *
+   * If the input <code>repeatTimesHandle</code> column does not have a numeric type, or it has a
+   * size that is different from size of the input strings column, an exception will be thrown.
+   *
+   * @param stringsHandle long holding the native handle of the column containing strings to repeat.
+   * @param repeatTimesHandle long holding the native handle of the column containing  the numbers
+   *        of times each input string is repeated.
+   * @param outputStringSizesHandle long holding the native handle of the column containing the
+   *                                pre-computed sizes of the output strings, can be specified as
+   *                                <code>0</code> value if that column is not available.
+   * @return native handle of the resulting cudf strings column containing repeated strings.
+   */
+    private static native long repeatStringsWithColumnRepeatTimes(long stringsHandle,
+      long repeatTimesHandle, long outputStringSizesHandle);
+
+  /**
+   * Native method to compute sizes of the output strings if each string in the input strings
+   * column is repeated by a different number of times given by the corresponding row in a
+   * <code>repeatTimes</code> numeric column (i.e., compute sizes of the strings resulted from
+   * {@link #repeatStringsWithColumnRepeatTimes}).
+   *
+   * @param stringsHandle long holding the native handle of the column containing strings to repeat.
+   * @param repeatTimesHandle long holding the native handle of the column containing  the numbers
+   *        of times each input string is repeated.
+   * @return An array of two long values, the first one holds native handle of a numeric column
+   *         containing the computed sizes of the repeated strings, and the second value is the sum
+   *         of all those string sizes.
+   */
+  private static native long[] repeatStringsSizes(long stringsHandle, long repeatTimesHandle);
 
   private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
 
@@ -3116,6 +3309,28 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param repl handle of scalar containing the string to replace.
    */
   private static native long stringReplace(long columnView, long target, long repl) throws CudfException;
+
+  /**
+   * Native method for replacing each regular expression pattern match with the specified
+   * replacement string.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param pattern The regular expression pattern to search within each string.
+   * @param repl native handle of the cudf::scalar containing the replacement string.
+   * @param maxRepl maximum number of times to replace the pattern within a string
+   * @return native handle of the resulting cudf column containing the string results.
+   */
+  private static native long replaceRegex(long columnView, String pattern,
+                                          long repl, long maxRepl) throws CudfException;
+
+  /**
+   * Native method for multiple instance regular expression replacement.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param patterns native handle of the cudf::column_view containing the regex patterns.
+   * @param repls The replacement template for creating the output string.
+   * @return native handle of the resulting cudf column containing the string results.
+   */
+  private static native long replaceMultiRegex(long columnView, String[] patterns,
+                                               long repls) throws CudfException;
 
   /**
    * Native method for replacing any character sequence matching the given pattern
@@ -3337,6 +3552,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long lastDayOfMonth(long viewHandle) throws CudfException;
 
   private static native long dayOfYear(long viewHandle) throws CudfException;
+
+  private static native long quarterOfYear(long viewHandle) throws CudfException;
+
+  private static native long addCalendricalMonths(long tsViewHandle, long monthsViewHandle);
+
+  private static native long isLeapYear(long viewHandle) throws CudfException;
 
   private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 

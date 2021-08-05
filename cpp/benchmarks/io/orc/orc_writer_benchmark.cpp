@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,7 @@ void BM_orc_write_varying_inout(benchmark::State& state)
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(sink_type);
+  auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::orc_writer_options options =
@@ -59,6 +60,7 @@ void BM_orc_write_varying_inout(benchmark::State& state)
   }
 
   state.SetBytesProcessed(data_size * state.iterations());
+  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
 }
 
 void BM_orc_write_varying_options(benchmark::State& state)
@@ -75,6 +77,7 @@ void BM_orc_write_varying_options(benchmark::State& state)
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(io_type::FILEPATH);
+  auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::orc_writer_options const options =
@@ -85,6 +88,7 @@ void BM_orc_write_varying_options(benchmark::State& state)
   }
 
   state.SetBytesProcessed(data_size * state.iterations());
+  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
 }
 
 #define ORC_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)                               \
@@ -99,6 +103,7 @@ WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, integral, type_group_id::
 WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
 WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
 WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, string, cudf::type_id::STRING);
+WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, list, cudf::type_id::LIST);
 
 BENCHMARK_DEFINE_F(OrcWrite, writer_options)
 (::benchmark::State& state) { BM_orc_write_varying_options(state); }
