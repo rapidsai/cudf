@@ -218,6 +218,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
+  // TODO: Remove support for full joins.
   join_kind KernelJoinKind = JoinKind == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : JoinKind;
   if (has_nulls) {
     compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>

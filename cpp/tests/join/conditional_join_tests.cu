@@ -438,7 +438,7 @@ TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoNullsRowAllEqual)
 
 TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoNullsNoOutputRowAllEqual)
 {
-  this->test_nulls({{{0, 1}, {0, 1}}}, {{{0, 0}, {1, 1}}}, left_zero_eq_right_zero, {{}, {}});
+  this->test_nulls({{{0, 1}, {0, 1}}}, {{{0, 0}, {1, 1}}}, left_zero_eq_right_zero, {});
 };
 
 /**
@@ -520,7 +520,10 @@ struct ConditionalFullJoinTest : public ConditionalJoinPairReturnTest<T> {
                         cudf::table_view right,
                         cudf::ast::expression predicate) override
   {
-    return cudf::conditional_full_join_size(left, right, predicate);
+    // Full joins don't actually support size calculations, but to support a
+    // uniform testing framework we just calculate it from the result of doing
+    // the join.
+    return cudf::conditional_full_join(left, right, predicate).first->size();
   }
 
   std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
