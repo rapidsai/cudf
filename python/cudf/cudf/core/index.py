@@ -4,7 +4,7 @@ from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Dict, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import cupy
 import numpy as np
@@ -3039,7 +3039,7 @@ class Index(BaseIndex, metaclass=IndexMeta):
         return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
 
 
-def _concat_range_index(indexes):
+def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
     """
     An internal Utility function to concat RangeIndex objects.
     """
