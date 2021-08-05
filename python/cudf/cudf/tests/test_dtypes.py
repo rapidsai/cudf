@@ -269,6 +269,8 @@ def test_lists_of_structs_dtype(data):
         (pd.StringDtype(), np.dtype("object")),
         ("int8", np.dtype("int8")),
         ("boolean", np.dtype("bool")),
+        ("bool_", np.dtype("bool")),
+        (np.bool_, np.dtype("bool")),
         (int, np.dtype("int64")),
         (float, np.dtype("float64")),
         (cudf.ListDtype("int64"), cudf.ListDtype("int64")),
