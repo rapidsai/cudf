@@ -172,29 +172,24 @@ struct interleave_list_entries_fn {
     rmm::mr::device_memory_resource* mr) const noexcept
   {
     auto const table_dv_ptr = table_device_view::create(input);
-    auto const comp_fn      = compute_string_sizes_and_interleave_lists_fn{
+    auto comp_fn            = compute_string_sizes_and_interleave_lists_fn{
       *table_dv_ptr, output_list_offsets.template begin<offset_type>(), data_has_null_mask};
 
-    if (data_has_null_mask) {
-      auto [offsets_column, chars_column, null_mask, null_count] =
-        cudf::strings::detail::make_strings_children_with_null_mask(
-          comp_fn, num_output_lists, num_output_entries, stream, mr);
-      return make_strings_column(num_output_entries,
-                                 std::move(offsets_column),
-                                 std::move(chars_column),
-                                 null_count,
-                                 std::move(null_mask),
-                                 stream,
-                                 mr);
-    }
+    auto validities =
+      rmm::device_uvector<int8_t>(data_has_null_mask ? num_output_entries : 0, stream);
+    comp_fn.d_validities = validities.data();
 
     auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
       comp_fn, num_output_lists, num_output_entries, stream, mr);
+
+    auto [null_mask, null_count] = cudf::detail::valid_if(
+      validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr);
+
     return make_strings_column(num_output_entries,
                                std::move(offsets_column),
                                std::move(chars_column),
-                               0,
-                               rmm::device_buffer{},
+                               null_count,
+                               std::move(null_mask),
                                stream,
                                mr);
   }

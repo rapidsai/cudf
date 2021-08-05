@@ -191,7 +191,15 @@ class StructMethods(ColumnMethods):
             pos = fields.index(key)
             return self._return_or_inplace(self._column.children[pos])
         else:
-            return self._return_or_inplace(self._column.children[key])
+            if isinstance(key, int):
+                try:
+                    return self._return_or_inplace(self._column.children[key])
+                except IndexError:
+                    raise IndexError(f"Index {key} out of range")
+            else:
+                raise KeyError(
+                    f"Field '{key}' is not found in the set of existing keys."
+                )
 
     def explode(self):
         """

@@ -30,7 +30,7 @@ from cudf.core.dtypes import ListDtype, StructDtype
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, make_table_view
 from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 
 from cudf._lib.interop import from_arrow, to_arrow
@@ -58,6 +58,7 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_s,
     timestamp_us,
 )
+from cudf._lib.utils cimport data_from_table_view
 
 from cudf.utils.dtypes import _decimal_to_int64, is_list_dtype, is_struct_dtype
 
@@ -338,8 +339,8 @@ cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
             names=columns
         )
 
-    cdef Table table = from_arrow(pyarrow_table, column_names=columns)
-    cdef table_view struct_view = table.view()
+    data, _ = from_arrow(pyarrow_table, column_names=columns)
+    cdef table_view struct_view = make_table_view(data.values())
 
     s.reset(
         new struct_scalar(struct_view, valid)
@@ -352,10 +353,13 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
     cdef table_view struct_table_view = (<struct_scalar*>s.get()).view()
     columns = [str(i) for i in range(struct_table_view.num_columns())]
 
-    cdef Table to_arrow_table = Table.from_table_view(
+    data, _ = data_from_table_view(
         struct_table_view,
         None,
         column_names=columns
+    )
+    cdef Table to_arrow_table = Table(
+        cudf.core.column_accessor.ColumnAccessor(data)
     )
 
     python_dict = to_arrow(to_arrow_table, columns).to_pydict()

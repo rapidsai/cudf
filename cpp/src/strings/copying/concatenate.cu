@@ -16,8 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -27,12 +26,11 @@
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
-#include "thrust/iterator/transform_iterator.h"
 
 #include <thrust/binary_search.h>
-#include <thrust/for_each.h>
-#include <thrust/transform_reduce.h>
+#include <thrust/execution_policy.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf {
@@ -287,12 +285,15 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
         column_view offsets_child = column->child(strings_column_view::offsets_column_index);
         column_view chars_child   = column->child(strings_column_view::chars_column_index);
 
-        auto d_offsets       = offsets_child.data<int32_t>() + column_offset;
-        int32_t bytes_offset = thrust::device_pointer_cast(d_offsets)[0];
+        auto bytes_offset =
+          cudf::detail::get_value<offset_type>(offsets_child, column_offset, stream);
 
         // copy the chars column data
-        auto d_chars    = chars_child.data<char>() + bytes_offset;
-        size_type bytes = thrust::device_pointer_cast(d_offsets)[column_size] - bytes_offset;
+        auto d_chars = chars_child.data<char>() + bytes_offset;
+        auto const bytes =
+          cudf::detail::get_value<offset_type>(offsets_child, column_size + column_offset, stream) -
+          bytes_offset;
+
         CUDA_TRY(
           cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDeviceToDevice, stream.value()));
 
