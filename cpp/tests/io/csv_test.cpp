@@ -2175,7 +2175,7 @@ TEST_F(CsvReaderTest, DtypesMap)
   auto result = cudf_io::read_csv(in_opts);
 
   const auto result_table = result.tbl->view();
-  assert(result_table->num_columns() == 2);
+  assert(result_table.num_columns() == 2);
   assert(result_table.column(0).type() == data_type{type_id::INT32});
   assert(result_table.column(1).type() == data_type{type_id::INT16});
   expect_column_data_equal(std::vector<int32_t>{12, 34, 56}, result_table.column(0));
