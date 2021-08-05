@@ -3047,7 +3047,8 @@ def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
 
     # Filter the empty indexes
     non_empty_indexes = [obj for obj in indexes if len(obj)]
-
+    if not non_empty_indexes:
+        return RangeIndex(0, 0)
     for obj in non_empty_indexes:
         if start is None:
             # This is set by the first non-empty index
