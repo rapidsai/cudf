@@ -574,10 +574,7 @@ class aggregate_metadata {
         schema_elem.children_idx.begin(),
         schema_elem.children_idx.end(),
         [&](size_t col_schema_idx) { return get_schema(col_schema_idx).name == name; });
-      // fut: Maybe it'd be better if we could return the full path in the exception rather than
-      // just the parent
-      CUDF_EXPECTS(col_schema_idx != schema_elem.children_idx.end(),
-                   "Child \"" + name + "\" not found in \"" + schema_elem.name + "\"");
+
       return (col_schema_idx != schema_elem.children_idx.end()) ? static_cast<int>(*col_schema_idx)
                                                                 : -1;
     };
@@ -586,11 +583,14 @@ class aggregate_metadata {
     std::vector<input_column_info> input_columns;
     std::deque<int> nesting;
 
-    std::function<void(column_name_info const*, int, std::vector<column_buffer>&)> build_column =
+    // Return true if column path is valid. e.g. if the path is {"struct1", "child1"}, then it is
+    // valid if "struct1.child1" exists in this file's schema. If "struct1" exists but "child1" is
+    // not a child of "struct1" then the function will return false for "struct1"
+    std::function<bool(column_name_info const*, int, std::vector<column_buffer>&)> build_column =
       [&](column_name_info const* col_name_info,
           int schema_idx,
           std::vector<column_buffer>& out_col_array) {
-        if (schema_idx < 0) { return; }
+        if (schema_idx < 0) { return false; }
         auto const& schema_elem = get_schema(schema_idx);
 
         // if I am a stub, continue on
@@ -598,8 +598,7 @@ class aggregate_metadata {
           // is this legit?
           CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
           auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
-          build_column(child_col_name_info, schema_elem.children_idx[0], out_col_array);
-          return;
+          return build_column(child_col_name_info, schema_elem.children_idx[0], out_col_array);
         }
 
         // if we're at the root, this is a new output column
@@ -609,24 +608,26 @@ class aggregate_metadata {
                              ? data_type{col_type, numeric::scale_type{-schema_elem.decimal_scale}}
                              : data_type{col_type};
 
-        column_buffer& output_col =
-          out_col_array.emplace_back(dtype, schema_elem.repetition_type == OPTIONAL ? true : false);
-        // store the index of this newly inserted element
-        nesting.push_back(static_cast<int>(out_col_array.size()) - 1);
+        column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL ? true : false);
+        // store the index of this element if inserted in out_col_array
+        nesting.push_back(static_cast<int>(out_col_array.size()));
         output_col.name = schema_elem.name;
 
         // build each child
+        bool path_is_valid = false;
         if (col_name_info == nullptr or col_name_info->children.empty()) {
           // add all children of schema_elem.
           // At this point, we can no longer pass a col_name_info to build_column
           for (int idx = 0; idx < schema_elem.num_children; idx++) {
-            build_column(nullptr, schema_elem.children_idx[idx], output_col.children);
+            path_is_valid |=
+              build_column(nullptr, schema_elem.children_idx[idx], output_col.children);
           }
         } else {
           for (size_t idx = 0; idx < col_name_info->children.size(); idx++) {
-            build_column(&col_name_info->children[idx],
-                         find_schema_child(schema_elem, col_name_info->children[idx].name),
-                         output_col.children);
+            path_is_valid |=
+              build_column(&col_name_info->children[idx],
+                           find_schema_child(schema_elem, col_name_info->children[idx].name),
+                           output_col.children);
           }
         }
 
@@ -636,9 +637,13 @@ class aggregate_metadata {
           input_column_info& input_col =
             input_columns.emplace_back(input_column_info{schema_idx, schema_elem.name});
           std::copy(nesting.begin(), nesting.end(), std::back_inserter(input_col.nesting));
+          path_is_valid = true;  // If we're able to reach leaf then path is valid
         }
 
+        if (path_is_valid) { out_col_array.push_back(std::move(output_col)); }
+
         nesting.pop_back();
+        return path_is_valid;
       };
 
     std::vector<int> output_column_schemas;
@@ -721,8 +726,8 @@ class aggregate_metadata {
       }
       for (auto& col : selected_columns) {
         auto const& top_level_col_schema_idx = find_schema_child(root, col.name);
-        build_column(&col, top_level_col_schema_idx, output_columns);
-        output_column_schemas.push_back(top_level_col_schema_idx);
+        bool valid_column = build_column(&col, top_level_col_schema_idx, output_columns);
+        if (valid_column) output_column_schemas.push_back(top_level_col_schema_idx);
       }
     }
 

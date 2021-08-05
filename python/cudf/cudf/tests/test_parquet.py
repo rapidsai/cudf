@@ -1151,7 +1151,7 @@ def select_columns_params():
                 {"a": None, "b": None},
                 {"a": 15, "b": None},
             ],
-            [["struct"], ["struct.a"], ["struct.b"]],
+            [["struct"], ["struct.a"], ["struct.b"], ["c"]],
         ),
         # struct-of-list
         (
@@ -1170,6 +1170,7 @@ def select_columns_params():
                 ["struct.c.list"],
                 ["struct.c.list.item"],
                 ["struct.b", "struct.c"],
+                ["struct.b", "struct.d", "struct.c"],
             ],
         ),
         # list-of-struct
@@ -1185,6 +1186,7 @@ def select_columns_params():
                 ["struct.list"],
                 ["struct.list.item"],
                 ["struct.list.item.a", "struct.list.item.b"],
+                ["struct.list.item.c"],
             ],
         ),
     ]
