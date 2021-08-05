@@ -43,7 +43,7 @@ __global__ void __launch_bounds__(block_size, 1)
 
 template <typename T>
 struct equality_functor {
-  column_device_view &col;
+  column_device_view const& col;
   __device__ bool operator()(size_type lhs_idx, size_type rhs_idx)
   {
     // We don't call this for nulls so this is fine
@@ -53,15 +53,15 @@ struct equality_functor {
 
 template <typename T>
 struct hash_functor {
-  column_device_view &col;
+  column_device_view const& col;
   __device__ auto operator()(size_type idx) { return MurmurHash3_32<T>{}(col.element<T>(idx)); }
 };
 
 struct map_insert_fn {
-  map_type::device_mutable_view &map;
+  map_type::device_mutable_view& map;
 
   template <typename T>
-  __device__ bool operator()(column_device_view &col, size_type i)
+  __device__ bool operator()(column_device_view const& col, size_type i)
   {
     if constexpr (column_device_view::has_element_accessor<T>()) {
       auto hash_fn     = hash_functor<T>{col};
@@ -75,10 +75,10 @@ struct map_insert_fn {
 };
 
 struct map_find_fn {
-  map_type::device_view &map;
+  map_type::device_view& map;
 
   template <typename T>
-  __device__ auto operator()(column_device_view &col, size_type i)
+  __device__ auto operator()(column_device_view const& col, size_type i)
   {
     if constexpr (column_device_view::has_element_accessor<T>()) {
       auto hash_fn     = hash_functor<T>{col};
@@ -104,7 +104,7 @@ __global__ void __launch_bounds__(block_size, 1)
     block_x * 5000;  // This is fragment size. all chunks are multiple of these many rows.
   size_type end_row = min(start_row + 5000, num_rows);
 
-  __shared__ EncColumnChunk *s_chunk;
+  __shared__ EncColumnChunk* s_chunk;
   __shared__ parquet_column_device_view s_col;
   __shared__ size_type s_start_value_idx;
   __shared__ size_type s_num_values;
@@ -147,8 +147,8 @@ __global__ void __launch_bounds__(block_size, 1)
   }
   __syncthreads();
 
-  column_device_view &data_col = *s_col.leaf_column;
-  using block_reduce           = cub::BlockReduce<size_type, block_size>;
+  column_device_view const& data_col = *s_col.leaf_column;
+  using block_reduce                 = cub::BlockReduce<size_type, block_size>;
   __shared__ typename block_reduce::TempStorage reduce_storage;
 
   // Make a view of the hash map
@@ -211,7 +211,7 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
   gpuCollectMapEntries(device_span<EncColumnChunk> chunks)
 {
-  auto &chunk = chunks[blockIdx.x];
+  auto& chunk = chunks[blockIdx.x];
   if (not chunk.use_dictionary) { return; }
 
   auto t = threadIdx.x;
@@ -299,7 +299,7 @@ __global__ void __launch_bounds__(block_size, 1)
 
   if (not s_chunk.use_dictionary) { return; }
 
-  column_device_view &data_col = *s_col.leaf_column;
+  column_device_view const& data_col = *s_col.leaf_column;
 
   auto map = map_type::device_view(
     s_chunk.dict_map_slots, s_chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
@@ -316,7 +316,7 @@ __global__ void __launch_bounds__(block_size, 1)
                     "Unable to find value in map in dictionary index construction");
         if (found_slot != map.end()) {
           // No need for atomic as this is not going to be modified by any other thread
-          auto *val_ptr = reinterpret_cast<map_type::mapped_type *>(&found_slot->second);
+          auto* val_ptr = reinterpret_cast<map_type::mapped_type*>(&found_slot->second);
           s_chunk.dict_index[val_idx - s_ck_start_val_idx] = *val_ptr;
         }
       }
