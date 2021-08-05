@@ -32,15 +32,18 @@ def dtype(arbitrary):
         np_dtype = np.dtype(arbitrary)
         if np_dtype.name == "float16":
             np_dtype = np.dtype("float32")
-        elif np_dtype.name in ("object", "str"):
+        elif np_dtype.kind in ("OU"):
             np_dtype = np.dtype("object")
         elif np_dtype.str == "<m8":
             np_dtype = np.dtype("<m8[ns]")
         elif np_dtype.str == "<M8":
             np_dtype = np.dtype("<M8[ns]")
-        return np_dtype
     except TypeError:
         pass
+    else:
+        if np_dtype.kind not in "biufUOMm":
+            raise TypeError(f"Unsupported type {np_dtype}")
+        return np_dtype
     if isinstance(arbitrary, cudf.core.dtypes._BaseDtype):
         return arbitrary
     elif isinstance(arbitrary, pd.CategoricalDtype):

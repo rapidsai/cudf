@@ -288,3 +288,11 @@ def test_lists_of_structs_dtype(data):
 )
 def test_dtype(in_dtype, expect):
     assert_eq(cudf.dtype(in_dtype), expect)
+
+
+@pytest.mark.parametrize(
+    "in_dtype", ["complex", np.complex128, complex, "S", "a", "V"]
+)
+def test_dtype_raise(in_dtype):
+    with pytest.raises(TypeError):
+        cudf.dtype(in_dtype)
