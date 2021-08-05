@@ -602,14 +602,16 @@ def test_groupby_first_last(agg):
         {"a": [2, 1, 2, 1, 1, 3], "b": [None, 1, 2, None, 2, None]}
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
-    ddf = dask_cudf.from_cudf(gdf, npartitions=2)
+
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    gddf = dask_cudf.from_cudf(gdf, npartitions=2)
 
     a = ddf.groupby("a").agg(agg)
-    b = ddf.groupby("a").agg(agg)
+    b = gddf.groupby("a").agg(agg)
 
     dd.assert_eq(a, b)
 
     a = getattr(ddf.groupby("a"), agg)()
-    b = getattr(ddf.groupby("a"), agg)()
+    b = getattr(gddf.groupby("a"), agg)()
 
     dd.assert_eq(a, b)
