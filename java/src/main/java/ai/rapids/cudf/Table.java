@@ -23,6 +23,7 @@ import ai.rapids.cudf.HostColumnVector.DataType;
 import ai.rapids.cudf.HostColumnVector.ListType;
 import ai.rapids.cudf.HostColumnVector.StructData;
 import ai.rapids.cudf.HostColumnVector.StructType;
+import ai.rapids.cudf.ast.CompiledExpression;
 
 import java.io.File;
 import java.math.BigDecimal;
@@ -522,6 +523,26 @@ public final class Table implements AutoCloseable {
 
   private static native long[] leftAntiJoinGatherMap(long leftKeys, long rightKeys,
                                                      boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] conditionalLeftJoinGatherMaps(long leftTable, long rightTable,
+                                                             long condition,
+                                                             boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] conditionalInnerJoinGatherMaps(long leftTable, long rightTable,
+                                                              long condition,
+                                                              boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] conditionalFullJoinGatherMaps(long leftTable, long rightTable,
+                                                             long condition,
+                                                             boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] conditionalLeftSemiJoinGatherMap(long leftTable, long rightTable,
+                                                                long condition,
+                                                                boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] conditionalLeftAntiJoinGatherMap(long leftTable, long rightTable,
+                                                                long condition,
+                                                                boolean compareNullsEqual) throws CudfException;
 
   private static native long[] crossJoin(long leftTable, long rightTable) throws CudfException;
 
@@ -1970,6 +1991,30 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes the gather maps that can be used to manifest the result of a left join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightTable the right side table of the join in the join
+   * @param condition conditional expression to evaluate during the join
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] leftJoinGatherMaps(Table rightTable, CompiledExpression condition,
+                                        boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightTable.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        conditionalLeftJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
    * Computes the gather maps that can be used to manifest the result of an inner equi-join between
    * two tables. It is assumed this table instance holds the key columns from the left table, and
    * the table argument represents the key columns from the right table. Two {@link GatherMap}
@@ -1991,6 +2036,30 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes the gather maps that can be used to manifest the result of an inner join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightTable the right side table of the join
+   * @param condition conditional expression to evaluate during the join
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] innerJoinGatherMaps(Table rightTable, CompiledExpression condition,
+                                         boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightTable.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        conditionalInnerJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
    * Computes the gather maps that can be used to manifest the result of an full equi-join between
    * two tables. It is assumed this table instance holds the key columns from the left table, and
    * the table argument represents the key columns from the right table. Two {@link GatherMap}
@@ -2008,6 +2077,30 @@ public final class Table implements AutoCloseable {
     }
     long[] gatherMapData =
         fullJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a full join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the full join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightTable the right side table of the join
+   * @param condition conditional expression to evaluate during the join
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] fullJoinGatherMaps(Table rightTable, CompiledExpression condition,
+                                         boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightTable.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        conditionalFullJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle(), compareNullsEqual);
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2040,6 +2133,30 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes the gather map that can be used to manifest the result of a left semi join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. The {@link GatherMap} instance returned can be used to gather the left table
+   * to produce the result of the left semi join.
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   * @param rightTable the right side table of the join
+   * @param condition conditional expression to evaluate during the join
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left table gather map
+   */
+  public GatherMap leftSemiJoinGatherMap(Table rightTable, CompiledExpression condition,
+                                         boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightTable.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        conditionalLeftSemiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle(), compareNullsEqual);
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
    * Computes the gather map that can be used to manifest the result of a left anti-join between
    * two tables. It is assumed this table instance holds the key columns from the left table, and
    * the table argument represents the key columns from the right table. The {@link GatherMap}
@@ -2057,6 +2174,30 @@ public final class Table implements AutoCloseable {
     }
     long[] gatherMapData =
         leftAntiJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left anti join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. The {@link GatherMap} instance returned can be used to gather the left table
+   * to produce the result of the left anti join.
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   * @param rightTable the right side table of the join
+   * @param condition conditional expression to evaluate during the join
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left table gather map
+   */
+  public GatherMap leftAntiJoinGatherMap(Table rightTable, CompiledExpression condition,
+                                         boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightTable.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        conditionalLeftAntiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle(), compareNullsEqual);
     return buildSemiJoinGatherMap(gatherMapData);
   }
 
@@ -2315,7 +2456,7 @@ public final class Table implements AutoCloseable {
      *                  1,   2
      *                  2,   1 ==> aggregated count
      */
-    public Table aggregate(AggregationOnColumn... aggregates) {
+    public Table aggregate(GroupByAggregationOnColumn... aggregates) {
       assert aggregates != null;
 
       // To improve performance and memory we want to remove duplicate operations
@@ -2328,9 +2469,9 @@ public final class Table implements AutoCloseable {
       int keysLength = operation.indices.length;
       int totalOps = 0;
       for (int outputIndex = 0; outputIndex < aggregates.length; outputIndex++) {
-        AggregationOnColumn agg = aggregates[outputIndex];
+        GroupByAggregationOnColumn agg = aggregates[outputIndex];
         ColumnOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnOps());
-        totalOps += ops.add(agg, outputIndex + keysLength);
+        totalOps += ops.add(agg.getWrapped().getWrapped(), outputIndex + keysLength);
       }
       int[] aggColumnIndexes = new int[totalOps];
       long[] aggOperationInstances = new long[totalOps];
@@ -2667,7 +2808,7 @@ public final class Table implements AutoCloseable {
       }
     }
 
-    public Table scan(AggregationOnColumn... aggregates) {
+    public Table scan(GroupByScanAggregationOnColumn... aggregates) {
       assert aggregates != null;
 
       // To improve performance and memory we want to remove duplicate operations
@@ -2680,9 +2821,9 @@ public final class Table implements AutoCloseable {
       int keysLength = operation.indices.length;
       int totalOps = 0;
       for (int outputIndex = 0; outputIndex < aggregates.length; outputIndex++) {
-        AggregationOnColumn agg = aggregates[outputIndex];
+        GroupByScanAggregationOnColumn agg = aggregates[outputIndex];
         ColumnOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnOps());
-        totalOps += ops.add(agg, outputIndex + keysLength);
+        totalOps += ops.add(agg.getWrapped().getWrapped(), outputIndex + keysLength);
       }
       int[] aggColumnIndexes = new int[totalOps];
       long[] aggOperationInstances = new long[totalOps];

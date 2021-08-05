@@ -1529,7 +1529,7 @@ def test_categorical_typecast_inner_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 
     left = make_categorical_dataframe(data)
-    right = left.astype(left["key"].dtype.categories)
+    right = left.astype(left["key"].dtype.categories.dtype)
 
     result = left.merge(right, on="key", how="inner")
     assert result["key"].dtype == left["key"].dtype.categories.dtype
@@ -1541,7 +1541,7 @@ def test_categorical_typecast_left_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 
     left = make_categorical_dataframe(data)
-    right = left.astype(left["key"].dtype.categories)
+    right = left.astype(left["key"].dtype.categories.dtype)
 
     result = left.merge(right, on="key", how="left")
     assert result["key"].dtype == left["key"].dtype
@@ -1553,7 +1553,7 @@ def test_categorical_typecast_outer_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 
     left = make_categorical_dataframe(data)
-    right = left.astype(left["key"].dtype.categories)
+    right = left.astype(left["key"].dtype.categories.dtype)
 
     result = left.merge(right, on="key", how="outer")
     assert result["key"].dtype == left["key"].dtype.categories.dtype

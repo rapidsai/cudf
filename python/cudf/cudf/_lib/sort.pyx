@@ -24,6 +24,7 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport null_order, null_policy, order
 from cudf._lib.sort cimport underlying_type_t_rank_method
 from cudf._lib.table cimport Table
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def is_sorted(
@@ -276,9 +277,9 @@ def rank_columns(Table source_table, object method, str na_option,
 
     cdef unique_ptr[table] c_result
     c_result.reset(new table(move(c_results)))
-    out_table = Table.from_unique_ptr(
+    data, _ = data_from_unique_ptr(
         move(c_result),
-        column_names=source_table._column_names
+        column_names=source_table._column_names,
+        index_names=None
     )
-    out_table._index = source_table._index
-    return out_table
+    return data, source_table._index
