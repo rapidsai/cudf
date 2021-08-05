@@ -75,6 +75,10 @@ std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices,
                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
+std::vector<table_view> slice(table_view const& input,
+                               std::vector<size_type> const& indices,
+                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+
 /**
  * @copydoc cudf::shift(column_view const&,size_type,scalar const&,
  * rmm::mr::device_memory_resource*)
