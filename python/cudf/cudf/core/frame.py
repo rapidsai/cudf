@@ -3610,17 +3610,14 @@ class Frame(libcudf.table.Table):
         try:
             return cls._SUPPORT_AXIS_LOOKUP[axis]
         except KeyError:
-            raise ValueError(
-                "Invalid axis argument, must be one of {}.".format(
-                    ", ".join(
-                        (
-                            ax
-                            for ax in cls._SUPPORT_AXIS_LOOKUP.keys()
-                            if ax is not None
-                        )
-                    )
+            valid_axes = ", ".join(
+                (
+                    ax
+                    for ax in cls._SUPPORT_AXIS_LOOKUP.keys()
+                    if ax is not None
                 )
             )
+            raise ValueError(f"Invalid axis, must be one of {valid_axes}.")
 
     def _reduce(self, *args, **kwargs):
         raise NotImplementedError(
