@@ -144,10 +144,7 @@ probe_join_hash_table(cudf::table_device_view build_table,
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
   thrust::counting_iterator<size_type> first(0);
-  thrust::transform_iterator<make_pair_function,
-                             thrust::counting_iterator<size_type>,
-                             cudf::detail::pair_type>
-    iter(first, pair_func);
+  auto iter = thrust::make_transform_iterator(first, pair_func);
 
   const cudf::size_type probe_table_num_rows = probe_table.num_rows();
 
@@ -207,10 +204,7 @@ std::size_t get_full_join_size(cudf::table_device_view build_table,
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
   thrust::counting_iterator<size_type> first(0);
-  thrust::transform_iterator<make_pair_function,
-                             thrust::counting_iterator<size_type>,
-                             cudf::detail::pair_type>
-    iter(first, pair_func);
+  auto iter = thrust::make_transform_iterator(first, pair_func);
 
   const cudf::size_type probe_table_num_rows = probe_table.num_rows();
 

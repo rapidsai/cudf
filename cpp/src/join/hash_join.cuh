@@ -121,10 +121,7 @@ std::size_t compute_join_output_size(table_device_view build_table,
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
   thrust::counting_iterator<size_type> first(0);
-  thrust::transform_iterator<make_pair_function,
-                             thrust::counting_iterator<size_type>,
-                             cudf::detail::pair_type>
-    iter(first, pair_func);
+  auto iter = thrust::make_transform_iterator(first, pair_func);
 
   size_type size;
   if constexpr (JoinKind == join_kind::LEFT_JOIN) {
