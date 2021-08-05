@@ -175,13 +175,11 @@ class ColumnBase(Column, Serializable):
     def all(self, skipna: bool = True) -> bool:
         # If all entries are null the result is True, including when the column
         # is empty.
-        if self.null_count == self.size:
+        result_col = self.nans_to_nulls() if skipna else self
+
+        if result_col.null_count == result_col.size:
             return True
 
-        # We don't want to call _process_for_reduction if skipna is False
-        # because all is not a reduction where the final output is also
-        # nullified by any nulls in the the input.
-        result_col = self._process_for_reduction(True) if skipna else self
         if isinstance(result_col, ColumnBase):
             return libcudf.reduce.reduce("all", result_col, dtype=np.bool_)
         else:
@@ -189,15 +187,12 @@ class ColumnBase(Column, Serializable):
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
-        if not skipna and self.has_nulls:
+        result_col = self.nans_to_nulls() if skipna else self
+        if not skipna and result_col.has_nulls:
             return True
-        elif skipna and self.null_count == self.size:
+        elif skipna and result_col.null_count == result_col.size:
             return False
 
-        # We don't want to call _process_for_reduction if skipna is False
-        # because any is not a reduction where the final output is also
-        # nullified by any nulls in the the input.
-        result_col = self._process_for_reduction(True) if skipna else self
         if isinstance(result_col, ColumnBase):
             return libcudf.reduce.reduce("any", result_col, dtype=np.bool_)
         else:
