@@ -90,11 +90,11 @@ TEST_F(StringsListsConcatenateTest, ZeroSizeStringsInput)
     auto const expected = STR_COL{"", "", "", ""};
 
     auto results = cudf::strings::join_list_elements(string_lv);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected, verbosity);
 
     auto const separators = STR_COL{"", "", "", ""}.release();
     results               = cudf::strings::join_list_elements(string_lv, separators->view());
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected, verbosity);
   }
 
   // Empty list results in null
