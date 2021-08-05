@@ -305,6 +305,7 @@ add_library(cudf
     src/join/cross_join.cu
     src/join/hash_join.cu
     src/join/join.cu
+    src/join/join_utils.cu
     src/join/semi_join.cu
     src/lists/contains.cu
     src/lists/combine/concatenate_list_elements.cu
