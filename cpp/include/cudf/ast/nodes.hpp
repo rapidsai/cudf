@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include <cudf/ast/detail/linearizer.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/operators.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -26,6 +25,21 @@
 
 namespace cudf {
 namespace ast {
+namespace detail {
+
+// Forward declaration
+class expression_parser;
+/**
+ * @brief A generic node that can be evaluated to return a value.
+ *
+ * This class is a part of a "visitor" pattern with the `linearizer` class.
+ * Nodes inheriting from this class can accept visitors.
+ */
+struct node {
+  virtual cudf::size_type accept(expression_parser& visitor) const = 0;
+};
+
+}  // namespace detail
 
 /**
  * @brief Enum of table references.
@@ -96,10 +110,10 @@ class literal : public detail::node {
    * @param visitor Visitor.
    * @return cudf::size_type Index of device data reference for this instance.
    */
-  cudf::size_type accept(detail::linearizer& visitor) const override;
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
 
  private:
-  const cudf::detail::fixed_width_scalar_device_view_base value;
+  cudf::detail::fixed_width_scalar_device_view_base const value;
 };
 
 /**
@@ -140,7 +154,7 @@ class column_reference : public detail::node {
    * @param table Table used to determine types.
    * @return cudf::data_type
    */
-  cudf::data_type get_data_type(const table_view& table) const
+  cudf::data_type get_data_type(table_view const& table) const
   {
     return table.column(get_column_index()).type();
   }
@@ -152,9 +166,9 @@ class column_reference : public detail::node {
    * @param right_table Right table used to determine types.
    * @return cudf::data_type
    */
-  cudf::data_type get_data_type(const table_view& left_table, const table_view& right_table) const
+  cudf::data_type get_data_type(table_view const& left_table, table_view const& right_table) const
   {
-    const auto table = [&] {
+    auto const table = [&] {
       if (get_table_source() == table_reference::LEFT) {
         return left_table;
       } else if (get_table_source() == table_reference::RIGHT) {
@@ -172,7 +186,7 @@ class column_reference : public detail::node {
    * @param visitor Visitor.
    * @return cudf::size_type Index of device data reference for this instance.
    */
-  cudf::size_type accept(detail::linearizer& visitor) const override;
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
 
  private:
   cudf::size_type column_index;
@@ -230,7 +244,7 @@ class expression : public detail::node {
    *
    * @return std::vector<std::reference_wrapper<const node>>
    */
-  std::vector<std::reference_wrapper<const node>> get_operands() const { return operands; }
+  std::vector<std::reference_wrapper<node const>> get_operands() const { return operands; }
 
   /**
    * @brief Accepts a visitor class.
@@ -238,11 +252,11 @@ class expression : public detail::node {
    * @param visitor Visitor.
    * @return cudf::size_type Index of device data reference for this instance.
    */
-  cudf::size_type accept(detail::linearizer& visitor) const override;
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
 
  private:
-  const ast_operator op;
-  const std::vector<std::reference_wrapper<const node>> operands;
+  ast_operator const op;
+  std::vector<std::reference_wrapper<node const>> const operands;
 };
 
 }  // namespace ast

@@ -706,12 +706,15 @@ class list_scalar : public scalar {
  */
 class struct_scalar : public scalar {
  public:
-  struct_scalar()                           = delete;
-  ~struct_scalar()                          = default;
-  struct_scalar(struct_scalar&& other)      = default;
-  struct_scalar(struct_scalar const& other) = default;
+  struct_scalar()                      = delete;
+  ~struct_scalar()                     = default;
+  struct_scalar(struct_scalar&& other) = default;
   struct_scalar& operator=(struct_scalar const& other) = delete;
   struct_scalar& operator=(struct_scalar&& other) = delete;
+
+  struct_scalar(struct_scalar const& other,
+                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new struct scalar object from table_view.
