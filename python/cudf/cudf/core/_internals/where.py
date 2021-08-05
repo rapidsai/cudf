@@ -242,8 +242,7 @@ def where(
                 )
             else:
                 cond = DataFrame(
-                    {name: cond for name in frame.columns},
-                    columns=frame._column_names,
+                    {name: cond for name in frame._column_names},
                     index=frame.index,
                 )
         elif (
