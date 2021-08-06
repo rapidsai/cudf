@@ -6457,7 +6457,7 @@ class DatetimeProperties(object):
     def is_month_end(self):
         """
         Boolean indicator if the date is the last day of the month.
-        
+
         Returns
         -------
         Series

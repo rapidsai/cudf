@@ -68,6 +68,7 @@ def is_leap_year(Column col):
 
     return Column.from_unique_ptr(move(c_result))
 
+
 def last_day_of_month(Column col):
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()

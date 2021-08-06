@@ -1327,6 +1327,7 @@ def test_is_month_start(data, dtype):
 
     assert_eq(expect, got)
 
+
 @pytest.mark.parametrize(
     "data",
     [
