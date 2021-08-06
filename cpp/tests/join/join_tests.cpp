@@ -1426,11 +1426,16 @@ TEST_F(JoinDictionaryTest, InnerJoinNoNulls)
                                                  result_view.column(3),
                                                  decoded4->view(),
                                                  result_view.column(5)});
+  auto result_sort_order = cudf::sorted_order(cudf::table_view(result_decoded));
+  auto sorted_result     = cudf::gather(cudf::table_view(result_decoded), *result_sort_order);
 
-  auto g0   = cudf::table_view({col0_0, col0_1_w, col0_2});
-  auto g1   = cudf::table_view({col1_0, col1_1_w, col1_2});
-  auto gold = cudf::inner_join(g0, g1, {0, 1}, {0, 1});
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*gold, cudf::table_view(result_decoded));
+  auto g0              = cudf::table_view({col0_0, col0_1_w, col0_2});
+  auto g1              = cudf::table_view({col1_0, col1_1_w, col1_2});
+  auto gold            = cudf::inner_join(g0, g1, {0, 1}, {0, 1});
+  auto gold_sort_order = cudf::sorted_order(gold->view());
+  auto sorted_gold     = cudf::gather(gold->view(), *gold_sort_order);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinDictionaryTest, InnerJoinWithNulls)
