@@ -124,6 +124,25 @@ def test_index_comparision():
     assert rg[:-1].equals(gi[:-1])
 
 
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda x: x.min(),
+        lambda x: x.max(),
+        lambda x: x.sum(),
+        lambda x: x.mean(),
+        lambda x: x.any(),
+        lambda x: x.all(),
+        lambda x: x.prod(),
+    ],
+)
+def test_reductions(func):
+    x = np.asarray([4, 5, 6, 10])
+    idx = Int64Index(np.asarray([4, 5, 6, 10]))
+
+    assert func(x) == func(idx)
+
+
 def test_name():
     idx = Int64Index(np.asarray([4, 5, 6, 10]), name="foo")
     assert idx.name == "foo"
