@@ -444,7 +444,7 @@ hash_join::hash_join_impl::probe_join_indices(cudf::table_view const& probe,
   auto join_indices = cudf::detail::probe_join_hash_table<JoinKind>(
     *build_table, *probe_table, _hash_table, compare_nulls, output_size, stream, mr);
 
-  if (JoinKind == cudf::detail::join_kind::FULL_JOIN) {
+  if constexpr (JoinKind == cudf::detail::join_kind::FULL_JOIN) {
     auto complement_indices = detail::get_left_join_indices_complement(
       join_indices.second, probe.num_rows(), _build.num_rows(), stream, mr);
     join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
