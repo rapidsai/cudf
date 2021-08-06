@@ -19,26 +19,26 @@ REPODIR=$(cd $(dirname $0); pwd)
 
 VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h"
 HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [-l] [--cmake-args=\"<args>\"]
-   clean                     - remove all existing build artifacts and configuration (start
-                               over)
-   libcudf                   - build the cudf C++ code only
-   cudf                      - build the cudf Python package
-   dask_cudf                 - build the dask_cudf Python package
-   benchmarks                - build benchmarks
-   tests                     - build tests
-   libcudf_kafka             - build the libcudf_kafka C++ code only
-   cudf_kafka                - build the cudf_kafka Python package
-   custreamz                 - build the custreamz Python package
-   -v                        - verbose build mode
-   -g                        - build for debug
-   -n                        - no install step
-   -l                        - build legacy tests
-   --allgpuarch              - build for all supported GPU architectures
-   --disable_nvtx            - disable inserting NVTX profiling ranges
-   --show_depr_warn          - show cmake deprecation warnings
-   --ptds                    - enable per-thread default stream
-   --cmake-args=\"<args>\"   - pass arbitrary list of CMake configuration options
-   -h | --h[elp]             - print this text
+   clean			 - remove all existing build artifacts and configuration (start
+                                   over)
+   libcudf			 - build the cudf C++ code only
+   cudf				 - build the cudf Python package
+   dask_cudf			 - build the dask_cudf Python package
+   benchmarks			 - build benchmarks
+   tests			 - build tests
+   libcudf_kafka		 - build the libcudf_kafka C++ code only
+   cudf_kafka			 - build the cudf_kafka Python package
+   custreamz			 - build the custreamz Python package
+   -v				 - verbose build mode
+   -g				 - build for debug
+   -n				 - no install step
+   -l				 - build legacy tests
+   --allgpuarch			 - build for all supported GPU architectures
+   --disable_nvtx		 - disable inserting NVTX profiling ranges
+   --show_depr_warn		 - show cmake deprecation warnings
+   --ptds			 - enable per-thread default stream
+   --cmake-args=\\\"<args>\\\"	 - pass arbitrary list of CMake configuration options (escape all quotes in argument)
+   -h | --h[elp]		 - print this text
 
    default action (no args) is to build and install 'libcudf' then 'cudf'
    then 'dask_cudf' targets
