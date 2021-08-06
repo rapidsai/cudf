@@ -146,8 +146,6 @@ struct scan_tile_state_callback {
       _tile_state.set_inclusive_prefix(_tile_idx, _temp_storage.exclusive_prefix + block_aggregate);
     }
 
-    __syncthreads();  // TODO: remove if unnecessary.
-
     return _temp_storage.exclusive_prefix;
   }
 

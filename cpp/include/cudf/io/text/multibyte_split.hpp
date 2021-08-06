@@ -21,7 +21,6 @@
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 
-#include <iostream>
 #include <memory>
 
 namespace cudf {
