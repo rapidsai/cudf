@@ -6453,6 +6453,24 @@ class DatetimeProperties(object):
         """
         return (self.day == 1).fillna(False)
 
+    @property
+    def is_month_end(self):
+        """
+        Boolean indicator if the date is the last day of the month.
+        
+        Returns
+        -------
+        Series
+        Booleans indicating if dates are the last day of the month.
+        """
+        last_day = libcudf.datetime.last_day_of_month(self.series._column)
+        last_day = Series._from_data(
+            ColumnAccessor({None: last_day}),
+            index=self.series._index,
+            name=self.series.name,
+        )
+        return (self.day == last_day.dt.day).fillna(False)
+
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(

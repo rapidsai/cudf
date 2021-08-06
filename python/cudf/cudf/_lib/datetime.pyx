@@ -67,3 +67,12 @@ def is_leap_year(Column col):
         c_result = move(libcudf_datetime.is_leap_year(col_view))
 
     return Column.from_unique_ptr(move(c_result))
+
+def last_day_of_month(Column col):
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        c_result = move(libcudf_datetime.last_day_of_month(col_view))
+
+    return Column.from_unique_ptr(move(c_result))
