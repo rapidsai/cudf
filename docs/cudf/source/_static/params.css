@@ -49,3 +49,7 @@ table.io-supported-types-table thead{
   --pst-color-toc-link-active: var(--pst-color-active-navigation);
 
 }
+
+.table td, .table th {
+    border: 1px solid #dee2e6;
+}
