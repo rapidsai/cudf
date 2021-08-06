@@ -846,6 +846,11 @@ class Series(SingleColumnFrame, Serializable):
         4       5
         dtype: int64
         """
+        warnings.warn(
+            "Series.set_mask is deprecated and will be removed "
+            "in the future.",
+            DeprecationWarning,
+        )
         col = self._column.set_mask(mask)
         return self._copy_construct(data=col)
 
