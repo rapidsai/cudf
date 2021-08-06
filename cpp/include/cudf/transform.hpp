@@ -59,6 +59,11 @@ std::unique_ptr<column> generalized_masked_op(
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+std::unique_ptr<column> ewm(
+  column_view input,
+  double alpha,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
  * preserving existing null values and also returns new null_count.
