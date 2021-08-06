@@ -1490,28 +1490,27 @@ class Frame(libcudf.table.Table):
             )
 
         data = self
-        columns = {}
 
         if not isinstance(data._index, cudf.RangeIndex):
             perm_sort = data._index.argsort()
             data = data._gather(perm_sort)
 
         interpolator = cudf.core.algorithms.get_column_interpolator(method)
+        columns = {}
         for colname, col in data._data.items():
             if col.nullable:
                 col = col.astype("float64").fillna(np.nan)
 
             # Interpolation methods may or may not need the index
-            result = interpolator(col, index=data._index)
-            columns[colname] = result
+            columns[colname] = interpolator(col, index=data._index)
 
-        result = self.__class__(ColumnAccessor(columns), index=data._index)
+        result = self._from_data(columns, index=data._index)
 
-        if not isinstance(data._index, cudf.RangeIndex):
-            # that which was once sorted, now is not
-            result = result._gather(perm_sort.argsort())
-
-        return result
+        return (
+            result
+            if isinstance(data._index, cudf.RangeIndex)
+            else result._gather(perm_sort.argsort())
+        )
 
     def _quantiles(
         self,

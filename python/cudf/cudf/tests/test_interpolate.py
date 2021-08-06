@@ -16,7 +16,10 @@ from cudf.testing._utils import assert_eq, assert_exceptions_equal
 @pytest.mark.parametrize("method", ["linear"])
 @pytest.mark.parametrize("axis", [0])
 def test_interpolate_dataframe(data, method, axis):
-    # doesn't seem to work with NAs just yet
+    # Pandas interpolate methods do not seem to work
+    # with nullable dtypes yet, so this method treats
+    # NAs as NaNs
+    # https://github.com/pandas-dev/pandas/issues/40252
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
