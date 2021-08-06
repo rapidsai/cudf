@@ -596,11 +596,18 @@ def test_groupby_unique_lists():
     )
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [], "b": []},
+        {"a": [2, 1, 2, 1, 1, 3], "b": [None, 1, 2, None, 2, None]},
+        {"a": [None], "b": [None]},
+        {"a": [2, 1, 1], "b": [None, 1, 0], "c": [None, 0, 1]},
+    ],
+)
 @pytest.mark.parametrize("agg", ["first", "last"])
-def test_groupby_first_last(agg):
-    pdf = pd.DataFrame(
-        {"a": [2, 1, 2, 1, 1, 3], "b": [None, 1, 2, None, 2, None]}
-    )
+def test_groupby_first_last(data, agg):
+    pdf = pd.DataFrame(data)
     gdf = cudf.DataFrame.from_pandas(pdf)
 
     ddf = dd.from_pandas(pdf, npartitions=2)
