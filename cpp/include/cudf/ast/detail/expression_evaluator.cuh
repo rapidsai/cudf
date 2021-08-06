@@ -457,17 +457,16 @@ struct expression_evaluator {
   {
     cudf::size_type operator_source_index{0};
     for (cudf::size_type operator_index = 0; operator_index < plan.operators.size();
-         operator_index++) {
+         ++operator_index) {
       // Execute operator
       auto const op    = plan.operators[operator_index];
       auto const arity = ast_operator_arity(op);
       if (arity == 1) {
         // Unary operator
         auto const input =
-          plan.data_references[plan.operator_source_indices[operator_source_index]];
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto const output =
-          plan.data_references[plan.operator_source_indices[operator_source_index + 1]];
-        operator_source_index += arity + 1;
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto input_row_index =
           input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
         type_dispatcher(input.data_type,
@@ -480,12 +479,12 @@ struct expression_evaluator {
                         op);
       } else if (arity == 2) {
         // Binary operator
-        auto const lhs = plan.data_references[plan.operator_source_indices[operator_source_index]];
+        auto const lhs =
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto const rhs =
-          plan.data_references[plan.operator_source_indices[operator_source_index + 1]];
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto const output =
-          plan.data_references[plan.operator_source_indices[operator_source_index + 2]];
-        operator_source_index += arity + 1;
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
         type_dispatcher(lhs.data_type,
                         detail::single_dispatch_binary_operator{},
                         *this,
