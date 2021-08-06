@@ -19,10 +19,9 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/device_uvector.hpp>
+#include <hash/concurrent_unordered_multimap.cuh>
 
 #include <cuco/static_multimap.cuh>
-#include <hash/concurrent_unordered_multimap.cuh>
 
 #include <limits>
 
@@ -48,26 +47,7 @@ using row_equality = cudf::row_equality_comparator<true>;
 
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
 
-inline bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type)
-{
-  // If there is nothing to join, then send empty table with all columns
-  if (left.is_empty() || right.is_empty()) { return true; }
-
-  // If left join and the left table is empty, return immediately
-  if ((join_kind::LEFT_JOIN == join_type) && (0 == left.num_rows())) { return true; }
-
-  // If Inner Join and either table is empty, return immediately
-  if ((join_kind::INNER_JOIN == join_type) && ((0 == left.num_rows()) || (0 == right.num_rows()))) {
-    return true;
-  }
-
-  // If left semi join (contains) and right table is empty,
-  // return immediately
-  if ((join_kind::LEFT_SEMI_JOIN == join_type) && (0 == right.num_rows())) { return true; }
-
-  return false;
-}
+bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);
 
 }  // namespace detail
-
 }  // namespace cudf

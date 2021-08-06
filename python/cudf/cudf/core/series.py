@@ -7,7 +7,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 from uuid import uuid4
 
 import cupy
@@ -267,28 +267,18 @@ class Series(SingleColumnFrame, Serializable):
         self._index = RangeIndex(len(data)) if index is None else index
 
     @classmethod
-    def _from_table(cls, table, index=None):
-        name, data = next(iter(table._data.items()))
-        if index is None:
-            if table._index is not None:
-                index = Index._from_table(table._index)
-        return cls(data=data, index=index, name=name)
-
-    @classmethod
     def _from_data(
         cls,
-        data: ColumnAccessor,
-        index: Optional[Index] = None,
+        data: Mapping,
+        index: Optional[BaseIndex] = None,
         name: Any = None,
     ) -> Series:
         """
         Construct the Series from a ColumnAccessor
         """
-        out = cls.__new__(cls)
-        out._data = data
-        out._index = index if index is not None else RangeIndex(data.nrows)
-        if name is not None:
-            out.name = name
+        out: Series = super()._from_data(data, index, name)
+        if index is None:
+            out._index = RangeIndex(out._data.nrows)
         return out
 
     def __contains__(self, item):
@@ -855,6 +845,11 @@ class Series(SingleColumnFrame, Serializable):
         4       5
         dtype: int64
         """
+        warnings.warn(
+            "Series.set_mask is deprecated and will be removed "
+            "in the future.",
+            DeprecationWarning,
+        )
         col = self._column.set_mask(mask)
         return self._copy_construct(data=col)
 
