@@ -155,8 +155,13 @@ probe_join_hash_table(cudf::table_device_view build_table,
 
   if constexpr (JoinKind == cudf::detail::join_kind::FULL_JOIN or
                 JoinKind == cudf::detail::join_kind::LEFT_JOIN) {
-    hash_table.pair_retrieve_outer(
+    [[maybe_unused]] auto const actual_size = hash_table.pair_retrieve_outer(
       iter, iter + probe_table_num_rows, out1_zip, out2_zip, equality, stream.value());
+
+    if constexpr (JoinKind == cudf::detail::join_kind::FULL_JOIN) {
+      left_indices->resize(actual_size, stream);
+      right_indices->resize(actual_size, stream);
+    }
   } else {
     hash_table.pair_retrieve(
       iter, iter + probe_table_num_rows, out1_zip, out2_zip, equality, stream.value());
