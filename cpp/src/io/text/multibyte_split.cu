@@ -340,7 +340,14 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               rmm::cuda_stream_pool& stream_pool)
 {
   CUDF_FUNC_RANGE();
-  auto const trie  = cudf::io::text::detail::trie::create(delimiters, stream);
+  auto const trie = cudf::io::text::detail::trie::create(delimiters, stream);
+
+  CUDF_EXPECTS(trie.max_duplicate_tokens() <= multistate::max_segments,
+               "delimiters must be representable by a trie with no more than 7 duplicate tokens");
+
+  CUDF_EXPECTS(trie.size() <= multistate_segment::max_states,
+               "delimiters must be representable by a trie with no more than 16 unique states");
+
   auto concurrency = 2;
   // must be at least 32 when using warp-reduce on partials
   // must be at least 1 more than max possible concurrent tiles
