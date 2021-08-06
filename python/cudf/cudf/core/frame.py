@@ -1468,7 +1468,7 @@ class Frame(libcudf.table.Table):
             an x-axis. Unsorted indices can lead to erroneous results.
         axis : int, default 0
             Axis to interpolate along. Currently,
-            only 'axis=0' is supprted.
+            only 'axis=0' is supported.
         inplace : bool, default False
             Update the data in place if possible.
 
