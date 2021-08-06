@@ -31,6 +31,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/optional.h>
+
 namespace cudf {
 
 namespace ast {
@@ -288,7 +290,7 @@ struct expression_evaluator {
   __device__ possibly_null_value_t<Element, has_nulls> resolve_input(
     detail::device_data_reference device_data_reference,
     cudf::size_type left_row_index,
-    cudf::size_type right_row_index = -1) const
+    thrust::optional<cudf::size_type> right_row_index = {}) const
   {
     auto const data_index = device_data_reference.data_index;
     auto const ref_type   = device_data_reference.reference_type;
@@ -300,9 +302,12 @@ struct expression_evaluator {
       // If we have nullable data, return an empty nullable type with no value if the data is null.
       auto const& table =
         (device_data_reference.table_source == table_reference::LEFT) ? left : right;
+      // Note that the code below assumes that a right index has been passed in
+      // any case where device_data_reference.table_source == table_reference::RIGHT.
+      // Otherwise, behavior is undefined.
       auto const row_index = (device_data_reference.table_source == table_reference::LEFT)
                                ? left_row_index
-                               : right_row_index;
+                               : *right_row_index;
       if constexpr (has_nulls) {
         return table.column(data_index).is_valid(row_index)
                  ? ReturnType(table.column(data_index).element<Element>(row_index))
@@ -330,7 +335,7 @@ struct expression_evaluator {
   __device__ possibly_null_value_t<Element, has_nulls> resolve_input(
     detail::device_data_reference device_data_reference,
     cudf::size_type left_row_index,
-    cudf::size_type right_row_index = -1) const
+    thrust::optional<cudf::size_type> right_row_index = {}) const
   {
     cudf_assert(false && "Unsupported type in resolve_input.");
     // Unreachable return used to silence compiler warnings.

@@ -291,7 +291,6 @@ conditional_full_join(table_view left,
                       table_view right,
                       ast::expression binary_predicate,
                       null_equality compare_nulls,
-                      std::optional<std::size_t> output_size,
                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -300,7 +299,7 @@ conditional_full_join(table_view left,
                                   binary_predicate,
                                   compare_nulls,
                                   detail::join_kind::FULL_JOIN,
-                                  output_size,
+                                  {},
                                   rmm::cuda_stream_default,
                                   mr);
 }

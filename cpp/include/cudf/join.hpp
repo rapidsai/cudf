@@ -781,8 +781,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 conditional_full_join(table_view left,
                       table_view right,
                       ast::expression binary_predicate,
-                      null_equality compare_nulls            = null_equality::EQUAL,
-                      std::optional<std::size_t> output_size = {},
+                      null_equality compare_nulls         = null_equality::EQUAL,
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
