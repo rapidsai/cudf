@@ -100,7 +100,7 @@ cudf::size_type expression_parser::visit(column_reference const& expr)
   // Increment the node index
   _node_count++;
   // Resolve node type
-  auto const data_type = expr.get_table_source() == table_reference::LEFT
+  auto const data_type = (expr.get_table_source() == table_reference::LEFT)
                            ? expr.get_data_type(_left)
                            : expr.get_data_type(_right);
   // Push data reference

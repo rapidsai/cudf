@@ -404,6 +404,20 @@ TYPED_TEST(ConditionalInnerJoinTest, TestComplexConditionMultipleColumns)
              {{4, 0}, {5, 0}, {6, 0}, {7, 0}});
 };
 
+TYPED_TEST(ConditionalInnerJoinTest, TestSymmetry)
+{
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_1, col_ref_0);
+  auto expression_reverse =
+    cudf::ast::expression(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_1);
+
+  this->test(
+    {{0, 1, 2}}, {{1, 2, 3}}, expression, {{0, 0}, {0, 1}, {0, 2}, {1, 1}, {1, 2}, {2, 2}});
+  this->test(
+    {{0, 1, 2}}, {{1, 2, 3}}, expression_reverse, {{0, 0}, {0, 1}, {0, 2}, {1, 1}, {1, 2}, {2, 2}});
+};
+
 TYPED_TEST(ConditionalInnerJoinTest, TestCompareRandomToHash)
 {
   // Generate columns of 10 repeats of the integer range [0, 10), then merge
