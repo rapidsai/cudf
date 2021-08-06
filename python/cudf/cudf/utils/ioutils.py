@@ -1006,6 +1006,18 @@ delimiter : string, default None, optional delimiter to insert into the
 doc_kafka_datasource = docfmt_partial(docstring=_docstring_kafka_datasource)
 
 
+_docstring_text_datasource = """
+Configuration object for a text Datasource
+
+Parameters
+----------
+delimiter : string, default None, The delimiter that should be used
+    for splitting text chunks into seperate cudf column rows.
+
+"""
+doc_read_text = docfmt_partial(docstring=_docstring_text_datasource)
+
+
 def is_url(url):
     """Check if a string is a valid URL to a network location.
 

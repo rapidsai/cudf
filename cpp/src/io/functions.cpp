@@ -26,10 +26,12 @@
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/detail/orc.hpp>
 #include <cudf/io/detail/parquet.hpp>
+#include <cudf/io/detail/text.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/text.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -103,6 +105,12 @@ chunked_parquet_writer_options_builder chunked_parquet_writer_options::builder(
   sink_info const& sink)
 {
   return chunked_parquet_writer_options_builder(sink);
+}
+
+// Returns builder for text_reader_options
+text_reader_options_builder text_reader_options::builder(source_info const& src)
+{
+  return text_reader_options_builder{src};
 }
 
 namespace {
@@ -433,6 +441,19 @@ std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::close(
 {
   CUDF_FUNC_RANGE();
   return writer->close(column_chunks_file_path);
+}
+
+using namespace cudf::io::detail::text;
+namespace detail_text = cudf::io::detail::text;
+
+table_with_metadata read_text(text_reader_options const& options,
+                              rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  auto reader =
+    make_reader<detail_text::reader>(options.get_source(), options, rmm::cuda_stream_default, mr);
+
+  return reader->read(options);
 }
 
 }  // namespace io
