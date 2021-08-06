@@ -218,14 +218,13 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
-  // TODO: Remove support for full joins.
-  join_kind KernelJoinKind = JoinKind == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : JoinKind;
+  assert(JoinKind != join_kind::FULL_JOIN);
   if (has_nulls) {
     compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
-        KernelJoinKind,
+        JoinKind,
         compare_nulls,
         parser.device_expression_data,
         size.data());
@@ -234,7 +233,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
-        KernelJoinKind,
+        JoinKind,
         compare_nulls,
         parser.device_expression_data,
         size.data());
@@ -374,22 +373,6 @@ std::size_t conditional_left_join_size(table_view left,
                                                       binary_predicate,
                                                       compare_nulls,
                                                       detail::join_kind::LEFT_JOIN,
-                                                      rmm::cuda_stream_default,
-                                                      mr);
-}
-
-std::size_t conditional_full_join_size(table_view left,
-                                       table_view right,
-                                       ast::expression binary_predicate,
-                                       null_equality compare_nulls,
-                                       rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::compute_conditional_join_output_size(left,
-                                                      right,
-                                                      binary_predicate,
-                                                      compare_nulls,
-                                                      detail::join_kind::FULL_JOIN,
                                                       rmm::cuda_stream_default,
                                                       mr);
 }

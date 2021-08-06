@@ -917,31 +917,6 @@ std::size_t conditional_left_join_size(
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
- * conditional full join between the specified tables where the predicate
- * evaluates to true.
- *
- * If the provided predicate returns NULL for a pair of rows
- * (left, right), that pair is not included in the output.
- *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
- *
- * @param left The left table
- * @param right The right table
- * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether the equality operator returns true or false for two nulls.
- * @param mr Device memory resource used to allocate the returned table and columns' device memory
- *
- * @return The size that would result from performing the requested join.
- */
-std::size_t conditional_full_join_size(
-  table_view left,
-  table_view right,
-  ast::expression binary_predicate,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Returns the exact number of matches (rows) when performing a
  * conditional left semi join between the specified tables where the predicate
  * evaluates to true.
  *
