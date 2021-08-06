@@ -56,44 +56,6 @@ TYPED_TEST(groupby_sum_test, basic)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
-TYPED_TEST(groupby_sum_test, basic_struct)
-{
-  using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, aggregation::SUM>;
-
-  auto child       = fixed_width_column_wrapper<K>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-  auto struct_keys = structs_column_wrapper{child};
-  fixed_width_column_wrapper<V> vals{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-
-  auto expect_child       = fixed_width_column_wrapper<K>{1, 2, 3};
-  auto expect_struct_keys = structs_column_wrapper{expect_child};
-  fixed_width_column_wrapper<R> expect_vals{9, 19, 17};
-
-  std::cout << "Struct input to groupby (keys)!" << std::endl;
-  print(struct_keys);
-
-  std::cout << "Expected output (grouped) struct keys!" << std::endl;
-  print(expect_struct_keys);
-
-  // auto agg = cudf::make_sum_aggregation();
-  // test_single_agg(struct_keys, vals, expect_struct_keys, expect_vals, std::move(agg));
-
-  auto requests = std::vector<groupby::aggregation_request>{};
-  requests.emplace_back(groupby::aggregation_request{});
-  auto& agg_request  = requests.front();
-  agg_request.values = vals;
-  agg_request.aggregations.push_back(cudf::make_sum_aggregation());
-  auto gby = groupby::groupby{table_view{{struct_keys}}, null_policy::EXCLUDE, sorted::NO, {}, {}};
-  auto result = gby.aggregate(requests);
-
-  std::cout << "Actual output (grouped) struct keys: " << std::endl;
-  print(result.first->view().column(0));
-
-  // auto agg2 = cudf::make_sum_aggregation();
-  // test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2),
-  // force_use_sort_impl::YES);
-}
-
 TYPED_TEST(groupby_sum_test, empty_cols)
 {
   using V = TypeParam;
