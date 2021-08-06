@@ -169,7 +169,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     std::sort(result_pairs.begin(), result_pairs.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
 
-    EXPECT_TRUE(std::equal(result_pairs.begin(), result_pairs.end(), expected_outputs.begin()));
+    EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
   }
 
   void test_nulls(std::vector<std::pair<std::vector<T>, std::vector<bool>>> left_data,
@@ -196,7 +196,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     std::sort(result_pairs.begin(), result_pairs.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
 
-    EXPECT_TRUE(std::equal(result_pairs.begin(), result_pairs.end(), expected_outputs.begin()));
+    EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
   }
 
   /*
@@ -242,7 +242,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     thrust::sort(thrust::device, reference_pairs.begin(), reference_pairs.end());
 
     EXPECT_TRUE(thrust::equal(
-      thrust::device, result_pairs.begin(), result_pairs.end(), reference_pairs.begin()));
+      thrust::device, reference_pairs.begin(), reference_pairs.end(), result_pairs.begin()));
   }
 
   /**
@@ -259,9 +259,9 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
    * It should be a simply forwarding of arguments to the appropriate cudf
    * conditional join size computation API.
    */
-  virtual size_t join_size(cudf::table_view left,
-                           cudf::table_view right,
-                           cudf::ast::expression predicate) = 0;
+  virtual std::size_t join_size(cudf::table_view left,
+                                cudf::table_view right,
+                                cudf::ast::expression predicate) = 0;
 
   /**
    * This method must be implemented by subclasses for specific types of joins.
@@ -654,9 +654,9 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
    * It should be a simply forwarding of arguments to the appropriate cudf
    * conditional join size computation API.
    */
-  virtual size_t join_size(cudf::table_view left,
-                           cudf::table_view right,
-                           cudf::ast::expression predicate) = 0;
+  virtual std::size_t join_size(cudf::table_view left,
+                                cudf::table_view right,
+                                cudf::ast::expression predicate) = 0;
 
   /**
    * This method must be implemented by subclasses for specific types of joins.
