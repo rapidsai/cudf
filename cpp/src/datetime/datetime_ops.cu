@@ -22,6 +22,7 @@
 #include <cudf/detail/datetime.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -211,31 +212,37 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
 }
 
 struct add_calendrical_months_functor {
-  column_view timestamp_column;
-  column_view months_column;
-  mutable_column_view output;
-
-  add_calendrical_months_functor(column_view tsc, column_view mc, mutable_column_view out)
-    : timestamp_column(tsc), months_column(mc), output(out)
-  {
-  }
-
-  template <typename Element>
-  typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void> operator()(
-    rmm::cuda_stream_view stream) const
+  template <typename Element, typename... Args>
+  typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, std::unique_ptr<column>>
+  operator()(Args&&...) const
   {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
-  template <typename Timestamp>
-  typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
-    rmm::cuda_stream_view stream) const
+  template <typename Timestamp, typename MonthIterator>
+  typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, std::unique_ptr<column>>
+  operator()(column_view timestamp_column,
+             MonthIterator months_begin,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr) const
   {
+    auto size            = timestamp_column.size();
+    auto output_col_type = timestamp_column.type();
+
+    // Return an empty column if source column is empty
+    if (size == 0) return make_empty_column(output_col_type);
+
+    auto output_null_mask =
+      cudf::detail::create_null_mask(size, mask_state::UNALLOCATED, stream, mr);
+    auto output = make_fixed_width_column(
+      output_col_type, size, std::move(output_null_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+    auto output_mview = output->mutable_view();
+
     thrust::transform(rmm::exec_policy(stream),
                       timestamp_column.begin<Timestamp>(),
                       timestamp_column.end<Timestamp>(),
-                      months_column.begin<int16_t>(),
-                      output.begin<Timestamp>(),
+                      months_begin,
+                      output_mview.begin<Timestamp>(),
                       [] __device__(auto time_val, auto months_val) {
                         using namespace cuda::std::chrono;
                         using duration_m = duration<int32_t, months::period>;
@@ -254,6 +261,7 @@ struct add_calendrical_months_functor {
                         // Put back the time component to the date
                         return sys_days{ymd} + (time_val - days_since_epoch);
                       });
+    return output;
   }
 };
 
@@ -267,23 +275,39 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
                "Months column type should be INT16");
   CUDF_EXPECTS(timestamp_column.size() == months_column.size(),
                "Timestamp and months column should be of the same size");
-  auto size            = timestamp_column.size();
-  auto output_col_type = timestamp_column.type();
 
-  // Return an empty column if source column is empty
-  if (size == 0) return make_empty_column(output_col_type);
+  auto output = type_dispatcher(timestamp_column.type(),
+                                add_calendrical_months_functor{},
+                                timestamp_column,
+                                months_column.begin<int16_t>(),
+                                stream,
+                                mr);
 
-  auto output_col_mask =
-    cudf::detail::bitmask_and(table_view({timestamp_column, months_column}), stream, mr);
-  auto output = make_fixed_width_column(
-    output_col_type, size, std::move(output_col_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
-
-  auto launch = add_calendrical_months_functor{
-    timestamp_column, months_column, static_cast<mutable_column_view>(*output)};
-
-  type_dispatcher(timestamp_column.type(), launch, stream);
-
+  auto output_null_mask =
+    cudf::detail::bitmask_and(table_view{{timestamp_column, months_column}}, stream, mr);
+  output->set_null_mask(std::move(output_null_mask));
   return output;
+}
+
+std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_column,
+                                               scalar const& months,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(is_timestamp(timestamp_column.type()), "Column type should be timestamp");
+  CUDF_EXPECTS(months.type() == data_type{type_id::INT16}, "Months type should be INT16");
+
+  auto typed_slr = static_cast<numeric_scalar<int16_t> const*>(&months);
+
+  return typed_slr->is_valid(stream)
+           ? make_timestamp_column(
+               timestamp_column.type(), timestamp_column.size(), mask_state::ALL_NULL, stream, mr)
+           : type_dispatcher(timestamp_column.type(),
+                             add_calendrical_months_functor{},
+                             timestamp_column,
+                             thrust::make_constant_iterator(typed_slr->value(stream)),
+                             stream,
+                             mr);
 }
 
 std::unique_ptr<column> extract_year(column_view const& column,
@@ -454,6 +478,14 @@ std::unique_ptr<cudf::column> add_calendrical_months(cudf::column_view const& ti
   CUDF_FUNC_RANGE();
   return detail::add_calendrical_months(
     timestamp_column, months_column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<cudf::column> add_calendrical_months(cudf::column_view const& timestamp_column,
+                                                     cudf::scalar const& months,
+                                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::add_calendrical_months(timestamp_column, months, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> is_leap_year(column_view const& column, rmm::mr::device_memory_resource* mr)
