@@ -2,9 +2,8 @@
 API reference
 =============
 
-This is a simple demonstration site to show off a few visual
-and structural elements of the theme. Click the sections on
-the left sidebar to see how various elements look on this theme.
+This page provides a list of all publicly accessible modules, methods and classes through
+``cudf.*`` namespace.
 
 .. toctree::
     :maxdepth: 2
