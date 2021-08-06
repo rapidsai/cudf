@@ -53,7 +53,6 @@ from cudf.api.types import (
     is_scalar,
     is_string_dtype,
     is_struct_dtype,
-    pandas_dtype,
 )
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
@@ -889,7 +888,7 @@ class ColumnBase(Column, Serializable):
             return self.as_numerical_column(dtype, **kwargs)
         elif is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
-        elif pandas_dtype(dtype).type in {
+        elif cudf.dtype(dtype).type in {
             np.str_,
             np.object_,
             str,
@@ -1299,7 +1298,7 @@ def column_empty(
 ) -> ColumnBase:
     """Allocate a new column like the given row_count and dtype.
     """
-    dtype = pandas_dtype(dtype)
+    dtype = cudf.dtype(dtype)
     children = ()  # type: Tuple[ColumnBase, ...]
 
     if is_struct_dtype(dtype):
@@ -1364,7 +1363,7 @@ def build_column(
     offset : int, optional
     children : tuple, optional
     """
-    dtype = pandas_dtype(dtype)
+    dtype = cudf.dtype(dtype)
 
     if _is_non_decimal_numeric_dtype(dtype):
         assert data is not None
@@ -1769,9 +1768,9 @@ def as_column(
         col = ColumnBase.from_arrow(arbitrary)
         if isinstance(arbitrary, pa.NullArray):
             if type(dtype) == str and dtype == "empty":
-                new_dtype = pandas_dtype(arbitrary.type.to_pandas_dtype())
+                new_dtype = np.dtype(arbitrary.type.to_pandas_dtype())
             else:
-                new_dtype = pandas_dtype(dtype)
+                new_dtype = np.dtype(dtype)
             col = col.astype(new_dtype)
 
         return col
@@ -1865,7 +1864,7 @@ def as_column(
             arbitrary = np.ascontiguousarray(arbitrary)
 
         if dtype is not None:
-            arbitrary = arbitrary.astype(dtype)
+            arbitrary = arbitrary.astype(np.dtype(dtype))
 
         if arb_dtype.kind == "M":
 
@@ -2034,12 +2033,11 @@ def as_column(
                         return cudf.core.column.Decimal32Column.from_arrow(
                             data
                         )
-                    dtype = pd.api.types.pandas_dtype(dtype)
-                    np_type = cudf.dtype(dtype).type
+                    np_type = np.dtype(dtype).type
                     if np_type == np.bool_:
                         pa_type = pa.bool_()
                     else:
-                        pa_type = np_to_pa_dtype(cudf.dtype(dtype))
+                        pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(
                     pa.array(
                         arbitrary,
@@ -2280,7 +2278,7 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
 def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
-        dtype = pandas_dtype(None)
+        dtype = cudf.dtype(None)
         return column_empty(0, dtype=dtype, masked=True)
 
     # If all columns are `NumericalColumn` with different dtypes,

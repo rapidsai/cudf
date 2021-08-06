@@ -18,6 +18,7 @@ from mimesis import Generic
 from pyarrow import parquet as pq
 
 import cudf
+from cudf.utils.dtypes import np_to_pa_dtype
 
 
 class ColumnParameters:
@@ -94,6 +95,7 @@ def _write(tbl, path, format):
 def _generate_column(column_params, num_rows):
     # If cardinality is specified, we create a set to sample from.
     # Otherwise, we simply use the given generator to generate each value.
+
     if column_params.cardinality is not None:
         # Construct set of values to sample from where
         # set size = cardinality
@@ -127,7 +129,7 @@ def _generate_column(column_params, num_rows):
         if hasattr(column_params.dtype, "to_arrow"):
             arrow_type = column_params.dtype.to_arrow()
         elif column_params.dtype is not None:
-            arrow_type = pa.from_numpy_dtype(column_params.dtype)
+            arrow_type = np_to_pa_dtype(cudf.dtype(column_params.dtype))
         else:
             arrow_type = None
 
@@ -227,15 +229,15 @@ def get_dataframe(parameters, use_threads):
         ):
             arrow_type = pa.dictionary(
                 index_type=pa.int64(),
-                value_type=pa.from_numpy_dtype(
-                    type(next(iter(column_params.generator)))
+                value_type=np_to_pa_dtype(
+                    cudf.dtype(type(next(iter(column_params.generator))))
                 ),
             )
         elif hasattr(column_params.dtype, "to_arrow"):
             arrow_type = column_params.dtype.to_arrow()
         else:
-            arrow_type = pa.from_numpy_dtype(
-                type(next(iter(column_params.generator)))
+            arrow_type = np_to_pa_dtype(
+                cudf.dtype(type(next(iter(column_params.generator))))
                 if column_params.dtype is None
                 else column_params.dtype
             )

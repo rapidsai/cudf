@@ -28,35 +28,52 @@ from cudf.core.dtypes import (  # noqa: F401
 
 
 def dtype(arbitrary):
+    """
+    Returns the cuDF-supported dtype corresponding to `arbitrary`
+
+    Inputs
+    ------
+    arbitrary: dtype or scalar-like
+
+    Returns
+    -------
+    dtype: the cuDF-supported dtype that best matches `arbitrary`
+    """
+    # first, try interpreting arbitrary as a NumPy dtype that we support:
     try:
         np_dtype = np.dtype(arbitrary)
         if np_dtype.name == "float16":
             np_dtype = np.dtype("float32")
         elif np_dtype.kind in ("OU"):
             np_dtype = np.dtype("object")
-        elif np_dtype.str == "<m8":
-            np_dtype = np.dtype("<m8[ns]")
-        elif np_dtype.str == "<M8":
-            np_dtype = np.dtype("<M8[ns]")
     except TypeError:
         pass
     else:
         if np_dtype.kind not in "biufUOMm":
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
+
+    #  next, check if `arbitrary` is one of our extension types:
     if isinstance(arbitrary, cudf.core.dtypes._BaseDtype):
         return arbitrary
-    elif isinstance(arbitrary, pd.CategoricalDtype):
-        return cudf.CategoricalDtype.from_pandas(arbitrary)
-    elif isinstance(arbitrary, pd.IntervalDtype):
-        return cudf.IntervalDtype.from_pandas(arbitrary)
+
+    # use `pandas_dtype` to try and interpret
+    # `arbitrary` as a Pandas extension type.
+    #  Return the corresponding NumPy/cuDF type.
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)
     try:
         return pd_dtype.numpy_dtype
     except AttributeError:
-        # no NumPy type corresponding to this type
-        # always object?
-        return np.dtype("object")
+        if isinstance(pd_dtype, pd.CategoricalDtype):
+            return cudf.CategoricalDtype.from_pandas(pd_dtype)
+        elif isinstance(pd_dtype, pd.StringDtype):
+            return np.dtype("object")
+        elif isinstance(pd_dtype, pd.IntervalDtype):
+            return cudf.IntervalDtype.from_pandas(pd_dtype)
+        else:
+            raise TypeError(
+                f"Cannot interpret {arbitrary} as a valid cuDF dtype"
+            )
 
 
 def is_numeric_dtype(obj):
