@@ -46,6 +46,7 @@ struct equality_functor {
   column_device_view const& col;
   __device__ bool operator()(size_type lhs_idx, size_type rhs_idx)
   {
+    if (lhs_idx < 0 or rhs_idx < 0) { return false; }
     // We don't call this for nulls so this is fine
     return equality_compare(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
   }
