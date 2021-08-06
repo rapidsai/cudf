@@ -46,24 +46,6 @@ using row_hash = cudf::row_hasher<default_hash>;
 
 using row_equality = cudf::row_equality_comparator<true>;
 
-class pair_equality {
- public:
-  pair_equality(table_device_view lhs, table_device_view rhs, bool nulls_are_equal = true)
-    : _check_row_equality{lhs, rhs, nulls_are_equal}
-  {
-  }
-
-  __device__ __inline__ bool operator()(const pair_type& lhs, const pair_type& rhs) const noexcept
-  {
-    bool res = (lhs.first == rhs.first);
-    if (res) { return _check_row_equality(rhs.second, lhs.second); }
-    return res;
-  }
-
- private:
-  cudf::row_equality_comparator<true> _check_row_equality;
-};
-
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
 
 inline bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type)
