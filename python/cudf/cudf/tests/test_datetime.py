@@ -12,6 +12,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+import cudf.testing.dataset_generator as dataset_generator
 from cudf.core import DataFrame, Series
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
@@ -1330,6 +1331,23 @@ def test_quarter():
 
     assert_eq(expect2, got2)
 
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+def test_days_in_months(dtype):
+    nrows = 1000
+
+    data = dataset_generator.rand_dataframe(
+        dtypes_meta=[
+            {"dtype": dtype, "null_frequency": 0.4, "cardinality": nrows}
+        ],
+        rows=nrows,
+        use_threads=False,
+        seed=23,
+    )
+
+    ps = data.to_pandas()["0"]
+    gs = cudf.from_pandas(ps)
+
+    assert_eq(ps.dt.days_in_month, gs.dt.days_in_month)
 
 @pytest.mark.parametrize(
     "data",

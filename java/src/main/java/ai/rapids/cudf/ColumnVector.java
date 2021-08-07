@@ -152,6 +152,16 @@ public final class ColumnVector extends ColumnView {
     incRefCountInternal(true);
   }
 
+
+  /**
+   * For a ColumnVector this is really just incrementing the reference count.
+   * @return this
+   */
+  @Override
+  public ColumnVector copyToColumnVector() {
+    return incRefCount();
+  }
+
   /**
    * Retrieves the column_view for a cudf::column and if it fails to do so, the column is deleted
    * and the exception is thrown to the caller.
@@ -803,7 +813,7 @@ public final class ColumnVector extends ColumnView {
   /**
    * Native method to concatenate columns of strings together using a separator specified for each row
    * and returns the result as a string column.
-   * @param columns array of longs holding the native handles of the column_views to combine.
+   * @param columnViews array of longs holding the native handles of the column_views to combine.
    * @param sep_column long holding the native handle of the strings_column_view used as separators.
    * @param separator_narep string scalar indicating null behavior when a separator is null.
    *                        If set to null and the separator is null the resulting string will

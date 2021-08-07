@@ -607,11 +607,12 @@ class StringMethods(ColumnMethods):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        out = libstrings.extract(self._column, pat)
-        if out._num_columns == 1 and expand is False:
-            return self._return_or_inplace(out._columns[0], expand=expand)
+        data, index = libstrings.extract(self._column, pat)
+        if len(data) == 1 and expand is False:
+            data = next(iter(data.values()))
         else:
-            return self._return_or_inplace(out, expand=expand)
+            data = cudf.core.frame.Frame(data, index)
+        return self._return_or_inplace(data, expand=expand)
 
     def contains(
         self,
@@ -748,6 +749,59 @@ class StringMethods(ColumnMethods):
                 self._column, column.as_column(pat, dtype="str")
             )
         return self._return_or_inplace(result_col)
+
+    def repeat(self, repeats: Union[int, Sequence],) -> SeriesOrIndex:
+        """
+        Duplicate each string in the Series or Index.
+        Equivalent to `str.repeat()
+        <https://pandas.pydata.org/docs/reference/api/pandas.Series.str.repeat.html>`_.
+
+        Parameters
+        ----------
+        repeats : int or sequence of int
+            Same value for all (int) or different value per (sequence).
+
+        Returns
+        -------
+        Series or Index of object
+            Series or Index of repeated string objects specified by
+            input parameter repeats.
+
+        Examples
+        --------
+        >>> s = cudf.Series(['a', 'b', 'c'])
+        >>> s
+        0    a
+        1    b
+        2    c
+        dtype: object
+
+        Single int repeats string in Series
+
+        >>> s.str.repeat(repeats=2)
+        0    aa
+        1    bb
+        2    cc
+        dtype: object
+
+        Sequence of int repeats corresponding string in Series
+
+        >>> s.str.repeat(repeats=[1, 2, 3])
+        0      a
+        1     bb
+        2    ccc
+        dtype: object
+        """
+        if can_convert_to_column(repeats):
+            return self._return_or_inplace(
+                libstrings.repeat_sequence(
+                    self._column, column.as_column(repeats, dtype="int"),
+                ),
+            )
+
+        return self._return_or_inplace(
+            libstrings.repeat_scalar(self._column, repeats)
+        )
 
     def replace(
         self,
@@ -2274,12 +2328,13 @@ class StringMethods(ColumnMethods):
             if self._column.null_count == len(self._column):
                 result_table = cudf.core.frame.Frame({0: self._column.copy()})
             else:
-                result_table = libstrings.split(
+                data, index = libstrings.split(
                     self._column, cudf.Scalar(pat, "str"), n
                 )
-                if len(result_table._data) == 1:
-                    if result_table._data[0].null_count == len(self._column):
-                        result_table = cudf.core.frame.Frame({})
+                if len(data) == 1 and data[0].null_count == len(self._column):
+                    result_table = cudf.core.frame.Frame({})
+                else:
+                    result_table = cudf.core.frame.Frame(data, index)
         else:
             result_table = libstrings.split_record(
                 self._column, cudf.Scalar(pat, "str"), n
@@ -2429,12 +2484,13 @@ class StringMethods(ColumnMethods):
             if self._column.null_count == len(self._column):
                 result_table = cudf.core.frame.Frame({0: self._column.copy()})
             else:
-                result_table = libstrings.rsplit(
-                    self._column, cudf.Scalar(pat), n
+                data, index = libstrings.rsplit(
+                    self._column, cudf.Scalar(pat, "str"), n
                 )
-                if len(result_table._data) == 1:
-                    if result_table._data[0].null_count == len(self._column):
-                        result_table = cudf.core.frame.Frame({})
+                if len(data) == 1 and data[0].null_count == len(self._column):
+                    result_table = cudf.core.frame.Frame({})
+                else:
+                    result_table = cudf.core.frame.Frame(data, index)
         else:
             result_table = libstrings.rsplit_record(
                 self._column, cudf.Scalar(pat), n
@@ -2519,7 +2575,9 @@ class StringMethods(ColumnMethods):
             sep = " "
 
         return self._return_or_inplace(
-            libstrings.partition(self._column, cudf.Scalar(sep)),
+            cudf.core.frame.Frame(
+                *libstrings.partition(self._column, cudf.Scalar(sep))
+            ),
             expand=expand,
         )
 
@@ -2584,7 +2642,9 @@ class StringMethods(ColumnMethods):
             sep = " "
 
         return self._return_or_inplace(
-            libstrings.rpartition(self._column, cudf.Scalar(sep)),
+            cudf.core.frame.Frame(
+                *libstrings.rpartition(self._column, cudf.Scalar(sep))
+            ),
             expand=expand,
         )
 
@@ -3309,8 +3369,9 @@ class StringMethods(ColumnMethods):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
+        data, index = libstrings.findall(self._column, pat)
         return self._return_or_inplace(
-            libstrings.findall(self._column, pat), expand=expand
+            cudf.core.frame.Frame(data, index), expand=expand
         )
 
     def isempty(self) -> SeriesOrIndex:
