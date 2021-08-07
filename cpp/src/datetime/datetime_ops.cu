@@ -29,6 +29,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include "cudf/null_mask.hpp"
 
 namespace cudf {
 namespace datetime {
@@ -232,10 +233,7 @@ struct add_calendrical_months_functor {
     // Return an empty column if source column is empty
     if (size == 0) return make_empty_column(output_col_type);
 
-    auto output_null_mask =
-      cudf::detail::create_null_mask(size, mask_state::UNALLOCATED, stream, mr);
-    auto output = make_fixed_width_column(
-      output_col_type, size, std::move(output_null_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+    auto output = make_fixed_width_column(output_col_type, size, mask_state::ALL_NULL, stream, mr);
     auto output_mview = output->mutable_view();
 
     thrust::transform(rmm::exec_policy(stream),
@@ -299,15 +297,19 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
 
   auto typed_slr = static_cast<numeric_scalar<int16_t> const*>(&months);
 
-  return typed_slr->is_valid(stream)
-           ? make_timestamp_column(
-               timestamp_column.type(), timestamp_column.size(), mask_state::ALL_NULL, stream, mr)
-           : type_dispatcher(timestamp_column.type(),
-                             add_calendrical_months_functor{},
-                             timestamp_column,
-                             thrust::make_constant_iterator(typed_slr->value(stream)),
-                             stream,
-                             mr);
+  if (typed_slr->is_valid(stream)) {
+    auto output = type_dispatcher(timestamp_column.type(),
+                                  add_calendrical_months_functor{},
+                                  timestamp_column,
+                                  thrust::make_constant_iterator(typed_slr->value(stream)),
+                                  stream,
+                                  mr);
+    output->set_null_mask(cudf::detail::copy_bitmask(timestamp_column, stream, mr));
+    return output;
+  } else {
+    return make_timestamp_column(
+      timestamp_column.type(), timestamp_column.size(), mask_state::ALL_NULL, stream, mr);
+  }
 }
 
 std::unique_ptr<column> extract_year(column_view const& column,
