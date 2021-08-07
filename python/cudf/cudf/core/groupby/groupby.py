@@ -472,8 +472,6 @@ class GroupBy(Serializable):
             result.index.names = self.grouping.names
         else:
             result = cudf.concat(chunk_results)
-        if isinstance(self, SeriesGroupBy):
-            result.name = self.obj.name
 
         if self._sort:
             result = result.sort_index()
@@ -1211,6 +1209,14 @@ class SeriesGroupBy(GroupBy):
             and result.columns.nlevels > 1
         ):
             result.columns = result.columns.droplevel(0)
+
+        return result
+
+    def apply(self, func):
+        result = super().apply(func)
+
+        # apply Series name to result
+        result.name = self.obj.name
 
         return result
 
