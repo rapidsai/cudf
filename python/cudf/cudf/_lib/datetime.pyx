@@ -80,10 +80,11 @@ def extract_quarter(Column col):
     cdef column_view col_view = col.view()
 
     with nogil:
-      c_result = move(libcudf_datetime.extract_quarter(col_view))
-    
+        c_result = move(libcudf_datetime.extract_quarter(col_view))
+
     return Column.from_unique_ptr(move(c_result))
-  
+
+
 def days_in_month(Column col):
     """Extracts the number of days in the month of the date
     """
