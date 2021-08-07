@@ -14,6 +14,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.transpose cimport transpose as cpp_transpose
 from cudf._lib.table cimport Table
+from cudf._lib.utils cimport data_from_table_view
 
 
 def transpose(Table source):
@@ -51,14 +52,14 @@ def transpose(Table source):
         c_result = move(cpp_transpose(c_input))
 
     result_owner = Column.from_unique_ptr(move(c_result.first))
-    result = Table.from_table_view(
+    data, _ = data_from_table_view(
         c_result.second,
         owner=result_owner,
         column_names=range(source._num_rows)
     )
 
     if cats is not None:
-        result = Table(index=result._index, data=[
+        data= [
             (name, cudf.core.column.column.build_categorical_column(
                 codes=cudf.core.column.column.as_column(
                     col.base_data, dtype=col.dtype),
@@ -67,7 +68,7 @@ def transpose(Table source):
                 categories=cats,
                 offset=col.offset,
             ))
-            for name, col in result._data.items()
-        ])
+            for name, col in data.items()
+        ]
 
-    return result
+    return data

@@ -151,7 +151,7 @@ add_library(cudf
     src/aggregation/aggregation.cpp
     src/aggregation/aggregation.cu
     src/aggregation/result_cache.cpp
-    src/ast/linearizer.cpp
+    src/ast/expression_parser.cpp
     src/ast/transform.cu
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
@@ -305,6 +305,7 @@ add_library(cudf
     src/join/cross_join.cu
     src/join/hash_join.cu
     src/join/join.cu
+    src/join/join_utils.cu
     src/join/semi_join.cu
     src/lists/contains.cu
     src/lists/combine/concatenate_list_elements.cu

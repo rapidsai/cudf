@@ -1847,6 +1847,7 @@ def gdf(pdf):
         lambda df, **kwargs: df.cumsum(**kwargs),
         lambda df, **kwargs: df.cumprod(**kwargs),
         lambda df, **kwargs: df.mean(**kwargs),
+        lambda df, **kwargs: df.median(**kwargs),
         lambda df, **kwargs: df.sum(**kwargs),
         lambda df, **kwargs: df.max(**kwargs),
         lambda df, **kwargs: df.std(ddof=1, **kwargs),
@@ -3424,8 +3425,6 @@ def test_all(data):
             assert_eq(got, expected)
         else:
             with pytest.raises(NotImplementedError):
-                gdata.all(bool_only=False)
-            with pytest.raises(NotImplementedError):
                 gdata.all(level="a")
 
     got = gdata.all()
@@ -3484,8 +3483,6 @@ def test_any(data, axis):
             expected = pdata.any(bool_only=True)
             assert_eq(got, expected)
         else:
-            with pytest.raises(NotImplementedError):
-                gdata.any(bool_only=False)
             with pytest.raises(NotImplementedError):
                 gdata.any(level="a")
 
@@ -5054,6 +5051,18 @@ def test_insert(data):
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize(
+    "data", [{"A": [1, 2, 3], "B": ["a", "b", "c"]}],
+)
+def test_insert_NA(data):
+    pdf = pd.DataFrame.from_dict(data)
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    pdf["C"] = pd.NA
+    gdf["C"] = cudf.NA
+    assert_eq(pdf, gdf)
+
+
 def test_cov():
     gdf = cudf.datasets.randomdata(10)
     pdf = gdf.to_pandas()
@@ -5370,14 +5379,6 @@ def test_change_column_dtype_in_empty():
     pdf["b"] = pdf["b"].astype("int64")
     gdf["b"] = gdf["b"].astype("int64")
     assert_eq(pdf, gdf)
-
-
-def test_dataframe_from_table_empty_index():
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    odict = df._data
-    tbl = cudf._lib.table.Table(odict)
-
-    result = cudf.DataFrame._from_table(tbl)  # noqa: F841
 
 
 @pytest.mark.parametrize("dtype", ["int64", "str"])

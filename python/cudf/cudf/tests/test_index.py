@@ -125,7 +125,16 @@ def test_index_comparision():
 
 
 @pytest.mark.parametrize(
-    "func", [lambda x: x.min(), lambda x: x.max(), lambda x: x.sum()]
+    "func",
+    [
+        lambda x: x.min(),
+        lambda x: x.max(),
+        lambda x: x.sum(),
+        lambda x: x.mean(),
+        lambda x: x.any(),
+        lambda x: x.all(),
+        lambda x: x.prod(),
+    ],
 )
 def test_reductions(func):
     x = np.asarray([4, 5, 6, 10])
@@ -2316,3 +2325,22 @@ def test_get_loc_multi_string(idx, key, method):
         got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "objs",
+    [
+        [pd.RangeIndex(0, 10), pd.RangeIndex(10, 20)],
+        [pd.RangeIndex(10, 20), pd.RangeIndex(22, 40), pd.RangeIndex(50, 60)],
+        [pd.RangeIndex(10, 20, 2), pd.RangeIndex(20, 40, 2)],
+    ],
+)
+def test_range_index_concat(objs):
+    cudf_objs = [cudf.from_pandas(obj) for obj in objs]
+
+    actual = cudf.concat(cudf_objs)
+
+    expected = objs[0]
+    for obj in objs[1:]:
+        expected = expected.append(obj)
+    assert_eq(expected, actual)

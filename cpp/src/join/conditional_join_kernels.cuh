@@ -19,12 +19,12 @@
 #include <join/join_common_utils.cuh>
 #include <join/join_common_utils.hpp>
 
-#include <cub/cub.cuh>
-#include <cudf/ast/detail/linearizer.hpp>
-#include <cudf/ast/detail/transform.cuh>
-#include <cudf/ast/operators.hpp>
+#include <cudf/ast/detail/expression_evaluator.cuh>
+#include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
+
+#include <cub/cub.cuh>
 
 namespace cudf {
 namespace detail {
@@ -42,16 +42,18 @@ namespace detail {
  * @param[in] right_table The right table
  * @param[in] JoinKind The type of join to be performed
  * @param[in] compare_nulls Controls whether null join-key values should match or not.
- * @param[in] plan Container of device data required to evaluate the desired expression.
+ * @param[in] device_expression_data Container of device data required to evaluate the desired
+ * expression.
  * @param[out] output_size The resulting output size
  */
 template <int block_size, bool has_nulls>
-__global__ void compute_conditional_join_output_size(table_device_view left_table,
-                                                     table_device_view right_table,
-                                                     join_kind JoinKind,
-                                                     null_equality compare_nulls,
-                                                     ast::detail::device_ast_plan plan,
-                                                     cudf::size_type* output_size)
+__global__ void compute_conditional_join_output_size(
+  table_device_view left_table,
+  table_device_view right_table,
+  join_kind JoinKind,
+  null_equality compare_nulls,
+  ast::detail::expression_device_view device_expression_data,
+  cudf::size_type* output_size)
 {
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
@@ -60,16 +62,17 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
   extern __shared__ char raw_intermediate_storage[];
   cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
     reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
-  auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * plan.num_intermediates];
+  auto thread_intermediate_storage =
+    &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
   cudf::size_type thread_counter(0);
-  const cudf::size_type left_start_idx = threadIdx.x + blockIdx.x * blockDim.x;
-  const cudf::size_type left_stride    = blockDim.x * gridDim.x;
-  const cudf::size_type left_num_rows  = left_table.num_rows();
-  const cudf::size_type right_num_rows = right_table.num_rows();
+  cudf::size_type const left_start_idx = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type const left_stride    = blockDim.x * gridDim.x;
+  cudf::size_type const left_num_rows  = left_table.num_rows();
+  cudf::size_type const right_num_rows = right_table.num_rows();
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, plan, thread_intermediate_storage, compare_nulls);
+    left_table, right_table, device_expression_data, thread_intermediate_storage, compare_nulls);
 
   for (cudf::size_type left_row_index = left_start_idx; left_row_index < left_num_rows;
        left_row_index += left_stride) {
@@ -118,7 +121,8 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
  * @param[out] join_output_r The right result of the join operation
  * @param[in,out] current_idx A global counter used by threads to coordinate
  * writes to the global output
- * @param plan Container of device data required to evaluate the desired expression.
+ * @param device_expression_data Container of device data required to evaluate the desired
+ * expression.
  * @param[in] max_size The maximum size of the output
  */
 template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
@@ -129,8 +133,8 @@ __global__ void conditional_join(table_device_view left_table,
                                  cudf::size_type* join_output_l,
                                  cudf::size_type* join_output_r,
                                  cudf::size_type* current_idx,
-                                 cudf::ast::detail::device_ast_plan plan,
-                                 const cudf::size_type max_size)
+                                 cudf::ast::detail::expression_device_view device_expression_data,
+                                 cudf::size_type const max_size)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ cudf::size_type current_idx_shared[num_warps];
@@ -144,12 +148,13 @@ __global__ void conditional_join(table_device_view left_table,
   extern __shared__ char raw_intermediate_storage[];
   cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
     reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
-  auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * plan.num_intermediates];
+  auto thread_intermediate_storage =
+    &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
-  const int warp_id                    = threadIdx.x / detail::warp_size;
-  const int lane_id                    = threadIdx.x % detail::warp_size;
-  const cudf::size_type left_num_rows  = left_table.num_rows();
-  const cudf::size_type right_num_rows = right_table.num_rows();
+  int const warp_id                    = threadIdx.x / detail::warp_size;
+  int const lane_id                    = threadIdx.x % detail::warp_size;
+  cudf::size_type const left_num_rows  = left_table.num_rows();
+  cudf::size_type const right_num_rows = right_table.num_rows();
 
   if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
 
@@ -157,10 +162,10 @@ __global__ void conditional_join(table_device_view left_table,
 
   cudf::size_type left_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
-  const unsigned int activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
+  unsigned int const activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, plan, thread_intermediate_storage, compare_nulls);
+    left_table, right_table, device_expression_data, thread_intermediate_storage, compare_nulls);
 
   if (left_row_index < left_num_rows) {
     bool found_match = false;
