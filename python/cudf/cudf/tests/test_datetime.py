@@ -1331,6 +1331,7 @@ def test_quarter():
 
     assert_eq(expect2, got2)
 
+
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 def test_days_in_months(dtype):
     nrows = 1000
@@ -1348,6 +1349,7 @@ def test_days_in_months(dtype):
     gs = cudf.from_pandas(ps)
 
     assert_eq(ps.dt.days_in_month, gs.dt.days_in_month)
+
 
 @pytest.mark.parametrize(
     "data",
