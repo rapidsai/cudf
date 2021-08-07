@@ -19,7 +19,7 @@
 #include <join/join_common_utils.cuh>
 #include <join/join_common_utils.hpp>
 
-#include <cudf/ast/detail/transform.cuh>
+#include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/nodes.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table.hpp>
