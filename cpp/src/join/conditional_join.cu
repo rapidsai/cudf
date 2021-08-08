@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/nodes.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>
