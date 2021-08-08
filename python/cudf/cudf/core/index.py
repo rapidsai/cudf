@@ -4,7 +4,16 @@ from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Dict, MutableMapping, Optional, Tuple, Type, Union
+from typing import (
+    Any,
+    Dict,
+    List,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 
 import cupy
 import numpy as np
@@ -518,83 +527,20 @@ class BaseIndex(SingleColumnFrame, Serializable):
         """
         return self._values.data_array_view
 
-    def min(self):
-        """
-        Return the minimum value of the Index.
-
-        Returns
-        -------
-        scalar
-            Minimum value.
-
-        See Also
-        --------
-        cudf.core.index.Index.max : Return the maximum value in an Index.
-        cudf.core.series.Series.min : Return the minimum value in a Series.
-        cudf.core.dataframe.DataFrame.min : Return the minimum values in
-            a DataFrame.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([3, 2, 1])
-        >>> idx.min()
-        1
-        """
-        return self._values.min()
-
-    def max(self):
-        """
-        Return the maximum value of the Index.
-
-        Returns
-        -------
-        scalar
-            Maximum value.
-
-        See Also
-        --------
-        cudf.core.index.Index.min : Return the minimum value in an Index.
-        cudf.core.series.Series.max : Return the maximum value in a Series.
-        cudf.core.dataframe.DataFrame.max : Return the maximum values in
-            a DataFrame.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([3, 2, 1])
-        >>> idx.max()
-        3
-        """
-        return self._values.max()
-
-    def sum(self):
-        """
-        Return the sum of all values of the Index.
-
-        Returns
-        -------
-        scalar
-            Sum of all values.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([3, 2, 1])
-        >>> idx.sum()
-        6
-        """
-        return self._values.sum()
-
     @classmethod
     def _concat(cls, objs):
-        data = concat_columns([o._values for o in objs])
+        if all(isinstance(obj, RangeIndex) for obj in objs):
+            result = _concat_range_index(objs)
+        else:
+            data = concat_columns([o._values for o in objs])
+            result = as_index(data)
+
         names = {obj.name for obj in objs}
         if len(names) == 1:
             [name] = names
         else:
             name = None
-        result = as_index(data)
+
         result.name = name
         return result
 
@@ -3001,3 +2947,43 @@ class Index(BaseIndex, metaclass=IndexMeta):
             )
 
         return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
+
+
+def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
+    """
+    An internal Utility function to concat RangeIndex objects.
+    """
+    start = step = next_ = None
+
+    # Filter the empty indexes
+    non_empty_indexes = [obj for obj in indexes if len(obj)]
+
+    if not non_empty_indexes:
+        # Here all "indexes" had 0 length, i.e. were empty.
+        # In this case return an empty range index.
+        return RangeIndex(0, 0)
+
+    for obj in non_empty_indexes:
+        if start is None:
+            # This is set by the first non-empty index
+            start = obj.start
+            if step is None and len(obj) > 1:
+                step = obj.step
+        elif step is None:
+            # First non-empty index had only one element
+            if obj.start == start:
+                result = as_index(concat_columns([x._values for x in indexes]))
+                return result
+            step = obj.start - start
+
+        non_consecutive = (step != obj.step and len(obj) > 1) or (
+            next_ is not None and obj.start != next_
+        )
+        if non_consecutive:
+            result = as_index(concat_columns([x._values for x in indexes]))
+            return result
+        if step is not None:
+            next_ = obj[-1] + step
+
+    stop = non_empty_indexes[-1].stop if next_ is None else next_
+    return RangeIndex(start, stop, step)
