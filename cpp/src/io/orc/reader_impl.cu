@@ -26,6 +26,7 @@
 #include <io/comp/gpuinflate.h>
 #include "orc.h"
 
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -759,15 +760,43 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
   }
 }
 
-void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-                                      size_t num_dicts,
-                                      size_t skip_rows,
-                                      timezone_table_view tz_table,
-                                      cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
-                                      size_t row_index_stride,
-                                      std::vector<column_buffer>& out_buffers,
-                                      size_t level,
-                                      rmm::cuda_stream_view stream)
+void calc_prefix_null_counts(cudf::detail::device_2dspan<gpu::ColumnDesc> chunks,
+                             cudf::host_span<rmm::device_uvector<uint32_t>> psums,
+                             rmm::cuda_stream_view stream)
+{
+  const auto num_stripes = chunks.size().first;
+  const auto num_columns = chunks.size().second;
+
+  if (num_stripes == 0) return;
+
+  for (auto col_idx = 0ul; col_idx < num_columns; ++col_idx) {
+    cudf::detail::device_single_thread(
+      [chunks, psums = psums[col_idx].data(), col_idx, num_stripes] __device__ {
+        if (chunks[0][col_idx].type_kind == STRUCT) {
+          thrust::for_each(thrust::seq,
+                           thrust::make_counting_iterator(0),
+                           thrust::make_counting_iterator(0) + num_stripes,
+                           [=] __device__(auto stripe_idx) {
+                             psums[stripe_idx] = chunks[stripe_idx][col_idx].null_count;
+                             if (stripe_idx > 0) { psums[stripe_idx] += psums[stripe_idx - 1]; }
+                           });
+        }
+      },
+      stream);
+  }
+}
+
+void reader::impl::decode_stream_data(
+  cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
+  size_t num_dicts,
+  size_t skip_rows,
+  timezone_table_view tz_table,
+  cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
+  size_t row_index_stride,
+  std::vector<column_buffer>& out_buffers,
+  size_t level,
+  cudf::host_span<rmm::device_uvector<uint32_t>> null_count_psums,
+  rmm::cuda_stream_view stream)
 {
   const auto num_stripes = chunks.size().first;
   const auto num_columns = chunks.size().second;
@@ -789,6 +818,8 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
   chunks.host_to_device(stream, true);
   gpu::DecodeNullsAndStringDictionaries(
     chunks.base_device_ptr(), global_dict.data(), num_columns, num_stripes, skip_rows, stream);
+
+  calc_prefix_null_counts(chunks, null_count_psums, stream);
 
   if (level > 0) {
     // Update nullmasks for children if parent was a struct and had null mask
@@ -817,8 +848,6 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
                       [&](auto null_count, auto const stripe_idx) {
                         return null_count + chunks[stripe_idx][col_idx].null_count;
                       });
-    // Add parent null count in case this is a child column of a struct
-    out_buffers[col_idx].null_count() += chunks[0][col_idx].parent_validity_info.null_count;
   });
 }
 
@@ -841,6 +870,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
   num_child_rows.resize(_selected_columns[level + 1].size());
   std::fill(num_child_rows.begin(), num_child_rows.end(), 0);
   parent_column_data.resize(number_of_child_chunks);
+  _col_meta.parent_column_index.resize(number_of_child_chunks);
   _col_meta.child_start_row.resize(number_of_child_chunks);
   _col_meta.num_child_rows_per_stripe.resize(number_of_child_chunks);
   _col_meta.rwgrp_meta.resize(num_of_rowgroups * num_child_cols);
@@ -899,7 +929,8 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
     auto num_rows          = out_buffers[parent_col_idx].size;
 
     for (uint32_t id = 0; id < p_col.num_children; id++) {
-      const auto child_col_idx = index + id;
+      const auto child_col_idx                     = index + id;
+      _col_meta.parent_column_index[child_col_idx] = parent_col_idx;
       if (type == type_id::STRUCT) {
         parent_column_data[child_col_idx] = {parent_valid_map, parent_null_count};
         // Number of rows in child will remain same as parent in case of struct column
@@ -1042,6 +1073,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   std::vector<std::vector<column_buffer>> out_buffers(_selected_columns.size());
   std::vector<column_name_info> schema_info;
   std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data(_selected_columns.size());
+  std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_psums;
   table_metadata out_metadata;
 
   // There are no columns in the table
@@ -1123,6 +1155,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       // Logically view streams as columns
       std::vector<orc_stream_info> stream_info;
+
+      null_count_psums.emplace_back();
+      for (auto i = 0u; i < _selected_columns[level].size(); ++i)
+        null_count_psums.back().emplace_back(
+          cudf::detail::make_zeroed_device_uvector_async<uint32_t>(total_num_stripes, stream));
 
       // Tracker for eventually deallocating compressed and uncompressed data
       auto& stripe_data = lvl_stripe_data[level];
@@ -1211,6 +1248,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
               (level == 0) ? nullptr : _col_meta.parent_column_data[col_idx].valid_map_base;
             chunk.parent_validity_info.null_count =
               (level == 0) ? 0 : _col_meta.parent_column_data[col_idx].null_count;
+            chunk.parent_null_count_psums =
+              (level == 0)
+                ? nullptr
+                : null_count_psums[level - 1][_col_meta.parent_column_index[col_idx]].data();
             chunk.encoding_kind = stripe_footer->columns[selected_columns[col_idx].id].kind;
             chunk.type_kind     = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
                                 .ff.types[selected_columns[col_idx].id]
@@ -1332,6 +1373,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                            _metadata->get_row_index_stride(),
                            out_buffers[level],
                            level,
+                           null_count_psums[level],
                            stream);
 
         // Extract information to process nested child columns
