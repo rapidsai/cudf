@@ -50,6 +50,6 @@ table.io-supported-types-table thead{
 
 }
 
-.table td, .table th {
+.special-table td, .special-table th {
     border: 1px solid #dee2e6;
 }
