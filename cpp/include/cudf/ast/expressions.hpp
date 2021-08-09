@@ -37,6 +37,8 @@ class expression_parser;
  */
 struct node {
   virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
+
+  virtual ~node() {}
 };
 
 /**
