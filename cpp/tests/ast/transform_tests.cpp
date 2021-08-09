@@ -47,6 +47,35 @@ constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_leve
 struct TransformTest : public cudf::test::BaseFixture {
 };
 
+TEST_F(TransformTest, ColumnReference)
+{
+  auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
+  auto c_1   = column_wrapper<int32_t>{10, 7, 20, 0};
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto col_ref_0 = cudf::ast::column_reference(0);
+
+  auto const& expected = c_0;
+  auto result          = cudf::compute_column(table, col_ref_0);
+
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
+}
+
+TEST_F(TransformTest, Literal)
+{
+  auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
+  auto c_1   = column_wrapper<int32_t>{10, 7, 20, 0};
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto literal_value = cudf::numeric_scalar<int32_t>(42);
+  auto literal       = cudf::ast::literal(literal_value);
+
+  auto expected = column_wrapper<int32_t>{42, 42, 42, 42};
+  auto result   = cudf::compute_column(table, literal);
+
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
+}
+
 TEST_F(TransformTest, BasicAddition)
 {
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
