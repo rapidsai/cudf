@@ -1,6 +1,9 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 
+# from cudf.python.dask_cudf.dask_cudf.core import Index
+
+
 class StructMethods:
     def __init__(self, d_series):
         self.d_series = d_series
@@ -33,15 +36,19 @@ class StructMethods:
         try:
             typ = self.d_series._meta.dtype.fields[key]
 
-        except KeyError as e:
-            if isinstance(key, int):
-                typ = self.d_series._meta.dtype.fields[
-                    list(self.d_series._meta.dtype.fields)[key]
-                ]
-
-            else:
-                raise e(
-                    f"Field '{key}' is not found in the set of existing keys"
+        except KeyError:
+            try:
+                if isinstance(key, int):
+                    typ = self.d_series._meta.dtype.fields[
+                        list(self.d_series._meta.dtype.fields)[key]
+                    ]
+                else:
+                    raise KeyError(
+                        f"Field '{key}' is not in the set of existing keys"
+                    )
+            except TypeError:
+                raise IndexError(
+                    f"Index '{key}' is greater than the number of fields"
                 )
 
         return self.d_series.map_partitions(
