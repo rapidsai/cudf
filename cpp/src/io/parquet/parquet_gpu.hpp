@@ -316,7 +316,7 @@ struct EncColumnChunk {
   uint32_t dictionary_size;    //!< Size of dictionary page including header
   uint32_t ck_stat_size;       //!< Size of chunk-level statistics (included in 1st page header)
   slot_type* dict_map_slots;   //!< Hash map storage for calculating dict encoding for this chunk
-  size_t dict_map_size;        //!< Size of dict_map_slots
+  size_type dict_map_size;     //!< Size of dict_map_slots
   size_type num_dict_entries;  //!< Total number of entries in dictionary
   size_type
     uniq_data_size;  //!< Size of dictionary page (set of all unique values) if dict enc is used

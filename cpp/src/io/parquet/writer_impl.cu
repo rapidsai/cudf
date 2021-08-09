@@ -787,7 +787,8 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   for (auto& chunk : h_chunks) {
     if (not chunk.use_dictionary) { continue; }
 
-    auto& inserted_dict_data  = dict_data.emplace_back(MAX_DICT_SIZE, stream);
+    size_t dict_data_size     = std::min(MAX_DICT_SIZE, chunk.dict_map_size);
+    auto& inserted_dict_data  = dict_data.emplace_back(dict_data_size, stream);
     auto& inserted_dict_index = dict_index.emplace_back(chunk.num_values, stream);
     chunk.dict_data           = inserted_dict_data.data();
     chunk.dict_index          = inserted_dict_index.data();
