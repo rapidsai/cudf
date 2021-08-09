@@ -2104,3 +2104,13 @@ def test_groupby_first(data, agg):
     expect = pdf.groupby("a").agg(agg)
     got = gdf.groupby("a").agg(agg)
     assert_groupby_results_equal(expect, got, check_dtype=False)
+
+
+def test_groupby_apply_series_name():
+    def foo(x):
+        return x.sum()
+
+    got = make_frame(DataFrame, 3).groupby("x").y.apply(foo)
+    expect = make_frame(pd.DataFrame, 3).groupby("x").y.apply(foo)
+
+    assert expect.name == got.name
