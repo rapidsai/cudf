@@ -100,9 +100,18 @@ cudf::size_type expression_parser::visit(column_reference const& expr)
   // Increment the node index
   _node_count++;
   // Resolve node type
-  auto const data_type = (expr.get_table_source() == table_reference::LEFT)
-                           ? expr.get_data_type(_left)
-                           : expr.get_data_type(_right);
+  cudf::data_type data_type;
+  if (expr.get_table_source() == table_reference::LEFT) {
+    data_type = expr.get_data_type(_left);
+  } else {
+    if (_right.has_value()) {
+      data_type = expr.get_data_type(*_right);
+    } else {
+      CUDF_FAIL(
+        "Your expression contains a reference to the RIGHT table even though it will only be "
+        "evaluated on a single table (by convention, the LEFT table).");
+    }
+  }
   // Push data reference
   auto const source = detail::device_data_reference(detail::device_data_reference_type::COLUMN,
                                                     data_type,
