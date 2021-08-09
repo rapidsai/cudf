@@ -5,9 +5,16 @@ from io import BytesIO, StringIO
 from nvtx import annotate
 
 import cudf
+import fsspec
+import pyarrow
+import s3fs
 from cudf import _lib as libcudf
 from cudf.utils import ioutils
 from cudf.utils.dtypes import is_scalar
+
+
+def _is_s3_filesystem(fs):
+    return isinstance(fs, s3fs.S3FileSystem)
 
 
 @annotate("READ_CSV", color="purple", domain="cudf_python")
@@ -57,12 +64,29 @@ def read_csv(
             "`read_csv` does not yet support reading multiple files"
         )
 
-    filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        path_or_data=filepath_or_buffer,
-        compression=compression,
-        iotypes=(BytesIO, StringIO),
-        **kwargs,
-    )
+    try:
+        fs, _, paths = fsspec.get_fs_token_paths(
+            filepath_or_buffer,
+            mode="rb",
+            storage_options=kwargs.get("storage_options"),
+        )
+    except ValueError as e:
+        if str(e).startswith("Protocol not known"):
+            return filepath_or_buffer, compression
+        else:
+            raise e
+
+    if _is_s3_filesystem(fs):
+        fs = pyarrow.fs.S3FileSystem()
+        filepath_or_buffer = fs.open_input_file(paths[0])
+
+    else:
+        filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
+            path_or_data=filepath_or_buffer,
+            compression=compression,
+            iotypes=(BytesIO, StringIO),
+            **kwargs,
+        )
 
     if na_values is not None and is_scalar(na_values):
         na_values = [na_values]

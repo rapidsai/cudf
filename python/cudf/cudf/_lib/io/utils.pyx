@@ -33,9 +33,6 @@ import os
 import cudf
 from cudf.utils.dtypes import is_struct_dtype
 
-
-
-
 # Converts the Python source input to libcudf++ IO source_info
 # with the appropriate type and source values
 cdef source_info make_source_info(list src) except*:
