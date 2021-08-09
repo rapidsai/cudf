@@ -74,13 +74,18 @@ function hasArg {
 
 function cmakeArgs {
     # Check for correctly formatted cmake args option
-    CMAKE_ARGS=$(echo $ARGS | grep -Eo "\-\-cmake\-args=\".+\" ")
-
-    if [[ -n ${CMAKE_ARGS} ]]; then
-	# Remove the full  CMAKE_ARGS argument from list of args so that it passes validArgs function
-	ARGS=${ARGS//$CMAKE_ARGS/}
-	# Filter the full argument down to just the extra string that will be added to cmake call
-        CMAKE_ARGS=$(echo $CMAKE_ARGS | grep -Eo "\".+\"" | sed -e 's/^"//' -e 's/"$//')
+    if [[ $(echo $ARGS | grep -E "\-\-cmake\-args=\"") ]]; then
+        CMAKE_ARGS="$(echo $ARGS | grep -Eo "\-\-cmake\-args=\".+\" ")"
+        if [[ -n ${CMAKE_ARGS} ]]; then
+	    # Remove the full  CMAKE_ARGS argument from list of args so that it passes validArgs function
+	    ARGS=${ARGS//$CMAKE_ARGS/}
+	    # Filter the full argument down to just the extra string that will be added to cmake call
+            CMAKE_ARGS=$(echo $CMAKE_ARGS | grep -Eo "\".+\"" | sed -e 's/^"//' -e 's/"$//')
+        fi
+    elif [[ $(echo $ARGS | grep -E "\-\-cmake\-args=") ]]; then
+	CMAKE_ARGS="$(echo $ARGS | grep -Eo "\-\-cmake\-args=.+ ")"
+	echo "Invalid formatting for --cmake-args, see --help: $CMAKE_ARGS"
+        exit 1
     fi
 }
 
