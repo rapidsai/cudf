@@ -1161,10 +1161,6 @@ def get_filepath_or_buffer(
             if os.path.exists(paths[0]):
                 path_or_data = paths if len(paths) > 1 else paths[0]
 
-        elif _is_s3_filesystem(fs):
-            fs = pyarrow.fs.S3FileSystem()
-            path_or_data = fs.open_input_file(paths[0])
-
         else:
             path_or_data = [BytesIO(fs.open(fpath).read()) for fpath in paths]
             if len(path_or_data) == 1:

@@ -13,10 +13,6 @@ from cudf.utils import ioutils
 from cudf.utils.dtypes import is_scalar
 
 
-def _is_s3_filesystem(fs):
-    return isinstance(fs, s3fs.S3FileSystem)
-
-
 @annotate("READ_CSV", color="purple", domain="cudf_python")
 @ioutils.doc_read_csv()
 def read_csv(
@@ -76,7 +72,7 @@ def read_csv(
         else:
             raise e
 
-    if _is_s3_filesystem(fs):
+    if ioutils._is_s3_filesystem(fs):
         fs = pyarrow.fs.S3FileSystem()
         filepath_or_buffer = fs.open_input_file(paths[0])
 
