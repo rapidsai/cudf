@@ -40,7 +40,7 @@ struct type_tester {
   template <typename Dispatched>
   bool operator()()
   {
-    return std::is_same<Expected, Dispatched>::value;
+    return std::is_same_v<Expected, Dispatched>;
   }
 };
 }  // namespace
@@ -98,8 +98,7 @@ struct two_type_tester {
   template <typename Dispatched1, typename Dispatched2>
   bool operator()()
   {
-    return std::is_same<Expected1, Dispatched1>::value &&
-           std::is_same<Expected2, Dispatched2>::value;
+    return std::is_same_v<Expected1, Dispatched1> && std::is_same_v<Expected2, Dispatched2>;
   }
 };
 }  // namespace

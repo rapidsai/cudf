@@ -1847,6 +1847,7 @@ def gdf(pdf):
         lambda df, **kwargs: df.cumsum(**kwargs),
         lambda df, **kwargs: df.cumprod(**kwargs),
         lambda df, **kwargs: df.mean(**kwargs),
+        lambda df, **kwargs: df.median(**kwargs),
         lambda df, **kwargs: df.sum(**kwargs),
         lambda df, **kwargs: df.max(**kwargs),
         lambda df, **kwargs: df.std(ddof=1, **kwargs),
@@ -3079,6 +3080,14 @@ def test_select_dtype():
         gdf.select_dtypes(include=["int"], exclude=["object"]),
     )
 
+    gdf = cudf.DataFrame(
+        {"int_col": [0, 1, 2], "list_col": [[1, 2], [3, 4], [5, 6]]}
+    )
+    pdf = gdf.to_pandas()
+    assert_eq(
+        pdf.select_dtypes("int64"), gdf.select_dtypes("int64"),
+    )
+
 
 def test_select_dtype_datetime():
     gdf = cudf.datasets.timeseries(
@@ -3416,8 +3425,6 @@ def test_all(data):
             assert_eq(got, expected)
         else:
             with pytest.raises(NotImplementedError):
-                gdata.all(bool_only=False)
-            with pytest.raises(NotImplementedError):
                 gdata.all(level="a")
 
     got = gdata.all()
@@ -3476,8 +3483,6 @@ def test_any(data, axis):
             expected = pdata.any(bool_only=True)
             assert_eq(got, expected)
         else:
-            with pytest.raises(NotImplementedError):
-                gdata.any(bool_only=False)
             with pytest.raises(NotImplementedError):
                 gdata.any(level="a")
 
@@ -3623,6 +3628,23 @@ def test_one_row_head():
     head_pdf = pdf.head()
 
     assert_eq(head_pdf, head_gdf)
+
+
+@pytest.mark.parametrize("dtype", ALL_TYPES)
+@pytest.mark.parametrize(
+    "np_dtype,pd_dtype",
+    [
+        tuple(item)
+        for item in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes.items()
+    ],
+)
+def test_series_astype_pandas_nullable(dtype, np_dtype, pd_dtype):
+    source = cudf.Series([0, 1, None], dtype=dtype)
+
+    expect = source.astype(np_dtype)
+    got = source.astype(pd_dtype)
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
@@ -5029,6 +5051,18 @@ def test_insert(data):
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize(
+    "data", [{"A": [1, 2, 3], "B": ["a", "b", "c"]}],
+)
+def test_insert_NA(data):
+    pdf = pd.DataFrame.from_dict(data)
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    pdf["C"] = pd.NA
+    gdf["C"] = cudf.NA
+    assert_eq(pdf, gdf)
+
+
 def test_cov():
     gdf = cudf.datasets.randomdata(10)
     pdf = gdf.to_pandas()
@@ -5345,14 +5379,6 @@ def test_change_column_dtype_in_empty():
     pdf["b"] = pdf["b"].astype("int64")
     gdf["b"] = gdf["b"].astype("int64")
     assert_eq(pdf, gdf)
-
-
-def test_dataframe_from_table_empty_index():
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    odict = df._data
-    tbl = cudf._lib.table.Table(odict)
-
-    result = cudf.DataFrame._from_table(tbl)  # noqa: F841
 
 
 @pytest.mark.parametrize("dtype", ["int64", "str"])

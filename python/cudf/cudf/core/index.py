@@ -4,7 +4,7 @@ from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Dict, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import cupy
 import numpy as np
@@ -518,83 +518,20 @@ class BaseIndex(SingleColumnFrame, Serializable):
         """
         return self._values.data_array_view
 
-    def min(self):
-        """
-        Return the minimum value of the Index.
-
-        Returns
-        -------
-        scalar
-            Minimum value.
-
-        See Also
-        --------
-        cudf.core.index.Index.max : Return the maximum value in an Index.
-        cudf.core.series.Series.min : Return the minimum value in a Series.
-        cudf.core.dataframe.DataFrame.min : Return the minimum values in
-            a DataFrame.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([3, 2, 1])
-        >>> idx.min()
-        1
-        """
-        return self._values.min()
-
-    def max(self):
-        """
-        Return the maximum value of the Index.
-
-        Returns
-        -------
-        scalar
-            Maximum value.
-
-        See Also
-        --------
-        cudf.core.index.Index.min : Return the minimum value in an Index.
-        cudf.core.series.Series.max : Return the maximum value in a Series.
-        cudf.core.dataframe.DataFrame.max : Return the maximum values in
-            a DataFrame.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([3, 2, 1])
-        >>> idx.max()
-        3
-        """
-        return self._values.max()
-
-    def sum(self):
-        """
-        Return the sum of all values of the Index.
-
-        Returns
-        -------
-        scalar
-            Sum of all values.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([3, 2, 1])
-        >>> idx.sum()
-        6
-        """
-        return self._values.sum()
-
     @classmethod
     def _concat(cls, objs):
-        data = concat_columns([o._values for o in objs])
+        if all(isinstance(obj, RangeIndex) for obj in objs):
+            result = _concat_range_index(objs)
+        else:
+            data = concat_columns([o._values for o in objs])
+            result = as_index(data)
+
         names = {obj.name for obj in objs}
         if len(names) == 1:
             [name] = names
         else:
             name = None
-        result = as_index(data)
+
         result.name = name
         return result
 
@@ -1362,53 +1299,42 @@ class BaseIndex(SingleColumnFrame, Serializable):
         ind.name = index.name
         return ind
 
-    @classmethod
-    def _from_table(cls, table):
-        if not isinstance(table, RangeIndex):
-            if table._num_columns == 0:
-                raise ValueError("Cannot construct Index from any empty Table")
-            if table._num_columns == 1:
-                values = next(iter(table._data.values()))
-
-                if isinstance(values, NumericalColumn):
-                    try:
-                        index_class_type = _dtype_to_index[values.dtype.type]
-                    except KeyError:
-                        index_class_type = GenericIndex
-                    out = super(BaseIndex, index_class_type).__new__(
-                        index_class_type
-                    )
-                elif isinstance(values, DatetimeColumn):
-                    out = super(BaseIndex, DatetimeIndex).__new__(
-                        DatetimeIndex
-                    )
-                elif isinstance(values, TimeDeltaColumn):
-                    out = super(BaseIndex, TimedeltaIndex).__new__(
-                        TimedeltaIndex
-                    )
-                elif isinstance(values, StringColumn):
-                    out = super(BaseIndex, StringIndex).__new__(StringIndex)
-                elif isinstance(values, CategoricalColumn):
-                    out = super(BaseIndex, CategoricalIndex).__new__(
-                        CategoricalIndex
-                    )
-                out._data = table._data
-                out._index = None
-                return out
-            else:
-                return cudf.MultiIndex._from_table(
-                    table, names=table._data.names
-                )
-        else:
-            return as_index(table)
-
     @property
     def _copy_construct_defaults(self):
         return {"data": self._column, "name": self.name}
 
     @classmethod
     def _from_data(cls, data, index=None):
-        return cls._from_table(SingleColumnFrame(data=data))
+        if not isinstance(data, cudf.core.column_accessor.ColumnAccessor):
+            data = cudf.core.column_accessor.ColumnAccessor(data)
+        if len(data) == 0:
+            raise ValueError("Cannot construct Index from any empty Table")
+        if len(data) == 1:
+            values = next(iter(data.values()))
+
+            if isinstance(values, NumericalColumn):
+                try:
+                    index_class_type = _dtype_to_index[values.dtype.type]
+                except KeyError:
+                    index_class_type = GenericIndex
+                out = super(BaseIndex, index_class_type).__new__(
+                    index_class_type
+                )
+            elif isinstance(values, DatetimeColumn):
+                out = super(BaseIndex, DatetimeIndex).__new__(DatetimeIndex)
+            elif isinstance(values, TimeDeltaColumn):
+                out = super(BaseIndex, TimedeltaIndex).__new__(TimedeltaIndex)
+            elif isinstance(values, StringColumn):
+                out = super(BaseIndex, StringIndex).__new__(StringIndex)
+            elif isinstance(values, CategoricalColumn):
+                out = super(BaseIndex, CategoricalIndex).__new__(
+                    CategoricalIndex
+                )
+            out._data = data
+            out._index = None
+            return out
+        else:
+            return cudf.MultiIndex._from_data(data)
 
     @property
     def _constructor_expanddim(self):
@@ -3043,3 +2969,43 @@ class Index(BaseIndex, metaclass=IndexMeta):
             )
 
         return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
+
+
+def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
+    """
+    An internal Utility function to concat RangeIndex objects.
+    """
+    start = step = next_ = None
+
+    # Filter the empty indexes
+    non_empty_indexes = [obj for obj in indexes if len(obj)]
+
+    if not non_empty_indexes:
+        # Here all "indexes" had 0 length, i.e. were empty.
+        # In this case return an empty range index.
+        return RangeIndex(0, 0)
+
+    for obj in non_empty_indexes:
+        if start is None:
+            # This is set by the first non-empty index
+            start = obj.start
+            if step is None and len(obj) > 1:
+                step = obj.step
+        elif step is None:
+            # First non-empty index had only one element
+            if obj.start == start:
+                result = as_index(concat_columns([x._values for x in indexes]))
+                return result
+            step = obj.start - start
+
+        non_consecutive = (step != obj.step and len(obj) > 1) or (
+            next_ is not None and obj.start != next_
+        )
+        if non_consecutive:
+            result = as_index(concat_columns([x._values for x in indexes]))
+            return result
+        if step is not None:
+            next_ = obj[-1] + step
+
+    stop = non_empty_indexes[-1].stop if next_ is None else next_
+    return RangeIndex(start, stop, step)

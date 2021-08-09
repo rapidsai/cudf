@@ -12,6 +12,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+import cudf.testing.dataset_generator as dataset_generator
 from cudf.core import DataFrame, Series
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
@@ -1297,3 +1298,51 @@ def test_is_leap_year():
     got2 = gIndex.is_leap_year
 
     assert_eq(expect2, got2)
+
+
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+def test_days_in_months(dtype):
+    nrows = 1000
+
+    data = dataset_generator.rand_dataframe(
+        dtypes_meta=[
+            {"dtype": dtype, "null_frequency": 0.4, "cardinality": nrows}
+        ],
+        rows=nrows,
+        use_threads=False,
+        seed=23,
+    )
+
+    ps = data.to_pandas()["0"]
+    gs = cudf.from_pandas(ps)
+
+    assert_eq(ps.dt.days_in_month, gs.dt.days_in_month)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-05-31",
+            None,
+            "1999-12-01",
+            "2000-12-21",
+            None,
+            "1900-02-28",
+            "1800-03-14",
+            "2100-03-10",
+            "1970-01-01",
+            "1969-12-11",
+        ]
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]"])
+def test_is_month_start(data, dtype):
+    # Series
+    ps = pd.Series(data, dtype=dtype)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.is_month_start
+    got = gs.dt.is_month_start
+
+    assert_eq(expect, got)

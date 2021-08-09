@@ -1,5 +1,5 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
-from cudf.utils.gpu_utils import validate_setup  # isort:skip
+from cudf.utils.gpu_utils import validate_setup
 
 validate_setup()
 

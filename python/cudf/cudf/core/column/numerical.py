@@ -309,8 +309,8 @@ class NumericalColumn(NumericalBaseColumn):
         """
         Return col with *to_replace* replaced with *value*.
         """
-        to_replace_col = as_column(to_replace)
-        replacement_col = as_column(replacement)
+        to_replace_col = column.as_column(to_replace)
+        replacement_col = column.as_column(replacement)
 
         if type(to_replace_col) != type(replacement_col):
             raise TypeError(
@@ -345,8 +345,16 @@ class NumericalColumn(NumericalBaseColumn):
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
             to_replace_col, replacement_col, replaced
         )
+        df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
+        df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
+        if df._data["old"].null_count == 1:
+            replaced = replaced.fillna(
+                df._data["new"][df._data["old"].isna()][0]
+            )
+            df = df.dropna(subset=["old"])
+
         return libcudf.replace.replace(
-            replaced, to_replace_col, replacement_col
+            replaced, df["old"]._column, df["new"]._column
         )
 
     def fillna(
@@ -629,9 +637,12 @@ def _normalize_find_and_replace_input(
         )
         # Scalar case
         if len(col_to_normalize) == 1:
-            col_to_normalize_casted = input_column_dtype.type(
-                col_to_normalize[0]
-            )
+            if cudf._lib.scalar._is_null_host_scalar(col_to_normalize[0]):
+                return normalized_column.astype(input_column_dtype)
+            else:
+                col_to_normalize_casted = input_column_dtype.type(
+                    col_to_normalize[0]
+                )
             if not np.isnan(col_to_normalize_casted) and (
                 col_to_normalize_casted != col_to_normalize[0]
             ):

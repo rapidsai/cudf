@@ -193,7 +193,7 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
 }
 
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
-std::enable_if_t<std::is_same<T, string_view>::value, std::unique_ptr<cudf::column>> clamper(
+std::enable_if_t<std::is_same_v<T, string_view>, std::unique_ptr<cudf::column>> clamper(
   column_view const& input,
   OptionalScalarIterator const& lo_itr,
   ReplaceScalarIterator const& lo_replace_itr,

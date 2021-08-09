@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/ast/nodes.hpp>
 #include <cudf/types.hpp>
 
 #include <memory>
@@ -53,6 +54,12 @@ std::unique_ptr<column> transform(
   bool is_ptx,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+std::unique_ptr<column> generalized_masked_op(
+  table_view const& data_view,
+  std::string const& binary_udf,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
  * preserving existing null values and also returns new null_count.
@@ -66,6 +73,22 @@ std::unique_ptr<column> transform(
  */
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
   column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Compute a new column by evaluating an expression tree on a table.
+ *
+ * This evaluates an expression over a table to produce a new column. Also called an n-ary
+ * transform.
+ *
+ * @param table The table used for expression evaluation.
+ * @param expr The root of the expression tree.
+ * @param mr Device memory resource.
+ * @return std::unique_ptr<column> Output column.
+ */
+std::unique_ptr<column> compute_column(
+  table_view const table,
+  ast::expression const& expr,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
