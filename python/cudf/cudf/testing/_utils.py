@@ -284,7 +284,7 @@ def gen_rand(dtype, size, **kwargs):
         return pd.to_datetime(
             np.random.randint(low=low, high=high, size=size), unit=time_unit
         )
-    elif dtype.kind == "U":
+    elif dtype.kind in ("O", "U"):
         return pd.util.testing.rands_array(10, size)
     raise NotImplementedError(f"dtype.kind={dtype.kind}")
 
