@@ -2727,109 +2727,18 @@ class Series(SingleColumnFrame, Serializable):
         return self._copy_construct(data=result_col)
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
-        """
-        Return whether all elements are True in Series.
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values. If the entire row/column is NA and
-            skipna is True, then the result will be True, as for an
-            empty row/column.
-            If skipna is False, then NA are treated as True, because
-            these are not equal to zero.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `bool_only`, `level`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3])
-        >>> ser.all()
-        True
-        """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
         if bool_only not in (None, True):
             raise NotImplementedError(
-                "bool_only parameter is not implemented yet"
+                "The bool_only parameter is not supported for Series."
             )
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if len(result_series) == result_series.null_count:
-                return True
-        else:
-            result_series = self
-        return result_series._column.all()
+        return super().all(axis, skipna, level, **kwargs)
 
     def any(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
-        """
-        Return whether any elements is True in Series.
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values. If the entire row/column is NA and
-            skipna is True, then the result will be False, as for an
-            empty row/column.
-            If skipna is False, then NA are treated as True, because
-            these are not equal to zero.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `bool_only`, `level`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3])
-        >>> ser.any()
-        True
-        """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
         if bool_only not in (None, True):
             raise NotImplementedError(
-                "bool_only parameter is not implemented yet"
+                "The bool_only parameter is not supported for Series."
             )
-
-        skipna = False if skipna is None else skipna
-
-        if skipna is False and self.has_nulls:
-            return True
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if len(result_series) == result_series.null_count:
-                return False
-
-        else:
-            result_series = self
-
-        return result_series._column.any()
+        return super().any(axis, skipna, level, **kwargs)
 
     def to_pandas(self, index=True, nullable=False, **kwargs):
         """
@@ -4022,230 +3931,6 @@ class Series(SingleColumnFrame, Serializable):
 
         return self.valid_count
 
-    def min(
-        self,
-        axis=None,
-        skipna=None,
-        dtype=None,
-        level=None,
-        numeric_only=None,
-        **kwargs,
-    ):
-        """
-        Return the minimum of the values in the Series.
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values when computing the result.
-
-        dtype : data type
-            Data type to cast the result to.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3])
-        >>> ser.min()
-        1
-        """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.min(skipna=skipna, dtype=dtype)
-
-    def max(
-        self,
-        axis=None,
-        skipna=None,
-        dtype=None,
-        level=None,
-        numeric_only=None,
-        **kwargs,
-    ):
-        """
-        Return the maximum of the values in the Series.
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values when computing the result.
-
-        dtype : data type
-            Data type to cast the result to.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3])
-        >>> ser.max()
-        5
-        """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.max(skipna=skipna, dtype=dtype)
-
-    def sum(
-        self,
-        axis=None,
-        skipna=None,
-        dtype=None,
-        level=None,
-        numeric_only=None,
-        min_count=0,
-        **kwargs,
-    ):
-        """
-        Return sum of the values in the Series.
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values when computing the result.
-
-        dtype : data type
-            Data type to cast the result to.
-
-        min_count : int, default 0
-            The required number of valid values to perform the operation.
-            If fewer than min_count non-NA values are present the result
-            will be NA.
-
-            The default being 0. This means the sum of an all-NA or empty
-            Series is 0, and the product of an all-NA or empty Series is 1.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3])
-        >>> ser.sum()
-        15
-        """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.sum(
-            skipna=skipna, dtype=dtype, min_count=min_count
-        )
-
-    def product(
-        self,
-        axis=None,
-        skipna=None,
-        dtype=None,
-        level=None,
-        numeric_only=None,
-        min_count=0,
-        **kwargs,
-    ):
-        """
-        Return product of the values in the Series.
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values when computing the result.
-
-        dtype : data type
-            Data type to cast the result to.
-
-        min_count : int, default 0
-            The required number of valid values to perform the operation.
-            If fewer than min_count non-NA values are present the result
-            will be NA.
-
-            The default being 0. This means the sum of an all-NA or empty
-            Series is 0, and the product of an all-NA or empty Series is 1.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3])
-        >>> ser.product()
-        120
-        """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.product(
-            skipna=skipna, dtype=dtype, min_count=min_count
-        )
-
-    prod = product
-
     def cummin(self, axis=None, skipna=True, *args, **kwargs):
         """
         Return cumulative minimum of the Series.
@@ -4328,8 +4013,6 @@ class Series(SingleColumnFrame, Serializable):
         3    5
         4    5
         """
-        assert axis in (None, 0)
-
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
 
@@ -4479,228 +4162,6 @@ class Series(SingleColumnFrame, Serializable):
                 name=self.name,
                 index=self.index,
             )
-
-    def mean(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
-    ):
-        """
-        Return the mean of the values in the series.
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values when computing the result.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level` and
-        `numeric_only`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([10, 25, 3, 25, 24, 6])
-        >>> ser.mean()
-        15.5
-        """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.mean(skipna=skipna)
-
-    def std(
-        self,
-        axis=None,
-        skipna=None,
-        level=None,
-        ddof=1,
-        numeric_only=None,
-        **kwargs,
-    ):
-        """
-        Return sample standard deviation of the Series.
-
-        Normalized by N-1 by default. This can be changed using
-        the `ddof` argument
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values. If an entire row/column is NA, the result
-            will be NA.
-
-        ddof : int, default 1
-            Delta Degrees of Freedom. The divisor used in calculations
-            is N - ddof, where N represents the number of elements.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level` and
-        `numeric_only`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 10, 20, 30, 40])
-        >>> series
-        0    10
-        1    10
-        2    20
-        3    30
-        4    40
-        dtype: int64
-        >>> series.std()
-        13.038404810405298
-        >>> series.std(ddof=2)
-        15.05545305418162
-        """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.std(skipna=skipna, ddof=ddof)
-
-    def var(
-        self,
-        axis=None,
-        skipna=None,
-        level=None,
-        ddof=1,
-        numeric_only=None,
-        **kwargs,
-    ):
-        """
-        Return unbiased variance of the Series.
-
-        Normalized by N-1 by default. This can be changed using the
-        ddof argument
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values. If an entire row/column is NA, the result
-            will be NA.
-
-        ddof : int, default 1
-            Delta Degrees of Freedom. The divisor used in calculations is
-            N - ddof, where N represents the number of elements.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level` and
-        `numeric_only`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 11, 12, 0, 1])
-        >>> series
-        0    10
-        1    11
-        2    12
-        3     0
-        4     1
-        dtype: int64
-        >>> series.var()
-        33.7
-        """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.var(skipna=skipna, ddof=ddof)
-
-    def sum_of_squares(self, dtype=None):
-        return self._column.sum_of_squares(dtype=dtype)
-
-    def median(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
-    ):
-        """
-        Return the median of the values for the requested axis.
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values when computing the result.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level` and
-        `numeric_only`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([10, 25, 3, 25, 24, 6])
-        >>> ser
-        0    10
-        1    25
-        2     3
-        3    25
-        4    24
-        5     6
-        dtype: int64
-        >>> ser.median()
-        17.0
-        """
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.median(skipna=skipna)
 
     def mode(self, dropna=True):
         """
@@ -4958,7 +4419,11 @@ class Series(SingleColumnFrame, Serializable):
         -0.20454263717316112
         """
 
-        assert method in ("pearson",) and min_periods in (None,)
+        if method not in ("pearson",):
+            raise ValueError(f"Unknown method {method}")
+
+        if min_periods not in (None,):
+            raise NotImplementedError("Unsupported argument 'min_periods'")
 
         if self.empty or other.empty:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
@@ -5407,7 +4872,8 @@ class Series(SingleColumnFrame, Serializable):
         2     76
         dtype: int32
         """
-        assert stop > 0
+        if not stop > 0:
+            raise ValueError("stop must be a positive integer.")
 
         initial_hash = [hash(self.name) & 0xFFFFFFFF] if use_name else None
         hashed_values = Series(self._hash(initial_hash))
@@ -6434,6 +5900,42 @@ class DatetimeProperties(object):
         -------
         Series
         Booleans indicating if dates belong to a leap year.
+
+        Example
+        -------
+        >>> import pandas as pd, cudf
+        >>> s = cudf.Series(
+        ...     pd.date_range(start='2000-02-01', end='2013-02-01', freq='1Y'))
+        >>> s
+        0    2000-12-31
+        1    2001-12-31
+        2    2002-12-31
+        3    2003-12-31
+        4    2004-12-31
+        5    2005-12-31
+        6    2006-12-31
+        7    2007-12-31
+        8    2008-12-31
+        9    2009-12-31
+        10   2010-12-31
+        11   2011-12-31
+        12   2012-12-31
+        dtype: datetime64[ns]
+        >>> s.dt.is_leap_year
+        0      True
+        1     False
+        2     False
+        3     False
+        4      True
+        5     False
+        6     False
+        7     False
+        8      True
+        9     False
+        10    False
+        11    False
+        12     True
+        dtype: bool
         """
         res = libcudf.datetime.is_leap_year(self.series._column).fillna(False)
         return Series._from_data(
@@ -6453,6 +5955,57 @@ class DatetimeProperties(object):
         Booleans indicating if dates are the first day of the month.
         """
         return (self.day == 1).fillna(False)
+
+    @property
+    def days_in_month(self):
+        """
+        Get the total number of days in the month that the date falls on.
+
+        Returns
+        -------
+        Series
+        Integers representing the number of days in month
+
+        Example
+        -------
+        >>> import pandas as pd, cudf
+        >>> s = cudf.Series(
+        ...     pd.date_range(start='2000-08-01', end='2001-08-01', freq='1M'))
+        >>> s
+        0    2000-08-31
+        1    2000-09-30
+        2    2000-10-31
+        3    2000-11-30
+        4    2000-12-31
+        5    2001-01-31
+        6    2001-02-28
+        7    2001-03-31
+        8    2001-04-30
+        9    2001-05-31
+        10   2001-06-30
+        11   2001-07-31
+        dtype: datetime64[ns]
+        >>> s.dt.days_in_month
+        0     31
+        1     30
+        2     31
+        3     30
+        4     31
+        5     31
+        6     28
+        7     31
+        8     30
+        9     31
+        10    30
+        11    31
+        dtype: int16
+        """
+        res = libcudf.datetime.days_in_month(self.series._column)
+        return Series._from_data(
+            ColumnAccessor({None: res}),
+            index=self.series._index,
+            name=self.series.name,
+        )
 
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
