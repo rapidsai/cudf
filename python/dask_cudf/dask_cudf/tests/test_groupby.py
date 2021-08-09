@@ -613,12 +613,21 @@ def test_groupby_first_last(data, agg):
     ddf = dd.from_pandas(pdf, npartitions=2)
     gddf = dask_cudf.from_cudf(gdf, npartitions=2)
 
-    a = ddf.groupby("a").agg(agg)
-    b = gddf.groupby("a").agg(agg)
+    dd.assert_eq(
+        ddf.groupby("a").agg(agg).compute(),
+        gddf.groupby("a").agg(agg).compute(),
+    )
 
-    dd.assert_eq(a, b)
+    dd.assert_eq(
+        getattr(ddf.groupby("a"), agg)().compute(),
+        getattr(gddf.groupby("a"), agg)().compute(),
+    )
 
-    a = getattr(ddf.groupby("a"), agg)()
-    b = getattr(gddf.groupby("a"), agg)()
+    dd.assert_eq(
+        gdf.groupby("a").agg(agg), gddf.groupby("a").agg(agg).compute()
+    )
 
-    dd.assert_eq(a, b)
+    dd.assert_eq(
+        getattr(gdf.groupby("a"), agg)(),
+        getattr(gddf.groupby("a"), agg)().compute(),
+    )
