@@ -29,6 +29,7 @@ cpdef read_text(object filepaths_or_buffers,
     --------
     cudf.io.text.read_text
     """
+    # TODO: Do we support multiple inputs here?
     cdef string filename = filepaths_or_buffers[0].encode()
     cdef vector[string] delims = [delimiter.encode()]
 
