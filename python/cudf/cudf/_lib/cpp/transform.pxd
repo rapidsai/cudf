@@ -41,8 +41,8 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     ) except +
 
     cdef unique_ptr[column] ewm(
-        const column_view& input_col,
-        float alpha
+        const column_view& input,
+        double alpha
     ) except +
 
     cdef pair[unique_ptr[table], unique_ptr[column]] encode(

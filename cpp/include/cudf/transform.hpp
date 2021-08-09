@@ -59,10 +59,6 @@ std::unique_ptr<column> generalized_masked_op(
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<column> ewm(
-  column_view input,
-  double alpha,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
@@ -98,6 +94,12 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+std::unique_ptr<column> ewm(
+  column_view const& input, 
+  double alpha, 
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  
 /**
  * @brief Encode the rows of the given table as integers
  *

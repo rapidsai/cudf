@@ -187,25 +187,6 @@ std::unique_ptr<column> generalized_masked_op(table_view const& data_view,
   return output;
 }
 
-std::unique_ptr<column> ewm(
-  column_view input,
-  double alpha,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr
-) 
-{
-  CUDF_EXPECTS(input.type() == cudf::data_type{cudf::type_id::FLOAT64}, "Column must be float64 type");
-  auto output = make_fixed_width_column(cudf::data_type{cudf::type_id::FLOAT64}, input.size());
-  auto output_mutable_view = output->mutable_view();
-  //auto inp_gpu = column_device_view::create(input);
-  //mutable_column_device_view out_gpu = output->mutable_view();
-
-
-  thrust::fill(rmm::exec_policy(), output_mutable_view.begin<float>(), output_mutable_view.end<float>(), 1.0);
-
-  return output;
-}
-
 }  // namespace detail
 
 std::unique_ptr<column> transform(column_view const& input,
@@ -224,15 +205,6 @@ std::unique_ptr<column> generalized_masked_op(table_view const& data_view,
                                               rmm::mr::device_memory_resource* mr)
 {
   return detail::generalized_masked_op(data_view, udf, output_type, rmm::cuda_stream_default, mr);
-}
-
-std::unique_ptr<column> ewm(
-  column_view input,
-  double alpha,
-  rmm::mr::device_memory_resource* mr)
-
-{
-  return detail::ewm(input, alpha, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

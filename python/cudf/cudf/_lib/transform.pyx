@@ -145,7 +145,7 @@ def masked_udf(Table incols, op, output_type):
 
 def ewm(Column incol, object alpha):
     cdef column_view input_col = incol.view()
-    cdef float alpha_ = alpha
+    cdef double alpha_ = alpha
 
     with nogil:
         c_output = move(libcudf_transform.ewm(
