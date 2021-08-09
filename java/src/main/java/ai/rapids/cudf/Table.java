@@ -2004,10 +2004,6 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap[] leftJoinGatherMaps(Table rightTable, CompiledExpression condition,
                                         boolean compareNullsEqual) {
-    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
-          "rightKeys: " + rightTable.getNumberOfColumns());
-    }
     long[] gatherMapData =
         conditionalLeftJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
@@ -2049,10 +2045,6 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap[] innerJoinGatherMaps(Table rightTable, CompiledExpression condition,
                                          boolean compareNullsEqual) {
-    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
-          "rightKeys: " + rightTable.getNumberOfColumns());
-    }
     long[] gatherMapData =
         conditionalInnerJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
@@ -2094,10 +2086,6 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap[] fullJoinGatherMaps(Table rightTable, CompiledExpression condition,
                                          boolean compareNullsEqual) {
-    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
-          "rightKeys: " + rightTable.getNumberOfColumns());
-    }
     long[] gatherMapData =
         conditionalFullJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
@@ -2146,10 +2134,6 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap leftSemiJoinGatherMap(Table rightTable, CompiledExpression condition,
                                          boolean compareNullsEqual) {
-    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
-          "rightKeys: " + rightTable.getNumberOfColumns());
-    }
     long[] gatherMapData =
         conditionalLeftSemiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
@@ -2191,10 +2175,6 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap leftAntiJoinGatherMap(Table rightTable, CompiledExpression condition,
                                          boolean compareNullsEqual) {
-    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
-          "rightKeys: " + rightTable.getNumberOfColumns());
-    }
     long[] gatherMapData =
         conditionalLeftAntiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
@@ -2456,7 +2436,7 @@ public final class Table implements AutoCloseable {
      *                  1,   2
      *                  2,   1 ==> aggregated count
      */
-    public Table aggregate(AggregationOnColumn... aggregates) {
+    public Table aggregate(GroupByAggregationOnColumn... aggregates) {
       assert aggregates != null;
 
       // To improve performance and memory we want to remove duplicate operations
@@ -2469,9 +2449,9 @@ public final class Table implements AutoCloseable {
       int keysLength = operation.indices.length;
       int totalOps = 0;
       for (int outputIndex = 0; outputIndex < aggregates.length; outputIndex++) {
-        AggregationOnColumn agg = aggregates[outputIndex];
+        GroupByAggregationOnColumn agg = aggregates[outputIndex];
         ColumnOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnOps());
-        totalOps += ops.add(agg, outputIndex + keysLength);
+        totalOps += ops.add(agg.getWrapped().getWrapped(), outputIndex + keysLength);
       }
       int[] aggColumnIndexes = new int[totalOps];
       long[] aggOperationInstances = new long[totalOps];
@@ -2808,7 +2788,7 @@ public final class Table implements AutoCloseable {
       }
     }
 
-    public Table scan(AggregationOnColumn... aggregates) {
+    public Table scan(GroupByScanAggregationOnColumn... aggregates) {
       assert aggregates != null;
 
       // To improve performance and memory we want to remove duplicate operations
@@ -2821,9 +2801,9 @@ public final class Table implements AutoCloseable {
       int keysLength = operation.indices.length;
       int totalOps = 0;
       for (int outputIndex = 0; outputIndex < aggregates.length; outputIndex++) {
-        AggregationOnColumn agg = aggregates[outputIndex];
+        GroupByScanAggregationOnColumn agg = aggregates[outputIndex];
         ColumnOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnOps());
-        totalOps += ops.add(agg, outputIndex + keysLength);
+        totalOps += ops.add(agg.getWrapped().getWrapped(), outputIndex + keysLength);
       }
       int[] aggColumnIndexes = new int[totalOps];
       long[] aggOperationInstances = new long[totalOps];
