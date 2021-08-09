@@ -34,7 +34,7 @@ from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
-from cudf.core.window import Rolling, ExponentialMovingWindow
+from cudf.core.window import ExponentialMovingWindow, Rolling
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -4511,7 +4511,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             win_type=win_type,
         )
 
-    def ewm(self, com=None, span=None, halflife=None, alpha=None, min_periods=0, adjust=True, ignore_na=False, axis=0):
+    def ewm(
+        self,
+        com=None,
+        span=None,
+        halflife=None,
+        alpha=None,
+        min_periods=0,
+        adjust=True,
+        ignore_na=False,
+        axis=0,
+    ):
         return ExponentialMovingWindow(
             self,
             com=com,
@@ -4521,7 +4531,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             min_periods=min_periods,
             adjust=True,
             ignore_na=False,
-            axis=0
+            axis=0,
         )
 
     def query(self, expr, local_dict=None):

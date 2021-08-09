@@ -17,14 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/transform.hpp>
-#include <cudf/detail/valid_if.cuh>
-#include <cudf/null_mask.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/traits.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -32,19 +25,17 @@
 namespace cudf {
 namespace detail {
 
-// A Functor
-class blelloch_functor
-{
-public:  
-    // This operator overloading enables calling
-    // operator function () on objects of increment
-    __device__ thrust::pair<double, double> operator () (thrust::pair<double, double> ci, thrust::pair<double, double> cj) {
-        double ci0 = thrust::get<0>(ci);
-        double ci1 = thrust::get<1>(ci);
-        double cj0 = thrust::get<0>(cj);
-        double cj1 = thrust::get<1>(cj);
-        return thrust::pair<double, double>(ci0 * cj0, ci1 * cj0 + cj1);   
-    }
+class blelloch_functor {
+ public:
+  __device__ thrust::pair<double, double> operator()(thrust::pair<double, double> ci,
+                                                     thrust::pair<double, double> cj)
+  {
+    double ci0 = thrust::get<0>(ci);
+    double ci1 = thrust::get<1>(ci);
+    double cj0 = thrust::get<0>(cj);
+    double cj1 = thrust::get<1>(cj);
+    return thrust::pair<double, double>(ci0 * cj0, ci1 * cj0 + cj1);
+  }
 };
 
 rmm::device_vector<double> ewm_denominator(column_view const& input, double beta)
@@ -56,11 +47,7 @@ rmm::device_vector<double> ewm_denominator(column_view const& input, double beta
   thrust::fill(pairs.begin(), pairs.end(), thrust::pair<double, double>(beta, 1.0));
 
   blelloch_functor op;
-  thrust::inclusive_scan(
-    pairs.begin(),
-    pairs.end(),
-    result_pairs.begin(),
-    op);
+  thrust::inclusive_scan(pairs.begin(), pairs.end(), result_pairs.begin(), op);
 
   thrust::transform(result_pairs.begin(),
                     result_pairs.end(),
@@ -87,11 +74,7 @@ rmm::device_vector<double> ewm_numerator(column_view const& input, double beta)
                     });
 
   blelloch_functor op;
-  thrust::inclusive_scan(
-    pairs.begin(),
-    pairs.end(),
-    result_pairs.begin(),
-    op);
+  thrust::inclusive_scan(pairs.begin(), pairs.end(), result_pairs.begin(), op);
 
   thrust::transform(result_pairs.begin(),
                     result_pairs.end(),
@@ -115,8 +98,6 @@ std::unique_ptr<column> ewm(column_view const& input,
 
   auto begin = output_mutable_view.begin<double>();
   auto end   = output_mutable_view.end<double>();
-
-  // thrust::fill(rmm::exec_policy(stream), begin, end, (double)1.0);
 
   rmm::device_vector<double> denominator = ewm_denominator(input, (1.0 - alpha));
   rmm::device_vector<double> numerator   = ewm_numerator(input, (1.0 - alpha));

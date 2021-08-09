@@ -365,8 +365,6 @@ cdef class RollingAggregation:
             ))
         return agg
 
-    def bran(cls, dropna=True):
-        assert False
 
     @classmethod
     def size(cls):

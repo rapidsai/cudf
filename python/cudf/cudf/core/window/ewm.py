@@ -1,17 +1,21 @@
 from pandas.core.window.ewm import get_center_of_mass
+
+from cudf._lib.transform import ewm
 from cudf.core.window.rolling import _RollingBase
+
+
 class ExponentialMovingWindow(_RollingBase):
     def __init__(
-        self, 
-        obj, 
-        com=None, 
-        span=None, 
-        halflife=None, 
-        alpha=None, 
+        self,
+        obj,
+        com=None,
+        span=None,
+        halflife=None,
+        alpha=None,
         min_periods=0,
         adjust=True,
         ignore_na=False,
-        axis=0
+        axis=0,
     ):
 
         self.obj = obj
@@ -21,21 +25,21 @@ class ExponentialMovingWindow(_RollingBase):
         return self._apply_agg("mean")
 
     def var(self):
-        return self._apply_agg("mean")
+        return self._apply_agg("var")
 
     def std(self):
-        return self._apply_agg("mean")
+        return self._apply_agg("std")
 
     def corr(self):
-        return self._apply_agg("mean")
+        return self._apply_agg("corr")
 
     def cov(self):
-        return self._apply_agg("mean")
+        return self._apply_agg("cov")
 
     def _apply_agg_series(self, sr, agg_name):
         """
         placeholder implementation
         """
-        pd_obj =  sr.to_pandas().ewm(com=self.com)
-        pd_agged = getattr(pd_obj, agg_name)()
-        return type(self.obj).from_pandas(pd_agged)
+        # TODO: redo libcudf stuff in terms of com not alpha
+        # hardcoded
+        return type(sr)(ewm(sr._column, 0.9))

@@ -41,7 +41,7 @@ from cudf.core.frame import Frame, SingleColumnFrame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
-from cudf.core.window import Rolling, ExponentialMovingWindow
+from cudf.core.window import ExponentialMovingWindow, Rolling
 from cudf.utils import cudautils, docutils, ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -5785,7 +5785,17 @@ class Series(SingleColumnFrame, Serializable):
             self, by=by, level=level, dropna=dropna, sort=sort
         )
 
-    def ewm(self, com=None, span=None, halflife=None, alpha=None, min_periods=0, adjust=True, ignore_na=False, axis=0):
+    def ewm(
+        self,
+        com=None,
+        span=None,
+        halflife=None,
+        alpha=None,
+        min_periods=0,
+        adjust=True,
+        ignore_na=False,
+        axis=0,
+    ):
         return ExponentialMovingWindow(
             self,
             com=com,
@@ -5795,8 +5805,9 @@ class Series(SingleColumnFrame, Serializable):
             min_periods=min_periods,
             adjust=True,
             ignore_na=False,
-            axis=0
+            axis=0,
         )
+
     @copy_docstring(Rolling)
     def rolling(
         self, window, min_periods=None, center=False, axis=0, win_type=None

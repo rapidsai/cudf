@@ -32,10 +32,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/transform.h>
-#include <cudf/column/column_device_view.cuh>
-#include <rmm/exec_policy.hpp>
-
 namespace cudf {
 namespace transformation {
 namespace jit {
