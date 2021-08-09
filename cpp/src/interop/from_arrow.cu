@@ -225,6 +225,54 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal64>(
 }
 
 template <>
+std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal32>(
+  arrow::Array const& array,
+  data_type type,
+  bool skip_mask,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  using DeviceType = int32_t;
+
+  auto constexpr BIT_WIDTH_RATIO = 4;  // Array::Type:type::DECIMAL (128) / int32_t
+  auto data_buffer               = array.data()->buffers[1];
+  auto const num_rows            = static_cast<size_type>(array.length());
+
+  rmm::device_uvector<DeviceType> buf(num_rows * BIT_WIDTH_RATIO, stream);
+  rmm::device_uvector<DeviceType> out_buf(num_rows, stream, mr);
+
+  CUDA_TRY(cudaMemcpyAsync(
+    reinterpret_cast<uint8_t*>(buf.data()),
+    reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(DeviceType),
+    buf.size() * sizeof(DeviceType),
+    cudaMemcpyDefault,
+    stream.value()));
+
+  auto every_other = [] __device__(size_type i) { return 4 * i; };
+  auto gather_map  = cudf::detail::make_counting_transform_iterator(0, every_other);
+
+  thrust::gather(
+    rmm::exec_policy(stream), gather_map, gather_map + num_rows, buf.data(), out_buf.data());
+
+  auto null_mask = [&] {
+    if (not skip_mask and array.null_bitmap_data()) {
+      auto temp_mask = get_mask_buffer(array, stream, mr);
+      // If array is sliced, we have to copy whole mask and then take copy.
+      return (num_rows == static_cast<size_type>(data_buffer->size() / sizeof(DeviceType)))
+               ? std::move(*temp_mask.release())
+               : cudf::detail::copy_bitmask(static_cast<bitmask_type*>(temp_mask->data()),
+                                            array.offset(),
+                                            array.offset() + num_rows,
+                                            stream,
+                                            mr);
+    }
+    return rmm::device_buffer{};
+  }();
+
+  return std::make_unique<cudf::column>(type, num_rows, out_buf.release(), std::move(null_mask));
+}
+
+template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
   arrow::Array const& array,
   data_type,
