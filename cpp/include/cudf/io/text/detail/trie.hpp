@@ -23,8 +23,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
+#include <algorithm>
 #include <queue>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace cudf {
@@ -118,10 +120,18 @@ struct trie_device_view {
 
 struct trie {
  private:
+  cudf::size_type _max_duplicate_tokens;
   rmm::device_uvector<trie_node> _nodes;
 
  public:
-  trie(rmm::device_uvector<trie_node>&& nodes) : _nodes(std::move(nodes)) {}
+  trie(cudf::size_type max_duplicate_tokens, rmm::device_uvector<trie_node>&& nodes)
+    : _max_duplicate_tokens(max_duplicate_tokens), _nodes(std::move(nodes))
+  {
+  }
+
+  cudf::size_type size() const { return _nodes.size(); }
+
+  cudf::size_type max_duplicate_tokens() const { return _max_duplicate_tokens; }
 
   static trie create(std::string const& pattern,
                      rmm::cuda_stream_view stream,
@@ -175,12 +185,22 @@ struct trie {
     match_length.emplace_back(0);
 
     std::vector<trie_node> trie_nodes;
+    auto token_counts = std::unordered_map<cudf::size_type, int32_t>();
 
     for (uint32_t i = 0; i < tokens.size(); i++) {
       trie_nodes.emplace_back(trie_node{tokens[i], match_length[i], transitions[i]});
+      token_counts[tokens[i]]++;
     }
 
-    return trie{cudf::detail::make_device_uvector_async(trie_nodes, stream, mr)};
+    auto most_common_token =
+      std::max_element(token_counts.begin(), token_counts.end(), [](auto const& a, auto const& b) {
+        return a.second < b.second;
+      });
+
+    auto max_duplicate_tokens = most_common_token->second;
+
+    return trie{max_duplicate_tokens,
+                cudf::detail::make_device_uvector_sync(trie_nodes, stream, mr)};
   }
 
   trie_device_view view() const { return trie_device_view{_nodes}; }

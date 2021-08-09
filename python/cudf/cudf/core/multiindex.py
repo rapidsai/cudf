@@ -6,7 +6,7 @@ import numbers
 import pickle
 import warnings
 from collections.abc import Sequence
-from typing import Any, List, Tuple, Union
+from typing import Any, List, Mapping, Tuple, Union
 
 import cupy
 import numpy as np
@@ -18,7 +18,6 @@ from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.column import as_column, column
-from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import SingleColumnFrame
 from cudf.core.index import BaseIndex, as_index
 from cudf.utils.utils import _maybe_indices_to_slice
@@ -174,7 +173,7 @@ class MultiIndex(BaseIndex):
 
             source_data[name] = libcudf.copying.gather(
                 level, codes._data.columns[0]
-            )._data[name]
+            )[0][name]
 
         self._data = source_data._data
         self.names = names
@@ -294,16 +293,14 @@ class MultiIndex(BaseIndex):
 
         return self._set_names(names=names, inplace=inplace)
 
+    # TODO: This type ignore is indicating a real problem, which is that
+    # MultiIndex should not be inheriting from SingleColumnFrame, but fixing
+    # that will have to wait until we reshuffle the Index hierarchy.
     @classmethod
-    def _from_data(cls, data: ColumnAccessor, index=None) -> MultiIndex:
+    def _from_data(  # type: ignore
+        cls, data: Mapping, index=None
+    ) -> MultiIndex:
         return cls.from_frame(cudf.DataFrame._from_data(data))
-
-    @classmethod
-    def _from_table(cls, table, names=None):
-        df = cudf.DataFrame(table._data)
-        if names is None:
-            names = df.columns
-        return MultiIndex.from_frame(df, names=names)
 
     @property
     def shape(self):
@@ -1241,9 +1238,7 @@ class MultiIndex(BaseIndex):
             popped_data[n] = self._data.pop(n)
 
         # construct the popped result
-        popped = cudf.core.index.Index._from_table(
-            cudf.core.frame.Frame(popped_data)
-        )
+        popped = cudf.Index._from_data(popped_data)
         popped.names = popped_names
 
         # update self

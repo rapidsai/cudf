@@ -29,6 +29,7 @@ namespace detail {
  */
 struct multistate_segment {
  public:
+  static auto constexpr max_states = 16;
   constexpr multistate_segment() : _data(0) {}
   constexpr multistate_segment(uint8_t head, uint8_t tail) : _data((head & 0b1111) | (tail << 4)) {}
 
@@ -44,6 +45,7 @@ struct multistate_segment {
  */
 struct multistate {
  public:
+  static auto constexpr max_segments = 7;
   constexpr void enqueue(uint8_t head, uint8_t tail)
   {
     _segments[_size++] = multistate_segment(head, tail);
@@ -66,9 +68,8 @@ struct multistate {
   constexpr uint8_t get_tail(uint8_t idx) const { return _segments[idx].get_tail(); }
 
  private:
-  static auto constexpr N = 7;
-  uint8_t _size           = 0;
-  multistate_segment _segments[N];
+  uint8_t _size = 0;
+  multistate_segment _segments[max_segments];
 };
 
 /**

@@ -30,7 +30,6 @@
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
 
-#include <iostream>
 #include <memory>
 
 namespace {
@@ -43,12 +42,11 @@ constexpr decltype(auto) ceil_div(Dividend dividend, Divisor divisor)
 
 using cudf::io::text::detail::multistate;
 
-int32_t constexpr ITEMS_PER_THREAD = 32;  // influences register pressure
-int32_t constexpr THREADS_PER_TILE = 32;  // must be >= 32. bugged for > 32, needs fix
+int32_t constexpr ITEMS_PER_THREAD = 32;
+int32_t constexpr THREADS_PER_TILE = 128;
 int32_t constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
-int32_t constexpr TILES_PER_CHUNK  = 512;
-// keep ITEMS_PER_CHUNK below input size to force multi-tile execution.
-int32_t constexpr ITEMS_PER_CHUNK = ITEMS_PER_TILE * TILES_PER_CHUNK;
+int32_t constexpr TILES_PER_CHUNK  = 1024;
+int32_t constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 
 struct PatternScan {
   typedef cub::BlockScan<multistate, THREADS_PER_TILE> BlockScan;
@@ -292,6 +290,9 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
 
   auto reader = source.create_reader();
 
+  cudaEvent_t last_launch_event;
+  cudaEventCreate(&last_launch_event);
+
   for (int32_t i = 0; true; i++) {
     auto base_tile_idx = i * TILES_PER_CHUNK;
     auto chunk_stream  = streams[i % streams.size()];
@@ -308,6 +309,8 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
       tile_multistates,
       tile_offsets);
 
+    cudaStreamWaitEvent(chunk_stream, last_launch_event, 0);
+
     multibyte_split_kernel<<<tiles_in_launch, THREADS_PER_TILE, 0, chunk_stream>>>(  //
       base_tile_idx,
       tile_multistates,
@@ -318,8 +321,12 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
       output_buffer,
       output_char_buffer);
 
+    cudaEventRecord(last_launch_event, chunk_stream);
+
     chunk_offset += chunk.size();
   }
+
+  cudaEventDestroy(last_launch_event);
 
   join_stream(streams, stream);
 
@@ -333,7 +340,14 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               rmm::cuda_stream_pool& stream_pool)
 {
   CUDF_FUNC_RANGE();
-  auto const trie  = cudf::io::text::detail::trie::create(delimiters, stream);
+  auto const trie = cudf::io::text::detail::trie::create(delimiters, stream);
+
+  CUDF_EXPECTS(trie.max_duplicate_tokens() <= multistate::max_segments,
+               "delimiters must be representable by a trie with no more than 7 duplicate tokens");
+
+  CUDF_EXPECTS(trie.size() <= multistate_segment::max_states,
+               "delimiters must be representable by a trie with no more than 16 unique states");
+
   auto concurrency = 2;
   // must be at least 32 when using warp-reduce on partials
   // must be at least 1 more than max possible concurrent tiles
