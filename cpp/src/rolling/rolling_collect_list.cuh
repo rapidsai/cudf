@@ -26,6 +26,7 @@
 #include <cudf/strings/detail/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/reduce.h>
@@ -100,8 +101,6 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
                                                            rmm::cuda_stream_view stream,
                                                            rmm::mr::device_memory_resource* mr)
 {
-  auto static constexpr size_data_type = data_type{type_to_id<size_type>()};
-
   // First, reduce offsets column by key, to identify the number of times
   // an offset appears.
   // Next, scatter the count for each offset (except the first and last),
@@ -124,29 +123,23 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
   auto const num_child_rows{
     cudf::detail::get_value<size_type>(offsets, offsets.size() - 1, stream)};
 
-  auto scatter_values =
-    make_fixed_width_column(size_data_type, offsets.size(), mask_state::UNALLOCATED, stream, mr);
-  auto scatter_keys =
-    make_fixed_width_column(size_data_type, offsets.size(), mask_state::UNALLOCATED, stream, mr);
+  rmm::device_uvector<size_type> scatter_values(offsets.size(), stream);
+  rmm::device_uvector<size_type> scatter_keys(offsets.size(), stream);
   auto reduced_by_key =
     thrust::reduce_by_key(rmm::exec_policy(stream),
-                          offsets.template begin<size_type>() + 1,  // Skip first 0 in offsets.
-                          offsets.template end<size_type>(),
+                          offsets.begin<size_type>() + 1,  // Skip first 0 in offsets.
+                          offsets.end<size_type>(),
                           thrust::make_constant_iterator<size_type>(1),
-                          scatter_keys->mutable_view().template begin<size_type>(),
-                          scatter_values->mutable_view().template begin<size_type>());
+                          scatter_keys.begin(),
+                          scatter_values.begin());
   auto scatter_values_end = reduced_by_key.second;
-  auto scatter_output =
-    make_fixed_width_column(size_data_type, num_child_rows, mask_state::UNALLOCATED, stream, mr);
-  thrust::fill_n(rmm::exec_policy(stream),
-                 scatter_output->mutable_view().template begin<size_type>(),
-                 num_child_rows,
-                 0);  // [0,0,0,...0]
+  rmm::device_uvector<size_type> scatter_output(num_child_rows + 1, stream);
+  thrust::fill_n(rmm::exec_policy(stream), scatter_output.begin(), num_child_rows, 0);
   thrust::scatter(rmm::exec_policy(stream),
-                  scatter_values->mutable_view().template begin<size_type>(),
+                  scatter_values.begin(),
                   scatter_values_end,
-                  scatter_keys->view().template begin<size_type>(),
-                  scatter_output->mutable_view().template begin<size_type>());  // [0,0,1,0,0,1,...]
+                  scatter_keys.begin(),
+                  scatter_output.begin());  // [0,0,1,0,0,1,...]
 
   // Next, generate mapping with inclusive_scan() on scatter() result.
   // For the example above:
@@ -156,11 +149,11 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
   // For the case with an empty list at index 3:
   //   scatter result == [0, 0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 1, 0]
   //   inclusive_scan == [0, 0, 1, 1, 1, 3, 3, 3, 4, 4, 4, 5, 5]
-  auto per_row_mapping =
-    make_fixed_width_column(size_data_type, num_child_rows, mask_state::UNALLOCATED, stream, mr);
+  auto per_row_mapping = make_fixed_width_column(
+    data_type{type_to_id<size_type>()}, num_child_rows, mask_state::UNALLOCATED, stream, mr);
   thrust::inclusive_scan(rmm::exec_policy(stream),
-                         scatter_output->view().template begin<size_type>(),
-                         scatter_output->view().template end<size_type>(),
+                         scatter_output.begin(),
+                         scatter_output.begin() + num_child_rows,
                          per_row_mapping->mutable_view().template begin<size_type>());
   return per_row_mapping;
 }
