@@ -154,7 +154,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
 
   auto count = thrust::make_counting_iterator(0);
 
-  thrust::for_each(count,
+  thrust::for_each(rmm::exec_policy(stream), count,
                    count + input.size(),
                    [in = input.begin<DeviceType>(), out = buf.data()] __device__(auto in_idx) {
                      auto const out_idx = in_idx * 2;
@@ -197,7 +197,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal32>(
 
   auto count = thrust::make_counting_iterator(0);
 
-  thrust::for_each(count,
+  thrust::for_each(rmm::exec_policy(stream), count,
                    count + input.size(),
                    [in = input.begin<DeviceType>(), out = buf.data()] __device__(auto in_idx) {
                      auto const out_idx = in_idx * 4;
