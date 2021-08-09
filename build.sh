@@ -83,7 +83,7 @@ function cmakeArgs {
             CMAKE_ARGS=$(echo $CMAKE_ARGS | grep -Eo "\".+\"" | sed -e 's/^"//' -e 's/"$//')
         fi
     elif [[ $(echo $ARGS | grep -E "\-\-cmake\-args=") ]]; then
-	CMAKE_ARGS="$(echo $ARGS | grep -Eo "\-\-cmake\-args=.+ ")"
+	CMAKE_ARGS="$(echo $ARGS | grep -Eo "\-\-cmake\-args=(.+)? ")"
 	echo "Invalid formatting for --cmake-args, see --help: $CMAKE_ARGS"
         exit 1
     fi
