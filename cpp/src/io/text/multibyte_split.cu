@@ -106,8 +106,25 @@ __global__ void multibyte_split_init_kernel(
   cudf::io::text::detail::scan_tile_status status =
     cudf::io::text::detail::scan_tile_status::invalid)
 {
-  tile_multistates.initialize_status(base_tile_idx, num_tiles, status);
-  tile_output_offsets.initialize_status(base_tile_idx, num_tiles, status);
+  auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (thread_idx < num_tiles) {
+    auto const tile_idx = base_tile_idx + thread_idx;
+    tile_multistates.set_status(tile_idx, status);
+    tile_output_offsets.set_status(tile_idx, status);
+  }
+}
+
+__global__ void multibyte_split_seed_kernel(
+  cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
+  cudf::io::text::detail::scan_tile_state_view<uint32_t> tile_output_offsets,
+  multistate tile_multistate_seed,
+  uint32_t tile_output_offset)
+{
+  auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (thread_idx == 0) {
+    tile_multistates.set_inclusive_prefix(-1, tile_multistate_seed);
+    tile_output_offsets.set_inclusive_prefix(-1, tile_output_offset);
+  }
 }
 
 __global__ void multibyte_split_kernel(
@@ -283,8 +300,11 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
   auto multistate_seed = multistate();
   multistate_seed.enqueue(0, 0);  // this represents the first state in the pattern.
 
-  tile_multistates.set_seed_async(multistate_seed, stream);
-  tile_offsets.set_seed_async(0, stream);
+  multibyte_split_seed_kernel<<<1, 1, 0, stream.value()>>>(  //
+    tile_multistates,
+    tile_offsets,
+    multistate_seed,
+    0);
 
   fork_stream(streams, stream);
 

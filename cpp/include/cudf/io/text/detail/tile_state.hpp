@@ -3,6 +3,8 @@
 
 #include <cub/block/block_scan.cuh>
 
+#include <cuda/atomic>
+
 namespace cudf {
 namespace io {
 namespace text {
@@ -18,47 +20,36 @@ enum class scan_tile_status : uint8_t {
 template <typename T>
 struct scan_tile_state_view {
   uint64_t num_tiles;
-  scan_tile_status* tile_status;
+  cuda::atomic<scan_tile_status, cuda::thread_scope_device>* tile_status;
   T* tile_partial;
   T* tile_inclusive;
 
-  __device__ inline void initialize_status(cudf::size_type base_tile_idx,
-                                           cudf::size_type count,
-                                           scan_tile_status status)
+  __device__ inline void set_status(cudf::size_type tile_idx, scan_tile_status status)
   {
-    auto thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (thread_idx < count) {  //
-      // this is UB if tile_status gets assigned from multiple threads.
-      tile_status[(base_tile_idx + thread_idx) % num_tiles] = status;
-    }
+    auto const offset = (tile_idx + num_tiles) % num_tiles;
+    tile_status[offset].store(status);
   }
 
   __device__ inline void set_partial_prefix(cudf::size_type tile_idx, T value)
   {
     auto const offset = (tile_idx + num_tiles) % num_tiles;
     cub::ThreadStore<cub::STORE_CG>(tile_partial + offset, value);
-    __threadfence();
-    cub::ThreadStore<cub::STORE_CG>(tile_status + offset, scan_tile_status::partial);
+    tile_status[offset].store(scan_tile_status::partial);
   }
 
   __device__ inline void set_inclusive_prefix(cudf::size_type tile_idx, T value)
   {
     auto const offset = (tile_idx + num_tiles) % num_tiles;
     cub::ThreadStore<cub::STORE_CG>(tile_inclusive + offset, value);
-    __threadfence();
-    cub::ThreadStore<cub::STORE_CG>(tile_status + offset, scan_tile_status::inclusive);
+    tile_status[offset].store(scan_tile_status::inclusive);
   }
 
   __device__ inline T get_prefix(cudf::size_type tile_idx, scan_tile_status& status)
   {
     auto const offset = (tile_idx + num_tiles) % num_tiles;
 
-    while (true) {
-      status = cub::ThreadLoad<cub::LOAD_CG>(tile_status + offset);
-      // prevent break-condition from being hoisted out of the loop?
-      __threadfence();
-      if (status != scan_tile_status::invalid) { break; }
-    }
+    while ((status = tile_status[offset].load(cuda::memory_order_relaxed)) ==
+           scan_tile_status::invalid) {}
 
     if (status == scan_tile_status::partial) {
       return cub::ThreadLoad<cub::LOAD_CG>(tile_partial + offset);
@@ -70,14 +61,15 @@ struct scan_tile_state_view {
 
 template <typename T>
 struct scan_tile_state {
-  rmm::device_uvector<scan_tile_status> tile_status;
+  rmm::device_uvector<cuda::atomic<scan_tile_status, cuda::thread_scope_device>> tile_status;
   rmm::device_uvector<T> tile_state_partial;
   rmm::device_uvector<T> tile_state_inclusive;
 
   scan_tile_state(cudf::size_type num_tiles,
                   rmm::cuda_stream_view stream,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : tile_status(rmm::device_uvector<scan_tile_status>(num_tiles, stream, mr)),
+    : tile_status(rmm::device_uvector<cuda::atomic<scan_tile_status, cuda::thread_scope_device>>(
+        num_tiles, stream, mr)),
       tile_state_partial(rmm::device_uvector<T>(num_tiles, stream, mr)),
       tile_state_inclusive(rmm::device_uvector<T>(num_tiles, stream, mr))
   {
@@ -89,14 +81,6 @@ struct scan_tile_state {
                                    tile_status.data(),
                                    tile_state_partial.data(),
                                    tile_state_inclusive.data()};
-  }
-
-  inline void set_seed_async(T const seed, rmm::cuda_stream_view stream)
-  {
-    auto size   = tile_status.size();
-    auto status = scan_tile_status::inclusive;
-    tile_state_inclusive.set_element_async(size - 1, seed, stream);
-    tile_status.set_element_async(size - 1, status, stream);
   }
 
   inline T get_inclusive_prefix(cudf::size_type tile_idx, rmm::cuda_stream_view stream) const
