@@ -2941,7 +2941,7 @@ class IntervalIndex(GenericIndex):
         Construct an IntervalIndex from an array of splits.
 
         Parameters
-        ---------
+        ----------
         breaks : array-like (1-dimensional)
             Left and right bounds for each interval.
         closed : {"left", "right", "both", "neither"}, default "right"
