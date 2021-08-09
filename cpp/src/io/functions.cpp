@@ -443,18 +443,5 @@ std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::close(
   return writer->close(column_chunks_file_path);
 }
 
-using namespace cudf::io::detail::text;
-namespace detail_text = cudf::io::detail::text;
-
-table_with_metadata read_text(text_reader_options const& options,
-                              rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  auto reader =
-    make_reader<detail_text::reader>(options.get_source(), options, rmm::cuda_stream_default, mr);
-
-  return reader->read(options);
-}
-
 }  // namespace io
 }  // namespace cudf

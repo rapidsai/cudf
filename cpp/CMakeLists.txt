@@ -292,7 +292,6 @@ add_library(cudf
     src/io/statistics/orc_column_statistics.cu
     src/io/statistics/parquet_column_statistics.cu
     src/io/text/multibyte_split.cu
-    src/io/text/reader_impl.cu
     src/io/utilities/column_buffer.cpp
     src/io/utilities/data_sink.cpp
     src/io/utilities/datasource.cpp
