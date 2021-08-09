@@ -760,30 +760,47 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
   }
 }
 
-void calc_prefix_null_counts(cudf::detail::device_2dspan<gpu::ColumnDesc> chunks,
-                             cudf::host_span<rmm::device_uvector<uint32_t>> psums,
-                             rmm::cuda_stream_view stream)
+/**
+ * @brief Compute the per-stripe prefix sum of null count, for each struct column in the current
+ * layer.
+ */
+void prefix_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& chunks,
+                        cudf::host_span<rmm::device_uvector<uint32_t>> prefix_sums,
+                        rmm::cuda_stream_view stream)
 {
-  const auto num_stripes = chunks.size().first;
-  const auto num_columns = chunks.size().second;
-
+  auto const num_stripes = chunks.size().first;
   if (num_stripes == 0) return;
 
+  auto const num_columns = chunks.size().second;
+  std::vector<thrust::pair<size_type, cudf::device_span<uint32_t>>> prefix_sums_to_update;
   for (auto col_idx = 0ul; col_idx < num_columns; ++col_idx) {
-    cudf::detail::device_single_thread(
-      [chunks, psums = psums[col_idx].data(), col_idx, num_stripes] __device__ {
-        if (chunks[0][col_idx].type_kind == STRUCT) {
-          thrust::for_each(thrust::seq,
-                           thrust::make_counting_iterator(0),
-                           thrust::make_counting_iterator(0) + num_stripes,
-                           [=] __device__(auto stripe_idx) {
-                             psums[stripe_idx] = chunks[stripe_idx][col_idx].null_count;
-                             if (stripe_idx > 0) { psums[stripe_idx] += psums[stripe_idx - 1]; }
-                           });
-        }
-      },
-      stream);
+    // Null counts sums are only needed for children of struct columns
+    if (chunks[0][col_idx].type_kind == STRUCT) {
+      prefix_sums_to_update.emplace_back(col_idx, prefix_sums[col_idx]);
+    }
   }
+  auto const d_prefix_sums_to_update =
+    cudf::detail::make_device_uvector_async(prefix_sums_to_update, stream);
+
+  thrust::for_each(rmm::exec_policy(stream),
+                   d_prefix_sums_to_update.begin(),
+                   d_prefix_sums_to_update.end(),
+                   [chunks = cudf::detail::device_2dspan<gpu::ColumnDesc const>{chunks}] __device__(
+                     auto const& idx_psums) {
+                     auto const col_idx = idx_psums.first;
+                     auto const psums   = idx_psums.second;
+
+                     thrust::transform(
+                       thrust::seq,
+                       thrust::make_counting_iterator(0),
+                       thrust::make_counting_iterator(0) + psums.size(),
+                       psums.begin(),
+                       [&](auto stripe_idx) { return chunks[stripe_idx][col_idx].null_count; });
+
+                     thrust::inclusive_scan(thrust::seq, psums.begin(), psums.end(), psums.begin());
+                   });
+  // `prefix_sums_to_update` goes out of scope, copy has to be done before we return
+  stream.synchronize();
 }
 
 void reader::impl::decode_stream_data(
@@ -819,7 +836,7 @@ void reader::impl::decode_stream_data(
   gpu::DecodeNullsAndStringDictionaries(
     chunks.base_device_ptr(), global_dict.data(), num_columns, num_stripes, skip_rows, stream);
 
-  calc_prefix_null_counts(chunks, null_count_psums, stream);
+  prefix_null_counts(chunks, null_count_psums, stream);
 
   if (level > 0) {
     // Update nullmasks for children if parent was a struct and had null mask
