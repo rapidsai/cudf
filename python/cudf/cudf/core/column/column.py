@@ -210,13 +210,15 @@ class ColumnBase(Column, Serializable):
           4
         ]
         """
-        return libcudf.interop.to_arrow(
+        res = libcudf.interop.to_arrow(
             libcudf.table.Table(
                 cudf.core.column_accessor.ColumnAccessor({"None": self})
             ),
             [["None"]],
             keep_index=False,
         )["None"].chunk(0)
+
+        return res
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
