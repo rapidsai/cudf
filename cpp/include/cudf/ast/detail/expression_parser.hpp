@@ -187,7 +187,7 @@ class expression_parser {
    * @param expr Expression node.
    * @return cudf::size_type Index of device data reference for the node.
    */
-  cudf::size_type visit(expression const& expr);
+  cudf::size_type visit(operation const& expr);
 
   /**
    * @brief Internal class used to track the utilization of intermediate storage locations.

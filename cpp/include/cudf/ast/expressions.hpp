@@ -246,31 +246,31 @@ class column_reference : public node {
 /**
  * @brief An expression node holds an operator and zero or more operands.
  */
-class expression : public node {
+class operation : public node {
  public:
   /**
-   * @brief Construct a new unary expression object.
+   * @brief Construct a new unary operation object.
    *
    * @param op Operator
    * @param input Input node (operand)
    */
-  expression(ast_operator op, node const& input);
+  operation(ast_operator op, node const& input);
 
   /**
-   * @brief Construct a new binary expression object.
+   * @brief Construct a new binary operation object.
    *
    * @param op Operator
    * @param left Left input node (left operand)
    * @param right Right input node (right operand)
    */
-  expression(ast_operator op, node const& left, node const& right);
+  operation(ast_operator op, node const& left, node const& right);
 
-  // expression only stores references to nodes, so it does not accept r-value
+  // operation only stores references to nodes, so it does not accept r-value
   // references: the calling code must own the nodes.
-  expression(ast_operator op, node&& input)                   = delete;
-  expression(ast_operator op, node&& left, node&& right)      = delete;
-  expression(ast_operator op, node&& left, node const& right) = delete;
-  expression(ast_operator op, node const& left, node&& right) = delete;
+  operation(ast_operator op, node&& input)                   = delete;
+  operation(ast_operator op, node&& left, node&& right)      = delete;
+  operation(ast_operator op, node&& left, node const& right) = delete;
+  operation(ast_operator op, node const& left, node&& right) = delete;
 
   /**
    * @brief Get the operator.

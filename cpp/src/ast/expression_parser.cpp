@@ -120,7 +120,7 @@ cudf::size_type expression_parser::visit(column_reference const& expr)
   return add_data_reference(source);
 }
 
-cudf::size_type expression_parser::visit(expression const& expr)
+cudf::size_type expression_parser::visit(operation const& expr)
 {
   // Increment the node index
   auto const node_index = _node_count++;

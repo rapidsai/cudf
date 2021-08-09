@@ -26,7 +26,7 @@ class ConditionalJoin : public cudf::benchmark {
   {                                                                                     \
     auto join = [](cudf::table_view const& left,                                        \
                    cudf::table_view const& right,                                       \
-                   cudf::ast::expression binary_pred,                                   \
+                   cudf::ast::operation binary_pred,                                    \
                    cudf::null_equality compare_nulls) {                                 \
       return cudf::conditional_inner_join(left, right, binary_pred, compare_nulls);     \
     };                                                                                  \
@@ -45,7 +45,7 @@ CONDITIONAL_INNER_JOIN_BENCHMARK_DEFINE(conditional_inner_join_64bit_nulls, int6
   {                                                                                    \
     auto join = [](cudf::table_view const& left,                                       \
                    cudf::table_view const& right,                                      \
-                   cudf::ast::expression binary_pred,                                  \
+                   cudf::ast::operation binary_pred,                                   \
                    cudf::null_equality compare_nulls) {                                \
       return cudf::conditional_left_join(left, right, binary_pred, compare_nulls);     \
     };                                                                                 \
@@ -64,7 +64,7 @@ CONDITIONAL_LEFT_JOIN_BENCHMARK_DEFINE(conditional_left_join_64bit_nulls, int64_
   {                                                                                    \
     auto join = [](cudf::table_view const& left,                                       \
                    cudf::table_view const& right,                                      \
-                   cudf::ast::expression binary_pred,                                  \
+                   cudf::ast::operation binary_pred,                                   \
                    cudf::null_equality compare_nulls) {                                \
       return cudf::conditional_inner_join(left, right, binary_pred, compare_nulls);    \
     };                                                                                 \
@@ -83,7 +83,7 @@ CONDITIONAL_FULL_JOIN_BENCHMARK_DEFINE(conditional_full_join_64bit_nulls, int64_
   {                                                                                         \
     auto join = [](cudf::table_view const& left,                                            \
                    cudf::table_view const& right,                                           \
-                   cudf::ast::expression binary_pred,                                       \
+                   cudf::ast::operation binary_pred,                                        \
                    cudf::null_equality compare_nulls) {                                     \
       return cudf::conditional_left_anti_join(left, right, binary_pred, compare_nulls);     \
     };                                                                                      \
@@ -114,7 +114,7 @@ CONDITIONAL_LEFT_ANTI_JOIN_BENCHMARK_DEFINE(conditional_left_anti_join_64bit_nul
   {                                                                                         \
     auto join = [](cudf::table_view const& left,                                            \
                    cudf::table_view const& right,                                           \
-                   cudf::ast::expression binary_pred,                                       \
+                   cudf::ast::operation binary_pred,                                        \
                    cudf::null_equality compare_nulls) {                                     \
       return cudf::conditional_left_semi_join(left, right, binary_pred, compare_nulls);     \
     };                                                                                      \

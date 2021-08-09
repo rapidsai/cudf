@@ -43,7 +43,7 @@ std::unique_ptr<column> transform(
  */
 std::unique_ptr<column> compute_column(
   table_view const table,
-  ast::expression const& expr,
+  ast::operation const& expr,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

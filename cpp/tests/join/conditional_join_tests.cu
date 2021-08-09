@@ -49,7 +49,7 @@ const auto col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_ref
 
 // Common expressions.
 auto left_zero_eq_right_zero =
-  cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
+  cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
 }  // namespace
 
 /**
@@ -146,7 +146,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
    */
   void test(std::vector<std::vector<T>> left_data,
             std::vector<std::vector<T>> right_data,
-            cudf::ast::expression predicate,
+            cudf::ast::operation predicate,
             std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
   {
     // Note that we need to maintain the column wrappers otherwise the
@@ -173,7 +173,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
 
   void test_nulls(std::vector<std::pair<std::vector<T>, std::vector<bool>>> left_data,
                   std::vector<std::pair<std::vector<T>, std::vector<bool>>> right_data,
-                  cudf::ast::expression predicate,
+                  cudf::ast::operation predicate,
                   std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
   {
     // Note that we need to maintain the column wrappers otherwise the
@@ -251,7 +251,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
    */
   virtual std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
                     std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-  join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) = 0;
+  join(cudf::table_view left, cudf::table_view right, cudf::ast::operation predicate) = 0;
 
   /**
    * This method must be implemented by subclasses for specific types of joins.
@@ -260,7 +260,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
    */
   virtual std::size_t join_size(cudf::table_view left,
                                 cudf::table_view right,
-                                cudf::ast::expression predicate) = 0;
+                                cudf::ast::operation predicate) = 0;
 
   /**
    * This method must be implemented by subclasses for specific types of joins.
@@ -279,14 +279,14 @@ template <typename T>
 struct ConditionalInnerJoinTest : public ConditionalJoinPairReturnTest<T> {
   std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
             std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-  join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
+  join(cudf::table_view left, cudf::table_view right, cudf::ast::operation predicate) override
   {
     return cudf::conditional_inner_join(left, right, predicate);
   }
 
   std::size_t join_size(cudf::table_view left,
                         cudf::table_view right,
-                        cudf::ast::expression predicate) override
+                        cudf::ast::operation predicate) override
   {
     return cudf::conditional_inner_join_size(left, right, predicate);
   }
@@ -335,7 +335,7 @@ TYPED_TEST(ConditionalInnerJoinTest, TestTwoColumnThreeRowSomeEqual)
 TYPED_TEST(ConditionalInnerJoinTest, TestNotComparison)
 {
   auto col_ref_0  = cudf::ast::column_reference(0);
-  auto expression = cudf::ast::expression(cudf::ast::ast_operator::NOT, col_ref_0);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::NOT, col_ref_0);
 
   this->test({{0, 1, 2}}, {{3, 4, 5}}, expression, {{0, 0}, {0, 1}, {0, 2}});
 };
@@ -344,7 +344,7 @@ TYPED_TEST(ConditionalInnerJoinTest, TestGreaterComparison)
 {
   auto col_ref_0  = cudf::ast::column_reference(0);
   auto col_ref_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-  auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_0, col_ref_1);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_0, col_ref_1);
 
   this->test({{0, 1, 2}}, {{1, 0, 0}}, expression, {{1, 1}, {1, 2}, {2, 0}, {2, 1}, {2, 2}});
 };
@@ -353,7 +353,7 @@ TYPED_TEST(ConditionalInnerJoinTest, TestGreaterTwoColumnComparison)
 {
   auto col_ref_0  = cudf::ast::column_reference(0);
   auto col_ref_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
-  auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_0, col_ref_1);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_0, col_ref_1);
 
   this->test({{0, 1, 2}, {0, 0, 0}},
              {{0, 0, 0}, {1, 0, 0}},
@@ -365,7 +365,7 @@ TYPED_TEST(ConditionalInnerJoinTest, TestGreaterDifferentNumberColumnComparison)
 {
   auto col_ref_0  = cudf::ast::column_reference(0);
   auto col_ref_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
-  auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_0, col_ref_1);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_0, col_ref_1);
 
   this->test(
     {{0, 1, 2}}, {{0, 0, 0}, {1, 0, 0}}, expression, {{1, 1}, {1, 2}, {2, 0}, {2, 1}, {2, 2}});
@@ -375,7 +375,7 @@ TYPED_TEST(ConditionalInnerJoinTest, TestGreaterDifferentNumberColumnDifferentSi
 {
   auto col_ref_0  = cudf::ast::column_reference(0);
   auto col_ref_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
-  auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_0, col_ref_1);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_0, col_ref_1);
 
   this->test({{0, 1}}, {{0, 0, 0}, {1, 0, 0}}, expression, {{1, 1}, {1, 2}});
 };
@@ -386,14 +386,14 @@ TYPED_TEST(ConditionalInnerJoinTest, TestComplexConditionMultipleColumns)
   auto col_ref_0      = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
   auto scalar_1       = cudf::numeric_scalar<TypeParam>(1);
   auto literal_1      = cudf::ast::literal(scalar_1);
-  auto left_0_equal_1 = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, literal_1);
+  auto left_0_equal_1 = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_0, literal_1);
 
   auto col_ref_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
   auto comparison_filter =
-    cudf::ast::expression(cudf::ast::ast_operator::LESS, col_ref_1, col_ref_0);
+    cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_1, col_ref_0);
 
   auto expression =
-    cudf::ast::expression(cudf::ast::ast_operator::LOGICAL_AND, left_0_equal_1, comparison_filter);
+    cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, left_0_equal_1, comparison_filter);
 
   this->test({{0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2}, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}},
              {{0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2},
@@ -407,9 +407,9 @@ TYPED_TEST(ConditionalInnerJoinTest, TestSymmetry)
 {
   auto col_ref_0  = cudf::ast::column_reference(0);
   auto col_ref_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-  auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_1, col_ref_0);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_1, col_ref_0);
   auto expression_reverse =
-    cudf::ast::expression(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_1);
+    cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_1);
 
   this->test(
     {{0, 1, 2}}, {{1, 2, 3}}, expression, {{0, 0}, {0, 1}, {0, 2}, {1, 1}, {1, 2}, {2, 2}});
@@ -461,14 +461,14 @@ template <typename T>
 struct ConditionalLeftJoinTest : public ConditionalJoinPairReturnTest<T> {
   std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
             std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-  join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
+  join(cudf::table_view left, cudf::table_view right, cudf::ast::operation predicate) override
   {
     return cudf::conditional_left_join(left, right, predicate);
   }
 
   std::size_t join_size(cudf::table_view left,
                         cudf::table_view right,
-                        cudf::ast::expression predicate) override
+                        cudf::ast::operation predicate) override
   {
     return cudf::conditional_left_join_size(left, right, predicate);
   }
@@ -524,14 +524,14 @@ template <typename T>
 struct ConditionalFullJoinTest : public ConditionalJoinPairReturnTest<T> {
   std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
             std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-  join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
+  join(cudf::table_view left, cudf::table_view right, cudf::ast::operation predicate) override
   {
     return cudf::conditional_full_join(left, right, predicate);
   }
 
   std::size_t join_size(cudf::table_view left,
                         cudf::table_view right,
-                        cudf::ast::expression predicate) override
+                        cudf::ast::operation predicate) override
   {
     // Full joins don't actually support size calculations, but to support a
     // uniform testing framework we just calculate it from the result of doing
@@ -609,7 +609,7 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
    */
   void test(std::vector<std::vector<T>> left_data,
             std::vector<std::vector<T>> right_data,
-            cudf::ast::expression predicate,
+            cudf::ast::operation predicate,
             std::vector<cudf::size_type> expected_outputs)
   {
     auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
@@ -660,7 +660,7 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
    * conditional join API.
    */
   virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> join(
-    cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) = 0;
+    cudf::table_view left, cudf::table_view right, cudf::ast::operation predicate) = 0;
 
   /**
    * This method must be implemented by subclasses for specific types of joins.
@@ -669,7 +669,7 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
    */
   virtual std::size_t join_size(cudf::table_view left,
                                 cudf::table_view right,
-                                cudf::ast::expression predicate) = 0;
+                                cudf::ast::operation predicate) = 0;
 
   /**
    * This method must be implemented by subclasses for specific types of joins.
@@ -686,14 +686,14 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
 template <typename T>
 struct ConditionalLeftSemiJoinTest : public ConditionalJoinSingleReturnTest<T> {
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> join(
-    cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
+    cudf::table_view left, cudf::table_view right, cudf::ast::operation predicate) override
   {
     return cudf::conditional_left_semi_join(left, right, predicate);
   }
 
   std::size_t join_size(cudf::table_view left,
                         cudf::table_view right,
-                        cudf::ast::expression predicate) override
+                        cudf::ast::operation predicate) override
   {
     return cudf::conditional_left_semi_join_size(left, right, predicate);
   }
@@ -744,14 +744,14 @@ TYPED_TEST(ConditionalLeftSemiJoinTest, TestCompareRandomToHash)
 template <typename T>
 struct ConditionalLeftAntiJoinTest : public ConditionalJoinSingleReturnTest<T> {
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> join(
-    cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
+    cudf::table_view left, cudf::table_view right, cudf::ast::operation predicate) override
   {
     return cudf::conditional_left_anti_join(left, right, predicate);
   }
 
   std::size_t join_size(cudf::table_view left,
                         cudf::table_view right,
-                        cudf::ast::expression predicate) override
+                        cudf::ast::operation predicate) override
   {
     return cudf::conditional_left_anti_join_size(left, right, predicate);
   }
