@@ -91,5 +91,3 @@ def last_day_of_month(Column col):
         c_result = move(libcudf_datetime.last_day_of_month(col_view))
 
     return Column.from_unique_ptr(move(c_result))
-
-
