@@ -29,7 +29,7 @@ from cudf.core.dtypes import (  # noqa: F401
 
 def dtype(arbitrary):
     """
-    Returns the cuDF-supported dtype corresponding to `arbitrary`
+    Return the cuDF-supported dtype corresponding to `arbitrary`.
 
     Inputs
     ------
