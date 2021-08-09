@@ -151,8 +151,7 @@ add_library(cudf
     src/aggregation/aggregation.cpp
     src/aggregation/aggregation.cu
     src/aggregation/result_cache.cpp
-    src/ast/linearizer.cpp
-    src/ast/transform.cu
+    src/ast/expression_parser.cpp
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
     src/binaryop/compiled/Add.cu
@@ -305,6 +304,7 @@ add_library(cudf
     src/join/cross_join.cu
     src/join/hash_join.cu
     src/join/join.cu
+    src/join/join_utils.cu
     src/join/semi_join.cu
     src/lists/contains.cu
     src/lists/combine/concatenate_list_elements.cu
@@ -436,6 +436,7 @@ add_library(cudf
     src/text/subword/wordpiece_tokenizer.cu
     src/text/tokenize.cu
     src/transform/bools_to_mask.cu
+    src/transform/compute_column.cu
     src/transform/encode.cu
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
@@ -543,7 +544,7 @@ if(NOT TARGET CUDA::cuda_driver)
     message(FATAL_ERROR "Building libcudf requires `libcuda.so` to be present.
         This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded.")
 endif()
-target_link_libraries(cudf PRIVATE CUDA::cuda_driver)
+target_link_libraries(cudf PUBLIC CUDA::cuda_driver)
 
 # Add cuFile interface if available
 if(TARGET cuFile::cuFile_interface)

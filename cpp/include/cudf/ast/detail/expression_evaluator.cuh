@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/ast/detail/linearizer.hpp>
+#include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/nodes.hpp>
 #include <cudf/ast/operators.hpp>
@@ -31,35 +31,11 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/optional.h>
-
 namespace cudf {
 
 namespace ast {
 
 namespace detail {
-
-// Type trait for wrapping nullable types in a thrust::optional. Non-nullable
-// types are returned as is.
-template <typename T, bool has_nulls>
-struct possibly_null_value;
-
-template <typename T>
-struct possibly_null_value<T, true> {
-  using type = thrust::optional<T>;
-};
-
-template <typename T>
-struct possibly_null_value<T, false> {
-  using type = T;
-};
-
-template <typename T, bool has_nulls>
-using possibly_null_value_t = typename possibly_null_value<T, has_nulls>::type;
-
-// Type used for intermediate storage in expression evaluation.
-template <bool has_nulls>
-using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
 
 /**
  * @brief A container for capturing the output of an evaluated expression.
@@ -140,14 +116,15 @@ struct value_expression_result
   /**
    * @brief Returns the underlying data.
    *
-   * @throws thrust::bad_optional_access if the underlying data is not valid.
+   * If the underlying data is not valid, behavior is undefined. Callers should
+   * use is_valid to check for validity before accessing the value.
    */
   __device__ T value() const
   {
     // Using two separate constexprs silences compiler warnings, whereas an
     // if/else does not. An unconditional return is not ignored by the compiler
     // when has_nulls is true and therefore raises a compiler error.
-    if constexpr (has_nulls) { return _obj.value(); }
+    if constexpr (has_nulls) { return *_obj; }
     if constexpr (!has_nulls) { return _obj; }
   }
 
@@ -214,147 +191,30 @@ struct mutable_column_expression_result
 };
 
 /**
- * @brief A container of all device data required to evaluate an expression on tables.
+ * @brief Dispatch to a binary operator based on a single data type.
  *
- * This struct should never be instantiated directly. It is created by the
- * `ast_plan` on construction, and the resulting member is publicly accessible
- * for passing to kernels for constructing an `expression_evaluator`.
- *
+ * This functor is a dispatcher for binary operations that assumes that both
+ * operands are of the same type. This assumption is encoded in the
+ * non-deducible template parameter LHS, the type of the left-hand operand,
+ * which is then used as the template parameter for both the left and right
+ * operands to the binary operator f.
  */
-struct device_ast_plan {
-  device_span<const detail::device_data_reference> data_references;
-  device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals;
-  device_span<const ast_operator> operators;
-  device_span<const cudf::size_type> operator_source_indices;
-  cudf::size_type num_intermediates;
-  int shmem_per_thread;
-};
-
-/**
- * @brief Preprocessor for an expression acting on tables to generate data suitable for AST
- * expression evaluation on the GPU.
- *
- * On construction, an AST plan creates a single "packed" host buffer of all
- * data arrays that will be necessary to evaluate an expression on a pair of
- * tables. This data is copied to a single contiguous device buffer, and
- * pointers are generated to the individual components. Because the plan tends
- * to be small, this is the most efficient approach for low latency. All the
- * data required on the GPU can be accessed via the convenient `dev_plan`
- * member struct, which can be used to construct an `expression_evaluator` on
- * the device.
- *
- * Note that the resulting device data cannot be used once this class goes out of scope.
- */
-struct ast_plan {
+struct single_dispatch_binary_operator {
   /**
-   * @brief Construct an AST plan for an expression operating on two tables.
+   * @brief Single-type dispatch to a binary operation.
    *
-   * @param expr The expression for which to construct a plan.
-   * @param left The left table on which the expression acts.
-   * @param right The right table on which the expression acts.
-   * @param has_nulls Boolean indicator of whether or not the data contains nulls.
-   * @param stream Stream view on which to allocate resources and queue execution.
-   * @param mr Device memory resource used to allocate the returned column's device.
-   */
-  ast_plan(detail::node const& expr,
-           cudf::table_view left,
-           cudf::table_view right,
-           bool has_nulls,
-           rmm::cuda_stream_view stream,
-           rmm::mr::device_memory_resource* mr)
-    : _linearizer(expr, left, right)
-  {
-    std::vector<cudf::size_type> sizes;
-    std::vector<const void*> data_pointers;
-
-    extract_size_and_pointer(_linearizer.data_references(), sizes, data_pointers);
-    extract_size_and_pointer(_linearizer.literals(), sizes, data_pointers);
-    extract_size_and_pointer(_linearizer.operators(), sizes, data_pointers);
-    extract_size_and_pointer(_linearizer.operator_source_indices(), sizes, data_pointers);
-
-    // Create device buffer
-    auto const buffer_size = std::accumulate(sizes.cbegin(), sizes.cend(), 0);
-    auto buffer_offsets    = std::vector<int>(sizes.size());
-    thrust::exclusive_scan(sizes.cbegin(), sizes.cend(), buffer_offsets.begin(), 0);
-
-    auto h_data_buffer = std::make_unique<char[]>(buffer_size);
-    for (unsigned int i = 0; i < data_pointers.size(); ++i) {
-      std::memcpy(h_data_buffer.get() + buffer_offsets[i], data_pointers[i], sizes[i]);
-    }
-
-    _device_data_buffer = rmm::device_buffer(h_data_buffer.get(), buffer_size, stream, mr);
-
-    stream.synchronize();
-
-    // Create device pointers to components of plan
-    auto device_data_buffer_ptr = static_cast<const char*>(_device_data_buffer.data());
-    dev_plan.data_references    = device_span<const detail::device_data_reference>(
-      reinterpret_cast<const detail::device_data_reference*>(device_data_buffer_ptr +
-                                                             buffer_offsets[0]),
-      _linearizer.data_references().size());
-    dev_plan.literals = device_span<const cudf::detail::fixed_width_scalar_device_view_base>(
-      reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
-        device_data_buffer_ptr + buffer_offsets[1]),
-      _linearizer.literals().size());
-    dev_plan.operators = device_span<const ast_operator>(
-      reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]),
-      _linearizer.operators().size());
-    dev_plan.operator_source_indices = device_span<const cudf::size_type>(
-      reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
-      _linearizer.operator_source_indices().size());
-    dev_plan.num_intermediates = _linearizer.intermediate_count();
-    dev_plan.shmem_per_thread  = static_cast<int>(
-      (has_nulls ? sizeof(IntermediateDataType<true>) : sizeof(IntermediateDataType<false>)) *
-      dev_plan.num_intermediates);
-  }
-
-  /**
-   * @brief Construct an AST plan for an expression operating on one table.
+   * @tparam LHS Left input type.
+   * @tparam F Type of forwarded binary operator functor.
+   * @tparam Ts Parameter pack of forwarded arguments.
    *
-   * @param expr The expression for which to construct a plan.
-   * @param table The table on which the expression acts.
-   * @param has_nulls Boolean indicator of whether or not the data contains nulls.
-   * @param stream Stream view on which to allocate resources and queue execution.
-   * @param mr Device memory resource used to allocate the returned column's device.
+   * @param f Binary operator functor.
+   * @param args Forwarded arguments to `operator()` of `f`.
    */
-  ast_plan(detail::node const& expr,
-           cudf::table_view table,
-           bool has_nulls,
-           rmm::cuda_stream_view stream,
-           rmm::mr::device_memory_resource* mr)
-    : ast_plan(expr, table, table, has_nulls, stream, mr)
+  template <typename LHS, typename F, typename... Ts>
+  CUDA_DEVICE_CALLABLE auto operator()(F&& f, Ts&&... args)
   {
+    f.template operator()<LHS, LHS>(std::forward<Ts>(args)...);
   }
-
-  cudf::data_type output_type() const { return _linearizer.root_data_type(); }
-
-  device_ast_plan
-    dev_plan;  ///< The collection of data required to evaluate the expression on the device.
-
- private:
-  /**
-   * @brief Helper function for adding components (operators, literals, etc) to AST plan
-   *
-   * @tparam T  The underlying type of the input `std::vector`
-   * @param[in]  v  The `std::vector` containing components (operators, literals, etc).
-   * @param[in,out]  sizes  The `std::vector` containing the size of each data buffer.
-   * @param[in,out]  data_pointers  The `std::vector` containing pointers to each data buffer.
-   */
-  template <typename T>
-  void extract_size_and_pointer(std::vector<T> const& v,
-                                std::vector<cudf::size_type>& sizes,
-                                std::vector<const void*>& data_pointers)
-  {
-    auto const data_size = sizeof(T) * v.size();
-    sizes.push_back(data_size);
-    data_pointers.push_back(v.data());
-  }
-
-  rmm::device_buffer
-    _device_data_buffer;  ///< The device-side data buffer containing the plan information, which is
-                          ///< owned by this class and persists until it is destroyed.
-  linearizer const _linearizer;  ///< The linearizer created from the provided expression that is
-                                 ///< used to construct device-side operators and references.
 };
 
 /**
@@ -379,7 +239,7 @@ struct expression_evaluator {
    */
   __device__ expression_evaluator(table_device_view const& left,
                                   table_device_view const& right,
-                                  device_ast_plan const& plan,
+                                  expression_device_view const& plan,
                                   IntermediateDataType<has_nulls>* thread_intermediate_storage,
                                   null_equality compare_nulls = null_equality::EQUAL)
     : left(left),
@@ -400,7 +260,7 @@ struct expression_evaluator {
    * @param compare_nulls Whether the equality operator returns true or false for two nulls.
    */
   __device__ expression_evaluator(table_device_view const& table,
-                                  device_ast_plan const& plan,
+                                  expression_device_view const& plan,
                                   IntermediateDataType<has_nulls>* thread_intermediate_storage,
                                   null_equality compare_nulls = null_equality::EQUAL)
     : left(table),
@@ -484,11 +344,11 @@ struct expression_evaluator {
    */
   template <typename Input, typename OutputType>
   __device__ void operator()(OutputType& output_object,
-                             const cudf::size_type input_row_index,
-                             const detail::device_data_reference input,
-                             const detail::device_data_reference output,
-                             const cudf::size_type output_row_index,
-                             const ast_operator op) const
+                             cudf::size_type const input_row_index,
+                             detail::device_data_reference const input,
+                             detail::device_data_reference const output,
+                             cudf::size_type const output_row_index,
+                             ast_operator const op) const
   {
     auto const typed_input = resolve_input<Input>(input, input_row_index);
     ast_operator_dispatcher(op,
@@ -517,13 +377,13 @@ struct expression_evaluator {
    */
   template <typename LHS, typename RHS, typename OutputType>
   __device__ void operator()(OutputType& output_object,
-                             const cudf::size_type left_row_index,
-                             const cudf::size_type right_row_index,
-                             const detail::device_data_reference lhs,
-                             const detail::device_data_reference rhs,
-                             const detail::device_data_reference output,
-                             const cudf::size_type output_row_index,
-                             const ast_operator op) const
+                             cudf::size_type const left_row_index,
+                             cudf::size_type const right_row_index,
+                             detail::device_data_reference const lhs,
+                             detail::device_data_reference const rhs,
+                             detail::device_data_reference const output,
+                             cudf::size_type const output_row_index,
+                             ast_operator const op) const
   {
     auto const typed_lhs = resolve_input<LHS>(lhs, left_row_index);
     auto const typed_rhs = resolve_input<RHS>(rhs, right_row_index);
@@ -544,11 +404,11 @@ struct expression_evaluator {
   __device__ void operator()(OutputType& output_object,
                              cudf::size_type left_row_index,
                              cudf::size_type right_row_index,
-                             const detail::device_data_reference lhs,
-                             const detail::device_data_reference rhs,
-                             const detail::device_data_reference output,
+                             detail::device_data_reference const lhs,
+                             detail::device_data_reference const rhs,
+                             detail::device_data_reference const output,
                              cudf::size_type output_row_index,
-                             const ast_operator op) const
+                             ast_operator const op) const
   {
     cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
   }
@@ -670,9 +530,9 @@ struct expression_evaluator {
               typename OutputType,
               CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
     __device__ void resolve_output(OutputType& output_object,
-                                   const detail::device_data_reference device_data_reference,
-                                   const cudf::size_type row_index,
-                                   const possibly_null_value_t<Element, has_nulls> result) const
+                                   detail::device_data_reference const device_data_reference,
+                                   cudf::size_type const row_index,
+                                   possibly_null_value_t<Element, has_nulls> const result) const
     {
       auto const ref_type = device_data_reference.reference_type;
       if (ref_type == detail::device_data_reference_type::COLUMN) {
@@ -690,9 +550,9 @@ struct expression_evaluator {
               typename OutputType,
               CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
     __device__ void resolve_output(OutputType& output_object,
-                                   const detail::device_data_reference device_data_reference,
-                                   const cudf::size_type row_index,
-                                   const possibly_null_value_t<Element, has_nulls> result) const
+                                   detail::device_data_reference const device_data_reference,
+                                   cudf::size_type const row_index,
+                                   possibly_null_value_t<Element, has_nulls> const result) const
     {
       cudf_assert(false && "Invalid type in resolve_output.");
     }
@@ -730,9 +590,9 @@ struct expression_evaluator {
       typename OutputType,
       std::enable_if_t<detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
-                               const cudf::size_type output_row_index,
-                               const possibly_null_value_t<Input, has_nulls> input,
-                               const detail::device_data_reference output) const
+                               cudf::size_type const output_row_index,
+                               possibly_null_value_t<Input, has_nulls> const input,
+                               detail::device_data_reference const output) const
     {
       using OperatorFunctor = detail::operator_functor<op>;
       using Out             = cuda::std::invoke_result_t<OperatorFunctor, Input>;
@@ -752,9 +612,9 @@ struct expression_evaluator {
       typename OutputType,
       std::enable_if_t<!detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
-                               const cudf::size_type output_row_index,
-                               const possibly_null_value_t<Input, has_nulls> input,
-                               const detail::device_data_reference output) const
+                               cudf::size_type const output_row_index,
+                               possibly_null_value_t<Input, has_nulls> const input,
+                               detail::device_data_reference const output) const
     {
       cudf_assert(false && "Invalid unary dispatch operator for the provided input.");
     }
@@ -790,10 +650,10 @@ struct expression_evaluator {
               std::enable_if_t<
                 detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
-                               const cudf::size_type output_row_index,
-                               const possibly_null_value_t<LHS, has_nulls> lhs,
-                               const possibly_null_value_t<RHS, has_nulls> rhs,
-                               const detail::device_data_reference output) const
+                               cudf::size_type const output_row_index,
+                               possibly_null_value_t<LHS, has_nulls> const lhs,
+                               possibly_null_value_t<RHS, has_nulls> const rhs,
+                               detail::device_data_reference const output) const
     {
       using OperatorFunctor = detail::operator_functor<op>;
       using Out             = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
@@ -832,10 +692,10 @@ struct expression_evaluator {
               std::enable_if_t<
                 !detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
-                               const cudf::size_type output_row_index,
-                               const possibly_null_value_t<LHS, has_nulls> lhs,
-                               const possibly_null_value_t<RHS, has_nulls> rhs,
-                               const detail::device_data_reference output) const
+                               cudf::size_type const output_row_index,
+                               possibly_null_value_t<LHS, has_nulls> const lhs,
+                               possibly_null_value_t<RHS, has_nulls> const rhs,
+                               detail::device_data_reference output) const
     {
       cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
     }
@@ -843,7 +703,7 @@ struct expression_evaluator {
 
   table_device_view const& left;   ///< The left table to operate on.
   table_device_view const& right;  ///< The right table to operate on.
-  device_ast_plan const&
+  expression_device_view const&
     plan;  ///< The container of device data representing the expression to evaluate.
   IntermediateDataType<has_nulls>*
     thread_intermediate_storage;  ///< The shared memory store of intermediates produced during
@@ -852,23 +712,6 @@ struct expression_evaluator {
     compare_nulls;  ///< Whether the equality operator returns true or false for two nulls.
 };
 
-/**
- * @brief Compute a new column by evaluating an expression tree on a table.
- *
- * This evaluates an expression over a table to produce a new column. Also called an n-ary
- * transform.
- *
- * @param table The table used for expression evaluation.
- * @param expr The root of the expression tree.
- * @param stream Stream on which to perform the computation.
- * @param mr Device memory resource.
- * @return std::unique_ptr<column> Output column.
- */
-std::unique_ptr<column> compute_column(
-  table_view const table,
-  expression const& expr,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 
 }  // namespace ast

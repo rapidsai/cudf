@@ -19,7 +19,7 @@ package ai.rapids.cudf.ast;
 import java.nio.ByteBuffer;
 
 /** Base class of every node in an AST */
-abstract class AstNode {
+public abstract class AstNode {
   /**
    * Enumeration for the types of AST nodes that can appear in a serialized AST.
    * NOTE: This must be kept in sync with the `jni_serialized_node_type` in CompiledExpression.cpp!
