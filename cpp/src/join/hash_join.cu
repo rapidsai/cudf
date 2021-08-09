@@ -283,7 +283,8 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const& build,
   : _empty{!build.num_rows()},
     _hash_table{compute_hash_table_size(build.num_rows()),
                 std::numeric_limits<hash_value_type>::max(),
-                cudf::detail::JoinNoneValue}
+                cudf::detail::JoinNoneValue,
+                stream}
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != build.num_columns(), "Hash join build table is empty");
