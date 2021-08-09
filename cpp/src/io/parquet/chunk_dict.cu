@@ -16,10 +16,11 @@
 
 #include <io/parquet/parquet_gpu.hpp>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/row_operators.cuh>
-#include "cudf/detail/iterator.cuh"
-#include "rmm/exec_policy.hpp"
+
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace io {
@@ -32,7 +33,7 @@ __global__ void __launch_bounds__(block_size, 1)
 {
   auto chunk = chunks[blockIdx.x];
   auto t     = threadIdx.x;
-  // TODO: Now that per-chunk dict is same size as ck.num_values, try to not use one block per chunk
+  // fut: Now that per-chunk dict is same size as ck.num_values, try to not use one block per chunk
   for (size_t i = 0; i < chunk.dict_map_size; i += block_size) {
     if (t + i < chunk.dict_map_size) {
       new (&chunk.dict_map_slots[t + i].first) map_type::atomic_key_type{KEY_SENTINEL};
@@ -46,6 +47,7 @@ struct equality_functor {
   column_device_view const& col;
   __device__ bool operator()(size_type lhs_idx, size_type rhs_idx)
   {
+    // TODO: Remove after cuCollections/#99 is fixed
     if (lhs_idx < 0 or rhs_idx < 0) { return false; }
     // We don't call this for nulls so this is fine
     return equality_compare(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
@@ -196,13 +198,11 @@ __global__ void __launch_bounds__(block_size, 1)
     }
 
     __syncthreads();
-    // TODO: Explore using ballot and popc for this reduction as the value to reduce is 1 or 0
     auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
     __syncthreads();
     auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
     if (t == 0) {
       atomicAdd(&s_chunk->num_dict_entries, num_unique);
-      // TODO: move out of loop. We don't have to update other blocks about this
       atomicAdd(&s_chunk->uniq_data_size, uniq_data_size);
     }
     __syncthreads();
@@ -220,7 +220,6 @@ __global__ void __launch_bounds__(block_size, 1)
   auto map =
     map_type::device_view(chunk.dict_map_slots, chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
-  // TODO: Does this need to be volatile?
   __shared__ size_type counter;
   if (t == 0) counter = 0;
   __syncthreads();
@@ -329,10 +328,8 @@ __global__ void __launch_bounds__(block_size, 1)
 void InitializeChunkHashMaps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 1024;
-  std::cout << "before init maps" << std::endl;
   gpuInitializeChunkHashMaps<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
   stream.synchronize();
-  std::cout << "after init maps" << std::endl;
 }
 
 void PopulateChunkHashMaps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
@@ -344,20 +341,16 @@ void PopulateChunkHashMaps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
   auto num_columns         = chunks.size().second;
   dim3 dim_grid(grid_x.num_blocks, num_columns);
 
-  std::cout << "before build maps" << std::endl;
   gpuBuildChunkDictionariesKernel<block_size>
     <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
   stream.synchronize();
-  std::cout << "after build maps" << std::endl;
 }
 
 void CollectMapEntries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 1024;
-  std::cout << "before collect maps" << std::endl;
   gpuCollectMapEntries<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
   stream.synchronize();
-  std::cout << "after collect maps" << std::endl;
 }
 
 void GetDictionaryIndices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
@@ -369,11 +362,9 @@ void GetDictionaryIndices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
   auto num_columns         = chunks.size().second;
   dim3 dim_grid(grid_x.num_blocks, num_columns);
 
-  std::cout << "before get dict ind" << std::endl;
   gpuGetDictionaryIndices<block_size>
     <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
   stream.synchronize();
-  std::cout << "after get dict ind" << std::endl;
 }
 }  // namespace gpu
 }  // namespace parquet
