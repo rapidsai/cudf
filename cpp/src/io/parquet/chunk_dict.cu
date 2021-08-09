@@ -195,6 +195,7 @@ __global__ void __launch_bounds__(block_size, 1)
       }
     }
 
+    __syncthreads();
     // TODO: Explore using ballot and popc for this reduction as the value to reduce is 1 or 0
     auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
     __syncthreads();
