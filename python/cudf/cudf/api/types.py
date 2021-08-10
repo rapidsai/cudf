@@ -14,9 +14,9 @@ import pandas as pd
 from pandas.api import types as pd_types
 
 import cudf
-from cudf._lib.scalar import DeviceScalar
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
+    dtype,
     is_categorical_dtype,
     is_decimal32_dtype,
     is_decimal64_dtype,
@@ -25,55 +25,6 @@ from cudf.core.dtypes import (  # noqa: F401
     is_list_dtype,
     is_struct_dtype,
 )
-
-
-def dtype(arbitrary):
-    """
-    Return the cuDF-supported dtype corresponding to `arbitrary`.
-
-    Inputs
-    ------
-    arbitrary: dtype or scalar-like
-
-    Returns
-    -------
-    dtype: the cuDF-supported dtype that best matches `arbitrary`
-    """
-    # first, try interpreting arbitrary as a NumPy dtype that we support:
-    try:
-        np_dtype = np.dtype(arbitrary)
-        if np_dtype.name == "float16":
-            np_dtype = np.dtype("float32")
-        elif np_dtype.kind in ("OU"):
-            np_dtype = np.dtype("object")
-    except TypeError:
-        pass
-    else:
-        if np_dtype.kind not in "biufUOMm":
-            raise TypeError(f"Unsupported type {np_dtype}")
-        return np_dtype
-
-    #  next, check if `arbitrary` is one of our extension types:
-    if isinstance(arbitrary, cudf.core.dtypes._BaseDtype):
-        return arbitrary
-
-    # use `pandas_dtype` to try and interpret
-    # `arbitrary` as a Pandas extension type.
-    #  Return the corresponding NumPy/cuDF type.
-    pd_dtype = pd.api.types.pandas_dtype(arbitrary)
-    try:
-        return pd_dtype.numpy_dtype
-    except AttributeError:
-        if isinstance(pd_dtype, pd.CategoricalDtype):
-            return cudf.CategoricalDtype.from_pandas(pd_dtype)
-        elif isinstance(pd_dtype, pd.StringDtype):
-            return np.dtype("object")
-        elif isinstance(pd_dtype, pd.IntervalDtype):
-            return cudf.IntervalDtype.from_pandas(pd_dtype)
-        else:
-            raise TypeError(
-                f"Cannot interpret {arbitrary} as a valid cuDF dtype"
-            )
 
 
 def is_numeric_dtype(obj):
@@ -173,7 +124,7 @@ def is_scalar(val):
         Return True if given object is scalar.
     """
     return (
-        isinstance(val, DeviceScalar)
+        isinstance(val, cudf._lib.scalar.DeviceScalar)
         or isinstance(val, cudf.Scalar)
         or isinstance(val, cudf.core.tools.datetimes.DateOffset)
         or pd_types.is_scalar(val)

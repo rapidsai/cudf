@@ -67,10 +67,10 @@ def _nonempty_index(idx):
         return cudf.core.index.GenericIndex(
             np.arange(2, dtype=idx.dtype), name=idx.name
         )
-    elif isinstance(idx, cudf.core.MultiIndex):
+    elif isinstance(idx, cudf.core.multiindex.MultiIndex):
         levels = [meta_nonempty(lev) for lev in idx.levels]
         codes = [[0, 0] for i in idx.levels]
-        return cudf.core.MultiIndex(
+        return cudf.core.multiindex.MultiIndex(
             levels=levels, codes=codes, names=idx.names
         )
 

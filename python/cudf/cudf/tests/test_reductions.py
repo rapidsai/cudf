@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import Series
+from cudf import Series
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.testing import _utils as utils
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq, gen_rand

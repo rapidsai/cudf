@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 import cudf
-from cudf.core import DataFrame, Series
+from cudf import DataFrame, Series
 
 
 def _random_float(nelem, dtype):

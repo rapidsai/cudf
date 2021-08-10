@@ -7,8 +7,7 @@ from numba.cuda import compile_ptx
 from numba.np import numpy_support
 
 import cudf
-from cudf import _lib as libcudf
-from cudf.core import Series
+from cudf import Series, _lib as libcudf
 from cudf.utils import dtypes as dtypeutils
 
 

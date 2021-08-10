@@ -8,6 +8,7 @@ from numba import cuda
 
 import rmm
 
+from cudf.api.types import dtype
 from cudf import core, datasets, testing
 from cudf._version import get_versions
 from cudf.api.extensions import (
@@ -15,35 +16,35 @@ from cudf.api.extensions import (
     register_index_accessor,
     register_series_accessor,
 )
-from cudf.api.types import dtype
-from cudf.core import (
+from cudf.core.scalar import (
     NA,
+    Scalar,
+)
+from cudf.core.index import (
     BaseIndex,
     CategoricalIndex,
-    DataFrame,
     DatetimeIndex,
     Float32Index,
     Float64Index,
     Index,
+    GenericIndex,
     Int8Index,
     Int16Index,
     Int32Index,
     Int64Index,
     IntervalIndex,
-    MultiIndex,
     RangeIndex,
-    Scalar,
-    Series,
     TimedeltaIndex,
     UInt8Index,
     UInt16Index,
     UInt32Index,
     UInt64Index,
-    cut,
-    from_pandas,
     interval_range,
-    merge,
 )
+from cudf.core.dataframe import DataFrame, from_pandas, merge
+from cudf.core.series import Series
+from cudf.core.multiindex import MultiIndex
+from cudf.core.cut import cut
 from cudf.core.algorithms import factorize
 from cudf.core.dtypes import (
     CategoricalDtype,

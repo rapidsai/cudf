@@ -787,7 +787,7 @@ cdef class _CPackedColumns:
         """
         Construct a ``PackedColumns`` object from a ``cudf.DataFrame``.
         """
-        from cudf.core import RangeIndex, dtypes
+        from cudf import RangeIndex, dtypes
 
         cdef _CPackedColumns p = _CPackedColumns.__new__(_CPackedColumns)
 

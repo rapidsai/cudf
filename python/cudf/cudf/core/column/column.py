@@ -64,7 +64,6 @@ from cudf.core.dtypes import (
 )
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
-    check_cast_unsupported_dtype,
     cudf_dtype_from_pa_type,
     get_time_unit,
     min_unsigned_type,
@@ -241,7 +240,12 @@ class ColumnBase(Column, Serializable):
         """
         if not isinstance(array, (pa.Array, pa.ChunkedArray)):
             raise TypeError("array should be PyArrow array or chunked array")
+
+        if array.type == pa.float16():
+            array = pa.Array.from_pandas(array.to_numpy().astype("float32"))
+
         data = pa.table([array], [None])
+
         if isinstance(array.type, pa.DictionaryType):
             indices_table = pa.table(
                 {
@@ -500,7 +504,10 @@ class ColumnBase(Column, Serializable):
         else:
             # Need to create a gather map for given slice with stride
             gather_map = arange(
-                start=start, stop=stop, step=stride, dtype=np.dtype(np.int32),
+                start=start,
+                stop=stop,
+                step=stride,
+                dtype=cudf.dtype(np.int32),
             )
             return self.take(gather_map)
 
@@ -543,7 +550,7 @@ class ColumnBase(Column, Serializable):
                     start=key_start,
                     stop=key_stop,
                     step=key_stride,
-                    dtype=np.dtype(np.int32),
+                    dtype=cudf.dtype(np.int32),
                 )
                 nelem = len(key)
             else:
@@ -950,7 +957,7 @@ class ColumnBase(Column, Serializable):
             cats = cats._column.dropna(drop_nan=False)
             min_type = min_unsigned_type(len(cats), 8)
             labels = labels - 1
-            if np.dtype(min_type).itemsize < labels.dtype.itemsize:
+            if cudf.dtype(min_type).itemsize < labels.dtype.itemsize:
                 labels = labels.astype(min_type)
 
         return build_categorical_column(
@@ -1311,7 +1318,7 @@ def column_empty(
         data = None
         children = (
             build_column(
-                data=Buffer.empty(row_count * np.dtype("int32").itemsize),
+                data=Buffer.empty(row_count * cudf.dtype("int32").itemsize),
                 dtype="int32",
             ),
         )
@@ -1320,7 +1327,7 @@ def column_empty(
         children = (
             full(row_count + 1, 0, dtype="int32"),
             build_column(
-                data=Buffer.empty(row_count * np.dtype("int8").itemsize),
+                data=Buffer.empty(row_count * cudf.dtype("int8").itemsize),
                 dtype="int8",
             ),
         )
@@ -1719,9 +1726,9 @@ def as_column(
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
-        current_dtype = np.dtype(desc["typestr"])
+        current_dtype = cudf.dtype(desc["typestr"])
 
-        arb_dtype = check_cast_unsupported_dtype(current_dtype)
+        arb_dtype = cudf.dtype(current_dtype)
 
         if desc.get("mask", None) is not None:
             # Extract and remove the mask from arbitrary before
@@ -1768,9 +1775,9 @@ def as_column(
         col = ColumnBase.from_arrow(arbitrary)
         if isinstance(arbitrary, pa.NullArray):
             if type(dtype) == str and dtype == "empty":
-                new_dtype = np.dtype(arbitrary.type.to_pandas_dtype())
+                new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
             else:
-                new_dtype = np.dtype(dtype)
+                new_dtype = cudf.dtype(dtype)
             col = col.astype(new_dtype)
 
         return col
@@ -1787,7 +1794,7 @@ def as_column(
         elif arbitrary.dtype == np.bool_:
             data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype)
         elif arbitrary.dtype.kind in ("f"):
-            arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
+            arb_dtype = cudf.dtype(arbitrary.dtype)
             data = as_column(
                 cupy.asarray(arbitrary, dtype=arb_dtype),
                 nan_as_null=nan_as_null,
@@ -1825,7 +1832,7 @@ def as_column(
         ):
             arbitrary = None
             if dtype is None:
-                dtype = np.dtype("float64")
+                dtype = cudf.dtype("float64")
 
         data = as_column(
             utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
@@ -1840,7 +1847,7 @@ def as_column(
         # CUDF assumes values are always contiguous
         desc = arbitrary.__array_interface__
         shape = desc["shape"]
-        arb_dtype = np.dtype(desc["typestr"])
+        arb_dtype = cudf.dtype(desc["typestr"])
         # CUDF assumes values are always contiguous
         if len(shape) > 1:
             raise ValueError("Data must be 1-dimensional")
@@ -1872,7 +1879,7 @@ def as_column(
             cast_dtype = time_unit in ("D", "W", "M", "Y")
 
             if cast_dtype:
-                arbitrary = arbitrary.astype(np.dtype("datetime64[s]"))
+                arbitrary = arbitrary.astype(cudf.dtype("datetime64[s]"))
 
             buffer = Buffer(arbitrary.view("|u1"))
             mask = None
@@ -1892,7 +1899,7 @@ def as_column(
             cast_dtype = time_unit in ("D", "W", "M", "Y")
 
             if cast_dtype:
-                arbitrary = arbitrary.astype(np.dtype("timedelta64[s]"))
+                arbitrary = arbitrary.astype(cudf.dtype("timedelta64[s]"))
 
             buffer = Buffer(arbitrary.view("|u1"))
             mask = None
@@ -1931,9 +1938,7 @@ def as_column(
             if dtype is not None:
                 data = data.astype(dtype)
         elif arb_dtype.kind in ("f"):
-            arb_dtype = check_cast_unsupported_dtype(
-                arb_dtype if dtype is None else dtype
-            )
+            arb_dtype = cudf.dtype(arb_dtype if dtype is None else dtype)
             data = as_column(
                 cupy.asarray(arbitrary, dtype=arb_dtype),
                 nan_as_null=nan_as_null,
@@ -1946,9 +1951,9 @@ def as_column(
             arb_dtype = arbitrary.dtype
         else:
             if arbitrary.dtype == pd.StringDtype():
-                arb_dtype = np.dtype("O")
+                arb_dtype = cudf.dtype("O")
             else:
-                arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
+                arb_dtype = cudf.dtype(arbitrary.dtype)
                 if arb_dtype != arbitrary.dtype.numpy_dtype:
                     arbitrary = arbitrary.astype(arb_dtype)
         if (
@@ -2100,7 +2105,7 @@ def _construct_array(
             arbitrary,
             dtype=native_dtype
             if native_dtype is None
-            else np.dtype(native_dtype),
+            else cudf.dtype(native_dtype),
         )
     return arbitrary
 
@@ -2109,7 +2114,7 @@ def _data_from_cuda_array_interface_desc(obj) -> Buffer:
     desc = obj.__cuda_array_interface__
     ptr = desc["data"][0]
     nelem = desc["shape"][0] if len(desc["shape"]) > 0 else 1
-    dtype = np.dtype(desc["typestr"])
+    dtype = cudf.dtype(desc["typestr"])
 
     data = Buffer(data=ptr, size=nelem * dtype.itemsize, owner=obj)
     return data

@@ -264,7 +264,7 @@ class DatetimeColumn(column.ColumnBase):
             )
         if len(self) > 0:
             return string._datetime_to_str_typecast_functions[
-                np.dtype(self.dtype)
+                cudf.dtype(self.dtype)
             ](self, format)
         else:
             return cast(
@@ -316,7 +316,7 @@ class DatetimeColumn(column.ColumnBase):
             return rhs._datetime_binop(self, op, reflect=reflect)
         lhs: Union[ScalarLike, ColumnBase] = self
         if op in ("eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"):
-            out_dtype = np.dtype(np.bool_)  # type: Dtype
+            out_dtype = cudf.dtype(np.bool_)  # type: Dtype
         elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
             out_dtype = cudf.core.column.timedelta._timedelta_add_result_dtype(
                 rhs, lhs
@@ -389,13 +389,13 @@ class DatetimeColumn(column.ColumnBase):
             to_res, _ = np.datetime_data(to_dtype)
             self_res, _ = np.datetime_data(self.dtype)
 
-            max_int = np.iinfo(np.dtype("int64")).max
+            max_int = np.iinfo(cudf.dtype("int64")).max
 
             max_dist = np.timedelta64(
-                self.max().astype(np.dtype("int64"), copy=False), self_res
+                self.max().astype(cudf.dtype("int64"), copy=False), self_res
             )
             min_dist = np.timedelta64(
-                self.min().astype(np.dtype("int64"), copy=False), self_res
+                self.min().astype(cudf.dtype("int64"), copy=False), self_res
             )
 
             self_delta_dtype = np.timedelta64(0, self_res).dtype
@@ -408,7 +408,7 @@ class DatetimeColumn(column.ColumnBase):
                 return True
             else:
                 return False
-        elif to_dtype == np.dtype("int64") or to_dtype == np.dtype("O"):
+        elif to_dtype == cudf.dtype("int64") or to_dtype == cudf.dtype("O"):
             # can safely cast to representation, or string
             return True
         else:

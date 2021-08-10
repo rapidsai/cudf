@@ -6,7 +6,6 @@ import pyarrow as pa
 from pandas._libs.missing import NAType as pd_NAType
 
 import cudf
-from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import Decimal64Dtype, ListDtype, StructDtype
 from cudf.core.index import BaseIndex
@@ -68,7 +67,7 @@ class Scalar(object):
                 self._host_dtype = value._host_dtype
             else:
                 self._device_value = value._device_value
-        elif isinstance(value, DeviceScalar):
+        elif isinstance(value, cudf._lib.scalar.DeviceScalar):
             self._device_value = value
         else:
             self._host_value, self._host_dtype = self._preprocess_host_value(
@@ -86,7 +85,7 @@ class Scalar(object):
     @property
     def device_value(self):
         if self._device_value is None:
-            self._device_value = DeviceScalar(
+            self._device_value = cudf._lib.scalar.DeviceScalar(
                 self._host_value, self._host_dtype
             )
         return self._device_value
@@ -102,7 +101,7 @@ class Scalar(object):
     def dtype(self):
         if self._is_host_value_current:
             if isinstance(self._host_value, str):
-                return np.dtype("object")
+                return cudf.dtype("object")
             else:
                 return self._host_dtype
         else:
@@ -111,13 +110,13 @@ class Scalar(object):
     def is_valid(self):
         if not self._is_host_value_current:
             self._device_value_to_host()
-        return not _is_null_host_scalar(self._host_value)
+        return not cudf._lib.scalar._is_null_host_scalar(self._host_value)
 
     def _device_value_to_host(self):
         self._host_value = self._device_value._to_host_scalar()
 
     def _preprocess_host_value(self, value, dtype):
-        valid = not _is_null_host_scalar(value)
+        valid = not cudf._lib.scalar._is_null_host_scalar(value)
 
         if isinstance(value, list):
             if dtype is not None:
@@ -187,7 +186,7 @@ class Scalar(object):
         if self._is_host_value_current and self._is_device_value_current:
             return
         elif self._is_host_value_current and not self._is_device_value_current:
-            self._device_value = DeviceScalar(
+            self._device_value = cudf._lib.scalar.DeviceScalar(
                 self._host_value, self._host_dtype
             )
         elif self._is_device_value_current and not self._is_host_value_current:
@@ -324,10 +323,10 @@ class Scalar(object):
                     and self.dtype.char == other.dtype.char == "M"
                 ):
                     res, _ = np.datetime_data(max(self.dtype, other.dtype))
-                    return np.dtype("m8" + f"[{res}]")
+                    return cudf.dtype("m8" + f"[{res}]")
                 return np.result_type(self.dtype, other.dtype)
 
-        return np.dtype(out_dtype)
+        return cudf.dtype(out_dtype)
 
     def _scalar_binop(self, other, op):
         if isinstance(other, (ColumnBase, Series, BaseIndex, np.ndarray)):
@@ -358,9 +357,9 @@ class Scalar(object):
 
         if op in {"__ceil__", "__floor__"}:
             if self.dtype.char in "bBhHf?":
-                return np.dtype("float32")
+                return cudf.dtype("float32")
             else:
-                return np.dtype("float64")
+                return cudf.dtype("float64")
         return self.dtype
 
     def _scalar_unaop(self, op):

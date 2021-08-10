@@ -137,7 +137,7 @@ class TimeDeltaColumn(column.ColumnBase):
                     rhs = cudf.Scalar(None, "float64")
             else:
                 rhs = rhs.astype(common_dtype).astype("float64")
-            out_dtype = np.dtype("int64")
+            out_dtype = cudf.dtype("int64")
         elif rhs.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
@@ -204,7 +204,7 @@ class TimeDeltaColumn(column.ColumnBase):
             else:
                 rhs = rhs.astype(common_dtype).astype("float64")
 
-            out_dtype = np.dtype("float64")
+            out_dtype = cudf.dtype("float64")
         elif rhs.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
@@ -344,7 +344,7 @@ class TimeDeltaColumn(column.ColumnBase):
             )
         if len(self) > 0:
             return string._timedelta_to_str_typecast_functions[
-                np.dtype(self.dtype)
+                cudf.dtype(self.dtype)
             ](self, format=format)
         else:
             return cast(
@@ -575,9 +575,9 @@ class TimeDeltaColumn(column.ColumnBase):
 
 
 def determine_out_dtype(lhs_dtype: Dtype, rhs_dtype: Dtype) -> Dtype:
-    if np.can_cast(np.dtype(lhs_dtype), np.dtype(rhs_dtype)):
+    if np.can_cast(cudf.dtype(lhs_dtype), cudf.dtype(rhs_dtype)):
         return rhs_dtype
-    elif np.can_cast(np.dtype(rhs_dtype), np.dtype(lhs_dtype)):
+    elif np.can_cast(cudf.dtype(rhs_dtype), cudf.dtype(lhs_dtype)):
         return lhs_dtype
     else:
         raise TypeError(f"Cannot type-cast {lhs_dtype} and {rhs_dtype}")
@@ -594,7 +594,7 @@ def _timedelta_add_result_dtype(
         lhs_unit = units.index(lhs_time_unit)
         rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
         rhs_unit = units.index(rhs_time_unit)
-        out_dtype = np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
+        out_dtype = cudf.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
     else:
         raise TypeError(
             f"Addition of {lhs.dtype} with {rhs.dtype} "
@@ -619,7 +619,7 @@ def _timedelta_sub_result_dtype(
         lhs_unit = units.index(lhs_time_unit)
         rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
         rhs_unit = units.index(rhs_time_unit)
-        out_dtype = np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
+        out_dtype = cudf.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
     else:
         raise TypeError(
             f"Subtraction of {lhs.dtype} with {rhs.dtype} "

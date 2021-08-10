@@ -53,47 +53,47 @@ if TYPE_CHECKING:
 
 
 _str_to_numeric_typecast_functions = {
-    np.dtype("int8"): str_cast.stoi8,
-    np.dtype("int16"): str_cast.stoi16,
-    np.dtype("int32"): str_cast.stoi,
-    np.dtype("int64"): str_cast.stol,
-    np.dtype("uint8"): str_cast.stoui8,
-    np.dtype("uint16"): str_cast.stoui16,
-    np.dtype("uint32"): str_cast.stoui,
-    np.dtype("uint64"): str_cast.stoul,
-    np.dtype("float32"): str_cast.stof,
-    np.dtype("float64"): str_cast.stod,
-    np.dtype("bool"): str_to_boolean,
+    cudf.dtype("int8"): str_cast.stoi8,
+    cudf.dtype("int16"): str_cast.stoi16,
+    cudf.dtype("int32"): str_cast.stoi,
+    cudf.dtype("int64"): str_cast.stol,
+    cudf.dtype("uint8"): str_cast.stoui8,
+    cudf.dtype("uint16"): str_cast.stoui16,
+    cudf.dtype("uint32"): str_cast.stoui,
+    cudf.dtype("uint64"): str_cast.stoul,
+    cudf.dtype("float32"): str_cast.stof,
+    cudf.dtype("float64"): str_cast.stod,
+    cudf.dtype("bool"): str_to_boolean,
 }
 
 _numeric_to_str_typecast_functions = {
-    np.dtype("int8"): str_cast.i8tos,
-    np.dtype("int16"): str_cast.i16tos,
-    np.dtype("int32"): str_cast.itos,
-    np.dtype("int64"): str_cast.ltos,
-    np.dtype("uint8"): str_cast.ui8tos,
-    np.dtype("uint16"): str_cast.ui16tos,
-    np.dtype("uint32"): str_cast.uitos,
-    np.dtype("uint64"): str_cast.ultos,
-    np.dtype("float32"): str_cast.ftos,
-    np.dtype("float64"): str_cast.dtos,
-    np.dtype("bool"): str_cast.from_booleans,
+    cudf.dtype("int8"): str_cast.i8tos,
+    cudf.dtype("int16"): str_cast.i16tos,
+    cudf.dtype("int32"): str_cast.itos,
+    cudf.dtype("int64"): str_cast.ltos,
+    cudf.dtype("uint8"): str_cast.ui8tos,
+    cudf.dtype("uint16"): str_cast.ui16tos,
+    cudf.dtype("uint32"): str_cast.uitos,
+    cudf.dtype("uint64"): str_cast.ultos,
+    cudf.dtype("float32"): str_cast.ftos,
+    cudf.dtype("float64"): str_cast.dtos,
+    cudf.dtype("bool"): str_cast.from_booleans,
 }
 
 _datetime_to_str_typecast_functions = {
     # TODO: support Date32 UNIX days
-    # np.dtype("datetime64[D]"): str_cast.int2timestamp,
-    np.dtype("datetime64[s]"): str_cast.int2timestamp,
-    np.dtype("datetime64[ms]"): str_cast.int2timestamp,
-    np.dtype("datetime64[us]"): str_cast.int2timestamp,
-    np.dtype("datetime64[ns]"): str_cast.int2timestamp,
+    # cudf.dtype("datetime64[D]"): str_cast.int2timestamp,
+    cudf.dtype("datetime64[s]"): str_cast.int2timestamp,
+    cudf.dtype("datetime64[ms]"): str_cast.int2timestamp,
+    cudf.dtype("datetime64[us]"): str_cast.int2timestamp,
+    cudf.dtype("datetime64[ns]"): str_cast.int2timestamp,
 }
 
 _timedelta_to_str_typecast_functions = {
-    np.dtype("timedelta64[s]"): str_cast.int2timedelta,
-    np.dtype("timedelta64[ms]"): str_cast.int2timedelta,
-    np.dtype("timedelta64[us]"): str_cast.int2timedelta,
-    np.dtype("timedelta64[ns]"): str_cast.int2timedelta,
+    cudf.dtype("timedelta64[s]"): str_cast.int2timedelta,
+    cudf.dtype("timedelta64[ms]"): str_cast.int2timedelta,
+    cudf.dtype("timedelta64[us]"): str_cast.int2timedelta,
+    cudf.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
 
 
@@ -4895,7 +4895,7 @@ class StringColumn(column.ColumnBase):
             Two non-null columns containing the string data and offsets
             respectively
         """
-        dtype = np.dtype("object")
+        dtype = cudf.dtype("object")
 
         if size is None:
             for child in children:
@@ -5240,7 +5240,7 @@ class StringColumn(column.ColumnBase):
         return col
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        to_dtype = np.dtype(to_dtype)
+        to_dtype = cudf.dtype(to_dtype)
 
         if self.dtype == to_dtype:
             return True

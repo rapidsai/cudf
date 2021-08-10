@@ -28,6 +28,7 @@ from cudf.utils.dtypes import is_scalar, is_string_dtype
 
 cimport cudf._lib.cpp.binaryop as cpp_binaryop
 from cudf._lib.cpp.binaryop cimport binary_operator
+import cudf
 
 
 class BinaryOperation(IntEnum):
@@ -211,7 +212,7 @@ def binaryop_udf(Column lhs, Column rhs, udf_ptx, dtype):
     cdef type_id tid = (
         <type_id> (
             <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(dtype)]
+                np_to_cudf_types[cudf.dtype(dtype)]
             )
         )
     )

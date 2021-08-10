@@ -81,7 +81,7 @@ cdef class DeviceScalar:
         dtype : dtype
             A NumPy dtype.
         """
-        self._dtype = dtype if dtype.kind != 'U' else np.dtype('object')
+        self._dtype = dtype if dtype.kind != 'U' else cudf.dtype('object')
         self._set_value(value, self._dtype)
 
     def _set_value(self, value, dtype):
@@ -560,7 +560,7 @@ def _is_null_host_scalar(slr):
 def _create_proxy_nat_scalar(dtype):
     cdef DeviceScalar result = DeviceScalar.__new__(DeviceScalar)
 
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     if dtype.char in 'mM':
         nat = dtype.type('NaT').astype(dtype)
         if dtype.type == np.datetime64:

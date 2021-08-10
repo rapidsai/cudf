@@ -17,7 +17,7 @@ from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import to_cudf_compatible_scalar
 
 # The size of the mask in bytes
-mask_dtype = np.dtype(np.int32)
+mask_dtype = cudf.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
 
 

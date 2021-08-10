@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import DataFrame, Index
+from cudf import DataFrame, Index
 from cudf.testing._utils import assert_eq
 
 
