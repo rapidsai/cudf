@@ -430,10 +430,9 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithInvalidScalarType)
 
   // Time in seconds since epoch
   // Dates converted using epochconverter.com
-  auto timestamps_s =
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
-      662688000L  // 1991-01-01 00:00:00 GMT
-    };
+  auto timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+    662688000L  // 1991-01-01 00:00:00 GMT
+  };
 
   // Months has to be an INT16 type
   auto months = cudf::make_fixed_width_scalar<int32_t>(5);
@@ -514,21 +513,20 @@ TEST_F(BasicDatetimeOpsTest, TestAddScalarMonthsWithSeconds)
 
   // Time in seconds since epoch
   // Dates converted using epochconverter.com
-  auto timestamps_s =
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
-      662688000L,   // 1991-01-01 00:00:00 GMT
-      949496401L,   // 2000-02-02 13:00:01 GMT - leap year
-      1056964201L,  // 2003-06-30 09:10:01 GMT - last day of month
-      0L,           // This is the UNIX epoch - 1970-01-01
-      -131536728L   // 1965-10-31 14:01:12 GMT - last day of month
-    };
+  auto timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+    662688000L,   // 1991-01-01 00:00:00 GMT
+    949496401L,   // 2000-02-02 13:00:01 GMT - leap year
+    1056964201L,  // 2003-06-30 09:10:01 GMT - last day of month
+    0L,           // This is the UNIX epoch - 1970-01-01
+    -131536728L   // 1965-10-31 14:01:12 GMT - last day of month
+  };
 
   // add
   auto months1 = cudf::make_fixed_width_scalar<int16_t>(11);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *add_calendrical_months(timestamps_s, *months1),
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+    fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
       691545600L,   // 1991-12-01 00:00:00 GMT
       978440401L,   // 2001-01-02 13:00:01 GMT
       1085908201L,  // 2004-05-30 09:10:01 GMT
@@ -542,7 +540,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddScalarMonthsWithSeconds)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *add_calendrical_months(timestamps_s, *months2),
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+    fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
       609984000L,   // 1989-05-01 00:00:00 GMT
       896792401L,   // 1998-06-02 13:00:01 GMT
       1004433001L,  // 2001-10-30 09:10:01 GMT
@@ -611,23 +609,22 @@ TEST_F(BasicDatetimeOpsTest, TestAddScalarMonthsWithSecondsWithNulls)
 
   // Time in seconds since epoch
   // Dates converted using epochconverter.com
-  auto timestamps_s =
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>(
-      {
-        662688000L,   // 1991-01-01 00:00:00 GMT
-        0L,           // NULL
-        1056964201L,  // 2003-06-30 09:10:01 GMT - last day of month
-        0L,           // This is the UNIX epoch - 1970-01-01
-        0L            // NULL
-      },
-      iterators::nulls_at({1, 4}));
+  auto timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>(
+    {
+      662688000L,   // 1991-01-01 00:00:00 GMT
+      0L,           // NULL
+      1056964201L,  // 2003-06-30 09:10:01 GMT - last day of month
+      0L,           // This is the UNIX epoch - 1970-01-01
+      0L            // NULL
+    },
+    iterators::nulls_at({1, 4}));
 
   // valid scalar
   auto months1 = cudf::make_fixed_width_scalar<int16_t>(11);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *add_calendrical_months(timestamps_s, *months1),
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>(
+    fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>(
       {
         691545600L,   // 1991-12-01 00:00:00 GMT
         0L,           // NULL
@@ -643,8 +640,8 @@ TEST_F(BasicDatetimeOpsTest, TestAddScalarMonthsWithSecondsWithNulls)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *add_calendrical_months(timestamps_s, *months2),
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>(
-      {0L, 0L, 0L, 0L, 0L}, iterators::all_nulls()),
+    fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>({0L, 0L, 0L, 0L, 0L},
+                                                                          iterators::all_nulls()),
     verbosity);
 }
 
