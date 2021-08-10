@@ -14,18 +14,19 @@
  * limitations under the License.
  */
 
+#include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
-#include <cudf/ast/detail/transform.cuh>
 #include <cudf/ast/nodes.hpp>
 #include <cudf/ast/operators.hpp>
-#include <cudf/ast/transform.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -34,7 +35,6 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 namespace cudf {
-namespace ast {
 namespace detail {
 
 /**
@@ -63,8 +63,8 @@ __launch_bounds__(max_block_size) __global__
   // workaround is to declare an arbitrary (here char) array type then cast it
   // after the fact to the appropriate type.
   extern __shared__ char raw_intermediate_storage[];
-  IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
+  ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
+    reinterpret_cast<ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
 
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
@@ -74,13 +74,13 @@ __launch_bounds__(max_block_size) __global__
     table, device_expression_data, thread_intermediate_storage);
 
   for (cudf::size_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
-    auto output_dest = mutable_column_expression_result<has_nulls>(output_column);
+    auto output_dest = ast::detail::mutable_column_expression_result<has_nulls>(output_column);
     evaluator.evaluate(output_dest, row_index);
   }
 }
 
 std::unique_ptr<column> compute_column(table_view const table,
-                                       expression const& expr,
+                                       ast::expression const& expr,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -122,11 +122,11 @@ std::unique_ptr<column> compute_column(table_view const table,
   // Execute the kernel
   auto table_device = table_device_view::create(table, stream);
   if (has_nulls) {
-    cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE, true>
+    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
         *table_device, device_expression_data, *mutable_output_device);
   } else {
-    cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE, false>
+    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
         *table_device, device_expression_data, *mutable_output_device);
   }
@@ -137,13 +137,11 @@ std::unique_ptr<column> compute_column(table_view const table,
 }  // namespace detail
 
 std::unique_ptr<column> compute_column(table_view const table,
-                                       expression const& expr,
+                                       ast::expression const& expr,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_column(table, expr, rmm::cuda_stream_default, mr);
 }
-
-}  // namespace ast
 
 }  // namespace cudf

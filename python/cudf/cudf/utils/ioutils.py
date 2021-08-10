@@ -256,6 +256,12 @@ Total number of rows
 Number of stripes
 List of column names
 
+Notes
+-----
+Support for reading files with struct columns is currently experimental,
+the output may not be as reliable as reading for other datatypes.
+{remote_data_sources}
+
 Examples
 --------
 >>> import cudf

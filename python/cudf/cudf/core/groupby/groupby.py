@@ -220,6 +220,10 @@ class GroupBy(Serializable):
                     else:
                         raise
 
+        if libgroupby._is_all_scan_aggregate(normalized_aggs):
+            # Scan aggregations return rows in original index order
+            return self._mimic_pandas_order(result)
+
         # set index names to be group key names
         if len(result):
             result.index.names = self.grouping.names
@@ -981,22 +985,20 @@ class GroupBy(Serializable):
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
-        value_column_names = [
-            x for x in self.obj._column_names if x not in self.grouping.names
-        ]
-        num_columns_to_shift = len(value_column_names)
+        value_columns = self.grouping.values
         if is_list_like(fill_value):
-            if not len(fill_value) == num_columns_to_shift:
+            if not len(fill_value) == len(value_columns._data):
                 raise ValueError(
                     "Mismatched number of columns and values to fill."
                 )
         else:
-            fill_value = [fill_value] * num_columns_to_shift
+            fill_value = [fill_value] * len(value_columns._data)
 
-        value_columns = self.obj._data.select_by_label(value_column_names)
-        return self.obj.__class__._from_data(
+        result = self.obj.__class__._from_data(
             *self._groupby.shift(Table(value_columns), periods, fill_value)
         )
+        result = self._mimic_pandas_order(result)
+        return result._copy_type_metadata(value_columns)
 
     def _mimic_pandas_order(
         self, result: DataFrameOrSeries
@@ -1209,6 +1211,14 @@ class SeriesGroupBy(GroupBy):
             and result.columns.nlevels > 1
         ):
             result.columns = result.columns.droplevel(0)
+
+        return result
+
+    def apply(self, func):
+        result = super().apply(func)
+
+        # apply Series name to result
+        result.name = self.obj.name
 
         return result
 
