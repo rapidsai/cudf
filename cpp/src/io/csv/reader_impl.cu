@@ -27,6 +27,7 @@
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/table/table.hpp>
@@ -48,18 +49,6 @@ using std::vector;
 using cudf::device_span;
 using cudf::host_span;
 using cudf::detail::make_device_uvector_async;
-
-namespace {
-/**
- * @brief Helper class to support inline-overloading for all of a variant's alternative types
- */
-template <class... Ts>
-struct VisitorOverload : Ts... {
-  using Ts::operator()...;
-};
-template <class... Ts>
-VisitorOverload(Ts...) -> VisitorOverload<Ts...>;
-}  // namespace
 
 namespace cudf {
 namespace io {
@@ -280,6 +269,41 @@ reader::impl::select_data_and_row_offsets(rmm::cuda_stream_view stream)
   return {rmm::device_uvector<char>{0, stream}, selected_rows_offsets{stream}};
 }
 
+std::vector<data_type> reader::impl::select_data_types(
+  std::map<std::string, data_type> const& col_type_map)
+{
+  std::vector<data_type> selected_dtypes;
+
+  for (int col = 0; col < num_actual_cols_; col++) {
+    if (column_flags_[col] & column_parse::enabled) {
+      auto const col_type_it = col_type_map.find(col_names_[col]);
+      CUDF_EXPECTS(col_type_it != col_type_map.end(),
+                   "Must specify data types for all active columns");
+      selected_dtypes.emplace_back(col_type_it->second);
+    }
+  }
+  return selected_dtypes;
+}
+
+std::vector<data_type> reader::impl::select_data_types(std::vector<data_type> const& dtypes)
+{
+  std::vector<data_type> selected_dtypes;
+
+  if (dtypes.size() == 1) {
+    // If it's a single dtype, assign that dtype to all active columns
+    selected_dtypes.resize(num_active_cols_, dtypes.front());
+  } else {
+    // If it's a list, assign dtypes to active columns in the given order
+    CUDF_EXPECTS(static_cast<int>(dtypes.size()) >= num_actual_cols_,
+                 "Must specify data types for all columns");
+
+    for (int col = 0; col < num_actual_cols_; col++) {
+      if (column_flags_[col] & column_parse::enabled) { selected_dtypes.emplace_back(dtypes[col]); }
+    }
+  }
+  return selected_dtypes;
+}
+
 table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
 {
   auto const data_row_offsets = select_data_and_row_offsets(stream);
@@ -355,16 +379,30 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
     }
   }
 
-  // User can specify which columns should be inferred as datetime
-  if (!opts_.get_infer_date_indexes().empty() || !opts_.get_infer_date_names().empty()) {
-    for (const auto index : opts_.get_infer_date_indexes()) {
+  // User can specify which columns should be read as datetime
+  if (!opts_.get_parse_dates_indexes().empty() || !opts_.get_parse_dates_names().empty()) {
+    for (const auto index : opts_.get_parse_dates_indexes()) {
       column_flags_[index] |= column_parse::as_datetime;
     }
 
-    for (const auto& name : opts_.get_infer_date_names()) {
+    for (const auto& name : opts_.get_parse_dates_names()) {
       auto it = std::find(col_names_.begin(), col_names_.end(), name);
       if (it != col_names_.end()) {
         column_flags_[it - col_names_.begin()] |= column_parse::as_datetime;
+      }
+    }
+  }
+
+  // User can specify which columns should be parsed as hexadecimal
+  if (!opts_.get_parse_hex_indexes().empty() || !opts_.get_parse_hex_names().empty()) {
+    for (const auto index : opts_.get_parse_hex_indexes()) {
+      column_flags_[index] |= column_parse::as_hexadecimal;
+    }
+
+    for (const auto& name : opts_.get_parse_hex_names()) {
+      auto it = std::find(col_names_.begin(), col_names_.end(), name);
+      if (it != col_names_.end()) {
+        column_flags_[it - col_names_.begin()] |= column_parse::as_hexadecimal;
       }
     }
   }
@@ -382,11 +420,14 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
   if (has_to_infer_column_types) {
     column_types = infer_column_types(data, row_offsets, stream);
   } else {
-    column_types =
-      std::visit(VisitorOverload{
-                   [&](const std::vector<data_type>& data_types) { return data_types; },
-                   [&](const std::vector<string>& dtypes) { return parse_column_types(dtypes); }},
-                 opts_.get_dtypes());
+    column_types = std::visit(
+      cudf::detail::visitor_overload{
+        [&](const std::vector<data_type>& data_types) { return select_data_types(data_types); },
+        [&](const std::map<std::string, data_type>& data_types) {
+          return select_data_types(data_types);
+        },
+        [&](const std::vector<string>& dtypes) { return parse_column_types(dtypes); }},
+      opts_.get_dtypes());
   }
 
   out_columns.reserve(column_types.size());

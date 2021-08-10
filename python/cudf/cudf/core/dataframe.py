@@ -10,7 +10,7 @@ import sys
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from typing import Any, Optional, TypeVar
+from typing import Any, Mapping, Optional, TypeVar
 
 import cupy
 import numpy as np
@@ -31,7 +31,7 @@ from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
-from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
+from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
 from cudf.core.window import Rolling
@@ -456,29 +456,15 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             self.columns = columns
 
     @classmethod
-    def _from_table(cls, table, index=None):
-        if index is None:
-            if table._index is not None:
-                index = Index._from_table(table._index)
-            else:
-                index = RangeIndex(table._num_rows)
-        out = cls.__new__(cls)
-        out._data = table._data
-        out._index = index
-        return out
-
-    @classmethod
     def _from_data(
         cls,
-        data: ColumnAccessor,
-        index: Optional[Index] = None,
+        data: Mapping,
+        index: Optional[BaseIndex] = None,
         columns: Any = None,
     ) -> DataFrame:
-        out = cls.__new__(cls)
-        out._data = data
+        out = super()._from_data(data, index)
         if index is None:
-            index = cudf.Index(range(data.nrows))
-        out._index = index
+            out.index = RangeIndex(out._data.nrows)
         if columns is not None:
             out.columns = columns
         return out
@@ -864,8 +850,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     )
                 )
             else:
-                result = self._from_table(
-                    libcudf.copying.table_slice(
+                result = self._from_data(
+                    *libcudf.copying.table_slice(
                         self, [start, stop], keep_index
                     )[0]
                 )
@@ -3893,9 +3879,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Examples
         --------
         >>> import cudf
-        >>> a = ('a', [0, 1, 2])
-        >>> b = ('b', [-3, 2, 0])
-        >>> df = cudf.DataFrame([a, b])
+        >>> df = cudf.DataFrame()
+        >>> df['a'] = [0, 1, 2]
+        >>> df['b'] = [-3, 2, 0]
         >>> df.sort_values('b')
            a  b
         0  0 -3
@@ -3904,8 +3890,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         """
         if inplace:
             raise NotImplementedError("`inplace` not currently implemented.")
-        if kind != "quicksort":
-            raise NotImplementedError("`kind` not currently implemented.")
+        if kind not in {"quicksort", "mergesort", "heapsort", "stable"}:
+            raise AttributeError(
+                f"{kind} is not a valid sorting algorithm for "
+                f"'DataFrame' object"
+            )
+        elif kind != "quicksort":
+            msg = (
+                f"GPU-accelerated {kind} is currently not supported, "
+                f"now defaulting to GPU-accelerated quicksort."
+            )
+            warnings.warn(msg)
         if axis != 0:
             raise NotImplementedError("`axis` not currently implemented.")
 
@@ -4214,10 +4209,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         index = self.columns.copy(deep=False)
         if self._num_columns == 0 or self._num_rows == 0:
             return DataFrame(index=index, columns=columns)
-        # Cython renames the columns to the range [0...ncols]
-        result = self.__class__._from_table(libcudf.transpose.transpose(self))
         # Set the old column names as the new index
-        result._index = as_index(index)
+        result = self.__class__._from_data(
+            # Cython renames the columns to the range [0...ncols]
+            libcudf.transpose.transpose(self),
+            as_index(index),
+        )
         # Set the old index as the new column names
         result.columns = columns
         return result
