@@ -6032,12 +6032,20 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the last day of the year.
         """
-        leap_end_days = (self.day_of_year == 366).fillna(False)
-        if self.is_leap_year.any() and leap_end_days.any():
-            year_end_days = (self.day_of_year == 365).fillna(False)
-            return leap_end_days + year_end_days
-        return (self.day_of_year == 365).fillna(False)
+        day_of_year = self.series._column.get_dt_field("day_of_year")
+        leap_dates = libcudf.datetime.is_leap_year(self.series._column)
 
+        leap = day_of_year == cudf.Scalar(366)
+        non_leap = day_of_year == cudf.Scalar(365)
+        result = cudf._lib.copying.copy_if_else(
+                    leap, non_leap, leap_dates
+                )
+        result = result.fillna(False)
+        return Series._from_data(
+            ColumnAccessor({None: result}),
+            index=self.series._index,
+            name=self.series.name,
+        )
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(
