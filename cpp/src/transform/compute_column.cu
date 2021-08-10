@@ -78,7 +78,7 @@ __launch_bounds__(max_block_size) __global__
   }
 }
 
-std::unique_ptr<column> compute_column(table_view const table,
+std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
@@ -135,7 +135,7 @@ std::unique_ptr<column> compute_column(table_view const table,
 
 }  // namespace detail
 
-std::unique_ptr<column> compute_column(table_view const table,
+std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
                                        rmm::mr::device_memory_resource* mr)
 {
