@@ -103,7 +103,7 @@ struct interleave_columns_functor {
                                       stream,
                                       mr);
 
-    // Only create null mask if at least one input structs columstructs1n is nullable.
+    // Only create null mask if at least one input structs column is nullable.
     if (create_mask) {
       auto const input_dv_ptr = table_device_view::create(structs_columns);
       auto const validity_fn  = [input_dv = *input_dv_ptr, num_columns] __device__(auto const idx) {
