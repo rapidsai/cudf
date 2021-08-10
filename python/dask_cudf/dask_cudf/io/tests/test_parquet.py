@@ -455,7 +455,7 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     p1 = os.path.join(tmpdir, "part.1.parquet")
     df1.to_parquet(p1, engine="pyarrow")
 
-    # New pyarrow-dataset base can handle an incosistent
+    # New pyarrow-dataset base can handle an inconsistent
     # schema even without a _metadata file
     ddf1 = dask_cudf.read_parquet(str(tmpdir), gather_statistics=True)
 
