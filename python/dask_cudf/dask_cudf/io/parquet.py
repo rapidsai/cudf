@@ -17,7 +17,7 @@ except ImportError:
     create_metadata_file_dd = None
 
 import cudf
-from cudf.core.column import as_column
+from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
 
 
@@ -135,14 +135,20 @@ class CudfEngine(ArrowDatasetEngine):
 
             for i, (name, index2) in enumerate(partition_keys):
 
-                categories = partitions[i].keys
-
-                col = as_column(index2).as_frame().repeat(len(df))._data[None]
-
-                df[name] = col.as_categorical_column(
-                    cudf.CategoricalDtype(
-                        categories=categories, ordered=False,
-                    )
+                # Build the column from `codes` directly
+                # (since the category is often a larger dtype)
+                codes = (
+                    as_column(partitions[i].keys.index(index2))
+                    .as_frame()
+                    .repeat(len(df))
+                    ._data[None]
+                )
+                df[name] = build_categorical_column(
+                    categories=partitions[i].keys,
+                    codes=codes,
+                    size=codes.size,
+                    offset=codes.offset,
+                    ordered=False,
                 )
 
         return df
