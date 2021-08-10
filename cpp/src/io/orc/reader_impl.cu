@@ -26,7 +26,6 @@
 #include <io/comp/gpuinflate.h>
 #include "orc.h"
 
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -1261,11 +1260,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                 ? stripe_info->numberOfRows
                 : _col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
             chunk.column_num_rows = (level == 0) ? num_rows : _col_meta.num_child_rows[col_idx];
-            chunk.parent_validity_info.valid_map_base =
-              (level == 0) ? nullptr : _col_meta.parent_column_data[col_idx].valid_map_base;
-            chunk.parent_validity_info.null_count =
-              (level == 0) ? 0 : _col_meta.parent_column_data[col_idx].null_count;
-            chunk.parent_null_count_psums =
+            chunk.parent_validity_info =
+              (level == 0) ? column_validity_info{} : _col_meta.parent_column_data[col_idx];
+            chunk.parent_null_count_prefix_sums =
               (level == 0)
                 ? nullptr
                 : null_count_psums[level - 1][_col_meta.parent_column_index[col_idx]].data();
