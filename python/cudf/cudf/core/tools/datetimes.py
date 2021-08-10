@@ -718,7 +718,16 @@ def date_range(
             start.value.astype("datetime64[D]").astype(old_dtype)
         )
 
-    res = libcudf.datetime.date_range(start.device_value, periods, offset)
+    if "months" in offset.kwds or "years" in offset.kwds:
+        res = libcudf.datetime.date_range(start.device_value, periods, offset)
+    else:
+        end = (pd.Timestamp(start.value) + (periods - 1) * offset).to_numpy()
+        arr = cp.linspace(
+            start=start.value.astype("int64"),
+            stop=end.astype("int64"),
+            num=periods,
+        )
+        res = cudf.core.column.as_column(arr).astype("datetime64[ns]")
 
     if _periods_not_specified:
         res = res[res <= end]

@@ -24,9 +24,4 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
         size_t n,
         size_t months,
     ) except +
-    cdef unique_ptr[column] date_range_nanosecond(
-        const scalar& initial,
-        size_t n,
-        size_t nanoseconds,
-    ) except +
     cdef unique_ptr[column] days_in_month(const column_view& column) except +

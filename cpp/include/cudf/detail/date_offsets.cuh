@@ -16,29 +16,13 @@ namespace cudf {
 namespace datetime {
 namespace detail {
 
-struct DateOffset {
-  std::size_t month, nanoseconds;
-  add_calendrical_months_functor_impl f;
-
-  template <typename Timestamp>
-  Timestamp __device__ operator+(Timestamp const& base)
-  {
-    return cuda::std::chrono::time_point_cast<typename Timestamp::duration>(
-      f(base, month) + cuda::std::chrono::nanoseconds{nanoseconds});
-  }
-
-  DateOffset __device__ operator*(std::size_t const& n)
-  {
-    return DateOffset{month * n, nanoseconds * n, add_calendrical_months_functor_impl{}};
-  }
-};
-
 template <typename Timestamp>
 CUDA_DEVICE_CALLABLE Timestamp add_dateoffset(
-  cudf::timestamp_scalar_device_view<Timestamp> const initial, std::size_t n, DateOffset offset)
+  cudf::timestamp_scalar_device_view<Timestamp> const initial, std::size_t n, std::size_t months)
 {
+  add_calendrical_months_functor_impl f{};
   // just add `n` days:
-  return offset * n + initial.value();
+  return f(initial.value(), n * months);
 }
 
 struct date_range_functor {
@@ -46,7 +30,7 @@ struct date_range_functor {
   typename std::enable_if_t<cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>>
   operator()(cudf::scalar const& input,
              std::size_t n,
-             DateOffset offset,
+             std::size_t months,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
@@ -61,8 +45,8 @@ struct date_range_functor {
                       thrust::make_counting_iterator<std::size_t>(0),
                       thrust::make_counting_iterator<std::size_t>(n),
                       output_view.begin<T>(),
-                      [device_input, n, offset] __device__(std::size_t i) {
-                        return add_dateoffset<T>(device_input, i, offset);
+                      [device_input, n, months] __device__(std::size_t i) {
+                        return add_dateoffset<T>(device_input, i, months);
                       });
 
     return output;
@@ -72,7 +56,7 @@ struct date_range_functor {
   typename std::enable_if_t<!cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>>
   operator()(cudf::scalar const& input,
              std::size_t n,
-             DateOffset offset,
+             std::size_t months,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {

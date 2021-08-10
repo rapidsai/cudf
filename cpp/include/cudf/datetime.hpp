@@ -224,12 +224,6 @@ std::unique_ptr<cudf::column> date_range_month(
   std::size_t months,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<cudf::column> date_range_nanosecond(
-  cudf::scalar const& initial,
-  std::size_t n,
-  std::size_t nanoseconds,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
 /**
  * @brief Extract the number of days in the month
  *

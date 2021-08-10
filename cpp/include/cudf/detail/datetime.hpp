@@ -147,13 +147,6 @@ std::unique_ptr<cudf::column> date_range_month(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<cudf::column> date_range_nanosecond(
-  cudf::scalar const& initial,
-  std::size_t n,
-  std::size_t nanoseconds,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
 }  // namespace detail
 }  // namespace datetime
 }  // namespace cudf

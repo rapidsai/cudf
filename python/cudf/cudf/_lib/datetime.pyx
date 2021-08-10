@@ -73,42 +73,19 @@ def is_leap_year(Column col):
 
 
 def date_range(DeviceScalar start, size_t n, offset):
+    # TODO: rename to date_range_month
     cdef unique_ptr[column] c_result
     cdef size_t months = (
         offset.kwds.get("years", 0) * 12
         + offset.kwds.get("months", 0)
     )
-    cdef size_t nanos = (
-        offset.kwds.get("weeks", 0) * 604800
-        + offset.kwds.get("days", 0) * 86400
-        + offset.kwds.get("hours", 0) * 3600
-        + offset.kwds.get("minutes", 0) * 60
-        + offset.kwds.get("seconds", 0)
-    ) * 1e9 + (
-        + offset.kwds.get("milliseconds", 0) * 1e6
-        + offset.kwds.get("microseconds", 0) * 1e3
-        + offset.kwds.get("nanoseconds", 0)
-    )
-
-    if months and nanos:
-        raise NotImplementedError(
-            "Cannot specify a combination of fixed and "
-            "non-fixed frequency."
-        )
 
     with nogil:
-        if months:
-            c_result = move(libcudf_datetime.date_range_month(
-                start.c_value.get()[0],
-                n,
-                months
-            ))
-        else:
-            c_result = move(libcudf_datetime.date_range_nanosecond(
-                start.c_value.get()[0],
-                n,
-                nanos
-            ))
+        c_result = move(libcudf_datetime.date_range_month(
+            start.c_value.get()[0],
+            n,
+            months
+        ))
     return Column.from_unique_ptr(move(c_result))
 
 
