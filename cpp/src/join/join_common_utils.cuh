@@ -40,9 +40,7 @@ class pair_equality {
   __device__ __forceinline__ bool operator()(const pair_type& lhs,
                                              const pair_type& rhs) const noexcept
   {
-    bool res = (lhs.first == rhs.first);
-    if (res) { return _check_row_equality(rhs.second, lhs.second); }
-    return res;
+    return lhs.first == rhs.first and _check_row_equality(rhs.second, lhs.second);
   }
 
  private:
