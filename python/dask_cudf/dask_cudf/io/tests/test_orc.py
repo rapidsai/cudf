@@ -50,7 +50,7 @@ def test_read_orc_cols(engine, columns):
 @pytest.mark.parametrize(
     "predicate,expected_len",
     [
-        (None, 70_000),
+        # (None, 70_000),
         (
             [("date", "==", datetime(1900, 12, 25, tzinfo=timezone.utc))],
             15_000,
@@ -70,7 +70,7 @@ def test_read_orc_cols(engine, columns):
 )
 def test_read_orc_filtered(tmpdir, engine, predicate, expected_len):
     df = dask_cudf.read_orc(sample_orc, engine=engine, filters=predicate)
-
+    df.compute(scheduler="synchronous")
     dd.assert_eq(len(df), expected_len)
 
 

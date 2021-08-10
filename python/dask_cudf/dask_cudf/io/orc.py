@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+from contextlib import ExitStack
 
 from io import BufferedWriter, IOBase
 
@@ -11,6 +12,137 @@ from dask.base import tokenize
 from dask.dataframe.io.utils import _get_pyarrow_dtypes
 
 import cudf
+from cudf.core.column import as_column, build_categorical_column
+
+try:
+
+    from dask.dataframe.io.orc.arrow import ArrowORCEngine
+
+    class CudfORCEngine(ArrowORCEngine):
+
+        @classmethod
+        def _create_meta(cls, fs, part0, columns, *args, **kwargs):
+            pd_meta = ArrowORCEngine._create_meta(fs, part0, columns, *args, **kwargs)
+            if part0:
+                with fs.open(part0[0], "rb") as f:
+                    cudf_meta = cudf.read_orc(
+                        f,
+                        stripes=[0] if part0[1] else None,
+                        columns=columns,
+                        **kwargs,
+                    )
+            else:
+                cudf_meta = cudf.DataFrame(index=pd_meta.index)
+
+            for col in pd_meta.columns:
+                if col not in cudf_meta.columns:
+                    cudf_meta[col] = as_column(pd_meta[col])
+
+            return cudf_meta
+
+        @classmethod
+        def read_partition(
+            cls,
+            fs,
+            parts,
+            columns,
+            filters=None,
+            schema=None,
+            partition_uniques=None,
+            **kwargs,
+        ):
+            # Create a seperate dataframe for each directory partition.
+            # We are only creating a single cudf dataframe if there
+            # are no partition columns.
+            tables = []
+            partitions = []
+            partition_uniques = partition_uniques or {}
+            if columns:
+                # Separate file columns and partition columns
+                file_columns = [c for c in columns if c in set(schema)]
+                partition_columns = [c for c in columns if c not in set(schema)]
+            else:
+                file_columns, partition_columns = None, list(partition_uniques)
+
+            dfs = []
+            path, stripes, hive_parts = parts[0]
+            path_list = [path]
+            stripe_list = [stripes]
+            for path, stripes, next_hive_parts in parts[1:]:
+                if hive_parts == next_hive_parts:
+                    path_list.append(path)
+                    stripe_list.append(stripes)
+                else:
+                    dfs.append(
+                        cls._read_partition(
+                            fs,
+                            path_list,
+                            file_columns,
+                            filters,
+                            stripe_list,
+                            **kwargs,
+                        )
+                    )
+                    partitions.append(hive_parts)
+                    path_list = [path]
+                    stripe_list = [stripes]
+                    hive_parts = next_hive_parts
+            dfs.append(
+                cls._read_partition(
+                    fs,
+                    path_list,
+                    file_columns,
+                    filters,
+                    stripe_list,
+                    **kwargs,
+                )
+            )
+            partitions.append(hive_parts)
+
+            # Add partition columns to each partition dataframe
+            for i, hive_parts in enumerate(partitions):
+                for (part_name, cat) in hive_parts:
+                    if part_name in partition_columns:
+                        # We read from file paths, so the partition
+                        # columns are NOT in our table yet.
+                        categories = partition_uniques[part_name]
+
+                        col = as_column(categories.index(cat)).as_frame().repeat(len(df))._data[None]
+                        dfs[i][part_name] = build_categorical_column(
+                            categories=categories,
+                            codes=as_column(col.base_data, dtype=col.dtype),
+                            size=col.size,
+                            offset=col.offset,
+                            ordered=False,
+                        )
+            return cudf.concat(dfs)
+
+
+        @classmethod
+        def _read_partition(cls, fs, path_list, columns, filters, stripe_list, **kwargs):
+
+            with ExitStack() as stack:
+                if cudf.utils.ioutils._is_local_filesystem(fs):
+                    # Let cudf open the files if this is
+                    # a local file system
+                    _source_list = path_list
+                else:
+                    # Use fs.open to pass file handles to cudf
+                    _source_list = [
+                        stack.enter_context(fs.open(path, "rb"))
+                        for path in path_list
+                    ]
+                df = cudf.io.read_orc(
+                    _source_list,
+                    columns=columns,
+                    filters=filters,
+                    stripes=stripe_list,
+                    **kwargs,
+                )
+            return df
+
+except ImportError:
+    CudfORCEngine = None
 
 
 def _read_orc_stripe(fs, path, stripe, columns, kwargs=None):
@@ -24,7 +156,17 @@ def _read_orc_stripe(fs, path, stripe, columns, kwargs=None):
     return df_stripe
 
 
-def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
+def read_orc(*args, legacy=False, **kwargs):
+    if CudfORCEngine is None or legacy is True:
+        return read_orc_legacy(*args, **kwargs)
+
+    engine = kwargs.pop("engine", CudfORCEngine)
+    if engine == "cudf":
+        engine = CudfORCEngine
+    return dd.read_orc(*args, engine=engine, **kwargs)
+
+
+def read_orc_legacy(path, columns=None, filters=None, storage_options=None, **kwargs):
     """Read cudf dataframe from ORC file(s).
 
     Note that this function is mostly borrowed from upstream Dask.
