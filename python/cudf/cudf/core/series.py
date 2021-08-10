@@ -5945,13 +5945,39 @@ class DatetimeProperties(object):
         )
 
     @property
-    def is_month_start(self):
+    def quarter(self):
         """
-        Boolean indicator if the date is the first day of the month.
+        Integer indicator for which quarter of the year the date belongs in.
+
+        There are 4 quarters in a year. With the first quarter being from
+        January - March, second quarter being April - June, third quarter
+        being July - September and fourth quarter being October - December.
 
         Returns
         -------
         Series
+        Integer indicating which quarter the date belongs to.
+
+        Examples
+        -------
+        >>> import cudf
+        >>> s = cudf.Series(["2020-05-31 08:00:00","1999-12-31 18:40:00"],
+        ...     dtype="datetime64[ms]")
+        >>> s.dt.quarter
+        0    2
+        1    4
+        dtype: int8
+        """
+        res = libcudf.datetime.extract_quarter(self.series._column).astype(
+            np.int8
+        )
+        return Series._from_data(
+            {None: res}, index=self.series._index, name=self.series.name,
+        )
+
+    @property
+    def is_month_start(self):
+        """
         Booleans indicating if dates are the first day of the month.
         """
         return (self.day == 1).fillna(False)

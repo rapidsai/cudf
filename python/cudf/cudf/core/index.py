@@ -13,7 +13,7 @@ from nvtx import annotate
 from pandas._config import get_option
 
 import cudf
-from cudf._lib.datetime import is_leap_year
+from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.table import Table
@@ -2492,6 +2492,31 @@ class DatetimeIndex(GenericIndex):
         """
         res = is_leap_year(self._values).fillna(False)
         return cupy.asarray(res)
+
+    @property
+    def quarter(self):
+        """
+        Integer indicator for which quarter of the year the date belongs in.
+
+        There are 4 quarters in a year. With the first quarter being from
+        January - March, second quarter being April - June, third quarter
+        being July - September and fourth quarter being October - December.
+
+        Returns
+        -------
+        Int8Index
+        Integer indicating which quarter the date belongs to.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:00:00",
+        ...    "1999-12-31 18:40:00"])
+        >>> gIndex.quarter
+        Int8Index([2, 4], dtype='int8')
+        """
+        res = extract_quarter(self._values)
+        return Int8Index(res, dtype="int8")
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
