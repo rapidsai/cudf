@@ -8107,17 +8107,7 @@ def test_dataframe_pipe_error():
 
 
 @pytest.mark.parametrize(
-    "op",
-    [
-        "count",
-        "cummin",
-        "cummax",
-        "cummax",
-        "cumprod",
-        "kurt",
-        "kurtosis",
-        "skew",
-    ],
+    "op", ["count", "kurt", "kurtosis", "skew"],
 )
 def test_dataframe_axis1_unsupported_ops(op):
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [8, 9, 10]})
