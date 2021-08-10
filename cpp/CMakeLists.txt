@@ -44,6 +44,7 @@ option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks"
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
+option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
 option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
 option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
 option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
@@ -627,9 +628,11 @@ endif()
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
 
+include(CPack)
+
 include(GNUInstallDirs)
 
-set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/cudf)
+set(INSTALL_CONFIGDIR lib/cmake/cudf)
 set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME cudf)
 
 # install target for cudf_base and the proxy libcudf.so
@@ -677,22 +680,6 @@ configure_package_config_file(cmake/cudf-build-config.cmake.in ${CUDF_BINARY_DIR
 
 write_basic_package_version_file(${CUDF_BINARY_DIR}/cudf-config-version.cmake
                                  COMPATIBILITY SameMinorVersion)
-
-if(TARGET arrow_shared)
-    get_target_property(arrow_is_imported arrow_shared IMPORTED)
-    if(NOT arrow_is_imported)
-        export(TARGETS arrow_shared arrow_cuda_shared
-            FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
-            NAMESPACE   cudf::)
-    endif()
-elseif(TARGET arrow_static)
-    get_target_property(arrow_is_imported arrow_static IMPORTED)
-    if(NOT arrow_is_imported)
-        export(TARGETS arrow_static arrow_cuda_static
-            FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
-            NAMESPACE   cudf::)
-    endif()
-endif()
 
 if(TARGET gtest)
     get_target_property(gtest_is_imported gtest IMPORTED)
