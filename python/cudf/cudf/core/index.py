@@ -2294,7 +2294,7 @@ class DatetimeIndex(GenericIndex):
 
         Returns
         -------
-        Int64Index
+        Int8Index
         Integer indicating which quarter the date belongs to.
 
         Examples

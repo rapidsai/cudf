@@ -1329,6 +1329,7 @@ def test_quarter():
     expect2 = pIndex.quarter
     got2 = gIndex.quarter
 
+    assert isinstance(got2, cudf.Int8Index)
     assert_eq(expect2.values, got2.values, check_dtype=False)
 
 
