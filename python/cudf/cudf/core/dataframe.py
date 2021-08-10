@@ -6340,6 +6340,24 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         elif axis == 1:
             return self._apply_support_method_axis_1(op, **kwargs)
 
+    def _scan(
+        self, op, axis=None, *args, **kwargs,
+    ):
+        axis = self._get_axis_from_axis_arg(axis)
+
+        if axis == 0:
+            result = [
+                getattr(self[col], op)(*args, **kwargs)
+                for col in self._data.names
+            ]
+
+            return DataFrame._from_data(
+                {col: result[i] for i, col in enumerate(self._data.names)},
+                index=result[0].index,
+            )
+        elif axis == 1:
+            return self._apply_support_method_axis_1(op, **kwargs)
+
     def cummin(self, axis=None, skipna=True, *args, **kwargs):
         """
         Return cumulative minimum of the DataFrame.
@@ -6347,6 +6365,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Parameters
         ----------
 
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values. If an entire row/column is NA,
             the result will be NA.
@@ -6366,9 +6386,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2  1  7
         3  1  7
         """
-        return self._apply_support_method(
-            "cummin", axis=axis, skipna=skipna, *args, **kwargs
-        )
+        return self._scan("cummin", axis=axis, skipna=skipna, *args, **kwargs)
 
     def cummax(self, axis=None, skipna=True, *args, **kwargs):
         """
@@ -6377,6 +6395,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Parameters
         ----------
 
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values. If an entire row/column is NA,
             the result will be NA.
@@ -6407,6 +6427,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Parameters
         ----------
 
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values. If an entire row/column is NA,
             the result will be NA.
@@ -6438,6 +6460,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Parameters
         ----------
 
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values. If an entire row/column is NA,
             the result will be NA.
