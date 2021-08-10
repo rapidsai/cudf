@@ -6043,7 +6043,7 @@ class DatetimeProperties(object):
         7    False
         8    False
         dtype: bool
-        """
+        """  # noqa: E501
         last_day = libcudf.datetime.last_day_of_month(self.series._column)
         last_day = Series._from_data(
             ColumnAccessor({None: last_day}),
