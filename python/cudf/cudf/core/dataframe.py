@@ -5893,6 +5893,36 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         return cls(data=data, index=index,)
 
+    def interpolate(
+        self,
+        method="linear",
+        axis=0,
+        limit=None,
+        inplace=False,
+        limit_direction=None,
+        limit_area=None,
+        downcast=None,
+        **kwargs,
+    ):
+
+        if all(dt == np.dtype("object") for dt in self.dtypes):
+            raise TypeError(
+                "Cannot interpolate with all object-dtype "
+                "columns in the DataFrame. Try setting at "
+                "least one column to a numeric dtype."
+            )
+
+        return super().interpolate(
+            method=method,
+            axis=axis,
+            limit=limit,
+            inplace=inplace,
+            limit_direction=limit_direction,
+            limit_area=limit_area,
+            downcast=downcast,
+            **kwargs,
+        )
+
     def quantile(
         self,
         q=0.5,
