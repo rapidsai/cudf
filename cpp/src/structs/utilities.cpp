@@ -158,9 +158,6 @@ struct flattened_table {
   }
 };
 
-/**
- * @copydoc cudf::structs::detail::flatten_nested_columns
- */
 std::tuple<table_view,
            std::vector<order>,
            std::vector<null_order>,
@@ -224,6 +221,8 @@ std::unique_ptr<cudf::column> unflatten_struct(vector_of_columns& flattened,
 
   CUDF_EXPECTS(current_index < flattened.size(), "STRUCT column can't have 0 children.");
 
+  auto const num_rows = flattened[current_index]->size();
+
   // cudf::flatten_nested_columns() executes depth first, and serializes the struct null vector
   // before the child/member columns.
   // E.g. STRUCT_1< STRUCT_2< A, B >, C > is flattened to:
@@ -243,8 +242,6 @@ std::unique_ptr<cudf::column> unflatten_struct(vector_of_columns& flattened,
                  blueprint.child_end(),
                  std::back_inserter(struct_members),
                  unflattener{flattened, current_index});
-
-  auto const num_rows = flattened[0]->size();
 
   return cudf::make_structs_column(num_rows,
                                    std::move(struct_members),
@@ -269,9 +266,6 @@ bool is_or_has_lists(cudf::column_view const& col)
 
 }  // namespace
 
-/**
- * @copydoc cudf::structs::detail::unflatten_nested_columns
- */
 std::unique_ptr<cudf::table> unflatten_nested_columns(std::unique_ptr<cudf::table>&& flattened,
                                                       table_view const& blueprint)
 {
