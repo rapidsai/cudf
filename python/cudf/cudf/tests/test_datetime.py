@@ -1318,9 +1318,9 @@ def test_quarter():
     gs = cudf.from_pandas(ps)
 
     expect = ps.dt.quarter
-    got = gs.dt.quarter.astype(np.int64)
+    got = gs.dt.quarter
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_dtype=False)
 
     # DatetimeIndex
     pIndex = pd.DatetimeIndex(data)
@@ -1329,7 +1329,7 @@ def test_quarter():
     expect2 = pIndex.quarter
     got2 = gIndex.quarter
 
-    assert_eq(expect2, got2)
+    assert_eq(expect2.values, got2.values, check_dtype=False)
 
 
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)

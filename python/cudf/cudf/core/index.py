@@ -2303,10 +2303,10 @@ class DatetimeIndex(GenericIndex):
         >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:00:00",
         ...    "1999-12-31 18:40:00"])
         >>> gIndex.quarter
-        Int64Index([2, 4], dtype='int64')
+        Int8Index([2, 4], dtype='int8')
         """
         res = extract_quarter(self._values)
-        return Int64Index(res, dtype="int64")
+        return Int8Index(res, dtype="int8")
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")

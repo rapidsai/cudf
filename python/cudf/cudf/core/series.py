@@ -5965,14 +5965,14 @@ class DatetimeProperties(object):
         >>> s.dt.quarter
         0    2
         1    4
-        dtype: int16
+        dtype: int8
         """
         res = libcudf.datetime.extract_quarter(self.series._column)
         return Series._from_data(
             ColumnAccessor({None: res}),
             index=self.series._index,
             name=self.series.name,
-        )
+        ).astype(np.int8)
 
     @property
     def is_month_start(self):
