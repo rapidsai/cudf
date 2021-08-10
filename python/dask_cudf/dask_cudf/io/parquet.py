@@ -19,6 +19,7 @@ except ImportError:
 import cudf
 from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
+from cudf.utils.dtypes import cudf_dtype_from_pa_type
 
 
 class CudfEngine(ArrowDatasetEngine):
@@ -27,6 +28,11 @@ class CudfEngine(ArrowDatasetEngine):
         meta, stats, parts, index = ArrowDatasetEngine.read_metadata(
             *args, **kwargs
         )
+        if parts:
+            # Re-set "object" dtypes align with pa schema
+            set_object_dtypes_from_pa_schema(
+                meta, parts[0].get("common_kwargs", {}).get("schema", None),
+            )
 
         # If `strings_to_categorical==True`, convert objects to int32
         strings_to_cats = kwargs.get("strings_to_categorical", False)
@@ -121,6 +127,9 @@ class CudfEngine(ArrowDatasetEngine):
                         strings_to_categorical=strings_to_cats,
                         **kwargs.get("read", {}),
                     )
+
+        # Re-set "object" dtypes align with pa schema
+        set_object_dtypes_from_pa_schema(df, kwargs.get("schema", None))
 
         if index and (index[0] in df.columns):
             df = df.set_index(index[0])
@@ -241,6 +250,18 @@ class CudfEngine(ArrowDatasetEngine):
             return None
         else:
             return meta
+
+
+def set_object_dtypes_from_pa_schema(df, schema):
+    # Simple utility to modify cudf DataFrame
+    # "object" dtypes to agree with a specific
+    # pyarrow schema.
+    if schema:
+        for name in df.columns:
+            if name in schema.names and df[name].dtype == "O":
+                df[name] = df[name].astype(
+                    cudf_dtype_from_pa_type(schema.field(name).type)
+                )
 
 
 def read_parquet(

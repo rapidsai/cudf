@@ -456,7 +456,8 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     df1.to_parquet(p1, engine="pyarrow")
 
     # New pyarrow-dataset base can handle an inconsistent
-    # schema even without a _metadata file
+    # schema (even without a _metadata file), but computing
+    # and dtype validation may fail
     ddf1 = dask_cudf.read_parquet(str(tmpdir), gather_statistics=True)
 
     # Add global metadata file.
@@ -468,7 +469,10 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     # with the _metadata file present
     ddf2 = dask_cudf.read_parquet(str(tmpdir), gather_statistics=True)
 
-    # Check that the result is the same with
-    # and without the _metadata file
-    dd.assert_eq(ddf1, ddf2, check_dtypes=False)
+    # Check that the result is the same with and
+    # without the _metadata file.  Note that we must
+    # call `compute` on `ddf1`, because the dtype of
+    # the inconsistent column ("a") may be "object"
+    # before computing, and "int" after
+    dd.assert_eq(ddf1.compute(), ddf2)
     dd.assert_eq(ddf1.compute(), ddf2.compute())
