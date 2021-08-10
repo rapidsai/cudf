@@ -4,6 +4,7 @@ import math
 import warnings
 from typing import Sequence, Union
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 from pandas.core.tools.datetimes import _unit_map
@@ -705,10 +706,12 @@ def date_range(
             periods = math.ceil(int(end - start) / _min_offset(offset))
             _periods_not_specified = True
     else:
-        start = cudf.Scalar(start, dtype=dtype)
-        end = cudf.Scalar(end, dtype=dtype)
-        delta = ((end.value - start.value) / (periods - 1)).astype("<m8[ns]")
-        offset = DateOffset(**{"nanoseconds": int(delta)})
+        start = (cudf.Scalar(start, dtype=dtype).value.astype("int64"),)
+        end = (cudf.Scalar(end, dtype=dtype).value.astype("int64"),)
+        arr = cp.linspace(start=start, stop=end, num=periods,)
+        result = cudf.core.column.as_column(arr).astype("datetime64[ns]")
+        return cudf.DatetimeIndex._from_data({None: result})
+
     if normalize:
         old_dtype = start.value.dtype
         start = cudf.Scalar(
