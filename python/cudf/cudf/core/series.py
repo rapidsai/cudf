@@ -3008,11 +3008,10 @@ class Series(SingleColumnFrame, Serializable):
             return self.copy(deep=copy)
         try:
             data = self._column.astype(dtype)
-            if copy:
-                data = data.copy(deep=True)
 
             return self._from_data(
-                {self.name: data.copy(deep=True)}, index=self._index
+                {self.name: (data.copy(deep=True) if copy else data)},
+                index=self._index,
             )
 
         except Exception as e:
