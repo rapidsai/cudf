@@ -52,6 +52,19 @@ _dtype_to_format_conversion = {
 
 
 class DatetimeColumn(column.ColumnBase):
+    """
+    A Column implementation for Date-time types.
+
+    Parameters
+    ----------
+    data : Buffer
+        The datetime values
+    dtype : np.dtype
+        The data type
+    mask : Buffer; optional
+        The validity mask
+    """
+
     def __init__(
         self,
         data: Buffer,
@@ -61,17 +74,8 @@ class DatetimeColumn(column.ColumnBase):
         offset: int = 0,
         null_count: int = None,
     ):
-        """
-        Parameters
-        ----------
-        data : Buffer
-            The datetime values
-        dtype : np.dtype
-            The data type
-        mask : Buffer; optional
-            The validity mask
-        """
         dtype = cudf.dtype(dtype)
+
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:

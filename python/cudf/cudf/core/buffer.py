@@ -16,6 +16,23 @@ from cudf.core.abc import Serializable
 
 
 class Buffer(Serializable):
+    """
+    A Buffer represents a device memory allocation.
+
+    Parameters
+    ----------
+    data : Buffer, array_like, int
+        An array-like object or integer representing a
+        device or host pointer to pre-allocated memory.
+    size : int, optional
+        Size of memory allocation. Required if a pointer
+        is passed for `data`.
+    owner : object, optional
+        Python object to which the lifetime of the memory
+        allocation is tied. If provided, a reference to this
+        object is kept in this Buffer.
+    """
+
     ptr: int
     size: int
     _owner: Any
@@ -23,22 +40,7 @@ class Buffer(Serializable):
     def __init__(
         self, data: Any = None, size: Optional[int] = None, owner: Any = None
     ):
-        """
-        A Buffer represents a device memory allocation.
 
-        Parameters
-        ----------
-        data : Buffer, array_like, int
-            An array-like object or integer representing a
-            device or host pointer to pre-allocated memory.
-        size : int, optional
-            Size of memory allocation. Required if a pointer
-            is passed for `data`.
-        owner : object, optional
-            Python object to which the lifetime of the memory
-            allocation is tied. If provided, a reference to this
-            object is kept in this Buffer.
-        """
         if isinstance(data, Buffer):
             self.ptr = data.ptr
             self.size = data.size

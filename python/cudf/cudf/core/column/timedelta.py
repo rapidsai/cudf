@@ -34,6 +34,24 @@ _dtype_to_format_conversion = {
 
 
 class TimeDeltaColumn(column.ColumnBase):
+    """
+    Parameters
+    ----------
+    data : Buffer
+        The Timedelta values
+    dtype : np.dtype
+        The data type
+    size : int
+        Size of memory allocation.
+    mask : Buffer; optional
+        The validity mask
+    offset : int
+        Data offset
+    null_count : int, optional
+        The number of null values.
+        If None, it is calculated automatically.
+    """
+
     def __init__(
         self,
         data: Buffer,
@@ -43,24 +61,8 @@ class TimeDeltaColumn(column.ColumnBase):
         offset: int = 0,
         null_count: int = None,
     ):
-        """
-        Parameters
-        ----------
-        data : Buffer
-            The Timedelta values
-        dtype : np.dtype
-            The data type
-        size : int
-            Size of memory allocation.
-        mask : Buffer; optional
-            The validity mask
-        offset : int
-            Data offset
-        null_count : int, optional
-            The number of null values.
-            If None, it is calculated automatically.
-        """
         dtype = cudf.dtype(dtype)
+
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:

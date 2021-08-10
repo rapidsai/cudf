@@ -170,11 +170,31 @@ class ColumnBase(Column, Serializable):
     def _null_equals(self, other: ColumnBase) -> ColumnBase:
         return self.binary_operator("NULL_EQUALS", other)
 
-    def all(self) -> bool:
-        return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
+    def all(self, skipna: bool = True) -> bool:
+        # If all entries are null the result is True, including when the column
+        # is empty.
+        result_col = self.nans_to_nulls() if skipna else self
 
-    def any(self) -> bool:
-        return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
+        if result_col.null_count == result_col.size:
+            return True
+
+        if isinstance(result_col, ColumnBase):
+            return libcudf.reduce.reduce("all", result_col, dtype=np.bool_)
+        else:
+            return result_col
+
+    def any(self, skipna: bool = True) -> bool:
+        # Early exit for fast cases.
+        result_col = self.nans_to_nulls() if skipna else self
+        if not skipna and result_col.has_nulls:
+            return True
+        elif skipna and result_col.null_count == result_col.size:
+            return False
+
+        if isinstance(result_col, ColumnBase):
+            return libcudf.reduce.reduce("any", result_col, dtype=np.bool_)
+        else:
+            return result_col
 
     def __sizeof__(self) -> int:
         n = 0
@@ -917,9 +937,9 @@ class ColumnBase(Column, Serializable):
             return self.as_interval_column(dtype, **kwargs)
         elif is_decimal_dtype(dtype):
             return self.as_decimal_column(dtype, **kwargs)
-        elif np.issubdtype(dtype, np.datetime64):
+        elif np.issubdtype(cast(Any, dtype), np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
-        elif np.issubdtype(dtype, np.timedelta64):
+        elif np.issubdtype(cast(Any, dtype), np.timedelta64):
             return self.as_timedelta_column(dtype, **kwargs)
         else:
             return self.as_numerical_column(dtype, **kwargs)

@@ -4,7 +4,7 @@ from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Dict, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import cupy
 import numpy as np
@@ -326,7 +326,7 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         See Also
         --------
-        cudf.core.index.Index.rename : Able to set new names without level.
+        cudf.Index.rename : Able to set new names without level.
 
         Examples
         --------
@@ -518,83 +518,20 @@ class BaseIndex(SingleColumnFrame, Serializable):
         """
         return self._values.data_array_view
 
-    def min(self):
-        """
-        Return the minimum value of the Index.
-
-        Returns
-        -------
-        scalar
-            Minimum value.
-
-        See Also
-        --------
-        cudf.core.index.Index.max : Return the maximum value in an Index.
-        cudf.core.series.Series.min : Return the minimum value in a Series.
-        cudf.core.dataframe.DataFrame.min : Return the minimum values in
-            a DataFrame.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([3, 2, 1])
-        >>> idx.min()
-        1
-        """
-        return self._values.min()
-
-    def max(self):
-        """
-        Return the maximum value of the Index.
-
-        Returns
-        -------
-        scalar
-            Maximum value.
-
-        See Also
-        --------
-        cudf.core.index.Index.min : Return the minimum value in an Index.
-        cudf.core.series.Series.max : Return the maximum value in a Series.
-        cudf.core.dataframe.DataFrame.max : Return the maximum values in
-            a DataFrame.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([3, 2, 1])
-        >>> idx.max()
-        3
-        """
-        return self._values.max()
-
-    def sum(self):
-        """
-        Return the sum of all values of the Index.
-
-        Returns
-        -------
-        scalar
-            Sum of all values.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([3, 2, 1])
-        >>> idx.sum()
-        6
-        """
-        return self._values.sum()
-
     @classmethod
     def _concat(cls, objs):
-        data = concat_columns([o._values for o in objs])
+        if all(isinstance(obj, RangeIndex) for obj in objs):
+            result = _concat_range_index(objs)
+        else:
+            data = concat_columns([o._values for o in objs])
+            result = as_index(data)
+
         names = {obj.name for obj in objs}
         if len(names) == 1:
             [name] = names
         else:
             name = None
-        result = as_index(data)
+
         result.name = name
         return result
 
@@ -780,8 +717,8 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         See Also
         --------
-        cudf.core.series.Series.min : Sort values of a Series.
-        cudf.core.dataframe.DataFrame.sort_values : Sort values in a DataFrame.
+        cudf.Series.min : Sort values of a Series.
+        cudf.DataFrame.sort_values : Sort values in a DataFrame.
 
         Examples
         --------
@@ -1350,9 +1287,9 @@ class BaseIndex(SingleColumnFrame, Serializable):
         >>> import numpy as np
         >>> data = [10, 20, 30, np.nan]
         >>> pdi = pd.Index(data)
-        >>> cudf.core.index.Index.from_pandas(pdi)
+        >>> cudf.Index.from_pandas(pdi)
         Float64Index([10.0, 20.0, 30.0, <NA>], dtype='float64')
-        >>> cudf.core.index.Index.from_pandas(pdi, nan_as_null=False)
+        >>> cudf.Index.from_pandas(pdi, nan_as_null=False)
         Float64Index([10.0, 20.0, 30.0, nan], dtype='float64')
         """
         if not isinstance(index, pd.Index):
@@ -1772,25 +1709,25 @@ class RangeIndex(BaseIndex):
 
 
 class GenericIndex(BaseIndex):
-    """An array of orderable values that represent the indices of another Column
+    """
+    An array of orderable values that represent the indices of another Column
 
     Attributes
     ----------
     _values: A Column object
     name: A string
+
+    Parameters
+    ----------
+    data : Column
+        The Column of data for this index
+    name : str optional
+        The name of the Index. If not provided, the Index adopts the value
+        Column's name. Otherwise if this name is different from the value
+        Column's, the data Column will be cloned to adopt this name.
     """
 
     def __init__(self, data, **kwargs):
-        """
-        Parameters
-        ----------
-        data : Column
-            The Column of data for this index
-        name : str optional
-            The name of the Index. If not provided, the Index adopts the value
-            Column's name. Otherwise if this name is different from the value
-            Column's, the data Column will be cloned to adopt this name.
-        """
         kwargs = _setdefault_name(data, **kwargs)
 
         # normalize the input
@@ -1996,42 +1933,252 @@ class NumericIndex(GenericIndex):
 
 
 class Int8Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Int8Index is a special case of Index with purely
+    integer(``int8``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Int8Index
+    """
+
     _dtype = np.int8
 
 
 class Int16Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Int16Index is a special case of Index with purely
+    integer(``int16``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Int16Index
+    """
+
     _dtype = np.int16
 
 
 class Int32Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Int32Index is a special case of Index with purely
+    integer(``int32``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Int32Index
+    """
+
     _dtype = np.int32
 
 
 class Int64Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Int64Index is a special case of Index with purely
+    integer(``int64``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Int64Index
+    """
+
     _dtype = np.int64
 
 
 class UInt8Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    UInt8Index is a special case of Index with purely
+    integer(``uint64``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    UInt8Index
+    """
+
     _dtype = np.uint8
 
 
 class UInt16Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    UInt16Index is a special case of Index with purely
+    integer(``uint16``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    UInt16Index
+    """
+
     _dtype = np.uint16
 
 
 class UInt32Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    UInt32Index is a special case of Index with purely
+    integer(``uint32``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    UInt32Index
+    """
+
     _dtype = np.uint32
 
 
 class UInt64Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    UInt64Index is a special case of Index with purely
+    integer(``uint64``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    UInt64Index
+    """
+
     _dtype = np.uint64
 
 
 class Float32Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Float32Index is a special case of Index with purely
+    float(``float32``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Float32Index
+    """
+
     _dtype = np.float32
 
 
 class Float64Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Float64Index is a special case of Index with purely
+    float(``float64``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Float64Index
+    """
+
     _dtype = np.float64
 
 
@@ -2482,6 +2629,13 @@ class TimedeltaIndex(GenericIndex):
 
     @property
     def inferred_freq(self):
+        """
+        Infers frequency of TimedeltaIndex.
+
+        Notes
+        -----
+        This property is currently not supported.
+        """
         raise NotImplementedError("inferred_freq is not yet supported")
 
 
@@ -2787,7 +2941,7 @@ class IntervalIndex(GenericIndex):
         Construct an IntervalIndex from an array of splits.
 
         Parameters
-        ---------
+        ----------
         breaks : array-like (1-dimensional)
             Left and right bounds for each interval.
         closed : {"left", "right", "both", "neither"}, default "right"
@@ -2867,7 +3021,7 @@ class StringIndex(GenericIndex):
             + ")"
         )
 
-    @copy_docstring(StringMethods.__init__)  # type: ignore
+    @copy_docstring(StringMethods)  # type: ignore
     @property
     def str(self):
         return StringMethods(parent=self)
@@ -3032,3 +3186,43 @@ class Index(BaseIndex, metaclass=IndexMeta):
             )
 
         return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
+
+
+def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
+    """
+    An internal Utility function to concat RangeIndex objects.
+    """
+    start = step = next_ = None
+
+    # Filter the empty indexes
+    non_empty_indexes = [obj for obj in indexes if len(obj)]
+
+    if not non_empty_indexes:
+        # Here all "indexes" had 0 length, i.e. were empty.
+        # In this case return an empty range index.
+        return RangeIndex(0, 0)
+
+    for obj in non_empty_indexes:
+        if start is None:
+            # This is set by the first non-empty index
+            start = obj.start
+            if step is None and len(obj) > 1:
+                step = obj.step
+        elif step is None:
+            # First non-empty index had only one element
+            if obj.start == start:
+                result = as_index(concat_columns([x._values for x in indexes]))
+                return result
+            step = obj.start - start
+
+        non_consecutive = (step != obj.step and len(obj) > 1) or (
+            next_ is not None and obj.start != next_
+        )
+        if non_consecutive:
+            result = as_index(concat_columns([x._values for x in indexes]))
+            return result
+        if step is not None:
+            next_ = obj[-1] + step
+
+    stop = non_empty_indexes[-1].stop if next_ is None else next_
+    return RangeIndex(start, stop, step)
