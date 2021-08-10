@@ -85,18 +85,23 @@ struct extract_last_day_of_month {
   CUDA_DEVICE_CALLABLE timestamp_D operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
-    // IDEAL: does not work with CUDA10.0 due to nvcc compiler bug
-    // cannot invoke ym_last_day.day()
-    // const year_month_day orig_ymd(floor<days>(ts));
-    // const year_month_day_last ym_last_day(orig_ymd.year(), month_day_last(orig_ymd.month()));
-    // return timestamp_D(sys_days(ym_last_day));
+    const year_month_day ymd(floor<days>(ts));
+    auto const ymdl = year_month_day_last{ymd.year() / ymd.month() / last};
+    return timestamp_D{sys_days{ymdl}};
+  }
+};
 
-    // Only has the days - time component is chopped off, which is what we want
-    auto const days_since_epoch = floor<days>(ts);
-    auto const date             = year_month_day(days_since_epoch);
-    auto const last_day         = days_in_month(date.month(), date.year().is_leap());
-
-    return timestamp_D(days_since_epoch + days(last_day - static_cast<unsigned>(date.day())));
+// Extract the number of days of the month
+// A similar operator to `extract_last_day_of_month`, except this returns
+// an integer while the other returns a timestamp.
+struct days_in_month_op {
+  template <typename Timestamp>
+  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
+  {
+    using namespace cuda::std::chrono;
+    auto const date = year_month_day(floor<days>(ts));
+    auto const ymdl = year_month_day_last(date.year() / date.month() / last);
+    return static_cast<int16_t>(unsigned{ymdl.day()});
   }
 };
 
@@ -133,6 +138,7 @@ struct extract_quarter_op {
   }
 };
 
+// Returns true if the year is a leap year
 struct is_leap_year_op {
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE bool operator()(Timestamp const ts) const
@@ -344,6 +350,13 @@ std::unique_ptr<column> is_leap_year(column_view const& column,
   return apply_datetime_op<is_leap_year_op, type_id::BOOL8>(column, stream, mr);
 }
 
+std::unique_ptr<column> days_in_month(column_view const& column,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  return apply_datetime_op<days_in_month_op, type_id::INT16>(column, stream, mr);
+}
+
 std::unique_ptr<column> extract_quarter(column_view const& column,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
@@ -425,6 +438,13 @@ std::unique_ptr<column> is_leap_year(column_view const& column, rmm::mr::device_
 {
   CUDF_FUNC_RANGE();
   return detail::is_leap_year(column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> days_in_month(column_view const& column,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::days_in_month(column, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> extract_quarter(column_view const& column,

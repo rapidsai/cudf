@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,14 +116,15 @@ struct value_expression_result
   /**
    * @brief Returns the underlying data.
    *
-   * @throws thrust::bad_optional_access if the underlying data is not valid.
+   * If the underlying data is not valid, behavior is undefined. Callers should
+   * use is_valid to check for validity before accessing the value.
    */
   __device__ T value() const
   {
     // Using two separate constexprs silences compiler warnings, whereas an
     // if/else does not. An unconditional return is not ignored by the compiler
     // when has_nulls is true and therefore raises a compiler error.
-    if constexpr (has_nulls) { return _obj.value(); }
+    if constexpr (has_nulls) { return *_obj; }
     if constexpr (!has_nulls) { return _obj; }
   }
 
@@ -190,13 +191,13 @@ struct mutable_column_expression_result
 };
 
 /**
- * @brief Despite to a binary operator based on a single data type.
+ * @brief Dispatch to a binary operator based on a single data type.
  *
  * This functor is a dispatcher for binary operations that assumes that both
- * operands to a binary operation are of the same type. This assumption is
- * encoded in the one non-deducible template parameter LHS, the type of the
- * left-hand operand, which is then used as the template parameter for both the
- * left and right operands to the binary operator f.
+ * operands are of the same type. This assumption is encoded in the
+ * non-deducible template parameter LHS, the type of the left-hand operand,
+ * which is then used as the template parameter for both the left and right
+ * operands to the binary operator f.
  */
 struct single_dispatch_binary_operator {
   /**
@@ -711,23 +712,6 @@ struct expression_evaluator {
     compare_nulls;  ///< Whether the equality operator returns true or false for two nulls.
 };
 
-/**
- * @brief Compute a new column by evaluating an expression tree on a table.
- *
- * This evaluates an expression over a table to produce a new column. Also called an n-ary
- * transform.
- *
- * @param table The table used for expression evaluation.
- * @param expr The root of the expression tree.
- * @param stream Stream on which to perform the computation.
- * @param mr Device memory resource.
- * @return std::unique_ptr<column> Output column.
- */
-std::unique_ptr<column> compute_column(
-  table_view const table,
-  expression const& expr,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 
 }  // namespace ast

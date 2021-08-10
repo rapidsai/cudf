@@ -61,6 +61,8 @@ def extract_datetime_component(Column col, object field):
 
 
 def is_leap_year(Column col):
+    """Returns a boolean indicator whether the year of the date is a leap year
+    """
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
 
@@ -107,4 +109,16 @@ def date_range(DeviceScalar start, size_t n, offset):
                 n,
                 nanos
             ))
+    return Column.from_unique_ptr(move(c_result))
+
+
+def days_in_month(Column col):
+    """Extracts the number of days in the month of the date
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        c_result = move(libcudf_datetime.days_in_month(col_view))
+
     return Column.from_unique_ptr(move(c_result))

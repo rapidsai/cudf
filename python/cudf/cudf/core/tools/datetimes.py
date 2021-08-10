@@ -347,6 +347,66 @@ def get_units(value):
 
 
 class DateOffset:
+    """
+    An object used for binary ops where calendrical arithmetic
+    is desired rather than absolute time arithmetic. Used to
+    add or subtract a whole number of periods, such as several
+    months or years, to a series or index of datetime dtype.
+    Works similarly to pd.DateOffset, but stores the offset
+    on the device (GPU).
+
+    Parameters
+    ----------
+    n : int, default 1
+        The number of time periods the offset represents.
+    **kwds
+        Temporal parameter that add to or replace the offset value.
+        Parameters that **add** to the offset (like Timedelta):
+        - months
+
+    See Also
+    --------
+    pandas.DateOffset : The equivalent Pandas object that this
+    object replicates
+
+    Examples
+    --------
+    >>> from cudf import DateOffset
+    >>> ts = cudf.Series([
+        "2000-01-01 00:00:00.012345678",
+        "2000-01-31 00:00:00.012345678",
+        "2000-02-29 00:00:00.012345678",
+    ], dtype='datetime64[ns])
+    >>> ts + DateOffset(months=3)
+    0   2000-04-01 00:00:00.012345678
+    1   2000-04-30 00:00:00.012345678
+    2   2000-05-29 00:00:00.012345678
+    dtype: datetime64[ns]
+    >>> ts - DateOffset(months=12)
+    0   1999-01-01 00:00:00.012345678
+    1   1999-01-31 00:00:00.012345678
+    2   1999-02-28 00:00:00.012345678
+    dtype: datetime64[ns]
+
+    Notes
+    -----
+    Note that cuDF does not yet support DateOffset arguments
+    that 'replace' units in the datetime data being operated on
+    such as
+        - year
+        - month
+        - week
+        - day
+        - hour
+        - minute
+        - second
+        - microsecond
+        - millisecond
+        - nanosecond
+
+    cuDF does not yet support rounding via a `normalize`
+    keyword argument.
+    """
 
     _UNITS_TO_CODES = {
         "nanoseconds": "ns",
@@ -364,66 +424,6 @@ class DateOffset:
     _CODES_TO_UNITS = {v: k for k, v in _UNITS_TO_CODES.items()}
 
     def __init__(self, n=1, normalize=False, **kwds):
-        """
-        An object used for binary ops where calendrical arithmetic
-        is desired rather than absolute time arithmetic. Used to
-        add or subtract a whole number of periods, such as several
-        months or years, to a series or index of datetime dtype.
-        Works similarly to pd.DateOffset, but stores the offset
-        on the device (GPU).
-
-        Parameters
-        ----------
-        n : int, default 1
-            The number of time periods the offset represents.
-        **kwds
-            Temporal parameter that add to or replace the offset value.
-            Parameters that **add** to the offset (like Timedelta):
-            - months
-
-        See Also
-        --------
-        pandas.DateOffset : The equivalent Pandas object that this
-        object replicates
-
-        Examples
-        --------
-        >>> from cudf import DateOffset
-        >>> ts = cudf.Series([
-            "2000-01-01 00:00:00.012345678",
-            "2000-01-31 00:00:00.012345678",
-            "2000-02-29 00:00:00.012345678",
-        ], dtype='datetime64[ns])
-        >>> ts + DateOffset(months=3)
-        0   2000-04-01 00:00:00.012345678
-        1   2000-04-30 00:00:00.012345678
-        2   2000-05-29 00:00:00.012345678
-        dtype: datetime64[ns]
-        >>> ts - DateOffset(months=12)
-        0   1999-01-01 00:00:00.012345678
-        1   1999-01-31 00:00:00.012345678
-        2   1999-02-28 00:00:00.012345678
-        dtype: datetime64[ns]
-
-        Notes
-        -----
-        Note that cuDF does not yet support DateOffset arguments
-        that 'replace' units in the datetime data being operated on
-        such as
-            - year
-            - month
-            - week
-            - day
-            - hour
-            - minute
-            - second
-            - microsecond
-            - millisecond
-            - nanosecond
-
-        cuDF does not yet support rounding via a `normalize`
-        keyword argument.
-        """
         if normalize:
             raise NotImplementedError(
                 "normalize not yet supported for DateOffset"

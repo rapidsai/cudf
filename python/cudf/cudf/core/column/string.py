@@ -98,17 +98,18 @@ _timedelta_to_str_typecast_functions = {
 
 
 class StringMethods(ColumnMethods):
+    """
+    Vectorized string functions for Series and Index.
+
+    This mimics pandas ``df.str`` interface. nulls stay null
+    unless handled otherwise by a particular method.
+    Patterned after Python’s string methods, with some
+    inspiration from R’s stringr package.
+    """
+
     _column: StringColumn
 
     def __init__(self, parent):
-        """
-        Vectorized string functions for Series and Index.
-
-        This mimics pandas ``df.str`` interface. nulls stay null
-        unless handled otherwise by a particular method.
-        Patterned after Python’s string methods, with some
-        inspiration from R’s stringr package.
-        """
         value_type = (
             parent.dtype.leaf_type
             if is_list_dtype(parent.dtype)
@@ -749,6 +750,59 @@ class StringMethods(ColumnMethods):
                 self._column, column.as_column(pat, dtype="str")
             )
         return self._return_or_inplace(result_col)
+
+    def repeat(self, repeats: Union[int, Sequence],) -> SeriesOrIndex:
+        """
+        Duplicate each string in the Series or Index.
+        Equivalent to `str.repeat()
+        <https://pandas.pydata.org/docs/reference/api/pandas.Series.str.repeat.html>`_.
+
+        Parameters
+        ----------
+        repeats : int or sequence of int
+            Same value for all (int) or different value per (sequence).
+
+        Returns
+        -------
+        Series or Index of object
+            Series or Index of repeated string objects specified by
+            input parameter repeats.
+
+        Examples
+        --------
+        >>> s = cudf.Series(['a', 'b', 'c'])
+        >>> s
+        0    a
+        1    b
+        2    c
+        dtype: object
+
+        Single int repeats string in Series
+
+        >>> s.str.repeat(repeats=2)
+        0    aa
+        1    bb
+        2    cc
+        dtype: object
+
+        Sequence of int repeats corresponding string in Series
+
+        >>> s.str.repeat(repeats=[1, 2, 3])
+        0      a
+        1     bb
+        2    ccc
+        dtype: object
+        """
+        if can_convert_to_column(repeats):
+            return self._return_or_inplace(
+                libstrings.repeat_sequence(
+                    self._column, column.as_column(repeats, dtype="int"),
+                ),
+            )
+
+        return self._return_or_inplace(
+            libstrings.repeat_scalar(self._column, repeats)
+        )
 
     def replace(
         self,
@@ -2502,7 +2556,7 @@ class StringMethods(ColumnMethods):
 
         Also available on indices:
 
-        >>> idx = cudf.core.index.StringIndex(['X 123', 'Y 999'])
+        >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
         StringIndex(['X 123' 'Y 999'], dtype='object')
 
@@ -2569,7 +2623,7 @@ class StringMethods(ColumnMethods):
 
         Also available on indices:
 
-        >>> idx = cudf.core.index.StringIndex(['X 123', 'Y 999'])
+        >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
         StringIndex(['X 123' 'Y 999'], dtype='object')
 
@@ -3241,7 +3295,7 @@ class StringMethods(ColumnMethods):
 
         This is also available on Index.
 
-        >>> index = cudf.core.index.StringIndex(['A', 'A', 'Aaba', 'cat'])
+        >>> index = cudf.Index(['A', 'A', 'Aaba', 'cat'])
         >>> index.str.count('a')
         Int64Index([0, 0, 2, 1], dtype='int64')
         """  # noqa W605
@@ -4869,7 +4923,18 @@ def _expected_types_format(types):
 
 
 class StringColumn(column.ColumnBase):
-    """Implements operations for Columns of String type
+    """
+    Implements operations for Columns of String type
+
+    Parameters
+    ----------
+    mask : Buffer
+        The validity mask
+    offset : int
+        Data offset
+    children : Tuple[Column]
+        Two non-null columns containing the string data and offsets
+        respectively
     """
 
     _start_offset: Optional[int]
@@ -4884,17 +4949,6 @@ class StringColumn(column.ColumnBase):
         null_count: int = None,
         children: Tuple["column.ColumnBase", ...] = (),
     ):
-        """
-        Parameters
-        ----------
-        mask : Buffer
-            The validity mask
-        offset : int
-            Data offset
-        children : Tuple[Column]
-            Two non-null columns containing the string data and offsets
-            respectively
-        """
         dtype = np.dtype("object")
 
         if size is None:

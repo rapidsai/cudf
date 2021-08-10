@@ -231,6 +231,21 @@ std::unique_ptr<cudf::column> date_range_nanosecond(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Extract the number of days in the month
+ *
+ * output[i] contains the number of days in the month of date `column[i]`
+ * output[i] is null if `column[i]` is null
+ *
+ * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
+ *
+ * @param cudf::column_view of the input datetime values
+ * @return cudf::column of datatype INT16 of days in month of the corresponding date
+ */
+std::unique_ptr<cudf::column> days_in_month(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief  Returns the quarter of the date
  *
  * `output[i]` will be a value from {1, 2, 3, 4} corresponding to the quater of month given by
