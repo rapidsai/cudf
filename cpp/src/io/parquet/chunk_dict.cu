@@ -160,10 +160,8 @@ __global__ void __launch_bounds__(block_size, 1)
   auto hash_map = map_type::device_view(
     s_chunk->dict_map_slots, s_chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
+  __shared__ int total_num_dict_entries;
   for (size_type i = 0; i < s_num_values; i += block_size) {
-    // Check if the num unique values in chunk has already exceeded max dict size and early exit
-    if (s_chunk->num_dict_entries > MAX_DICT_SIZE) { return; }
-
     // add the value to hash map
     size_type val_idx = i + t + s_start_value_idx;
     bool is_valid =
@@ -202,10 +200,14 @@ __global__ void __launch_bounds__(block_size, 1)
     __syncthreads();
     auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
     if (t == 0) {
-      atomicAdd(&s_chunk->num_dict_entries, num_unique);
+      total_num_dict_entries = atomicAdd(&s_chunk->num_dict_entries, num_unique);
+      total_num_dict_entries += num_unique;
       atomicAdd(&s_chunk->uniq_data_size, uniq_data_size);
     }
     __syncthreads();
+
+    // Check if the num unique values in chunk has already exceeded max dict size and early exit
+    if (total_num_dict_entries > MAX_DICT_SIZE) { return; }
   }
 }
 
