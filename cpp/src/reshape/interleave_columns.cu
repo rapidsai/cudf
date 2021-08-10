@@ -32,7 +32,8 @@ namespace {
 struct interleave_columns_functor {
   template <typename T, typename... Args>
   std::enable_if_t<not cudf::is_fixed_width<T>() and not std::is_same_v<T, cudf::string_view> and
-                     not std::is_same_v<T, cudf::list_view>,
+                     not std::is_same_v<T, cudf::list_view> and
+                     not std::is_same_v<T, cudf::struct_view>,
                    std::unique_ptr<cudf::column>>
   operator()(Args&&...)
   {
@@ -47,6 +48,77 @@ struct interleave_columns_functor {
     rmm::mr::device_memory_resource* mr)
   {
     return lists::detail::interleave_columns(lists_columns, create_mask, stream, mr);
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same_v<T, cudf::struct_view>, std::unique_ptr<cudf::column>> operator()(
+    table_view const& structs_columns,
+    bool create_mask,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
+  {
+    // We can safely call `column(0)` as the number of columns is known to be non zero.
+    auto const num_children = structs_columns.column(0).num_children();
+    CUDF_EXPECTS(
+      std::all_of(structs_columns.begin(),
+                  structs_columns.end(),
+                  [num_children](auto const& col) { return col.num_children() == num_children; }),
+      "Number of children of the input structs columns must be the same");
+
+    auto const num_columns = structs_columns.num_columns();
+    auto const num_rows    = structs_columns.num_rows();
+    auto const output_size = num_columns * num_rows;
+
+    // Interleave the children of the structs columns.
+    std::vector<std::unique_ptr<cudf::column>> output_struct_members;
+    for (size_type child_idx = 0; child_idx < num_children; ++child_idx) {
+      // Collect children columns from the input structs columns at index `child_idx`.
+      std::vector<column_view> children;
+      for (auto const& col : structs_columns) {
+        children.push_back(structs_column_view(col).get_sliced_child(child_idx));
+      }
+
+      auto const child_type = children.front().type();
+      CUDF_EXPECTS(
+        std::all_of(children.cbegin(),
+                    children.cend(),
+                    [child_type](auto const& col) { return child_type == col.type(); }),
+        "Children of the input structs columns at the same child index must have the same type");
+
+      auto const children_nullable = std::any_of(
+        children.cbegin(), children.cend(), [](auto const& col) { return col.nullable(); });
+      output_struct_members.emplace_back(
+        type_dispatcher<dispatch_storage_type>(child_type,
+                                               interleave_columns_functor{},
+                                               table_view{std::move(children)},
+                                               children_nullable,
+                                               stream,
+                                               mr));
+    }
+
+    auto output = make_structs_column(output_size,
+                                      std::move(output_struct_members),
+                                      0,
+                                      rmm::device_buffer{0, stream, mr},
+                                      stream,
+                                      mr);
+
+    // Only create null mask if at least one input structs columstructs1n is nullable.
+    if (create_mask) {
+      auto const input_dv_ptr = table_device_view::create(structs_columns);
+      auto const validity_fn  = [input_dv = *input_dv_ptr, num_columns] __device__(auto const idx) {
+        return input_dv.column(idx % num_columns).is_valid(idx / num_columns);
+      };
+      auto [null_mask, null_count] =
+        cudf::detail::valid_if(thrust::make_counting_iterator<size_type>(0),
+                               thrust::make_counting_iterator<size_type>(output_size),
+                               validity_fn,
+                               stream,
+                               mr);
+      output->set_null_mask(std::move(null_mask), null_count);
+    }
+
+    return output;
   }
 
   template <typename T>
