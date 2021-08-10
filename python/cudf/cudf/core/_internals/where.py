@@ -3,8 +3,10 @@
 import warnings
 from typing import Any, Optional, Tuple, Union, cast
 
+import cupy
 import numpy as np
 import pandas as pd
+from numba import cuda
 
 import cudf
 from cudf._typing import ColumnLike, ScalarLike
@@ -236,7 +238,13 @@ def where(
 
     if isinstance(frame, DataFrame):
         if hasattr(cond, "__cuda_array_interface__"):
-            if isinstance(cond, DataFrame):
+            if (
+                isinstance(cond, DataFrame)
+                or isinstance(cond, cupy._core.core.ndarray)
+                or isinstance(
+                    cond, cuda.cudadrv.devicearray.DeviceNDArray
+                )
+            ):
                 cond = DataFrame(
                     cond, columns=frame._column_names, index=frame.index
                 )
