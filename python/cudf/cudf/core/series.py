@@ -6015,7 +6015,7 @@ class DatetimeProperties(object):
         -------
         Series
         Booleans indicating if dates are the last day of the month.
-        
+
         Example
         -------
         >>> import pandas as pd, cudf
