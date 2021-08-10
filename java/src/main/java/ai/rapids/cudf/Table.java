@@ -248,6 +248,7 @@ public final class Table implements AutoCloseable {
    * @param isInt96         true if timestamp type is int96
    * @param precisions      precision list containing all the precisions of the decimal types in
    *                        the columns
+   * @param isMapValues     true if a column is a map
    * @param filename        local output path
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -261,7 +262,7 @@ public final class Table implements AutoCloseable {
                                                    int statsFreq,
                                                    boolean[] isInt96,
                                                    int[] precisions,
-                                                   String filename) throws CudfException;
+                                                   boolean[] isMapValues, String filename) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a buffer.
@@ -276,6 +277,7 @@ public final class Table implements AutoCloseable {
    * @param isInt96         true if timestamp type is int96
    * @param precisions      precision list containing all the precisions of the decimal types in
    *                        the columns
+   * @param isMapValues     true if a column is a map
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -289,7 +291,7 @@ public final class Table implements AutoCloseable {
                                                      int statsFreq,
                                                      boolean[] isInt96,
                                                      int[] precisions,
-                                                     HostBufferConsumer consumer) throws CudfException;
+                                                     boolean[] isMapValues, HostBufferConsumer consumer) throws CudfException;
 
   /**
    * Write out a table to an open handle.
@@ -864,6 +866,7 @@ public final class Table implements AutoCloseable {
       String[] columnNames = options.getFlatColumnNames();
       boolean[] columnNullabilities = options.getFlatIsNullable();
       boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
+      boolean[] isMapValues = options.getFlatIsMap();
       int[] precisions = options.getFlatPrecision();
       int[] flatNumChildren = options.getFlatNumChildren();
 
@@ -878,6 +881,7 @@ public final class Table implements AutoCloseable {
           options.getStatisticsFrequency().nativeId,
           timeInt96Values,
           precisions,
+          isMapValues,
           outputFile.getAbsolutePath());
     }
 
@@ -885,6 +889,7 @@ public final class Table implements AutoCloseable {
       String[] columnNames = options.getFlatColumnNames();
       boolean[] columnNullabilities = options.getFlatIsNullable();
       boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
+      boolean[] isMapValues = options.getFlatIsMap();
       int[] precisions = options.getFlatPrecision();
       int[] flatNumChildren = options.getFlatNumChildren();
 
@@ -899,6 +904,7 @@ public final class Table implements AutoCloseable {
           options.getStatisticsFrequency().nativeId,
           timeInt96Values,
           precisions,
+          isMapValues,
           consumer);
     }
 

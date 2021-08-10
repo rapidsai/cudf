@@ -30,6 +30,16 @@ import ai.rapids.cudf.ast.BinaryOperator;
 import ai.rapids.cudf.ast.ColumnReference;
 import ai.rapids.cudf.ast.CompiledExpression;
 import ai.rapids.cudf.ast.TableReference;
+import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.ipc.ArrowFileReader;
+import org.apache.arrow.vector.ipc.SeekableReadChannel;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.hadoop.ParquetFileReader;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.OriginalType;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -52,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static ai.rapids.cudf.ParquetColumnWriterOptions.mapColumn;
 import static ai.rapids.cudf.ParquetWriterOptions.listBuilder;
 import static ai.rapids.cudf.ParquetWriterOptions.structBuilder;
 import static ai.rapids.cudf.Table.TestBuilder;
@@ -6009,6 +6020,33 @@ public class TableTest extends CudfTestBase {
            Table concat = Table.concatenate(table0, table0, table0)) {
         assertTablesAreEqual(concat, table1);
       }
+    }
+  }
+
+  @Test
+  void testParquetWriteMap() throws IOException {
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withMapColumn(mapColumn("my_map",
+            new ParquetColumnWriterOptions("key", false),
+            new ParquetColumnWriterOptions("value"))).build();
+    File f = File.createTempFile("test-map", ".parquet");
+    List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
+    List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
+    List<HostColumnVector.StructData> list3 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+        new HostColumnVector.BasicType(true, DType.STRING)));
+    try (Table t0 = new Table(ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3))) {
+      try (TableWriter writer = Table.writeParquetChunked(options, f)) {
+        writer.write(t0);
+      }
+      ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(new Path(f.getAbsolutePath()), new Configuration()));
+      MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+      assertEquals(OriginalType.MAP, schema.getType("my_map").getOriginalType());
+    }
+    try (ColumnVector cv = Table.readParquet(f).getColumn(0);
+         ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
+         ColumnVector expected = ColumnVector.fromStrings("b", "c", null)) {
+      assertColumnsAreEqual(expected, res);
     }
   }
 

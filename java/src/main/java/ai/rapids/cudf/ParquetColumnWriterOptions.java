@@ -28,6 +28,7 @@ public class ParquetColumnWriterOptions {
   private boolean isTimestampTypeInt96;
   private int precision;
   private boolean isNullable;
+  private boolean isMap = false;
   private String columName;
   private ParquetColumnWriterOptions(AbstractStructBuilder builder) {
     this.columName = builder.name;
@@ -118,6 +119,15 @@ public class ParquetColumnWriterOptions {
       if (child.getChildColumnOptions()[1].getColumName().isEmpty()) {
         throw new IllegalArgumentException("Column name can't be empty");
       }
+      children.add(child);
+      return (T) this;
+    }
+
+    /**
+     * Set the map column meta.
+     * @return this for chaining.
+     */
+    public T withMapColumn(ParquetColumnWriterOptions child) {
       children.add(child);
       return (T) this;
     }
@@ -220,7 +230,7 @@ public class ParquetColumnWriterOptions {
     public abstract V build();
   }
 
-  ParquetColumnWriterOptions(String columnName, boolean isTimestampTypeInt96,
+  public ParquetColumnWriterOptions(String columnName, boolean isTimestampTypeInt96,
                              int precision, boolean isNullable) {
     this.isTimestampTypeInt96 = isTimestampTypeInt96;
     this.precision = precision;
@@ -228,14 +238,14 @@ public class ParquetColumnWriterOptions {
     this.columName = columnName;
   }
 
-  ParquetColumnWriterOptions(String columnName, boolean isNullable) {
+  public ParquetColumnWriterOptions(String columnName, boolean isNullable) {
     this.isTimestampTypeInt96 = false;
     this.precision = 0;
     this.isNullable = isNullable;
     this.columName = columnName;
   }
 
-  ParquetColumnWriterOptions(String columnName) {
+  public ParquetColumnWriterOptions(String columnName) {
     this(columnName, true);
   }
 
@@ -295,6 +305,15 @@ public class ParquetColumnWriterOptions {
     }
   }
 
+  boolean[] getFlatIsMap() {
+    boolean[] ret = {isMap};
+    if (childColumnOptions.length > 0) {
+      return getFlatBooleans(ret, (opt) -> opt.getFlatIsMap());
+    } else {
+      return ret;
+    }
+  }
+
   int[] getFlatNumChildren() {
     int[] ret = {childColumnOptions.length};
     if (childColumnOptions.length > 0) {
@@ -349,6 +368,29 @@ public class ParquetColumnWriterOptions {
       copiedSoFar += childResults[i].length;
     }
     return result;
+  }
+
+  /**
+   * Creates a ListBuilder for column called 'name'
+   */
+  public static ParquetColumnWriterOptions mapColumn(String name, ParquetColumnWriterOptions key,
+                                      ParquetColumnWriterOptions value) {
+    ParquetStructColumnWriterOptions struct = structBuilder("key_value").build();
+    if (key.columName != "key") {
+      throw new IllegalArgumentException("key column's name should be 'key'");
+    }
+    if (key.isNullable) {
+      throw new IllegalArgumentException("key column can not be nullable");
+    }
+    if (value.columName != "value") {
+      throw new IllegalArgumentException("value column's name should be 'value'");
+    }
+    struct.childColumnOptions = new ParquetColumnWriterOptions[]{key, value};
+    ParquetColumnWriterOptions opt = listBuilder(name)
+        .withStructColumn(struct)
+        .build();
+    opt.isMap = true;
+    return opt;
   }
 
   /**

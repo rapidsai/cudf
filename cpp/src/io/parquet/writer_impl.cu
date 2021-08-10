@@ -364,6 +364,28 @@ struct leaf_schema_fn {
   }
 };
 
+inline bool is_col_nullable(LinkedColPtr const& col,
+                          column_in_metadata const& col_meta,
+                          bool single_write_mode)
+{
+  if (single_write_mode) {
+    return col->nullable();
+  } else {
+    if (col_meta.is_nullability_defined()) {
+      if (col_meta.nullable() == false) {
+        CUDF_EXPECTS(col->nullable() == false,
+                     "Mismatch in metadata prescribed nullability and input column nullability. "
+                     "Metadata for nullable input column cannot prescribe nullability = false");
+      }
+      return col_meta.nullable();
+    } else {
+      // For chunked write, when not provided nullability, we assume the worst case scenario
+      // that all columns are nullable.
+      return true;
+    }
+  }
+}
+
 /**
  * @brief Construct schema from input columns and per-column input options
  *
@@ -386,25 +408,8 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
 
   std::function<void(LinkedColPtr const&, column_in_metadata const&, size_t)> add_schema =
     [&](LinkedColPtr const& col, column_in_metadata const& col_meta, size_t parent_idx) {
-      bool col_nullable = [&]() {
-        if (single_write_mode) {
-          return col->nullable();
-        } else {
-          if (col_meta.is_nullability_defined()) {
-            if (col_meta.nullable() == false) {
-              CUDF_EXPECTS(
-                col->nullable() == false,
-                "Mismatch in metadata prescribed nullability and input column nullability. "
-                "Metadata for nullable input column cannot prescribe nullability = false");
-            }
-            return col_meta.nullable();
-          } else {
-            // For chunked write, when not provided nullability, we assume the worst case scenario
-            // that all columns are nullable.
-            return true;
-          }
-        }
-      }();
+      
+      bool col_nullable = is_col_nullable(col, col_meta, single_write_mode);
 
       if (col->type().id() == type_id::STRUCT) {
         // if struct, add current and recursively call for all children
@@ -426,7 +431,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         for (size_t i = 0; i < col->children.size(); ++i) {
           add_schema(col->children[i], col_meta.child(i), struct_node_index);
         }
-      } else if (col->type().id() == type_id::LIST) {
+      } else if (col->type().id() == type_id::LIST && !col_meta.is_map()) {
         // List schema is denoted by two levels for each nesting level and one final level for leaf.
         // The top level is the same name as the column name.
         // So e.g. List<List<int>> is denoted in the schema by
@@ -454,6 +459,50 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         add_schema(col->children[lists_column_view::child_column_index],
                    col_meta.child(lists_column_view::child_column_index),
                    schema.size() - 1);
+      } else if (col->type().id() == type_id::LIST && col_meta.is_map()) {
+        // Map schema is denoted by a list of struct 
+        // e.g. List<Struct<String,String>> will be 
+        // "col_name" : { "key_value" : { "key", "value" } }
+
+        // verify the List child structure is a struct<left_child, right_child>
+        auto const& struct_col = col->child(lists_column_view::child_column_index);
+        CUDF_EXPECTS(struct_col.type().id() == type_id::STRUCT, "Map should be a List of struct");
+        CUDF_EXPECTS(struct_col.num_children() == 2, "Map should be a List of struct with two children only but found " + std::to_string(struct_col.num_children()));
+
+        schema_tree_node map_schema_1{};
+        map_schema_1.converted_type = ConvertedType::MAP;
+        map_schema_1.repetition_type =
+          col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
+        map_schema_1.name = col_meta.get_name();
+        map_schema_1.num_children = 1;
+        map_schema_1.parent_idx   = parent_idx;
+        schema.push_back(std::move(map_schema_1));
+
+        schema_tree_node repeat_group{};
+        repeat_group.repetition_type = FieldRepetitionType::REPEATED;
+        repeat_group.name            = "key_value";
+        repeat_group.num_children    = 2;
+        repeat_group.parent_idx      = schema.size() - 1;  // Parent is map_schema, last added.
+        schema.push_back(std::move(repeat_group));
+
+        CUDF_EXPECTS(col_meta.num_children() == 2,
+                     "List column's metadata should have exactly two children");
+        //verify the col meta of children of the struct have name key and value 
+        auto left_child_meta = col_meta.child(lists_column_view::child_column_index).child(0);
+        CUDF_EXPECTS(left_child_meta.get_name() == "key", "First child of the Struct should be named key, but found " + left_child_meta.get_name());
+        //verify the col meta of children of the struct have name key and value 
+        auto right_child_meta = col_meta.child(lists_column_view::child_column_index).child(1);
+        CUDF_EXPECTS(right_child_meta.get_name() == "value", "Second child of the Struct should be named value, but found " + right_child_meta.get_name());
+        // check the repetition type of key is required i.e. the col should be non-nullable
+        auto key_col = col->children[lists_column_view::child_column_index]->children[0];
+        CUDF_EXPECTS(!is_col_nullable(key_col, left_child_meta, single_write_mode), "key column cannot be nullable");
+        // process key 
+        size_type struct_col_index = schema.size() - 1;
+        add_schema(key_col, left_child_meta, struct_col_index);
+        // process value
+        add_schema(col->children[lists_column_view::child_column_index]->children[1],
+                   right_child_meta, struct_col_index);
+
       } else {
         // if leaf, add current
         if (col->type().id() == type_id::STRING) {
