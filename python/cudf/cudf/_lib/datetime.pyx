@@ -88,11 +88,23 @@ def date_range(DeviceScalar start, size_t n, offset):
         + offset.kwds.get("nanoseconds", 0)
     )
 
+    if months and nanos:
+        raise NotImplementedError(
+            "Cannot specify a combination of fixed and "
+            "non-fixed frequency."
+        )
+
     with nogil:
-        c_result = move(libcudf_datetime.date_range(
-            start.c_value.get()[0],
-            n,
-            months,
-            nanos
-        ))
+        if months:
+            c_result = move(libcudf_datetime.date_range_month(
+                start.c_value.get()[0],
+                n,
+                months
+            ))
+        else:
+            c_result = move(libcudf_datetime.date_range_nanosecond(
+                start.c_value.get()[0],
+                n,
+                nanos
+            ))
     return Column.from_unique_ptr(move(c_result))

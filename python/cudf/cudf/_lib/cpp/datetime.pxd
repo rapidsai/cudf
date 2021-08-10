@@ -19,9 +19,13 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
     ) except +
     cdef unique_ptr[column] day_of_year(const column_view& column) except +
     cdef unique_ptr[column] is_leap_year(const column_view& column) except +
-    cdef unique_ptr[column] date_range(
+    cdef unique_ptr[column] date_range_month(
         const scalar& initial,
         size_t n,
         size_t months,
-        size_t nanoseconds
+    ) except +
+    cdef unique_ptr[column] date_range_nanosecond(
+        const scalar& initial,
+        size_t n,
+        size_t nanoseconds,
     ) except +
