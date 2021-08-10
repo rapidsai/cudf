@@ -25,8 +25,8 @@ def dtype(arbitrary):
     """
     Return the cuDF-supported dtype corresponding to `arbitrary`.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     arbitrary: dtype or scalar-like
 
     Returns
