@@ -6355,10 +6355,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
 
-        Notes
-        -----
-        Parameters currently not supported is `axis`
-
         Examples
         --------
         >>> import cudf
@@ -6370,9 +6366,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2  1  7
         3  1  7
         """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
         return self._apply_support_method(
             "cummin", axis=axis, skipna=skipna, *args, **kwargs
         )
@@ -6392,10 +6385,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
 
-        Notes
-        -----
-        Parameters currently not supported is `axis`
-
         Examples
         --------
         >>> import cudf
@@ -6407,9 +6396,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2  3   9
         3  4  10
         """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
         return self._apply_support_method(
             "cummax", axis=axis, skipna=skipna, *args, **kwargs
         )
@@ -6430,10 +6416,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
 
-        Notes
-        -----
-        Parameters currently not supported is `axis`
-
         Examples
         --------
         >>> import cudf
@@ -6445,9 +6427,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2   6  24
         3  10  34
         """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
         return self._apply_support_method(
             "cumsum", axis=axis, skipna=skipna, *args, **kwargs
         )
@@ -6467,10 +6446,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
 
-        Notes
-        -----
-        Parameters currently not supported is `axis`
-
         Examples
         --------
         >>> import cudf
@@ -6482,9 +6457,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2   6   504
         3  24  5040
         """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
         return self._apply_support_method(
             "cumprod", axis=axis, skipna=skipna, *args, **kwargs
         )
