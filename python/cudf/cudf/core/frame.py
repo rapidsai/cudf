@@ -1443,6 +1443,75 @@ class Frame(libcudf.table.Table):
         result._copy_type_metadata(self)
         return result
 
+    def interpolate(
+        self,
+        method="linear",
+        axis=0,
+        limit=None,
+        inplace=False,
+        limit_direction=None,
+        limit_area=None,
+        downcast=None,
+        **kwargs,
+    ):
+        """
+        Interpolate data values between some points.
+
+        Parameters
+        ----------
+        method : str, default 'linear'
+            Interpolation technique to use. Currently,
+            only 'linear` is supported.
+            * 'linear': Ignore the index and treat the values as
+            equally spaced. This is the only method supported on MultiIndexes.
+            * 'index', 'values': linearly interpolate using the index as
+            an x-axis. Unsorted indices can lead to erroneous results.
+        axis : int, default 0
+            Axis to interpolate along. Currently,
+            only 'axis=0' is supported.
+        inplace : bool, default False
+            Update the data in place if possible.
+
+        Returns
+        -------
+        Series or DataFrame
+            Returns the same object type as the caller, interpolated at
+            some or all ``NaN`` values
+
+        """
+
+        if method in {"pad", "ffill"} and limit_direction != "forward":
+            raise ValueError(
+                f"`limit_direction` must be 'forward' for method `{method}`"
+            )
+        if method in {"backfill", "bfill"} and limit_direction != "backward":
+            raise ValueError(
+                f"`limit_direction` must be 'backward' for method `{method}`"
+            )
+
+        data = self
+
+        if not isinstance(data._index, cudf.RangeIndex):
+            perm_sort = data._index.argsort()
+            data = data._gather(perm_sort)
+
+        interpolator = cudf.core.algorithms.get_column_interpolator(method)
+        columns = {}
+        for colname, col in data._data.items():
+            if col.nullable:
+                col = col.astype("float64").fillna(np.nan)
+
+            # Interpolation methods may or may not need the index
+            columns[colname] = interpolator(col, index=data._index)
+
+        result = self._from_data(columns, index=data._index)
+
+        return (
+            result
+            if isinstance(data._index, cudf.RangeIndex)
+            else result._gather(perm_sort.argsort())
+        )
+
     def _quantiles(
         self,
         q,
