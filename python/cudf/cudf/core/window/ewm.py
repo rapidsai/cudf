@@ -42,4 +42,4 @@ class ExponentialMovingWindow(_RollingBase):
         """
         # TODO: redo libcudf stuff in terms of com not alpha
         # hardcoded
-        return type(sr)(ewm(sr._column, 0.9))
+        return type(sr)(ewm(sr._column, self.com))

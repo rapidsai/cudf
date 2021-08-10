@@ -7,7 +7,14 @@ from cudf.testing._utils import assert_eq
     [1.0, 2.0, 3.0, 4.0, 5.0]
 ])
 @pytest.mark.parametrize('params', [
-    {'alpha': 0.9}
+    {'com': 0.1},
+    {'com': 0.5},
+    {'span': 1.5},
+    {'span': 2.5},
+    {'halflife': 0.5},
+    {'halflife': 1.5},
+    {'alpha': 0.1},
+    {'alpha': 0.5},
 ])
 def test_ewm_basic_mean(data, params):
     """

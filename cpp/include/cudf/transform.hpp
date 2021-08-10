@@ -95,7 +95,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
 
 std::unique_ptr<column> ewm(
   column_view const& input,
-  double alpha,
+  double com,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

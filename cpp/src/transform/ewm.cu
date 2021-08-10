@@ -87,20 +87,23 @@ rmm::device_vector<double> ewm_numerator(column_view const& input, double beta)
 }
 
 std::unique_ptr<column> ewm(column_view const& input,
-                            double alpha,
+                            double com,
                             rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(input.type() == cudf::data_type{cudf::type_id::FLOAT64},
                "Column must be float64 type");
+
+  double beta = 1.0 - (1.0 / (com + 1.0));
+    
   auto output = make_fixed_width_column(cudf::data_type{cudf::type_id::FLOAT64}, input.size());
   auto output_mutable_view = output->mutable_view();
 
   auto begin = output_mutable_view.begin<double>();
   auto end   = output_mutable_view.end<double>();
 
-  rmm::device_vector<double> denominator = ewm_denominator(input, (1.0 - alpha));
-  rmm::device_vector<double> numerator   = ewm_numerator(input, (1.0 - alpha));
+  rmm::device_vector<double> denominator = ewm_denominator(input, beta);
+  rmm::device_vector<double> numerator   = ewm_numerator(input, beta);
 
   thrust::transform(rmm::exec_policy(stream),
                     numerator.begin(),
@@ -115,11 +118,11 @@ std::unique_ptr<column> ewm(column_view const& input,
 }  // namespace detail
 
 std::unique_ptr<column> ewm(column_view const& input,
-                            double alpha,
+                            double com,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ewm(input, alpha, rmm::cuda_stream_default, mr);
+  return detail::ewm(input, com, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
