@@ -1214,6 +1214,14 @@ class SeriesGroupBy(GroupBy):
 
         return result
 
+    def apply(self, func):
+        result = super().apply(func)
+
+        # apply Series name to result
+        result.name = self.obj.name
+
+        return result
+
 
 class Grouper(object):
     def __init__(self, key=None, level=None):
