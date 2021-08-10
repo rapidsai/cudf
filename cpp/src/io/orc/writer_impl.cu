@@ -1138,45 +1138,20 @@ void writer::impl::init_state()
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
+template <typename T>
 struct device_stack {
-  using value_type = thrust::pair<column_device_view const*, thrust::optional<uint32_t>>;
-
-  __device__ device_stack(value_type* stack) : stack(stack), size(0) {}
-  __device__ void push(value_type const& val) { stack[size++] = val; }
-  __device__ value_type pop() { return {stack[--size]}; }
+  __device__ device_stack(T* stack_storage, uint32_t max_size)
+    : stack(stack_storage), max_size(max_size), size(0)
+  {
+  }
+  __device__ void push(T const& val) { stack[size++] = val; }
+  __device__ T pop() { return stack[--size]; }
   __device__ bool empty() { return size == 0; }
 
  private:
-  value_type* stack;
+  T* stack;
+  uint32_t max_size;
   uint32_t size;
-};
-
-/**
- * @brief pre-order append ORC device columns
- */
-void __device__ append_orc_device_column(table_device_view table,
-                                         device_span<orc_column_device_view> cols,
-                                         device_stack::value_type* stack_space)
-{
-  device_stack stack(stack_space);
-
-  for (auto c = table.end() - 1; c >= table.begin(); c--) {
-    stack.push({c, thrust::nullopt});
-  }
-
-  uint32_t idx = 0;
-  while (not stack.empty()) {
-    auto [col, parent] = stack.pop();
-    cols[idx]          = orc_column_device_view{*col, parent};
-
-    if (col->type().id() == type_id::LIST) { stack.push({&col->children()[0], idx}); }
-    if (col->type().id() == type_id::STRUCT) {
-      for (auto c = col->children().end() - 1; c >= col->children().begin(); c--) {
-        stack.push({c, idx});
-      }
-    }
-    idx++;
-  }
 };
 
 orc_table_view make_orc_table_view(table_view const& table,
@@ -1206,15 +1181,35 @@ orc_table_view make_orc_table_view(table_view const& table,
   }
 
   rmm::device_uvector<orc_column_device_view> d_orc_columns(orc_columns.size(), stream);
+  using stack_value_type = thrust::pair<column_device_view const*, thrust::optional<uint32_t>>;
+  rmm::device_uvector<stack_value_type> stack_storage(orc_columns.size(), stream);
 
-  rmm::device_uvector<thrust::pair<column_device_view const*, thrust::optional<uint32_t>>> stack(
-    50000, stream);
-
+  // pre-order append ORC device columns
   cudf::detail::device_single_thread(
-    [d_orc_cols = device_span<orc_column_device_view>{d_orc_columns},
-     d_table    = d_table,
-     stack      = stack.data()] __device__() mutable {
-      append_orc_device_column(d_table, d_orc_cols, stack);
+    [d_orc_cols         = device_span<orc_column_device_view>{d_orc_columns},
+     d_table            = d_table,
+     stack_storage      = stack_storage.data(),
+     stack_storage_size = stack_storage.size()] __device__() {
+      device_stack stack(stack_storage, stack_storage_size);
+
+      for (auto c = d_table.end() - 1; c >= d_table.begin(); c--) {
+        stack.push({c, thrust::nullopt});
+      }
+
+      uint32_t idx = 0;
+      while (not stack.empty()) {
+        auto [col, parent] = stack.pop();
+        d_orc_cols[idx]    = orc_column_device_view{*col, parent};
+
+        if (col->type().id() == type_id::LIST) {
+          stack.push({&col->children()[lists_column_view::child_column_index], idx});
+        } else if (col->type().id() == type_id::STRUCT) {
+          for (auto c = col->children().end() - 1; c >= col->children().begin(); c--) {
+            stack.push({c, idx});
+          }
+        }
+        idx++;
+      }
     },
     stream);
 
