@@ -6015,7 +6015,13 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the first day of the year.
         """
-        return (self.day_of_year == 1).fillna(False)
+        outcol = self.series._column.get_dt_field("day_of_year") == 1
+        outcol = outcol.fillna(False)
+        return Series._from_data(
+            ColumnAccessor({None: res}),
+            index=self.series._index,
+            name=self.series.name,
+        )
 
     @property
     def is_year_end(self):
