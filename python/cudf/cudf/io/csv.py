@@ -7,7 +7,6 @@ from nvtx import annotate
 import cudf
 import fsspec
 import pyarrow
-import s3fs
 from cudf import _lib as libcudf
 from cudf.utils import ioutils
 from cudf.utils.dtypes import is_scalar

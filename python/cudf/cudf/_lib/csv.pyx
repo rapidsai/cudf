@@ -369,7 +369,8 @@ def read_csv(
     """
 
     if not isinstance(datasource, (BytesIO, StringIO, bytes,
-                    cudf._lib.io.datasource.Datasource, NativeFile)):
+                                   cudf._lib.io.datasource.Datasource,
+                                   NativeFile)):
         if not os.path.isfile(datasource):
             raise FileNotFoundError(
                 errno.ENOENT, os.strerror(errno.ENOENT), datasource

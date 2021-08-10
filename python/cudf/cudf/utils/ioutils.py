@@ -9,7 +9,6 @@ import fsspec
 import fsspec.implementations.local
 import pandas as pd
 import s3fs
-import pyarrow
 from fsspec.core import get_fs_token_paths
 
 from cudf.utils.docutils import docfmt_partial

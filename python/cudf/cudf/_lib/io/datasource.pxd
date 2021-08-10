@@ -7,5 +7,5 @@ cdef class Datasource:
     cdef datasource* get_datasource(self) nogil except *
 
 cdef class NativeFileDatasource(Datasource):
-    cdef arrow_io_source c_datasource    
+    cdef arrow_io_source c_datasource
     cdef datasource* get_datasource(self) nogil
