@@ -391,6 +391,132 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         raise TypeError(f"cannot concatenate object of type {typ}")
 
 
+# def crosstab(
+#     index,
+#     columns,
+#     values=None,
+#     rownames=None,
+#     colnames=None,
+# ) -> DataFrame:
+#     """
+#     Compute a simple cross tabulation of two (or more) factors. By default
+#     computes a frequency table of the factors unless an array of values and an
+#     aggregation function are passed.
+#     Parameters
+#     ----------
+#     index : array-like, Series, or list of arrays/Series
+#         Values to group by in the rows.
+#     columns : array-like, Series, or list of arrays/Series
+#         Values to group by in the columns.
+#     values : array-like, optional
+#         Array of values to aggregate according to the factors.
+#         Requires `aggfunc` be specified.
+#     rownames : sequence, default None
+#         If passed, must match number of row arrays passed.
+#     colnames : sequence, default None
+#         If passed, must match number of column arrays passed.
+#     Returns
+#     -------
+#     DataFrame
+#         Cross tabulation of the data.
+#     See Also
+#     --------
+#     DataFrame.pivot : Reshape data based on column values.
+#     pivot_table : Create a pivot table as a DataFrame.
+#     Notes
+#     -----
+#     Any Series passed will have their name attributes used unless row or column
+#     names for the cross-tabulation are specified.
+#     Any input passed containing Categorical data will have **all** of its
+#     categories included in the cross-tabulation, even if the actual data does
+#     not contain any instances of a particular category.
+#     In the event that there aren't overlapping indexes an empty DataFrame will
+#     be returned.
+#     Examples
+#     --------
+#     >>> a = np.array(["foo", "foo", "foo", "foo", "bar", "bar",
+#     ...               "bar", "bar", "foo", "foo", "foo"], dtype=object)
+#     >>> b = np.array(["one", "one", "one", "two", "one", "one",
+#     ...               "one", "two", "two", "two", "one"], dtype=object)
+#     >>> c = np.array(["dull", "dull", "shiny", "dull", "dull", "shiny",
+#     ...               "shiny", "dull", "shiny", "shiny", "shiny"],
+#     ...              dtype=object)
+#     >>> cudf.crosstab(a, [b, c], rownames=['a'], colnames=['b', 'c'])
+#     b   one        two
+#     c   dull shiny dull shiny
+#     a
+#     bar    1     2    1     0
+#     foo    2     2    1     2
+#     Here 'c' and 'f' are not represented in the data and will not be
+#     shown in the output because dropna is True by default. Set
+#     dropna=False to preserve categories with no data.
+#     >>> foo = cudf.Categorical(['a', 'b'], categories=['a', 'b', 'c'])
+#     >>> bar = cudf.Categorical(['d', 'e'], categories=['d', 'e', 'f'])
+#     >>> cudf.crosstab(foo, bar)
+#     col_0  d  e
+#     row_0
+#     a      1  0
+#     b      0  1
+#     """
+#     if values is None:
+#         raise ValueError("aggfunc cannot be used without values.")
+
+#     index = com.maybe_make_list(index)
+#     columns = com.maybe_make_list(columns)
+
+#     common_idx = None
+#     pass_objs = [x for x in index + columns if isinstance(x, (ABCSeries, ABCDataFrame))]
+#     if pass_objs:
+#         common_idx = get_objs_combined_axis(pass_objs, intersect=True, sort=False)
+
+#     rownames = _get_names(index, rownames, prefix="row")
+#     colnames = _get_names(columns, colnames, prefix="col")
+
+#     # duplicate names mapped to unique names for pivot op
+#     (
+#         rownames_mapper,
+#         unique_rownames,
+#         colnames_mapper,
+#         unique_colnames,
+#     ) = _build_names_mapper(rownames, colnames)
+
+#     from pandas import DataFrame
+
+#     data = {
+#         **dict(zip(unique_rownames, index)),
+#         **dict(zip(unique_colnames, columns)),
+#     }
+#     df = DataFrame(data, index=common_idx)
+
+#     if values is None:
+#         df["__dummy__"] = 0
+#         kwargs = {"aggfunc": len, "fill_value": 0}
+#     else:
+#         df["__dummy__"] = values
+#         kwargs = {"aggfunc": aggfunc}
+
+#     table = df.pivot_table(
+#         "__dummy__",
+#         index=unique_rownames,
+#         columns=unique_colnames,
+#         margins=margins,
+#         margins_name=margins_name,
+#         dropna=dropna,
+#         **kwargs,
+#     )
+
+#     # Post-process
+#     if normalize is not False:
+#         table = _normalize(
+#             table, normalize=normalize, margins=margins, margins_name=margins_name
+#         )
+
+#     table = table.rename_axis(index=rownames_mapper, axis=0)
+#     table = table.rename_axis(columns=colnames_mapper, axis=1)
+
+#     return table
+
+
 def melt(
     frame,
     id_vars=None,
@@ -808,6 +934,7 @@ def _pivot(df, index, columns):
     columns : cudf.core.index.Index
         Column labels of the result
     """
+    breakpoint()
     columns_labels, columns_idx = columns._encode()
     index_labels, index_idx = index._encode()
     column_labels = columns_labels.to_pandas().to_flat_index()
