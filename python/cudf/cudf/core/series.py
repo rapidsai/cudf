@@ -6015,6 +6015,34 @@ class DatetimeProperties(object):
         -------
         Series
         Booleans indicating if dates are the last day of the month.
+        
+        Example
+        -------
+        >>> import pandas as pd, cudf
+        >>> s = cudf.Series(
+        ...     pd.date_range(start='2000-08-026', end='2000-09-03', freq='1D'))
+        >>> s
+        0   2000-08-26
+        1   2000-08-27
+        2   2000-08-28
+        3   2000-08-29
+        4   2000-08-30
+        5   2000-08-31
+        6   2000-09-01
+        7   2000-09-02
+        8   2000-09-03
+        dtype: datetime64[ns]
+        >>> s.dt.is_month_end
+        0    False
+        1    False
+        2    False
+        3    False
+        4    False
+        5     True
+        6    False
+        7    False
+        8    False
+        dtype: bool
         """
         last_day = libcudf.datetime.last_day_of_month(self.series._column)
         last_day = Series._from_data(
