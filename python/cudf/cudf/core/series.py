@@ -3933,6 +3933,39 @@ class Series(SingleColumnFrame, Serializable):
 
         return self.valid_count
 
+    def _scan(self, op, axis=None, skipna=True, cast_to_int=False):
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        skipna = True if skipna is None else skipna
+
+        if skipna:
+            result_col = self.nans_to_nulls()._column
+        else:
+            result_col = self._column.copy()
+            if result_col.has_nulls:
+                # Workaround as find_first_value doesn't seem to work
+                # incase of bools.
+                first_index = int(
+                    result_col.isnull().astype("int8").find_first_value(1)
+                )
+                result_col[first_index:] = None
+
+        if (
+            cast_to_int
+            and not is_decimal_dtype(result_col.dtype)
+            and (
+                np.issubdtype(result_col.dtype, np.integer)
+                or np.issubdtype(result_col.dtype, np.bool_)
+            )
+        ):
+            # For reductions that accumulate a value (e.g. sum, not max) pandas
+            # returns an int64 dtype for all input int or bool dtypes.
+            result_col = result_col.astype(np.int64)
+        return Series._from_data(
+            {self.name: result_col._apply_scan_op(op)}, index=self.index,
+        )
+
     def cummin(self, axis=None, skipna=True, *args, **kwargs):
         """
         Return cumulative minimum of the Series.
@@ -3963,27 +3996,7 @@ class Series(SingleColumnFrame, Serializable):
         3    1
         4    1
         """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_col = self.nans_to_nulls()._column
-        else:
-            result_col = self._column.copy()
-            if result_col.has_nulls:
-                # Workaround as find_first_value doesn't seem to work
-                # incase of bools.
-                first_index = int(
-                    result_col.isnull().astype("int8").find_first_value(1)
-                )
-                result_col[first_index:] = None
-
-        return Series(
-            result_col._apply_scan_op("min"), name=self.name, index=self.index,
-        )
+        return self._scan("min", axis=axis, skipna=skipna)
 
     def cummax(self, axis=0, skipna=True, *args, **kwargs):
         """
@@ -4015,24 +4028,7 @@ class Series(SingleColumnFrame, Serializable):
         3    5
         4    5
         """
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_col = self.nans_to_nulls()._column
-        else:
-            result_col = self._column.copy()
-            if result_col.has_nulls:
-                first_index = int(
-                    result_col.isnull().astype("int8").find_first_value(1)
-                )
-                result_col[first_index:] = None
-
-        return Series(
-            result_col._apply_scan_op("max"), name=self.name, index=self.index,
-        )
+        return self._scan("max", axis=axis, skipna=skipna)
 
     def cumsum(self, axis=0, skipna=True, *args, **kwargs):
         """
@@ -4065,38 +4061,7 @@ class Series(SingleColumnFrame, Serializable):
         3    12
         4    15
         """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_col = self.nans_to_nulls()._column
-        else:
-            result_col = self._column.copy()
-            if result_col.has_nulls:
-                first_index = int(
-                    result_col.isnull().astype("int8").find_first_value(1)
-                )
-                result_col[first_index:] = None
-
-        # pandas always returns int64 dtype if original dtype is int or `bool`
-        if not is_decimal_dtype(result_col.dtype) and (
-            np.issubdtype(result_col.dtype, np.integer)
-            or np.issubdtype(result_col.dtype, np.bool_)
-        ):
-            return Series(
-                result_col.astype(np.int64)._apply_scan_op("sum"),
-                name=self.name,
-                index=self.index,
-            )
-        else:
-            return Series(
-                result_col._apply_scan_op("sum"),
-                name=self.name,
-                index=self.index,
-            )
+        return self._scan("sum", axis=axis, skipna=skipna, cast_to_int=True)
 
     def cumprod(self, axis=0, skipna=True, *args, **kwargs):
         """
@@ -4128,42 +4093,9 @@ class Series(SingleColumnFrame, Serializable):
         3    40
         4    120
         """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if is_decimal_dtype(self.dtype):
-            raise NotImplementedError(
-                "cumprod does not currently support decimal types"
-            )
-
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_col = self.nans_to_nulls()._column
-        else:
-            result_col = self._column.copy()
-            if result_col.has_nulls:
-                first_index = int(
-                    result_col.isnull().astype("int8").find_first_value(1)
-                )
-                result_col[first_index:] = None
-
-        # pandas always returns int64 dtype if original dtype is int or `bool`
-        if np.issubdtype(result_col.dtype, np.integer) or np.issubdtype(
-            result_col.dtype, np.bool_
-        ):
-            return Series(
-                result_col.astype(np.int64)._apply_scan_op("product"),
-                name=self.name,
-                index=self.index,
-            )
-        else:
-            return Series(
-                result_col._apply_scan_op("product"),
-                name=self.name,
-                index=self.index,
-            )
+        return self._scan(
+            "product", axis=axis, skipna=skipna, cast_to_int=True
+        )
 
     def mode(self, dropna=True):
         """
