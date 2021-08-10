@@ -1,5 +1,6 @@
 # Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
+import math
 import warnings
 from typing import Sequence, Union
 
@@ -701,7 +702,7 @@ def date_range(
             start = cudf.Scalar(start, dtype=dtype)
             end = cudf.Scalar(end, dtype=dtype)
             # TODO: support below
-            periods = int(end - start) / _min_offset(offset)
+            periods = math.ceil(int(end - start) / _min_offset(offset))
             _periods_not_specified = True
     else:
         start = cudf.Scalar(start, dtype=dtype)
@@ -718,9 +719,6 @@ def date_range(
 
     if _periods_not_specified:
         res = res[res <= end]
-
-    if not _periods_not_specified:
-        res[-1] = end
 
     return cudf.DatetimeIndex._from_data({None: res})
 
