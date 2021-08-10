@@ -241,9 +241,7 @@ def where(
             if (
                 isinstance(cond, DataFrame)
                 or isinstance(cond, cupy._core.core.ndarray)
-                or isinstance(
-                    cond, cuda.cudadrv.devicearray.DeviceNDArray
-                )
+                or isinstance(cond, cuda.cudadrv.devicearray.DeviceNDArray)
             ):
                 cond = DataFrame(
                     cond, columns=frame._column_names, index=frame.index
