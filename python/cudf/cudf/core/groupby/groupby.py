@@ -817,6 +817,14 @@ class GroupBy(Serializable):
         """Get the column-wise cumulative maximum value in each group."""
         return self.agg("cummax")
 
+    def first(self):
+        """Get the first non-null value in each group."""
+        return self.agg("first")
+
+    def last(self):
+        """Get the last non-null value in each group."""
+        return self.agg("last")
+
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`
         """
