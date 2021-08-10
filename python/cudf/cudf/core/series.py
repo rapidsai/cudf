@@ -6026,8 +6026,10 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the last day of the year.
         """
-        if is_leap_year(self):
-            return (self.day_of_year == 366).fillna(False)
+        leap_end_days = (self.day_of_year == 366).fillna(False)
+        if self.is_leap_year.any() and leap_end_days.any():
+            year_end_days = (self.day_of_year == 365).fillna(False)
+            return leap_end_days + year_end_days
         return (self.day_of_year == 365).fillna(False)
 
     def _get_dt_field(self, field):
