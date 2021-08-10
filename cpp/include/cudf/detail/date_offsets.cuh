@@ -10,6 +10,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include "cudf/utilities/error.hpp"
 
 namespace cudf {
 namespace datetime {

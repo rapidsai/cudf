@@ -178,7 +178,8 @@ std::unique_ptr<cudf::column> day_of_year(
  * @endcode
 
  * @param[in] timestamps cudf::column_view of timestamp type.
- * @param[in] months cudf::column_view of integer type containing the number of months to add.
+ * @param[in] CategoricalColumnmonths cudf::column_view of integer type containing the number of
+ months to add.
  *
  * @returns cudf::column of timestamp type containing the computed timestamps.
  * @throw cudf::logic_error if `timestamps` datatype is not a TIMESTAMP or if `months` datatype
@@ -217,10 +218,15 @@ std::unique_ptr<cudf::column> is_leap_year(
  * @returns cudf::column
  * @throw cudf::logic_error if input datatype is not a TIMESTAMP
  */
-std::unique_ptr<cudf::column> date_range(
+std::unique_ptr<cudf::column> date_range_month(
   cudf::scalar const& initial,
   std::size_t n,
   std::size_t months,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<cudf::column> date_range_nanosecond(
+  cudf::scalar const& initial,
+  std::size_t n,
   std::size_t nanoseconds,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

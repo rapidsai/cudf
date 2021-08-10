@@ -31,14 +31,22 @@ std::unique_ptr<cudf::column> date_range(cudf::scalar const& initial,
 }
 }  // namespace detail
 
-std::unique_ptr<cudf::column> date_range(cudf::scalar const& initial,
-                                         size_t n,
-                                         size_t months,
-                                         size_t nanoseconds,
-                                         rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> date_range_month(cudf::scalar const& initial,
+                                               size_t n,
+                                               size_t months,
+                                               rmm::mr::device_memory_resource* mr)
 {
   return detail::date_range(
-    initial, n, detail::DateOffset{months, nanoseconds}, rmm::cuda_stream_default, mr);
+    initial, n, detail::DateOffset{months, 0}, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<cudf::column> date_range_nanosecond(cudf::scalar const& initial,
+                                                    size_t n,
+                                                    size_t nanoseconds,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  return detail::date_range(
+    initial, n, detail::DateOffset{0, nanoseconds}, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace datetime
