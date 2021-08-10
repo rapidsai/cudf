@@ -1497,8 +1497,18 @@ def build_categorical_column(
         Indicates whether the categories are ordered
     """
 
-    codes = as_column(codes, dtype="uint32")
+    if codes.nullable:
+        raise ValueError
+    if categories.nullable:
+        raise ValueError
+
+    category_order = categories.argsort(ascending=True)
+    codes = category_order.take(
+        codes, keep_index=False, nullify=True).astype("uint32")
+    codes = codes.fillna(0)
+
     dtype = CategoricalDtype(categories=categories, ordered=ordered)
+    category_sorted = categories.take(category_order)
 
     result = build_column(
         data=None,
@@ -1507,8 +1517,9 @@ def build_categorical_column(
         size=size,
         offset=offset,
         null_count=null_count,
-        children=(codes, categories),
+        children=(codes, category_sorted),
     )
+    result._category_order = category_order
     return cast("cudf.core.column.CategoricalColumn", result)
 
 

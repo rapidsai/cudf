@@ -35,7 +35,7 @@ from cudf._lib.stream_compaction import drop_duplicates
 from cudf._lib.table import Table
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf._lib.search import contains
-from cudf._lib.copying import gather
+from cudf._lib.copying import gather, scatter
 from cudf._lib.sort import order_by
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
@@ -857,8 +857,10 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def codes(self) -> NumericalColumn:
-        return self.children[0]
-
+        codes = self._category_order.take(self.children[0]) if self.dtype.ordered else self.children[0]
+        codes = codes.set_mask(self.mask)
+        return codes
+        
     @property
     def _min_type_codes(self) -> NumericalColumn:
         codes = self.codes
@@ -976,6 +978,10 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def to_pandas(self, index: pd.Index = None, **kwargs) -> pd.Series:
+        if "__DEBUG__" in kwargs:
+            import pdb
+            pdb.set_trace()
+
         if self.categories.dtype.kind == "f":
             new_mask = bools_to_mask(self.notnull())
             col = self.__class__(dtype=self.dtype,
@@ -1428,7 +1434,7 @@ class CategoricalColumn(column.ColumnBase):
         is_unique: bool = False,
         ordered: bool = False,
     ) -> CategoricalColumn:
-        """Returns a new CategoricalColumn with the categories set to the
+        """Returns a new `CategoricalColumn` with the categories set to the
         specified *new_categories*.
 
         Notes
@@ -1439,9 +1445,9 @@ class CategoricalColumn(column.ColumnBase):
         """
         new_categories = column.as_column(new_categories)
 
-        should_drop_duplicates = is_unique is False or not new_categories.is_unique 
+        should_drop_duplicates = is_unique is False or not new_categories.is_unique
         if should_drop_duplicates:
-            new_categories = drop_duplicates(Table({None: new_categories}))._columns[0]
+            new_categories = drop_duplicates(Table({None: new_categories}))[0][None]
 
         # libcudf expects source and target categories to have exact same type.
         # Here we upcast the numerical types to make sure that floating point
@@ -1452,7 +1458,7 @@ class CategoricalColumn(column.ColumnBase):
         # categories.
         col = self
         new_categories_as_common_type = new_categories
-        if isinstance(new_categories, cudf.core.column.NumericalColumn) and not new_categories.dtype == col.children[1].dtype:
+        if cudf.api.types.is_numeric_dtype(new_categories.dtype) and not new_categories.dtype == col.children[1].dtype:
             common_type = find_common_type([col.children[1].dtype, new_categories.dtype])
             converted_categories = col.children[1].astype(common_type)
             col = column.build_categorical_column(
@@ -1470,9 +1476,10 @@ class CategoricalColumn(column.ColumnBase):
 
         # In case there was an upcast, convert it to result dtype.
         result_cats = res_col.children[1]
-        if isinstance(new_categories, cudf.core.column.NumericalColumn) and not result_cats.dtype == new_categories.dtype:
+        if cudf.api.types.is_numeric_dtype(new_categories.dtype) and not result_cats.dtype == new_categories.dtype:
             result_cats = result_cats.astype(new_categories.dtype)
-        # Update with `ordered` info
+
+        # Update with ordering info
         res_col = column.build_categorical_column(
             categories=result_cats,
             codes=res_col.children[0],
@@ -1493,7 +1500,7 @@ class CategoricalColumn(column.ColumnBase):
         # Ignore order for comparison because we're only interested
         # in whether new_categories has all the same values as the
         # current set of categories.
-        if not contains(new_categories, self._column.categories).all():
+        if not contains(new_categories, self.categories).all():
             raise ValueError(
                 "items in new_categories are not the same as in "
                 "old categories"
