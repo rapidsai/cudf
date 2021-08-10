@@ -85,39 +85,50 @@ cudf::size_type expression_parser::intermediate_counter::find_first_missing() co
 
 cudf::size_type expression_parser::visit(literal const& expr)
 {
-  _node_count++;                                                 // Increment the node index
-  auto const data_type     = expr.get_data_type();               // Resolve node type
-  auto device_view         = expr.get_value();                   // Construct a scalar device view
-  auto const literal_index = cudf::size_type(_literals.size());  // Push literal
-  _literals.push_back(device_view);
-  auto const source = detail::device_data_reference(
-    detail::device_data_reference_type::LITERAL, data_type, literal_index);  // Push data reference
-  return add_data_reference(source);
+  if (_node_count == 0) {
+    // Handle the trivial case of a literal as the entire expression.
+    return visit(operation(ast_operator::IDENTITY, expr));
+  } else {
+    _node_count++;                                                 // Increment the node index
+    auto const data_type     = expr.get_data_type();               // Resolve node type
+    auto device_view         = expr.get_value();                   // Construct a scalar device view
+    auto const literal_index = cudf::size_type(_literals.size());  // Push literal
+    _literals.push_back(device_view);
+    auto const source = detail::device_data_reference(detail::device_data_reference_type::LITERAL,
+                                                      data_type,
+                                                      literal_index);  // Push data reference
+    return add_data_reference(source);
+  }
 }
 
 cudf::size_type expression_parser::visit(column_reference const& expr)
 {
-  // Increment the node index
-  _node_count++;
-  // Resolve node type
-  cudf::data_type data_type;
-  if (expr.get_table_source() == table_reference::LEFT) {
-    data_type = expr.get_data_type(_left);
+  if (_node_count == 0) {
+    // Handle the trivial case of a column reference as the entire expression.
+    return visit(operation(ast_operator::IDENTITY, expr));
   } else {
-    if (_right.has_value()) {
-      data_type = expr.get_data_type(*_right);
+    // Increment the node index
+    _node_count++;
+    // Resolve node type
+    cudf::data_type data_type;
+    if (expr.get_table_source() == table_reference::LEFT) {
+      data_type = expr.get_data_type(_left);
     } else {
-      CUDF_FAIL(
-        "Your expression contains a reference to the RIGHT table even though it will only be "
-        "evaluated on a single table (by convention, the LEFT table).");
+      if (_right.has_value()) {
+        data_type = expr.get_data_type(*_right);
+      } else {
+        CUDF_FAIL(
+          "Your expression contains a reference to the RIGHT table even though it will only be "
+          "evaluated on a single table (by convention, the LEFT table).");
+      }
     }
+    // Push data reference
+    auto const source = detail::device_data_reference(detail::device_data_reference_type::COLUMN,
+                                                      data_type,
+                                                      expr.get_column_index(),
+                                                      expr.get_table_source());
+    return add_data_reference(source);
   }
-  // Push data reference
-  auto const source = detail::device_data_reference(detail::device_data_reference_type::COLUMN,
-                                                    data_type,
-                                                    expr.get_column_index(),
-                                                    expr.get_table_source());
-  return add_data_reference(source);
 }
 
 cudf::size_type expression_parser::visit(operation const& expr)
