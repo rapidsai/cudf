@@ -188,9 +188,9 @@ namespace {
 std::unique_ptr<cudf::column> unflatten_struct(vector_of_columns& flattened,
                                                column_index_t& current_index,
                                                cudf::column_view const& blueprint);
+
 /**
- * @brief Helper functor to reconstruct STRUCT columns
- *        from its flattened member columns.
+ * @brief Helper functor to reconstruct STRUCT columns from its flattened member columns.
  *
  */
 class unflattener {
@@ -224,8 +224,6 @@ std::unique_ptr<cudf::column> unflatten_struct(vector_of_columns& flattened,
 
   CUDF_EXPECTS(current_index < flattened.size(), "STRUCT column can't have 0 children.");
 
-  auto num_rows = flattened[current_index]->size();
-
   // cudf::flatten_nested_columns() executes depth first, and serializes the struct null vector
   // before the child/member columns.
   // E.g. STRUCT_1< STRUCT_2< A, B >, C > is flattened to:
@@ -245,6 +243,8 @@ std::unique_ptr<cudf::column> unflatten_struct(vector_of_columns& flattened,
                  blueprint.child_end(),
                  std::back_inserter(struct_members),
                  unflattener{flattened, current_index});
+
+  auto num_rows = flattened[0]->size();
 
   return cudf::make_structs_column(num_rows,
                                    std::move(struct_members),
@@ -287,9 +287,6 @@ std::unique_ptr<cudf::table> unflatten_nested_columns(std::unique_ptr<cudf::tabl
 
   // There be struct columns.
   // Note: Requires null vectors for all struct input columns.
-  // TODO: Explore if blueprint's struct's has_nulls() should be used at all.
-  //       At first glance, no. `groupby.aggregate()` might have filtered out nulls.
-
   auto flattened_columns = flattened->release();
   auto current_idx       = column_index_t{0};
 
