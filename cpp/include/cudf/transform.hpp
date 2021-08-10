@@ -90,7 +90,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  */
 std::unique_ptr<column> compute_column(
   table_view const table,
-  ast::node const& expr,
+  ast::expression const& expr,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

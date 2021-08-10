@@ -30,15 +30,15 @@ class expression_parser;
 }
 
 /**
- * @brief A generic node that can be evaluated to return a value.
+ * @brief A generic expression that can be evaluated to return a value.
  *
  * This class is a part of a "visitor" pattern with the `linearizer` class.
  * Nodes inheriting from this class can accept visitors.
  */
-struct node {
+struct expression {
   virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
 
-  virtual ~node() {}
+  virtual ~expression() {}
 };
 
 /**
@@ -107,7 +107,7 @@ enum class table_reference {
 /**
  * @brief A literal value used in an abstract syntax tree.
  */
-class literal : public node {
+class literal : public expression {
  public:
   /**
    * @brief Construct a new literal object.
@@ -169,14 +169,14 @@ class literal : public node {
 };
 
 /**
- * @brief A node referring to data from a column in a table.
+ * @brief A expression referring to data from a column in a table.
  */
-class column_reference : public node {
+class column_reference : public expression {
  public:
   /**
    * @brief Construct a new column reference object
    *
-   * @param column_index Index of this column in the table (provided when the node is
+   * @param column_index Index of this column in the table (provided when the expression is
    * evaluated).
    * @param table_source Which table to use in cases with two tables (e.g. joins).
    */
@@ -246,33 +246,33 @@ class column_reference : public node {
 };
 
 /**
- * @brief An expression node holds an operator and zero or more operands.
+ * @brief An expression expression holds an operator and zero or more operands.
  */
-class operation : public node {
+class operation : public expression {
  public:
   /**
    * @brief Construct a new unary operation object.
    *
    * @param op Operator
-   * @param input Input node (operand)
+   * @param input Input expression (operand)
    */
-  operation(ast_operator op, node const& input);
+  operation(ast_operator op, expression const& input);
 
   /**
    * @brief Construct a new binary operation object.
    *
    * @param op Operator
-   * @param left Left input node (left operand)
-   * @param right Right input node (right operand)
+   * @param left Left input expression (left operand)
+   * @param right Right input expression (right operand)
    */
-  operation(ast_operator op, node const& left, node const& right);
+  operation(ast_operator op, expression const& left, expression const& right);
 
-  // operation only stores references to nodes, so it does not accept r-value
-  // references: the calling code must own the nodes.
-  operation(ast_operator op, node&& input)                   = delete;
-  operation(ast_operator op, node&& left, node&& right)      = delete;
-  operation(ast_operator op, node&& left, node const& right) = delete;
-  operation(ast_operator op, node const& left, node&& right) = delete;
+  // operation only stores references to expressions, so it does not accept r-value
+  // references: the calling code must own the expressions.
+  operation(ast_operator op, expression&& input)                         = delete;
+  operation(ast_operator op, expression&& left, expression&& right)      = delete;
+  operation(ast_operator op, expression&& left, expression const& right) = delete;
+  operation(ast_operator op, expression const& left, expression&& right) = delete;
 
   /**
    * @brief Get the operator.
@@ -284,9 +284,9 @@ class operation : public node {
   /**
    * @brief Get the operands.
    *
-   * @return std::vector<std::reference_wrapper<const node>>
+   * @return std::vector<std::reference_wrapper<const expression>>
    */
-  std::vector<std::reference_wrapper<node const>> get_operands() const { return operands; }
+  std::vector<std::reference_wrapper<expression const>> get_operands() const { return operands; }
 
   /**
    * @brief Accepts a visitor class.
@@ -298,7 +298,7 @@ class operation : public node {
 
  private:
   ast_operator const op;
-  std::vector<std::reference_wrapper<node const>> const operands;
+  std::vector<std::reference_wrapper<expression const>> const operands;
 };
 
 }  // namespace ast

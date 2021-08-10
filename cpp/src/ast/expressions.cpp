@@ -25,14 +25,14 @@
 namespace cudf {
 namespace ast {
 
-operation::operation(ast_operator op, node const& input) : op(op), operands({input})
+operation::operation(ast_operator op, expression const& input) : op(op), operands({input})
 {
   if (cudf::ast::detail::ast_operator_arity(op) != 1) {
     CUDF_FAIL("The provided operator is not a unary operator.");
   }
 }
 
-operation::operation(ast_operator op, node const& left, node const& right)
+operation::operation(ast_operator op, expression const& left, expression const& right)
   : op(op), operands({left, right})
 {
   if (cudf::ast::detail::ast_operator_arity(op) != 2) {

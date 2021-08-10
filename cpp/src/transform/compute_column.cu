@@ -79,7 +79,7 @@ __launch_bounds__(max_block_size) __global__
 }
 
 std::unique_ptr<column> compute_column(table_view const table,
-                                       ast::node const& expr,
+                                       ast::expression const& expr,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -136,7 +136,7 @@ std::unique_ptr<column> compute_column(table_view const table,
 }  // namespace detail
 
 std::unique_ptr<column> compute_column(table_view const table,
-                                       ast::node const& expr,
+                                       ast::expression const& expr,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();

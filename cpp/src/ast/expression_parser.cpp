@@ -85,12 +85,12 @@ cudf::size_type expression_parser::intermediate_counter::find_first_missing() co
 
 cudf::size_type expression_parser::visit(literal const& expr)
 {
-  if (_node_count == 0) {
+  if (_expression_count == 0) {
     // Handle the trivial case of a literal as the entire expression.
     return visit(operation(ast_operator::IDENTITY, expr));
   } else {
-    _node_count++;                                                 // Increment the node index
-    auto const data_type     = expr.get_data_type();               // Resolve node type
+    _expression_count++;                                           // Increment the expression index
+    auto const data_type     = expr.get_data_type();               // Resolve expression type
     auto device_view         = expr.get_value();                   // Construct a scalar device view
     auto const literal_index = cudf::size_type(_literals.size());  // Push literal
     _literals.push_back(device_view);
@@ -103,13 +103,13 @@ cudf::size_type expression_parser::visit(literal const& expr)
 
 cudf::size_type expression_parser::visit(column_reference const& expr)
 {
-  if (_node_count == 0) {
+  if (_expression_count == 0) {
     // Handle the trivial case of a column reference as the entire expression.
     return visit(operation(ast_operator::IDENTITY, expr));
   } else {
-    // Increment the node index
-    _node_count++;
-    // Resolve node type
+    // Increment the expression index
+    _expression_count++;
+    // Resolve expression type
     cudf::data_type data_type;
     if (expr.get_table_source() == table_reference::LEFT) {
       data_type = expr.get_data_type(_left);
@@ -133,9 +133,9 @@ cudf::size_type expression_parser::visit(column_reference const& expr)
 
 cudf::size_type expression_parser::visit(operation const& expr)
 {
-  // Increment the node index
-  auto const node_index = _node_count++;
-  // Visit children (operands) of this node
+  // Increment the expression index
+  auto const expression_index = _expression_count++;
+  // Visit children (operands) of this expression
   auto const operand_data_ref_indices = visit_operands(expr.get_operands());
   // Resolve operand types
   auto data_ref = [this](auto const& index) { return _data_references[index].data_type; };
@@ -160,18 +160,18 @@ cudf::size_type expression_parser::visit(operation const& expr)
         _intermediate_counter.give(intermediate_index);
       }
     });
-  // Resolve node type
+  // Resolve expression type
   auto const op        = expr.get_operator();
   auto const data_type = cudf::ast::detail::ast_operator_return_type(op, operand_types);
   _operators.push_back(op);
   // Push data reference
   auto const output = [&]() {
-    if (node_index == 0) {
-      // This node is the root. Output should be directed to the output column.
+    if (expression_index == 0) {
+      // This expression is the root. Output should be directed to the output column.
       return detail::device_data_reference(
         detail::device_data_reference_type::COLUMN, data_type, 0, table_reference::OUTPUT);
     } else {
-      // This node is not the root. Output is an intermediate value.
+      // This expression is not the root. Output is an intermediate value.
       // Ensure that the output type is fixed width and fits in the intermediate storage.
       if (!cudf::is_fixed_width(data_type)) {
         CUDF_FAIL(
@@ -200,7 +200,7 @@ cudf::data_type expression_parser::output_type() const
 }
 
 std::vector<cudf::size_type> expression_parser::visit_operands(
-  std::vector<std::reference_wrapper<node const>> operands)
+  std::vector<std::reference_wrapper<expression const>> operands)
 {
   auto operand_data_reference_indices = std::vector<cudf::size_type>();
   for (auto const& operand : operands) {
