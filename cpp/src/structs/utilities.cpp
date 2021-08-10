@@ -244,7 +244,7 @@ std::unique_ptr<cudf::column> unflatten_struct(vector_of_columns& flattened,
                  std::back_inserter(struct_members),
                  unflattener{flattened, current_index});
 
-  auto num_rows = flattened[0]->size();
+  auto const num_rows = flattened[0]->size();
 
   return cudf::make_structs_column(num_rows,
                                    std::move(struct_members),
