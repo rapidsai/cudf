@@ -763,9 +763,9 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
  * @brief Compute the per-stripe prefix sum of null count, for each struct column in the current
  * layer.
  */
-void prefix_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& chunks,
-                        cudf::host_span<rmm::device_uvector<uint32_t>> prefix_sums,
-                        rmm::cuda_stream_view stream)
+void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& chunks,
+                      cudf::host_span<rmm::device_uvector<uint32_t>> prefix_sums,
+                      rmm::cuda_stream_view stream)
 {
   auto const num_stripes = chunks.size().first;
   if (num_stripes == 0) return;
@@ -802,17 +802,15 @@ void prefix_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const
   stream.synchronize();
 }
 
-void reader::impl::decode_stream_data(
-  cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-  size_t num_dicts,
-  size_t skip_rows,
-  timezone_table_view tz_table,
-  cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
-  size_t row_index_stride,
-  std::vector<column_buffer>& out_buffers,
-  size_t level,
-  cudf::host_span<rmm::device_uvector<uint32_t>> null_count_psums,
-  rmm::cuda_stream_view stream)
+void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
+                                      size_t num_dicts,
+                                      size_t skip_rows,
+                                      timezone_table_view tz_table,
+                                      cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
+                                      size_t row_index_stride,
+                                      std::vector<column_buffer>& out_buffers,
+                                      size_t level,
+                                      rmm::cuda_stream_view stream)
 {
   const auto num_stripes = chunks.size().first;
   const auto num_columns = chunks.size().second;
@@ -834,8 +832,6 @@ void reader::impl::decode_stream_data(
   chunks.host_to_device(stream, true);
   gpu::DecodeNullsAndStringDictionaries(
     chunks.base_device_ptr(), global_dict.data(), num_columns, num_stripes, skip_rows, stream);
-
-  prefix_null_counts(chunks, null_count_psums, stream);
 
   if (level > 0) {
     // Update nullmasks for children if parent was a struct and had null mask
@@ -1089,7 +1085,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   std::vector<std::vector<column_buffer>> out_buffers(_selected_columns.size());
   std::vector<column_name_info> schema_info;
   std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data(_selected_columns.size());
-  std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_psums;
+  std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
   table_metadata out_metadata;
 
   // There are no columns in the table
@@ -1172,10 +1168,13 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // Logically view streams as columns
       std::vector<orc_stream_info> stream_info;
 
-      null_count_psums.emplace_back();
-      for (auto i = 0u; i < _selected_columns[level].size(); ++i)
-        null_count_psums.back().emplace_back(
-          cudf::detail::make_zeroed_device_uvector_async<uint32_t>(total_num_stripes, stream));
+      null_count_prefix_sums.emplace_back();
+      null_count_prefix_sums.back().reserve(_selected_columns[level].size());
+      std::generate_n(
+        std::back_inserter(null_count_prefix_sums.back()), _selected_columns[level].size(), [&]() {
+          return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(total_num_stripes,
+                                                                          stream);
+        });
 
       // Tracker for eventually deallocating compressed and uncompressed data
       auto& stripe_data = lvl_stripe_data[level];
@@ -1265,7 +1264,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             chunk.parent_null_count_prefix_sums =
               (level == 0)
                 ? nullptr
-                : null_count_psums[level - 1][_col_meta.parent_column_index[col_idx]].data();
+                : null_count_prefix_sums[level - 1][_col_meta.parent_column_index[col_idx]].data();
             chunk.encoding_kind = stripe_footer->columns[selected_columns[col_idx].id].kind;
             chunk.type_kind     = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
                                 .ff.types[selected_columns[col_idx].id]
@@ -1387,11 +1386,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                            _metadata->get_row_index_stride(),
                            out_buffers[level],
                            level,
-                           null_count_psums[level],
                            stream);
 
         // Extract information to process nested child columns
         if (nested_col.size()) {
+          scan_null_counts(chunks, null_count_prefix_sums[level], stream);
           row_groups.device_to_host(stream, true);
           aggregate_child_meta(chunks, row_groups, out_buffers[level], nested_col, level);
         }

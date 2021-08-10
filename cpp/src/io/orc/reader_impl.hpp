@@ -150,7 +150,6 @@ class reader::impl {
                           size_t row_index_stride,
                           std::vector<column_buffer>& out_buffers,
                           size_t level,
-                          cudf::host_span<rmm::device_uvector<uint32_t>> null_count_psums,
                           rmm::cuda_stream_view stream);
 
   /**
