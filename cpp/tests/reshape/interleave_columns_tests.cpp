@@ -376,8 +376,6 @@ namespace {
 using StrListsCol = cudf::test::lists_column_wrapper<cudf::string_view>;
 using IntListsCol = cudf::test::lists_column_wrapper<int32_t>;
 using IntCol      = cudf::test::fixed_width_column_wrapper<int32_t>;
-using StructsCol  = cudf::test::structs_column_wrapper;
-using StringsCol  = cudf::test::strings_column_wrapper;
 using TView       = cudf::table_view;
 
 constexpr int32_t null{0};  // mark for null elements
@@ -734,14 +732,8 @@ TEST_F(ListsColumnsInterleaveTest, SlicedStringsColumnsInputWithNulls)
 }
 
 namespace {
-using StrListsCol = cudf::test::lists_column_wrapper<cudf::string_view>;
-using IntListsCol = cudf::test::lists_column_wrapper<int32_t>;
-using IntCol      = cudf::test::fixed_width_column_wrapper<int32_t>;
-using StructsCol  = cudf::test::structs_column_wrapper;
-using StringsCol  = cudf::test::strings_column_wrapper;
-using TView       = cudf::table_view;
-
-constexpr int32_t null{0};  // mark for null elements
+using StructsCol = cudf::test::structs_column_wrapper;
+using StringsCol = cudf::test::strings_column_wrapper;
 }  // namespace
 
 struct StructsColumnsInterleaveTest : public cudf::test::BaseFixture {
