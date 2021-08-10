@@ -152,7 +152,6 @@ add_library(cudf
     src/aggregation/aggregation.cu
     src/aggregation/result_cache.cpp
     src/ast/expression_parser.cpp
-    src/ast/transform.cu
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
     src/binaryop/compiled/Add.cu
@@ -437,6 +436,7 @@ add_library(cudf
     src/text/subword/wordpiece_tokenizer.cu
     src/text/tokenize.cu
     src/transform/bools_to_mask.cu
+    src/transform/compute_column.cu
     src/transform/encode.cu
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
