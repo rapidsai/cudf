@@ -1828,58 +1828,66 @@ def gdf(pdf):
 @pytest.mark.parametrize(
     "data",
     [
-        {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
-        {"x": [1, 2, 3], "y": [4, 5, 6]},
-        {"x": [np.nan, np.nan, np.nan], "y": [np.nan, np.nan, np.nan]},
-        {"x": [], "y": []},
+        {
+            "x": [np.nan, 2, 3, 4, 100, np.nan],
+            "y": [4, 5, 6, 88, 99, np.nan],
+            "z": [7, 8, 9, 66, np.nan, 77],
+        },
+        {"x": [1, 2, 3], "y": [4, 5, 6], "z": [7, 8, 9]},
+        {
+            "x": [np.nan, np.nan, np.nan],
+            "y": [np.nan, np.nan, np.nan],
+            "z": [np.nan, np.nan, np.nan],
+        },
+        {"x": [], "y": [], "z": []},
         {"x": []},
     ],
 )
-# @pytest.mark.parametrize("axis", [0, 1])
-@pytest.mark.parametrize("axis", [1])
+@pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize(
     "func",
     [
-        lambda df, **kwargs: df.min(**kwargs),
-        lambda df, **kwargs: df.max(**kwargs),
-        lambda df, **kwargs: df.sum(**kwargs),
-        lambda df, **kwargs: df.product(**kwargs),
-        lambda df, **kwargs: df.cummin(**kwargs),
-        lambda df, **kwargs: df.cummax(**kwargs),
-        lambda df, **kwargs: df.cumsum(**kwargs),
-        lambda df, **kwargs: df.cumprod(**kwargs),
-        lambda df, **kwargs: df.mean(**kwargs),
-        lambda df, **kwargs: df.median(**kwargs),
-        lambda df, **kwargs: df.sum(**kwargs),
-        lambda df, **kwargs: df.max(**kwargs),
-        lambda df, **kwargs: df.std(ddof=1, **kwargs),
-        lambda df, **kwargs: df.var(ddof=1, **kwargs),
-        # lambda df, **kwargs: df.std(ddof=2, **kwargs),
-        # lambda df, **kwargs: df.var(ddof=2, **kwargs),
-        # lambda df, **kwargs: df.kurt(**kwargs),
-        # lambda df, **kwargs: df.skew(**kwargs),
-        lambda df, **kwargs: df.all(**kwargs),
-        lambda df, **kwargs: df.any(**kwargs),
+        "min",
+        "max",
+        "sum",
+        "product",
+        "cummin",
+        "cummax",
+        "cumsum",
+        "cumprod",
+        "mean",
+        "median",
+        "sum",
+        "max",
+        "std",
+        "var",
+        "kurt",
+        "skew",
+        "all",
+        "any",
     ],
 )
 @pytest.mark.parametrize("skipna", [True, False, None])
 def test_dataframe_reductions(data, axis, func, skipna):
     pdf = pd.DataFrame(data=data)
     gdf = cudf.DataFrame.from_pandas(pdf)
-    try:
+
+    # These reductions don't support axis=1
+    if axis == 1 and func in ("kurt", "skew"):
+        return
+
+    # We need cupy-supported operations when performing rowwise ops.
+    if func not in cudf.core.dataframe._cupy_nan_methods_map and axis == 1:
+        return
+
+    # Test different degrees of freedom for var and std.
+    all_kwargs = [{"ddof": 1}, {"ddof": 2}] if func in ("var", "std") else [{}]
+    for kwargs in all_kwargs:
         assert_eq(
-            func(pdf, axis=axis, skipna=skipna),
-            func(gdf, axis=axis, skipna=skipna),
+            getattr(pdf, func)(axis=axis, skipna=skipna, **kwargs),
+            getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),
             check_dtype=False,
         )
-    except Exception as e:
-        acceptable_errors = (
-            "Row-wise operations to calculate",
-            "module 'cupy' has no attribute",
-        )
-        if any(a in str(e) for a in acceptable_errors):
-            return
-        raise e
 
 
 @pytest.mark.parametrize(
