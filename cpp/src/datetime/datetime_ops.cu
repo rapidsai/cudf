@@ -29,7 +29,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include "cudf/null_mask.hpp"
 
 namespace cudf {
 namespace datetime {

@@ -27,7 +27,6 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include "cudf/utilities/error.hpp"
 
 #define XXX false  // stub for null values
 
