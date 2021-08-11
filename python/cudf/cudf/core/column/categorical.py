@@ -817,7 +817,7 @@ class CategoricalColumn(column.ColumnBase):
     @property
     def codes(self) -> NumericalColumn:
         category_order = self.dtype.categories._values.argsort()
-        codes = category_order.take(self.children[0]) if self.dtype.ordered else self.children[0]
+        codes = category_order.take(self.children[0])
         codes = codes.set_mask(self.mask)
         return codes
 

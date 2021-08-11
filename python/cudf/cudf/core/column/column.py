@@ -2055,7 +2055,7 @@ def as_column(
                 )
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 if is_categorical_dtype(dtype):
-                    sr = pd.Series(arbitrary, dtype="category")
+                    sr = pd.Series(arbitrary, dtype=dtype)
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
                 elif np_type == np.str_:
                     sr = pd.Series(arbitrary, dtype="str")

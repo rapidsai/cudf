@@ -400,7 +400,8 @@ def test_index_copy_deep(idx, deep):
     """Test if deep copy creates a new instance for device data.
     The general criterion is to compare `Buffer.ptr` between two data objects.
     Specifically for:
-        - CategoricalIndex, this applies to both `.codes` and `.categories`
+        - CategoricalIndex, this applies to both `children` (notice .codes and
+        - .categories are now derived properties)
         - StringIndex, to every element in `._base_children`
         - Others, to `.base_data`
     No test is defined for RangeIndex.
@@ -409,8 +410,8 @@ def test_index_copy_deep(idx, deep):
     same_ref = not deep
     if isinstance(idx, cudf.CategoricalIndex):
         assert (
-            idx._values.codes.base_data.ptr
-            == idx_copy._values.codes.base_data.ptr
+            idx._values.children[0].base_data.ptr
+            == idx_copy._values.children[0].base_data.ptr
         ) == same_ref
         if isinstance(
             idx._values.categories, cudf.core.column.string.StringColumn
