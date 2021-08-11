@@ -25,6 +25,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -389,7 +390,7 @@ TEST_F(FromArrowTest, FixedPointTable32)
 
   for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
     auto const data     = std::vector<int32_t>{1, 1, 1, 1, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 0};
-    auto const col      = fp_wrapper<int32_t>({1, 2, 3, 4, 5, 6}, scale_type{i});
+    auto const col      = fp_wrapper<cudf::device_storage_type_t<int32_t>>({1, 2, 3, 4, 5, 6}, scale_type{i});
     auto const expected = cudf::table_view({col});
 
     std::shared_ptr<arrow::Array> arr;
@@ -405,6 +406,9 @@ TEST_F(FromArrowTest, FixedPointTable32)
 
     auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
+    if (expected.column(0).type().id() != cudf::type_id::DECIMAL32) {std::cout<< "Hello world" << std::endl; }
+    auto x=got_cudf_table->view();
+    if (x.column(0).type().id() != cudf::type_id::DECIMAL32) {std::cout<< "Actual type_id is incorrect " << std::endl; }
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
   }
 }
