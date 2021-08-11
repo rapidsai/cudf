@@ -149,6 +149,12 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 }
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, ewma_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, rank_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
@@ -297,6 +303,11 @@ void aggregation_finalizer::visit(nth_element_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(row_number_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(ewma_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -520,6 +531,14 @@ std::unique_ptr<Base> make_row_number_aggregation()
 }
 template std::unique_ptr<aggregation> make_row_number_aggregation<aggregation>();
 template std::unique_ptr<rolling_aggregation> make_row_number_aggregation<rolling_aggregation>();
+
+/// Factory to create an EWMA aggregation
+template <typename Base>
+std::unique_ptr<Base> make_ewma_aggregation() 
+{
+  return std::make_unique<detail::ewma_aggregation>();
+}
+template std::unique_ptr<aggregation> make_ewma_aggregation<aggregation>();
 
 /// Factory to create a RANK aggregation
 template <typename Base>

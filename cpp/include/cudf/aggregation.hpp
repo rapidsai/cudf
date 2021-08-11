@@ -77,6 +77,7 @@ class aggregation {
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
+    EWMA,            ///< get exponential weighted moving average of current index
     RANK,            ///< get rank       of current index
     DENSE_RANK,      ///< get dense rank of current index
     COLLECT_LIST,    ///< collect values into a list
@@ -254,6 +255,12 @@ std::unique_ptr<Base> make_nth_element_aggregation(
 /// Factory to create a ROW_NUMBER aggregation
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_row_number_aggregation();
+
+/**
+ * @brief Factory to create a EWMA aggregation
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_ewma_aggregation();
 
 /**
  * @brief Factory to create a RANK aggregation

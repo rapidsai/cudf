@@ -330,6 +330,15 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
   return generate_ranks<false>(order_by, stream, mr);
 }
 
+std::unique_ptr<column> ewma(
+  column_view const& input, 
+  rmm::cuda_stream_view stream, 
+  rmm::mr::device_memory_resource* mr) 
+{
+  std::unique_ptr<column> result = make_fixed_width_column(input.type(), input.size());
+  return result;
+}
+
 std::unique_ptr<column> scan_inclusive(
   column_view const& input,
   std::unique_ptr<aggregation> const& agg,
