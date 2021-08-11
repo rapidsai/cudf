@@ -182,7 +182,7 @@ std::unique_ptr<cudf::column> day_of_year(
  *
  * @returns cudf::column of timestamp type containing the computed timestamps.
  * @throw cudf::logic_error if `timestamps` datatype is not a TIMESTAMP or if `months` datatype
- * is not INT16.
+ * is not INT16 or INT32.
  * @throw cudf::logic_error if `timestamps` column size is not equal to `months` column size.
  */
 std::unique_ptr<cudf::column> add_calendrical_months(
@@ -215,7 +215,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(
  *
  * @returns cudf::column of timestamp type containing the computed timestamps.
  * @throw cudf::logic_error if `timestamps` datatype is not a TIMESTAMP or if `months` datatype
- * is not INT16.
+ * is not INT16 or INT32.
  * @throw cudf::logic_error if `timestamps` column size is not equal to `months` column size.
  */
 std::unique_ptr<cudf::column> add_calendrical_months(
