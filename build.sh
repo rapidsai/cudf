@@ -75,7 +75,7 @@ function hasArg {
 function cmakeArgs {
     # Check for correctly formatted cmake args option
     if [[ $(echo $ARGS | grep -Eo "\-\-cmake\-args=" | wc -l ) -gt 1 ]]; then
-	echo "Multiple --cmake-args options were provided, please provide only one: ${ARGS}"
+        echo "Multiple --cmake-args options were provided, please provide only one: ${ARGS}"
         exit 1
     elif [[ -n $(echo $ARGS | grep -E "\-\-cmake\-args=\"") ]]; then
         # There are possible weird edge cases that may cause this regex filter to output nothing and fail silently
