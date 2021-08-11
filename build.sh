@@ -220,7 +220,7 @@ if hasArg libcudf_kafka; then
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DBUILD_TESTS=${BUILD_TESTS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-	  ${CMAKE_ARGS}
+          ${CMAKE_ARGS}
 
 
     cd ${KAFKA_LIB_BUILD_DIR}
