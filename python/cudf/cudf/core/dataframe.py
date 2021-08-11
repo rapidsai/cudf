@@ -69,100 +69,101 @@ _cupy_nan_methods_map = {
 
 
 class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
+    """
+    A GPU Dataframe object.
+
+    Parameters
+    ----------
+    data : array-like, Iterable, dict, or DataFrame.
+        Dict can contain Series, arrays, constants, or list-like objects.
+
+    index : Index or array-like
+        Index to use for resulting frame. Will default to
+        RangeIndex if no indexing information part of input data and
+        no index provided.
+
+    columns : Index or array-like
+        Column labels to use for resulting frame.
+        Will default to RangeIndex (0, 1, 2, …, n) if no column
+        labels are provided.
+
+    dtype : dtype, default None
+        Data type to force. Only a single dtype is allowed.
+        If None, infer.
+
+    Examples
+    --------
+
+    Build dataframe with ``__setitem__``:
+
+    >>> import cudf
+    >>> df = cudf.DataFrame()
+    >>> df['key'] = [0, 1, 2, 3, 4]
+    >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
+    >>> df
+       key   val
+    0    0  10.0
+    1    1  11.0
+    2    2  12.0
+    3    3  13.0
+    4    4  14.0
+
+    Build DataFrame via dict of columns:
+
+    >>> import numpy as np
+    >>> from datetime import datetime, timedelta
+    >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
+    >>> n = 5
+    >>> df = cudf.DataFrame({
+    ...     'id': np.arange(n),
+    ...     'datetimes': np.array(
+    ...     [(t0+ timedelta(seconds=x)) for x in range(n)])
+    ... })
+    >>> df
+        id                datetimes
+    0    0  2018-10-07T12:00:00.000
+    1    1  2018-10-07T12:00:01.000
+    2    2  2018-10-07T12:00:02.000
+    3    3  2018-10-07T12:00:03.000
+    4    4  2018-10-07T12:00:04.000
+
+    Build DataFrame via list of rows as tuples:
+
+    >>> df = cudf.DataFrame([
+    ...     (5, "cats", "jump", np.nan),
+    ...     (2, "dogs", "dig", 7.5),
+    ...     (3, "cows", "moo", -2.1, "occasionally"),
+    ... ])
+    >>> df
+       0     1     2     3             4
+    0  5  cats  jump  <NA>          <NA>
+    1  2  dogs   dig   7.5          <NA>
+    2  3  cows   moo  -2.1  occasionally
+
+    Convert from a Pandas DataFrame:
+
+    >>> import pandas as pd
+    >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
+    >>> pdf
+       a    b
+    0  0  0.1
+    1  1  0.2
+    2  2  NaN
+    3  3  0.3
+    >>> df = cudf.from_pandas(pdf)
+    >>> df
+       a     b
+    0  0   0.1
+    1  1   0.2
+    2  2  <NA>
+    3  3   0.3
+    """
 
     _PROTECTED_KEYS = frozenset(("_data", "_index"))
 
     @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
-        """
-        A GPU Dataframe object.
 
-        Parameters
-        ----------
-        data : array-like, Iterable, dict, or DataFrame.
-            Dict can contain Series, arrays, constants, or list-like objects.
-
-        index : Index or array-like
-            Index to use for resulting frame. Will default to
-            RangeIndex if no indexing information part of input data and
-            no index provided.
-
-        columns : Index or array-like
-            Column labels to use for resulting frame.
-            Will default to RangeIndex (0, 1, 2, …, n) if no column
-            labels are provided.
-
-        dtype : dtype, default None
-            Data type to force. Only a single dtype is allowed.
-            If None, infer.
-
-        Examples
-        --------
-
-        Build dataframe with ``__setitem__``:
-
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2, 3, 4]
-        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-        >>> df
-           key   val
-        0    0  10.0
-        1    1  11.0
-        2    2  12.0
-        3    3  13.0
-        4    4  14.0
-
-        Build DataFrame via dict of columns:
-
-        >>> import numpy as np
-        >>> from datetime import datetime, timedelta
-        >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
-        >>> n = 5
-        >>> df = cudf.DataFrame({
-        ...     'id': np.arange(n),
-        ...     'datetimes': np.array(
-        ...     [(t0+ timedelta(seconds=x)) for x in range(n)])
-        ... })
-        >>> df
-            id                datetimes
-        0    0  2018-10-07T12:00:00.000
-        1    1  2018-10-07T12:00:01.000
-        2    2  2018-10-07T12:00:02.000
-        3    3  2018-10-07T12:00:03.000
-        4    4  2018-10-07T12:00:04.000
-
-        Build DataFrame via list of rows as tuples:
-
-        >>> df = cudf.DataFrame([
-        ...     (5, "cats", "jump", np.nan),
-        ...     (2, "dogs", "dig", 7.5),
-        ...     (3, "cows", "moo", -2.1, "occasionally"),
-        ... ])
-        >>> df
-           0     1     2     3             4
-        0  5  cats  jump  <NA>          <NA>
-        1  2  dogs   dig   7.5          <NA>
-        2  3  cows   moo  -2.1  occasionally
-
-        Convert from a Pandas DataFrame:
-
-        >>> import pandas as pd
-        >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
-        >>> pdf
-           a    b
-        0  0  0.1
-        1  1  0.2
-        2  2  NaN
-        3  3  0.3
-        >>> df = cudf.from_pandas(pdf)
-        >>> df
-           a     b
-        0  0   0.1
-        1  1   0.2
-        2  2  <NA>
-        3  3   0.3
-        """
         super().__init__()
 
         if isinstance(columns, (Series, cudf.BaseIndex)):
@@ -3462,7 +3463,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if index:
             if (
                 any(type(item) == str for item in index.values())
-                and type(self.index) != cudf.core.index.StringIndex
+                and type(self.index) != cudf.StringIndex
             ):
                 raise NotImplementedError(
                     "Implicit conversion of index to "
@@ -4455,6 +4456,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         )
         return df
 
+    @copy_docstring(DataFrameGroupBy)
     def groupby(
         self,
         by=None,
@@ -4499,6 +4501,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             sort=sort,
         )
 
+    @copy_docstring(Rolling)
     def rolling(
         self, window, min_periods=None, center=False, axis=0, win_type=None
     ):
@@ -6512,9 +6515,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         See Also
         --------
-        cudf.core.series.Series.mode : Return the highest frequency value
+        cudf.Series.mode : Return the highest frequency value
             in a Series.
-        cudf.core.series.Series.value_counts : Return the counts of values
+        cudf.Series.value_counts : Return the counts of values
             in a Series.
 
         Notes

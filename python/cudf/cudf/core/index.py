@@ -13,7 +13,7 @@ from nvtx import annotate
 from pandas._config import get_option
 
 import cudf
-from cudf._lib.datetime import is_leap_year
+from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.table import Table
@@ -326,7 +326,7 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         See Also
         --------
-        cudf.core.index.Index.rename : Able to set new names without level.
+        cudf.Index.rename : Able to set new names without level.
 
         Examples
         --------
@@ -717,8 +717,8 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         See Also
         --------
-        cudf.core.series.Series.min : Sort values of a Series.
-        cudf.core.dataframe.DataFrame.sort_values : Sort values in a DataFrame.
+        cudf.Series.min : Sort values of a Series.
+        cudf.DataFrame.sort_values : Sort values in a DataFrame.
 
         Examples
         --------
@@ -1287,9 +1287,9 @@ class BaseIndex(SingleColumnFrame, Serializable):
         >>> import numpy as np
         >>> data = [10, 20, 30, np.nan]
         >>> pdi = pd.Index(data)
-        >>> cudf.core.index.Index.from_pandas(pdi)
+        >>> cudf.Index.from_pandas(pdi)
         Float64Index([10.0, 20.0, 30.0, <NA>], dtype='float64')
-        >>> cudf.core.index.Index.from_pandas(pdi, nan_as_null=False)
+        >>> cudf.Index.from_pandas(pdi, nan_as_null=False)
         Float64Index([10.0, 20.0, 30.0, nan], dtype='float64')
         """
         if not isinstance(index, pd.Index):
@@ -1709,25 +1709,25 @@ class RangeIndex(BaseIndex):
 
 
 class GenericIndex(BaseIndex):
-    """An array of orderable values that represent the indices of another Column
+    """
+    An array of orderable values that represent the indices of another Column
 
     Attributes
     ----------
     _values: A Column object
     name: A string
+
+    Parameters
+    ----------
+    data : Column
+        The Column of data for this index
+    name : str optional
+        The name of the Index. If not provided, the Index adopts the value
+        Column's name. Otherwise if this name is different from the value
+        Column's, the data Column will be cloned to adopt this name.
     """
 
     def __init__(self, data, **kwargs):
-        """
-        Parameters
-        ----------
-        data : Column
-            The Column of data for this index
-        name : str optional
-            The name of the Index. If not provided, the Index adopts the value
-            Column's name. Otherwise if this name is different from the value
-            Column's, the data Column will be cloned to adopt this name.
-        """
         kwargs = _setdefault_name(data, **kwargs)
 
         # normalize the input
@@ -1933,42 +1933,252 @@ class NumericIndex(GenericIndex):
 
 
 class Int8Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Int8Index is a special case of Index with purely
+    integer(``int8``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Int8Index
+    """
+
     _dtype = np.int8
 
 
 class Int16Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Int16Index is a special case of Index with purely
+    integer(``int16``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Int16Index
+    """
+
     _dtype = np.int16
 
 
 class Int32Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Int32Index is a special case of Index with purely
+    integer(``int32``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Int32Index
+    """
+
     _dtype = np.int32
 
 
 class Int64Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Int64Index is a special case of Index with purely
+    integer(``int64``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Int64Index
+    """
+
     _dtype = np.int64
 
 
 class UInt8Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    UInt8Index is a special case of Index with purely
+    integer(``uint64``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    UInt8Index
+    """
+
     _dtype = np.uint8
 
 
 class UInt16Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    UInt16Index is a special case of Index with purely
+    integer(``uint16``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    UInt16Index
+    """
+
     _dtype = np.uint16
 
 
 class UInt32Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    UInt32Index is a special case of Index with purely
+    integer(``uint32``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    UInt32Index
+    """
+
     _dtype = np.uint32
 
 
 class UInt64Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    UInt64Index is a special case of Index with purely
+    integer(``uint64``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    UInt64Index
+    """
+
     _dtype = np.uint64
 
 
 class Float32Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Float32Index is a special case of Index with purely
+    float(``float32``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Float32Index
+    """
+
     _dtype = np.float32
 
 
 class Float64Index(NumericIndex):
+    """
+    Immutable, ordered and sliceable sequence of labels.
+    The basic object storing row labels for all cuDF objects.
+    Float64Index is a special case of Index with purely
+    float(``float64``) labels.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype,
+            but not used.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Float64Index
+    """
+
     _dtype = np.float64
 
 
@@ -2283,6 +2493,31 @@ class DatetimeIndex(GenericIndex):
         res = is_leap_year(self._values).fillna(False)
         return cupy.asarray(res)
 
+    @property
+    def quarter(self):
+        """
+        Integer indicator for which quarter of the year the date belongs in.
+
+        There are 4 quarters in a year. With the first quarter being from
+        January - March, second quarter being April - June, third quarter
+        being July - September and fourth quarter being October - December.
+
+        Returns
+        -------
+        Int8Index
+        Integer indicating which quarter the date belongs to.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:00:00",
+        ...    "1999-12-31 18:40:00"])
+        >>> gIndex.quarter
+        Int8Index([2, 4], dtype='int8')
+        """
+        res = extract_quarter(self._values)
+        return Int8Index(res, dtype="int8")
+
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
@@ -2419,6 +2654,13 @@ class TimedeltaIndex(GenericIndex):
 
     @property
     def inferred_freq(self):
+        """
+        Infers frequency of TimedeltaIndex.
+
+        Notes
+        -----
+        This property is currently not supported.
+        """
         raise NotImplementedError("inferred_freq is not yet supported")
 
 
@@ -2724,7 +2966,7 @@ class IntervalIndex(GenericIndex):
         Construct an IntervalIndex from an array of splits.
 
         Parameters
-        ---------
+        ----------
         breaks : array-like (1-dimensional)
             Left and right bounds for each interval.
         closed : {"left", "right", "both", "neither"}, default "right"
@@ -2804,7 +3046,7 @@ class StringIndex(GenericIndex):
             + ")"
         )
 
-    @copy_docstring(StringMethods.__init__)  # type: ignore
+    @copy_docstring(StringMethods)  # type: ignore
     @property
     def str(self):
         return StringMethods(parent=self)
