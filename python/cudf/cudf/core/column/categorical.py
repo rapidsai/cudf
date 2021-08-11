@@ -536,52 +536,12 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (2, int64): [1, 10]
         """
-        ordered = self.ordered if ordered is None else ordered
-        new_categories = column.as_column(new_categories)
-
-        if isinstance(new_categories, CategoricalColumn):
-            new_categories = new_categories.categories
-
-        # when called with rename=True, the pandas behavior is
-        # to replace the current category values with the new
-        # categories.
-        if rename:
-            # enforce same length
-            if len(new_categories) != len(self._column.categories):
-                raise ValueError(
-                    "new_categories must have the same "
-                    "number of items as old categories"
-                )
-
-            return column.build_categorical_column(
-                categories=new_categories,
-                codes=self._column.codes,
-                mask=self._column.mask.copy(),
-                size=self._column.size,
-                offset=0,
-                null_count=self._column.null_count,
-                ordered=self.ordered
-            )
-
-
-        if not type(self._column.children[1]) == type(new_categories):
-            # Return a new categorical column of same size, but null-filled
-            out_col = _create_empty_categorical_column(self._column, 
-                                                        dtype=CategoricalDtype(
-                                                            new_categories,
-                                                            ordered=ordered
-                                                        )
-                                                        )
-        elif (
-                not self._categories_equal(new_categories, ordered=ordered)
-                or not self.ordered == ordered
-             ):
-                out_col = self._set_categories(
-                    new_categories, ordered=ordered,
-                )
-        else:
-            out_col = self._column
-        return self._return_or_inplace(out_col, inplace=inplace)
+        return self._return_or_inplace(
+            self._column.set_categories(
+                new_categories=new_categories, ordered=ordered, rename=rename
+            ),
+            inplace=inplace,
+        )
 
     def reorder_categories(
         self,
@@ -1347,8 +1307,15 @@ class CategoricalColumn(column.ColumnBase):
                     categories = column.column_empty(0, "int32", masked=False)
                 codes = column.column_empty(0, "uint32", masked=False)
             else:
-                categories = self.base_children[1]
-                codes = self.base_children[0]
+                if dtype._categories is not None:
+                    # Restore original order
+                    categories = dtype._categories
+                    category_order = categories.argsort(ascending=True)
+                    codes = category_order.take(self.children[0])
+                else:
+                    codes = self.base_children[0]
+                    categories = self.base_children[1]
+            
             return column.build_categorical_column(
                 categories=categories,
                 codes=codes,
@@ -1474,21 +1441,7 @@ class CategoricalColumn(column.ColumnBase):
         
         res_col = cpp_set_categories(col, new_categories_as_common_type)
 
-        # In case there was an upcast, convert it to result dtype.
-        result_cats = res_col.children[1]
-        if cudf.api.types.is_numeric_dtype(new_categories.dtype) and not result_cats.dtype == new_categories.dtype:
-            result_cats = result_cats.astype(new_categories.dtype)
-
-        # Update with ordering info
-        res_col = column.build_categorical_column(
-            categories=result_cats,
-            codes=res_col.children[0],
-            mask=res_col.base_mask,
-            size=res_col.base_size,
-            offset=res_col.offset,
-            null_count=res_col.null_count,
-            ordered=ordered
-        )
+        res_col = res_col._with_type_metadata(CategoricalDtype(categories=new_categories, ordered=ordered))
 
         return res_col
 
