@@ -6041,11 +6041,27 @@ class DatetimeProperties(object):
         -------
         Series
         Booleans indicating if dates are the first day of the year.
+
+        Example
+        -------
+        >>> import pandas as pd, cudf
+        >>> s = cudf.Series(pd.date_range("2017-12-30", periods=3))
+        >>> dates
+        0   2017-12-30
+        1   2017-12-31
+        2   2018-01-01
+        dtype: datetime64[ns]
+        >>> dates.dt.is_year_start
+        0    False
+        1    False
+        2    True
+        dtype: bool
         """
-        outcol = self.series._column.get_dt_field("day_of_year") == 1
-        outcol = outcol.fillna(False)
+        outcol = self.series._column.get_dt_field(
+            "day_of_year"
+        ) == cudf.Scalar(1)
         return Series._from_data(
-            ColumnAccessor({None: res}),
+            ColumnAccessor({None: outcol.fillna(False)}),
             index=self.series._index,
             name=self.series.name,
         )
@@ -6058,21 +6074,35 @@ class DatetimeProperties(object):
         -------
         Series
         Booleans indicating if dates are the last day of the year.
+
+        Example
+        -------
+        >>> import pandas as pd, cudf
+        >>> dates = cudf.Series(pd.date_range("2017-12-30", periods=3))
+        >>> dates
+        0   2017-12-30
+        1   2017-12-31
+        2   2018-01-01
+        dtype: datetime64[ns]
+        >>> dates.dt.is_year_end
+        0    False
+        1     True
+        2    False
+        dtype: bool
         """
         day_of_year = self.series._column.get_dt_field("day_of_year")
         leap_dates = libcudf.datetime.is_leap_year(self.series._column)
 
         leap = day_of_year == cudf.Scalar(366)
         non_leap = day_of_year == cudf.Scalar(365)
-        result = cudf._lib.copying.copy_if_else(
-                    leap, non_leap, leap_dates
-                )
+        result = cudf._lib.copying.copy_if_else(leap, non_leap, leap_dates)
         result = result.fillna(False)
         return Series._from_data(
             ColumnAccessor({None: result}),
             index=self.series._index,
             name=self.series.name,
         )
+
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(
