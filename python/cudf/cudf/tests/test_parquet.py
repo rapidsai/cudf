@@ -1198,13 +1198,12 @@ def select_columns_params():
 @pytest.mark.parametrize("data, columns", select_columns_params())
 def test_parquet_reader_struct_select_columns1(tmpdir, data, columns):
     table = pa.Table.from_pydict({"struct": data})
-    fname = tmpdir.join("test_parquet_reader_struct_basic.parquet")
+    buff = BytesIO()
 
-    pa.parquet.write_table(table, fname)
-    assert os.path.exists(fname)
+    pa.parquet.write_table(table, buff)
 
-    expect = pq.ParquetFile(fname).read(columns=columns)
-    got = cudf.read_parquet(fname, columns=columns)
+    expect = pq.ParquetFile(buff).read(columns=columns)
+    got = cudf.read_parquet(buff, columns=columns)
     assert expect.equals(got.to_arrow())
 
 
