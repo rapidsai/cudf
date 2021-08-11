@@ -3,10 +3,8 @@
 import warnings
 from typing import Any, Optional, Tuple, Union, cast
 
-import cupy
 import numpy as np
 import pandas as pd
-from numba import cuda
 
 import cudf
 from cudf._typing import ColumnLike, ScalarLike
