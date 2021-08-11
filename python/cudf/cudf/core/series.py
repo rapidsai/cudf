@@ -3933,12 +3933,6 @@ class Series(SingleColumnFrame, Serializable):
 
         return self.valid_count
 
-    def _scan(self, op, axis=None, *args, **kwargs):
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        return super()._scan(op, axis=axis, *args, **kwargs)
-
     def mode(self, dropna=True):
         """
         Return the mode(s) of the dataset.

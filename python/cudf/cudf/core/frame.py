@@ -4222,7 +4222,10 @@ class Frame(libcudf.table.Table):
                 # pandas returns an int64 dtype for all int or bool dtypes.
                 result_col = result_col.astype(np.int64)
             results[name] = result_col._apply_scan_op(op)
-        return self._from_data(results, index=self.index)
+        # TODO: This will work for Index because it's passing self._index
+        # (which is None), but eventually we may want to remove that parameter
+        # for Index._from_data and simplify.
+        return self._from_data(results, index=self._index)
 
     def cummin(self, axis=None, skipna=True, *args, **kwargs):
         """
@@ -4373,6 +4376,12 @@ class SingleColumnFrame(Frame):
                 "numeric_only parameter is not implemented yet"
             )
         return getattr(self._column, op)(**kwargs)
+
+    def _scan(self, op, axis=None, *args, **kwargs):
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        return super()._scan(op, axis=axis, *args, **kwargs)
 
     @classmethod
     def _from_data(
