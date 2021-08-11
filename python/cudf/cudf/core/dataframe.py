@@ -5756,7 +5756,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         """
         members = [("index", self.index.dtype)] if index else []
         members += [(col, self[col].dtype) for col in self._data.names]
-        dtype = cudf.dtype(members)
+        dtype = np.dtype(members)
         ret = np.recarray(len(self), dtype=dtype)
         if index:
             ret["index"] = self.index.to_array()

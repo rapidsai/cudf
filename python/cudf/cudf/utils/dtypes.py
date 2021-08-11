@@ -388,27 +388,22 @@ def min_column_type(x, expected_type):
         max_bound_dtype = np.min_scalar_type(x.max())
         min_bound_dtype = np.min_scalar_type(x.min())
         result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
-        if result_type == cudf.dtype("float16"):
-            # cuDF does not support float16 dtype
-            result_type = cudf.dtype("float32")
-        return result_type
 
-    if np.issubdtype(expected_type, np.integer):
+    elif np.issubdtype(expected_type, np.integer):
         max_bound_dtype = np.min_scalar_type(x.max())
         min_bound_dtype = np.min_scalar_type(x.min())
-        return np.promote_types(max_bound_dtype, min_bound_dtype)
+        result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
+    else:
+        result_type = x.dtype
 
-    return x.dtype
+    return cudf.dtype(result_type)
 
 
 def get_min_float_dtype(col):
     max_bound_dtype = np.min_scalar_type(float(col.max()))
     min_bound_dtype = np.min_scalar_type(float(col.min()))
     result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
-    if result_type == cudf.dtype("float16"):
-        # cuDF does not support float16 dtype
-        result_type = cudf.dtype("float32")
-    return result_type
+    return cudf.dtype(result_type)
 
 
 def is_mixed_with_object_dtype(lhs, rhs):
@@ -547,11 +542,7 @@ def find_common_type(dtypes):
         dtypes.add(np.result_type(*td_dtypes))
 
     common_dtype = np.find_common_type(list(dtypes), [])
-    if common_dtype == cudf.dtype("float16"):
-        # cuDF does not support float16 dtype
-        return cudf.dtype("float32")
-    else:
-        return common_dtype
+    return cudf.dtype(common_dtype)
 
 
 def _can_cast(from_dtype, to_dtype):

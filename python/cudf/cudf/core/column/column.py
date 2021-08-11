@@ -261,9 +261,6 @@ class ColumnBase(Column, Serializable):
         if not isinstance(array, (pa.Array, pa.ChunkedArray)):
             raise TypeError("array should be PyArrow array or chunked array")
 
-        if array.type == pa.float16():
-            array = pa.Array.from_pandas(array.to_numpy().astype("float32"))
-
         data = pa.table([array], [None])
 
         if isinstance(array.type, pa.DictionaryType):
