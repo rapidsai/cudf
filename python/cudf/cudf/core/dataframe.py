@@ -6346,15 +6346,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         axis = self._get_axis_from_axis_arg(axis)
 
         if axis == 0:
-            result = [
-                getattr(self[col], op)(*args, **kwargs)
-                for col in self._data.names
-            ]
-
-            return DataFrame._from_data(
-                {col: result[i] for i, col in enumerate(self._data.names)},
-                index=result[0].index,
-            )
+            return super()._scan(op, axis, *args, **kwargs)
         elif axis == 1:
             return self._apply_support_method_axis_1(op, **kwargs)
 
@@ -6386,7 +6378,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2  1  7
         3  1  7
         """
-        return self._scan("cummin", axis=axis, skipna=skipna, *args, **kwargs)
+        return self._scan("min", axis=axis, skipna=skipna, *args, **kwargs)
 
     def cummax(self, axis=None, skipna=True, *args, **kwargs):
         """
@@ -6416,9 +6408,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2  3   9
         3  4  10
         """
-        return self._apply_support_method(
-            "cummax", axis=axis, skipna=skipna, *args, **kwargs
-        )
+        return self._scan("max", axis=axis, skipna=skipna, *args, **kwargs)
 
     def cumsum(self, axis=None, skipna=True, *args, **kwargs):
         """
@@ -6449,9 +6439,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2   6  24
         3  10  34
         """
-        return self._apply_support_method(
-            "cumsum", axis=axis, skipna=skipna, *args, **kwargs
-        )
+        return self._scan("sum", axis=axis, skipna=skipna, *args, **kwargs)
 
     def cumprod(self, axis=None, skipna=True, *args, **kwargs):
         """
@@ -6481,9 +6469,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2   6   504
         3  24  5040
         """
-        return self._apply_support_method(
-            "cumprod", axis=axis, skipna=skipna, *args, **kwargs
-        )
+        return self._scan("prod", axis=axis, skipna=skipna, *args, **kwargs)
 
     def mode(self, axis=0, numeric_only=False, dropna=True):
         """

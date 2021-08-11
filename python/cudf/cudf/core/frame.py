@@ -3681,19 +3681,43 @@ class Frame(libcudf.table.Table):
         try:
             return cls._SUPPORT_AXIS_LOOKUP[axis]
         except KeyError:
-            valid_axes = ", ".join(
-                (
-                    ax
-                    for ax in cls._SUPPORT_AXIS_LOOKUP.keys()
-                    if ax is not None
-                )
-            )
-            raise ValueError(f"Invalid axis, must be one of {valid_axes}.")
+            raise ValueError(f"No axis named {axis} for object type {cls}")
 
     def _reduce(self, *args, **kwargs):
         raise NotImplementedError(
             f"Reductions are not supported for objects of type {type(self)}."
         )
+
+    def _scan(self, op, axis=None, skipna=True, cast_to_int=False):
+        skipna = True if skipna is None else skipna
+
+        results = {}
+        for name, col in self._data.items():
+            if skipna:
+                result_col = self._data[name].nans_to_nulls()
+            else:
+                result_col = self._data[name].copy()
+                if result_col.has_nulls:
+                    # Workaround as find_first_value doesn't seem to work
+                    # incase of bools.
+                    first_index = int(
+                        result_col.isnull().astype("int8").find_first_value(1)
+                    )
+                    result_col[first_index:] = None
+
+            if (
+                cast_to_int
+                and not is_decimal_dtype(result_col.dtype)
+                and (
+                    np.issubdtype(result_col.dtype, np.integer)
+                    or np.issubdtype(result_col.dtype, np.bool_)
+                )
+            ):
+                # For reductions that accumulate a value (e.g. sum, not max)
+                # pandas returns an int64 dtype for all int or bool dtypes.
+                result_col = result_col.astype(np.int64)
+            results[name] = result_col._apply_scan_op(op)
+        return self._from_data(results, index=self.index)
 
     def min(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs,

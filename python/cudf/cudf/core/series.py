@@ -3937,34 +3937,7 @@ class Series(SingleColumnFrame, Serializable):
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_col = self.nans_to_nulls()._column
-        else:
-            result_col = self._column.copy()
-            if result_col.has_nulls:
-                # Workaround as find_first_value doesn't seem to work
-                # incase of bools.
-                first_index = int(
-                    result_col.isnull().astype("int8").find_first_value(1)
-                )
-                result_col[first_index:] = None
-
-        if (
-            cast_to_int
-            and not is_decimal_dtype(result_col.dtype)
-            and (
-                np.issubdtype(result_col.dtype, np.integer)
-                or np.issubdtype(result_col.dtype, np.bool_)
-            )
-        ):
-            # For reductions that accumulate a value (e.g. sum, not max) pandas
-            # returns an int64 dtype for all input int or bool dtypes.
-            result_col = result_col.astype(np.int64)
-        return Series._from_data(
-            {self.name: result_col._apply_scan_op(op)}, index=self.index,
-        )
+        return super()._scan(op, axis, skipna, cast_to_int)
 
     def cummin(self, axis=None, skipna=True, *args, **kwargs):
         """
