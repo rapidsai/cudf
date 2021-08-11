@@ -271,6 +271,17 @@ constructed from `thrust::device_vector`, `rmm::device_vector`, or `rmm::device_
 If you are definining internal (detail) functions that operate on vectors, use spans for the input 
 vector parameters rather than a specific vector type, to make your functions more widely applicable.
 
+When a `span` refers to immutable elements, use `span<T const>`, not `span<T> const`. Since a span
+is lightweight view, it does not propagate `const`-ness. Therefore, `const` should be applied to
+the template type parameter, not to the `span` itself. Also, `span` should be passed by value 
+because it is a lightweight view. APIS in libcudf that take spans as input will look like the 
+following function that copies device data to a host `std::vector`.
+
+```c++
+template <typename T>
+std::vector<T> make_std_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
+```
+
 ## `cudf::scalar`
 
 A `cudf::scalar` is an object that can represent a singular, nullable value of any of the types 
