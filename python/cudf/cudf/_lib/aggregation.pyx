@@ -154,6 +154,32 @@ cdef class Aggregation:
         return agg
 
     @classmethod
+    def first(cls):
+        cdef Aggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.make_nth_element_aggregation[aggregation](
+                0,
+                <libcudf_types.null_policy><underlying_type_t_null_policy>(
+                    NullHandling.EXCLUDE
+                )
+            )
+        )
+        return agg
+
+    @classmethod
+    def last(cls):
+        cdef Aggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.make_nth_element_aggregation[aggregation](
+                -1,
+                <libcudf_types.null_policy><underlying_type_t_null_policy>(
+                    NullHandling.EXCLUDE
+                )
+            )
+        )
+        return agg
+
+    @classmethod
     def any(cls):
         cdef Aggregation agg = cls()
         agg.c_obj = move(

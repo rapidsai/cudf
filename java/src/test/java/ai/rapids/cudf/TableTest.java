@@ -1496,7 +1496,9 @@ public class TableTest extends CudfTestBase {
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
-         Table right = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5).build();
          Table expected = new Table.TestBuilder()
              .column(  0,   1, 2, 2, 2,   3,   4, 5, 5,   6, 7,   8, 9, 9)
              .column(inv, inv, 0, 1, 3, inv, inv, 0, 1, inv, 1, inv, 0, 1)
@@ -1589,7 +1591,9 @@ public class TableTest extends CudfTestBase {
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
-         Table right = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5).build();
          Table expected = new Table.TestBuilder()
              .column(2, 2, 2, 5, 5, 7, 9, 9)
              .column(0, 1, 3, 0, 1, 1, 0, 1)
@@ -1684,7 +1688,9 @@ public class TableTest extends CudfTestBase {
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
-         Table right = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5).build();
          Table expected = new Table.TestBuilder()
              .column(inv, inv, inv,   0,   1, 2, 2, 2,   3,   4, 5, 5,   6, 7,   8, 9, 9)
              .column(  2,   4,   5, inv, inv, 0, 1, 3, inv, inv, 0, 1, inv, 1, inv, 0, 1)
@@ -1763,7 +1769,9 @@ public class TableTest extends CudfTestBase {
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
-         Table right = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5).build();
          Table expected = new Table.TestBuilder()
              .column(2, 5, 7, 9) // left
              .build();
@@ -1827,7 +1835,9 @@ public class TableTest extends CudfTestBase {
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
-         Table right = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5).build();
          Table expected = new Table.TestBuilder()
              .column(0, 1, 3, 4, 6, 8) // left
              .build();
