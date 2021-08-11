@@ -74,18 +74,18 @@ function hasArg {
 
 function cmakeArgs {
     # Check for correctly formatted cmake args option
-    if [[ $(echo $ARGS | grep -E "\-\-cmake\-args=\"") ]]; then
+    if [[ -n $(echo $ARGS | grep -E "\-\-cmake\-args=\"") ]]; then
         # There are possible weird edge cases that may cause this regex filter to output nothing and fail silently
         # the true pipe will catch any weird edge cases that may happen and will cause the program to fall back
         # on the invalid option error
-        CMAKE_ARGS=$(echo $ARGS | { grep -Eo "\-\-cmake\-args=\".+\" " || true; })
+        CMAKE_ARGS=$(echo $ARGS | { grep -Eo "\-\-cmake\-args=\".+\"" || true; })
         if [[ -n ${CMAKE_ARGS} ]]; then
 	    # Remove the full  CMAKE_ARGS argument from list of args so that it passes validArgs function
 	    ARGS=${ARGS//$CMAKE_ARGS/}
 	    # Filter the full argument down to just the extra string that will be added to cmake call
             CMAKE_ARGS=$(echo $CMAKE_ARGS | grep -Eo "\".+\"" | sed -e 's/^"//' -e 's/"$//')
         fi
-    elif [[ $(echo $ARGS | grep -E "\-\-cmake\-args=") ]]; then
+    elif [[ -z $(echo $ARGS | grep -E "\-\-cmake\-args=") ]]; then
 	CMAKE_ARGS="$(echo $ARGS | grep -Eo "\-\-cmake\-args=(.+)? ")"
 	echo "Invalid formatting for --cmake-args, see --help: $CMAKE_ARGS"
         exit 1
@@ -220,7 +220,8 @@ if hasArg libcudf_kafka; then
     cmake -S $REPODIR/cpp/libcudf_kafka -B ${KAFKA_LIB_BUILD_DIR} \
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DBUILD_TESTS=${BUILD_TESTS} \
-          -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
+          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+	  ${CMAKE_ARGS}
 
 
     cd ${KAFKA_LIB_BUILD_DIR}
