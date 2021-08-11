@@ -224,7 +224,8 @@ def _convert_str_col(col, errors, _downcast=None):
 
 
 def _proc_inf_empty_strings(col):
-    """Handles empty and infinity strings"""
+    """Handles empty and infinity strings
+    """
     col = libstrings.to_lower(col)
     col = _proc_empty_strings(col)
     col = _proc_inf_strings(col)
@@ -232,7 +233,8 @@ def _proc_inf_empty_strings(col):
 
 
 def _proc_empty_strings(col):
-    """Replaces empty strings with NaN"""
+    """Replaces empty strings with NaN
+    """
     s = cudf.Series(col)
     s = s.where(s != "", "NaN")
     return s._column
@@ -243,8 +245,6 @@ def _proc_inf_strings(col):
     representing infinity in libcudf
     """
     col = libstrings.replace_multi(
-        col,
-        as_column(["+", "inf", "inity"]),
-        as_column(["", "Inf", ""]),
+        col, as_column(["+", "inf", "inity"]), as_column(["", "Inf", ""]),
     )
     return col

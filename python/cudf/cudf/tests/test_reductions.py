@@ -240,8 +240,7 @@ def test_date_minmax():
 
 
 @pytest.mark.parametrize(
-    "op",
-    ["sum", "product", "var", "kurt", "kurtosis", "skew"],
+    "op", ["sum", "product", "var", "kurt", "kurtosis", "skew"],
 )
 def test_datetime_unsupported_reductions(op):
     gsr = cudf.Series([1, 2, 3, None], dtype="datetime64[ns]")

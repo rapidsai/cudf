@@ -619,10 +619,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows):
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)
-    (
-        file_stats,
-        stripes_stats,
-    ) = cudf.io.orc.read_orc_statistics([fname])
+    (file_stats, stripes_stats,) = cudf.io.orc.read_orc_statistics([fname])
 
     # check file stats
     for col in gdf:
@@ -663,10 +660,7 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)
-    (
-        file_stats,
-        stripes_stats,
-    ) = cudf.io.orc.read_orc_statistics([fname])
+    (file_stats, stripes_stats,) = cudf.io.orc.read_orc_statistics([fname])
 
     # check file stats
     col = "col_bool"
@@ -961,10 +955,7 @@ list_struct_buff = generate_list_struct_buff()
 @pytest.mark.parametrize("use_index", [True, False])
 @pytest.mark.parametrize("skip_rows", [0, 101, 1007, 27000])
 def test_lists_struct_nests(
-    columns,
-    num_rows,
-    use_index,
-    skip_rows,
+    columns, num_rows, use_index, skip_rows,
 ):
 
     has_lists = (

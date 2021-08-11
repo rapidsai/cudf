@@ -323,14 +323,12 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
         else:
             if infer_datetime_format and format is None:
                 format = column.datetime.infer_format(
-                    element=col[0],
-                    dayfirst=dayfirst,
+                    element=col[0], dayfirst=dayfirst,
                 )
             elif format is None:
                 format = column.datetime.infer_format(element=col[0])
             col = col.as_datetime_column(
-                dtype=_unit_dtype_map[unit],
-                format=format,
+                dtype=_unit_dtype_map[unit], format=format,
             )
     return col
 

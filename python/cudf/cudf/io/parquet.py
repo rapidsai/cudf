@@ -199,9 +199,7 @@ def read_parquet(
             source = fs.sep.join([source, "*.parquet"])
 
         tmp_source, compression = ioutils.get_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            **kwargs,
+            path_or_data=source, compression=None, **kwargs,
         )
         if compression is not None:
             raise ValueError(

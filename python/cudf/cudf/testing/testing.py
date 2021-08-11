@@ -231,10 +231,7 @@ def assert_column_equal(
         except BaseException:
             diff = 100.0
         raise_assert_detail(
-            obj,
-            f"values are different ({np.round(diff, 5)} %)",
-            msg1,
-            msg2,
+            obj, f"values are different ({np.round(diff, 5)} %)", msg1, msg2,
         )
 
 

@@ -91,14 +91,10 @@ def parquet_writer_test_rowgroup_index_compression(
     gdf = cudf.from_pandas(pdf)
 
     pdf.to_parquet(
-        pd_file_name,
-        compression=compression,
-        row_group_size=row_group_size,
+        pd_file_name, compression=compression, row_group_size=row_group_size,
     )
     gdf.to_parquet(
-        gd_file_name,
-        compression=compression,
-        row_group_size=row_group_size,
+        gd_file_name, compression=compression, row_group_size=row_group_size,
     )
 
     actual = cudf.read_parquet(gd_file_name)

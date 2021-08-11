@@ -720,9 +720,7 @@ def test_series_describe():
     pdsr = dd.from_pandas(psr, npartitions=4)
 
     dd.assert_eq(
-        dsr.describe(),
-        pdsr.describe(),
-        check_less_precise=3,
+        dsr.describe(), pdsr.describe(), check_less_precise=3,
     )
 
 

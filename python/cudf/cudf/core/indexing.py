@@ -552,7 +552,7 @@ def _normalize_dtypes(df):
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
     """Append a scalar `value` to the end of `col` inplace.
-    Cast to common type if possible
+       Cast to common type if possible
     """
     to_type = find_common_type([type(value), col.dtype])
     val_col = as_column(value, dtype=to_type)

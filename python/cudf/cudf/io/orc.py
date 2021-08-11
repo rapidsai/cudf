@@ -108,9 +108,7 @@ def read_orc_metadata(path):
 
 @ioutils.doc_read_orc_statistics()
 def read_orc_statistics(
-    filepaths_or_buffers,
-    columns=None,
-    **kwargs,
+    filepaths_or_buffers, columns=None, **kwargs,
 ):
     """{docstring}"""
 
@@ -269,9 +267,7 @@ def read_orc(
             source = fs.sep.join([source, "*.orc"])
 
         tmp_source, compression = ioutils.get_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            **kwargs,
+            path_or_data=source, compression=None, **kwargs,
         )
         if compression is not None:
             raise ValueError(

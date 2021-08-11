@@ -118,10 +118,7 @@ class NumericalColumn(NumericalBaseColumn):
         return _numeric_column_unaryop(self, op=unaryop)
 
     def binary_operator(
-        self,
-        binop: str,
-        rhs: BinaryOperand,
-        reflect: bool = False,
+        self, binop: str, rhs: BinaryOperand, reflect: bool = False,
     ) -> ColumnBase:
         int_dtypes = [
             np.dtype("int8"),
@@ -199,9 +196,7 @@ class NumericalColumn(NumericalBaseColumn):
                     other, size=len(self), dtype=other_dtype
                 )
                 return column.build_column(
-                    data=Buffer(ary),
-                    dtype=ary.dtype,
-                    mask=self.mask,
+                    data=Buffer(ary), dtype=ary.dtype, mask=self.mask,
                 )
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
@@ -280,7 +275,8 @@ class NumericalColumn(NumericalBaseColumn):
         return lhs, rhs
 
     def default_na_value(self) -> ScalarLike:
-        """Returns the default NA value for this column"""
+        """Returns the default NA value for this column
+        """
         dkind = self.dtype.kind
         if dkind == "f":
             return self.dtype.type(np.nan)
@@ -419,10 +415,7 @@ class NumericalColumn(NumericalBaseColumn):
                 found = len(self)
             else:
                 found = cudautils.find_first(
-                    self.data_array_view,
-                    value,
-                    mask=self.mask,
-                    compare="gt",
+                    self.data_array_view, value, mask=self.mask, compare="gt",
                 )
                 if found == -1:
                     raise ValueError("value not found")
@@ -442,9 +435,7 @@ class NumericalColumn(NumericalBaseColumn):
         found = 0
         if len(self):
             found = cudautils.find_last(
-                self.data_array_view,
-                value,
-                mask=self.mask,
+                self.data_array_view, value, mask=self.mask,
             )
         if found == -1 and self.is_monotonic and closest:
             if value < self.min():
@@ -453,10 +444,7 @@ class NumericalColumn(NumericalBaseColumn):
                 found = len(self) - 1
             else:
                 found = cudautils.find_last(
-                    self.data_array_view,
-                    value,
-                    mask=self.mask,
-                    compare="lt",
+                    self.data_array_view, value, mask=self.mask, compare="lt",
                 )
                 if found == -1:
                     raise ValueError("value not found")

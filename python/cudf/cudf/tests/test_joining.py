@@ -1257,12 +1257,10 @@ def test_decimal_typecast_outer(dtype):
 
 
 @pytest.mark.parametrize(
-    "dtype_l",
-    [Decimal64Dtype(7, 3), Decimal64Dtype(9, 5)],
+    "dtype_l", [Decimal64Dtype(7, 3), Decimal64Dtype(9, 5)],
 )
 @pytest.mark.parametrize(
-    "dtype_r",
-    [Decimal64Dtype(8, 3), Decimal64Dtype(11, 6)],
+    "dtype_r", [Decimal64Dtype(8, 3), Decimal64Dtype(11, 6)],
 )
 def test_mixed_decimal_typecast(dtype_l, dtype_r):
     other_data = ["a", "b", "c", "d"]
@@ -1906,8 +1904,7 @@ def test_join_merge_with_on(lhs_col, lhs_idx, rhs_col, rhs_idx, on, how):
 
 
 @pytest.mark.parametrize(
-    "on",
-    ["A", "L0"],
+    "on", ["A", "L0"],
 )
 @pytest.mark.parametrize(
     "how", ["left", "inner", "right", "outer", "leftanti", "leftsemi"]

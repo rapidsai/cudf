@@ -460,9 +460,7 @@ def test_unstack_multiindex(level):
     ).set_index(["foo", "bar", "baz"])
     gdf = cudf.from_pandas(pdf)
     assert_eq(
-        pdf.unstack(level=level),
-        gdf.unstack(level=level),
-        check_dtype=False,
+        pdf.unstack(level=level), gdf.unstack(level=level), check_dtype=False,
     )
 
 

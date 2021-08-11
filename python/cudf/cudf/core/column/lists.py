@@ -30,13 +30,7 @@ class ListColumn(ColumnBase):
     dtype: ListDtype
 
     def __init__(
-        self,
-        size,
-        dtype,
-        mask=None,
-        offset=0,
-        null_count=None,
-        children=(),
+        self, size, dtype, mask=None, offset=0, null_count=None, children=(),
     ):
         super().__init__(
             None,

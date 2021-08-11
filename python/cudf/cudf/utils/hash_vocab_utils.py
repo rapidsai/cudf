@@ -247,7 +247,7 @@ def hash_vocab(
     sep_token="[SEP]",
 ):
     """
-    Write the vocab vocabulary hashtable to the output_path
+      Write the vocab vocabulary hashtable to the output_path
     """
     np.random.seed(1243342)
     vocab = _load_vocab_dict(vocab_path)

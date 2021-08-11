@@ -104,8 +104,7 @@ setup(
     ),
     packages=find_packages(include=["cudf_kafka", "cudf_kafka.*"]),
     package_data=dict.fromkeys(
-        find_packages(include=["cudf_kafka._lib*"]),
-        ["*.pxd"],
+        find_packages(include=["cudf_kafka._lib*"]), ["*.pxd"],
     ),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,

@@ -682,14 +682,7 @@ def test_concat_join_axis_1_dup_error(objs):
     # we do not support duplicate columns
     with pytest.raises(NotImplementedError):
         assert_eq(
-            pd.concat(
-                objs,
-                axis=1,
-            ),
-            gd.concat(
-                gpu_objs,
-                axis=1,
-            ),
+            pd.concat(objs, axis=1,), gd.concat(gpu_objs, axis=1,),
         )
 
 
@@ -882,9 +875,7 @@ def test_concat_join_no_overlapping_columns_many_and_empty(
         axis=axis,
     )
     assert_eq(
-        expected,
-        actual,
-        check_index_type=False,
+        expected, actual, check_index_type=False,
     )
 
 
@@ -943,18 +934,10 @@ def test_concat_join_no_overlapping_columns_many_and_empty2(
     objs_gd = [gd.from_pandas(o) if o is not None else o for o in objs]
 
     expected = pd.concat(
-        objs,
-        sort=sort,
-        join=join,
-        ignore_index=ignore_index,
-        axis=axis,
+        objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis,
     )
     actual = gd.concat(
-        objs_gd,
-        sort=sort,
-        join=join,
-        ignore_index=ignore_index,
-        axis=axis,
+        objs_gd, sort=sort, join=join, ignore_index=ignore_index, axis=axis,
     )
     assert_eq(expected, actual, check_index_type=False)
 

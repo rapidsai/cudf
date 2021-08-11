@@ -199,8 +199,7 @@ def test_dropna_thresh_cols(thresh, subset, inplace):
         actual = gdf
 
     assert_eq(
-        expected,
-        actual,
+        expected, actual,
     )
 
 
