@@ -269,17 +269,25 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_timestamp(timestamp_column.type()), "Column type should be timestamp");
-  CUDF_EXPECTS(months_column.type() == data_type{type_id::INT16},
-               "Months column type should be INT16");
+  CUDF_EXPECTS(
+    months_column.type().id() == type_id::INT16 or months_column.type().id() == type_id::INT32,
+    "Months column type should be INT16 or INT32.");
   CUDF_EXPECTS(timestamp_column.size() == months_column.size(),
                "Timestamp and months column should be of the same size");
 
-  auto output = type_dispatcher(timestamp_column.type(),
-                                add_calendrical_months_functor{},
-                                timestamp_column,
-                                months_column.begin<int16_t>(),
-                                stream,
-                                mr);
+  auto output = months_column.type() == data_type{type_id::INT16}
+                  ? type_dispatcher(timestamp_column.type(),
+                                    add_calendrical_months_functor{},
+                                    timestamp_column,
+                                    months_column.begin<int16_t>(),
+                                    stream,
+                                    mr)
+                  : type_dispatcher(timestamp_column.type(),
+                                    add_calendrical_months_functor{},
+                                    timestamp_column,
+                                    months_column.begin<int32_t>(),
+                                    stream,
+                                    mr);
 
   auto output_null_mask =
     cudf::detail::bitmask_and(table_view{{timestamp_column, months_column}}, stream, mr);
@@ -293,17 +301,26 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_timestamp(timestamp_column.type()), "Column type should be timestamp");
-  CUDF_EXPECTS(months.type() == data_type{type_id::INT16}, "Months type should be INT16");
+  CUDF_EXPECTS(months.type().id() == type_id::INT16 or months.type().id() == type_id::INT32,
+               "Months type should be INT16 or INT32");
 
-  auto typed_slr = static_cast<numeric_scalar<int16_t> const*>(&months);
-
-  if (typed_slr->is_valid(stream)) {
-    auto output = type_dispatcher(timestamp_column.type(),
-                                  add_calendrical_months_functor{},
-                                  timestamp_column,
-                                  thrust::make_constant_iterator(typed_slr->value(stream)),
-                                  stream,
-                                  mr);
+  if (months.is_valid(stream)) {
+    auto output =
+      months.type().id() == type_id::INT16
+        ? type_dispatcher(timestamp_column.type(),
+                          add_calendrical_months_functor{},
+                          timestamp_column,
+                          thrust::make_constant_iterator(
+                            static_cast<numeric_scalar<int16_t> const&>(months).value(stream)),
+                          stream,
+                          mr)
+        : type_dispatcher(timestamp_column.type(),
+                          add_calendrical_months_functor{},
+                          timestamp_column,
+                          thrust::make_constant_iterator(
+                            static_cast<numeric_scalar<int32_t> const&>(months).value(stream)),
+                          stream,
+                          mr);
     output->set_null_mask(cudf::detail::copy_bitmask(timestamp_column, stream, mr));
     return output;
   } else {

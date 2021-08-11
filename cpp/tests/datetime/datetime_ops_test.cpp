@@ -27,6 +27,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
+#include "cudf/utilities/error.hpp"
 
 #define XXX false  // stub for null values
 
@@ -416,10 +417,18 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithInvalidColType)
       662688000L  // 1991-01-01 00:00:00 GMT
     };
 
-  // Months has to be an INT16 type
-  auto months = cudf::test::fixed_width_column_wrapper<int32_t>{-2};
+  // Months has to be an INT16 or INT32 type
+  EXPECT_NO_THROW(
+    add_calendrical_months(timestamps_s, cudf::test::fixed_width_column_wrapper<int32_t>{-2}));
+  EXPECT_NO_THROW(
+    add_calendrical_months(timestamps_s, cudf::test::fixed_width_column_wrapper<int16_t>{-2}));
 
-  EXPECT_THROW(add_calendrical_months(timestamps_s, months), cudf::logic_error);
+  EXPECT_THROW(
+    add_calendrical_months(timestamps_s, cudf::test::fixed_width_column_wrapper<int8_t>{-2}),
+    cudf::logic_error);
+  EXPECT_THROW(
+    add_calendrical_months(timestamps_s, cudf::test::fixed_width_column_wrapper<int64_t>{-2}),
+    cudf::logic_error);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithInvalidScalarType)
@@ -434,10 +443,15 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithInvalidScalarType)
     662688000L  // 1991-01-01 00:00:00 GMT
   };
 
-  // Months has to be an INT16 type
-  auto months = cudf::make_fixed_width_scalar<int32_t>(5);
+  // Months has to be an INT16 or INT32 type
+  EXPECT_NO_THROW(add_calendrical_months(timestamps_s, *cudf::make_fixed_width_scalar<int32_t>(5)));
+  EXPECT_NO_THROW(
+    add_calendrical_months(timestamps_s, *cudf::make_fixed_width_scalar<int16_t>(-3)));
 
-  EXPECT_THROW(add_calendrical_months(timestamps_s, *months), cudf::logic_error);
+  EXPECT_THROW(add_calendrical_months(timestamps_s, *cudf::make_fixed_width_scalar<int8_t>(-3)),
+               cudf::logic_error);
+  EXPECT_THROW(add_calendrical_months(timestamps_s, *cudf::make_fixed_width_scalar<int64_t>(-3)),
+               cudf::logic_error);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithIncorrectColSizes)
@@ -459,7 +473,15 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithIncorrectColSizes)
   EXPECT_THROW(add_calendrical_months(timestamps_s, months), cudf::logic_error);
 }
 
-TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSeconds)
+using ValidMonthIntegerType = cudf::test::Types<int16_t, int32_t>;
+
+template <typename T>
+struct TypedAddMonthsTest : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(TypedAddMonthsTest, ValidMonthIntegerType);
+
+TYPED_TEST(TypedAddMonthsTest, TestAddMonthsWithSeconds)
 {
   using namespace cudf::test;
   using namespace cudf::datetime;
@@ -483,11 +505,10 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSeconds)
       -131536728L   // 1965-10-31 14:01:12 GMT
     };
 
-  auto months =
-    cudf::test::fixed_width_column_wrapper<int16_t>{-2, 6, -1, 1, -4, 8, -2, 10, 4, -20, 1, 3};
+  auto const months =
+    cudf::test::fixed_width_column_wrapper<TypeParam>{-2, 6, -1, 1, -4, 8, -2, 10, 4, -20, 1, 3};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    *add_calendrical_months(timestamps_s, months),
+  auto const expected =
     cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
       657417600L,   // 1990-11-01 00:00:00 GMT
       965221201L,   // 2000-08-02 13:00:01 GMT
@@ -501,11 +522,13 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSeconds)
       -184254590L,  // 1964-02-29 10:10:10 GMT
       -128952000L,  // 1965-11-30 12:00:00 GMT
       -123587928L   // 1966-01-31 14:01:12 GMT
-    },
-    verbosity);
+    };
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *add_calendrical_months(timestamps_s, months), expected, verbosity);
 }
 
-TEST_F(BasicDatetimeOpsTest, TestAddScalarMonthsWithSeconds)
+TYPED_TEST(TypedAddMonthsTest, TestAddScalarMonthsWithSeconds)
 {
   using namespace cudf::test;
   using namespace cudf::datetime;
@@ -522,7 +545,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddScalarMonthsWithSeconds)
   };
 
   // add
-  auto months1 = cudf::make_fixed_width_scalar<int16_t>(11);
+  auto const months1 = cudf::make_fixed_width_scalar<TypeParam>(11);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *add_calendrical_months(timestamps_s, *months1),
@@ -536,7 +559,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddScalarMonthsWithSeconds)
     verbosity);
 
   // subtract
-  auto months2 = cudf::make_fixed_width_scalar<int16_t>(-20);
+  auto months2 = cudf::make_fixed_width_scalar<TypeParam>(-20);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *add_calendrical_months(timestamps_s, *months2),
@@ -550,7 +573,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddScalarMonthsWithSeconds)
     verbosity);
 }
 
-TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSecondsAndNullValues)
+TYPED_TEST(TypedAddMonthsTest, TestAddMonthsWithSecondsAndNullValues)
 {
   using namespace cudf::test;
   using namespace cudf::datetime;
@@ -576,7 +599,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSecondsAndNullValues)
       },
       {true, false, true, false, true, false, true, false, true, true, true, true}};
 
-  auto months = cudf::test::fixed_width_column_wrapper<int16_t>{
+  auto months = cudf::test::fixed_width_column_wrapper<TypeParam>{
     {-2, 6, -1, 1, -4, 8, -2, 10, 4, -20, 1, 3},
     {false, true, true, false, true, true, true, true, true, true, true, true}};
 
@@ -601,7 +624,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSecondsAndNullValues)
     verbosity);
 }
 
-TEST_F(BasicDatetimeOpsTest, TestAddScalarMonthsWithSecondsWithNulls)
+TYPED_TEST(TypedAddMonthsTest, TestAddScalarMonthsWithSecondsWithNulls)
 {
   using namespace cudf::test;
   using namespace cudf::datetime;
@@ -620,7 +643,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddScalarMonthsWithSecondsWithNulls)
     iterators::nulls_at({1, 4}));
 
   // valid scalar
-  auto months1 = cudf::make_fixed_width_scalar<int16_t>(11);
+  auto months1 = cudf::make_fixed_width_scalar<TypeParam>(11);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *add_calendrical_months(timestamps_s, *months1),
@@ -636,7 +659,8 @@ TEST_F(BasicDatetimeOpsTest, TestAddScalarMonthsWithSecondsWithNulls)
     verbosity);
 
   // null scalar
-  auto months2 = cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT16});
+  auto months2 =
+    cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_to_id<TypeParam>()});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *add_calendrical_months(timestamps_s, *months2),
