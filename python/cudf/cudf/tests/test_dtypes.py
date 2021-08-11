@@ -286,6 +286,21 @@ def test_lists_of_structs_dtype(data):
         ("datetime64[ms]", np.dtype("<M8[ms]")),
         ("datetime64[D]", np.dtype("<M8[D]")),
         ("<M8[s]", np.dtype("<M8[s]")),
+        (cudf.ListDtype("int64"), cudf.ListDtype("int64")),
+        ("category", cudf.CategoricalDtype()),
+        (
+            cudf.CategoricalDtype(categories=("a", "b", "c")),
+            cudf.CategoricalDtype(categories=("a", "b", "c")),
+        ),
+        (
+            pd.CategoricalDtype(categories=("a", "b", "c")),
+            cudf.CategoricalDtype(categories=("a", "b", "c")),
+        ),
+        (
+            # this is a pandas.core.arrays.numpy_.PandasDtype...
+            pd.array([1], dtype="int16").dtype,
+            np.dtype("int16"),
+        ),
     ],
 )
 def test_dtype(in_dtype, expect):
