@@ -1050,9 +1050,9 @@ def pivot(data, index=None, columns=None, values=None):
     }
     columns_index = cudf.DataFrame(columns_index)
 
-    # Check that each row is unique:
-    if len(columns_index) != len(columns_index.drop_duplicates()):
-        raise ValueError("Duplicate index-column pairs found. Cannot reshape.")
+    # # Check that each row is unique:
+    # if len(columns_index) != len(columns_index.drop_duplicates()):
+    #     raise ValueError("Duplicate index-column pairs found. Cannot reshape.")
 
     return _pivot(values, index, columns)
 
