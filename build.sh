@@ -73,11 +73,14 @@ function hasArg {
 }
 
 function cmakeArgs {
-    # Check for correctly formatted cmake args option
-    if [[ $(echo $ARGS | grep -Eo "\-\-cmake\-args=" | wc -l ) -gt 1 ]]; then
+    # Check for multiple cmake args options
+    if [[ $(echo $ARGS | { grep -Eo "\-\-cmake\-args" || true; } | wc -l ) -gt 1 ]]; then
         echo "Multiple --cmake-args options were provided, please provide only one: ${ARGS}"
         exit 1
-    elif [[ -n $(echo $ARGS | grep -E "\-\-cmake\-args=\"") ]]; then
+    fi
+
+    # Check for cmake args option
+    if [[ -n $(echo $ARGS | { grep -E "\-\-cmake\-args" || true; } ) ]]; then
         # There are possible weird edge cases that may cause this regex filter to output nothing and fail silently
         # the true pipe will catch any weird edge cases that may happen and will cause the program to fall back
         # on the invalid option error
@@ -88,10 +91,6 @@ function cmakeArgs {
             # Filter the full argument down to just the extra string that will be added to cmake call
             CMAKE_ARGS=$(echo $CMAKE_ARGS | grep -Eo "\".+\"" | sed -e 's/^"//' -e 's/"$//')
         fi
-    elif [[ -z $(echo $ARGS | grep -E "\-\-cmake\-args=") ]]; then
-        CMAKE_ARGS="$(echo $ARGS | grep -Eo "\-\-cmake\-args=(.+)? ")"
-        echo "Invalid formatting for --cmake-args, see --help: $CMAKE_ARGS"
-        exit 1
     fi
 }
 
@@ -110,7 +109,7 @@ if (( ${NUMARGS} != 0 )); then
     cmakeArgs
     for a in ${ARGS}; do
     if ! (echo " ${VALIDARGS} " | grep -q " ${a} "); then
-        echo "Invalid option, check --help: ${a}"
+        echo "Invalid option or formatting, check --help: ${a}"
         exit 1
     fi
     done
