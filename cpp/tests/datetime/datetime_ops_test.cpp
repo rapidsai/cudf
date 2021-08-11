@@ -354,39 +354,74 @@ TYPED_TEST(TypedDatetimeOpsTest, TestCeilDatetime)
   using namespace cudf::datetime;
   using namespace cuda::std::chrono;
 
-  auto start      = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop_      = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
-  auto timestamps = generate_timestamps<cudf::timestamp_ms>(
-    this->size(), time_point_ms(start), time_point_ms(stop_));
-
-  std::vector<cudf::timestamp_ms> expected_day = {time_point_ms(milliseconds(-2499984000000L)),
-                                                  time_point_ms(milliseconds(-1999987200000L))};
-
-  auto expected_ceil_day = fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>{
-    -2499984000000L,  // 1890-10-12
-    -1999987200000L,  // 1906-8-17
-    -1499990400000L,  // 1922-6-21
-    -999993600000L,   // 1938-4-25
-    -499996800000L,   // 1954-2-27
-    0L,               // 1970-1-1 (exactly midnight)
-    500083200000L,    // 1985-11-6
-    1000080000000L,   // 2001-9-10
-    1500076800000L,   // 2017-7-15
-    2000073600000L    // 2033-5-19
+  std::vector<long> timestamps{
+    118800987L,       // 1970-01-02 09:00:00
+    129390186056L,    // 2011-01-01 17:11:00
+    318402007832L,    // 1980-02-03 05:00:00
+    604996200000L,    // 1989-03-04 06:30:00
+    1270413572078L,   // 2010-04-04 20:39:32
+    1588734621000L,   // 2020-05-06 03:10:21
+    2550814152105L,   // 2050-10-31 07:29:12
+    4102518778005L,   // 2100-01-01 20:32:58
+    702696234000L,    // 1992-04-08 01:23:54
+    6516816203020L,   // 2176-07-05 02:43:23
+    26472091292001L,  // 2808-11-12 22:41:32
+    4133857172000L,   // 2100-12-30 01:39:32
+    1560248892060L,   // 2019-06-19 12:54:52
+    4115217620600L,   // 2100-05-28 20:00:00
+    -265880250000L,   // 1961-07-29 16:22:30
   };
-  // auto expected_weekdays = fixed_width_column_wrapper<int16_t>{6, 4, 2, 7, 5, 4, 2, 7, 5, 3};
-  // auto expected_hours    = fixed_width_column_wrapper<int16_t>{19, 20, 21, 22, 23, 0, 0, 1, 2,
-  // 3}; auto expected_minutes = fixed_width_column_wrapper<int16_t>{33, 26, 20, 13, 6, 0, 53, 46,
-  // 40, 33}; auto expected_seconds = fixed_width_column_wrapper<int16_t>{20, 40, 0, 20, 40, 0, 20,
-  // 40, 0, 20};
 
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps), expected_years);
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps), expected_months);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_day(timestamps), expected_ceil_day);
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps), expected_weekdays);
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps), expected_hours);
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps), expected_minutes);
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps), expected_seconds);
+  auto input = fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(
+    timestamps.begin(), timestamps.end());
+
+  std::vector<cudf::timestamp_ms> ms_timestamp(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), ms_timestamp.begin(), [](auto i) {
+    return time_point_ms(milliseconds(i));
+  });
+
+  std::vector<cudf::timestamp_ms> ceiled_day(timestamps.size());
+  std::transform(ms_timestamp.begin(), ms_timestamp.end(), ceiled_day.begin(), [](auto i) {
+    return ceil<days>(i);
+  });
+
+  std::vector<cudf::timestamp_ms> ceiled_hour(timestamps.size());
+  std::transform(ms_timestamp.begin(), ms_timestamp.end(), ceiled_hour.begin(), [](auto i) {
+    return ceil<hours>(i);
+  });
+
+  std::vector<cudf::timestamp_ms> ceiled_minute(timestamps.size());
+  std::transform(ms_timestamp.begin(), ms_timestamp.end(), ceiled_minute.begin(), [](auto i) {
+    return ceil<minutes>(i);
+  });
+
+  std::vector<cudf::timestamp_ms> ceiled_second(timestamps.size());
+  std::transform(ms_timestamp.begin(), ms_timestamp.end(), ceiled_second.begin(), [](auto i) {
+    return ceil<seconds>(i);
+  });
+
+  std::vector<cudf::timestamp_ms> ceiled_millisecond(timestamps.size());
+  std::transform(ms_timestamp.begin(), ms_timestamp.end(), ceiled_millisecond.begin(), [](auto i) {
+    return ceil<milliseconds>(i);
+  });
+
+  auto expected_day =
+    fixed_width_column_wrapper<cudf::timestamp_ms>(ceiled_day.begin(), ceiled_day.end());
+  auto expected_hour =
+    fixed_width_column_wrapper<cudf::timestamp_ms>(ceiled_hour.begin(), ceiled_hour.end());
+  auto expected_minute =
+    fixed_width_column_wrapper<cudf::timestamp_ms>(ceiled_minute.begin(), ceiled_minute.end());
+  auto expected_second =
+    fixed_width_column_wrapper<cudf::timestamp_ms>(ceiled_second.begin(), ceiled_second.end());
+  auto expected_millisecond = fixed_width_column_wrapper<cudf::timestamp_ms>(
+    ceiled_millisecond.begin(), ceiled_millisecond.end());
+
+  // auto res = *ceil_millisecond(input);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_day(input), expected_day);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_hour(input), expected_hour);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_minute(input), expected_minute);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_second(input), expected_second);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_millisecond(input), expected_millisecond);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestCeilDay)

@@ -264,8 +264,9 @@ std::unique_ptr<cudf::column> ceil_second(
  * @returns cudf::column of the same datetime resolution as the input column
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<column> ceil_millisecond(column_view const& column,
-                                         rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> ceil_millisecond(
+  column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Round up to the nearest microsecond
@@ -275,8 +276,9 @@ std::unique_ptr<column> ceil_millisecond(column_view const& column,
  * @returns cudf::column of the same datetime resolution as the input column
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<column> ceil_microsecond(column_view const& column,
-                                         rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> ceil_microsecond(
+  column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Round up to the nearest nanosecond
@@ -286,7 +288,8 @@ std::unique_ptr<column> ceil_microsecond(column_view const& column,
  * @returns cudf::column of the same datetime resolution as the input column
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<column> ceil_nanosecond(column_view const& column,
-                                        rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> ceil_nanosecond(
+  column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace datetime
 }  // namespace cudf
