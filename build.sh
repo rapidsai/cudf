@@ -75,7 +75,10 @@ function hasArg {
 function cmakeArgs {
     # Check for correctly formatted cmake args option
     if [[ $(echo $ARGS | grep -E "\-\-cmake\-args=\"") ]]; then
-        CMAKE_ARGS="$(echo $ARGS | grep -Eo "\-\-cmake\-args=\".+\" ")"
+	# There are possible weird edge cases that may cause this regex filter to output nothing and fail silently
+        # the true pipe will catch any weird edge cases that may happen and will cause the program to fall back
+        # on the invalid option error
+        CMAKE_ARGS=$(echo $ARGS | { grep -Eo "\-\-cmake\-args=\".+\" " || true; })
         if [[ -n ${CMAKE_ARGS} ]]; then
 	    # Remove the full  CMAKE_ARGS argument from list of args so that it passes validArgs function
 	    ARGS=${ARGS//$CMAKE_ARGS/}
@@ -105,7 +108,7 @@ cmakeArgs
 if (( ${NUMARGS} != 0 )); then
     for a in ${ARGS}; do
     if ! (echo " ${VALIDARGS} " | grep -q " ${a} "); then
-        echo "Invalid option: ${a}"
+        echo "Invalid option, check --help: ${a}"
         exit 1
     fi
     done
