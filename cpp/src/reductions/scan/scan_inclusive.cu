@@ -343,13 +343,26 @@ public:
  }
 };
 
+rmm::device_vector<double> compute_recurrence(rmm::device_vector<thrust::pair<double, double>> input) {
+  // final result
+  rmm::device_vector<double> result(input.size());
+  
+  blelloch_functor op;
+  thrust::inclusive_scan(input.begin(), input.end(), input.begin(), op);
+  thrust::transform(input.begin(),
+                    input.end(),
+                    result.begin(),
+                    [=] __host__ __device__(thrust::pair<double, double> input) -> double {
+                      return thrust::get<1>(input);
+                    });
+  return result;
+
+}
+
 rmm::device_vector<double> ewm_numerator(column_view const& input, double beta)
 {
   rmm::device_vector<double> output(input.size());
-
   rmm::device_vector<thrust::pair<double, double>> pairs(input.size());
-  rmm::device_vector<thrust::pair<double, double>> result_pairs(input.size());
-
   thrust::transform(input.begin<double>(),
                     input.end<double>(),
                     pairs.begin(),
@@ -357,38 +370,18 @@ rmm::device_vector<double> ewm_numerator(column_view const& input, double beta)
                       return thrust::pair<double, double>(beta, input);
                     });
 
-  blelloch_functor op;
-  thrust::inclusive_scan(pairs.begin(), pairs.end(), result_pairs.begin(), op);
-
-  thrust::transform(result_pairs.begin(),
-                    result_pairs.end(),
-                    output.begin(),
-                    [=] __host__ __device__(thrust::pair<double, double> input) -> double {
-                      return thrust::get<1>(input);
-                    });
-
-  return output;
+  rmm::device_vector<double> result = compute_recurrence(pairs);
+  return result;
 }
 
 rmm::device_vector<double> ewm_denominator(column_view const& input, double beta)
 {
   rmm::device_vector<double> output(input.size());
-
   rmm::device_vector<thrust::pair<double, double>> pairs(input.size());
-  rmm::device_vector<thrust::pair<double, double>> result_pairs(input.size());
   thrust::fill(pairs.begin(), pairs.end(), thrust::pair<double, double>(beta, 1.0));
 
-  blelloch_functor op;
-  thrust::inclusive_scan(pairs.begin(), pairs.end(), result_pairs.begin(), op);
-
-  thrust::transform(result_pairs.begin(),
-                    result_pairs.end(),
-                    output.begin(),
-                    [=] __host__ __device__(thrust::pair<double, double> input) -> double {
-                      return thrust::get<1>(input);
-                    });
-
-  return output;
+  rmm::device_vector<double> result = compute_recurrence(pairs);
+  return result;
 }
 
 
