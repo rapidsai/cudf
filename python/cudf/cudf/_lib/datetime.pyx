@@ -1,12 +1,10 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+cimport cudf._lib.cpp.datetime as libcudf_datetime
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-
-from cudf._lib.column cimport Column
-
-cimport cudf._lib.cpp.datetime as libcudf_datetime
 
 
 def add_months(Column col, Column months):
@@ -59,3 +57,51 @@ def extract_datetime_component(Column col, object field):
         result = result.binary_operator("sub", result.dtype.type(1))
 
     return result
+
+
+def is_leap_year(Column col):
+    """Returns a boolean indicator whether the year of the date is a leap year
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        c_result = move(libcudf_datetime.is_leap_year(col_view))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def extract_quarter(Column col):
+    """
+    Returns a column which contains the corresponding quarter of the year
+    for every timestamp inside the input column.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        c_result = move(libcudf_datetime.extract_quarter(col_view))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def days_in_month(Column col):
+    """Extracts the number of days in the month of the date
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        c_result = move(libcudf_datetime.days_in_month(col_view))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def last_day_of_month(Column col):
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        c_result = move(libcudf_datetime.last_day_of_month(col_view))
+
+    return Column.from_unique_ptr(move(c_result))

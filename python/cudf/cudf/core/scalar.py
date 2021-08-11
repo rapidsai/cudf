@@ -17,45 +17,46 @@ from cudf.utils.dtypes import (
 
 
 class Scalar(object):
+    """
+    A GPU-backed scalar object with NumPy scalar like properties
+    May be used in binary operations against other scalars, cuDF
+    Series, DataFrame, and Index objects.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.Scalar(42, dtype='int64')
+    Scalar(42, dtype=int64)
+    >>> cudf.Scalar(42, dtype='int32') + cudf.Scalar(42, dtype='float64')
+    Scalar(84.0, dtype=float64)
+    >>> cudf.Scalar(42, dtype='int64') + np.int8(21)
+    Scalar(63, dtype=int64)
+    >>> x = cudf.Scalar(42, dtype='datetime64[s]')
+    >>> y = cudf.Scalar(21, dtype='timedelta64[ns])
+    >>> x - y
+    Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
+    >>> cudf.Series([1,2,3]) + cudf.Scalar(1)
+    0    2
+    1    3
+    2    4
+    dtype: int64
+    >>> df = cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]})
+    >>> slr = cudf.Scalar(10, dtype='uint8')
+    >>> df - slr
+       a    b
+    0 -9 -5.5
+    1 -8 -4.5
+    2 -7 -3.5
+
+    Parameters
+    ----------
+    value : Python Scalar, NumPy Scalar, or cuDF Scalar
+        The scalar value to be converted to a GPU backed scalar object
+    dtype : np.dtype or string specifier
+        The data type
+    """
+
     def __init__(self, value, dtype=None):
-        """
-        A GPU-backed scalar object with NumPy scalar like properties
-        May be used in binary operations against other scalars, cuDF
-        Series, DataFrame, and Index objects.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> cudf.Scalar(42, dtype='int64')
-        Scalar(42, dtype=int64)
-        >>> cudf.Scalar(42, dtype='int32') + cudf.Scalar(42, dtype='float64')
-        Scalar(84.0, dtype=float64)
-        >>> cudf.Scalar(42, dtype='int64') + np.int8(21)
-        Scalar(63, dtype=int64)
-        >>> x = cudf.Scalar(42, dtype='datetime64[s]')
-        >>> y = cudf.Scalar(21, dtype='timedelta64[ns])
-        >>> x - y
-        Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
-        >>> cudf.Series([1,2,3]) + cudf.Scalar(1)
-        0    2
-        1    3
-        2    4
-        dtype: int64
-        >>> df = cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]})
-        >>> slr = cudf.Scalar(10, dtype='uint8')
-        >>> df - slr
-           a    b
-        0 -9 -5.5
-        1 -8 -4.5
-        2 -7 -3.5
-
-        Parameters
-        ----------
-        value : Python Scalar, NumPy Scalar, or cuDF Scalar
-            The scalar value to be converted to a GPU backed scalar object
-        dtype : np.dtype or string specifier
-            The data type
-        """
 
         self._host_value = None
         self._host_dtype = None
@@ -133,15 +134,13 @@ class Scalar(object):
                 return NA, dtype
 
         if isinstance(value, dict):
-            if dtype is not None:
-                raise TypeError("dict may not be cast to a different dtype")
-            else:
+            if dtype is None:
                 dtype = StructDtype.from_arrow(
                     pa.infer_type([value], from_pandas=True)
                 )
-                return value, dtype
+            return value, dtype
         elif isinstance(dtype, StructDtype):
-            if value is not None:
+            if value not in {None, NA}:
                 raise ValueError(f"Can not coerce {value} to StructDType")
             else:
                 return NA, dtype

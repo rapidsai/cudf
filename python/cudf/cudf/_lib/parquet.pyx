@@ -2,71 +2,68 @@
 
 # cython: boundscheck = False
 
-import cudf
 import errno
 import os
-import pyarrow as pa
 from collections import OrderedDict
+
+import pyarrow as pa
+
+import cudf
 
 try:
     import ujson as json
 except ImportError:
     import json
 
-from cython.operator import dereference
 import numpy as np
+from cython.operator import dereference
 
 from cudf.utils.dtypes import (
-    np_to_pa_dtype,
     is_categorical_dtype,
+    is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype,
-    is_decimal_dtype,
+    np_to_pa_dtype,
 )
 
-from cudf._lib.utils cimport get_column_names
-from cudf._lib.utils import (
-    _index_level_name,
-    generate_pandas_metadata,
-)
+from cudf._lib.utils cimport data_from_unique_ptr, get_column_names
 
-from libc.stdlib cimport free
+from cudf._lib.utils import _index_level_name, generate_pandas_metadata
+
 from libc.stdint cimport uint8_t
-from libcpp.memory cimport unique_ptr, make_unique
-from libcpp.string cimport string
-from libcpp.map cimport map
-from libcpp.vector cimport vector
-from libcpp.utility cimport move
+from libc.stdlib cimport free
 from libcpp cimport bool
+from libcpp.map cimport map
+from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.string cimport string
+from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
-
-from cudf._lib.cpp.types cimport data_type, size_type
-from cudf._lib.table cimport Table
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport (
-    table_view
-)
+cimport cudf._lib.cpp.io.types as cudf_io_types
+cimport cudf._lib.cpp.types as cudf_types
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.io.parquet cimport (
-    read_parquet as parquet_reader,
-    parquet_reader_options,
-    table_input_metadata,
-    column_in_metadata,
-    parquet_writer_options,
-    write_parquet as parquet_writer,
-    parquet_chunked_writer as cpp_parquet_chunked_writer,
     chunked_parquet_writer_options,
     chunked_parquet_writer_options_builder,
+    column_in_metadata,
     merge_rowgroup_metadata as parquet_merge_metadata,
+    parquet_chunked_writer as cpp_parquet_chunked_writer,
+    parquet_reader_options,
+    parquet_writer_options,
+    read_parquet as parquet_reader,
+    table_input_metadata,
+    write_parquet as parquet_writer,
 )
-from cudf._lib.column cimport Column
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.io.utils cimport (
-    make_source_info,
     make_sink_info,
+    make_source_info,
     update_struct_field_names,
 )
+from cudf._lib.table cimport Table
 
-cimport cudf._lib.cpp.types as cudf_types
-cimport cudf._lib.cpp.io.types as cudf_io_types
 
 cdef class BufferArrayFromVector:
     cdef Py_ssize_t length
@@ -181,12 +178,10 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     for c in meta['columns']:
                         if c['field_name'] == idx_col:
                             index_col_names[idx_col] = c['name']
-    df = cudf.DataFrame._from_table(
-        Table.from_unique_ptr(
-            move(c_out_table.tbl),
-            column_names=column_names
-        )
-    )
+    df = cudf.DataFrame._from_data(*data_from_unique_ptr(
+        move(c_out_table.tbl),
+        column_names=column_names
+    ))
 
     update_struct_field_names(df, c_out_table.metadata.schema_info)
 

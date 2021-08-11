@@ -16,41 +16,16 @@
 
 #pragma once
 
-#include <cstddef>
-#include <cub/cub.cuh>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
+#include <join/join_common_utils.cuh>
+#include <join/join_common_utils.hpp>
+
 #include <cudf/table/table_device_view.cuh>
 
-#include "join_common_utils.hpp"
+#include <thrust/pair.h>
+#include <cub/cub.cuh>
 
 namespace cudf {
 namespace detail {
-/**
- * @brief Adds a pair of indices to the shared memory cache
- *
- * @param[in] first The first index in the pair
- * @param[in] second The second index in the pair
- * @param[in,out] current_idx_shared Pointer to shared index that determines
- * where in the shared memory cache the pair will be written
- * @param[in] warp_id The ID of the warp of the calling the thread
- * @param[out] joined_shared_l Pointer to the shared memory cache for left indices
- * @param[out] joined_shared_r Pointer to the shared memory cache for right indices
- */
-__inline__ __device__ void add_pair_to_cache(const size_type first,
-                                             const size_type second,
-                                             size_type* current_idx_shared,
-                                             const int warp_id,
-                                             size_type* joined_shared_l,
-                                             size_type* joined_shared_r)
-{
-  size_type my_current_idx{atomicAdd(current_idx_shared + warp_id, size_type(1))};
-
-  // its guaranteed to fit into the shared cache
-  joined_shared_l[my_current_idx] = first;
-  joined_shared_r[my_current_idx] = second;
-}
-
 /**
  * @brief Remaps a hash value to a new value if it is equal to the specified sentinel value.
  *
@@ -200,83 +175,6 @@ __global__ void compute_join_output_size(multimap_type multi_map,
 }
 
 /**
- * @brief Computes the output size of joining the left table to the right table.
- *
- * This method uses a nested loop to iterate over the left and right tables and count the number of
- * matches.
- *
- * @tparam block_size The number of threads per block for this kernel
- *
- * @param[in] left_table The left table
- * @param[in] right_table The right table
- * @param[in] JoinKind The type of join to be performed
- * @param[in] check_row_equality The row equality comparator
- * @param[out] output_size The resulting output size
- */
-template <int block_size>
-__global__ void compute_nested_loop_join_output_size(table_device_view left_table,
-                                                     table_device_view right_table,
-                                                     join_kind JoinKind,
-                                                     row_equality check_row_equality,
-                                                     cudf::size_type* output_size)
-{
-  cudf::size_type thread_counter(0);
-  const cudf::size_type left_start_idx = threadIdx.x + blockIdx.x * blockDim.x;
-  const cudf::size_type left_stride    = blockDim.x * gridDim.x;
-  const cudf::size_type left_num_rows  = left_table.num_rows();
-  const cudf::size_type right_num_rows = right_table.num_rows();
-
-  for (cudf::size_type left_row_index = left_start_idx; left_row_index < left_num_rows;
-       left_row_index += left_stride) {
-    bool found_match = false;
-    for (cudf::size_type right_row_index = 0; right_row_index < right_num_rows; right_row_index++) {
-      if (check_row_equality(left_row_index, right_row_index)) {
-        ++thread_counter;
-        found_match = true;
-      }
-    }
-    if ((JoinKind == join_kind::LEFT_JOIN) && (!found_match)) { ++thread_counter; }
-  }
-
-  using BlockReduce = cub::BlockReduce<cudf::size_type, block_size>;
-  __shared__ typename BlockReduce::TempStorage temp_storage;
-  cudf::size_type block_counter = BlockReduce(temp_storage).Sum(thread_counter);
-
-  // Add block counter to global counter
-  if (threadIdx.x == 0) atomicAdd(output_size, block_counter);
-}
-
-template <int num_warps, cudf::size_type output_cache_size>
-__device__ void flush_output_cache(const unsigned int activemask,
-                                   const cudf::size_type max_size,
-                                   const int warp_id,
-                                   const int lane_id,
-                                   cudf::size_type* current_idx,
-                                   cudf::size_type current_idx_shared[num_warps],
-                                   size_type join_shared_l[num_warps][output_cache_size],
-                                   size_type join_shared_r[num_warps][output_cache_size],
-                                   size_type* join_output_l,
-                                   size_type* join_output_r)
-{
-  // count how many active threads participating here which could be less than warp_size
-  int num_threads               = __popc(activemask);
-  cudf::size_type output_offset = 0;
-
-  if (0 == lane_id) { output_offset = atomicAdd(current_idx, current_idx_shared[warp_id]); }
-
-  output_offset = cub::ShuffleIndex<detail::warp_size>(output_offset, 0, activemask);
-
-  for (int shared_out_idx = lane_id; shared_out_idx < current_idx_shared[warp_id];
-       shared_out_idx += num_threads) {
-    cudf::size_type thread_offset = output_offset + shared_out_idx;
-    if (thread_offset < max_size) {
-      join_output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
-      join_output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
-    }
-  }
-}
-
-/**
  * @brief Probes the hash map with the probe table to find all matching rows
  * between the probe and hash table and generate the output for the desired
  * Join operation.
@@ -409,111 +307,6 @@ __global__ void probe_hash_table(multimap_type multi_map,
         if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
         __syncwarp(activemask);
       }
-    }
-
-    // final flush of output cache
-    if (current_idx_shared[warp_id] > 0) {
-      flush_output_cache<num_warps, output_cache_size>(activemask,
-                                                       max_size,
-                                                       warp_id,
-                                                       lane_id,
-                                                       current_idx,
-                                                       current_idx_shared,
-                                                       join_shared_l,
-                                                       join_shared_r,
-                                                       join_output_l,
-                                                       join_output_r);
-    }
-  }
-}
-
-/**
- * @brief Performs a nested loop join to find all matching rows between the
- * left and right tables and generate the output for the desired Join
- * operation.
- *
- * @tparam block_size The number of threads per block for this kernel
- * @tparam output_cache_size The side of the shared memory buffer to cache join
- * output results
-
- * @param[in] left_table The left table
- * @param[in] right_table The right table
- * @param[in] JoinKind The type of join to be performed
- * @param[in] check_row_equality The row equality comparator
- * @param[out] join_output_l The left result of the join operation
- * @param[out] join_output_r The right result of the join operation
- * @param[in,out] current_idx A global counter used by threads to coordinate
- * writes to the global output
- * @param[in] max_size The maximum size of the output
- */
-template <cudf::size_type block_size, cudf::size_type output_cache_size>
-__global__ void nested_loop_join(table_device_view left_table,
-                                 table_device_view right_table,
-                                 join_kind JoinKind,
-                                 row_equality check_row_equality,
-                                 cudf::size_type* join_output_l,
-                                 cudf::size_type* join_output_r,
-                                 cudf::size_type* current_idx,
-                                 const cudf::size_type max_size)
-{
-  constexpr int num_warps = block_size / detail::warp_size;
-  __shared__ cudf::size_type current_idx_shared[num_warps];
-  __shared__ cudf::size_type join_shared_l[num_warps][output_cache_size];
-  __shared__ cudf::size_type join_shared_r[num_warps][output_cache_size];
-
-  const int warp_id                    = threadIdx.x / detail::warp_size;
-  const int lane_id                    = threadIdx.x % detail::warp_size;
-  const cudf::size_type left_num_rows  = left_table.num_rows();
-  const cudf::size_type right_num_rows = right_table.num_rows();
-
-  if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
-
-  __syncwarp();
-
-  cudf::size_type left_row_index = threadIdx.x + blockIdx.x * blockDim.x;
-
-  const unsigned int activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
-  if (left_row_index < left_num_rows) {
-    bool found_match = false;
-    for (size_type right_row_index(0); right_row_index < right_num_rows; right_row_index++) {
-      if (check_row_equality(left_row_index, right_row_index)) {
-        // If the rows are equal, then we have found a true match
-        found_match = true;
-        add_pair_to_cache(left_row_index,
-                          right_row_index,
-                          current_idx_shared,
-                          warp_id,
-                          join_shared_l[warp_id],
-                          join_shared_r[warp_id]);
-      }
-
-      __syncwarp(activemask);
-      // flush output cache if next iteration does not fit
-      if (current_idx_shared[warp_id] + detail::warp_size >= output_cache_size) {
-        flush_output_cache<num_warps, output_cache_size>(activemask,
-                                                         max_size,
-                                                         warp_id,
-                                                         lane_id,
-                                                         current_idx,
-                                                         current_idx_shared,
-                                                         join_shared_l,
-                                                         join_shared_r,
-                                                         join_output_l,
-                                                         join_output_r);
-        __syncwarp(activemask);
-        if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
-        __syncwarp(activemask);
-      }
-    }
-
-    // If performing a LEFT join and no match was found, insert a Null into the output
-    if ((JoinKind == join_kind::LEFT_JOIN) && (!found_match)) {
-      add_pair_to_cache(left_row_index,
-                        static_cast<cudf::size_type>(JoinNoneValue),
-                        current_idx_shared,
-                        warp_id,
-                        join_shared_l[warp_id],
-                        join_shared_r[warp_id]);
     }
 
     // final flush of output cache

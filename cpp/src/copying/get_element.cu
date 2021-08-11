@@ -58,7 +58,7 @@ struct get_element_functor {
     return s;
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, string_view>::value>* p = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, string_view>>* p = nullptr>
   std::unique_ptr<scalar> operator()(
     column_view const& input,
     size_type index,
@@ -83,7 +83,7 @@ struct get_element_functor {
     return std::make_unique<string_scalar>(temp_data, temp_valid.value(stream), stream, mr);
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, dictionary32>::value>* p = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, dictionary32>>* p = nullptr>
   std::unique_ptr<scalar> operator()(
     column_view const& input,
     size_type index,
@@ -119,7 +119,7 @@ struct get_element_functor {
                            mr);
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, list_view>::value>* p = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, list_view>>* p = nullptr>
   std::unique_ptr<scalar> operator()(
     column_view const& input,
     size_type index,
@@ -175,7 +175,7 @@ struct get_element_functor {
                                                    mr);
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, struct_view>::value>* p = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, struct_view>>* p = nullptr>
   std::unique_ptr<scalar> operator()(
     column_view const& input,
     size_type index,

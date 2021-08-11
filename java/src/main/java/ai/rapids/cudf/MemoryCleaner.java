@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.ast.CompiledExpression;
 import ai.rapids.cudf.nvcomp.BatchedLZ4Decompressor;
 import ai.rapids.cudf.nvcomp.Decompressor;
 import org.slf4j.Logger;
@@ -270,6 +271,10 @@ public final class MemoryCleaner {
   static void register(CuFileHandle handle, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(handle, cleaner, collected, false));
+  }
+
+  public static void register(CompiledExpression expr, Cleaner cleaner) {
+    all.add(new CleanerWeakReference(expr, cleaner, collected, false));
   }
 
   /**

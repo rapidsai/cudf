@@ -1,5 +1,5 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
-from cudf.utils.gpu_utils import validate_setup  # isort:skip
+from cudf.utils.gpu_utils import validate_setup
 
 validate_setup()
 
@@ -31,6 +31,7 @@ from cudf.core import (
     IntervalIndex,
     MultiIndex,
     RangeIndex,
+    StringIndex,
     Scalar,
     Series,
     TimedeltaIndex,
@@ -73,7 +74,14 @@ from cudf.core.ops import (
     tan,
     true_divide,
 )
-from cudf.core.reshape import concat, get_dummies, melt, merge_sorted
+from cudf.core.reshape import (
+    concat,
+    get_dummies,
+    melt,
+    merge_sorted,
+    pivot,
+    unstack,
+)
 from cudf.core.series import isclose
 from cudf.core.tools.datetimes import DateOffset, to_datetime
 from cudf.core.tools.numeric import to_numeric

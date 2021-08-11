@@ -1,14 +1,14 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
 from libcpp.vector cimport vector
 
 from cudf._lib.cpp.types cimport (
-    size_type,
     data_type,
     interpolation,
-    null_policy
+    null_policy,
+    size_type,
 )
 
 
@@ -85,6 +85,11 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[T] make_nth_element_aggregation[T](
         size_type n
+    ) except +
+
+    cdef unique_ptr[T] make_nth_element_aggregation[T](
+        size_type n,
+        null_policy null_handling
     ) except +
 
     cdef unique_ptr[T] make_collect_list_aggregation[T]() except +

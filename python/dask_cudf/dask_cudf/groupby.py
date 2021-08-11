@@ -71,6 +71,8 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             "min",
             "max",
             "collect",
+            "first",
+            "last",
         }
         if (
             isinstance(self.obj, DaskDataFrame)
@@ -127,7 +129,10 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             "min",
             "max",
             "collect",
+            "first",
+            "last",
         }
+
         if (
             isinstance(self.obj, DaskDataFrame)
             and isinstance(self.index, (str, list))
@@ -143,7 +148,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
                 sep=self.sep,
                 sort=self.sort,
                 as_index=self.as_index,
-            )
+            )[self._slice]
 
         return super().aggregate(
             arg, split_every=split_every, split_out=split_out
@@ -165,7 +170,16 @@ def groupby_agg(
 
         This aggregation algorithm only supports the following options:
 
-        {"count", "mean", "std", "var", "sum", "min", "max", "collect"}
+        - "count"
+        - "mean"
+        - "std"
+        - "var"
+        - "sum"
+        - "min"
+        - "max"
+        - "collect"
+        - "first"
+        - "last"
 
         This "optimized" approach is more performant than the algorithm
         in `dask.dataframe`, because it allows the cudf backend to
@@ -208,6 +222,8 @@ def groupby_agg(
         "min",
         "max",
         "collect",
+        "first",
+        "last",
     }
     if not _is_supported(aggs, _supported):
         raise ValueError(

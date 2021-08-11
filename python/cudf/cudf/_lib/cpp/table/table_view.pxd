@@ -2,11 +2,9 @@
 
 from libcpp.vector cimport vector
 
+from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.cpp.column.column_view cimport (
-    column_view,
-    mutable_column_view
-)
+
 
 cdef extern from "cudf/table/table_view.hpp" namespace "cudf" nogil:
     cdef cppclass table_view:

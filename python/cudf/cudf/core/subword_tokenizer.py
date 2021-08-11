@@ -1,13 +1,15 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 from __future__ import annotations
+
 from typing import Union
-import cupy as cp
 from warnings import warn
 
+import cupy as cp
+
 from cudf._lib.nvtext.subword_tokenize import (
-    subword_tokenize_inmem_hash as cpp_subword_tokenize,
     Hashed_Vocabulary as cpp_hashed_vocabulary,
+    subword_tokenize_inmem_hash as cpp_subword_tokenize,
 )
 
 

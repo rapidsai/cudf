@@ -221,7 +221,8 @@ $ ./build.sh dask_cudf
 - To run Python tests (Optional):
 ```bash
 $ cd $CUDF_HOME/python
-$ py.test -v                           # run python tests on cudf and dask-cudf python bindings
+$ py.test -v cudf                           # run cudf test suite
+$ py.test -v dask_cudf                      # run dask_cudf test suite
 ```
 
 - Other `build.sh` options:

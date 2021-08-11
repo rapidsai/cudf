@@ -47,15 +47,19 @@ using void_t = void;
  */
 #define CUDF_ENABLE_IF(...) std::enable_if_t<(__VA_ARGS__)>* = nullptr
 
-template <typename L, typename R, typename = void>
-struct is_relationally_comparable_impl : std::false_type {
-};
-
 template <typename L, typename R>
 using less_comparable = decltype(std::declval<L>() < std::declval<R>());
 
 template <typename L, typename R>
 using greater_comparable = decltype(std::declval<L>() > std::declval<R>());
+
+template <typename L, typename R>
+using equality_comparable = decltype(std::declval<L>() == std::declval<R>());
+
+namespace detail {
+template <typename L, typename R, typename = void>
+struct is_relationally_comparable_impl : std::false_type {
+};
 
 template <typename L, typename R>
 struct is_relationally_comparable_impl<L,
@@ -69,11 +73,24 @@ struct is_equality_comparable_impl : std::false_type {
 };
 
 template <typename L, typename R>
-using equality_comparable = decltype(std::declval<L>() == std::declval<R>());
-
-template <typename L, typename R>
 struct is_equality_comparable_impl<L, R, void_t<equality_comparable<L, R>>> : std::true_type {
 };
+
+// has common type
+template <typename AlwaysVoid, typename... Ts>
+struct has_common_type_impl : std::false_type {
+};
+
+template <typename... Ts>
+struct has_common_type_impl<void_t<std::common_type_t<Ts...>>, Ts...> : std::true_type {
+};
+}  // namespace detail
+
+template <typename... Ts>
+using has_common_type = typename detail::has_common_type_impl<void, Ts...>::type;
+
+template <typename... Ts>
+constexpr inline bool has_common_type_v = detail::has_common_type_impl<void, Ts...>::value;
 
 template <typename T>
 using is_timestamp_t = cuda::std::disjunction<std::is_same<cudf::timestamp_D, T>,
@@ -104,7 +121,7 @@ using is_duration_t = cuda::std::disjunction<std::is_same<cudf::duration_D, T>,
 template <typename L, typename R>
 constexpr inline bool is_relationally_comparable()
 {
-  return is_relationally_comparable_impl<L, R>::value;
+  return detail::is_relationally_comparable_impl<L, R>::value;
 }
 
 /**
@@ -122,7 +139,7 @@ constexpr inline bool is_relationally_comparable()
 template <typename L, typename R>
 constexpr inline bool is_equality_comparable()
 {
-  return is_equality_comparable_impl<L, R>::value;
+  return detail::is_equality_comparable_impl<L, R>::value;
 }
 
 /**
@@ -176,7 +193,7 @@ constexpr inline bool is_numeric(data_type type)
 template <typename T>
 constexpr inline bool is_index_type()
 {
-  return std::is_integral<T>::value and not std::is_same<T, bool>::value;
+  return std::is_integral<T>::value and not std::is_same_v<T, bool>;
 }
 
 struct is_index_type_impl {
@@ -294,7 +311,7 @@ constexpr inline bool is_floating_point(data_type type)
 template <typename T>
 constexpr inline bool is_boolean()
 {
-  return std::is_same<T, bool>::value;
+  return std::is_same_v<T, bool>;
 }
 
 struct is_boolean_impl {
@@ -362,7 +379,7 @@ constexpr inline bool is_timestamp(data_type type)
 template <typename T>
 constexpr inline bool is_fixed_point()
 {
-  return std::is_same<numeric::decimal32, T>::value || std::is_same<numeric::decimal64, T>::value;
+  return std::is_same_v<numeric::decimal32, T> || std::is_same_v<numeric::decimal64, T>;
 }
 
 struct is_fixed_point_impl {
@@ -483,7 +500,7 @@ constexpr bool is_rep_layout_compatible()
 template <typename T>
 constexpr inline bool is_dictionary()
 {
-  return std::is_same<dictionary32, T>::value;
+  return std::is_same_v<dictionary32, T>;
 }
 
 struct is_dictionary_impl {
@@ -561,8 +578,8 @@ class string_view;
 template <typename T>
 constexpr inline bool is_compound()
 {
-  return std::is_same<T, cudf::string_view>::value or std::is_same<T, cudf::dictionary32>::value or
-         std::is_same<T, cudf::list_view>::value or std::is_same<T, cudf::struct_view>::value;
+  return std::is_same_v<T, cudf::string_view> or std::is_same_v<T, cudf::dictionary32> or
+         std::is_same_v<T, cudf::list_view> or std::is_same_v<T, cudf::struct_view>;
 }
 
 struct is_compound_impl {
@@ -604,7 +621,7 @@ constexpr inline bool is_compound(data_type type)
 template <typename T>
 constexpr inline bool is_nested()
 {
-  return std::is_same<T, cudf::list_view>::value || std::is_same<T, cudf::struct_view>::value;
+  return std::is_same_v<T, cudf::list_view> || std::is_same_v<T, cudf::struct_view>;
 }
 
 struct is_nested_impl {

@@ -29,6 +29,7 @@ target_link_libraries(cudf_datagen
                       GTest::gmock_main
                       GTest::gtest_main
                       benchmark::benchmark
+                      nvbench::nvbench
                       Threads::Threads
                       cudf)
 
@@ -101,7 +102,8 @@ ConfigureBench(STREAM_COMPACTION_BENCH stream_compaction/drop_duplicates_benchma
 
 ###################################################################################################
 # - join benchmark --------------------------------------------------------------------------------
-ConfigureBench(JOIN_BENCH join/join_benchmark.cu)
+ConfigureBench(JOIN_BENCH join/join_benchmark.cu join/conditional_join_benchmark.cu)
+ConfigureNVBench(JOIN_NVBENCH join/join_nvbench.cu)
 
 ###################################################################################################
 # - iterator benchmark ----------------------------------------------------------------------------
@@ -203,6 +205,7 @@ ConfigureBench(AST_BENCH ast/transform_benchmark.cpp)
 # - binaryop benchmark ----------------------------------------------------------------------------
 ConfigureBench(BINARYOP_BENCH
   binaryop/binaryop_benchmark.cpp
+  binaryop/compiled_binaryop_benchmark.cpp
   binaryop/jit_binaryop_benchmark.cpp)
 
 ###################################################################################################
@@ -230,6 +233,7 @@ ConfigureBench(STRINGS_BENCH
   string/factory_benchmark.cu
   string/filter_benchmark.cpp
   string/find_benchmark.cpp
+  string/repeat_strings_benchmark.cpp
   string/replace_benchmark.cpp
   string/replace_re_benchmark.cpp
   string/split_benchmark.cpp

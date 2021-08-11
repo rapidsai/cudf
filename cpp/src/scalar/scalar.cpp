@@ -182,6 +182,12 @@ T fixed_point_scalar<T>::fixed_point_value(rmm::cuda_stream_view stream) const
 }
 
 template <typename T>
+fixed_point_scalar<T>::operator value_type() const
+{
+  return this->fixed_point_value(rmm::cuda_stream_default);
+}
+
+template <typename T>
 typename fixed_point_scalar<T>::rep_type* fixed_point_scalar<T>::data()
 {
   return _data.data();
@@ -513,6 +519,13 @@ list_scalar::list_scalar(list_scalar const& other,
 }
 
 column_view list_scalar::view() const { return _data.view(); }
+
+struct_scalar::struct_scalar(struct_scalar const& other,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+  : scalar{other, stream, mr}, _data(other._data, stream, mr)
+{
+}
 
 struct_scalar::struct_scalar(table_view const& data,
                              bool is_valid,

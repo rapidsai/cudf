@@ -98,8 +98,9 @@ class _SeriesIlocIndexer(object):
             or _is_null_host_scalar(data)
         ):
             return data
-        index = self._sr.index.take(arg)
-        return self._sr._copy_construct(data=data, index=index)
+        return self._sr._from_data(
+            {self._sr.name: data}, index=cudf.Index(self._sr.index.take(arg))
+        )
 
     def __setitem__(self, key, value):
         from cudf.core.column import column
@@ -111,10 +112,13 @@ class _SeriesIlocIndexer(object):
         if is_scalar(value):
             value = to_cudf_compatible_scalar(value)
         elif not (
-            isinstance(value, list)
-            and isinstance(self._sr._column.dtype, cudf.ListDtype)
+            isinstance(value, (list, dict))
+            and isinstance(
+                self._sr._column.dtype, (cudf.ListDtype, cudf.StructDtype)
+            )
         ):
             value = column.as_column(value)
+
         if (
             not isinstance(
                 self._sr._column.dtype,

@@ -67,8 +67,8 @@ Examples
 
 See Also
 --------
-cudf.io.csv.read_csv
-cudf.io.json.read_json
+cudf.read_csv
+cudf.read_json
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -175,7 +175,7 @@ See Also
 --------
 cudf.io.parquet.read_parquet_metadata
 cudf.io.parquet.to_parquet
-cudf.io.orc.read_orc
+cudf.read_orc
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -217,7 +217,7 @@ int96_timestamps : bool, default False
 See Also
 --------
 cudf.io.parquet.read_parquet
-cudf.io.orc.read_orc
+cudf.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
@@ -256,6 +256,12 @@ Total number of rows
 Number of stripes
 List of column names
 
+Notes
+-----
+Support for reading files with struct columns is currently experimental,
+the output may not be as reliable as reading for other datatypes.
+{remote_data_sources}
+
 Examples
 --------
 >>> import cudf
@@ -270,7 +276,7 @@ Examples
 
 See Also
 --------
-cudf.io.orc.read_orc
+cudf.read_orc
 """
 doc_read_orc_metadata = docfmt_partial(docstring=_docstring_read_orc_metadata)
 
@@ -296,7 +302,7 @@ Statistics for each column for each stripe of given file
 
 See Also
 --------
-cudf.io.orc.read_orc
+cudf.read_orc
 """
 doc_read_orc_statistics = docfmt_partial(
     docstring=_docstring_read_orc_statistics
@@ -385,7 +391,7 @@ enable_statistics: boolean, default True
 
 See Also
 --------
-cudf.io.orc.read_orc
+cudf.read_orc
 """
 doc_to_orc = docfmt_partial(docstring=_docstring_to_orc)
 
@@ -687,7 +693,7 @@ errors : str, default 'strict'
 
 See Also
 --------
-cudf.io.hdf.read_hdf : Read from HDF file.
+cudf.read_hdf : Read from HDF file.
 cudf.io.parquet.to_parquet : Write a DataFrame to the binary parquet format.
 cudf.io.feather.to_feather : Write out feather-format for DataFrames.
 """
@@ -898,7 +904,7 @@ Read the file with ``cudf.read_csv``
 
 See Also
 --------
-cudf.io.csv.to_csv
+cudf.to_csv
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -963,7 +969,7 @@ Examples
 
 See Also
 --------
-cudf.io.csv.read_csv
+cudf.read_csv
 """
 doc_to_csv = docfmt_partial(
     docstring=_docstring_to_csv.format(

@@ -30,6 +30,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
 
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
+
 template <typename T>
 class ReverseTypedTestFixture : public cudf::test::BaseFixture {
 };
@@ -54,7 +56,7 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseTable)
   auto const p_ret = cudf::reverse(input_table);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected, verbosity);
 }
 
 TYPED_TEST(ReverseTypedTestFixture, ReverseColumn)
@@ -74,7 +76,7 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseColumn)
 
   auto const column_ret = cudf::reverse(input);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(column_ret->view(), expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(column_ret->view(), expected, verbosity);
 }
 
 TYPED_TEST(ReverseTypedTestFixture, ReverseNullable)
