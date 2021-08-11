@@ -757,9 +757,9 @@ TEST_F(StructsColumnsInterleaveTest, InvalidInput)
     }();
 
     auto const structs2 = [] {
-      auto child3 = IntCol{7, 8, 9};
-      auto child4 = StringsCol{"", "abc", "123"};
-      return StructsCol{{child3, child4}};
+      auto child1 = IntCol{7, 8, 9};
+      auto child2 = StringsCol{"", "abc", "123"};
+      return StructsCol{{child1, child2}};
     }();
 
     EXPECT_THROW(cudf::interleave_columns(TView{{structs1, structs2}}), cudf::logic_error);
@@ -774,10 +774,10 @@ TEST_F(StructsColumnsInterleaveTest, InvalidInput)
     }();
 
     auto const structs2 = [] {
-      auto child3 = IntCol{7, 8, 9};
-      auto child4 = IntCol{10, 11, 12};
-      auto child5 = IntCol{13, 14, 15};
-      return StructsCol{{child3, child4, child5}};
+      auto child1 = IntCol{7, 8, 9};
+      auto child2 = IntCol{10, 11, 12};
+      auto child3 = IntCol{13, 14, 15};
+      return StructsCol{{child1, child2, child3}};
     }();
 
     EXPECT_THROW(cudf::interleave_columns(TView{{structs1, structs2}}), cudf::logic_error);
