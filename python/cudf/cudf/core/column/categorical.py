@@ -860,7 +860,7 @@ class CategoricalColumn(column.ColumnBase):
         codes[key] = value
         out = cudf.core.column.build_categorical_column(
             categories=self.categories,
-            codes=codes,
+            codes=codes.fillna(0),
             mask=codes.base_mask,
             size=codes.size,
             offset=self.offset,
@@ -1212,6 +1212,10 @@ class CategoricalColumn(column.ColumnBase):
     def as_categorical_column(
         self, dtype: Dtype, **kwargs
     ) -> CategoricalColumn:
+        if "__DEBUG__" in kwargs:
+            import pdb
+            pdb.set_trace()
+        
         if isinstance(dtype, str) and dtype == "category":
             return self
         if (
@@ -1262,7 +1266,7 @@ class CategoricalColumn(column.ColumnBase):
         if self.null_count == len(self):
             # self.categories is empty; just return codes
             return self.codes
-        gather_map = self.codes
+        gather_map = self.children[0]
         out = self.categories.take(gather_map, nullify=True)
         out = out.set_mask(self.mask)
         return out
@@ -1353,8 +1357,9 @@ class CategoricalColumn(column.ColumnBase):
             )
         else:
             out_col = self
-            if not (type(out_col.categories) is type(new_categories)):
+            if len(out_col.categories) == 0 or not (type(out_col.categories) is type(new_categories)):
                 # If both categories are of different Column types,
+                # or the original categories are empty
                 # return a column full of Nulls.
                 out_col = _create_empty_categorical_column(
                     self,
@@ -1498,7 +1503,7 @@ def _create_empty_categorical_column(
         ),
         offset=categorical_column.offset,
         size=categorical_column.size,
-        mask=categorical_column.base_mask,
+        mask=libcudf.null_mask.create_null_mask(categorical_column.size, libcudf.null_mask.MaskState.ALL_NULL),
         ordered=dtype.ordered,
     )
 

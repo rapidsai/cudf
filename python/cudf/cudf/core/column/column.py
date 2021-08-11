@@ -22,6 +22,7 @@ from typing import (
 import cupy
 import numpy as np
 import pandas as pd
+from pandas._libs import missing
 import pyarrow as pa
 from numba import cuda
 
@@ -911,6 +912,10 @@ class ColumnBase(Column, Serializable):
             return self.as_numerical_column(dtype, **kwargs)
 
     def as_categorical_column(self, dtype, **kwargs) -> ColumnBase:
+        if "__DEBUG__" in kwargs:
+            import pdb
+            pdb.set_trace()
+
         if "ordered" in kwargs:
             ordered = kwargs["ordered"]
         else:
@@ -920,17 +925,25 @@ class ColumnBase(Column, Serializable):
 
         # Re-label self w.r.t. the provided categories
         if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
-            labels = sr.label_encoding(cats=dtype.categories)
+            NA_SENTINEL = -1
+            labels = sr.label_encoding(cats=dtype.categories, na_sentinel=NA_SENTINEL)
             if "ordered" in kwargs:
                 warnings.warn(
                     "Ignoring the `ordered` parameter passed in `**kwargs`, "
                     "will be using `ordered` parameter of CategoricalDtype"
                 )
             
+            missing_categorical_mask = ~(labels._column==np.int32(NA_SENTINEL))
+            if self.mask:
+                mask_col = libcudf.transform.mask_to_bools(self.mask, 0, self.size)
+                mask = mask_col & missing_categorical_mask if self.mask is not None else missing_categorical_mask
+            else:
+                mask = missing_categorical_mask
+            bitmask = libcudf.transform.bools_to_mask(mask)
             return build_categorical_column(
                 categories=as_column(dtype.categories),
                 codes=labels._column,
-                mask=self.mask,
+                mask=bitmask,
                 ordered=dtype.ordered,
             )
 
