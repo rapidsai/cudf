@@ -1,6 +1,6 @@
 from pandas.core.window.ewm import get_center_of_mass
 
-from cudf._lib.transform import ewm
+#from cudf._lib.transform import ewm
 from cudf.core.window.rolling import _RollingBase
 
 
@@ -42,4 +42,5 @@ class ExponentialMovingWindow(_RollingBase):
         """
         # TODO: redo libcudf stuff in terms of com not alpha
         # hardcoded
-        return type(sr)(ewm(sr._column, self.com))
+        #return type(sr)(ewm(sr._column, self.com))
+        pass

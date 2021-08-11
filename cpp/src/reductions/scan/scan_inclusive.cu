@@ -330,12 +330,105 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
   return generate_ranks<false>(order_by, stream, mr);
 }
 
+class blelloch_functor {
+public:
+ __device__ thrust::pair<double, double> operator()(thrust::pair<double, double> ci,
+                                                    thrust::pair<double, double> cj)
+ {
+   double ci0 = thrust::get<0>(ci);
+   double ci1 = thrust::get<1>(ci);
+   double cj0 = thrust::get<0>(cj);
+   double cj1 = thrust::get<1>(cj);
+   return thrust::pair<double, double>(ci0 * cj0, ci1 * cj0 + cj1);
+ }
+};
+
+rmm::device_vector<double> ewm_numerator(column_view const& input, double beta)
+{
+  rmm::device_vector<double> output(input.size());
+
+  rmm::device_vector<thrust::pair<double, double>> pairs(input.size());
+  rmm::device_vector<thrust::pair<double, double>> result_pairs(input.size());
+
+  thrust::transform(input.begin<double>(),
+                    input.end<double>(),
+                    pairs.begin(),
+                    [=] __host__ __device__(double input) -> thrust::pair<double, double> {
+                      return thrust::pair<double, double>(beta, input);
+                    });
+
+  blelloch_functor op;
+  thrust::inclusive_scan(pairs.begin(), pairs.end(), result_pairs.begin(), op);
+
+  thrust::transform(result_pairs.begin(),
+                    result_pairs.end(),
+                    output.begin(),
+                    [=] __host__ __device__(thrust::pair<double, double> input) -> double {
+                      return thrust::get<1>(input);
+                    });
+
+  return output;
+}
+
+rmm::device_vector<double> ewm_denominator(column_view const& input, double beta)
+{
+  rmm::device_vector<double> output(input.size());
+
+  rmm::device_vector<thrust::pair<double, double>> pairs(input.size());
+  rmm::device_vector<thrust::pair<double, double>> result_pairs(input.size());
+  thrust::fill(pairs.begin(), pairs.end(), thrust::pair<double, double>(beta, 1.0));
+
+  blelloch_functor op;
+  thrust::inclusive_scan(pairs.begin(), pairs.end(), result_pairs.begin(), op);
+
+  thrust::transform(result_pairs.begin(),
+                    result_pairs.end(),
+                    output.begin(),
+                    [=] __host__ __device__(thrust::pair<double, double> input) -> double {
+                      return thrust::get<1>(input);
+                    });
+
+  return output;
+}
+
+
+std::unique_ptr<column> ewm(column_view const& input,
+                            double com,
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(input.type() == cudf::data_type{cudf::type_id::FLOAT64},
+               "Column must be float64 type");
+
+  double beta = 1.0 - (1.0 / (com + 1.0));
+    
+  auto output = make_fixed_width_column(cudf::data_type{cudf::type_id::FLOAT64}, input.size());
+  auto output_mutable_view = output->mutable_view();
+
+  auto begin = output_mutable_view.begin<double>();
+  auto end   = output_mutable_view.end<double>();
+
+  rmm::device_vector<double> denominator = ewm_denominator(input, beta);
+  rmm::device_vector<double> numerator   = ewm_numerator(input, beta);
+
+  thrust::transform(rmm::exec_policy(stream),
+                    numerator.begin(),
+                    numerator.end(),
+                    denominator.begin(),
+                    output_mutable_view.begin<double>(),
+                    thrust::divides<double>());
+
+  return output;
+}
+
+
 std::unique_ptr<column> ewma(
   column_view const& input, 
   rmm::cuda_stream_view stream, 
   rmm::mr::device_memory_resource* mr) 
 {
-  std::unique_ptr<column> result = make_fixed_width_column(input.type(), input.size());
+  double com = 0.5;
+  std::unique_ptr<column> result = ewm(input, com, stream, mr);
   return result;
 }
 
