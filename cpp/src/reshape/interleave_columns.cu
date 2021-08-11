@@ -107,29 +107,23 @@ struct interleave_columns_impl<T, typename std::enable_if_t<std::is_same_v<T, cu
                                                mr));
     }
 
-    auto output = make_structs_column(output_size,
-                                      std::move(output_struct_members),
-                                      0,
-                                      rmm::device_buffer{0, stream, mr},
-                                      stream,
-                                      mr);
-
-    // Only create null mask if at least one input structs column is nullable.
-    if (create_mask) {
+    auto const create_mask_fn = [&] {
       auto const input_dv_ptr = table_device_view::create(structs_columns);
       auto const validity_fn  = [input_dv = *input_dv_ptr, num_columns] __device__(auto const idx) {
         return input_dv.column(idx % num_columns).is_valid(idx / num_columns);
       };
-      auto [null_mask, null_count] =
-        cudf::detail::valid_if(thrust::make_counting_iterator<size_type>(0),
-                               thrust::make_counting_iterator<size_type>(output_size),
-                               validity_fn,
-                               stream,
-                               mr);
-      output->set_null_mask(std::move(null_mask), null_count);
-    }
+      return cudf::detail::valid_if(thrust::make_counting_iterator<size_type>(0),
+                                    thrust::make_counting_iterator<size_type>(output_size),
+                                    validity_fn,
+                                    stream,
+                                    mr);
+    };
 
-    return output;
+    // Only create null mask if at least one input structs column is nullable.
+    auto [null_mask, null_count] =
+      create_mask ? create_mask_fn() : std::pair{rmm::device_buffer{0, stream, mr}, size_type{0}};
+    return make_structs_column(
+      output_size, std::move(output_struct_members), null_count, std::move(null_mask), stream, mr);
   }
 };
 
