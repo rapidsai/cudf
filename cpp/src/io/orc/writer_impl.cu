@@ -1140,7 +1140,7 @@ void writer::impl::init_state()
 
 template <typename T>
 struct device_stack {
-  __device__ device_stack(T* stack_storage, uint32_t capacity)
+  __device__ device_stack(T* stack_storage, int capacity)
     : stack(stack_storage), capacity(capacity), size(0)
   {
   }
@@ -1149,13 +1149,17 @@ struct device_stack {
     cudf_assert(size < capacity and "Stack overflow");
     stack[size++] = val;
   }
-  __device__ T pop() { return stack[--size]; }
+  __device__ T pop()
+  {
+    cudf_assert(size > 0 and "Stack underflow");
+    return stack[--size];
+  }
   __device__ bool empty() { return size == 0; }
 
  private:
   T* stack;
-  uint32_t capacity;
-  uint32_t size;
+  int capacity;
+  int size;
 };
 
 orc_table_view make_orc_table_view(table_view const& table,
