@@ -6348,7 +6348,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if axis == 0:
             return super()._scan(op, axis=axis, *args, **kwargs)
         elif axis == 1:
-            return self._apply_support_method_axis_1(op, **kwargs)
+            return self._apply_support_method_axis_1(f"cum{op}", **kwargs)
 
     def mode(self, axis=0, numeric_only=False, dropna=True):
         """
