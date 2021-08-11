@@ -228,7 +228,8 @@ def test_string_empty_to_decimal():
     gs = cudf.Series(["", "-85", ""], dtype="str")
     got = gs.astype(cudf.Decimal64Dtype(scale=0, precision=5))
     expected = cudf.Series(
-        [0, -85, 0], dtype=cudf.Decimal64Dtype(scale=0, precision=5),
+        [0, -85, 0],
+        dtype=cudf.Decimal64Dtype(scale=0, precision=5),
     )
     assert_eq(expected, got)
 
@@ -668,12 +669,15 @@ def test_string_index_str_cat(data, others, sep, na_rep, name):
     got = gi.str.cat(others=gd_others, sep=sep, na_rep=na_rep)
 
     assert_eq(
-        expect, got, exact=False,
+        expect,
+        got,
+        exact=False,
     )
 
 
 @pytest.mark.parametrize(
-    "data", [["a", None, "c", None, "e"], ["a", "b", "c", "d", "a"]],
+    "data",
+    [["a", None, "c", None, "e"], ["a", "b", "c", "d", "a"]],
 )
 @pytest.mark.parametrize(
     "others",
@@ -1142,7 +1146,8 @@ def test_string_get(string, index):
     gds = cudf.Series(string)
 
     assert_eq(
-        pds.str.get(index).fillna(""), gds.str.get(index).fillna(""),
+        pds.str.get(index).fillna(""),
+        gds.str.get(index).fillna(""),
     )
 
 
@@ -1155,10 +1160,12 @@ def test_string_get(string, index):
     ],
 )
 @pytest.mark.parametrize(
-    "number", [-10, 0, 1, 3, 10],
+    "number",
+    [-10, 0, 1, 3, 10],
 )
 @pytest.mark.parametrize(
-    "diff", [0, 2, 5, 9],
+    "diff",
+    [0, 2, 5, 9],
 )
 def test_string_slice_str(string, number, diff):
     pds = pd.Series(string)
@@ -1614,7 +1621,8 @@ def test_strings_zfill_tests(data, width):
 )
 @pytest.mark.parametrize("width", [0, 1, 4, 9, 100])
 @pytest.mark.parametrize(
-    "side", ["left", "right", "both"],
+    "side",
+    ["left", "right", "both"],
 )
 @pytest.mark.parametrize("fillchar", [" ", ".", "\n", "+", "\t"])
 def test_strings_pad_tests(data, width, side, fillchar):
@@ -1797,7 +1805,8 @@ def test_string_table_view_creation():
     ],
 )
 @pytest.mark.parametrize(
-    "pat", ["", None, " ", "a", "abc", "cat", "$", "\n"],
+    "pat",
+    ["", None, " ", "a", "abc", "cat", "$", "\n"],
 )
 def test_string_starts_ends(data, pat):
     ps = pd.Series(data)
@@ -1873,7 +1882,8 @@ def test_string_starts_ends_list_like_pat(data, pat):
     ],
 )
 @pytest.mark.parametrize(
-    "sub", ["", " ", "a", "abc", "cat", "$", "\n"],
+    "sub",
+    ["", " ", "a", "abc", "cat", "$", "\n"],
 )
 def test_string_find(data, sub):
     ps = pd.Series(data)
@@ -1882,49 +1892,65 @@ def test_string_find(data, sub):
     got = gs.str.find(sub)
     expect = ps.str.find(sub)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
     got = gs.str.find(sub, start=1)
     expect = ps.str.find(sub, start=1)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
     got = gs.str.find(sub, end=10)
     expect = ps.str.find(sub, end=10)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
     got = gs.str.find(sub, start=2, end=10)
     expect = ps.str.find(sub, start=2, end=10)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
     got = gs.str.rfind(sub)
     expect = ps.str.rfind(sub)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
     got = gs.str.rfind(sub, start=1)
     expect = ps.str.rfind(sub, start=1)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
     got = gs.str.rfind(sub, end=10)
     expect = ps.str.rfind(sub, end=10)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
     got = gs.str.rfind(sub, start=2, end=10)
     expect = ps.str.rfind(sub, start=2, end=10)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
 

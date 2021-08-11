@@ -65,7 +65,8 @@ def read_json(
         )
 
         if not ioutils.ensure_single_filepath_or_buffer(
-            path_or_data=path_or_buf, **kwargs,
+            path_or_data=path_or_buf,
+            **kwargs,
         ):
             raise NotImplementedError(
                 "`read_json` does not yet support reading "

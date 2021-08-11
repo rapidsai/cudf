@@ -74,7 +74,10 @@ class Parameters:
     """
 
     def __init__(
-        self, num_rows=2048, column_parameters=None, seed=None,
+        self,
+        num_rows=2048,
+        column_parameters=None,
+        seed=None,
     ):
         self.num_rows = num_rows
         if column_parameters is None:
@@ -181,7 +184,10 @@ def _generate_column(column_params, num_rows):
 
 
 def generate(
-    path, parameters, format=None, use_threads=True,
+    path,
+    parameters,
+    format=None,
+    use_threads=True,
 ):
     """
     Generate dataset using given parameters and write to given format
@@ -274,7 +280,10 @@ def get_dataframe(parameters, use_threads):
         pool.close()
         pool.join()
     # Convert to Pandas DataFrame and sort columns appropriately
-    tbl = pa.Table.from_arrays(column_data, schema=schema,)
+    tbl = pa.Table.from_arrays(
+        column_data,
+        schema=schema,
+    )
     if columns_to_sort:
         tbl = tbl.to_pandas()
         tbl = tbl.sort_values(columns_to_sort)
@@ -460,7 +469,11 @@ def rand_dataframe(
             # is merged.
 
     df = get_dataframe(
-        Parameters(num_rows=rows, column_parameters=column_params, seed=seed,),
+        Parameters(
+            num_rows=rows,
+            column_parameters=column_params,
+            seed=seed,
+        ),
         use_threads=use_threads,
     )
 
@@ -473,7 +486,10 @@ def int_generator(dtype, size):
     """
     iinfo = np.iinfo(dtype)
     return lambda: np.random.randint(
-        low=iinfo.min, high=iinfo.max, size=size, dtype=dtype,
+        low=iinfo.min,
+        high=iinfo.max,
+        size=size,
+        dtype=dtype,
     )
 
 
@@ -484,7 +500,9 @@ def float_generator(dtype, size):
     finfo = np.finfo(dtype)
     return (
         lambda: np.random.uniform(
-            low=finfo.min / 2, high=finfo.max / 2, size=size,
+            low=finfo.min / 2,
+            high=finfo.max / 2,
+            size=size,
         )
         * 2
     )
@@ -545,7 +563,10 @@ def get_values_for_nested_data(dtype, lists_max_length):
         values = float_generator(dtype=dtype, size=cardinality)()
     elif dtype.kind in ("U", "O"):
         values = [
-            mimesis.random.random.schoice(string.printable, 100,)
+            mimesis.random.random.schoice(
+                string.printable,
+                100,
+            )
             for _ in range(cardinality)
         ]
     elif dtype.kind == "M":

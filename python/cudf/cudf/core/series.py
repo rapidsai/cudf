@@ -169,7 +169,12 @@ class Series(SingleColumnFrame, Serializable):
         return cls(data=col)
 
     def __init__(
-        self, data=None, index=None, dtype=None, name=None, nan_as_null=True,
+        self,
+        data=None,
+        index=None,
+        dtype=None,
+        name=None,
+        nan_as_null=True,
     ):
         """
         One-dimensional GPU array (including time series).
@@ -2926,8 +2931,7 @@ class Series(SingleColumnFrame, Serializable):
 
     @property
     def index(self):
-        """The index object
-        """
+        """The index object"""
         return self._index
 
     @index.setter
@@ -2982,8 +2986,7 @@ class Series(SingleColumnFrame, Serializable):
 
     @property
     def nullmask(self):
-        """The gpu buffer for the null-mask
-        """
+        """The gpu buffer for the null-mask"""
         return cudf.Series(self._column.nullmask)
 
     def as_mask(self):
@@ -4299,7 +4302,9 @@ class Series(SingleColumnFrame, Serializable):
                 result_col[first_index:] = None
 
         return Series(
-            result_col._apply_scan_op("min"), name=self.name, index=self.index,
+            result_col._apply_scan_op("min"),
+            name=self.name,
+            index=self.index,
         )
 
     def cummax(self, axis=0, skipna=True, *args, **kwargs):
@@ -4350,7 +4355,9 @@ class Series(SingleColumnFrame, Serializable):
                 result_col[first_index:] = None
 
         return Series(
-            result_col._apply_scan_op("max"), name=self.name, index=self.index,
+            result_col._apply_scan_op("max"),
+            name=self.name,
+            index=self.index,
         )
 
     def cumsum(self, axis=0, skipna=True, *args, **kwargs):
@@ -5478,7 +5485,10 @@ class Series(SingleColumnFrame, Serializable):
             index = np.asarray(q)
             if len(self) == 0:
                 result = column_empty_like(
-                    index, dtype=self.dtype, masked=True, newsize=len(index),
+                    index,
+                    dtype=self.dtype,
+                    masked=True,
+                    newsize=len(index),
                 )
         else:
             index = None
@@ -5531,7 +5541,10 @@ class Series(SingleColumnFrame, Serializable):
             data = _format_stats_values(data)
 
             return Series(
-                data=data, index=index, nan_as_null=False, name=self.name,
+                data=data,
+                index=index,
+                nan_as_null=False,
+                name=self.name,
             )
 
         def _describe_timedelta(self):

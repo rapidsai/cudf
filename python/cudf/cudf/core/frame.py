@@ -1664,8 +1664,7 @@ class Frame(libcudf.table.Table):
         return self
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
-        """Shift values by `periods` positions.
-        """
+        """Shift values by `periods` positions."""
         assert axis in (None, 0) and freq is None
         return self._shift(periods)
 
@@ -3637,8 +3636,7 @@ class SingleColumnFrame(Frame):
 
     @property
     def shape(self):
-        """Returns a tuple representing the dimensionality of the Index.
-        """
+        """Returns a tuple representing the dimensionality of the Index."""
         return (len(self),)
 
     def __iter__(self):
@@ -3901,8 +3899,7 @@ class SingleColumnFrame(Frame):
         raise NotImplementedError
 
     def _copy_construct(self, **kwargs):
-        """Shallow copy this object by replacing certain ctor args.
-        """
+        """Shallow copy this object by replacing certain ctor args."""
         return self.__class__(**{**self._copy_construct_defaults, **kwargs})
 
     def _binaryop(
@@ -4012,7 +4009,9 @@ def _get_replacement_values_for_columns(
                 col: [value]
                 if _is_non_decimal_numeric_dtype(columns_dtype_map[col])
                 else cudf.utils.utils.scalar_broadcast_to(
-                    value, (len(to_replace),), np.dtype(type(value)),
+                    value,
+                    (len(to_replace),),
+                    np.dtype(type(value)),
                 )
                 for col in columns_dtype_map
             }
@@ -4199,7 +4198,10 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
                 if idx in categories:
                     cols[idx] = (
                         cols[idx]
-                        ._set_categories(categories[idx], is_unique=True,)
+                        ._set_categories(
+                            categories[idx],
+                            is_unique=True,
+                        )
                         .codes
                     )
                 cols[idx] = cols[idx].astype(dtype)

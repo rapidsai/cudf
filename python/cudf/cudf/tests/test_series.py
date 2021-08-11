@@ -863,8 +863,14 @@ def test_series_memory_usage():
             ),
         ),
         (
-            cudf.Series([1, 2, None, 10.2, None], dtype="float32",),
-            pd.Series([1, 2, None, 10.2, None], dtype=pd.Float32Dtype(),),
+            cudf.Series(
+                [1, 2, None, 10.2, None],
+                dtype="float32",
+            ),
+            pd.Series(
+                [1, 2, None, 10.2, None],
+                dtype=pd.Float32Dtype(),
+            ),
         ),
     ],
 )
@@ -1178,7 +1184,8 @@ def test_series_drop_raises():
 
 
 @pytest.mark.parametrize(
-    "data", [[[1, 2, 3], None, [4], [], [5, 6]], [1, 2, 3, 4, 5]],
+    "data",
+    [[[1, 2, 3], None, [4], [], [5, 6]], [1, 2, 3, 4, 5]],
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize(

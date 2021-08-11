@@ -33,7 +33,7 @@ DASK_VERSION = LooseVersion(dask.__version__)
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
-    """ Superclass for DataFrame and Series
+    """Superclass for DataFrame and Series
 
     Parameters
     ----------
@@ -257,13 +257,13 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return df
 
     def to_parquet(self, path, *args, **kwargs):
-        """ Calls dask.dataframe.io.to_parquet with CudfEngine backend """
+        """Calls dask.dataframe.io.to_parquet with CudfEngine backend"""
         from dask_cudf.io import to_parquet
 
         return to_parquet(self, path, *args, **kwargs)
 
     def to_orc(self, path, **kwargs):
-        """ Calls dask_cudf.io.to_orc """
+        """Calls dask_cudf.io.to_orc"""
         from dask_cudf.io import to_orc
 
         return to_orc(self, path, **kwargs)
@@ -298,7 +298,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return _parallel_var(self, meta, skipna, split_every, out)
 
     def repartition(self, *args, **kwargs):
-        """ Wraps dask.dataframe DataFrame.repartition method.
+        """Wraps dask.dataframe DataFrame.repartition method.
         Uses DataFrame.shuffle if `columns=` is specified.
         """
         # TODO: Remove this function in future(0.17 release)
@@ -320,8 +320,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return super().repartition(*args, **kwargs)
 
     def shuffle(self, *args, **kwargs):
-        """ Wraps dask.dataframe DataFrame.shuffle method
-        """
+        """Wraps dask.dataframe DataFrame.shuffle method"""
         shuffle_arg = kwargs.pop("shuffle", None)
         if shuffle_arg and shuffle_arg != "tasks":
             raise ValueError("dask_cudf does not support disk-based shuffle.")

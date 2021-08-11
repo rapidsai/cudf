@@ -344,7 +344,8 @@ def test_create_list_series(data):
 
 
 @pytest.mark.parametrize(
-    "data", [data_test_1(), data_test_2(), data_test_non_numeric()],
+    "data",
+    [data_test_1(), data_test_2(), data_test_non_numeric()],
 )
 def test_unique(data):
     expect = Series(data).list.unique()
@@ -353,7 +354,8 @@ def test_unique(data):
 
 
 @pytest.mark.parametrize(
-    "data", [data_test_2(), data_test_non_numeric()],
+    "data",
+    [data_test_2(), data_test_non_numeric()],
 )
 def test_len(data):
     expect = Series(data).list.len()
@@ -362,7 +364,8 @@ def test_len(data):
 
 
 @pytest.mark.parametrize(
-    "data, search_key", [(data_test_2(), 1)],
+    "data, search_key",
+    [(data_test_2(), 1)],
 )
 def test_contains(data, search_key):
     expect = Series(data).list.contains(search_key)
@@ -387,7 +390,8 @@ def test_get(data, index, expectation):
 
 
 @pytest.mark.parametrize(
-    "data", [data_test_1(), data_test_2(), data_test_nested()],
+    "data",
+    [data_test_1(), data_test_2(), data_test_nested()],
 )
 def test_leaves(data):
     expect = Series(data).list.leaves

@@ -317,7 +317,8 @@ def test_timedelta_ops_misc_inputs(data, other, dtype, ops):
 @pytest.mark.parametrize("datetime_dtype", utils.DATETIME_TYPES)
 @pytest.mark.parametrize("timedelta_dtype", utils.TIMEDELTA_TYPES)
 @pytest.mark.parametrize(
-    "ops", ["add", "sub"],
+    "ops",
+    ["add", "sub"],
 )
 def test_timedelta_ops_datetime_inputs(
     datetime_data, timedelta_data, datetime_dtype, timedelta_dtype, ops
@@ -640,7 +641,8 @@ def test_timedelta_reduction_ops(data, dtype, reduction_op):
 
 
 @pytest.mark.parametrize(
-    "data", _TIMEDELTA_DATA,
+    "data",
+    _TIMEDELTA_DATA,
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 def test_timedelta_dt_components(data, dtype):
@@ -657,7 +659,8 @@ def test_timedelta_dt_components(data, dtype):
 
 
 @pytest.mark.parametrize(
-    "data", _TIMEDELTA_DATA,
+    "data",
+    _TIMEDELTA_DATA,
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 def test_timedelta_dt_properties(data, dtype):
@@ -692,7 +695,8 @@ def test_timedelta_dt_properties(data, dtype):
 
 
 @pytest.mark.parametrize(
-    "data", _TIMEDELTA_DATA,
+    "data",
+    _TIMEDELTA_DATA,
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 def test_timedelta_index(data, dtype):

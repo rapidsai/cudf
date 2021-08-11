@@ -118,5 +118,6 @@ def test_get_dummies_categorical():
     got = dd.get_dummies(gddf, columns=["B"])
 
     dd.assert_eq(
-        expect, got,
+        expect,
+        got,
     )

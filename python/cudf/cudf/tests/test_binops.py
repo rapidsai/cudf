@@ -924,7 +924,8 @@ def test_ufunc_ops(lhs, rhs, ops):
         assert got == expect
     else:
         utils.assert_eq(
-            expect, got,
+            expect,
+            got,
         )
 
 

@@ -40,7 +40,10 @@ class ColumnMethods:
 
     @overload
     def _return_or_inplace(
-        self, new_col, expand: bool = False, retain_index: bool = True,
+        self,
+        new_col,
+        expand: bool = False,
+        retain_index: bool = True,
     ) -> ParentType:
         ...
 

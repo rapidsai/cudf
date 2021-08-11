@@ -42,7 +42,7 @@ from cudf.utils.dtypes import (
 
 
 def str_to_boolean(column: StringColumn):
-    """Takes in string column and returns boolean column """
+    """Takes in string column and returns boolean column"""
     return (
         libstrings.count_characters(column) > cudf.Scalar(0, dtype="int8")
     ).fillna(False)
@@ -235,7 +235,9 @@ class StringMethods(ColumnMethods):
         2    11
         dtype: int32
         """
-        return self._return_or_inplace(libstrings.count_bytes(self._column),)
+        return self._return_or_inplace(
+            libstrings.count_bytes(self._column),
+        )
 
     @overload
     def cat(self, sep: str = None, na_rep: str = None) -> str:
@@ -336,7 +338,9 @@ class StringMethods(ColumnMethods):
 
         if others is None:
             data = libstrings.join(
-                self._column, cudf.Scalar(sep), cudf.Scalar(na_rep, "str"),
+                self._column,
+                cudf.Scalar(sep),
+                cudf.Scalar(na_rep, "str"),
             )
         else:
             other_cols = _get_cols_list(self._parent, others)
@@ -834,7 +838,9 @@ class StringMethods(ColumnMethods):
 
             return self._return_or_inplace(
                 libstrings.replace_multi_re(
-                    self._column, pat, column.as_column(repl, dtype="str"),
+                    self._column,
+                    pat,
+                    column.as_column(repl, dtype="str"),
                 )
                 if regex
                 else libstrings.replace_multi(
@@ -4681,7 +4687,7 @@ class StringMethods(ColumnMethods):
         0     True
         1    False
         dtype: bool
-         """
+        """
         ltype = libstrings.LetterType.CONSONANT
 
         if can_convert_to_column(position):
@@ -4861,8 +4867,7 @@ def _expected_types_format(types):
 
 
 class StringColumn(column.ColumnBase):
-    """Implements operations for Columns of String type
-    """
+    """Implements operations for Columns of String type"""
 
     _start_offset: Optional[int]
     _end_offset: Optional[int]

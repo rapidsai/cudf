@@ -171,7 +171,9 @@ class Merge(object):
         right_table = _frame_select_by_indexers(rhs, self._keys.right)
 
         left_rows, right_rows = self._joiner(
-            left_table, right_table, how=self.how,
+            left_table,
+            right_table,
+            how=self.how,
         )
         lhs, rhs = self._restore_categorical_keys(lhs, rhs)
 

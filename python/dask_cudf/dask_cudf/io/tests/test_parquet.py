@@ -391,7 +391,10 @@ def test_row_groups_per_part(tmpdir, row_groups, index):
         write_metadata_file=True,
     )
 
-    ddf2 = dask_cudf.read_parquet(str(tmpdir), row_groups_per_part=row_groups,)
+    ddf2 = dask_cudf.read_parquet(
+        str(tmpdir),
+        row_groups_per_part=row_groups,
+    )
 
     dd.assert_eq(ddf1, ddf2, check_divisions=False)
 
@@ -409,7 +412,9 @@ def test_create_metadata_file(tmpdir, partition_on):
     df1.index.name = "myindex"
     ddf1 = dask_cudf.from_cudf(df1, npartitions=10)
     ddf1.to_parquet(
-        tmpdir, write_metadata_file=False, partition_on=partition_on,
+        tmpdir,
+        write_metadata_file=False,
+        partition_on=partition_on,
     )
 
     # Add global _metadata file
@@ -418,7 +423,8 @@ def test_create_metadata_file(tmpdir, partition_on):
     else:
         fns = glob.glob(os.path.join(tmpdir, "*.parquet"))
     dask_cudf.io.parquet.create_metadata_file(
-        fns, split_every=3,  # Force tree reduction
+        fns,
+        split_every=3,  # Force tree reduction
     )
 
     # Check that we can now read the ddf
@@ -458,7 +464,10 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     with pytest.raises(RuntimeError):
         # Pyarrow will fail to aggregate metadata
         # if gather_statistics=True
-        dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()
+        dask_cudf.read_parquet(
+            str(tmpdir),
+            gather_statistics=True,
+        ).compute()
 
     # Add global metadata file.
     # Dask-CuDF can do this without requiring schema
@@ -468,4 +477,7 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
 
     # Check that we can now read the ddf
     # with the _metadata file present
-    dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()
+    dask_cudf.read_parquet(
+        str(tmpdir),
+        gather_statistics=True,
+    ).compute()

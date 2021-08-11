@@ -9,9 +9,13 @@ __all__ = ["timeseries", "randomdata"]
 # TODO:
 # change default of name from category to str type when nvstring are merged
 def timeseries(
-    start="2000-01-01", end="2000-01-31", freq="1s", dtypes=None, seed=None,
+    start="2000-01-01",
+    end="2000-01-31",
+    freq="1s",
+    dtypes=None,
+    seed=None,
 ):
-    """ Create timeseries dataframe with random data
+    """Create timeseries dataframe with random data
 
     Parameters
     ----------
@@ -58,7 +62,7 @@ def timeseries(
 
 
 def randomdata(nrows=10, dtypes=None, seed=None):
-    """ Create a dataframe with random data
+    """Create a dataframe with random data
 
     Parameters
     ----------

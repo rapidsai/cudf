@@ -125,7 +125,13 @@ class MultiIndex(BaseIndex):
             return
 
         # name setup
-        if isinstance(names, (Sequence, pd.core.indexes.frozen.FrozenList,),):
+        if isinstance(
+            names,
+            (
+                Sequence,
+                pd.core.indexes.frozen.FrozenList,
+            ),
+        ):
             if sum(x is None for x in names) > 1:
                 column_names = list(range(len(codes)))
             else:
@@ -448,7 +454,7 @@ class MultiIndex(BaseIndex):
         return self.copy(deep=True)
 
     def _popn(self, n):
-        """ Returns a copy of this index without the left-most n values.
+        """Returns a copy of this index without the left-most n values.
 
         Removes n names, labels, and codes in order to build a new index
         for results.
@@ -640,12 +646,11 @@ class MultiIndex(BaseIndex):
 
     @property
     def ndim(self):
-        """Dimension of the data. For MultiIndex ndim is always 2.
-        """
+        """Dimension of the data. For MultiIndex ndim is always 2."""
         return 2
 
     def _get_level_label(self, level):
-        """ Get name of the level.
+        """Get name of the level.
 
         Parameters
         ----------
@@ -786,8 +791,7 @@ class MultiIndex(BaseIndex):
         self._codes = codes
 
     def _compute_validity_mask(self, index, row_tuple, max_length):
-        """ Computes the valid set of indices of values in the lookup
-        """
+        """Computes the valid set of indices of values in the lookup"""
         lookup = cudf.DataFrame()
         for idx, row in enumerate(row_tuple):
             if isinstance(row, slice) and row == slice(None):
