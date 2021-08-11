@@ -185,6 +185,12 @@ def test_typecast_from_int_to_decimal(data, from_dtype, to_dtype):
     ],
 )
 def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
+    if from_dtype.scale > to_dtype.MAX_PRECISION:
+        pytest.skip(
+            "In python this is supposed to overflow because "
+            "the representation value in the source exceeds the max representable"
+            "in destination dtype."
+        )
     s = data.astype(from_dtype)
 
     pa_arr = s.to_arrow().cast(

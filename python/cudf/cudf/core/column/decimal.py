@@ -26,7 +26,7 @@ from .numerical_base import NumericalBaseColumn
 
 
 class DecimalBaseColumn(NumericalBaseColumn):
-    """A decimal type column
+    """Base column for decimal64 and decimal32 columns
     """
 
     dtype: Union[Decimal32Dtype, Decimal64Dtype]
