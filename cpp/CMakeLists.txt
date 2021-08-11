@@ -138,6 +138,7 @@ include(cmake/thirdparty/CUDF_GetDLPack.cmake)
 # find libcu++
 include(cmake/thirdparty/CUDF_GetLibcudacxx.cmake)
 # find cuCollections
+# Should come after including thrust and libcudacxx
 include(cmake/thirdparty/CUDF_GetcuCollections.cmake)
 # find or install GoogleTest
 include(cmake/thirdparty/CUDF_GetGTest.cmake)

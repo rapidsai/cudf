@@ -16,23 +16,24 @@
 
 function(find_and_configure_cucollections)
 
-    if(TARGET cuCollections::cuco)
+    if(TARGET cuco::cuco)
         return()
     endif()
 
     # Find or install cuCollections
     CPMFindPackage(NAME   cuco
         GITHUB_REPOSITORY NVIDIA/cuCollections
-        GIT_TAG           dev
+        GIT_TAG           0d602ae21ea4f38d23ed816aa948453d97b2ee4e
         OPTIONS           "BUILD_TESTS OFF"
                           "BUILD_BENCHMARKS OFF"
                           "BUILD_EXAMPLES OFF"
+        DOWNLOAD_ONLY
     )
 
     set(CUCO_INCLUDE_DIR "${cuco_SOURCE_DIR}/include" PARENT_SCOPE)
 
-    # Make sure consumers of cudf can also see cuCollections::cuco target
-    fix_cmake_global_defaults(cuCollections::cuco)
+    # Make sure consumers of cudf can also see cuco::cuco target
+    fix_cmake_global_defaults(cuco::cuco)
 endfunction()
 
 find_and_configure_cucollections()
