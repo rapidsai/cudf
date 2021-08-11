@@ -570,6 +570,41 @@ TEST_F(BasicDatetimeOpsTest, TestIsLeapYear)
       {true, false, true, true, true, true, true, true, false, true, true, false}});
 }
 
+TEST_F(BasicDatetimeOpsTest, TestDaysInMonths)
+
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace cuda::std::chrono;
+
+  auto timestamps_s =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      {
+        0L,            // NULL
+        -1887541682L,  // 1910-03-10 10:51:58
+        0L,            // NULL
+        -1251006943L,  // 1930-05-11 18:04:17
+        -932134638L,   // 1940-06-18 09:42:42
+        -614354877L,   // 1950-07-14 09:52:03
+        -296070394L,   // 1960-08-14 06:13:26
+        22840404L,     // 1970-09-22 08:33:24
+        339817190L,    // 1980-10-08 01:39:50
+        657928062L,    // 1990-11-06 21:47:42
+        976630837L,    // 2000-12-12 14:20:37
+        1294699018L,   // 2011-01-10 22:36:58
+        1613970182L,   // 2021-02-22 05:03:02 - non leap year February
+        1930963331L,   // 2031-03-11 02:42:11
+        2249867102L,   // 2041-04-18 03:05:02
+        951426858L,    // 2000-02-24 21:14:18 - leap year February
+      },
+      iterators::nulls_at({0, 2})};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*days_in_month(timestamps_s),
+                                 cudf::test::fixed_width_column_wrapper<int16_t>{
+                                   {-1, 31, -1, 31, 30, 31, 31, 30, 31, 30, 31, 31, 28, 31, 30, 29},
+                                   iterators::nulls_at({0, 2})});
+}
+
 TEST_F(BasicDatetimeOpsTest, TestQuarter)
 {
   using namespace cudf::test;
