@@ -586,8 +586,10 @@ class row_number_aggregation final : public rolling_aggregation {
  * @brief Derived class for specifying an ewma aggregation
  */
 class ewma_aggregation final : public rolling_aggregation {
+
  public:
-  ewma_aggregation() : aggregation{EWMA} {}
+  double com;
+  ewma_aggregation(double com) : aggregation{EWMA} {this->com=com;}
 
   std::unique_ptr<aggregation> clone() const override
   {

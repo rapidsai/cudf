@@ -23,7 +23,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
+#include <iostream>
 namespace cudf {
 namespace detail {
 
@@ -42,6 +42,7 @@ std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
                                                   rmm::mr::device_memory_resource* mr);
 
 std::unique_ptr<column> ewma(column_view const& input, 
+                             double com,
                              rmm::cuda_stream_view stream, 
                              rmm::mr::device_memory_resource* mr); 
 
@@ -76,7 +77,7 @@ std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
         input.type(), DispatchFn<DeviceProduct>(), input, null_handling, stream, mr);
     case aggregation::RANK: return inclusive_rank_scan(input, stream, mr);
     case aggregation::DENSE_RANK: return inclusive_dense_rank_scan(input, stream, mr);
-    case aggregation::EWMA: return ewma(input, stream, mr);
+    case aggregation::EWMA: {double com = (dynamic_cast<ewma_aggregation*>(agg.get()))->com; return ewma(input, com, stream, mr);}
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
 }

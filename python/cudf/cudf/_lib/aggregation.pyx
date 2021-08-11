@@ -240,10 +240,10 @@ cdef class Aggregation:
         return agg
 
     @classmethod
-    def ewma(cls):
+    def ewma(cls, com=1.0):
         cdef Aggregation agg = cls()
         agg.c_obj = move(
-            libcudf_aggregation.make_ewma_aggregation[aggregation]())
+            libcudf_aggregation.make_ewma_aggregation[aggregation](com))
         return agg
 
     @classmethod

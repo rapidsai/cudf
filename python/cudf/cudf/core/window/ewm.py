@@ -1,6 +1,6 @@
 from pandas.core.window.ewm import get_center_of_mass
 
-#from cudf._lib.transform import ewm
+from cudf._lib.reduce import scan
 from cudf.core.window.rolling import _RollingBase
 
 
@@ -37,10 +37,5 @@ class ExponentialMovingWindow(_RollingBase):
         return self._apply_agg("cov")
 
     def _apply_agg_series(self, sr, agg_name):
-        """
-        placeholder implementation
-        """
-        # TODO: redo libcudf stuff in terms of com not alpha
-        # hardcoded
-        #return type(sr)(ewm(sr._column, self.com))
-        pass
+        result = scan('ewma', sr._column, True, com=self.com)
+        return result

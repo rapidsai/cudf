@@ -417,10 +417,10 @@ std::unique_ptr<column> ewm(column_view const& input,
 
 std::unique_ptr<column> ewma(
   column_view const& input, 
+  double com,
   rmm::cuda_stream_view stream, 
   rmm::mr::device_memory_resource* mr) 
 {
-  double com = 0.5;
   std::unique_ptr<column> result = ewm(input, com, stream, mr);
   return result;
 }
