@@ -10,10 +10,6 @@ from cudf._lib.scalar cimport DeviceScalar
 
 from cudf._lib.types import np_to_cudf_types
 
-from cudf._lib.types cimport underlying_type_t_type_id
-
-from cudf.core.column.column import as_column
-
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -55,6 +51,7 @@ from cudf._lib.cpp.strings.convert.convert_urls cimport (
     url_encode as cpp_url_encode,
 )
 from cudf._lib.cpp.types cimport data_type, type_id
+from cudf._lib.types cimport underlying_type_t_type_id
 
 import cudf
 
@@ -590,7 +587,7 @@ def istimestamp(
 
     """
     if input_col.size == 0:
-        return as_column([], dtype=kwargs.get('dtype'))
+        return cudf.core.column.as_column([], dtype=kwargs.get('dtype'))
     cdef column_view input_column_view = input_col.view()
     cdef string c_timestamp_format = <string>str(format).encode('UTF-8')
     cdef unique_ptr[column] c_result

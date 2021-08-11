@@ -35,6 +35,7 @@ from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 
 from cudf._lib.interop import from_arrow, to_arrow
 
+cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.cpp.scalar.scalar cimport (
     duration_scalar,
     fixed_point_scalar,
@@ -60,9 +61,7 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
 )
 from cudf._lib.utils cimport data_from_table_view
 
-from cudf.utils.dtypes import _decimal_to_int64, is_list_dtype, is_struct_dtype
-
-cimport cudf._lib.cpp.types as libcudf_types
+import cudf
 
 
 cdef class DeviceScalar:
@@ -120,9 +119,9 @@ cdef class DeviceScalar:
     def _to_host_scalar(self):
         if isinstance(self.dtype, cudf.Decimal64Dtype):
             result = _get_py_decimal_from_fixed_point(self.c_value)
-        elif is_struct_dtype(self.dtype):
+        elif cudf.api.types.is_struct_dtype(self.dtype):
             result = _get_py_dict_from_struct(self.c_value)
-        elif is_list_dtype(self.dtype):
+        elif cudf.api.types.is_list_dtype(self.dtype):
             result = _get_py_list_from_list(self.c_value)
         elif pd.api.types.is_string_dtype(self.dtype):
             result = _get_py_string_from_string(self.c_value)
@@ -309,7 +308,7 @@ cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
                                 object value,
                                 object dtype,
                                 bool valid=True):
-    value = _decimal_to_int64(value) if valid else 0
+    value = cudf.utils.dtypes._decimal_to_int64(value) if valid else 0
     s.reset(
         new fixed_point_scalar[decimal64](
             <int64_t>np.int64(value), scale_type(-dtype.scale), valid
