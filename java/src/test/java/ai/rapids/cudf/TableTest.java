@@ -6027,8 +6027,8 @@ public class TableTest extends CudfTestBase {
   void testParquetWriteMap() throws IOException {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
         .withMapColumn(mapColumn("my_map",
-            new ParquetColumnWriterOptions("key", false),
-            new ParquetColumnWriterOptions("value"))).build();
+            new ParquetColumnWriterOptions("key0", false),
+            new ParquetColumnWriterOptions("value0"))).build();
     File f = File.createTempFile("test-map", ".parquet");
     List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
     List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));

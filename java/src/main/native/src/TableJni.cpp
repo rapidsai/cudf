@@ -685,8 +685,9 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
     column_metadata.add_child(child);
     int childs_children = children[read_index++];
     if (childs_children > 0) {
-      read_index = set_column_metadata(column_metadata.child(write_index), col_names, nullability,
-                                       is_int96, precisions, is_map, children, childs_children, read_index);
+      read_index =
+          set_column_metadata(column_metadata.child(write_index), col_names, nullability, is_int96,
+                              precisions, is_map, children, childs_children, read_index);
     }
   }
   return read_index;
@@ -696,7 +697,7 @@ void createTableMetaData(JNIEnv *env, jint num_children, jobjectArray &j_col_nam
                          jintArray &j_children, jbooleanArray &j_col_nullability,
                          jobjectArray &j_metadata_keys, jobjectArray &j_metadata_values,
                          jint j_compression, jint j_stats_freq, jbooleanArray &j_isInt96,
-                         jintArray &j_precisions, jbooleanArray &j_is_map, 
+                         jintArray &j_precisions, jbooleanArray &j_is_map,
                          cudf::io::table_input_metadata &metadata) {
   cudf::jni::auto_set_device(env);
   cudf::jni::native_jstringArray col_names(env, j_col_names);
@@ -1270,7 +1271,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     JNIEnv *env, jclass, jobjectArray j_col_names, jint j_num_children, jintArray j_children,
     jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
-    jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions, 
+    jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions,
     jbooleanArray j_is_map, jobject consumer) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);

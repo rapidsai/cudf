@@ -371,20 +371,20 @@ public class ParquetColumnWriterOptions {
   }
 
   /**
-   * Creates a ListBuilder for column called 'name'
+   * Add a Map Column to the schema.
+   *
+   * Maps are List columns with a Struct named 'key_value' with a child named 'key' and a child
+   * named 'value'. The caller of this method doesn't need to worry about this as this method will
+   * take care of this without the knowledge of the caller.
    */
   public static ParquetColumnWriterOptions mapColumn(String name, ParquetColumnWriterOptions key,
                                       ParquetColumnWriterOptions value) {
     ParquetStructColumnWriterOptions struct = structBuilder("key_value").build();
-    if (key.columName != "key") {
-      throw new IllegalArgumentException("key column's name should be 'key'");
-    }
     if (key.isNullable) {
       throw new IllegalArgumentException("key column can not be nullable");
     }
-    if (value.columName != "value") {
-      throw new IllegalArgumentException("value column's name should be 'value'");
-    }
+    value.columName = "value";
+    key.columName = "key";
     struct.childColumnOptions = new ParquetColumnWriterOptions[]{key, value};
     ParquetColumnWriterOptions opt = listBuilder(name)
         .withStructColumn(struct)
