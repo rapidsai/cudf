@@ -527,8 +527,8 @@ target_link_libraries(cudf
            PUBLIC ZLIB::ZLIB
                   ${ARROW_LIBRARIES}
                   cudf::Thrust
-                  cuco::cuco
-                  rmm::rmm)
+                  rmm::rmm
+           PRIVATE cuco::cuco)
 
 if(CUDA_STATIC_RUNTIME)
     # Tell CMake what CUDA language runtime to use
