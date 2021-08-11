@@ -6061,7 +6061,7 @@ class DatetimeProperties(object):
             "day_of_year"
         ) == cudf.Scalar(1)
         return Series._from_data(
-            ColumnAccessor({None: outcol.fillna(False)}),
+            {None: outcol.fillna(False)},
             index=self.series._index,
             name=self.series.name,
         )
@@ -6098,7 +6098,7 @@ class DatetimeProperties(object):
         result = cudf._lib.copying.copy_if_else(leap, non_leap, leap_dates)
         result = result.fillna(False)
         return Series._from_data(
-            ColumnAccessor({None: result}),
+            {None: result},
             index=self.series._index,
             name=self.series.name,
         )
