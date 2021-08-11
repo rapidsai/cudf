@@ -37,11 +37,11 @@ def dtype(arbitrary):
     try:
         np_dtype = np.dtype(arbitrary)
         if np_dtype.name == "float16":
-            np_dtype = np.dtype("float32")
+            return np.dtype("float32")
         elif np_dtype.name == "float128":
             raise NotImplementedError()
         elif np_dtype.kind in ("OU"):
-            np_dtype = np.dtype("object")
+            return np.dtype("object")
     except TypeError:
         pass
     else:
