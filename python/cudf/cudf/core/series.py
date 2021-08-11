@@ -6098,9 +6098,7 @@ class DatetimeProperties(object):
         result = cudf._lib.copying.copy_if_else(leap, non_leap, leap_dates)
         result = result.fillna(False)
         return Series._from_data(
-            {None: result},
-            index=self.series._index,
-            name=self.series.name,
+            {None: result}, index=self.series._index, name=self.series.name,
         )
 
     def _get_dt_field(self, field):
