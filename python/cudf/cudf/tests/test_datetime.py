@@ -1423,52 +1423,21 @@ def test_is_year_start(data, dtype):
             None,
             "1900-12-31",
             "1800-03-14",
-            "2100-03-10",
-            "1970-01-01",
-            "1969-12-11",
-            "2018-01-01",
             "2017-12-30",
             "2017-12-31",
-        ]
-    ],
-)
-@pytest.mark.parametrize("dtype", ["datetime64[ns]"])
-def test_is_year_end(data, dtype):
-    ps = pd.Series(data, dtype=dtype)
-    gs = cudf.from_pandas(ps)
-
-    expect = ps.dt.is_year_end
-    got = gs.dt.is_year_end
-
-    assert_eq(expect, got)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [
-            "2020-12-31 08:00:00",
+             "2020-12-31 08:00:00",
             None,
             "1999-12-31 18:40:00",
             "2000-12-31 04:00:00",
             None,
             "1800-12-14 07:30:00",
             "2100-12-14 07:30:00",
-            "1970-01-01 00:00:00",
-            "1969-12-31 12:59:00",
             "2020-05-31",
-            None,
-            "1999-12-01",
-            "2000-12-21",
-            None,
-            "1900-12-31",
-            "2017-12-30",
-            "2017-12-31",
         ]
     ],
 )
 @pytest.mark.parametrize("dtype", ["datetime64[ns]"])
-def test_is_year_end_leap_year(data, dtype):
+def test_is_year_end(data, dtype):
     ps = pd.Series(data, dtype=dtype)
     gs = cudf.from_pandas(ps)
 
