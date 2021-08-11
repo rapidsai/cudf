@@ -2,15 +2,10 @@
 
 from libcpp.memory cimport shared_ptr
 from libcpp.utility cimport move
-
-from cudf._lib.cpp.io.types cimport (
-    datasource,
-    source_info,
-    arrow_io_source,
-)
-
-from pyarrow.lib cimport NativeFile
 from pyarrow.includes.libarrow cimport CRandomAccessFile
+from pyarrow.lib cimport NativeFile
+
+from cudf._lib.cpp.io.types cimport arrow_io_source, datasource, source_info
 
 
 cdef class Datasource:

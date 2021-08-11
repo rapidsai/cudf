@@ -8,9 +8,12 @@ from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+from pyarrow.includes.libarrow cimport CRandomAccessFile
+from pyarrow.lib cimport NativeFile
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.io.types cimport (
+    arrow_io_source,
     column_name_info,
     data_sink,
     datasource,
@@ -18,12 +21,8 @@ from cudf._lib.cpp.io.types cimport (
     io_type,
     sink_info,
     source_info,
-    arrow_io_source,
 )
 from cudf._lib.io.datasource cimport Datasource
-
-from pyarrow.lib cimport NativeFile
-from pyarrow.includes.libarrow cimport CRandomAccessFile
 
 import codecs
 import errno
@@ -32,6 +31,7 @@ import os
 
 import cudf
 from cudf.utils.dtypes import is_struct_dtype
+
 
 # Converts the Python source input to libcudf++ IO source_info
 # with the appropriate type and source values

@@ -2,11 +2,11 @@
 
 from io import BytesIO, StringIO
 
+import fsspec
+import pyarrow
 from nvtx import annotate
 
 import cudf
-import fsspec
-import pyarrow
 from cudf import _lib as libcudf
 from cudf.utils import ioutils
 from cudf.utils.dtypes import is_scalar
