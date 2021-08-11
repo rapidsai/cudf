@@ -5851,7 +5851,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             )
 
         if data.ndim == 2:
-            num_cols = len(data[0])
+            num_cols = data.shape[1]
         else:
             # Since we validate ndim to be either 1 or 2 above,
             # this case can be assumed to be ndim == 1.
@@ -6576,13 +6576,14 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     def _apply_support_method_axis_1(self, method, *args, **kwargs):
         # for dask metadata compatibility
         skipna = kwargs.pop("skipna", None)
+        skipna = True if skipna is None else skipna
         if method not in _cupy_nan_methods_map and skipna not in (
             None,
             True,
             1,
         ):
             raise NotImplementedError(
-                f"Row-wise operation to calculate '{method}'"
+                f"Row-wise operations to calculate '{method}'"
                 f" currently do not support `skipna=False`."
             )
 
