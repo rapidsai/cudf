@@ -1140,17 +1140,21 @@ void writer::impl::init_state()
 
 template <typename T>
 struct device_stack {
-  __device__ device_stack(T* stack_storage, uint32_t max_size)
-    : stack(stack_storage), max_size(max_size), size(0)
+  __device__ device_stack(T* stack_storage, uint32_t capacity)
+    : stack(stack_storage), capacity(capacity), size(0)
   {
   }
-  __device__ void push(T const& val) { stack[size++] = val; }
+  __device__ void push(T const& val)
+  {
+    cudf_assert(size < capacity and "Stack overflow");
+    stack[size++] = val;
+  }
   __device__ T pop() { return stack[--size]; }
   __device__ bool empty() { return size == 0; }
 
  private:
   T* stack;
-  uint32_t max_size;
+  uint32_t capacity;
   uint32_t size;
 };
 
@@ -1192,9 +1196,12 @@ orc_table_view make_orc_table_view(table_view const& table,
      stack_storage_size = stack_storage.size()] __device__() {
       device_stack stack(stack_storage, stack_storage_size);
 
-      for (auto c = d_table.end() - 1; c >= d_table.begin(); c--) {
-        stack.push({c, thrust::nullopt});
-      }
+      thrust::for_each(thrust::seq,
+                       thrust::make_reverse_iterator(d_table.end()),
+                       thrust::make_reverse_iterator(d_table.begin()),
+                       [&stack](column_device_view const& c) {
+                         stack.push({&c, thrust::nullopt});
+                       });
 
       uint32_t idx = 0;
       while (not stack.empty()) {
@@ -1204,9 +1211,12 @@ orc_table_view make_orc_table_view(table_view const& table,
         if (col->type().id() == type_id::LIST) {
           stack.push({&col->children()[lists_column_view::child_column_index], idx});
         } else if (col->type().id() == type_id::STRUCT) {
-          for (auto c = col->children().end() - 1; c >= col->children().begin(); c--) {
-            stack.push({c, idx});
-          }
+          thrust::for_each(thrust::seq,
+                           thrust::make_reverse_iterator(col->children().end()),
+                           thrust::make_reverse_iterator(col->children().begin()),
+                           [&stack, idx](column_device_view const& c) {
+                             stack.push({&c, idx});
+                           });
         }
         idx++;
       }
