@@ -391,130 +391,96 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         raise TypeError(f"cannot concatenate object of type {typ}")
 
 
-# def crosstab(
-#     index,
-#     columns,
-#     values=None,
-#     rownames=None,
-#     colnames=None,
-# ) -> DataFrame:
-#     """
-#     Compute a simple cross tabulation of two (or more) factors. By default
-#     computes a frequency table of the factors unless an array of values and an
-#     aggregation function are passed.
-#     Parameters
-#     ----------
-#     index : array-like, Series, or list of arrays/Series
-#         Values to group by in the rows.
-#     columns : array-like, Series, or list of arrays/Series
-#         Values to group by in the columns.
-#     values : array-like, optional
-#         Array of values to aggregate according to the factors.
-#         Requires `aggfunc` be specified.
-#     rownames : sequence, default None
-#         If passed, must match number of row arrays passed.
-#     colnames : sequence, default None
-#         If passed, must match number of column arrays passed.
-#     Returns
-#     -------
-#     DataFrame
-#         Cross tabulation of the data.
-#     See Also
-#     --------
-#     DataFrame.pivot : Reshape data based on column values.
-#     pivot_table : Create a pivot table as a DataFrame.
-#     Notes
-#     -----
-#     Any Series passed will have their name attributes used unless row or column
-#     names for the cross-tabulation are specified.
-#     Any input passed containing Categorical data will have **all** of its
-#     categories included in the cross-tabulation, even if the actual data does
-#     not contain any instances of a particular category.
-#     In the event that there aren't overlapping indexes an empty DataFrame will
-#     be returned.
-#     Examples
-#     --------
-#     >>> a = np.array(["foo", "foo", "foo", "foo", "bar", "bar",
-#     ...               "bar", "bar", "foo", "foo", "foo"], dtype=object)
-#     >>> b = np.array(["one", "one", "one", "two", "one", "one",
-#     ...               "one", "two", "two", "two", "one"], dtype=object)
-#     >>> c = np.array(["dull", "dull", "shiny", "dull", "dull", "shiny",
-#     ...               "shiny", "dull", "shiny", "shiny", "shiny"],
-#     ...              dtype=object)
-#     >>> cudf.crosstab(a, [b, c], rownames=['a'], colnames=['b', 'c'])
-#     b   one        two
-#     c   dull shiny dull shiny
-#     a
-#     bar    1     2    1     0
-#     foo    2     2    1     2
-#     Here 'c' and 'f' are not represented in the data and will not be
-#     shown in the output because dropna is True by default. Set
-#     dropna=False to preserve categories with no data.
-#     >>> foo = cudf.Categorical(['a', 'b'], categories=['a', 'b', 'c'])
-#     >>> bar = cudf.Categorical(['d', 'e'], categories=['d', 'e', 'f'])
-#     >>> cudf.crosstab(foo, bar)
-#     col_0  d  e
-#     row_0
-#     a      1  0
-#     b      0  1
-#     """
-#     if values is None:
-#         raise ValueError("aggfunc cannot be used without values.")
+def crosstab(
+    index,
+    columns,
+    values=None,
+    rownames=None,
+    colnames=None,
+):
+    """
+    Compute a simple cross tabulation of two (or more) factors. By default
+    computes a frequency table of the factors unless an array of values and an
+    aggregation function are passed.
+    Parameters
+    ----------
+    index : array-like, Series, or list of arrays/Series
+        Values to group by in the rows.
+    columns : array-like, Series, or list of arrays/Series
+        Values to group by in the columns.
+    """
+    breakpoint()
+   
+    columns_labels, columns_idx = index = cudf.core.index.Index([columns])._encode()
+    index_labels, index_idx = cudf.core.index.Index(index)._encode()
+    column_labels = columns_labels.to_pandas().to_flat_index()
 
-#     index = com.maybe_make_list(index)
-#     columns = com.maybe_make_list(columns)
+    # the result of pivot always has a multicolumn
+    result = cudf.core.column_accessor.ColumnAccessor(
+        multiindex=True, level_names=(None,) + columns_col._data.names
+    )
 
-#     common_idx = None
-#     pass_objs = [x for x in index + columns if isinstance(x, (ABCSeries, ABCDataFrame))]
-#     if pass_objs:
-#         common_idx = get_objs_combined_axis(pass_objs, intersect=True, sort=False)
+    def as_tuple(x):
+        return x if isinstance(x, tuple) else (x,)
 
-#     rownames = _get_names(index, rownames, prefix="row")
-#     colnames = _get_names(columns, colnames, prefix="col")
+    for v in df:
+        names = [as_tuple(v) + as_tuple(name) for name in column_labels]
+        nrows = len(index_labels)
+        ncols = len(names)
+        num_elements = nrows * ncols
+        if num_elements > 0:
+            col = df._data[v]
+            scatter_map = (columns_idx * np.int32(nrows)) + index_idx
+            target = cudf.core.frame.Frame(
+                {
+                    None: cudf.core.column.column_empty_like(
+                        col, masked=True, newsize=nrows * ncols
+                    )
+                }
+            )
+            target._data[None][scatter_map] = col
+            result_frames = target._split(range(nrows, nrows * ncols, nrows))
+            result.update(
+                {
+                    name: next(iter(f._columns))
+                    for name, f in zip(names, result_frames)
+                }
+            )
 
-#     # duplicate names mapped to unique names for pivot op
-#     (
-#         rownames_mapper,
-#         unique_rownames,
-#         colnames_mapper,
-#         unique_colnames,
-#     ) = _build_names_mapper(rownames, colnames)
+    return cudf.DataFrame._from_data(
+        result, index=cudf.Index(index_labels, name=index.name)
+    )
 
-#     from pandas import DataFrame
 
-#     data = {
-#         **dict(zip(unique_rownames, index)),
-#         **dict(zip(unique_colnames, columns)),
-#     }
-#     df = DataFrame(data, index=common_idx)
+    # df = data
+    # if values is None:
+    #     values = df._columns_view(
+    #         col for col in df._column_names if col not in (index, columns)
+    #     )
+    # else:
+    #     values = df._columns_view(values)
+    # if index is None:
+    #     index = df.index
+    # else:
+    #     index = cudf.core.index.Index(df.loc[:, index])
+    # columns = cudf.Index(df.loc[:, columns])
 
-#     if values is None:
-#         df["__dummy__"] = 0
-#         kwargs = {"aggfunc": len, "fill_value": 0}
-#     else:
-#         df["__dummy__"] = values
-#         kwargs = {"aggfunc": aggfunc}
+    # # Create a DataFrame composed of columns from both
+    # # columns and index
+    # columns_index = {}
+    # columns_index = {
+    #     i: col
+    #     for i, col in enumerate(
+    #         itertools.chain(index._data.columns, columns._data.columns)
+    #     )
+    # }
+    # columns_index = cudf.DataFrame(columns_index)
 
-#     table = df.pivot_table(
-#         "__dummy__",
-#         index=unique_rownames,
-#         columns=unique_colnames,
-#         margins=margins,
-#         margins_name=margins_name,
-#         dropna=dropna,
-#         **kwargs,
-#     )
+    # # # Check that each row is unique:
+    # # if len(columns_index) != len(columns_index.drop_duplicates()):
+    # #     raise ValueError("Duplicate index-column pairs found. Cannot reshape.")
 
-#     # Post-process
-#     if normalize is not False:
-#         table = _normalize(
-#             table, normalize=normalize, margins=margins, margins_name=margins_name
-#         )
-
-#     table = table.rename_axis(index=rownames_mapper, axis=0)
-#     table = table.rename_axis(columns=colnames_mapper, axis=1)
-
-#     return table
+    # return _pivot(values, index, columns)
 
 
 def melt(
@@ -1050,9 +1016,9 @@ def pivot(data, index=None, columns=None, values=None):
     }
     columns_index = cudf.DataFrame(columns_index)
 
-    # # Check that each row is unique:
-    # if len(columns_index) != len(columns_index.drop_duplicates()):
-    #     raise ValueError("Duplicate index-column pairs found. Cannot reshape.")
+    # Check that each row is unique:
+    if len(columns_index) != len(columns_index.drop_duplicates()):
+        raise ValueError("Duplicate index-column pairs found. Cannot reshape.")
 
     return _pivot(values, index, columns)
 

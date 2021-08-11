@@ -73,7 +73,7 @@ from cudf.core.ops import (
     tan,
     true_divide,
 )
-from cudf.core.reshape import concat, get_dummies, melt, merge_sorted
+from cudf.core.reshape import concat, crosstab, get_dummies, melt, merge_sorted
 from cudf.core.series import isclose
 from cudf.core.tools.datetimes import DateOffset, to_datetime
 from cudf.core.tools.numeric import to_numeric
