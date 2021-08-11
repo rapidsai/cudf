@@ -101,11 +101,10 @@ if hasArg -h || hasArg --h || hasArg --help; then
     exit 0
 fi
 
-# Check for additional arbitrary cmake options
-cmakeArgs
-
 # Check for valid usage
 if (( ${NUMARGS} != 0 )); then
+    # Check for cmake args
+    cmakeArgs
     for a in ${ARGS}; do
     if ! (echo " ${VALIDARGS} " | grep -q " ${a} "); then
         echo "Invalid option, check --help: ${a}"
