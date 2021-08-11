@@ -27,7 +27,6 @@ function(find_and_configure_cucollections)
         OPTIONS           "BUILD_TESTS OFF"
                           "BUILD_BENCHMARKS OFF"
                           "BUILD_EXAMPLES OFF"
-        DOWNLOAD_ONLY
     )
 
     set(CUCO_INCLUDE_DIR "${cuco_SOURCE_DIR}/include" PARENT_SCOPE)
