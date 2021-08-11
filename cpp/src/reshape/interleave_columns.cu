@@ -29,33 +29,44 @@
 namespace cudf {
 namespace detail {
 namespace {
-struct interleave_columns_functor {
-  template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_fixed_width<T>() and not std::is_same_v<T, cudf::string_view> and
-                     not std::is_same_v<T, cudf::list_view> and
-                     not std::is_same_v<T, cudf::struct_view>,
-                   std::unique_ptr<cudf::column>>
-  operator()(Args&&...)
+// Error case when no other overload or specialization is available
+template <typename T, typename Enable = void>
+struct interleave_columns_impl {
+  template <typename... Args>
+  std::unique_ptr<column> operator()(Args&&...)
   {
-    CUDF_FAIL("Called `interleave_columns` on none-supported data type.");
+    CUDF_FAIL("Unsupported type in `interleave_columns`.");
   }
+};
 
+struct interleave_columns_functor {
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::list_view>, std::unique_ptr<cudf::column>> operator()(
-    table_view const& lists_columns,
-    bool create_mask,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<cudf::column> operator()(table_view const& input,
+                                           bool create_mask,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
+  {
+    return interleave_columns_impl<T>{}(input, create_mask, stream, mr);
+  }
+};
+
+template <typename T>
+struct interleave_columns_impl<T, typename std::enable_if_t<std::is_same_v<T, cudf::list_view>>> {
+  std::unique_ptr<column> operator()(table_view const& lists_columns,
+                                     bool create_mask,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     return lists::detail::interleave_columns(lists_columns, create_mask, stream, mr);
   }
+};
 
-  template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::struct_view>, std::unique_ptr<cudf::column>> operator()(
-    table_view const& structs_columns,
-    bool create_mask,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+template <typename T>
+struct interleave_columns_impl<T, typename std::enable_if_t<std::is_same_v<T, cudf::struct_view>>> {
+  std::unique_ptr<cudf::column> operator()(table_view const& structs_columns,
+                                           bool create_mask,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
   {
     // We can safely call `column(0)` as the number of columns is known to be non zero.
     auto const num_children = structs_columns.column(0).num_children();
@@ -120,13 +131,14 @@ struct interleave_columns_functor {
 
     return output;
   }
+};
 
-  template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::string_view>, std::unique_ptr<cudf::column>> operator()(
-    table_view const& strings_columns,
-    bool create_mask,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+template <typename T>
+struct interleave_columns_impl<T, typename std::enable_if_t<std::is_same_v<T, cudf::string_view>>> {
+  std::unique_ptr<cudf::column> operator()(table_view const& strings_columns,
+                                           bool create_mask,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
   {
     auto num_columns = strings_columns.num_columns();
     if (num_columns == 1)  // Single strings column returns a copy
@@ -178,7 +190,7 @@ struct interleave_columns_functor {
       cudf::detail::get_value<int32_t>(offsets_column->view(), num_strings, stream);
     auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
     // Fill the chars column
-    auto d_results_chars = chars_column->mutable_view().data<char>();
+    auto d_results_chars = chars_column->mutable_view().template data<char>();
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
@@ -204,13 +216,14 @@ struct interleave_columns_functor {
                                stream,
                                mr);
   }
+};
 
-  template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> operator()(
-    table_view const& input,
-    bool create_mask,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+template <typename T>
+struct interleave_columns_impl<T, typename std::enable_if_t<cudf::is_fixed_width<T>()>> {
+  std::unique_ptr<cudf::column> operator()(table_view const& input,
+                                           bool create_mask,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
   {
     auto arch_column = input.column(0);
     auto output_size = input.num_columns() * input.num_rows();
@@ -265,11 +278,10 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   CUDF_EXPECTS(input.num_columns() > 0, "input must have at least one column to determine dtype.");
 
   auto const dtype = input.column(0).type();
-
   CUDF_EXPECTS(std::all_of(std::cbegin(input),
                            std::cend(input),
                            [dtype](auto const& col) { return dtype == col.type(); }),
-               "DTYPE mismatch");
+               "Input columns must have the same type");
 
   auto const output_needs_mask = std::any_of(
     std::cbegin(input), std::cend(input), [](auto const& col) { return col.nullable(); });
