@@ -38,6 +38,8 @@ def dtype(arbitrary):
         np_dtype = np.dtype(arbitrary)
         if np_dtype.name == "float16":
             np_dtype = np.dtype("float32")
+        elif np_dtype.name == "float128":
+            raise NotImplementedError()
         elif np_dtype.kind in ("OU"):
             np_dtype = np.dtype("object")
     except TypeError:
@@ -56,7 +58,7 @@ def dtype(arbitrary):
     #  Return the corresponding NumPy/cuDF type.
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)
     try:
-        return pd_dtype.numpy_dtype
+        return dtype(pd_dtype.numpy_dtype)
     except AttributeError:
         if isinstance(pd_dtype, pd.CategoricalDtype):
             return cudf.CategoricalDtype.from_pandas(pd_dtype)
