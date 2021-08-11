@@ -141,7 +141,7 @@ class CategoricalAccessor(ColumnMethods):
             if isinstance(self._parent, cudf.Series)
             else None
         )
-        codes = self._column._min_type_codes
+        codes = self._column.codes.astype(min_signed_type(len(self._column.categories)))
         codes = codes.fillna(-1)
         return cudf.Series(codes, index=index)
 
@@ -627,7 +627,6 @@ class CategoricalColumn(column.ColumnBase):
     dtype: cudf.core.dtypes.CategoricalDtype
     _codes: Optional[NumericalColumn]
     _children: Tuple[NumericalColumn]
-    _category_order: Optional[NumericalColumn]
 
     def __init__(
         self,
@@ -817,16 +816,9 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def codes(self) -> NumericalColumn:
-        codes = self._category_order.take(self.children[0]) if self.dtype.ordered else self.children[0]
+        category_order = self.dtype.categories._values.argsort()
+        codes = category_order.take(self.children[0]) if self.dtype.ordered else self.children[0]
         codes = codes.set_mask(self.mask)
-        return codes
-        
-    @property
-    def _min_type_codes(self) -> NumericalColumn:
-        codes = self.codes
-        codes.set_base_mask(self.base_mask)
-        dtype = min_signed_type(codes.max(skipna=True))
-        codes = codes.astype(dtype=dtype)
         return codes
 
     @property
@@ -953,8 +945,10 @@ class CategoricalColumn(column.ColumnBase):
         else:
             col = self
 
-        signed_dtype = min_signed_type(len(col.categories))
-        codes = col.codes.astype(signed_dtype).fillna(-1).to_array()
+        codes = col.codes.astype(
+            min_signed_type(len(col.categories))
+        ).fillna(-1).to_array()
+
         if is_interval_dtype(col.categories.dtype):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
@@ -968,10 +962,10 @@ class CategoricalColumn(column.ColumnBase):
         return pd.Series(data, index=index)
 
     def to_arrow(self) -> pa.Array:
-        result = super().to_arrow()
-        min_type_codes = self._min_type_codes
-        return pa.DictionaryArray.from_arrays(indices=min_type_codes.to_arrow(), dictionary=result.dictionary)
-        
+        indices = self.codes.astype(min_signed_type(len(self.categories)))
+        dictionary = self.categories
+        return pa.DictionaryArray.from_arrays(indices=indices.to_arrow(), dictionary=dictionary.to_arrow())
+
     @property
     def values_host(self) -> np.ndarray:
         """
@@ -1307,7 +1301,7 @@ class CategoricalColumn(column.ColumnBase):
                     categories = column.column_empty(0, "int32", masked=False)
                 codes = column.column_empty(0, "uint32", masked=False)
             else:
-                if dtype._categories is not None:
+                if dtype._categories is not None and dtype.ordered:
                     # Restore original order
                     categories = dtype._categories
                     category_order = categories.argsort(ascending=True)
@@ -1458,7 +1452,10 @@ class CategoricalColumn(column.ColumnBase):
                 "items in new_categories are not the same as in "
                 "old categories"
             )
-        return self._set_categories(new_categories, ordered=ordered)
+        # Under the hood, libcudf is unaware of the ordering of the categories.
+        # The order information is stored in `dtype`.
+        res = self.copy()
+        return res._with_type_metadata(CategoricalDtype(categories=new_categories, ordered=ordered))
 
     def as_ordered(self):
         out_col = self

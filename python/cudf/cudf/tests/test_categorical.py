@@ -426,9 +426,11 @@ def test_categorical_reorder_categories(
     pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
-    assert_eq(pd_sr_1, cd_sr_1)
+    # Skip checking the order of category if the result is unordered categorical
+    assert_eq(pd_sr_1, cd_sr_1, check_category_order=to_ordered)
 
-    assert str(cd_sr_1) == str(pd_sr_1)
+    if to_ordered:
+        assert str(cd_sr_1) == str(pd_sr_1)
 
 
 @pytest.mark.parametrize("inplace", [True, False])
