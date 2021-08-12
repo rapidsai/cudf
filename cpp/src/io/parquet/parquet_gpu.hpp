@@ -488,7 +488,7 @@ void InitFragmentStatistics(cudf::detail::device_2dspan<statistics_group> groups
  * @param chunks Flat span of chunks to intialize hash maps for
  * @param stream CUDA stream to use
  */
-void InitializeChunkHashMaps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
+void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
 
 /**
  * @brief Insert chunk values into their respective hash maps
@@ -497,9 +497,9 @@ void InitializeChunkHashMaps(device_span<EncColumnChunk> chunks, rmm::cuda_strea
  * @param num_rows Number of rows per column
  * @param stream CUDA stream to use
  */
-void PopulateChunkHashMaps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                           size_type num_rows,
-                           rmm::cuda_stream_view stream);
+void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                              size_type num_rows,
+                              rmm::cuda_stream_view stream);
 
 /**
  * @brief Compact dictionary hash map entries into chunk.dict_data
@@ -507,7 +507,7 @@ void PopulateChunkHashMaps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
  * @param chunks Flat span of chunks to compact hash maps for
  * @param stream CUDA stream to use
  */
-void CollectMapEntries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
+void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
 
 /**
  * @brief Get the Dictionary Indices for each row
@@ -522,9 +522,9 @@ void CollectMapEntries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
  * @param num_rows Number of rows per column
  * @param stream CUDA stream to use
  */
-void GetDictionaryIndices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                          size_type num_rows,
-                          rmm::cuda_stream_view stream);
+void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                            size_type num_rows,
+                            rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder data pages

@@ -29,7 +29,7 @@ namespace gpu {
 
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
-  gpuInitializeChunkHashMaps(device_span<EncColumnChunk> chunks)
+  initialize_chunk_hash_maps_kernel(device_span<EncColumnChunk> chunks)
 {
   auto chunk = chunks[blockIdx.x];
   auto t     = threadIdx.x;
@@ -94,7 +94,7 @@ struct map_find_fn {
 
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
-  gpuBuildChunkDictionariesKernel(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+  populate_chunk_hash_maps_kernel(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                                   size_type num_rows)
 {
   auto col_idx = blockIdx.y;
@@ -211,7 +211,7 @@ __global__ void __launch_bounds__(block_size, 1)
 
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
-  gpuCollectMapEntries(device_span<EncColumnChunk> chunks)
+  collect_map_entries_kernel(device_span<EncColumnChunk> chunks)
 {
   auto& chunk = chunks[blockIdx.x];
   if (not chunk.use_dictionary) { return; }
@@ -243,7 +243,8 @@ __global__ void __launch_bounds__(block_size, 1)
 
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
-  gpuGetDictionaryIndices(cudf::detail::device_2dspan<EncColumnChunk> chunks, size_type num_rows)
+  get_dictionary_indices_kernel(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                                size_type num_rows)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
@@ -325,44 +326,45 @@ __global__ void __launch_bounds__(block_size, 1)
   }
 }
 
-void InitializeChunkHashMaps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
+void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 1024;
-  gpuInitializeChunkHashMaps<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
+  initialize_chunk_hash_maps_kernel<block_size>
+    <<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
   stream.synchronize();
 }
 
-void PopulateChunkHashMaps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                           size_type num_rows,
-                           rmm::cuda_stream_view stream)
+void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                              size_type num_rows,
+                              rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
   auto grid_x              = cudf::detail::grid_1d(num_rows, 5000);
   auto num_columns         = chunks.size().second;
   dim3 dim_grid(grid_x.num_blocks, num_columns);
 
-  gpuBuildChunkDictionariesKernel<block_size>
+  populate_chunk_hash_maps_kernel<block_size>
     <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
   stream.synchronize();
 }
 
-void CollectMapEntries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
+void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 1024;
-  gpuCollectMapEntries<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
+  collect_map_entries_kernel<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
   stream.synchronize();
 }
 
-void GetDictionaryIndices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                          size_type num_rows,
-                          rmm::cuda_stream_view stream)
+void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                            size_type num_rows,
+                            rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
   auto grid_x              = cudf::detail::grid_1d(num_rows, 5000);
   auto num_columns         = chunks.size().second;
   dim3 dim_grid(grid_x.num_blocks, num_columns);
 
-  gpuGetDictionaryIndices<block_size>
+  get_dictionary_indices_kernel<block_size>
     <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
   stream.synchronize();
 }

@@ -744,8 +744,8 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
   chunks.host_to_device(stream);
 
-  gpu::InitializeChunkHashMaps(chunks.device_view().flat_view(), stream);
-  gpu::PopulateChunkHashMaps(chunks, num_rows, stream);
+  gpu::initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
+  gpu::populate_chunk_hash_maps(chunks, num_rows, stream);
 
   chunks.device_to_host(stream);
   stream.synchronize();
@@ -794,8 +794,8 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
     chunk.dict_index          = inserted_dict_index.data();
   }
   chunks.host_to_device(stream);
-  gpu::CollectMapEntries(chunks.device_view().flat_view(), stream);
-  gpu::GetDictionaryIndices(chunks.device_view(), num_rows, stream);
+  gpu::collect_map_entries(chunks.device_view().flat_view(), stream);
+  gpu::get_dictionary_indices(chunks.device_view(), num_rows, stream);
 
   return std::make_pair(std::move(dict_data), std::move(dict_index));
 }
