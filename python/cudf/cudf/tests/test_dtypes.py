@@ -301,6 +301,9 @@ def test_lists_of_structs_dtype(data):
             pd.array([1], dtype="int16").dtype,
             np.dtype("int16"),
         ),
+        (pd.IntervalDtype("int"), cudf.IntervalDtype("int64")),
+        (cudf.IntervalDtype("int"), cudf.IntervalDtype("int64")),
+        (pd.IntervalDtype("int64"), cudf.IntervalDtype("int64")),
     ],
 )
 def test_dtype(in_dtype, expect):
