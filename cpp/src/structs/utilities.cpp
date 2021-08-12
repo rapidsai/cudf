@@ -234,19 +234,14 @@ std::unique_ptr<cudf::column> unflatten_struct(vector_of_columns& flattened,
   //
   // Extract null-vector *before* child columns are constructed.
   auto struct_null_column_contents = flattened[current_index++]->release();
+  auto unflattening_iter =
+    thrust::make_transform_iterator(blueprint.child_begin(), unflattener{flattened, current_index});
 
-  auto struct_members = vector_of_columns{};
-  struct_members.reserve(blueprint.num_children());
-
-  std::transform(blueprint.child_begin(),
-                 blueprint.child_end(),
-                 std::back_inserter(struct_members),
-                 unflattener{flattened, current_index});
-
-  return cudf::make_structs_column(num_rows,
-                                   std::move(struct_members),
-                                   UNKNOWN_NULL_COUNT,  // Do count?
-                                   std::move(*struct_null_column_contents.null_mask));
+  return cudf::make_structs_column(
+    num_rows,
+    vector_of_columns{unflattening_iter, unflattening_iter + blueprint.num_children()},
+    UNKNOWN_NULL_COUNT,  // Do count?
+    std::move(*struct_null_column_contents.null_mask));
 }
 
 bool is_struct(cudf::column_view const& col) { return col.type().id() == type_id::STRUCT; }
@@ -284,13 +279,11 @@ std::unique_ptr<cudf::table> unflatten_nested_columns(std::unique_ptr<cudf::tabl
   auto flattened_columns = flattened->release();
   auto current_idx       = column_index_t{0};
 
-  auto return_columns = vector_of_columns{};
-  std::transform(blueprint.begin(),
-                 blueprint.end(),
-                 std::back_inserter(return_columns),
-                 unflattener(flattened_columns, current_idx));
+  auto unflattening_iter =
+    thrust::make_transform_iterator(blueprint.begin(), unflattener{flattened_columns, current_idx});
 
-  return std::make_unique<cudf::table>(std::move(return_columns));
+  return std::make_unique<cudf::table>(
+    vector_of_columns{unflattening_iter, unflattening_iter + blueprint.num_columns()});
 }
 
 // Helper function to superimpose validity of parent struct
