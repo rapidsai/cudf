@@ -372,9 +372,9 @@ inline bool is_col_nullable(LinkedColPtr const& col,
     return col->nullable();
   } else {
     if (col_meta.is_nullability_defined()) {
-        CUDF_EXPECTS(col_meta.nullable() || !col->nullable(),
-                     "Mismatch in metadata prescribed nullability and input column nullability. "
-                     "Metadata for nullable input column cannot prescribe nullability = false");
+      CUDF_EXPECTS(col_meta.nullable() || !col->nullable(),
+                   "Mismatch in metadata prescribed nullability and input column nullability. "
+                   "Metadata for nullable input column cannot prescribe nullability = false");
       return col_meta.nullable();
     } else {
       // For chunked write, when not provided nullability, we assume the worst case scenario
@@ -486,16 +486,14 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
 
         CUDF_EXPECTS(col_meta.num_children() == 2,
                      "List column's metadata should have exactly two children");
-        CUDF_EXPECTS(col_meta.child(lists_column_view::child_column_index).num_children() == 2, 
-                    "Map struct column should have exactly two children");
+        CUDF_EXPECTS(col_meta.child(lists_column_view::child_column_index).num_children() == 2,
+                     "Map struct column should have exactly two children");
         // verify the col meta of children of the struct have name key and value
-        auto& left_child_meta =
-          col_meta.child(lists_column_view::child_column_index).child(0);
+        auto& left_child_meta = col_meta.child(lists_column_view::child_column_index).child(0);
         left_child_meta.set_name("key");
         left_child_meta.set_nullability(false);
 
-        auto& right_child_meta =
-          col_meta.child(lists_column_view::child_column_index).child(1);
+        auto& right_child_meta = col_meta.child(lists_column_view::child_column_index).child(1);
         right_child_meta.set_name("value");
         // check the repetition type of key is required i.e. the col should be non-nullable
         auto key_col = col->children[lists_column_view::child_column_index]->children[0];
