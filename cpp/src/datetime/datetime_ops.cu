@@ -20,6 +20,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/detail/datetime.hpp>
+#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -275,13 +276,14 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
   CUDF_EXPECTS(timestamp_column.size() == months_column.size(),
                "Timestamp and months column should be of the same size");
 
-  auto const months_begin_iter = cudf::detail::indexalator_factory::make_input_iterator(months_column);
+  auto const months_begin_iter =
+    cudf::detail::indexalator_factory::make_input_iterator(months_column);
   auto output = type_dispatcher(timestamp_column.type(),
-                                    add_calendrical_months_functor{},
-                                    timestamp_column,
-                                    months_begin_iter,
-                                    stream,
-                                    mr);
+                                add_calendrical_months_functor{},
+                                timestamp_column,
+                                months_begin_iter,
+                                stream,
+                                mr);
 
   auto output_null_mask =
     cudf::detail::bitmask_and(table_view{{timestamp_column, months_column}}, stream, mr);
@@ -299,22 +301,13 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
                "Months type should be INT16 or INT32");
 
   if (months.is_valid(stream)) {
-    auto output =
-      months.type().id() == type_id::INT16
-        ? type_dispatcher(timestamp_column.type(),
-                          add_calendrical_months_functor{},
-                          timestamp_column,
-                          thrust::make_constant_iterator(
-                            static_cast<numeric_scalar<int16_t> const&>(months).value(stream)),
-                          stream,
-                          mr)
-        : type_dispatcher(timestamp_column.type(),
-                          add_calendrical_months_functor{},
-                          timestamp_column,
-                          thrust::make_constant_iterator(
-                            static_cast<numeric_scalar<int32_t> const&>(months).value(stream)),
-                          stream,
-                          mr);
+    auto const months_begin_iter = cudf::detail::indexalator_factory::make_input_iterator(months);
+    auto output                  = type_dispatcher(timestamp_column.type(),
+                                  add_calendrical_months_functor{},
+                                  timestamp_column,
+                                  months_begin_iter,
+                                  stream,
+                                  mr);
     output->set_null_mask(cudf::detail::copy_bitmask(timestamp_column, stream, mr));
     return output;
   } else {
