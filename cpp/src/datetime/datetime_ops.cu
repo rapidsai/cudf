@@ -232,7 +232,8 @@ struct add_calendrical_months_functor {
     // Return an empty column if source column is empty
     if (size == 0) return make_empty_column(output_col_type);
 
-    auto output = make_fixed_width_column(output_col_type, size, mask_state::ALL_NULL, stream, mr);
+    auto output =
+      make_fixed_width_column(output_col_type, size, mask_state::UNALLOCATED, stream, mr);
     auto output_mview = output->mutable_view();
 
     thrust::transform(rmm::exec_policy(stream),
