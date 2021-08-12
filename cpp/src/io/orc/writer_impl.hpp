@@ -379,7 +379,7 @@ class writer::impl {
   // a single table write.  this enables some internal optimizations.
   bool const single_write_mode;
   // optional user metadata
-  table_input_metadata const* user_metadata = nullptr;
+  std::unique_ptr<table_input_metadata> table_meta;
   // to track if the output has been written to sink
   bool closed = false;
 
