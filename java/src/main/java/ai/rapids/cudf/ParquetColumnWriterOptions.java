@@ -231,7 +231,7 @@ public class ParquetColumnWriterOptions {
   }
 
   public ParquetColumnWriterOptions(String columnName, boolean isTimestampTypeInt96,
-                             int precision, boolean isNullable) {
+                                    int precision, boolean isNullable) {
     this.isTimestampTypeInt96 = isTimestampTypeInt96;
     this.precision = precision;
     this.isNullable = isNullable;
