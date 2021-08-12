@@ -372,11 +372,9 @@ inline bool is_col_nullable(LinkedColPtr const& col,
     return col->nullable();
   } else {
     if (col_meta.is_nullability_defined()) {
-      if (col_meta.nullable() == false) {
-        CUDF_EXPECTS(col->nullable() == false,
+        CUDF_EXPECTS(col_meta.nullable() || !col->nullable(),
                      "Mismatch in metadata prescribed nullability and input column nullability. "
                      "Metadata for nullable input column cannot prescribe nullability = false");
-      }
       return col_meta.nullable();
     } else {
       // For chunked write, when not provided nullability, we assume the worst case scenario
