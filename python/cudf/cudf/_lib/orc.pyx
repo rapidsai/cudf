@@ -87,7 +87,7 @@ cpdef read_orc(object filepaths_or_buffers,
 
     See Also
     --------
-    cudf.io.orc.read_orc
+    cudf.read_orc
     """
     cdef orc_reader_options c_orc_reader_options = make_orc_reader_options(
         filepaths_or_buffers,
@@ -145,7 +145,7 @@ cpdef write_orc(Table table,
 
     See Also
     --------
-    cudf.io.orc.read_orc
+    cudf.read_orc
     """
     cdef compression_type compression_ = _get_comp_type(compression)
     cdef unique_ptr[data_sink] data_sink_c
