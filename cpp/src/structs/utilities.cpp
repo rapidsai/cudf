@@ -63,6 +63,27 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
   return result;
 }
 
+namespace {
+/**
+ * @brief Check whether the specified column is of type `STRUCT`.
+ *
+ */
+bool is_struct(cudf::column_view const& col) { return col.type().id() == type_id::STRUCT; }
+
+/**
+ * @brief Check whether the specified column is of type LIST,
+ *        or any LISTs in its descendent columns.
+ *
+ */
+bool is_or_has_lists(cudf::column_view const& col)
+{
+  auto is_list = [](cudf::column_view const& col) { return col.type().id() == type_id::LIST; };
+
+  return is_list(col) ||
+         (is_struct(col) && std::any_of(col.child_begin(), col.child_end(), is_or_has_lists));
+}
+}  // namespace
+
 /**
  * @brief Flattens struct columns to constituent non-struct columns in the input table.
  *
@@ -88,6 +109,13 @@ struct flattened_table {
       null_precedence(null_precedence),
       nullability(nullability)
   {
+    fail_if_unsupported_types(input);
+  }
+
+  void fail_if_unsupported_types(table_view const& input) const
+  {
+    auto const has_lists = std::any_of(input.begin(), input.end(), is_or_has_lists);
+    CUDF_EXPECTS(not has_lists, "Flattening LIST columns is not supported.");
   }
 
   // Convert null_mask to BOOL8 columns and flatten the struct children in order.
@@ -243,22 +271,6 @@ std::unique_ptr<cudf::column> unflatten_struct(vector_of_columns& flattened,
     UNKNOWN_NULL_COUNT,  // Do count?
     std::move(*struct_null_column_contents.null_mask));
 }
-
-bool is_struct(cudf::column_view const& col) { return col.type().id() == type_id::STRUCT; }
-
-/**
- * @brief Check whether the specified column is of type LIST,
- *        or any LISTs in its descendent columns.
- *
- */
-bool is_or_has_lists(cudf::column_view const& col)
-{
-  auto is_list = [](cudf::column_view const& col) { return col.type().id() == type_id::LIST; };
-
-  return is_list(col) ||
-         (is_struct(col) && std::any_of(col.child_begin(), col.child_end(), is_or_has_lists));
-}
-
 }  // namespace
 
 std::unique_ptr<cudf::table> unflatten_nested_columns(std::unique_ptr<cudf::table>&& flattened,

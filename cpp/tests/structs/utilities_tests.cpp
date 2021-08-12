@@ -200,4 +200,21 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
   flatten_unflatten_compare(cudf::table_view{{nums_col, struct_of_structs_col}});
 }
 
+TYPED_TEST(TypedStructUtilitiesTest, ListsAreUnsupported)
+{
+  using T    = TypeParam;
+  using ints = fixed_width_column_wrapper<int32_t>;
+  using lcw  = lists_column_wrapper<T, int32_t>;
+
+  // clang-format off
+  auto lists_member = lcw{  {0,1,2}, {3,4,5}, {6,7,8,9} };
+  auto ints_member  = ints{       0,       1,         2 };
+  // clang-format on
+
+  auto structs_with_lists_col = structs{lists_member, ints_member};
+
+  EXPECT_THROW(flatten_unflatten_compare(cudf::table_view{{structs_with_lists_col}}),
+               cudf::logic_error);
+}
+
 }  // namespace cudf::test
