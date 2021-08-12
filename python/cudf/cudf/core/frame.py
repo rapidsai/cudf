@@ -6,7 +6,16 @@ import copy
 import functools
 import warnings
 from collections import abc
-from typing import Any, Dict, MutableMapping, Optional, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Dict,
+    MutableMapping,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+    cast,
+)
 
 import cupy
 import numpy as np
@@ -2352,7 +2361,9 @@ class Frame(libcudf.table.Table):
                 ) and not isinstance(
                     self._index, cudf.core.index.CategoricalIndex
                 ):
-                    self._index = cudf.Index(self._index._column)
+                    self._index = cudf.Index(
+                        cast(cudf.core.Index.NumericIndex, self._index)._column
+                    )
 
         return self
 

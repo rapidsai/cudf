@@ -64,7 +64,7 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import cached_property, search_range
 
 
-class BaseIndex(SingleColumnFrame, Serializable):
+class BaseIndex(Serializable):
     """Base class for all cudf Index types."""
 
     dtype: DtypeObj
@@ -80,6 +80,35 @@ class BaseIndex(SingleColumnFrame, Serializable):
     @cached_property
     def _values(self) -> ColumnBase:
         raise NotImplementedError
+
+    @property
+    def values(self):
+        return self._values.values
+
+    def __iter__(self):
+        """
+        Iterating over a GPU object is not effecient and hence not supported.
+
+        Consider using ``.to_arrow()``, ``.to_pandas()`` or ``.values_host``
+        if you wish to iterate over the values.
+        """
+        cudf.utils.utils.raise_iteration_error(obj=self)
+
+    def _copy_type_metadata(
+        self, other: BaseIndex, include_index: bool = True
+    ) -> BaseIndex:
+        """
+        Copy type metadata from each column of `other` to the corresponding
+        column of `self`.
+        See `ColumnBase._with_type_metadata` for more information.
+        """
+        for name, col, other_col in zip(
+            self._data.keys(), self._data.values(), other._data.values()
+        ):
+            self._data.set_by_label(
+                name, col._with_type_metadata(other_col.dtype), validate=False
+            )
+        return self
 
     def __getitem__(self, key):
         raise NotImplementedError()
@@ -127,36 +156,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
     def __contains__(self, item):
         return item in self._values
-
-    @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
-    def equals(self, other, **kwargs):
-        """
-        Determine if two Index objects contain the same elements.
-
-        Returns
-        -------
-        out: bool
-            True if “other” is an Index and it has the same elements
-            as calling index; False otherwise.
-        """
-        if not isinstance(other, BaseIndex):
-            return False
-
-        check_types = False
-
-        self_is_categorical = isinstance(self, CategoricalIndex)
-        other_is_categorical = isinstance(other, CategoricalIndex)
-        if self_is_categorical and not other_is_categorical:
-            other = other.astype(self.dtype)
-            check_types = True
-        elif other_is_categorical and not self_is_categorical:
-            self = self.astype(other.dtype)
-            check_types = True
-
-        try:
-            return super().equals(other, check_types=check_types)
-        except TypeError:
-            return False
 
     def get_level_values(self, level):
         """
@@ -232,51 +231,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
             )
 
         self.name = values[0]
-
-    def dropna(self, how="any"):
-        """
-        Return an Index with null values removed.
-
-        Parameters
-        ----------
-            how : {‘any’, ‘all’}, default ‘any’
-                If the Index is a MultiIndex, drop the value when any or
-                all levels are NaN.
-
-        Returns
-        -------
-        valid : Index
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.Index(['a', None, 'b', 'c'])
-        >>> index
-        StringIndex(['a' None 'b' 'c'], dtype='object')
-        >>> index.dropna()
-        StringIndex(['a' 'b' 'c'], dtype='object')
-
-        Using `dropna` on a `MultiIndex`:
-
-        >>> midx = cudf.MultiIndex(
-        ...         levels=[[1, None, 4, None], [1, 2, 5]],
-        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        ...         names=["x", "y"],
-        ...     )
-        >>> midx
-        MultiIndex([(   1, 1),
-                    (   1, 5),
-                    (<NA>, 2),
-                    (   4, 2),
-                    (<NA>, 1)],
-                   names=['x', 'y'])
-        >>> midx.dropna()
-        MultiIndex([(1, 1),
-                    (1, 5),
-                    (4, 2)],
-                   names=['x', 'y'])
-        """
-        return super().dropna(how=how)
 
     def _clean_nulls_from_index(self):
         """
@@ -1052,36 +1006,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         return self._values.isin(values).values
 
-    def where(self, cond, other=None):
-        """
-        Replace values where the condition is False.
-
-        Parameters
-        ----------
-        cond : bool array-like with the same length as self
-            Where cond is True, keep the original value.
-            Where False, replace with corresponding value from other.
-            Callables are not supported.
-        other: scalar, or array-like
-            Entries where cond is False are replaced with
-            corresponding value from other. Callables are not
-            supported. Default is None.
-
-        Returns
-        -------
-        Same type as caller
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.Index([4, 3, 2, 1, 0])
-        >>> index
-        Int64Index([4, 3, 2, 1, 0], dtype='int64')
-        >>> index.where(index > 2, 15)
-        Int64Index([4, 3, 15, 15, 15], dtype='int64')
-        """
-        return super().where(cond=cond, other=other)
-
     def memory_usage(self, deep=False):
         """
         Memory usage of the values.
@@ -1295,19 +1219,15 @@ class BaseIndex(SingleColumnFrame, Serializable):
                     index_class_type = _dtype_to_index[values.dtype.type]
                 except KeyError:
                     index_class_type = GenericIndex
-                out = super(BaseIndex, index_class_type).__new__(
-                    index_class_type
-                )
+                out = index_class_type.__new__(index_class_type)
             elif isinstance(values, DatetimeColumn):
-                out = super(BaseIndex, DatetimeIndex).__new__(DatetimeIndex)
+                out = DatetimeIndex.__new__(DatetimeIndex)
             elif isinstance(values, TimeDeltaColumn):
-                out = super(BaseIndex, TimedeltaIndex).__new__(TimedeltaIndex)
+                out = TimedeltaIndex.__new__(TimedeltaIndex)
             elif isinstance(values, StringColumn):
-                out = super(BaseIndex, StringIndex).__new__(StringIndex)
+                out = StringIndex.__new__(StringIndex)
             elif isinstance(values, CategoricalColumn):
-                out = super(BaseIndex, CategoricalIndex).__new__(
-                    CategoricalIndex
-                )
+                out = CategoricalIndex.__new__(CategoricalIndex)
             out._data = data
             out._index = None
             return out
@@ -1509,7 +1429,7 @@ class RangeIndex(BaseIndex):
                 other._step,
             ):
                 return True
-        return super().equals(other)
+        return cudf.Index._from_data(self._data).equals(other)
 
     def serialize(self):
         header = {}
@@ -1685,8 +1605,38 @@ class RangeIndex(BaseIndex):
             )
         return super().__mul__(other)
 
+    def where(self, cond, other=None):
+        """
+        Replace values where the condition is False.
 
-class GenericIndex(BaseIndex):
+        Parameters
+        ----------
+        cond : bool array-like with the same length as self
+            Where cond is True, keep the original value.
+            Where False, replace with corresponding value from other.
+            Callables are not supported.
+        other: scalar, or array-like
+            Entries where cond is False are replaced with
+            corresponding value from other. Callables are not
+            supported. Default is None.
+
+        Returns
+        -------
+        Same type as caller
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([4, 3, 2, 1, 0])
+        >>> index
+        Int64Index([4, 3, 2, 1, 0], dtype='int64')
+        >>> index.where(index > 2, 15)
+        Int64Index([4, 3, 15, 15, 15], dtype='int64')
+        """
+        return cudf.Index._from_data(self._data).where(cond=cond, other=other)
+
+
+class GenericIndex(BaseIndex, SingleColumnFrame):
     """
     An array of orderable values that represent the indices of another Column
 
@@ -1728,6 +1678,36 @@ class GenericIndex(BaseIndex):
     @property
     def _values(self):
         return self._column
+
+    @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
+    def equals(self, other, **kwargs):
+        """
+        Determine if two Index objects contain the same elements.
+
+        Returns
+        -------
+        out: bool
+            True if “other” is an Index and it has the same elements
+            as calling index; False otherwise.
+        """
+        if not isinstance(other, BaseIndex):
+            return False
+
+        check_types = False
+
+        self_is_categorical = isinstance(self, CategoricalIndex)
+        other_is_categorical = isinstance(other, CategoricalIndex)
+        if self_is_categorical and not other_is_categorical:
+            other = other.astype(self.dtype)
+            check_types = True
+        elif other_is_categorical and not self_is_categorical:
+            self = self.astype(other.dtype)
+            check_types = True
+
+        try:
+            return super().equals(other, check_types=check_types)
+        except TypeError:
+            return False
 
     def copy(self, name=None, deep=False, dtype=None, names=None):
         """
@@ -3189,6 +3169,14 @@ class Index(BaseIndex, metaclass=IndexMeta):
             )
 
         return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
+
+    @classmethod
+    def from_arrow(cls, obj):
+        try:
+            return cls(ColumnBase.from_arrow(obj))
+        except TypeError:
+            # Try interpreting object as a MultiIndex before failing.
+            return cudf.MultiIndex.from_arrow(obj)
 
 
 def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:

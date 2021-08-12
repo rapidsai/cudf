@@ -18,12 +18,12 @@ from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.column import as_column, column
-from cudf.core.frame import SingleColumnFrame
+from cudf.core.frame import Frame
 from cudf.core.index import BaseIndex, as_index
 from cudf.utils.utils import _maybe_indices_to_slice
 
 
-class MultiIndex(BaseIndex):
+class MultiIndex(BaseIndex, Frame):
     """A multi-level or hierarchical index.
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
@@ -201,11 +201,6 @@ class MultiIndex(BaseIndex):
             )
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
-    @property
-    def _num_columns(self):
-        # MultiIndex is not a single-columned frame.
-        return super(SingleColumnFrame, self)._num_columns
-
     def rename(self, names, inplace=False):
         """
         Alter MultiIndex level names
@@ -293,13 +288,8 @@ class MultiIndex(BaseIndex):
 
         return self._set_names(names=names, inplace=inplace)
 
-    # TODO: This type ignore is indicating a real problem, which is that
-    # MultiIndex should not be inheriting from SingleColumnFrame, but fixing
-    # that will have to wait until we reshuffle the Index hierarchy.
     @classmethod
-    def _from_data(  # type: ignore
-        cls, data: Mapping, index=None
-    ) -> MultiIndex:
+    def _from_data(cls, data: Mapping, index=None) -> MultiIndex:
         return cls.from_frame(cudf.DataFrame._from_data(data))
 
     @property
@@ -544,68 +534,6 @@ class MultiIndex(BaseIndex):
 
         data_output = "\n".join(lines)
         return output_prefix + data_output
-
-    @classmethod
-    def from_arrow(cls, table):
-        """
-        Convert PyArrow Table to MultiIndex
-
-        Parameters
-        ----------
-        table : PyArrow Table
-            PyArrow Object which has to be converted to MultiIndex
-
-        Returns
-        -------
-        cudf MultiIndex
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> tbl = pa.table({"a":[1, 2, 3], "b":["a", "b", "c"]})
-        >>> cudf.MultiIndex.from_arrow(tbl)
-        MultiIndex([(1, 'a'),
-                    (2, 'b'),
-                    (3, 'c')],
-                   names=['a', 'b'])
-        """
-
-        return super(SingleColumnFrame, cls).from_arrow(table)
-
-    def to_arrow(self):
-        """Convert MultiIndex to PyArrow Table
-
-        Returns
-        -------
-        PyArrow Table
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":[2, 3, 4]})
-        >>> mindex = cudf.Index(df)
-        >>> mindex
-        MultiIndex([(1, 2),
-                    (2, 3),
-                    (3, 4)],
-                   names=['a', 'b'])
-        >>> mindex.to_arrow()
-        pyarrow.Table
-        a: int64
-        b: int64
-        >>> mindex.to_arrow()['a']
-        <pyarrow.lib.ChunkedArray object at 0x7f5c6b71fad0>
-        [
-            [
-                1,
-                2,
-                3
-            ]
-        ]
-        """
-
-        return super(SingleColumnFrame, self).to_arrow()
 
     @property
     def codes(self):

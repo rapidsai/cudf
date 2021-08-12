@@ -672,11 +672,11 @@ def test_index_where(data, condition, other, error):
         else:
             assert_eq(
                 ps.where(ps_condition, other=ps_other)
-                .fillna(gs._columns[0].default_na_value())
+                .fillna(gs._values.default_na_value())
                 .values,
                 gs.where(gs_condition, other=gs_other)
                 .to_pandas()
-                .fillna(gs._columns[0].default_na_value())
+                .fillna(gs._values.default_na_value())
                 .values,
             )
     else:
