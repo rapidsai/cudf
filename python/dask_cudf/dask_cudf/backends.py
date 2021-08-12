@@ -283,7 +283,7 @@ try:
             )
         if np.issubdtype(a.dtype, np.datetime64):
             result = a.quantile(
-                [i / 100 for i in q], interpolation=interpolation
+                [i / 100.0 for i in q], interpolation=interpolation
             )
 
             if q[0] == 0:
@@ -294,7 +294,7 @@ try:
             interpolation = "nearest"
         return (
             a.quantile(
-                [i / 100 for i in q], interpolation=interpolation
+                [i / 100.0 for i in q], interpolation=interpolation
             ).to_pandas(),
             n,
         )
