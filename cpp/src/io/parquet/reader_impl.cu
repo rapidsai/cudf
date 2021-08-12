@@ -571,8 +571,8 @@ class aggregate_metadata {
   {
     auto find_schema_child = [&](SchemaElement const& schema_elem, std::string const& name) {
       auto const& col_schema_idx = std::find_if(
-        schema_elem.children_idx.begin(),
-        schema_elem.children_idx.end(),
+        schema_elem.children_idx.cbegin(),
+        schema_elem.children_idx.cend(),
         [&](size_t col_schema_idx) { return get_schema(col_schema_idx).name == name; });
 
       return (col_schema_idx != schema_elem.children_idx.end()) ? static_cast<int>(*col_schema_idx)
@@ -608,7 +608,7 @@ class aggregate_metadata {
                              ? data_type{col_type, numeric::scale_type{-schema_elem.decimal_scale}}
                              : data_type{col_type};
 
-        column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL ? true : false);
+        column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
         // store the index of this element if inserted in out_col_array
         nesting.push_back(static_cast<int>(out_col_array.size()));
         output_col.name = schema_elem.name;
@@ -636,7 +636,7 @@ class aggregate_metadata {
         if (schema_elem.num_children == 0) {
           input_column_info& input_col =
             input_columns.emplace_back(input_column_info{schema_idx, schema_elem.name});
-          std::copy(nesting.begin(), nesting.end(), std::back_inserter(input_col.nesting));
+          std::copy(nesting.cbegin(), nesting.cend(), std::back_inserter(input_col.nesting));
           path_is_valid = true;  // If we're able to reach leaf then path is valid
         }
 
@@ -677,10 +677,10 @@ class aggregate_metadata {
       std::vector<column_name_info> selected_columns;
       if (include_index) {
         std::vector<std::string> index_names = get_pandas_index_names();
-        std::transform(index_names.begin(),
-                       index_names.end(),
+        std::transform(index_names.cbegin(),
+                       index_names.cend(),
                        std::back_inserter(selected_columns),
-                       [](std::string name) { return column_name_info(name); });
+                       [](std::string const& name) { return column_name_info(name); });
       }
       // Merge the vector use_names into a set of hierarchical column_name_info objects
       /* This is because if we have columns like this:
