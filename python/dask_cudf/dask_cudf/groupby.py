@@ -78,7 +78,13 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         }
         if (
             isinstance(self.obj, DaskDataFrame)
-            and isinstance(self.index, (str, list))
+            and (
+                isinstance(self.index, str)
+                or (
+                    isinstance(self.index, list)
+                    and all(isinstance(x, str) for x in self.index)
+                )
+            )
             and _is_supported(arg, _supported)
         ):
             if isinstance(self._meta.grouping.keys, cudf.MultiIndex):
