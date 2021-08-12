@@ -349,76 +349,57 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
 
 TYPED_TEST(TypedDatetimeOpsTest, TestCeilDatetime)
 {
+  using T = TypeParam;
   using namespace cudf::test;
   using namespace cudf::datetime;
   using namespace cuda::std::chrono;
 
-  std::vector<long> timestamps{
-    118800987L,       // 1970-01-02 09:00:00
-    129390186056L,    // 2011-01-01 17:11:00
-    318402007832L,    // 1980-02-03 05:00:00
-    604996200000L,    // 1989-03-04 06:30:00
-    1270413572078L,   // 2010-04-04 20:39:32
-    1588734621000L,   // 2020-05-06 03:10:21
-    2550814152105L,   // 2050-10-31 07:29:12
-    4102518778005L,   // 2100-01-01 20:32:58
-    702696234000L,    // 1992-04-08 01:23:54
-    6516816203020L,   // 2176-07-05 02:43:23
-    26472091292001L,  // 2808-11-12 22:41:32
-    4133857172000L,   // 2100-12-30 01:39:32
-    1560248892060L,   // 2019-06-19 12:54:52
-    4115217620600L,   // 2100-05-28 20:00:00
-    -265880250000L,   // 1961-07-29 16:22:30
-  };
+  auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
+  auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
 
-  auto input = fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(
-    timestamps.begin(), timestamps.end());
+  auto input = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop_));
 
-  std::vector<cudf::timestamp_ms> ms_timestamp(timestamps.size());
-  std::transform(timestamps.begin(), timestamps.end(), ms_timestamp.begin(), [](auto i) {
-    return time_point_ms(milliseconds(i));
+  auto host_val                     = to_host<T>(input);
+  thrust::host_vector<T> timestamps = host_val.first;
+
+  thrust::host_vector<T> ceiled_day(timestamps.size());
+  thrust::transform(timestamps.begin(), timestamps.end(), ceiled_day.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(ceil<days>(i));
   });
-
-  std::vector<cudf::timestamp_ms> ceiled_day(timestamps.size());
-  std::transform(ms_timestamp.begin(), ms_timestamp.end(), ceiled_day.begin(), [](auto i) {
-    return ceil<days>(i);
-  });
-
-  std::vector<cudf::timestamp_ms> ceiled_hour(timestamps.size());
-  std::transform(ms_timestamp.begin(), ms_timestamp.end(), ceiled_hour.begin(), [](auto i) {
-    return ceil<hours>(i);
-  });
-
-  std::vector<cudf::timestamp_ms> ceiled_minute(timestamps.size());
-  std::transform(ms_timestamp.begin(), ms_timestamp.end(), ceiled_minute.begin(), [](auto i) {
-    return ceil<minutes>(i);
-  });
-
-  std::vector<cudf::timestamp_ms> ceiled_second(timestamps.size());
-  std::transform(ms_timestamp.begin(), ms_timestamp.end(), ceiled_second.begin(), [](auto i) {
-    return ceil<seconds>(i);
-  });
-
-  std::vector<cudf::timestamp_ms> ceiled_millisecond(timestamps.size());
-  std::transform(ms_timestamp.begin(), ms_timestamp.end(), ceiled_millisecond.begin(), [](auto i) {
-    return ceil<milliseconds>(i);
-  });
-
   auto expected_day =
-    fixed_width_column_wrapper<cudf::timestamp_ms>(ceiled_day.begin(), ceiled_day.end());
-  auto expected_hour =
-    fixed_width_column_wrapper<cudf::timestamp_ms>(ceiled_hour.begin(), ceiled_hour.end());
-  auto expected_minute =
-    fixed_width_column_wrapper<cudf::timestamp_ms>(ceiled_minute.begin(), ceiled_minute.end());
-  auto expected_second =
-    fixed_width_column_wrapper<cudf::timestamp_ms>(ceiled_second.begin(), ceiled_second.end());
-  auto expected_millisecond = fixed_width_column_wrapper<cudf::timestamp_ms>(
-    ceiled_millisecond.begin(), ceiled_millisecond.end());
-
+    fixed_width_column_wrapper<T, typename T::duration::rep>(ceiled_day.begin(), ceiled_day.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_day(input), expected_day);
+
+  thrust::host_vector<T> ceiled_hour(timestamps.size());
+  thrust::transform(timestamps.begin(), timestamps.end(), ceiled_hour.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(ceil<hours>(i));
+  });
+  auto expected_hour = fixed_width_column_wrapper<T, typename T::duration::rep>(ceiled_hour.begin(),
+                                                                                ceiled_hour.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_hour(input), expected_hour);
+
+  std::vector<T> ceiled_minute(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), ceiled_minute.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(ceil<minutes>(i));
+  });
+  auto expected_minute = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    ceiled_minute.begin(), ceiled_minute.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_minute(input), expected_minute);
+
+  std::vector<T> ceiled_second(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), ceiled_second.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(ceil<seconds>(i));
+  });
+  auto expected_second = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    ceiled_second.begin(), ceiled_second.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_second(input), expected_second);
+
+  std::vector<T> ceiled_millisecond(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), ceiled_millisecond.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(ceil<milliseconds>(i));
+  });
+  auto expected_millisecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    ceiled_millisecond.begin(), ceiled_millisecond.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_millisecond(input), expected_millisecond);
 }
 
