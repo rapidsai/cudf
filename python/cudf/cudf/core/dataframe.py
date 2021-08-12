@@ -1921,13 +1921,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         return self._binaryop(other, "mul", fill_value, reflect=True)
 
-    def dot(self, other):
-        if isinstance(other, cudf.DataFrame):
-            output = cudf.DataFrame(self.values.dot(other.values))
-        elif isinstance(other, cudf.Series):
-            output = cudf.Series(self.values.dot(other.values))
-        return output
-
     def mod(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Modulo division of dataframe and other, element-wise (binary

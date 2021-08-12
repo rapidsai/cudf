@@ -3594,6 +3594,63 @@ class Frame(libcudf.table.Table):
 
         return output
 
+    def dot(self, other, reflect=False):
+        """
+        Get dot product of frame and other, (binary operator `dot`).
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+        other : sequence, Series, or DataFrame
+            Any multiple element data structure, or list-like object.
+        reflect : bool, default False
+            If ``True`` the operation is reflected (i.e whether to swap the
+            left and right operands).
+
+        Returns
+        -------
+        scalar, Series, or DataFrame
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame([[1, 2, 3, 4],
+        ...                      [5, 6, 7, 8]])
+        >>> df @ df.T
+            0    1
+        0  30   70
+        1  70  174
+        >>> s = cudf.Series([1, 1, 1, 1])
+        >>> df @ s
+        0    10
+        1    26
+        dtype: int64
+        >>> [1, 2, 3, 4] @ s
+        array(10)
+        """
+        lhs = self.values
+        if isinstance(other, Frame):
+            rhs = other.values
+        elif isinstance(other, cupy.ndarray):
+            rhs = other
+        elif isinstance(other, abc.Sequence):
+            rhs = cupy.asarray(other)
+        else:
+            return NotImplemented
+        if reflect:
+            lhs, rhs = rhs.T, lhs.T
+
+        result = lhs.dot(rhs)
+        if len(result.shape) == 1:
+            result = cudf.Series(result)
+        elif len(result.shape) == 2:
+            result = cudf.DataFrame(result)
+
+        return result
+
     # Binary arithmetic operations.
     def __add__(self, other):
         return self._binaryop(other, "add")
@@ -3609,6 +3666,9 @@ class Frame(libcudf.table.Table):
 
     def __matmul__(self, other):
         return self.dot(other)
+
+    def __rmatmul__(self, other):
+        return self.dot(other, reflect=True)
 
     def __mul__(self, other):
         return self._binaryop(other, "mul")
