@@ -198,6 +198,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(
  * A null months scalar would result in an all null column.
  * This method preserves the input time and the day where applicable. The date is rounded
  * down to the last day of the month for that year, if the new day is invalid for that month.
+ *
  * @code{.pseudo}
  * Example:
  * timestamps = [5/31/20 08:00:00, 6/30/20 00:00:00, 7/31/20 13:00:00]
@@ -207,13 +208,12 @@ std::unique_ptr<cudf::column> add_calendrical_months(
  * timestamps = [4/28/20 04:00:00, 5/30/20 01:00:00, 6/30/20 21:00:00]
  * months     = 1
  * output is [5/28/20 04:00:00, 6/30/20 01:00:00, 7/30/20 21:00:00]
- *
  * @endcode
  *
- * @param[in] timestamps cudf::column_view of timestamp type.
- * @param[in] months cudf::scalar of integer type containing the number of months to add.
+ * @param timestamps cudf::column_view of timestamp type.
+ * @param months cudf::scalar of integer type containing the number of months to add.
  *
- * @returns cudf::column of timestamp type containing the computed timestamps.
+ * @return cudf::column of timestamp type containing the computed timestamps.
  * @throw cudf::logic_error if `timestamps` datatype is not a TIMESTAMP or if `months` datatype
  * is not INT16 or INT32.
  * @throw cudf::logic_error if `timestamps` column size is not equal to `months` column size.
