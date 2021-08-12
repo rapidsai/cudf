@@ -4316,7 +4316,9 @@ class Frame(libcudf.table.Table):
         2   6  24
         3  10  34
         """
-        return self._scan("sum", axis=axis, skipna=skipna, *args, **kwargs)
+        return self._scan(
+            "sum", axis=axis, skipna=skipna, cast_to_int=True, *args, **kwargs
+        )
 
     def cumprod(self, axis=None, skipna=True, *args, **kwargs):
         """
@@ -4346,7 +4348,9 @@ class Frame(libcudf.table.Table):
         2   6   504
         3  24  5040
         """
-        return self._scan("prod", axis=axis, skipna=skipna, *args, **kwargs)
+        return self._scan(
+            "prod", axis=axis, skipna=skipna, cast_to_int=True, *args, **kwargs
+        )
 
 
 class SingleColumnFrame(Frame):
