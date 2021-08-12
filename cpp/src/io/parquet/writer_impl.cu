@@ -391,7 +391,7 @@ inline bool is_col_nullable(LinkedColPtr const& col,
  * The resulting schema tree is stored in a vector in pre-order traversal order.
  */
 std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linked_columns,
-                                                    table_input_metadata const& metadata,
+                                                    table_input_metadata& metadata,
                                                     bool single_write_mode,
                                                     bool int96_timestamps)
 {
@@ -404,8 +404,8 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
   root.parent_idx      = -1;  // root schema has no parent
   schema.push_back(std::move(root));
 
-  std::function<void(LinkedColPtr const&, column_in_metadata const&, size_t)> add_schema =
-    [&](LinkedColPtr const& col, column_in_metadata const& col_meta, size_t parent_idx) {
+  std::function<void(LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
+    [&](LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
       bool col_nullable = is_col_nullable(col, col_meta, single_write_mode);
 
       if (col->type().id() == type_id::STRUCT) {
@@ -489,12 +489,12 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         CUDF_EXPECTS(col_meta.child(lists_column_view::child_column_index).num_children() == 2, 
                     "Map struct column should have exactly two children");
         // verify the col meta of children of the struct have name key and value
-        auto left_child_meta =
+        auto& left_child_meta =
           col_meta.child(lists_column_view::child_column_index).child(0);
         left_child_meta.set_name("key");
         left_child_meta.set_nullability(false);
 
-        auto right_child_meta =
+        auto& right_child_meta =
           col_meta.child(lists_column_view::child_column_index).child(1);
         right_child_meta.set_name("value");
         // check the repetition type of key is required i.e. the col should be non-nullable
