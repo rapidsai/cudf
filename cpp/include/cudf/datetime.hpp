@@ -177,13 +177,14 @@ std::unique_ptr<cudf::column> day_of_year(
  *       5/30/20 00:00:01, 7/30/20 14:12:13]
  * @endcode
 
- * @param[in] timestamps cudf::column_view of timestamp type.
- * @param[in] months cudf::column_view of integer type containing the number of months to add.
- *
- * @returns cudf::column of timestamp type containing the computed timestamps.
  * @throw cudf::logic_error if `timestamps` datatype is not a TIMESTAMP or if `months` datatype
  * is not INT16 or INT32.
  * @throw cudf::logic_error if `timestamps` column size is not equal to `months` column size.
+ *
+ * @param timestamps cudf::column_view of timestamp type.
+ * @param months cudf::column_view of integer type containing the number of months to add.
+ *
+ * @returns cudf::column of timestamp type containing the computed timestamps.
  */
 std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
@@ -210,13 +211,14 @@ std::unique_ptr<cudf::column> add_calendrical_months(
  * output is [5/28/20 04:00:00, 6/30/20 01:00:00, 7/30/20 21:00:00]
  * @endcode
  *
+ * @throw cudf::logic_error if `timestamps` datatype is not a TIMESTAMP or if `months` datatype
+ * is not INT16 or INT32.
+ * @throw cudf::logic_error if `timestamps` column size is not equal to `months` column size.
+ *
  * @param timestamps cudf::column_view of timestamp type.
  * @param months cudf::scalar of integer type containing the number of months to add.
  *
  * @return cudf::column of timestamp type containing the computed timestamps.
- * @throw cudf::logic_error if `timestamps` datatype is not a TIMESTAMP or if `months` datatype
- * is not INT16 or INT32.
- * @throw cudf::logic_error if `timestamps` column size is not equal to `months` column size.
  */
 std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
