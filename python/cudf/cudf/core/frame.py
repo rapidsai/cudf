@@ -6,7 +6,7 @@ import copy
 import functools
 import warnings
 from collections import abc
-from typing import Any, Dict, Mapping, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, MutableMapping, Optional, Tuple, TypeVar, Union
 
 import cupy
 import numpy as np
@@ -65,7 +65,9 @@ class Frame(libcudf.table.Table):
 
     @classmethod
     def _from_data(
-        cls, data: Mapping, index: Optional[cudf.core.index.BaseIndex] = None,
+        cls,
+        data: MutableMapping,
+        index: Optional[cudf.core.index.BaseIndex] = None,
     ):
         obj = cls.__new__(cls)
         libcudf.table.Table.__init__(obj, data, index)
@@ -1116,19 +1118,19 @@ class Frame(libcudf.table.Table):
 
         See also
         --------
-        cudf.core.dataframe.DataFrame.isna
+        cudf.DataFrame.isna
             Indicate null values.
 
-        cudf.core.dataframe.DataFrame.notna
+        cudf.DataFrame.notna
             Indicate non-null values.
 
-        cudf.core.dataframe.DataFrame.fillna
+        cudf.DataFrame.fillna
             Replace null values.
 
-        cudf.core.series.Series.dropna
+        cudf.Series.dropna
             Drop null values.
 
-        cudf.core.index.Index.dropna
+        cudf.Index.dropna
             Drop null indices.
 
         Examples
@@ -1442,6 +1444,75 @@ class Frame(libcudf.table.Table):
         )
         result._copy_type_metadata(self)
         return result
+
+    def interpolate(
+        self,
+        method="linear",
+        axis=0,
+        limit=None,
+        inplace=False,
+        limit_direction=None,
+        limit_area=None,
+        downcast=None,
+        **kwargs,
+    ):
+        """
+        Interpolate data values between some points.
+
+        Parameters
+        ----------
+        method : str, default 'linear'
+            Interpolation technique to use. Currently,
+            only 'linear` is supported.
+            * 'linear': Ignore the index and treat the values as
+            equally spaced. This is the only method supported on MultiIndexes.
+            * 'index', 'values': linearly interpolate using the index as
+            an x-axis. Unsorted indices can lead to erroneous results.
+        axis : int, default 0
+            Axis to interpolate along. Currently,
+            only 'axis=0' is supported.
+        inplace : bool, default False
+            Update the data in place if possible.
+
+        Returns
+        -------
+        Series or DataFrame
+            Returns the same object type as the caller, interpolated at
+            some or all ``NaN`` values
+
+        """
+
+        if method in {"pad", "ffill"} and limit_direction != "forward":
+            raise ValueError(
+                f"`limit_direction` must be 'forward' for method `{method}`"
+            )
+        if method in {"backfill", "bfill"} and limit_direction != "backward":
+            raise ValueError(
+                f"`limit_direction` must be 'backward' for method `{method}`"
+            )
+
+        data = self
+
+        if not isinstance(data._index, cudf.RangeIndex):
+            perm_sort = data._index.argsort()
+            data = data._gather(perm_sort)
+
+        interpolator = cudf.core.algorithms.get_column_interpolator(method)
+        columns = {}
+        for colname, col in data._data.items():
+            if col.nullable:
+                col = col.astype("float64").fillna(np.nan)
+
+            # Interpolation methods may or may not need the index
+            columns[colname] = interpolator(col, index=data._index)
+
+        result = self._from_data(columns, index=data._index)
+
+        return (
+            result
+            if isinstance(data._index, cudf.RangeIndex)
+            else result._gather(perm_sort.argsort())
+        )
 
     def _quantiles(
         self,
@@ -4160,7 +4231,7 @@ class SingleColumnFrame(Frame):
     @classmethod
     def _from_data(
         cls,
-        data: Mapping,
+        data: MutableMapping,
         index: Optional[cudf.core.index.BaseIndex] = None,
         name: Any = None,
     ):
@@ -4191,6 +4262,12 @@ class SingleColumnFrame(Frame):
         return (len(self),)
 
     def __iter__(self):
+        """
+        Iterating over a GPU object is not effecient and hence not supported.
+
+        Consider using ``.to_arrow()``, ``.to_pandas()`` or ``.values_host``
+        if you wish to iterate over the values.
+        """
         cudf.utils.utils.raise_iteration_error(obj=self)
 
     def __len__(self):
@@ -4444,16 +4521,6 @@ class SingleColumnFrame(Frame):
         """
         return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
-    @property
-    def _copy_construct_defaults(self):
-        """A default dictionary of kwargs to be used for copy construction."""
-        raise NotImplementedError
-
-    def _copy_construct(self, **kwargs):
-        """Shallow copy this object by replacing certain ctor args.
-        """
-        return self.__class__(**{**self._copy_construct_defaults, **kwargs})
-
     def _binaryop(
         self,
         other: T,
@@ -4512,8 +4579,9 @@ class SingleColumnFrame(Frame):
             result_name: (self._column, other, reflect, fill_value)
         }
 
-        return self._copy_construct(
-            data=type(self)._colwise_binop(operands, fn)[result_name],
+        return self._from_data(
+            data=type(self)._colwise_binop(operands, fn),
+            index=self._index,
             name=result_name,
         )
 

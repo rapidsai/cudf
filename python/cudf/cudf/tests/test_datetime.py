@@ -1300,6 +1300,39 @@ def test_is_leap_year():
     assert_eq(expect2, got2)
 
 
+def test_quarter():
+    data = [
+        "2020-05-31 08:00:00",
+        "1999-12-31 18:40:00",
+        "2000-12-31 04:00:00",
+        "1900-02-28 07:00:00",
+        "1800-03-14 07:30:00",
+        "2100-03-14 07:30:00",
+        "1970-01-01 00:00:00",
+        "1969-12-31 12:59:00",
+    ]
+    dtype = "datetime64[s]"
+
+    # Series
+    ps = pd.Series(data, dtype=dtype)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.quarter
+    got = gs.dt.quarter
+
+    assert_eq(expect, got, check_dtype=False)
+
+    # DatetimeIndex
+    pIndex = pd.DatetimeIndex(data)
+    gIndex = cudf.from_pandas(pIndex)
+
+    expect2 = pIndex.quarter
+    got2 = gIndex.quarter
+
+    assert isinstance(got2, cudf.Int8Index)
+    assert_eq(expect2.values, got2.values, check_dtype=False)
+
+
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 def test_days_in_months(dtype):
     nrows = 1000
@@ -1344,5 +1377,35 @@ def test_is_month_start(data, dtype):
 
     expect = ps.dt.is_month_start
     got = gs.dt.is_month_start
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-05-31",
+            "2020-02-29",
+            None,
+            "1999-12-01",
+            "2000-12-21",
+            None,
+            "1900-02-28",
+            "1800-03-14",
+            "2100-03-10",
+            "1970-01-01",
+            "1969-12-11",
+        ]
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]"])
+def test_is_month_end(data, dtype):
+    # Series
+    ps = pd.Series(data, dtype=dtype)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.is_month_end
+    got = gs.dt.is_month_end
 
     assert_eq(expect, got)
