@@ -49,62 +49,63 @@ if TYPE_CHECKING:
 
 
 class CategoricalAccessor(ColumnMethods):
+    """
+    Accessor object for categorical properties of the Series values.
+    Be aware that assigning to `categories` is a inplace operation,
+    while all methods return new categorical data per default.
+
+    Parameters
+    ----------
+    column : Column
+    parent : Series or CategoricalIndex
+
+    Examples
+    --------
+    >>> s = cudf.Series([1,2,3], dtype='category')
+    >>> s
+    >>> s
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [1, 2, 3]
+    >>> s.cat.categories
+    Int64Index([1, 2, 3], dtype='int64')
+    >>> s.cat.reorder_categories([3,2,1])
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [3, 2, 1]
+    >>> s.cat.remove_categories([1])
+    0    <NA>
+    1       2
+    2       3
+    dtype: category
+    Categories (2, int64): [2, 3]
+    >>> s.cat.set_categories(list('abcde'))
+    0    <NA>
+    1    <NA>
+    2    <NA>
+    dtype: category
+    Categories (5, object): ['a', 'b', 'c', 'd', 'e']
+    >>> s.cat.as_ordered()
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [1 < 2 < 3]
+    >>> s.cat.as_unordered()
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [1, 2, 3]
+    """
+
     _column: CategoricalColumn
 
     def __init__(self, parent: SeriesOrIndex):
-        """
-        Accessor object for categorical properties of the Series values.
-        Be aware that assigning to `categories` is a inplace operation,
-        while all methods return new categorical data per default.
-
-        Parameters
-        ----------
-        column : Column
-        parent : Series or CategoricalIndex
-
-        Examples
-        --------
-        >>> s = cudf.Series([1,2,3], dtype='category')
-        >>> s
-        >>> s
-        0    1
-        1    2
-        2    3
-        dtype: category
-        Categories (3, int64): [1, 2, 3]
-        >>> s.cat.categories
-        Int64Index([1, 2, 3], dtype='int64')
-        >>> s.cat.reorder_categories([3,2,1])
-        0    1
-        1    2
-        2    3
-        dtype: category
-        Categories (3, int64): [3, 2, 1]
-        >>> s.cat.remove_categories([1])
-        0    <NA>
-        1       2
-        2       3
-        dtype: category
-        Categories (2, int64): [2, 3]
-        >>> s.cat.set_categories(list('abcde'))
-        0    <NA>
-        1    <NA>
-        2    <NA>
-        dtype: category
-        Categories (5, object): ['a', 'b', 'c', 'd', 'e']
-        >>> s.cat.as_ordered()
-        0    1
-        1    2
-        2    3
-        dtype: category
-        Categories (3, int64): [1 < 2 < 3]
-        >>> s.cat.as_unordered()
-        0    1
-        1    2
-        2    3
-        dtype: category
-        Categories (3, int64): [1, 2, 3]
-        """
         if not is_categorical_dtype(parent.dtype):
             raise AttributeError(
                 "Can only use .cat accessor with a 'category' dtype"
@@ -648,7 +649,19 @@ class CategoricalAccessor(ColumnMethods):
 
 
 class CategoricalColumn(column.ColumnBase):
-    """Implements operations for Columns of Categorical type
+    """
+    Implements operations for Columns of Categorical type
+
+    Parameters
+    ----------
+    dtype : CategoricalDtype
+    mask : Buffer
+        The validity mask
+    offset : int
+        Data offset
+    children : Tuple[ColumnBase]
+        Two non-null columns containing the categories and codes
+        respectively
     """
 
     dtype: cudf.core.dtypes.CategoricalDtype
@@ -664,18 +677,7 @@ class CategoricalColumn(column.ColumnBase):
         null_count: int = None,
         children: Tuple["column.ColumnBase", ...] = (),
     ):
-        """
-        Parameters
-        ----------
-        dtype : CategoricalDtype
-        mask : Buffer
-            The validity mask
-        offset : int
-            Data offset
-        children : Tuple[ColumnBase]
-            Two non-null columns containing the categories and codes
-            respectively
-        """
+
         if size is None:
             for child in children:
                 assert child.offset == 0

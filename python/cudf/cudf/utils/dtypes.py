@@ -581,6 +581,8 @@ def _can_cast(from_dtype, to_dtype):
     `np.can_cast` but with some special handling around
     cudf specific dtypes.
     """
+    if from_dtype in {None, cudf.NA}:
+        return True
     if isinstance(from_dtype, type):
         from_dtype = np.dtype(from_dtype)
     if isinstance(to_dtype, type):

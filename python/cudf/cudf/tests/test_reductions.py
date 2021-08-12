@@ -110,19 +110,24 @@ def test_sum_of_squares(dtype, nelem):
     dtype = np.dtype(dtype).type
     data = gen_rand(dtype, nelem)
     sr = Series(data)
+    df = cudf.DataFrame(sr)
 
     got = sr.sum_of_squares()
-    # got = dtype(got)
+    got_df = df.sum_of_squares()
     expect = (data ** 2).sum()
 
     if np.dtype(dtype).kind in {"u", "i"}:
         if 0 <= expect <= np.iinfo(dtype).max:
             np.testing.assert_array_almost_equal(expect, got)
+            np.testing.assert_array_almost_equal(expect, got_df.iloc[0])
         else:
             print("overflow, passing")
     else:
         np.testing.assert_approx_equal(
             expect, got, significant=accuracy_for_dtype[dtype]
+        )
+        np.testing.assert_approx_equal(
+            expect, got_df.iloc[0], significant=accuracy_for_dtype[dtype]
         )
 
 
