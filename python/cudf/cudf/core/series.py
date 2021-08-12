@@ -6125,7 +6125,7 @@ class DatetimeProperties(object):
         -------
         Series
         Booleans indicating if dates are the last day of the year.
-        
+
         Example
         -------
         >>> import pandas as pd, cudf
