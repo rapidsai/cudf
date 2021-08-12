@@ -291,7 +291,8 @@ public final class Table implements AutoCloseable {
                                                      int statsFreq,
                                                      boolean[] isInt96,
                                                      int[] precisions,
-                                                     boolean[] isMapValues, HostBufferConsumer consumer) throws CudfException;
+                                                     boolean[] isMapValues,
+                                                     HostBufferConsumer consumer) throws CudfException;
 
   /**
    * Write out a table to an open handle.

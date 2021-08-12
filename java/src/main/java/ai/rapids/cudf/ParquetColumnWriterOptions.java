@@ -372,13 +372,13 @@ public class ParquetColumnWriterOptions {
 
   /**
    * Add a Map Column to the schema.
-   *
+   * <p>
    * Maps are List columns with a Struct named 'key_value' with a child named 'key' and a child
    * named 'value'. The caller of this method doesn't need to worry about this as this method will
    * take care of this without the knowledge of the caller.
    */
   public static ParquetColumnWriterOptions mapColumn(String name, ParquetColumnWriterOptions key,
-                                      ParquetColumnWriterOptions value) {
+                                                     ParquetColumnWriterOptions value) {
     ParquetStructColumnWriterOptions struct = structBuilder("key_value").build();
     if (key.isNullable) {
       throw new IllegalArgumentException("key column can not be nullable");

@@ -6030,16 +6030,23 @@ public class TableTest extends CudfTestBase {
             new ParquetColumnWriterOptions("key0", false),
             new ParquetColumnWriterOptions("value0"))).build();
     File f = File.createTempFile("test-map", ".parquet");
-    List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
-    List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
-    List<HostColumnVector.StructData> list3 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
-    HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+    List<HostColumnVector.StructData> list1 =
+        Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
+    List<HostColumnVector.StructData> list2 =
+        Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
+    List<HostColumnVector.StructData> list3 =
+     Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
+     Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
         new HostColumnVector.BasicType(true, DType.STRING)));
-    try (Table t0 = new Table(ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3))) {
+    try (Table t0 = new Table(ColumnVector.fromLists(new HostColumnVector.ListType(true,
+     structType), list1, list2, list3))) {
       try (TableWriter writer = Table.writeParquetChunked(options, f)) {
         writer.write(t0);
       }
-      ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(new Path(f.getAbsolutePath()), new Configuration()));
+      ParquetFileReader reader =
+       ParquetFileReader.open(HadoopInputFile.fromPath(new Path(f.getAbsolutePath()),
+           new Configuration()));
       MessageType schema = reader.getFooter().getFileMetaData().getSchema();
       assertEquals(OriginalType.MAP, schema.getType("my_map").getOriginalType());
     }
