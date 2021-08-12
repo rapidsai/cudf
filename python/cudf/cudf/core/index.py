@@ -1605,35 +1605,15 @@ class RangeIndex(BaseIndex):
             )
         return super().__mul__(other)
 
-    def where(self, cond, other=None):
-        """
-        Replace values where the condition is False.
-
-        Parameters
-        ----------
-        cond : bool array-like with the same length as self
-            Where cond is True, keep the original value.
-            Where False, replace with corresponding value from other.
-            Callables are not supported.
-        other: scalar, or array-like
-            Entries where cond is False are replaced with
-            corresponding value from other. Callables are not
-            supported. Default is None.
-
-        Returns
-        -------
-        Same type as caller
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.Index([4, 3, 2, 1, 0])
-        >>> index
-        Int64Index([4, 3, 2, 1, 0], dtype='int64')
-        >>> index.where(index > 2, 15)
-        Int64Index([4, 3, 15, 15, 15], dtype='int64')
-        """
-        return cudf.Index._from_data(self._data).where(cond=cond, other=other)
+    def __getattr__(self, key):
+        # For methods that are not defined for RangeIndex we attempt to operate
+        # on the corresponding integer index if possible.
+        try:
+            return getattr(cudf.Index._from_data(self._data), key)
+        except AttributeError:
+            raise AttributeError(
+                f"'{type(self)}' object has no attribute {key}"
+            )
 
 
 class GenericIndex(BaseIndex, SingleColumnFrame):
