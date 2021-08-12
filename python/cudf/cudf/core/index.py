@@ -4,7 +4,16 @@ from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import (
+    Any,
+    Dict,
+    List,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 
 import cupy
 import numpy as np
@@ -661,39 +670,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         return difference
 
-    def _copy_construct(self, **kwargs):
-        # Need to override the parent behavior because pandas allows operations
-        # on unsigned types to return signed values, forcing us to choose the
-        # right index type here.
-        data = kwargs.get("data")
-        cls = self.__class__
-
-        if data is not None:
-            if self.dtype != data.dtype:
-                # TODO: This logic is largely copied from `as_index`. The two
-                # should be unified via a centralized type dispatching scheme.
-                if isinstance(data, NumericalColumn):
-                    try:
-                        cls = _dtype_to_index[data.dtype.type]
-                    except KeyError:
-                        cls = GenericIndex
-                elif isinstance(data, StringColumn):
-                    cls = StringIndex
-                elif isinstance(data, DatetimeColumn):
-                    cls = DatetimeIndex
-                elif isinstance(data, TimeDeltaColumn):
-                    cls = TimedeltaIndex
-                elif isinstance(data, CategoricalColumn):
-                    cls = CategoricalIndex
-            elif cls is RangeIndex:
-                # RangeIndex must convert to other numerical types for ops
-                try:
-                    cls = _dtype_to_index[data.dtype.type]
-                except KeyError:
-                    cls = GenericIndex
-
-        return cls(**{**self._copy_construct_defaults, **kwargs})
-
     def sort_values(self, return_indexer=False, ascending=True, key=None):
         """
         Return a sorted copy of the index, and optionally return the indices
@@ -1299,12 +1275,14 @@ class BaseIndex(SingleColumnFrame, Serializable):
         ind.name = index.name
         return ind
 
-    @property
-    def _copy_construct_defaults(self):
-        return {"data": self._column, "name": self.name}
-
     @classmethod
-    def _from_data(cls, data, index=None):
+    def _from_data(
+        cls,
+        data: MutableMapping,
+        index: Optional[BaseIndex] = None,
+        name: Any = None,
+    ) -> BaseIndex:
+        assert index is None
         if not isinstance(data, cudf.core.column_accessor.ColumnAccessor):
             data = cudf.core.column_accessor.ColumnAccessor(data)
         if len(data) == 0:
