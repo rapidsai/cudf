@@ -2163,31 +2163,6 @@ TEST_F(CsvReaderTest, DefaultWriteChunkSize)
   }
 }
 
-TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
-{
-  auto filepath = temp_env->get_temp_dir() + "something.csv";
-
-  // make up some kind of dataframe
-  auto constexpr num_rows = 10;
-  auto int32_column       = []() {
-    auto values = random_values<int32_t>(num_rows);
-    return column_wrapper<int32_t>(values.begin(), values.end());
-  }();
-  auto int64_column = []() {
-    auto values = random_values<int64_t>(num_rows);
-    return column_wrapper<int64_t>(values.begin(), values.end());
-  }();
-  std::vector<cudf::column_view> input_columns{int32_column, int64_column};
-  cudf::table_view original_table{input_columns};
-
-  // write that dataframe to a csv using the default options to some temporary file
-
-  // read the temp csv file using default options
-
-  // check to see / assert / verify they are identical, or at least as identical as expected.
-  ASSERT_TRUE(false);
-}
-
 TEST_F(CsvReaderTest, DtypesMap)
 {
   std::string csv_in{"12,9\n34,8\n56,7"};
@@ -2217,6 +2192,40 @@ TEST_F(CsvReaderTest, DtypesMapInvalid)
       .dtypes({{"A", dtype<int16_t>()}});
 
   EXPECT_THROW(cudf_io::read_csv(in_opts), cudf::logic_error);
+}
+
+TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
+{
+  auto filepath = temp_env->get_temp_dir() + "issue.csv";
+
+  // make up some kind of dataframe
+  auto constexpr num_rows = 10;
+
+  auto int32_column       = []() {
+    auto values = random_values<int32_t>(num_rows);
+    return column_wrapper<int32_t>(values.begin(), values.end());
+  }();
+  auto int64_column = []() {
+    auto values = random_values<int64_t>(num_rows);
+    return column_wrapper<int64_t>(values.begin(), values.end());
+  }();
+  std::vector<cudf::column_view> input_columns{int32_column, int64_column};
+
+  cudf::table_view original_table{input_columns};
+  cudf::table_view new_table;
+
+  // write that dataframe to a csv using the default options to some temporary file
+  cudf_io::csv_writer_options writer_options =
+    cudf_io::csv_writer_options::builder(cudf_io::sink_info{"issue.csv"}, original_table);
+  cudf_io::write_csv(writer_options);
+
+  // read the temp csv file using default options
+  cudf_io::csv_reader_options read_options =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{"issue.csv"}, new_table);
+  cudf_io::read_csv(read_options);
+
+  // check to see / assert / verify they are identical, or at least as identical as expected.
+  EXPECT_EQ(original_table, new_table);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
