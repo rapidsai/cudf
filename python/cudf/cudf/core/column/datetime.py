@@ -158,6 +158,15 @@ class DatetimeColumn(column.ColumnBase):
             index=index,
         )
 
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the DateTimeColumn.
+        """
+        raise NotImplementedError(
+            "DateTime Arrays is not yet implemented in cudf"
+        )
+
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
 
