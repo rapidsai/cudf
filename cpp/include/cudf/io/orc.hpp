@@ -392,7 +392,7 @@ class orc_writer_options {
   // Set of columns to output
   table_view _table;
   // Optional associated metadata
-  const table_metadata* _metadata = nullptr;
+  const table_input_metadata* _metadata = nullptr;
 
   friend orc_writer_options_builder;
 
@@ -448,7 +448,7 @@ class orc_writer_options {
   /**
    * @brief Returns associated metadata.
    */
-  table_metadata const* get_metadata() const { return _metadata; }
+  table_input_metadata const* get_metadata() const { return _metadata; }
 
   // Setters
 
@@ -478,7 +478,7 @@ class orc_writer_options {
    *
    * @param meta Associated metadata.
    */
-  void set_metadata(table_metadata* meta) { _metadata = meta; }
+  void set_metadata(table_input_metadata const* meta) { _metadata = meta; }
 };
 
 class orc_writer_options_builder {
@@ -544,7 +544,7 @@ class orc_writer_options_builder {
    * @param meta Associated metadata.
    * @return this for chaining.
    */
-  orc_writer_options_builder& metadata(table_metadata* meta)
+  orc_writer_options_builder& metadata(table_input_metadata const* meta)
   {
     options._metadata = meta;
     return *this;
@@ -598,7 +598,7 @@ class chunked_orc_writer_options {
   // Enable writing column statistics
   bool _enable_statistics = true;
   // Optional associated metadata
-  const table_metadata_with_nullability* _metadata = nullptr;
+  const table_input_metadata* _metadata = nullptr;
 
   friend chunked_orc_writer_options_builder;
 
@@ -644,7 +644,7 @@ class chunked_orc_writer_options {
   /**
    * @brief Returns associated metadata.
    */
-  table_metadata_with_nullability const* get_metadata() const { return _metadata; }
+  table_input_metadata const* get_metadata() const { return _metadata; }
 
   // Setters
 
@@ -667,7 +667,7 @@ class chunked_orc_writer_options {
    *
    * @param meta Associated metadata.
    */
-  void metadata(table_metadata_with_nullability* meta) { _metadata = meta; }
+  void metadata(table_input_metadata const* meta) { _metadata = meta; }
 };
 
 class chunked_orc_writer_options_builder {
@@ -718,7 +718,7 @@ class chunked_orc_writer_options_builder {
    * @param meta Associated metadata.
    * @return this for chaining.
    */
-  chunked_orc_writer_options_builder& metadata(table_metadata_with_nullability* meta)
+  chunked_orc_writer_options_builder& metadata(table_input_metadata const* meta)
   {
     options._metadata = meta;
     return *this;

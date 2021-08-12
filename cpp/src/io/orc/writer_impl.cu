@@ -97,6 +97,7 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id)
     case cudf::type_id::DECIMAL32:
     case cudf::type_id::DECIMAL64: return TypeKind::DECIMAL;
     case cudf::type_id::LIST: return TypeKind::LIST;
+    case cudf::type_id::STRUCT: return TypeKind::STRUCT;
     default: return TypeKind::INVALID_TYPE_KIND;
   }
 }
@@ -140,28 +141,20 @@ class orc_column_view {
    */
   explicit orc_column_view(uint32_t index,
                            int str_idx,
-                           int index_in_table,
+                           bool is_child,
                            column_view const& col,
-                           const table_metadata* metadata)
+                           column_in_metadata const* metadata)
     : cudf_column{col},
       _index{index},
       _str_idx{str_idx},
-      _is_child{index_in_table < 0},
+      _is_child{is_child},
       _type_width{cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : 0},
       _scale{(to_orc_type(col.type().id()) == TypeKind::DECIMAL) ? -col.type().scale()
                                                                  : to_clockscale(col.type().id())},
       _precision{orc_precision(col.type().id())},
-      _type_kind{to_orc_type(col.type().id())}
+      _type_kind{to_orc_type(col.type().id())},
+      metadata{metadata}
   {
-    // Don't assign names to child columns
-    if (index_in_table >= 0) {
-      if (metadata != nullptr && index_in_table < static_cast<int>(metadata->column_names.size())) {
-        _name = metadata->column_names[index_in_table];
-      } else {
-        // Generating default name if name isn't present in metadata
-        _name = "_col" + std::to_string(index_in_table);
-      }
-    }
   }
 
   auto is_string() const noexcept { return cudf_column.type().id() == type_id::STRING; }
@@ -213,6 +206,11 @@ class orc_column_view {
   auto null_count() const noexcept { return cudf_column.null_count(); }
   auto null_mask() const noexcept { return cudf_column.null_mask(); }
   bool nullable() const noexcept { return null_mask() != nullptr; }
+  std::optional<bool> user_defined_nullable() const noexcept
+  {
+    if (!metadata or not metadata->is_nullability_defined()) return std::nullopt;
+    return metadata->nullable();
+  }
 
   auto scale() const noexcept { return _scale; }
   auto precision() const noexcept { return _precision; }
@@ -220,7 +218,16 @@ class orc_column_view {
   void set_orc_encoding(ColumnEncodingKind e) noexcept { _encoding_kind = e; }
   auto orc_kind() const noexcept { return _type_kind; }
   auto orc_encoding() const noexcept { return _encoding_kind; }
-  auto orc_name() const noexcept { return _name; }
+  auto orc_name() const noexcept
+  {
+    if (metadata != nullptr) {
+      return metadata->get_name();
+    } else {
+      // Generating default name if no metadata
+      // TODO: incorrect, need to find out the naming scheme
+      return "_col" + std::to_string(_index);
+    }
+  }
 
  private:
   column_view cudf_column;
@@ -236,7 +243,6 @@ class orc_column_view {
   int32_t _precision = 0;
 
   // ORC-related members
-  std::string _name{};
   TypeKind _type_kind;
   ColumnEncodingKind _encoding_kind;
 
@@ -250,6 +256,8 @@ class orc_column_view {
   // Offsets for encoded decimal elements. Used to enable direct writing of encoded decimal elements
   // into the output stream.
   uint32_t* d_decimal_offsets = nullptr;
+
+  column_in_metadata const* metadata;
 };
 
 size_type orc_table_view::num_rows() const noexcept
@@ -474,11 +482,13 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
       if (single_write_mode) {
         return column.nullable();
       } else {
-        if (user_metadata_with_nullability.column_nullable.empty()) return true;
-        CUDF_EXPECTS(user_metadata_with_nullability.column_nullable.size() > column.index(),
-                     "When passing values in user_metadata_with_nullability, data for all columns "
-                     "must be specified");
-        return user_metadata_with_nullability.column_nullable[column.index()];
+        // For chunked write, when not provided nullability, we assume the worst case scenario
+        // that all columns are nullable.
+        auto const chunked_nullable = column.user_defined_nullable().value_or(true);
+        CUDF_EXPECTS(chunked_nullable or !column.nullable(),
+                     "Mismatch in metadata prescribed nullability and input column nullability. "
+                     "Metadata for nullable input column cannot prescribe nullability = false");
+        return chunked_nullable;
       }
     }();
 
@@ -509,6 +519,7 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
     };
 
     if (is_nullable) { add_RLE_stream(gpu::CI_PRESENT, PRESENT, TypeKind::BOOLEAN); }
+
     switch (kind) {
       case TypeKind::BOOLEAN:
       case TypeKind::BYTE:
@@ -591,6 +602,9 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         // no data stream, only lengths
         add_RLE_stream(gpu::CI_DATA2, LENGTH, TypeKind::INT);
         column.set_orc_encoding(DIRECT_V2);
+        break;
+      case TypeKind::STRUCT:
+        // Only has the present stream
         break;
       default: CUDF_FAIL("Unsupported ORC type kind");
     }
@@ -1101,13 +1115,13 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
-  : compression_kind_(to_orc_compression(options.get_compression())),
-    enable_statistics_(options.enable_statistics()),
-    out_sink_(std::move(sink)),
-    single_write_mode(mode == SingleWriteMode::YES),
-    user_metadata(options.get_metadata()),
+  : _mr(mr),
     stream(stream),
-    _mr(mr)
+    compression_kind_(to_orc_compression(options.get_compression())),
+    enable_statistics_(options.enable_statistics()),
+    single_write_mode(mode == SingleWriteMode::YES),
+    user_metadata{options.get_metadata()},
+    out_sink_(std::move(sink))
 {
   init_state();
 }
@@ -1117,18 +1131,14 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
-  : compression_kind_(to_orc_compression(options.get_compression())),
-    enable_statistics_(options.enable_statistics()),
-    out_sink_(std::move(sink)),
-    single_write_mode(mode == SingleWriteMode::YES),
+  : _mr(mr),
     stream(stream),
-    _mr(mr)
+    compression_kind_(to_orc_compression(options.get_compression())),
+    enable_statistics_(options.enable_statistics()),
+    single_write_mode(mode == SingleWriteMode::YES),
+    user_metadata{options.get_metadata()},
+    out_sink_(std::move(sink))
 {
-  if (options.get_metadata() != nullptr) {
-    user_metadata_with_nullability = *options.get_metadata();
-    user_metadata                  = &user_metadata_with_nullability;
-  }
-
   init_state();
 }
 
@@ -1164,28 +1174,38 @@ void __device__ append_orc_device_column(uint32_t& idx,
 
 orc_table_view make_orc_table_view(table_view const& table,
                                    table_device_view const& d_table,
-                                   table_metadata const* user_metadata,
+                                   table_input_metadata const* user_metadata,
                                    rmm::cuda_stream_view stream)
 {
   std::vector<orc_column_view> orc_columns;
   std::vector<uint32_t> str_col_indexes;
 
-  std::function<void(column_view const&, int)> append_orc_column = [&](column_view const& col,
-                                                                       int index_in_table) {
-    int const str_idx =
-      (col.type().id() == type_id::STRING) ? static_cast<int>(str_col_indexes.size()) : -1;
-    auto const& new_col =
-      orc_columns.emplace_back(orc_columns.size(), str_idx, index_in_table, col, user_metadata);
-    if (new_col.is_string()) { str_col_indexes.push_back(new_col.index()); }
-    if (col.type().id() == type_id::LIST)
-      append_orc_column(col.child(lists_column_view::child_column_index), -1);
-    if (col.type().id() == type_id::STRUCT)
-      for (auto child = col.child_begin(); child != col.child_end(); ++child)
-        append_orc_column(*child, -1);
-  };
+  std::function<void(column_view const&, bool, column_in_metadata const*)> append_orc_column =
+    [&](column_view const& col, bool is_child, column_in_metadata const* col_metadata) {
+      auto meta_child = [&](int idx) -> column_in_metadata const* {
+        return col_metadata == nullptr ? nullptr : &col_metadata->child(idx);
+      };
+
+      int const str_idx =
+        (col.type().id() == type_id::STRING) ? static_cast<int>(str_col_indexes.size()) : -1;
+
+      auto const& new_col =
+        orc_columns.emplace_back(orc_columns.size(), str_idx, is_child, col, col_metadata);
+      if (new_col.is_string()) { str_col_indexes.push_back(new_col.index()); }
+      if (col.type().id() == type_id::LIST)
+        append_orc_column(col.child(lists_column_view::child_column_index),
+                          true,
+                          meta_child(lists_column_view::child_column_index));
+      if (col.type().id() == type_id::STRUCT)
+        for (auto child_idx = 0; child_idx != col.num_children(); ++child_idx)
+          append_orc_column(col.child(child_idx), true, meta_child(child_idx));
+    };
 
   for (auto col_idx = 0; col_idx < table.num_columns(); ++col_idx) {
-    append_orc_column(table.column(col_idx), col_idx);
+    append_orc_column(
+      table.column(col_idx),
+      false,
+      user_metadata == nullptr ? nullptr : &user_metadata->column_metadata[col_idx]);
   }
 
   rmm::device_uvector<orc_column_device_view> d_orc_columns(orc_columns.size(), stream);

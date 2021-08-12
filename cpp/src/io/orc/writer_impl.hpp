@@ -375,14 +375,11 @@ class writer::impl {
   cudf::io::orc::Metadata md;
   // current write position for rowgroups/chunks
   size_t current_chunk_offset;
-  // optional user metadata
-  table_metadata const* user_metadata = nullptr;
-  // only used in the write_chunked() case. copied from the (optionally) user supplied
-  // argument to write_chunked_begin()
-  table_metadata_with_nullability user_metadata_with_nullability;
   // special parameter only used by detail::write() to indicate that we are guaranteeing
   // a single table write.  this enables some internal optimizations.
   bool const single_write_mode;
+  // optional user metadata
+  table_input_metadata const* user_metadata = nullptr;
   // to track if the output has been written to sink
   bool closed = false;
 
