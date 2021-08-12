@@ -40,6 +40,7 @@ from cudf._lib.cpp.io.types cimport (
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.io.utils cimport make_sink_info, make_source_info
 from cudf._lib.table cimport Table, make_table_view
+from cudf._lib.utils cimport data_from_unique_ptr
 
 ctypedef int32_t underlying_type_t_compression
 
@@ -116,8 +117,8 @@ cdef csv_reader_options make_csv_reader_options(
     cdef vector[string] c_use_cols_names
     cdef size_type c_nrows = nrows if nrows is not None else -1
     cdef quote_style c_quoting
-    cdef vector[string] c_infer_date_names
-    cdef vector[int] c_infer_date_indexes
+    cdef vector[string] c_parse_dates_names
+    cdef vector[int] c_parse_dates_indexes
     cdef vector[string] c_dtypes
     cdef vector[string] c_true_values
     cdef vector[string] c_false_values
@@ -220,14 +221,14 @@ cdef csv_reader_options make_csv_reader_options(
                 "`parse_dates`: non-lists are unsupported")
         for col in parse_dates:
             if isinstance(col, str):
-                c_infer_date_names.push_back(str(col).encode())
+                c_parse_dates_names.push_back(str(col).encode())
             elif isinstance(col, int):
-                c_infer_date_indexes.push_back(col)
+                c_parse_dates_indexes.push_back(col)
             else:
                 raise NotImplementedError(
                     "`parse_dates`: Nesting is unsupported")
-        csv_reader_options_c.set_infer_date_names(c_infer_date_names)
-        csv_reader_options_c.set_infer_date_indexes(c_infer_date_indexes)
+        csv_reader_options_c.set_parse_dates(c_parse_dates_names)
+        csv_reader_options_c.set_parse_dates(c_parse_dates_indexes)
 
     if dtype is not None:
         if isinstance(dtype, abc.Mapping):
@@ -358,7 +359,7 @@ def read_csv(
 
     See Also
     --------
-    cudf.io.csv.read_csv
+    cudf.read_csv
     """
 
     if not isinstance(datasource, (BytesIO, StringIO, bytes,
@@ -393,7 +394,7 @@ def read_csv(
         c_result = move(cpp_read_csv(read_csv_options_c))
 
     meta_names = [name.decode() for name in c_result.metadata.column_names]
-    df = cudf.DataFrame._from_table(Table.from_unique_ptr(
+    df = cudf.DataFrame._from_data(*data_from_unique_ptr(
         move(c_result.tbl),
         column_names=meta_names
     ))
@@ -428,7 +429,7 @@ cpdef write_csv(
 
     See Also
     --------
-    cudf.io.csv.to_csv
+    cudf.to_csv
     """
     cdef table_view input_table_view = \
         table.view() if index is True else table.data_view()

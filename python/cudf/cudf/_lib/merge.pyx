@@ -11,6 +11,7 @@ from cudf._lib.cpp.merge cimport merge as cpp_merge
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.table cimport Table
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def merge_sorted(
@@ -102,7 +103,7 @@ def merge_sorted(
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=index_names,

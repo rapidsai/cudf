@@ -828,6 +828,34 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Get the quarter of the year from a timestamp.
+   * @return A new INT16 vector allocated on the GPU. It will be a value from {1, 2, 3, 4}
+   * corresponding to the quarter of the year.
+   */
+  public final ColumnVector quarterOfYear() {
+    assert type.isTimestampType();
+    return new ColumnVector(quarterOfYear(getNativeView()));
+  }
+
+  /**
+   * Add the specified number of months to the timestamp.
+   * @param months must be a INT16 column indicating the number of months to add. A negative number
+   *               of months works too.
+   * @return the updated timestamp
+   */
+  public final ColumnVector addCalendricalMonths(ColumnView months) {
+    return new ColumnVector(addCalendricalMonths(getNativeView(), months.getNativeView()));
+  }
+
+  /**
+   * Check to see if the year for this timestamp is a leap year or not.
+   * @return BOOL8 vector of results
+   */
+  public final ColumnVector isLeapYear() {
+    return new ColumnVector(isLeapYear(getNativeView()));
+  }
+
+  /**
    * Rounds all the values in a column to the specified number of decimal places.
    *
    * @param decimalPlaces Number of decimal places to round to. If negative, this
@@ -1107,7 +1135,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar sum(DType outType) {
-    return reduce(Aggregation.sum(), outType);
+    return reduce(ReductionAggregation.sum(), outType);
   }
 
   /**
@@ -1115,7 +1143,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the same type as this column.
    */
   public Scalar min() {
-    return reduce(Aggregation.min(), type);
+    return reduce(ReductionAggregation.min(), type);
   }
 
   /**
@@ -1132,7 +1160,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         return tmp.min(outType);
       }
     }
-    return reduce(Aggregation.min(), outType);
+    return reduce(ReductionAggregation.min(), outType);
   }
 
   /**
@@ -1140,7 +1168,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the same type as this column.
    */
   public Scalar max() {
-    return reduce(Aggregation.max(), type);
+    return reduce(ReductionAggregation.max(), type);
   }
 
   /**
@@ -1157,7 +1185,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         return tmp.max(outType);
       }
     }
-    return reduce(Aggregation.max(), outType);
+    return reduce(ReductionAggregation.max(), outType);
   }
 
   /**
@@ -1173,7 +1201,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar product(DType outType) {
-    return reduce(Aggregation.product(), outType);
+    return reduce(ReductionAggregation.product(), outType);
   }
 
   /**
@@ -1189,7 +1217,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * scalar of the specified type.
    */
   public Scalar sumOfSquares(DType outType) {
-    return reduce(Aggregation.sumOfSquares(), outType);
+    return reduce(ReductionAggregation.sumOfSquares(), outType);
   }
 
   /**
@@ -1213,7 +1241,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                types are currently supported.
    */
   public Scalar mean(DType outType) {
-    return reduce(Aggregation.mean(), outType);
+    return reduce(ReductionAggregation.mean(), outType);
   }
 
   /**
@@ -1237,7 +1265,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                types are currently supported.
    */
   public Scalar variance(DType outType) {
-    return reduce(Aggregation.variance(), outType);
+    return reduce(ReductionAggregation.variance(), outType);
   }
 
   /**
@@ -1262,7 +1290,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                types are currently supported.
    */
   public Scalar standardDeviation(DType outType) {
-    return reduce(Aggregation.standardDeviation(), outType);
+    return reduce(ReductionAggregation.standardDeviation(), outType);
   }
 
   /**
@@ -1281,7 +1309,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Null values are skipped.
    */
   public Scalar any(DType outType) {
-    return reduce(Aggregation.any(), outType);
+    return reduce(ReductionAggregation.any(), outType);
   }
 
   /**
@@ -1302,7 +1330,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   @Deprecated
   public Scalar all(DType outType) {
-    return reduce(Aggregation.all(), outType);
+    return reduce(ReductionAggregation.all(), outType);
   }
 
   /**
@@ -1315,7 +1343,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(Aggregation aggregation) {
+  public Scalar reduce(ReductionAggregation aggregation) {
     return reduce(aggregation, type);
   }
 
@@ -1332,7 +1360,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(Aggregation aggregation, DType outType) {
+  public Scalar reduce(ReductionAggregation aggregation, DType outType) {
     long nativeId = aggregation.createNativeInstance();
     try {
       return new Scalar(outType, reduce(getNativeView(), nativeId, outType.typeId.getNativeId(), outType.getScale()));
@@ -1362,20 +1390,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws IllegalArgumentException if unsupported window specification * (i.e. other than {@link WindowOptions.FrameType#ROWS} is used.
    */
   public final ColumnVector rollingWindow(RollingAggregation op, WindowOptions options) {
-    Aggregation agg = op.getBaseAggregation();
     // Check that only row-based windows are used.
     if (!options.getFrameType().equals(WindowOptions.FrameType.ROWS)) {
       throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
           + options.getFrameType());
     }
 
-    long nativePtr = agg.createNativeInstance();
+    long nativePtr = op.createNativeInstance();
     try {
       Scalar p = options.getPrecedingScalar();
       Scalar f = options.getFollowingScalar();
       return new ColumnVector(
           rollingWindow(this.getNativeView(),
-              agg.getDefaultOutput(),
+              op.getDefaultOutput(),
               options.getMinPeriods(),
               nativePtr,
               p == null || !p.isValid() ? 0 : p.getInt(),
@@ -1392,7 +1419,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * This is just a convenience method for an inclusive scan with a SUM aggregation.
    */
   public final ColumnVector prefixSum() {
-    return scan(Aggregation.sum());
+    return scan(ScanAggregation.sum());
   }
 
   /**
@@ -1403,7 +1430,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                   null policy too. Currently none of those aggregations are supported so
    *                   it is undefined how they would interact with each other.
    */
-  public final ColumnVector scan(Aggregation aggregation, ScanType scanType, NullPolicy nullPolicy) {
+  public final ColumnVector scan(ScanAggregation aggregation, ScanType scanType, NullPolicy nullPolicy) {
     long nativeId = aggregation.createNativeInstance();
     try {
       return new ColumnVector(scan(getNativeView(), nativeId,
@@ -1418,7 +1445,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param aggregation the aggregation to perform
    * @param scanType should the scan be inclusive, include the current row, or exclusive.
    */
-  public final ColumnVector scan(Aggregation aggregation, ScanType scanType) {
+  public final ColumnVector scan(ScanAggregation aggregation, ScanType scanType) {
     return scan(aggregation, scanType, NullPolicy.EXCLUDE);
   }
 
@@ -1426,7 +1453,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Computes an inclusive scan for a column that excludes nulls.
    * @param aggregation the aggregation to perform
    */
-  public final ColumnVector scan(Aggregation aggregation) {
+  public final ColumnVector scan(ScanAggregation aggregation) {
     return scan(aggregation, ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
   }
 
@@ -3525,6 +3552,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long lastDayOfMonth(long viewHandle) throws CudfException;
 
   private static native long dayOfYear(long viewHandle) throws CudfException;
+
+  private static native long quarterOfYear(long viewHandle) throws CudfException;
+
+  private static native long addCalendricalMonths(long tsViewHandle, long monthsViewHandle);
+
+  private static native long isLeapYear(long viewHandle) throws CudfException;
 
   private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 
