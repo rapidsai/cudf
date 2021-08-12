@@ -114,14 +114,6 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   // result = [6, 1, 11, 1, 1]
   //
-  auto validity_iter = cudf::detail::make_counting_transform_iterator(
-    0,
-    [row_indices = row_indices.begin<size_type>(),
-     validity    = c.null_mask(),
-     offset      = c.offset()] __device__(int index) {
-      auto const true_index = row_indices[index] + offset;
-      return !validity || cudf::bit_is_set(validity, true_index) ? 1 : 0;
-    });
   auto output_row_iter = cudf::detail::make_counting_transform_iterator(
     0,
     [row_indices  = row_indices.begin<size_type>(),
@@ -136,8 +128,9 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
                      output_row_iter,
                      output_row_iter + row_indices.size(),
                      output_row_start->view().begin<size_type>(),
-                     validity_iter,
-                     result->mutable_view().begin<size_type>());
+                     row_size_iter,
+                     result->mutable_view().begin<size_type>(),
+                     [] __device__(auto row_size) { return row_size != 0; });
 
   // generate keys for each output row
   //
@@ -150,11 +143,12 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
                    keys->mutable_view().end<size_type>(),
                    [] __device__() { return 0; });
   thrust::scatter_if(rmm::exec_policy(),
-                     validity_iter,
-                     validity_iter + row_indices.size(),
+                     row_size_iter,
+                     row_size_iter + row_indices.size(),
                      output_row_start->view().begin<size_type>(),
-                     validity_iter,
-                     keys->mutable_view().begin<size_type>());
+                     row_size_iter,
+                     keys->mutable_view().begin<size_type>(),
+                     [] __device__(auto row_size) { return row_size != 0; });
   thrust::inclusive_scan(rmm::exec_policy(),
                          keys->view().begin<size_type>(),
                          keys->view().end<size_type>(),
