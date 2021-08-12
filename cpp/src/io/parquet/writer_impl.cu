@@ -486,17 +486,17 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
 
         CUDF_EXPECTS(col_meta.num_children() == 2,
                      "List column's metadata should have exactly two children");
+        CUDF_EXPECTS(col_meta.child(lists_column_view::child_column_index).num_children() == 2, 
+                    "Map struct column should have exactly two children");
         // verify the col meta of children of the struct have name key and value
-        auto const& left_child_meta =
+        auto left_child_meta =
           col_meta.child(lists_column_view::child_column_index).child(0);
-        CUDF_EXPECTS(
-          left_child_meta.get_name() == "key",
-          "First child of the Struct should be named key, but found " + left_child_meta.get_name());
-        auto const& right_child_meta =
+        left_child_meta.set_name("key");
+        left_child_meta.set_nullability(false);
+
+        auto right_child_meta =
           col_meta.child(lists_column_view::child_column_index).child(1);
-        CUDF_EXPECTS(right_child_meta.get_name() == "value",
-                     "Second child of the Struct should be named value, but found " +
-                       right_child_meta.get_name());
+        right_child_meta.set_name("value");
         // check the repetition type of key is required i.e. the col should be non-nullable
         auto key_col = col->children[lists_column_view::child_column_index]->children[0];
         CUDF_EXPECTS(!is_col_nullable(key_col, left_child_meta, single_write_mode),

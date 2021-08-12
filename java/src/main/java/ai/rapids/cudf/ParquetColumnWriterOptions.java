@@ -383,8 +383,6 @@ public class ParquetColumnWriterOptions {
     if (key.isNullable) {
       throw new IllegalArgumentException("key column can not be nullable");
     }
-    value.columName = "value";
-    key.columName = "key";
     struct.childColumnOptions = new ParquetColumnWriterOptions[]{key, value};
     ParquetColumnWriterOptions opt = listBuilder(name)
         .withStructColumn(struct)
