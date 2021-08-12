@@ -275,17 +275,11 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
   CUDF_EXPECTS(timestamp_column.size() == months_column.size(),
                "Timestamp and months column should be of the same size");
 
-  auto output = months_column.type() == data_type{type_id::INT16}
-                  ? type_dispatcher(timestamp_column.type(),
+  auto const months_begin_iter = cudf::detail::indexalator_factory::make_input_iterator(months_column);
+  auto output = type_dispatcher(timestamp_column.type(),
                                     add_calendrical_months_functor{},
                                     timestamp_column,
-                                    months_column.begin<int16_t>(),
-                                    stream,
-                                    mr)
-                  : type_dispatcher(timestamp_column.type(),
-                                    add_calendrical_months_functor{},
-                                    timestamp_column,
-                                    months_column.begin<int32_t>(),
+                                    months_begin_iter,
                                     stream,
                                     mr);
 

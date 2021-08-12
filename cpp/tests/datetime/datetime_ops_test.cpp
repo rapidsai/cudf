@@ -558,7 +558,7 @@ TYPED_TEST(TypedAddMonthsTest, TestAddScalarMonthsWithSeconds)
     verbosity);
 
   // subtract
-  auto months2 = cudf::make_fixed_width_scalar<TypeParam>(-20);
+  auto const months2 = cudf::make_fixed_width_scalar<TypeParam>(-20);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *add_calendrical_months(timestamps_s, *months2),
@@ -598,7 +598,7 @@ TYPED_TEST(TypedAddMonthsTest, TestAddMonthsWithSecondsAndNullValues)
       },
       {true, false, true, false, true, false, true, false, true, true, true, true}};
 
-  auto months = cudf::test::fixed_width_column_wrapper<TypeParam>{
+  auto const months = cudf::test::fixed_width_column_wrapper<TypeParam>{
     {-2, 6, -1, 1, -4, 8, -2, 10, 4, -20, 1, 3},
     {false, true, true, false, true, true, true, true, true, true, true, true}};
 
@@ -642,7 +642,7 @@ TYPED_TEST(TypedAddMonthsTest, TestAddScalarMonthsWithSecondsWithNulls)
     iterators::nulls_at({1, 4}));
 
   // valid scalar
-  auto months1 = cudf::make_fixed_width_scalar<TypeParam>(11);
+  auto const months1 = cudf::make_fixed_width_scalar<TypeParam>(11);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *add_calendrical_months(timestamps_s, *months1),
@@ -658,7 +658,7 @@ TYPED_TEST(TypedAddMonthsTest, TestAddScalarMonthsWithSecondsWithNulls)
     verbosity);
 
   // null scalar
-  auto months2 =
+  auto const months2 =
     cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_to_id<TypeParam>()});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
