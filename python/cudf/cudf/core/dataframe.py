@@ -1502,8 +1502,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         fill_value for missing data in one of the inputs. With reverse
         version, `radd`.
 
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
 
         Parameters
         ----------
@@ -1656,8 +1657,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         fill_value for missing data in one of the inputs. With reverse
         version, `add`.
 
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
 
         Parameters
         ----------
@@ -1709,8 +1711,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         fill_value for missing data in one of the inputs. With reverse
         version, `rsub`.
 
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
 
         Parameters
         ----------
@@ -1762,8 +1765,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         fill_value for missing data in one of the inputs. With reverse
         version, `sub`.
 
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
 
         Parameters
         ----------
@@ -1820,8 +1824,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         fill_value for missing data in one of the inputs. With reverse
         version, `rmul`.
 
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
 
         Parameters
         ----------
@@ -1875,8 +1880,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         fill_value for missing data in one of the inputs. With reverse
         version, `mul`.
 
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
 
         Parameters
         ----------
@@ -1930,8 +1936,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         fill_value for missing data in one of the inputs. With reverse
         version, `rmod`.
 
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
 
         Parameters
         ----------
@@ -1983,8 +1990,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         fill_value for missing data in one of the inputs. With reverse
         version, `mod`.
 
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
 
         Parameters
         ----------
@@ -2036,8 +2044,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         fill_value for missing data in one of the inputs. With reverse
         version, `rpow`.
 
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
 
         Parameters
         ----------
@@ -2089,8 +2098,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         fill_value for missing data in one of the inputs. With reverse
         version, `pow`.
 
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
 
         Parameters
         ----------
@@ -2142,8 +2152,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         fill_value for missing data in one of the inputs. With reverse
         version, `rfloordiv`.
 
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
 
         Parameters
         ----------
@@ -2195,8 +2206,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         a fill_value for missing data in one of the inputs. With reverse
         version, `floordiv`.
 
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
 
         Parameters
         ----------
@@ -2258,8 +2270,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         fill_value for missing data in one of the inputs. With reverse
         version, `rtruediv`.
 
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
 
         Parameters
         ----------
@@ -2319,8 +2332,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         fill_value for missing data in one of the inputs. With reverse
         version, `truediv`.
 
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
 
         Parameters
         ----------
