@@ -1481,7 +1481,7 @@ for binop in (
         RangeIndex,
         binop,
         (
-            lambda self, other: getattr(
+            lambda self, other, binop=binop: getattr(
                 cudf.Int64Index._from_data(self._data), binop
             )(other)
         ),
