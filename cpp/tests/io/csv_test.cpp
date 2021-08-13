@@ -2196,12 +2196,20 @@ TEST_F(CsvReaderTest, DtypesMapInvalid)
 
 TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
 {
-  auto filepath = temp_env->get_temp_dir() + "issue.csv";
+  auto const filepath = temp_env->get_temp_dir() + "issue.csv";
 
   // make up some kind of dataframe
   auto constexpr num_rows = 10;
 
-  auto int32_column       = []() {
+  auto int8_column = []() {
+    auto values = random_values<int8_t>(num_rows);
+    return column_wrapper<int8_t>(values.begin(), values.end());
+  }();
+  auto int16_column = []() {
+    auto values = random_values<int16_t>(num_rows);
+    return column_wrapper<int16_t>(values.begin(), values.end());
+  }();
+  auto int32_column = []() {
     auto values = random_values<int32_t>(num_rows);
     return column_wrapper<int32_t>(values.begin(), values.end());
   }();
@@ -2209,23 +2217,67 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
     auto values = random_values<int64_t>(num_rows);
     return column_wrapper<int64_t>(values.begin(), values.end());
   }();
-  std::vector<cudf::column_view> input_columns{int32_column, int64_column};
+  auto uint8_column = []() {
+    auto values = random_values<uint8_t>(num_rows);
+    return column_wrapper<uint8_t>(values.begin(), values.end());
+  }();
+  auto uint16_column = []() {
+    auto values = random_values<uint16_t>(num_rows);
+    return column_wrapper<uint16_t>(values.begin(), values.end());
+  }();
+  auto uint32_column = []() {
+    auto values = random_values<uint32_t>(num_rows);
+    return column_wrapper<uint32_t>(values.begin(), values.end());
+  }();
+  auto uint64_column = []() {
+    auto values = random_values<uint64_t>(num_rows);
+    return column_wrapper<uint64_t>(values.begin(), values.end());
+  }();
+  auto float32_column = []() {
+    auto values = random_values<float>(num_rows);
+    return column_wrapper<float>(values.begin(), values.end());
+  }();
+  auto float64_column = []() {
+    auto values = random_values<double>(num_rows);
+    return column_wrapper<double>(values.begin(), values.end());
+  }();
 
-  cudf::table_view original_table{input_columns};
-  cudf::table_view new_table;
+  auto input_columns = std::vector<cudf::column_view>{int8_column,
+                                                      int16_column,
+                                                      int32_column,
+                                                      int64_column,
+                                                      uint8_column,
+                                                      uint16_column,
+                                                      uint32_column,
+                                                      uint64_column,
+                                                      float32_column,
+                                                      float64_column};
+
+  auto input_table = cudf::table_view{input_columns};
 
   // write that dataframe to a csv using the default options to some temporary file
-  cudf_io::csv_writer_options writer_options =
-    cudf_io::csv_writer_options::builder(cudf_io::sink_info{"issue.csv"}, original_table);
+  auto writer_options =
+    cudf_io::csv_writer_options::builder(cudf_io::sink_info{"issue.csv"}, input_table);
   cudf_io::write_csv(writer_options);
 
   // read the temp csv file using default options
   cudf_io::csv_reader_options read_options =
-    cudf_io::csv_reader_options::builder(cudf_io::source_info{"issue.csv"}, new_table);
-  cudf_io::read_csv(read_options);
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+      .header(-1)
+      .dtypes({dtype<int8_t>(),
+               dtype<int16_t>(),
+               dtype<int32_t>(),
+               dtype<int64_t>(),
+               dtype<uint8_t>(),
+               dtype<uint16_t>(),
+               dtype<uint32_t>(),
+               dtype<uint64_t>(),
+               dtype<float>(),
+               dtype<double>()});
+  auto new_table_and_metadata = cudf_io::read_csv(read_options);
 
   // check to see / assert / verify they are identical, or at least as identical as expected.
-  EXPECT_EQ(original_table, new_table);
+  EXPECT_EQ(input_table, new_table_and_metadata);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
