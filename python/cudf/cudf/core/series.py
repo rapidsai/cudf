@@ -39,7 +39,7 @@ from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, SingleColumnFrame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
-from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
+from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
 from cudf.utils import cudautils, docutils, ioutils
@@ -2375,7 +2375,9 @@ class Series(SingleColumnFrame, Serializable):
             if isinstance(objs[0].index, cudf.MultiIndex):
                 index = cudf.MultiIndex._concat([o.index for o in objs])
             else:
-                index = Index._concat([o.index for o in objs])
+                index = cudf.core.index.GenericIndex._concat(
+                    [o.index for o in objs]
+                )
 
         names = {obj.name for obj in objs}
         if len(names) == 1:

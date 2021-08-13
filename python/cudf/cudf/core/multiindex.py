@@ -23,7 +23,7 @@ from cudf.core.index import BaseIndex, as_index
 from cudf.utils.utils import _maybe_indices_to_slice
 
 
-class MultiIndex(BaseIndex, Frame):
+class MultiIndex(Frame, BaseIndex):
     """A multi-level or hierarchical index.
 
     Provides N-Dimensional indexing into Series and DataFrame objects.

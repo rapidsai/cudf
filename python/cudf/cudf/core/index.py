@@ -481,23 +481,6 @@ class BaseIndex(Serializable):
         """
         return self._values.data_array_view
 
-    @classmethod
-    def _concat(cls, objs):
-        if all(isinstance(obj, RangeIndex) for obj in objs):
-            result = _concat_range_index(objs)
-        else:
-            data = concat_columns([o._values for o in objs])
-            result = as_index(data)
-
-        names = {obj.name for obj in objs}
-        if len(names) == 1:
-            [name] = names
-        else:
-            name = None
-
-        result.name = name
-        return result
-
     def append(self, other):
         """
         Append a collection of Index options together.
@@ -1616,7 +1599,7 @@ class RangeIndex(BaseIndex):
             )
 
 
-class GenericIndex(BaseIndex, SingleColumnFrame):
+class GenericIndex(SingleColumnFrame, BaseIndex):
     """
     An array of orderable values that represent the indices of another Column
 
@@ -1658,6 +1641,23 @@ class GenericIndex(BaseIndex, SingleColumnFrame):
     @property
     def _values(self):
         return self._column
+
+    @classmethod
+    def _concat(cls, objs):
+        if all(isinstance(obj, RangeIndex) for obj in objs):
+            result = _concat_range_index(objs)
+        else:
+            data = concat_columns([o._values for o in objs])
+            result = as_index(data)
+
+        names = {obj.name for obj in objs}
+        if len(names) == 1:
+            [name] = names
+        else:
+            name = None
+
+        result.name = name
+        return result
 
     @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other, **kwargs):
