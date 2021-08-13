@@ -410,7 +410,7 @@ TYPED_TEST(ConditionalInnerJoinTest, TestSymmetry)
   auto col_ref_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
   auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_1, col_ref_0);
   auto expression_reverse =
-    cudf::ast::expression(cudf::ast::ast_operator::LESS_EQUAL, col_ref_0, col_ref_1);
+    cudf::ast::expression(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_1);
 
   this->test(
     {{0, 1, 2}}, {{1, 2, 3}}, expression, {{0, 0}, {0, 1}, {0, 2}, {1, 1}, {1, 2}, {2, 2}});
