@@ -129,7 +129,7 @@ $ # for other contributors
 $./build.sh libcudf                     
 ```
 
-#### Python cudf contributors:
+#### Building and testing the `cudf` Python library
 
 - To build and install in edit/develop mode the `cudf` python package, in the `python/cudf` folder:
 ```bash
