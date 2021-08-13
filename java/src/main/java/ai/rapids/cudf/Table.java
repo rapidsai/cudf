@@ -2004,10 +2004,6 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap[] leftJoinGatherMaps(Table rightTable, CompiledExpression condition,
                                         boolean compareNullsEqual) {
-    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
-          "rightKeys: " + rightTable.getNumberOfColumns());
-    }
     long[] gatherMapData =
         conditionalLeftJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
@@ -2049,10 +2045,6 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap[] innerJoinGatherMaps(Table rightTable, CompiledExpression condition,
                                          boolean compareNullsEqual) {
-    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
-          "rightKeys: " + rightTable.getNumberOfColumns());
-    }
     long[] gatherMapData =
         conditionalInnerJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
@@ -2094,10 +2086,6 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap[] fullJoinGatherMaps(Table rightTable, CompiledExpression condition,
                                          boolean compareNullsEqual) {
-    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
-          "rightKeys: " + rightTable.getNumberOfColumns());
-    }
     long[] gatherMapData =
         conditionalFullJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
@@ -2146,10 +2134,6 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap leftSemiJoinGatherMap(Table rightTable, CompiledExpression condition,
                                          boolean compareNullsEqual) {
-    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
-          "rightKeys: " + rightTable.getNumberOfColumns());
-    }
     long[] gatherMapData =
         conditionalLeftSemiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
@@ -2191,10 +2175,6 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap leftAntiJoinGatherMap(Table rightTable, CompiledExpression condition,
                                          boolean compareNullsEqual) {
-    if (getNumberOfColumns() != rightTable.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
-          "rightKeys: " + rightTable.getNumberOfColumns());
-    }
     long[] gatherMapData =
         conditionalLeftAntiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
