@@ -116,7 +116,7 @@ $./build.sh --help
 
 The general workflow for building and testing the C++ and Python components of cuDF are provided below. Please also see the last section about [code formatting](###code-formatting).
 
-#### Any contributor:
+#### Building and testing the `libcudf` C++ library
 
 This section provides instructions for building and testing C++ libcudf. Thus, C++ libcudf only contributor will be all set after following instructions below:
  
