@@ -631,3 +631,17 @@ def test_groupby_first_last(data, agg):
         getattr(gdf.groupby("a"), agg)(),
         getattr(gddf.groupby("a"), agg)().compute(),
     )
+
+
+def test_groupby_with_list_of_series():
+    df = cudf.DataFrame({"a": [1, 2, 3, 4, 5]})
+    gdf = dask_cudf.from_cudf(df, npartitions=2)
+    gs = cudf.Series([1, 1, 1, 2, 2], name="id")
+    ggs = dask_cudf.from_cudf(gs, npartitions=2)
+
+    ddf = dd.from_pandas(df.to_pandas(), npartitions=2)
+    pgs = dd.from_pandas(gs.to_pandas(), npartitions=2)
+
+    dd.assert_eq(
+        gdf.groupby([ggs]).agg(["sum"]), ddf.groupby([pgs]).agg(["sum"])
+    )
