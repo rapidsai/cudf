@@ -526,50 +526,12 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (2, int64): [1, 10]
         """
-        ordered = ordered if ordered is not None else self.ordered
-        new_categories = column.as_column(new_categories)
-
-        if isinstance(new_categories, CategoricalColumn):
-            new_categories = new_categories.categories
-
-        # when called with rename=True, the pandas behavior is
-        # to replace the current category values with the new
-        # categories.
-        if rename:
-            # enforce same length
-            if len(new_categories) != len(self._column.categories):
-                raise ValueError(
-                    "new_categories must have the same "
-                    "number of items as old categories"
-                )
-
-            out_col = column.build_categorical_column(
-                categories=new_categories,
-                codes=self._column.base_children[0],
-                mask=self._column.base_mask,
-                size=self._column.size,
-                offset=self._column.offset,
-                ordered=ordered,
-            )
-        else:
-            out_col = self._column
-            if not (type(out_col.categories) is type(new_categories)):
-                # If both categories are of different Column types,
-                # return a column full of Nulls.
-                out_col = _create_empty_categorical_column(
-                    self._column,
-                    CategoricalDtype(
-                        categories=new_categories, ordered=ordered
-                    ),
-                )
-            elif (
-                not out_col._categories_equal(new_categories, ordered=ordered)
-                or not self.ordered == ordered
-            ):
-                out_col = out_col._set_categories(
-                    new_categories, ordered=ordered,
-                )
-        return self._return_or_inplace(out_col, inplace=inplace)
+        return self._return_or_inplace(
+            self._column.set_categories(
+                new_categories=new_categories, ordered=ordered, rename=rename
+            ),
+            inplace=inplace,
+        )
 
     def reorder_categories(
         self,
