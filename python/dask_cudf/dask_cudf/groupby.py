@@ -210,7 +210,7 @@ def groupby_agg(
     split_out = split_out or 1
 
     # Standardize `gb_cols` and `columns` lists
-    aggs = _redirect_aggs(aggs_in.copy())
+    aggs = _redirect_aggs(aggs_in)
     if isinstance(gb_cols, str):
         gb_cols = [gb_cols]
     columns = [c for c in ddf.columns if c not in gb_cols]
