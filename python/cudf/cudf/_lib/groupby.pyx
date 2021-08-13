@@ -94,10 +94,12 @@ cdef class GroupBy:
         c_grouped_values = move(c_groups.values)
         c_group_offsets = c_groups.offsets
 
-        grouped_keys = cudf.Index._from_data(*data_from_unique_ptr(
-            move(c_grouped_keys),
-            column_names=range(c_grouped_keys.get()[0].num_columns())
-        ))
+        grouped_keys = cudf.core.index.GenericIndex._from_data(
+            *data_from_unique_ptr(
+                move(c_grouped_keys),
+                column_names=range(c_grouped_keys.get()[0].num_columns())
+            )
+        )
         grouped_values = data_from_unique_ptr(
             move(c_grouped_values),
             index_names=values._index_names,
@@ -216,7 +218,8 @@ cdef class GroupBy:
                     Column.from_unique_ptr(move(c_result.second[i].results[j]))
                 )
 
-        return result_data, cudf.Index._from_data(grouped_keys)
+        return result_data, cudf.core.index.GenericIndex._from_data(
+            grouped_keys)
 
     def shift(self, Table values, int periods, list fill_values):
         cdef table_view view = values.view()
@@ -241,10 +244,12 @@ cdef class GroupBy:
                 self.c_obj.get()[0].shift(view, offsets, c_fill_values)
             )
 
-        grouped_keys = cudf.Index._from_data(*data_from_unique_ptr(
-            move(c_result.first),
-            column_names=self.keys._column_names
-        ))
+        grouped_keys = cudf.core.index.GenericIndex._from_data(
+            *data_from_unique_ptr(
+                move(c_result.first),
+                column_names=self.keys._column_names
+            )
+        )
 
         shifted, _ = data_from_unique_ptr(
             move(c_result.second), column_names=values._column_names

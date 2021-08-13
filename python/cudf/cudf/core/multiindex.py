@@ -1347,7 +1347,7 @@ class MultiIndex(Frame, BaseIndex):
             popped_data[n] = self._data.pop(n)
 
         # construct the popped result
-        popped = cudf.Index._from_data(popped_data)
+        popped = cudf.core.index.GenericIndex._from_data(popped_data)
         popped.names = popped_names
 
         # update self
@@ -1485,6 +1485,18 @@ class MultiIndex(Frame, BaseIndex):
                 self._source_data.drop_duplicates(ignore_index=True)
             )
         return self._is_unique
+
+    @property
+    def is_monotonic(self):
+        """Return boolean if values in the object are monotonic_increasing.
+
+        This property is an alias for :attr:`is_monotonic_increasing`.
+
+        Returns
+        -------
+        bool
+        """
+        return self.is_monotonic_increasing
 
     @property
     def is_monotonic_increasing(self):

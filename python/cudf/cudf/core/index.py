@@ -1258,7 +1258,7 @@ class RangeIndex(BaseIndex):
                 other._step,
             ):
                 return True
-        return cudf.Index._from_data(self._data).equals(other)
+        return cudf.Int64Index._from_data(self._data).equals(other)
 
     def serialize(self):
         header = {}
@@ -1445,9 +1445,63 @@ class RangeIndex(BaseIndex):
             )
 
     def get_loc(self, key, method=None, tolerance=None):
-        return cudf.Index._from_data(self._data).get_loc(
+        return cudf.Int64Index._from_data(self._data).get_loc(
             key, method=method, tolerance=tolerance
         )
+
+
+# Patch in all binops and unary ops, which bypass __getattr__ on the instance
+# and prevent the above overload from working.
+for binop in (
+    "__add__",
+    "__radd__",
+    "__sub__",
+    "__rsub__",
+    "__mul__",
+    "__rmul__",
+    "__mod__",
+    "__rmod__",
+    "__pow__",
+    "__rpow__",
+    "__floordiv__",
+    "__rfloordiv__",
+    "__truediv__",
+    "__rtruediv__",
+    "__and__",
+    "__or__",
+    "__xor__",
+    "__eq",
+    "__ne",
+    "__lt__",
+    "__le__",
+    "__gt__",
+    "__ge__",
+):
+    setattr(
+        RangeIndex,
+        binop,
+        (
+            lambda self, other: getattr(
+                cudf.Int64Index._from_data(self._data), binop
+            )(other)
+        ),
+    )
+
+
+for unaop in (
+    "__neg__",
+    "__pos__",
+    "__abs__",
+):
+    setattr(
+        RangeIndex,
+        binop,
+        (
+            lambda self: getattr(
+                cudf.Int64Index._from_data(self._data), binop
+            )()
+        ),
+    )
 
 
 class GenericIndex(SingleColumnFrame, BaseIndex):
@@ -1516,6 +1570,43 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         StringIndex(['beetle' 'cow' 'hippo' 'lama'], dtype='object')
         """  # noqa: E501
         return super().drop_duplicates(keep=keep)
+
+    @classmethod
+    def _from_data(
+        cls,
+        data: MutableMapping,
+        index: Optional[BaseIndex] = None,
+        name: Any = None,
+    ) -> BaseIndex:
+        assert index is None
+        if not isinstance(data, cudf.core.column_accessor.ColumnAccessor):
+            data = cudf.core.column_accessor.ColumnAccessor(data)
+        if len(data) == 0:
+            raise ValueError("Cannot construct Index from any empty Table")
+        if len(data) == 1:
+            values = next(iter(data.values()))
+
+            if isinstance(values, NumericalColumn):
+                try:
+                    index_class_type: Type[GenericIndex] = _dtype_to_index[
+                        values.dtype.type
+                    ]
+                except KeyError:
+                    index_class_type = GenericIndex
+                out = index_class_type.__new__(index_class_type)
+            elif isinstance(values, DatetimeColumn):
+                out = DatetimeIndex.__new__(DatetimeIndex)
+            elif isinstance(values, TimeDeltaColumn):
+                out = TimedeltaIndex.__new__(TimedeltaIndex)
+            elif isinstance(values, StringColumn):
+                out = StringIndex.__new__(StringIndex)
+            elif isinstance(values, CategoricalColumn):
+                out = CategoricalIndex.__new__(CategoricalIndex)
+            out._data = data
+            out._index = None
+            return out
+        else:
+            return cudf.MultiIndex._from_data(data)
 
     def _copy_type_metadata(
         self, other: Frame, include_index: bool = True
@@ -3160,43 +3251,6 @@ class Index(BaseIndex, metaclass=IndexMeta):
             )
 
         return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
-
-    @classmethod
-    def _from_data(
-        cls,
-        data: MutableMapping,
-        index: Optional[BaseIndex] = None,
-        name: Any = None,
-    ) -> BaseIndex:
-        assert index is None
-        if not isinstance(data, cudf.core.column_accessor.ColumnAccessor):
-            data = cudf.core.column_accessor.ColumnAccessor(data)
-        if len(data) == 0:
-            raise ValueError("Cannot construct Index from any empty Table")
-        if len(data) == 1:
-            values = next(iter(data.values()))
-
-            if isinstance(values, NumericalColumn):
-                try:
-                    index_class_type: Type[GenericIndex] = _dtype_to_index[
-                        values.dtype.type
-                    ]
-                except KeyError:
-                    index_class_type = GenericIndex
-                out = index_class_type.__new__(index_class_type)
-            elif isinstance(values, DatetimeColumn):
-                out = DatetimeIndex.__new__(DatetimeIndex)
-            elif isinstance(values, TimeDeltaColumn):
-                out = TimedeltaIndex.__new__(TimedeltaIndex)
-            elif isinstance(values, StringColumn):
-                out = StringIndex.__new__(StringIndex)
-            elif isinstance(values, CategoricalColumn):
-                out = CategoricalIndex.__new__(CategoricalIndex)
-            out._data = data
-            out._index = None
-            return out
-        else:
-            return cudf.MultiIndex._from_data(data)
 
     @classmethod
     def from_arrow(cls, obj):
