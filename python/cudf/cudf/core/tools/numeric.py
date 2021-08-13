@@ -109,7 +109,7 @@ def to_numeric(arg, errors="raise", downcast=None):
     dtype = col.dtype
 
     if is_datetime_dtype(dtype) or is_timedelta_dtype(dtype):
-        col = col.as_numerical_column(np.dtype("int64"))
+        col = col.as_numerical_column(cudf.dtype("int64"))
     elif is_categorical_dtype(dtype):
         cat_dtype = col.dtype.type
         if _is_non_decimal_numeric_dtype(cat_dtype):
@@ -140,7 +140,7 @@ def to_numeric(arg, errors="raise", downcast=None):
         raise ValueError("Unrecognized datatype")
 
     # str->float conversion may require lower precision
-    if col.dtype == np.dtype("f"):
+    if col.dtype == cudf.dtype("f"):
         col = col.as_numerical_column("d")
 
     if downcast:
@@ -150,13 +150,13 @@ def to_numeric(arg, errors="raise", downcast=None):
             "unsigned": list(np.typecodes["UnsignedInteger"]),
         }
         float_types = list(np.typecodes["Float"])
-        idx = float_types.index(np.dtype(np.float32).char)
+        idx = float_types.index(cudf.dtype(np.float32).char)
         downcast_type_map["float"] = float_types[idx:]
 
         type_set = downcast_type_map[downcast]
 
         for t in type_set:
-            downcast_dtype = np.dtype(t)
+            downcast_dtype = cudf.dtype(t)
             if downcast_dtype.itemsize <= col.dtype.itemsize:
                 if col.can_cast_safely(downcast_dtype):
                     col = libcudf.unary.cast(col, downcast_dtype)
@@ -197,7 +197,7 @@ def _convert_str_col(col, errors, _downcast=None):
 
     is_integer = libstrings.is_integer(col)
     if is_integer.all():
-        return col.as_numerical_column(dtype=np.dtype("i8"))
+        return col.as_numerical_column(dtype=cudf.dtype("i8"))
 
     col = _proc_inf_empty_strings(col)
 
@@ -210,9 +210,9 @@ def _convert_str_col(col, errors, _downcast=None):
                     "limited by float32 precision."
                 )
             )
-            return col.as_numerical_column(dtype=np.dtype("f"))
+            return col.as_numerical_column(dtype=cudf.dtype("f"))
         else:
-            return col.as_numerical_column(dtype=np.dtype("d"))
+            return col.as_numerical_column(dtype=cudf.dtype("d"))
     else:
         if errors == "coerce":
             col = libcudf.string_casting.stod(col)

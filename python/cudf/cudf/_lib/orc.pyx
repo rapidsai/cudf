@@ -84,7 +84,7 @@ cpdef read_orc(object filepaths_or_buffers,
 
     See Also
     --------
-    cudf.io.orc.read_orc
+    cudf.read_orc
     """
     cdef orc_reader_options c_orc_reader_options = make_orc_reader_options(
         filepaths_or_buffers,
@@ -97,7 +97,7 @@ cpdef read_orc(object filepaths_or_buffers,
             if timestamp_type is None else
             <type_id>(
                 <underlying_type_t_type_id> (
-                    np_to_cudf_types[np.dtype(timestamp_type)]
+                    np_to_cudf_types[cudf.dtype(timestamp_type)]
                 )
             )
         ),
@@ -142,7 +142,7 @@ cpdef write_orc(Table table,
 
     See Also
     --------
-    cudf.io.orc.read_orc
+    cudf.read_orc
     """
     cdef compression_type compression_ = _get_comp_type(compression)
     cdef table_metadata metadata_ = table_metadata()
