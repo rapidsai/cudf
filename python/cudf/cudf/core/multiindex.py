@@ -93,7 +93,6 @@ class MultiIndex(BaseIndex):
 
         self._name = None
 
-        column_names = []
         if labels:
             warnings.warn(
                 "the 'labels' keyword is deprecated, use 'codes' " "instead",
@@ -123,17 +122,6 @@ class MultiIndex(BaseIndex):
             self._levels = levels
             return
 
-        # name setup
-        if isinstance(names, (Sequence, pd.core.indexes.frozen.FrozenList,),):
-            if sum(x is None for x in names) > 1:
-                column_names = list(range(len(codes)))
-            else:
-                column_names = names
-        elif names is None:
-            column_names = list(range(len(codes)))
-        else:
-            column_names = names
-
         if len(levels) == 0:
             raise ValueError("Must pass non-zero number of levels/codes")
 
@@ -146,10 +134,9 @@ class MultiIndex(BaseIndex):
             self._codes = codes
         elif len(levels) == len(codes):
             self._codes = cudf.DataFrame()
-            for i, codes in enumerate(codes):
-                name = column_names[i] or i
-                codes = column.as_column(codes)
-                self._codes[name] = codes.astype(np.int64)
+            for i, code in enumerate(codes):
+                code = column.as_column(code)
+                self._codes[i] = code.astype(np.int64)
         else:
             raise ValueError(
                 "MultiIndex has unequal number of levels and "
