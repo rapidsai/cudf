@@ -57,15 +57,15 @@ The following instructions are for developers and contributors to cuDF OSS devel
 
 
 
-### General dependency requirements
+### General requirements
 
-Compiler requirements:
+Compilers:
 
 * `gcc`     version 9.3+
 * `nvcc`    version 11.0+
 * `cmake`   version 3.20.1+
 
-CUDA/GPU requirements:
+CUDA/GPU:
 
 * CUDA 11.0+
 * NVIDIA driver 450.80.02+
@@ -94,7 +94,7 @@ conda activate cudf_dev
 
 ### Build cuDF from Source
 
-- A `build.sh` script is provided in `$CUDF_HOME`. Note that  CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX` and the libraries will be installed to the location set in `$INSTALL_PREFIX` if set (i.e. `export INSTALL_PREFIX=/install/path`), otherwise to `$CONDA_PREFIX`.
+- A `build.sh` script is provided in `$CUDF_HOME`. Running the script with no additional arguments will install the `libcudf`, `cudf` and `dask_cudf` libraries. By default, the libraries are installed to the `$CONDA_PREFIX` directory. To install into a different location, set the location in `$INSTALL_PREFIX`. Finally, note that the script depends on the `nvcc` executable being on your path, or defined in `$CUDACXX`.
 ```bash
 $ cd $CUDF_HOME
 $./build.sh libcudf             
