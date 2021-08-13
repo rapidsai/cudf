@@ -96,8 +96,15 @@ conda activate cudf_dev
 
 - A `build.sh` script is provided in `$CUDF_HOME`. Running the script with no additional arguments will install the `libcudf`, `cudf` and `dask_cudf` libraries. By default, the libraries are installed to the `$CONDA_PREFIX` directory. To install into a different location, set the location in `$INSTALL_PREFIX`. Finally, note that the script depends on the `nvcc` executable being on your path, or defined in `$CUDACXX`.
 ```bash
-$ cd $CUDF_HOME
-$./build.sh libcudf             
+cd $CUDF_HOME
+
+# Choose one of the following commands, depending on whether
+# you want to build and install the libcudf C++ library only, 
+# or include the cudf and/or dask_cudf Python libraries:
+
+./build.sh  # libcudf, cudf and dask_cudf
+./build.sh libcudf  # libcudf only
+./build.sh libcudf cudf  # libcudf and cudf only             
 ```
 - Many other librairies like `dask-cudf` and `cudf-kafka` can be installed with this script. For the complete list of librairies as well as details about the script usage, run the `help` command:
 ```bash
