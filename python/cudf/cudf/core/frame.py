@@ -2362,7 +2362,7 @@ class Frame(libcudf.table.Table):
                     self._index, cudf.core.index.CategoricalIndex
                 ):
                     self._index = cudf.Index(
-                        cast(cudf.core.Index.NumericIndex, self._index)._column
+                        cast(cudf.core.index.NumericIndex, self._index)._column
                     )
 
         return self

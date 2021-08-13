@@ -34,8 +34,16 @@ cdef class Table:
         """
         if data is None:
             data = {}
-        self._data = cudf.core.column_accessor.ColumnAccessor(data)
+        self._column_accessor = cudf.core.column_accessor.ColumnAccessor(data)
         self._index = index
+
+    @property
+    def _data(self) -> cudf.core.column_accessor.ColumnAccessor:
+        return self._column_accessor
+
+    @_data.setter
+    def _data(self, value):
+        self._column_accessor = value
 
     @property
     def _num_columns(self):

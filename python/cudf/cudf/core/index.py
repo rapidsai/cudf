@@ -82,6 +82,13 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @property
+    def _data(self) -> cudf.core.column_accessor.ColumnAccessor:
+        raise NotImplementedError
+
+    def copy(self, deep: bool = True) -> BaseIndex:
+        raise NotImplementedError
+
+    @property
     def values(self):
         return self._values.values
 
@@ -1199,7 +1206,9 @@ class BaseIndex(Serializable):
 
             if isinstance(values, NumericalColumn):
                 try:
-                    index_class_type = _dtype_to_index[values.dtype.type]
+                    index_class_type: Type[GenericIndex] = _dtype_to_index[
+                        values.dtype.type
+                    ]
                 except KeyError:
                     index_class_type = GenericIndex
                 out = index_class_type.__new__(index_class_type)
@@ -3060,7 +3069,7 @@ def as_index(arbitrary, **kwargs) -> BaseIndex:
     )
 
 
-_dtype_to_index: Dict[Any, Type[BaseIndex]] = {
+_dtype_to_index: Dict[Any, Type[NumericIndex]] = {
     np.int8: Int8Index,
     np.int16: Int16Index,
     np.int32: Int32Index,

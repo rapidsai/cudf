@@ -160,7 +160,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     3  3   0.3
     """
 
-    _PROTECTED_KEYS = frozenset(("_data", "_index"))
+    _PROTECTED_KEYS = frozenset(("_column_accessor", "_data", "_index"))
 
     @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
