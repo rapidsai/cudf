@@ -1008,9 +1008,7 @@ class ColumnBase(Column, Serializable):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> Union[
-        "cudf.core.column.Decimal32Column", "cudf.core.column.Decimal64Column"
-    ]:
+    ) -> Union["cudf.core.column.decimal.DecimalBaseColumn"]:
         raise NotImplementedError
 
     def as_decimal64_column(
