@@ -195,11 +195,9 @@ class avro_reader_options_builder {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  ...
  *  auto source  = cudf::io::source_info("dataset.avro");
  *  auto options = cudf::io::avro_reader_options::builder(source);
  *  auto result  = cudf::io::read_avro(options);
- *  ...
  * @endcode
  *
  * @param options Settings for controlling reading behavior.
