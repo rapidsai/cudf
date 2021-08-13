@@ -40,7 +40,7 @@ conditional_join(table_view const& left,
                  table_view const& right,
                  ast::expression binary_predicate,
                  null_equality compare_nulls,
-                 join_kind JoinKind,
+                 join_kind join_type,
                  std::optional<std::size_t> output_size,
                  rmm::cuda_stream_view stream,
                  rmm::mr::device_memory_resource* mr)
@@ -49,7 +49,7 @@ conditional_join(table_view const& left,
   // some cases, we return all the rows of the left table with a corresponding
   // null index for the right table; in others, we return an empty output.
   if (right.num_rows() == 0) {
-    switch (JoinKind) {
+    switch (join_type) {
       // Left, left anti, and full (which are effectively left because we are
       // guaranteed that left has more rows than right) all return a all the
       // row indices from left with a corresponding NULL from the right.
@@ -84,7 +84,7 @@ conditional_join(table_view const& left,
   detail::grid_1d config(left_table->num_rows(), DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block =
     parser.device_expression_data.shmem_per_thread * config.num_threads_per_block;
-  join_kind KernelJoinKind = JoinKind == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : JoinKind;
+  join_kind kernel_join_type = join_type == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : join_type;
 
   // If the join size was not provided as an input, compute it here.
   std::size_t join_size;
@@ -98,7 +98,7 @@ conditional_join(table_view const& left,
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
           *left_table,
           *right_table,
-          KernelJoinKind,
+          kernel_join_type,
           compare_nulls,
           parser.device_expression_data,
           size.data());
@@ -107,7 +107,7 @@ conditional_join(table_view const& left,
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
           *left_table,
           *right_table,
-          KernelJoinKind,
+          kernel_join_type,
           compare_nulls,
           parser.device_expression_data,
           size.data());
@@ -134,7 +134,7 @@ conditional_join(table_view const& left,
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
-        KernelJoinKind,
+        kernel_join_type,
         compare_nulls,
         join_output_l,
         join_output_r,
@@ -146,7 +146,7 @@ conditional_join(table_view const& left,
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
-        KernelJoinKind,
+        kernel_join_type,
         compare_nulls,
         join_output_l,
         join_output_r,
@@ -161,7 +161,7 @@ conditional_join(table_view const& left,
 
   // For full joins, get the indices in the right table that were not joined to
   // by any row in the left table.
-  if (JoinKind == join_kind::FULL_JOIN) {
+  if (join_type == join_kind::FULL_JOIN) {
     auto complement_indices = detail::get_left_join_indices_complement(
       join_indices.second, left.num_rows(), right.num_rows(), stream, mr);
     join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
@@ -173,7 +173,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
                                                  table_view const& right,
                                                  ast::expression binary_predicate,
                                                  null_equality compare_nulls,
-                                                 join_kind JoinKind,
+                                                 join_kind join_type,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
@@ -181,7 +181,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   // some cases, we return all the rows of the left table with a corresponding
   // null index for the right table; in others, we return an empty output.
   if (right.num_rows() == 0) {
-    switch (JoinKind) {
+    switch (join_type) {
       // Left, left anti, and full (which are effectively left because we are
       // guaranteed that left has more rows than right) all return a all the
       // row indices from left with a corresponding NULL from the right.
@@ -219,13 +219,13 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
-  assert(JoinKind != join_kind::FULL_JOIN);
+  assert(join_type != join_kind::FULL_JOIN);
   if (has_nulls) {
     compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
-        JoinKind,
+        join_type,
         compare_nulls,
         parser.device_expression_data,
         size.data());
@@ -234,7 +234,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
-        JoinKind,
+        join_type,
         compare_nulls,
         parser.device_expression_data,
         size.data());
