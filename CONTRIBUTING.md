@@ -106,7 +106,7 @@ cd $CUDF_HOME
 ./build.sh libcudf  # libcudf only
 ./build.sh libcudf cudf  # libcudf and cudf only             
 ```
-- Many other librairies like `dask-cudf` and `cudf-kafka` can be installed with this script. For the complete list of librairies as well as details about the script usage, run the `help` command:
+- Other libraries like `cudf-kafka` and `custreamz` can be installed with this script. For the complete list of libraries as well as details about the script usage, run the `help` command:
 ```bash
 $ ./build.sh --help            
 ```
