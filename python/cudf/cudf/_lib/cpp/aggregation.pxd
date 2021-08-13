@@ -87,6 +87,11 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         size_type n
     ) except +
 
+    cdef unique_ptr[T] make_nth_element_aggregation[T](
+        size_type n,
+        null_policy null_handling
+    ) except +
+
     cdef unique_ptr[T] make_collect_list_aggregation[T]() except +
 
     cdef unique_ptr[T] make_collect_set_aggregation[T]() except +
