@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import Series
+from cudf import Series
 from cudf.core.index import as_index
 from cudf.testing import _utils as utils
 from cudf.utils.dtypes import (
@@ -931,7 +931,7 @@ def test_ufunc_ops(lhs, rhs, ops):
 def dtype_scalar(val, dtype):
     if dtype == "str":
         return str(val)
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     if dtype.type in {np.datetime64, np.timedelta64}:
         res, _ = np.datetime_data(dtype)
         return dtype.type(val, res)
@@ -1695,13 +1695,15 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     )
 
     if dtype == "datetime64[s]":
-        val = np.dtype(dtype).type(4, "s")
+        val = cudf.dtype(dtype).type(4, "s")
     elif dtype == "timedelta64[s]":
-        val = np.dtype(dtype).type(4, "s")
+        val = cudf.dtype(dtype).type(4, "s")
     elif dtype == "category":
         val = np.int64(4)
+    elif dtype == "str":
+        val = str(4)
     else:
-        val = np.dtype(dtype).type(4)
+        val = cudf.dtype(dtype).type(4)
 
     expected = val == data.to_pandas()
     got = val == data
@@ -2793,11 +2795,11 @@ def test_column_null_scalar_comparison(dtype, null_scalar, cmpop):
     # a new series where all the elements are <NA>.
 
     if isinstance(null_scalar, np.datetime64):
-        if np.dtype(dtype).kind not in "mM":
+        if cudf.dtype(dtype).kind not in "mM":
             pytest.skip()
         null_scalar = null_scalar.astype(dtype)
 
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
 
     data = [1, 2, 3, 4, 5]
     sr = cudf.Series(data, dtype=dtype)

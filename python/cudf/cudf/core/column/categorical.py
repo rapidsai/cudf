@@ -22,7 +22,6 @@ from numba import cuda
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import as_device_scalar
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.core.buffer import Buffer
@@ -846,7 +845,9 @@ class CategoricalColumn(column.ColumnBase):
             return self if inplace else self.copy()
 
         fill_code = self._encode(fill_value)
-        fill_scalar = as_device_scalar(fill_code, self.codes.dtype)
+        fill_scalar = cudf._lib.scalar.as_device_scalar(
+            fill_code, self.codes.dtype
+        )
 
         result = self if inplace else self.copy()
 

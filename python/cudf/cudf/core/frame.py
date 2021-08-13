@@ -886,8 +886,9 @@ class Frame(libcudf.table.Table):
         4    <NA>
         dtype: int64
         """
+        import cudf.core._internals.where
 
-        return cudf.core._internals.where(
+        return cudf.core._internals.where.where(
             frame=self, cond=cond, other=other, inplace=inplace
         )
 
@@ -3375,7 +3376,7 @@ class Frame(libcudf.table.Table):
         if index is not None:
             index = cudf.core.index.as_index(index)
 
-            if isinstance(index, cudf.core.MultiIndex):
+            if isinstance(index, cudf.MultiIndex):
                 idx_dtype_match = (
                     df.index._source_data.dtypes == index._source_data.dtypes
                 ).all()
@@ -4629,7 +4630,7 @@ def _get_replacement_values_for_columns(
                 col: [value]
                 if _is_non_decimal_numeric_dtype(columns_dtype_map[col])
                 else cudf.utils.utils.scalar_broadcast_to(
-                    value, (len(to_replace),), np.dtype(type(value)),
+                    value, (len(to_replace),), cudf.dtype(type(value)),
                 )
                 for col in columns_dtype_map
             }

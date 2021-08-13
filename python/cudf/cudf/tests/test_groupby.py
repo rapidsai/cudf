@@ -13,7 +13,7 @@ from numpy.testing import assert_array_equal
 import rmm
 
 import cudf
-from cudf.core import DataFrame, Series
+from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_110
 from cudf.testing._utils import (
     DATETIME_TYPES,
