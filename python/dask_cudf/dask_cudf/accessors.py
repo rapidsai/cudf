@@ -34,22 +34,20 @@ class StructMethods:
         dtype: int64
         """
         try:
-            typ = self.d_series._meta.dtype.fields[key]
+
+            if isinstance(key, int):
+                typ = self.d_series._meta.dtype.fields[
+                    list(self.d_series._meta.dtype.fields)[key]
+                ]
+            else:
+                typ = self.d_series._meta.dtype.fields[key]
 
         except KeyError:
-            try:
-                if isinstance(key, int):
-                    typ = self.d_series._meta.dtype.fields[
-                        list(self.d_series._meta.dtype.fields)[key]
-                    ]
-                else:
-                    raise KeyError(
-                        f"Field '{key}' is not in the set of existing keys"
-                    )
-            except TypeError:
-                raise IndexError(
-                    f"Index '{key}' is greater than the number of fields"
-                )
+            raise KeyError(f"Field '{key}' is not in the set of existing keys")
+        except TypeError:
+            raise IndexError(
+                f"Index '{key}' is greater than the number of fields"
+            )
 
         return self.d_series.map_partitions(
             lambda s: s.struct.field(key),
