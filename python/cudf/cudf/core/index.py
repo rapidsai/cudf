@@ -132,34 +132,6 @@ class BaseIndex(Serializable):
     def __getitem__(self, key):
         raise NotImplementedError()
 
-    def drop_duplicates(self, keep="first"):
-        """
-        Return Index with duplicate values removed
-
-        Parameters
-        ----------
-        keep : {‘first’, ‘last’, False}, default ‘first’
-            * ‘first’ : Drop duplicates except for the
-                first occurrence.
-            * ‘last’ : Drop duplicates except for the
-                last occurrence.
-            *  False : Drop all duplicates.
-
-        Returns
-        -------
-        deduplicated : Index
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index(['lama', 'cow', 'lama', 'beetle', 'lama', 'hippo'])
-        >>> idx
-        StringIndex(['lama' 'cow' 'lama' 'beetle' 'lama' 'hippo'], dtype='object')
-        >>> idx.drop_duplicates()
-        StringIndex(['beetle' 'cow' 'hippo' 'lama'], dtype='object')
-        """  # noqa: E501
-        return super().drop_duplicates(keep=keep)
-
     def serialize(self):
         header = {}
         header["index_column"] = {}
@@ -1217,6 +1189,34 @@ class RangeIndex(BaseIndex):
             start=self._start, stop=self._stop, step=self._step, name=name
         )
 
+    def drop_duplicates(self, keep="first"):
+        """
+        Return Index with duplicate values removed
+
+        Parameters
+        ----------
+        keep : {‘first’, ‘last’, False}, default ‘first’
+            * ‘first’ : Drop duplicates except for the
+                first occurrence.
+            * ‘last’ : Drop duplicates except for the
+                last occurrence.
+            *  False : Drop all duplicates.
+
+        Returns
+        -------
+        deduplicated : RangeIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.RangeIndex(0, 10)
+        >>> idx
+        RangeIndex(start=0, stop=10, step=1)
+        >>> idx.drop_duplicates()
+        RangeIndex(start=0, stop=10, step=1)
+        """  # noqa: E501
+        return self
+
     def __repr__(self):
         return (
             f"{self.__class__.__name__}(start={self._start}, stop={self._stop}"
@@ -1495,6 +1495,34 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         name = kwargs.get("name")
         super().__init__({name: data})
+
+    def drop_duplicates(self, keep="first"):
+        """
+        Return Index with duplicate values removed
+
+        Parameters
+        ----------
+        keep : {‘first’, ‘last’, False}, default ‘first’
+            * ‘first’ : Drop duplicates except for the
+                first occurrence.
+            * ‘last’ : Drop duplicates except for the
+                last occurrence.
+            *  False : Drop all duplicates.
+
+        Returns
+        -------
+        deduplicated : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index(['lama', 'cow', 'lama', 'beetle', 'lama', 'hippo'])
+        >>> idx
+        StringIndex(['lama' 'cow' 'lama' 'beetle' 'lama' 'hippo'], dtype='object')
+        >>> idx.drop_duplicates()
+        StringIndex(['beetle' 'cow' 'hippo' 'lama'], dtype='object')
+        """  # noqa: E501
+        return super().drop_duplicates(keep=keep)
 
     def _copy_type_metadata(
         self, other: Frame, include_index: bool = True
