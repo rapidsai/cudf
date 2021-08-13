@@ -347,11 +347,10 @@ class orc_reader_options_builder {
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
  *  ...
- *  std::string filepath = "dataset.orc";
- *  cudf::orc_reader_options options =
- * cudf::orc_reader_options::builder(cudf::source_info(filepath));
+ *  auto source  = cudf::io::source_info("dataset.orc");
+ *  auto options = cudf::io::orc_reader_options::builder(source);
+ *  auto result  = cudf::io::read_orc(options);
  *  ...
- *  auto result = cudf::read_orc(options);
  * @endcode
  *
  * Note: Support for reading files with struct columns is currently experimental, the output may not

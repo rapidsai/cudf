@@ -355,11 +355,10 @@ class parquet_reader_options_builder {
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
  *  ...
- *  std::string filepath = "dataset.parquet";
- *  cudf::io::parquet_reader_options options =
- *  cudf::io::parquet_reader_options::builder(cudf::source_info(filepath));
+ *  auto source  = cudf::io::source_info("dataset.parquet");
+ *  auto options = cudf::io::parquet_reader_options::builder(source);
+ *  auto result  = cudf::io::read_parquet(options);
  *  ...
- *  auto result = cudf::read_parquet(options);
  * @endcode
  *
  * @param options Settings for controlling reading behavior

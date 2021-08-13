@@ -1185,11 +1185,9 @@ class csv_reader_options_builder {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  std::string filepath = "dataset.csv";
- *  cudf::io::csv_reader_options options =
- * cudf::io::csv_reader_options::builder(cudf::source_info(filepath));
- *  ...
- *  auto result = cudf::read_csv(options);
+ *  auto source  = cudf::io::source_info("dataset.csv");
+ *  auto options = cudf::io::csv_reader_options::builder(source);
+ *  auto result  = cudf::io::read_csv(options);
  * @endcode
  *
  * @param options Settings for controlling reading behavior.
