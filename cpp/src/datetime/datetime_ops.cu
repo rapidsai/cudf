@@ -30,6 +30,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include "thrust/iterator/constant_iterator.h"
 
 namespace cudf {
 namespace datetime {
@@ -301,8 +302,10 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
                "Months type should be INT16 or INT32");
 
   if (months.is_valid(stream)) {
-    auto const months_begin_iter = cudf::detail::indexalator_factory::make_input_iterator(months);
-    auto output                  = type_dispatcher(timestamp_column.type(),
+    auto const months_begin_iter = thrust::make_permutation_iterator(
+      cudf::detail::indexalator_factory::make_input_iterator(months),
+      thrust::make_constant_iterator(0));
+    auto output = type_dispatcher(timestamp_column.type(),
                                   add_calendrical_months_functor{},
                                   timestamp_column,
                                   months_begin_iter,
