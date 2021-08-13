@@ -7,7 +7,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, Mapping, Optional
+from typing import Any, MutableMapping, Optional
 from uuid import uuid4
 
 import cupy
@@ -270,7 +270,7 @@ class Series(SingleColumnFrame, Serializable):
     @classmethod
     def _from_data(
         cls,
-        data: Mapping,
+        data: MutableMapping,
         index: Optional[BaseIndex] = None,
         name: Any = None,
     ) -> Series:
@@ -382,10 +382,6 @@ class Series(SingleColumnFrame, Serializable):
         column = col_typ.deserialize(header["column"], frames[:column_nframes])
 
         return Series(column, index=index, name=name)
-
-    @property
-    def _copy_construct_defaults(self):
-        return {"data": self._column, "index": self._index, "name": self.name}
 
     def _get_columns_by_label(self, labels, downcast=False):
         """Return the column specified by `labels`
@@ -699,7 +695,7 @@ class Series(SingleColumnFrame, Serializable):
             if inplace is True:
                 self._index = RangeIndex(len(self))
             else:
-                return self._copy_construct(index=RangeIndex(len(self)))
+                return self._from_data(self._data, index=RangeIndex(len(self)))
 
     def set_index(self, index):
         """Returns a new Series with a different index.
@@ -734,7 +730,7 @@ class Series(SingleColumnFrame, Serializable):
         dtype: int64
         """
         index = index if isinstance(index, BaseIndex) else as_index(index)
-        return self._copy_construct(index=index)
+        return self._from_data(self._data, index, self.name)
 
     def as_index(self):
         """Returns a new Series with a RangeIndex.
@@ -851,8 +847,9 @@ class Series(SingleColumnFrame, Serializable):
             "in the future.",
             DeprecationWarning,
         )
-        col = self._column.set_mask(mask)
-        return self._copy_construct(data=col)
+        return self._from_data(
+            {self.name: self._column.set_mask(mask)}, self._index
+        )
 
     def __sizeof__(self):
         return self._column.__sizeof__() + self._index.__sizeof__()
@@ -1093,8 +1090,9 @@ class Series(SingleColumnFrame, Serializable):
             return self.iloc[indices]
         else:
             col_inds = as_column(indices)
-            data = self._column.take(col_inds, keep_index=False)
-            return self._copy_construct(data=data, index=None)
+            return self._from_data(
+                {self.name: self._column.take(col_inds, keep_index=False)}
+            )
 
     def head(self, n=5):
         """
@@ -2723,8 +2721,9 @@ class Series(SingleColumnFrame, Serializable):
         4    10.0
         dtype: float64
         """
-        result_col = self._column.nans_to_nulls()
-        return self._copy_construct(data=result_col)
+        return self._from_data(
+            {self.name: self._column.nans_to_nulls()}, self._index
+        )
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         if bool_only not in (None, True):
@@ -3011,8 +3010,9 @@ class Series(SingleColumnFrame, Serializable):
         try:
             data = self._column.astype(dtype)
 
-            return self._copy_construct(
-                data=data.copy(deep=True) if copy else data, index=self.index
+            return self._from_data(
+                {self.name: (data.copy(deep=True) if copy else data)},
+                index=self._index,
             )
 
         except Exception as e:
@@ -3326,8 +3326,8 @@ class Series(SingleColumnFrame, Serializable):
         col_keys, col_inds = self._column.sort_by_values(
             ascending=ascending, na_position=na_position
         )
-        sr_keys = self._copy_construct(data=col_keys)
-        sr_inds = self._copy_construct(data=col_inds)
+        sr_keys = self._from_data({self.name: col_keys}, self._index)
+        sr_inds = self._from_data({self.name: col_inds}, self._index)
         return sr_keys, sr_inds
 
     def replace(
@@ -3630,9 +3630,9 @@ class Series(SingleColumnFrame, Serializable):
         dtype: int64
         """
         rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
-        col = self._column[rinds]
-        index = self.index._values[rinds]
-        return self._copy_construct(data=col, index=index)
+        return self._from_data(
+            {self.name: self._column[rinds]}, self.index._values[rinds]
+        )
 
     def one_hot_encoding(self, cats, dtype="float64"):
         """Perform one-hot-encoding
@@ -3786,7 +3786,9 @@ class Series(SingleColumnFrame, Serializable):
         codes = codes.merge(value, on="value", how="left")
         codes = codes.sort_values("order")["code"].fillna(na_sentinel)
 
-        return codes._copy_construct(name=None, index=self.index)
+        codes.name = None
+        codes.index = self._index
+        return codes
 
     # UDF related
 
@@ -3900,7 +3902,7 @@ class Series(SingleColumnFrame, Serializable):
         """
         if not callable(udf):
             raise ValueError("Input UDF must be a callable object.")
-        return self._copy_construct(data=self._unaryop(udf))
+        return self._from_data({self.name: self._unaryop(udf)}, self._index)
 
     #
     # Stats
@@ -4721,7 +4723,8 @@ class Series(SingleColumnFrame, Serializable):
         vmin = self.min()
         vmax = self.max()
         scaled = (self - vmin) / (vmax - vmin)
-        return self._copy_construct(data=scaled)
+        scaled._index = self._index.copy(deep=False)
+        return scaled
 
     # Absolute
     def abs(self):
@@ -6031,6 +6034,122 @@ class DatetimeProperties(object):
             ColumnAccessor({None: res}),
             index=self.series._index,
             name=self.series.name,
+        )
+
+    @property
+    def is_month_end(self):
+        """
+        Boolean indicator if the date is the last day of the month.
+
+        Returns
+        -------
+        Series
+        Booleans indicating if dates are the last day of the month.
+
+        Example
+        -------
+        >>> import pandas as pd, cudf
+        >>> s = cudf.Series(
+        ...     pd.date_range(start='2000-08-026', end='2000-09-03', freq='1D'))
+        >>> s
+        0   2000-08-26
+        1   2000-08-27
+        2   2000-08-28
+        3   2000-08-29
+        4   2000-08-30
+        5   2000-08-31
+        6   2000-09-01
+        7   2000-09-02
+        8   2000-09-03
+        dtype: datetime64[ns]
+        >>> s.dt.is_month_end
+        0    False
+        1    False
+        2    False
+        3    False
+        4    False
+        5     True
+        6    False
+        7    False
+        8    False
+        dtype: bool
+        """  # noqa: E501
+        last_day = libcudf.datetime.last_day_of_month(self.series._column)
+        last_day = Series._from_data(
+            ColumnAccessor({None: last_day}),
+            index=self.series._index,
+            name=self.series.name,
+        )
+        return (self.day == last_day.dt.day).fillna(False)
+
+    @property
+    def is_year_start(self):
+        """
+        Boolean indicator if the date is the first day of the year.
+
+        Returns
+        -------
+        Series
+        Booleans indicating if dates are the first day of the year.
+
+        Example
+        -------
+        >>> import pandas as pd, cudf
+        >>> s = cudf.Series(pd.date_range("2017-12-30", periods=3))
+        >>> dates
+        0   2017-12-30
+        1   2017-12-31
+        2   2018-01-01
+        dtype: datetime64[ns]
+        >>> dates.dt.is_year_start
+        0    False
+        1    False
+        2    True
+        dtype: bool
+        """
+        outcol = self.series._column.get_dt_field(
+            "day_of_year"
+        ) == cudf.Scalar(1)
+        return Series._from_data(
+            {None: outcol.fillna(False)},
+            index=self.series._index,
+            name=self.series.name,
+        )
+
+    @property
+    def is_year_end(self):
+        """
+        Boolean indicator if the date is the last day of the year.
+
+        Returns
+        -------
+        Series
+        Booleans indicating if dates are the last day of the year.
+
+        Example
+        -------
+        >>> import pandas as pd, cudf
+        >>> dates = cudf.Series(pd.date_range("2017-12-30", periods=3))
+        >>> dates
+        0   2017-12-30
+        1   2017-12-31
+        2   2018-01-01
+        dtype: datetime64[ns]
+        >>> dates.dt.is_year_end
+        0    False
+        1     True
+        2    False
+        dtype: bool
+        """
+        day_of_year = self.series._column.get_dt_field("day_of_year")
+        leap_dates = libcudf.datetime.is_leap_year(self.series._column)
+
+        leap = day_of_year == cudf.Scalar(366)
+        non_leap = day_of_year == cudf.Scalar(365)
+        result = cudf._lib.copying.copy_if_else(leap, non_leap, leap_dates)
+        result = result.fillna(False)
+        return Series._from_data(
+            {None: result}, index=self.series._index, name=self.series.name,
         )
 
     def _get_dt_field(self, field):
