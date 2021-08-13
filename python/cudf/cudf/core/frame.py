@@ -4545,18 +4545,6 @@ def _get_replacement_values_for_columns(
     return all_na_columns, to_replace_columns, values_columns
 
 
-def _reassign_categories(categories, cols, col_idxs):
-    for name, idx in zip(cols, col_idxs):
-        if idx in categories:
-            cols[name] = build_categorical_column(
-                categories=categories[idx],
-                codes=as_column(cols[name].base_data, dtype=cols[name].dtype),
-                mask=cols[name].base_mask,
-                offset=cols[name].offset,
-                size=cols[name].size,
-            )
-
-
 def _is_series(obj):
     """
     Checks if the `obj` is of type `cudf.Series`

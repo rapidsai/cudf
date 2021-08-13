@@ -435,6 +435,15 @@ class MultiIndex(Frame, BaseIndex):
     def __copy__(self):
         return self.copy(deep=True)
 
+    def __iter__(self):
+        """
+        Iterating over a GPU object is not effecient and hence not supported.
+
+        Consider using ``.to_arrow()``, ``.to_pandas()`` or ``.values_host``
+        if you wish to iterate over the values.
+        """
+        cudf.utils.utils.raise_iteration_error(obj=self)
+
     def _popn(self, n):
         """ Returns a copy of this index without the left-most n values.
 

@@ -120,15 +120,6 @@ class BaseIndex(Serializable):
     def get_loc(self, key, method=None, tolerance=None):
         raise NotImplementedError
 
-    def __iter__(self):
-        """
-        Iterating over a GPU object is not effecient and hence not supported.
-
-        Consider using ``.to_arrow()``, ``.to_pandas()`` or ``.values_host``
-        if you wish to iterate over the values.
-        """
-        cudf.utils.utils.raise_iteration_error(obj=self)
-
     def __getitem__(self, key):
         raise NotImplementedError()
 
