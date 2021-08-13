@@ -290,6 +290,7 @@ class MultiIndex(Frame, BaseIndex):
 
     @classmethod
     def _from_data(cls, data: Mapping, index=None) -> MultiIndex:
+        assert index is None
         return cls.from_frame(cudf.DataFrame._from_data(data))
 
     @property

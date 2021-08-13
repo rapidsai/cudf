@@ -1079,43 +1079,6 @@ class BaseIndex(Serializable):
         ind.name = index.name
         return ind
 
-    @classmethod
-    def _from_data(
-        cls,
-        data: MutableMapping,
-        index: Optional[BaseIndex] = None,
-        name: Any = None,
-    ) -> BaseIndex:
-        assert index is None
-        if not isinstance(data, cudf.core.column_accessor.ColumnAccessor):
-            data = cudf.core.column_accessor.ColumnAccessor(data)
-        if len(data) == 0:
-            raise ValueError("Cannot construct Index from any empty Table")
-        if len(data) == 1:
-            values = next(iter(data.values()))
-
-            if isinstance(values, NumericalColumn):
-                try:
-                    index_class_type: Type[GenericIndex] = _dtype_to_index[
-                        values.dtype.type
-                    ]
-                except KeyError:
-                    index_class_type = GenericIndex
-                out = index_class_type.__new__(index_class_type)
-            elif isinstance(values, DatetimeColumn):
-                out = DatetimeIndex.__new__(DatetimeIndex)
-            elif isinstance(values, TimeDeltaColumn):
-                out = TimedeltaIndex.__new__(TimedeltaIndex)
-            elif isinstance(values, StringColumn):
-                out = StringIndex.__new__(StringIndex)
-            elif isinstance(values, CategoricalColumn):
-                out = CategoricalIndex.__new__(CategoricalIndex)
-            out._data = data
-            out._index = None
-            return out
-        else:
-            return cudf.MultiIndex._from_data(data)
-
     @property
     def _constructor_expanddim(self):
         return cudf.MultiIndex
@@ -3169,6 +3132,43 @@ class Index(BaseIndex, metaclass=IndexMeta):
             )
 
         return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
+
+    @classmethod
+    def _from_data(
+        cls,
+        data: MutableMapping,
+        index: Optional[BaseIndex] = None,
+        name: Any = None,
+    ) -> BaseIndex:
+        assert index is None
+        if not isinstance(data, cudf.core.column_accessor.ColumnAccessor):
+            data = cudf.core.column_accessor.ColumnAccessor(data)
+        if len(data) == 0:
+            raise ValueError("Cannot construct Index from any empty Table")
+        if len(data) == 1:
+            values = next(iter(data.values()))
+
+            if isinstance(values, NumericalColumn):
+                try:
+                    index_class_type: Type[GenericIndex] = _dtype_to_index[
+                        values.dtype.type
+                    ]
+                except KeyError:
+                    index_class_type = GenericIndex
+                out = index_class_type.__new__(index_class_type)
+            elif isinstance(values, DatetimeColumn):
+                out = DatetimeIndex.__new__(DatetimeIndex)
+            elif isinstance(values, TimeDeltaColumn):
+                out = TimedeltaIndex.__new__(TimedeltaIndex)
+            elif isinstance(values, StringColumn):
+                out = StringIndex.__new__(StringIndex)
+            elif isinstance(values, CategoricalColumn):
+                out = CategoricalIndex.__new__(CategoricalIndex)
+            out._data = data
+            out._index = None
+            return out
+        else:
+            return cudf.MultiIndex._from_data(data)
 
     @classmethod
     def from_arrow(cls, obj):
