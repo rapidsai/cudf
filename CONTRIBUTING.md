@@ -146,7 +146,7 @@ $ py.test -v cudf/cudf/tests                     # run cudf test suite
 
 #### Python dask-cudf contributors:
 
-- To build and install in edit/develop mode the `dask-cudf` python package, in the `python/dask_cudf` folder:
+- To install in edit/develop mode the `dask-cudf` python package:
 ```bash
 $ cd $CUDF_HOME/python/dask_cudf
 $ python setup.py develop
