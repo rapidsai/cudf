@@ -106,17 +106,16 @@ cd $CUDF_HOME
 ./build.sh libcudf  # libcudf only
 ./build.sh libcudf cudf  # libcudf and cudf only             
 ```
-- Many other librairies like `dask-cudf` and `cudf-kafka` can be installed with this script. For the complete list of librairies as well as details about the script usage, run the `help` command:
+- Other libraries like `cudf-kafka` and `custreamz` can be installed with this script. For the complete list of libraries as well as details about the script usage, run the `help` command:
 ```bash
-$ cd $CUDF_HOME
-$./build.sh --help            
+$ ./build.sh --help            
 ```
 
 ### Install and Test cuDF for contributors
 
-The general workflow is to find your contributor profile (C++ or Python, etc...), then follow the corresponding instructions and finally go to the last section about [code formatting](###code-formatting).
+The general workflow for building and testing the C++ and Python components of cuDF are provided below. Please also see the last section about [code formatting](###code-formatting).
 
-#### Any contributor:
+#### Building and testing the `libcudf` C++ library
 
 This section provides instructions for building and testing C++ libcudf. Thus, C++ libcudf only contributor will be all set after following instructions below:
  
@@ -129,7 +128,7 @@ $ # for other contributors
 $./build.sh libcudf                     
 ```
 
-#### Python cudf contributors:
+#### Building and testing the `cudf` Python library
 
 - To build and install in edit/develop mode the `cudf` python package, in the `python/cudf` folder:
 ```bash
@@ -146,7 +145,7 @@ $ py.test -v cudf/cudf/tests                     # run cudf test suite
 
 #### Python dask-cudf contributors:
 
-- To build and install in edit/develop mode the `dask-cudf` python package, in the `python/dask_cudf` folder:
+- To install in edit/develop mode the `dask-cudf` python package:
 ```bash
 $ cd $CUDF_HOME/python/dask_cudf
 $ python setup.py develop
