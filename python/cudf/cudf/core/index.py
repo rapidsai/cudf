@@ -48,7 +48,7 @@ from cudf.core.column import (
 from cudf.core.column.column import as_column, concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
-from cudf.core.frame import SingleColumnFrame
+from cudf.core.frame import Frame, SingleColumnFrame
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -128,22 +128,6 @@ class BaseIndex(Serializable):
         if you wish to iterate over the values.
         """
         cudf.utils.utils.raise_iteration_error(obj=self)
-
-    def _copy_type_metadata(
-        self, other: BaseIndex, include_index: bool = True
-    ) -> BaseIndex:
-        """
-        Copy type metadata from each column of `other` to the corresponding
-        column of `self`.
-        See `ColumnBase._with_type_metadata` for more information.
-        """
-        for name, col, other_col in zip(
-            self._data.keys(), self._data.values(), other._data.values()
-        ):
-            self._data.set_by_label(
-                name, col._with_type_metadata(other_col.dtype), validate=False
-            )
-        return self
 
     def __getitem__(self, key):
         raise NotImplementedError()
@@ -1136,6 +1120,13 @@ class RangeIndex(BaseIndex):
         self._index = None
         self._name = name
 
+    def _copy_type_metadata(
+        self, other: Frame, include_index: bool = True
+    ) -> RangeIndex:
+        # There is no metadata to be copied for RangeIndex since it does not
+        # have an underlying column.
+        return self
+
     @property
     def name(self):
         """
@@ -1504,6 +1495,22 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         name = kwargs.get("name")
         super().__init__({name: data})
+
+    def _copy_type_metadata(
+        self, other: Frame, include_index: bool = True
+    ) -> GenericIndex:
+        """
+        Copy type metadata from each column of `other` to the corresponding
+        column of `self`.
+        See `ColumnBase._with_type_metadata` for more information.
+        """
+        for name, col, other_col in zip(
+            self._data.keys(), self._data.values(), other._data.values()
+        ):
+            self._data.set_by_label(
+                name, col._with_type_metadata(other_col.dtype), validate=False
+            )
+        return self
 
     @property
     def _values(self):

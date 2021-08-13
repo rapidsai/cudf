@@ -2350,7 +2350,7 @@ class Frame(libcudf.table.Table):
 
         if include_index:
             if self._index is not None and other._index is not None:
-                self._index._copy_type_metadata(other._index)
+                self._index._copy_type_metadata(other._index)  # type: ignore
                 # When other._index is a CategoricalIndex, the current index
                 # will be a NumericalIndex with an underlying CategoricalColumn
                 # (the above _copy_type_metadata call will have converted the
