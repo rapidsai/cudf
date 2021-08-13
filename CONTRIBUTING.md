@@ -108,8 +108,7 @@ cd $CUDF_HOME
 ```
 - Many other librairies like `dask-cudf` and `cudf-kafka` can be installed with this script. For the complete list of librairies as well as details about the script usage, run the `help` command:
 ```bash
-$ cd $CUDF_HOME
-$./build.sh --help            
+$ ./build.sh --help            
 ```
 
 ### Install and Test cuDF for contributors
