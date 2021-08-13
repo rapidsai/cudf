@@ -11,7 +11,7 @@ import sys
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from typing import Any, MutableMapping, Optional, TypeVar
+from typing import Any, MutableMapping, Optional, Set, TypeVar
 
 import cupy
 import numpy as np
@@ -169,6 +169,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     """
 
     _PROTECTED_KEYS = frozenset(("_column_accessor", "_data", "_index"))
+    _accessors: Set[Any] = set()
 
     @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):

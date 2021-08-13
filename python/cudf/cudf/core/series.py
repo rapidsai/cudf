@@ -7,7 +7,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, MutableMapping, Optional
+from typing import Any, MutableMapping, Optional, Set
 from uuid import uuid4
 
 import cupy
@@ -105,6 +105,8 @@ class Series(SingleColumnFrame, Serializable):
         ``null`` values.
         If ``False``, leaves ``np.nan`` values as is.
     """
+
+    _accessors: Set[Any] = set()
 
     # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property

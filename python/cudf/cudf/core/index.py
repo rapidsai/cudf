@@ -10,6 +10,7 @@ from typing import (
     List,
     MutableMapping,
     Optional,
+    Set,
     Tuple,
     Type,
     Union,
@@ -93,6 +94,7 @@ class BaseIndex(Serializable):
     """Base class for all cudf Index types."""
 
     dtype: DtypeObj
+    _accessors: Set[Any] = set()
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
 
@@ -1436,7 +1438,7 @@ class RangeIndex(BaseIndex):
         # For methods that are not defined for RangeIndex we attempt to operate
         # on the corresponding integer index if possible.
         try:
-            return getattr(cudf.Index._from_data(self._data), key)
+            return getattr(cudf.Int64Index._from_data(self._data), key)
         except AttributeError:
             raise AttributeError(
                 f"'{type(self)}' object has no attribute {key}"

@@ -61,12 +61,6 @@ class Frame(libcudf.table.Table):
     _data: "ColumnAccessor"
 
     @classmethod
-    def __init_subclass__(cls):
-        # All subclasses contain a set _accessors that is used to hold custom
-        # accessors defined by user APIs (see cudf/api/extensions/accessor.py).
-        cls._accessors = set()
-
-    @classmethod
     def _from_data(
         cls,
         data: MutableMapping,
