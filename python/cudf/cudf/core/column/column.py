@@ -2016,6 +2016,29 @@ def as_column(
                 memoryview(arbitrary), dtype=dtype, nan_as_null=nan_as_null
             )
         except TypeError:
+            if dtype is not None:
+                # Arrow throws a type error if the input is of
+                # mixed-precision and cannot fit into the provided
+                # decimal type properly, see:
+                # https://github.com/apache/arrow/pull/9948
+                # Hence we should let the exception propagate to
+                # the user.
+                if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
+                    data = pa.array(
+                        arbitrary,
+                        type=pa.decimal128(
+                            precision=dtype.precision, scale=dtype.scale
+                        ),
+                    )
+                    return cudf.core.column.Decimal64Column.from_arrow(data)
+                if isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
+                    data = pa.array(
+                        arbitrary,
+                        type=pa.decimal128(
+                            precision=dtype.precision, scale=dtype.scale
+                        ),
+                    )
+                    return cudf.core.column.Decimal32Column.from_arrow(data)
             pa_type = None
             np_type = None
             try:
@@ -2034,26 +2057,7 @@ def as_column(
                     ) and not isinstance(dtype, cudf.IntervalDtype):
                         data = pa.array(arbitrary, type=dtype.to_arrow())
                         return as_column(data, nan_as_null=nan_as_null)
-                    if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
-                        data = pa.array(
-                            arbitrary,
-                            type=pa.decimal128(
-                                precision=dtype.precision, scale=dtype.scale
-                            ),
-                        )
-                        return cudf.core.column.Decimal64Column.from_arrow(
-                            data
-                        )
-                    if isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
-                        data = pa.array(
-                            arbitrary,
-                            type=pa.decimal128(
-                                precision=dtype.precision, scale=dtype.scale
-                            ),
-                        )
-                        return cudf.core.column.Decimal32Column.from_arrow(
-                            data
-                        )
+
                     dtype = pd.api.types.pandas_dtype(dtype)
                     np_type = np.dtype(dtype).type
                     if np_type == np.bool_:
