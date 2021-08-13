@@ -1760,16 +1760,16 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.add,
             ["1.5", "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
-            ["1.5", "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
-            ["3.0", "4.0"],
             cudf.Decimal64Dtype(scale=2, precision=3),
+            ["1.5", "2.0"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["3.0", "4.0"],
+            cudf.Decimal64Dtype(scale=2, precision=4),
         ),
         (
             operator.add,
             ["1.5", "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=2, precision=3),
             ["2.25", "1.005"],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["3.75", "3.005"],
@@ -1787,7 +1787,7 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.sub,
             ["1.5", "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=1, precision=2),
             ["2.25", "1.005"],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["-0.75", "0.995"],
@@ -1796,7 +1796,7 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.sub,
             ["1.5", "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=1, precision=2),
             ["2.25", "1.005"],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["-0.75", "0.995"],
@@ -1814,11 +1814,11 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.mul,
             ["1.5", "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=2, precision=3),
             ["1.5", "3.0"],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["2.25", "6.0"],
-            cudf.Decimal64Dtype(scale=5, precision=7),
+            cudf.Decimal64Dtype(scale=5, precision=8),
         ),
         (
             operator.mul,
@@ -1868,16 +1868,16 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.add,
             ["1.5", None, "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=1, precision=2),
             ["1.5", None, "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=1, precision=2),
             ["3.0", None, "4.0"],
-            cudf.Decimal64Dtype(scale=2, precision=3),
+            cudf.Decimal64Dtype(scale=1, precision=3),
         ),
         (
             operator.add,
             ["1.5", None],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=2, precision=3),
             ["2.25", "1.005"],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["3.75", None],
@@ -1886,7 +1886,7 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.sub,
             ["1.5", None],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=2, precision=3),
             ["2.25", None],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["-0.75", None],
@@ -1895,7 +1895,7 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.sub,
             ["1.5", "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=2, precision=3),
             ["2.25", None],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["-0.75", None],
@@ -1904,11 +1904,11 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.mul,
             ["1.5", None],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=2, precision=3),
             ["1.5", None],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["2.25", None],
-            cudf.Decimal64Dtype(scale=5, precision=7),
+            cudf.Decimal64Dtype(scale=5, precision=8),
         ),
         (
             operator.mul,
@@ -2434,10 +2434,10 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
         (
             operator.truediv,
             ["100", "200"],
-            cudf.Decimal64Dtype(scale=2, precision=4),
+            cudf.Decimal64Dtype(scale=2, precision=5),
             decimal.Decimal(2),
             ["50", "100"],
-            cudf.Decimal64Dtype(scale=2, precision=6),
+            cudf.Decimal64Dtype(scale=2, precision=7),
             False,
         ),
         (
@@ -2461,10 +2461,10 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
         (
             operator.truediv,
             ["100", "200"],
-            cudf.Decimal64Dtype(scale=2, precision=3),
+            cudf.Decimal64Dtype(scale=2, precision=5),
             1,
             ["0", "0"],
-            cudf.Decimal64Dtype(scale=-2, precision=5),
+            cudf.Decimal64Dtype(scale=-2, precision=7),
             True,
         ),
         (

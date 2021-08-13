@@ -2017,6 +2017,29 @@ def as_column(
                 memoryview(arbitrary), dtype=dtype, nan_as_null=nan_as_null
             )
         except TypeError:
+            if dtype is not None:
+                # Arrow throws a type error if the input is of
+                # mixed-precision and cannot fit into the provided
+                # decimal type properly, see:
+                # https://github.com/apache/arrow/pull/9948
+                # Hence we should let the exception propagate to
+                # the user.
+                if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
+                    data = pa.array(
+                        arbitrary,
+                        type=pa.decimal128(
+                            precision=dtype.precision, scale=dtype.scale
+                        ),
+                    )
+                    return cudf.core.column.Decimal64Column.from_arrow(data)
+                if isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
+                    data = pa.array(
+                        arbitrary,
+                        type=pa.decimal128(
+                            precision=dtype.precision, scale=dtype.scale
+                        ),
+                    )
+                    return cudf.core.column.Decimal32Column.from_arrow(data)
             pa_type = None
             np_type = None
             try:
