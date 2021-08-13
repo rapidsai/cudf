@@ -221,9 +221,8 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
     auto tmp_data_buffer                 = allocate_arrow_buffer(0, ar_mr);
     tmp_offset_buffer->mutable_data()[0] = 0;
 
-    return std::make_shared<arrow::StringArray>(0,
-      std::move(tmp_offset_buffer),
-      std::move(tmp_data_buffer));
+    return std::make_shared<arrow::StringArray>(
+      0, std::move(tmp_offset_buffer), std::move(tmp_data_buffer));
   }
   auto offset_buffer = child_arrays[0]->data()->buffers[1];
   auto data_buffer   = child_arrays[1]->data()->buffers[1];

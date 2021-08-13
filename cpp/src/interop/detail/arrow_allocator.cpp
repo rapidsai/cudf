@@ -47,6 +47,5 @@ std::shared_ptr<arrow::Buffer> allocate_arrow_bitmap(const int64_t size, arrow::
   return std::move(result).ValueOrDie();
 }
 
-
-}
+}  // namespace detail
 }  // namespace cudf

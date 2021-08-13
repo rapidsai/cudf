@@ -22,10 +22,10 @@ namespace cudf {
 namespace detail {
 
 // unique_ptr because that is what AllocateBuffer returns
-std::unique_ptr<arrow::Buffer> allocate_arrow_buffer(const int64_t size, ::arrow::MemoryPool* ar_mr);
+std::unique_ptr<arrow::Buffer> allocate_arrow_buffer(const int64_t size, arrow::MemoryPool* ar_mr);
 
 // shared_ptr because that is what AllocateBitmap returns
-std::shared_ptr<arrow::Buffer> allocate_arrow_bitmap(const int64_t size, ::arrow::MemoryPool* ar_mr);
+std::shared_ptr<arrow::Buffer> allocate_arrow_bitmap(const int64_t size, arrow::MemoryPool* ar_mr);
 
-}
+}  // namespace detail
 }  // namespace cudf
