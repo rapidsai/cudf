@@ -13,7 +13,11 @@ from dask.dataframe.core import (
     new_dd_object,
     split_out_on_cols,
 )
-from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
+from dask.dataframe.groupby import (
+    DataFrameGroupBy,
+    SeriesGroupBy,
+    _normalize_spec,
+)
 from dask.highlevelgraph import HighLevelGraph
 
 import cudf
@@ -245,8 +249,25 @@ def groupby_agg(
         )
 
     # Always convert aggs to dict for consistency
-    if isinstance(aggs, list):
-        aggs = {col: aggs for col in columns}
+    # if isinstance(aggs, list):
+    #    aggs = {col: aggs for col in columns}
+
+    # normalize_spec returns a list of ``(result_column, func, input_column)``
+    # tuples.  Using normalize spec allows for nested dicts to be used as
+    # result columns by separating the aggregation (`func`) from the
+    # groupby.agg() call
+    spec = _normalize_spec(aggs, None)
+    aggs = {
+        input_column: (func,) for result_column, func, input_column in spec
+    }
+
+    # we need to nest the result column to make the MultiIndex creation in
+    # _finalize_gb_agg
+    res_cols = [
+        [x]
+        for result_column, func, input_column in spec
+        for x in result_column
+    ]
 
     # Begin graph construction
     dsk = {}
@@ -326,6 +347,7 @@ def groupby_agg(
             sort,
             sep,
             str_cols_out,
+            res_cols,
         )
 
     divisions = [None] * (split_out + 1)
@@ -350,6 +372,10 @@ def _redirect_aggs(arg):
         for col in arg:
             if isinstance(arg[col], list):
                 new_arg[col] = [redirects.get(agg, agg) for agg in arg[col]]
+            elif isinstance(arg[col], dict):
+                # special case handling of nested dicts
+                for k, v in arg[col].items():
+                    new_arg[col] = {k: redirects.get(v, v)}
             else:
                 new_arg[col] = redirects.get(arg[col], arg[col])
         return new_arg
@@ -367,6 +393,8 @@ def _is_supported(arg, supported: set):
             for col in arg:
                 if isinstance(arg[col], list):
                     _global_set = _global_set.union(set(arg[col]))
+                elif isinstance(arg[col], dict):
+                    return _is_supported(arg[col], supported)
                 else:
                     _global_set.add(arg[col])
         else:
@@ -508,6 +536,7 @@ def _finalize_gb_agg(
     sort,
     sep,
     str_cols_out,
+    finalize_cols=None,
 ):
     """ Final aggregation task.
 
@@ -567,6 +596,8 @@ def _finalize_gb_agg(
             agg_array.append(agg)
     if str_cols_out:
         gb.columns = col_array
+    elif finalize_cols:
+        gb.columns = pd.MultiIndex.from_arrays(finalize_cols)
     else:
         gb.columns = pd.MultiIndex.from_arrays([col_array, agg_array])
 

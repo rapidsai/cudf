@@ -645,3 +645,32 @@ def test_groupby_with_list_of_series():
     dd.assert_eq(
         gdf.groupby([ggs]).agg(["sum"]), ddf.groupby([pgs]).agg(["sum"])
     )
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df: df.groupby("x").agg({"y": {"foo": "sum"}}),
+        lambda df: df.groupby("x").agg({"y": {"y": "sum"}}),
+    ],
+)
+def test_groupby_nested_dict(func):
+    pdf = pd.DataFrame(
+        {
+            "x": np.random.randint(0, 5, size=10000),
+            "y": np.random.normal(size=10000),
+        }
+    )
+
+    ddf = dd.from_pandas(pdf, npartitions=5)
+    c_ddf = ddf.map_partitions(cudf.from_pandas)
+
+    a = func(ddf).compute()
+    b = func(c_ddf).compute().to_pandas()
+
+    a.index.name = None
+    a.name = None
+    b.index.name = None
+    b.name = None
+
+    dd.assert_eq(a, b)
