@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.core import DataFrame
+from cudf import DataFrame
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
