@@ -3,7 +3,7 @@ I/O Supported dtypes
 
 The following table lists are compatible cudf types for each supported IO format.
 
-.. rst-class:: io-supported-types-table
+.. rst-class:: io-supported-types-table special-table
 .. table::
     :widths: 15 10 10 10 10 10 10 10 10 10 10 10 10 10 10 10
 

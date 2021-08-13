@@ -36,6 +36,17 @@ from .numerical_base import NumericalBaseColumn
 
 
 class NumericalColumn(NumericalBaseColumn):
+    """
+    A Column object for Numeric types.
+
+    Parameters
+    ----------
+    data : Buffer
+    dtype : np.dtype
+        The dtype associated with the data Buffer
+    mask : Buffer, optional
+    """
+
     def __init__(
         self,
         data: Buffer,
@@ -45,14 +56,6 @@ class NumericalColumn(NumericalBaseColumn):
         offset: int = 0,
         null_count: int = None,
     ):
-        """
-        Parameters
-        ----------
-        data : Buffer
-        dtype : np.dtype
-            The dtype associated with the data Buffer
-        mask : Buffer, optional
-        """
         dtype = np.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
