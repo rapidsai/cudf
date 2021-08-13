@@ -27,7 +27,7 @@ struct scan_tile_state_view {
   __device__ inline void set_status(cudf::size_type tile_idx, scan_tile_status status)
   {
     auto const offset = (tile_idx + num_tiles) % num_tiles;
-    tile_status[offset].store(status);
+    tile_status[offset].store(status, cuda::memory_order_relaxed);
   }
 
   __device__ inline void set_partial_prefix(cudf::size_type tile_idx, T value)
