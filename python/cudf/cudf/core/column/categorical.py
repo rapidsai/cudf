@@ -817,7 +817,7 @@ class CategoricalColumn(column.ColumnBase):
     @property
     def codes(self) -> NumericalColumn:
         category_order = self.dtype.categories._values.argsort()
-        codes = category_order.take(self.children[0])
+        codes = category_order.take(self.children[0], nullify=True)
         codes = codes.set_mask(self.mask)
         return codes
 
@@ -1295,7 +1295,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def _with_type_metadata(
-        self: CategoricalColumn, dtype: Dtype
+        self: CategoricalColumn, dtype: Dtype, **kwargs
     ) -> CategoricalColumn:
         if isinstance(dtype, CategoricalDtype):
             if len(self.base_children) == 0:
@@ -1309,14 +1309,14 @@ class CategoricalColumn(column.ColumnBase):
                     # Restore original order
                     categories = dtype._categories
                     category_order = categories.argsort(ascending=True)
-                    codes = category_order.take(self.children[0])
+                    codes = category_order.take(self.children[0], nullify=True)
                 else:
                     codes = self.base_children[0]
                     categories = self.base_children[1]
             
             return column.build_categorical_column(
                 categories=categories,
-                codes=codes,
+                codes=codes.fillna(0),
                 mask=self.base_mask,
                 ordered=dtype.ordered,
                 size=self.size,

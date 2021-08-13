@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+from cudf.core.dtypes import CategoricalDtype
 import datetime as dt
 from collections import namedtuple
 from decimal import Decimal
@@ -265,6 +266,9 @@ def to_cudf_compatible_scalar(val, dtype=None):
     if ((dtype is None) and isinstance(val, str)) or is_string_dtype(dtype):
         dtype = "str"
 
+    if isinstance(val, pa.DictionaryScalar):
+        val = val.value.as_py()
+
     if isinstance(val, dt.datetime):
         val = np.datetime64(val)
     elif isinstance(val, dt.timedelta):
@@ -276,8 +280,9 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     val = pandas_dtype(type(val)).type(val)
 
-    if dtype is not None:
+    if dtype is not None and not isinstance(dtype, cudf.CategoricalDtype):
         val = val.astype(dtype)
+            
 
     if val.dtype.type is np.datetime64:
         time_unit, _ = np.datetime_data(val.dtype)

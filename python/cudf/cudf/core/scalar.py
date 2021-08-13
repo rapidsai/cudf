@@ -145,6 +145,12 @@ class Scalar(object):
                 raise ValueError(f"Can not coerce {value} to StructDType")
             else:
                 return NA, dtype
+        
+        if isinstance(dtype, CategoricalDtype):
+            if value not in dtype.categories:
+                return NA, dtype.categories.dtype
+            else:
+                return value, dtype.categories.dtype
 
         if isinstance(dtype, Decimal64Dtype):
             value = pa.scalar(
