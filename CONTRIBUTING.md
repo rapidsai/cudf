@@ -148,6 +148,7 @@ $ py.test -v cudf/cudf/tests                     # run cudf test suite
 - To install in edit/develop mode the `dask-cudf` python package:
 ```bash
 $ cd $CUDF_HOME/python/dask_cudf
+$ python setup.py build_ext --inplace
 $ python setup.py develop
 ```
 
