@@ -253,21 +253,17 @@ def groupby_agg(
     #    aggs = {col: aggs for col in columns}
 
     # normalize_spec returns a list of ``(result_column, func, input_column)``
-    # tuples.  Using normalize spec allows for nested dicts to be used as
+    # tuples. Using normalize spec allows for nested dicts to be used as
     # result columns by separating the aggregation (`func`) from the
     # groupby.agg() call
-    spec = _normalize_spec(aggs, None)
-    aggs = {
-        input_column: (func,) for result_column, func, input_column in spec
-    }
-
-    # we need to nest the result column to make the MultiIndex creation in
-    # _finalize_gb_agg
-    res_cols = [
-        [x]
-        for result_column, func, input_column in spec
-        for x in result_column
-    ]
+    spec = _normalize_spec(aggs, columns)
+    aggs = {}
+    res_cols = []
+    for result_column, func, input_column in spec:
+        aggs[input_column] = (func,)
+        # we need to nest the result column to make the MultiIndex creation in
+        # _finalize_gb_agg
+        res_cols.extend([[x] for x in result_column])
 
     # Begin graph construction
     dsk = {}
