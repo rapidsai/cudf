@@ -1106,10 +1106,12 @@ class MultiIndex(BaseIndex):
         match = self.take(index)
         if isinstance(index, slice):
             return match
-        result = []
-        for level, item in enumerate(match.codes):
-            result.append(match.levels[level][match.codes[item].iloc[0]])
-        return tuple(result)
+        if isinstance(index, int):
+            # we are indexing into a single row of the MultiIndex,
+            # return that row as a tuple:
+            return match.to_pandas()[0]
+        else:
+            return match
 
     def to_frame(self, index=True, name=None):
         df = self._source_data

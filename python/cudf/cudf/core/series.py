@@ -6522,7 +6522,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     for sr in series_list[1:]:
         if not sr.index.names == head.names:
             all_names_equal = False
-    new_index_names = [None]
+    new_index_names = [None] * head.nlevels
     if all_names_equal:
         new_index_names = head.names
 

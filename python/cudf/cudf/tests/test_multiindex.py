@@ -1522,3 +1522,16 @@ def test_multiindex_rename_error(names):
         lfunc_args_and_kwargs=([], {"names": names}),
         rfunc_args_and_kwargs=([], {"names": names}),
     )
+
+
+@pytest.mark.parametrize(
+    "key",
+    [0, 1, [], [0, 1], slice(None), slice(0, 0), slice(0, 1), slice(0, 2)],
+)
+def test_multiindex_indexing(key):
+    gi = cudf.MultiIndex.from_frame(
+        cudf.DataFrame({"a": [1, 2, 3], "b": [True, False, False]})
+    )
+    pi = gi.to_pandas()
+
+    assert_eq(gi[key], pi[key], exact=False)
