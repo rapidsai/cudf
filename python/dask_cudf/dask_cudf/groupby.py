@@ -391,7 +391,8 @@ def _is_supported(arg, supported: set):
                 if isinstance(arg[col], list):
                     _global_set = _global_set.union(set(arg[col]))
                 elif isinstance(arg[col], dict):
-                    return _is_supported(arg[col], supported)
+                    if not _is_supported(arg[col], supported):
+                        return False
                 else:
                     _global_set.add(arg[col])
         else:
