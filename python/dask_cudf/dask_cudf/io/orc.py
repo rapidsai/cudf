@@ -21,47 +21,41 @@ try:
 
     class CudfORCEngine(ArrowORCEngine):
         @classmethod
-        def create_output_meta(
+        def construct_output_meta(
             cls,
-            sample=None,
-            columns=None,
-            schema=None,
+            dataset_info,
             index=None,
-            directory_partition_keys=None,
-            **kwargs,
+            columns=None,
+            sample_data=True,
+            read_kwargs=None,
         ):
 
-            if kwargs:
-                # We want to allow Dask to add to this function
-                # signature without an error, but we do want to
-                # be aware of any changes.
-                warnings.warn(
-                    f"Unexpected kwargs ({kwargs}) were passed to "
-                    f"`CudfORCEngine.create_output_meta`. This version "
-                    f"of Dask-cuDF may be out of sync with upstream Dask."
+            # Start with pandas metadata
+            pd_meta = ArrowORCEngine.construct_output_meta(
+                dataset_info,
+                index=index,
+                columns=columns,
+                sample_data=False,
+                read_kwargs=read_kwargs,
+            )
+
+            # Return direct conversion if sample_data=False
+            if sample_data is False:
+                return cudf.from_pandas(pd_meta)
+
+            # Read 0th stripe to get cudf metadata
+            fs = dataset_info["fs"]
+            path = dataset_info["paths"][0]
+            with fs.open(path, "rb") as f:
+                o = orc.ORCFile(f)
+                stripes = [0] if o.nstripes else None
+                f.seek(0)
+                cudf_meta = cudf.read_orc(
+                    f, stripes=stripes, columns=columns, **(read_kwargs or {}),
                 )
 
-            pd_meta = ArrowORCEngine.create_output_meta(
-                sample=None,
-                columns=columns,
-                schema=schema,
-                index=index,
-                directory_partition_keys=directory_partition_keys,
-            )
-            if sample:
-                part = sample.get("part")
-                fs = sample.get("fs")
-                read_kwargs = sample.get("read_kwargs")
-                with fs.open(part[0], "rb") as f:
-                    cudf_meta = cudf.read_orc(
-                        f,
-                        stripes=[0] if part[1] else None,
-                        columns=columns,
-                        **read_kwargs,
-                    )
-            else:
-                cudf_meta = cudf.DataFrame(index=pd_meta.index)
-
+            # Use pandas metadata to update missing
+            # columns in cudf_meta (directory partitions)
             for col in pd_meta.columns:
                 if col not in cudf_meta.columns:
                     cudf_meta[col] = as_column(pd_meta[col])
@@ -71,12 +65,12 @@ try:
         @classmethod
         def filter_file_stripes(
             cls,
-            file_path,
             orc_file=None,
             filters=None,
-            stat_columns=None,
             stat_hive_part=None,
+            file_path=None,
             fs=None,
+            stat_columns=None,
             file_handle=None,
             gather_statistics=True,
             **kwargs,
@@ -99,12 +93,12 @@ try:
                     with fs.open(file_path, "rb") as f:
                         f.seek(0)
                         cudf_statistics = cudf.io.orc.read_orc_statistics(
-                            f, columns=stat_columns,
+                            [f], columns=stat_columns,
                         )[1]
                 else:
                     file_handle.seek(0)
                     cudf_statistics = cudf.io.orc.read_orc_statistics(
-                        file_handle, columns=stat_columns,
+                        [file_handle], columns=stat_columns,
                     )[1]
                 stripes = list(range(len(cudf_statistics)))
 
@@ -153,9 +147,9 @@ try:
         @classmethod
         def read_partition(
             cls,
-            fs,
             parts,
             columns,
+            fs=None,
             filters=None,
             schema=None,
             partition_uniques=None,
