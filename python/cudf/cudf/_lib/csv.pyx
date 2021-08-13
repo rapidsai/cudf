@@ -6,6 +6,8 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+from cudf._lib.cpp.types cimport data_type, type_id
+
 import numpy as np
 import pandas as pd
 
@@ -503,20 +505,11 @@ def _get_cudf_compatible_str_from_dtype(dtype):
         }
     ):
         return str(dtype)
-    pd_dtype = pd.core.dtypes.common.pandas_dtype(dtype)
 
-    if pd_dtype in cudf.utils.dtypes.pandas_dtypes_to_cudf_dtypes:
-        return str(cudf.utils.dtypes.pandas_dtypes_to_cudf_dtypes[pd_dtype])
-    elif isinstance(pd_dtype, np.dtype) and pd_dtype.kind in ("O", "U"):
-        return "str"
-    elif (
-        pd_dtype in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes or
-        str(pd_dtype) in cudf.utils.dtypes.ALL_TYPES or
-        cudf.utils.dtypes.is_categorical_dtype(pd_dtype)
-    ):
-        return str(pd_dtype)
-    else:
-        raise ValueError(f"dtype not understood: {dtype}")
+    pd_dtype = cudf.dtype(dtype)
+    if pd_dtype == np.dtype('object'):
+        return 'str'
+    return str(pd_dtype)
 
 
 def columns_apply_na_rep(column_names, na_rep):
