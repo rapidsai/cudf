@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import math
+from collections import defaultdict
 from operator import getitem
 
 import numpy as np
@@ -257,10 +258,10 @@ def groupby_agg(
     # result columns by separating the aggregation (`func`) from the
     # groupby.agg() call
     spec = _normalize_spec(aggs, columns)
-    aggs = {}
+    aggs = defaultdict(list)
     res_cols = []
     for result_column, func, input_column in spec:
-        aggs[input_column] = (func,)
+        aggs[input_column].append(func)
         # we need to nest the result column to make the MultiIndex creation in
         # _finalize_gb_agg
         res_cols.extend([[x] for x in result_column])
