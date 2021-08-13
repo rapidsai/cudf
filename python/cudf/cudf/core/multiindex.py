@@ -19,7 +19,7 @@ from cudf._typing import DataFrameOrSeries
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.column import as_column, column
 from cudf.core.frame import Frame
-from cudf.core.index import BaseIndex, as_index
+from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
 from cudf.utils.utils import _maybe_indices_to_slice
 
 
@@ -1781,11 +1781,9 @@ class MultiIndex(Frame, BaseIndex):
         partial_index = self.__class__._from_data(
             data=self._data.select_by_index(slice(key_as_table._num_columns))
         )
-        (
-            lower_bound,
-            upper_bound,
-            sort_inds,
-        ) = partial_index._lexsorted_equal_range(key_as_table, is_sorted)
+        (lower_bound, upper_bound, sort_inds,) = _lexsorted_equal_range(
+            partial_index, key_as_table, is_sorted
+        )
 
         if lower_bound == upper_bound:
             raise KeyError(key)
