@@ -114,7 +114,7 @@ $./build.sh --help
 
 ### Install and Test cuDF for contributors
 
-The general workflow is to find your contributor profile (C++ or Python, etc...), then follow the corresponding instructions and finally go to the last section about [code formatting](###code-formatting).
+The general workflow for building and testing the C++ and Python components of cuDF are provided below. Please also see the last section about [code formatting](###code-formatting).
 
 #### Any contributor:
 
