@@ -46,13 +46,14 @@ enum data_chunk_source_type {
 };
 
 static cudf::string_scalar create_random_input(int32_t num_chars,
-                                               int32_t num_delims,
+                                               double delim_factor,
                                                double deviation,
                                                std::string delim)
 {
-  auto const num_rows        = num_delims;
-  auto const num_delim_chars = delim.size() * num_delims;
+  auto const num_delims      = static_cast<int32_t>((num_chars * delim_factor) / delim.size());
+  auto const num_delim_chars = num_delims * delim.size();
   auto const num_value_chars = num_chars - num_delim_chars;
+  auto const num_rows        = num_delims;
   auto const value_size_max  = static_cast<int32_t>(num_value_chars / num_rows);
   auto const value_size_min  = static_cast<int32_t>(value_size_max * (1 - deviation));
 
@@ -86,10 +87,18 @@ static cudf::string_scalar create_random_input(int32_t num_chars,
 
 static void BM_multibyte_split(benchmark::State& state)
 {
-  auto file_size_approx = state.range(0);
-  auto delimiter_count  = state.range(1);
-  auto source_type      = static_cast<data_chunk_source_type>(state.range(2));
-  auto device_input     = create_random_input(file_size_approx, delimiter_count, 0.1, "::");
+  auto source_type      = static_cast<data_chunk_source_type>(state.range(0));
+  auto delim_size       = state.range(1);
+  auto delim_percent    = state.range(2);
+  auto file_size_approx = state.range(3);
+
+  CUDF_EXPECTS(delim_percent >= 1, "delimiter percent must be at least 1");
+  CUDF_EXPECTS(delim_percent <= 50, "delimiter percent must be at most 50");
+
+  auto delim = std::string(":", delim_size);
+
+  auto delim_factor = static_cast<double>(delim_percent) / 100;
+  auto device_input = create_random_input(file_size_approx, delim_factor, 0.1, delim);
   // auto host_input   = std::string(file_size_approx, 'x');
 
   // auto temp_file_name = random_file_in_dir(temp_dir.path());
@@ -106,15 +115,15 @@ static void BM_multibyte_split(benchmark::State& state)
   auto source = std::unique_ptr<cudf::io::text::data_chunk_source>(nullptr);
 
   switch (source_type) {
-    case data_chunk_source_type::file:    //
-                                          // source =
-                                          // cudf::io::text::make_source_from_file(temp_file_name);
-                                          // state.SetLabel("from file");
-                                          // break;
-    case data_chunk_source_type::host:    //
-                                          // source = cudf::io::text::make_source(host_input);
-                                          // state.SetLabel("from host");
-                                          // break;
+    // case data_chunk_source_type::file:    //
+    // source =
+    // cudf::io::text::make_source_from_file(temp_file_name);
+    // state.SetLabel("from file");
+    // break;
+    // case data_chunk_source_type::host:    //
+    // source = cudf::io::text::make_source(host_input);
+    // state.SetLabel("from host");
+    // break;
     case data_chunk_source_type::device:  //
       source = cudf::io::text::make_source(device_input);
       state.SetLabel("from device");
@@ -122,7 +131,7 @@ static void BM_multibyte_split(benchmark::State& state)
     default: CUDF_FAIL();
   }
 
-  auto delimiters = std::vector<std::string>({"::"});
+  auto delimiters = std::vector<std::string>({delim});
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
@@ -141,7 +150,7 @@ class MultibyteSplitBenchmark : public cudf::benchmark {
     BM_multibyte_split(state);                                                                \
   }                                                                                           \
   BENCHMARK_REGISTER_F(MultibyteSplitBenchmark, name)                                         \
-    ->ArgsProduct({{1 << 30, 1 << 30}, {1 << 15, 1 << 15}, {data_chunk_source_type::device}}) \
+    ->ArgsProduct({{data_chunk_source_type::device}, {1, 4, 7}, {1, 25}, {1 << 15, 1 << 30}}) \
     ->UseManualTime()                                                                         \
     ->Unit(::benchmark::kMillisecond);
 
