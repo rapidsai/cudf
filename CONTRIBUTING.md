@@ -90,7 +90,7 @@ conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda11.0.yml
 # activate the environment
 conda activate cudf_dev
 ```
-- For other CUDA versions, check the corresponding cudf_dev_cuda*.yml file in conda/environments
+- For other CUDA versions, check the corresponding `cudf_dev_cuda*.yml` file in conda/environments
 
 ### Build cuDF from Source
 
