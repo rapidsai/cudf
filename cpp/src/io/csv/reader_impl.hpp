@@ -181,6 +181,7 @@ class reader_impl {
    * @return The columns' inferred data types
    */
   std::vector<data_type> infer_column_types(parse_options const& parse_opts,
+                                            std::vector<column_parse::flags> const& column_flags,
                                             device_span<char const> data,
                                             device_span<uint64_t const> row_offsets,
                                             data_type timestamp_type,
@@ -193,7 +194,8 @@ class reader_impl {
    * types
    * @return List of columns' data types
    */
-  std::vector<data_type> parse_column_types(std::vector<std::string> const& types_as_strings,
+  std::vector<data_type> parse_column_types(std::vector<column_parse::flags>& column_flags,
+                                            std::vector<std::string> const& types_as_strings,
                                             data_type timestamp_type);
 
   /**
@@ -205,6 +207,7 @@ class reader_impl {
    * @return list of column buffers of decoded data, or ptr/size in the case of strings.
    */
   std::vector<column_buffer> decode_data(parse_options const& parse_opts,
+                                         std::vector<column_parse::flags> const& column_flags,
                                          device_span<char const> data,
                                          device_span<uint64_t const> row_offsets,
                                          host_span<data_type const> column_types,
@@ -215,8 +218,6 @@ class reader_impl {
   cudf::size_type num_records_ = 0;  // Number of rows with actual data
   int num_active_cols_         = 0;  // Number of columns to read
   int num_actual_cols_         = 0;  // Number of columns in the dataset
-
-  std::vector<column_parse::flags> column_flags_;
 
   // Intermediate data
   std::vector<std::string> col_names_;
