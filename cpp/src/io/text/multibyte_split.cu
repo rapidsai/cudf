@@ -49,7 +49,6 @@ struct PatternScan {
 
   struct _TempStorage {
     typename BlockScan::TempStorage scan;
-    typename BlockScanCallback::TempStorage scan_callback;
   };
 
   _TempStorage& _temp_storage;
@@ -70,7 +69,7 @@ struct PatternScan {
       thread_multistate = trie.transition(thread_data[i], thread_multistate);
     }
 
-    auto prefix_callback = BlockScanCallback(_temp_storage.scan_callback, tile_state, tile_idx);
+    auto prefix_callback = BlockScanCallback(tile_state, tile_idx);
 
     BlockScan(_temp_storage.scan)
       .ExclusiveSum(thread_multistate, thread_multistate, prefix_callback);
@@ -140,10 +139,7 @@ __global__ void multibyte_split_kernel(
   __shared__ union {
     typename InputLoad::TempStorage input_load;
     typename PatternScan::TempStorage pattern_scan;
-    struct {
-      typename OffsetScan::TempStorage offset_scan;
-      typename OffsetScanCallback::TempStorage offset_scan_callback;
-    };
+    typename OffsetScan::TempStorage offset_scan;
   } temp_storage;
 
   int32_t const tile_idx            = base_tile_idx + blockIdx.x;
@@ -164,8 +160,8 @@ __global__ void multibyte_split_kernel(
 
   uint32_t thread_states[ITEMS_PER_THREAD];
 
-  __syncthreads();                        // required before temp_memory re-use
-  PatternScan(temp_storage.pattern_scan)  //
+  __syncthreads();  // required before temp_memory re-use
+  PatternScan(temp_storage.pattern_scan)
     .Scan(tile_idx, tile_multistates, trie, thread_chars, thread_states);
 
   // STEP 3: Flag matches
@@ -178,10 +174,9 @@ __global__ void multibyte_split_kernel(
 
   // STEP 4: Scan flags to determine absolute thread output offset
 
-  __syncthreads();  // required before temp_memory re-use
-  auto prefix_callback =
-    OffsetScanCallback(temp_storage.offset_scan_callback, tile_output_offsets, tile_idx);
+  auto prefix_callback = OffsetScanCallback(tile_output_offsets, tile_idx);
 
+  __syncthreads();  // required before temp_memory re-use
   OffsetScan(temp_storage.offset_scan)
     .ExclusiveSum(thread_offsets, thread_offsets, prefix_callback);
 
