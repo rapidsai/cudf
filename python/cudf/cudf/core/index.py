@@ -1434,6 +1434,10 @@ class RangeIndex(BaseIndex):
             )
         return super().__mul__(other)
 
+    def __rmul__(self, other):
+        # Multiplication is commutative.
+        return self.__mul__(other)
+
     def _as_int64(self):
         # Convert self to an Int64Index. This method is used to perform ops
         # that are not defined directly on RangeIndex.
@@ -1462,8 +1466,6 @@ for binop in (
     "__radd__",
     "__sub__",
     "__rsub__",
-    "__mul__",
-    "__rmul__",
     "__mod__",
     "__rmod__",
     "__pow__",
