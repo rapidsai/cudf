@@ -186,6 +186,7 @@ class reader_impl {
    * @return List of columns' data types
    */
   std::vector<data_type> parse_column_types(std::vector<column_parse::flags>& column_flags,
+                                            std::vector<std::string> const& column_names,
                                             std::vector<std::string> const& types_as_strings,
                                             data_type timestamp_type);
 
@@ -199,6 +200,7 @@ class reader_impl {
    */
   std::vector<column_buffer> decode_data(parse_options const& parse_opts,
                                          std::vector<column_parse::flags> const& column_flags,
+                                         std::vector<std::string> const& column_names,
                                          device_span<char const> data,
                                          device_span<uint64_t const> row_offsets,
                                          host_span<data_type const> column_types,
@@ -211,7 +213,7 @@ class reader_impl {
   int num_actual_cols_         = 0;  // Number of columns in the dataset
 
   // Intermediate data
-  std::vector<std::string> col_names_;
+  // std::vector<std::string> col_names_;
   std::vector<char> header_;
 };
 

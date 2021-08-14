@@ -340,29 +340,30 @@ table_with_metadata reader_impl::read(cudf::io::datasource* source,
   num_records_ = std::max(row_offsets.size(), 1ul) - 1;
 
   auto column_flags = std::vector<column_parse::flags>();
+  auto column_names = std::vector<std::string>();
 
   // Check if the user gave us a list of column names
   if (not reader_opts.get_names().empty()) {
     column_flags.resize(reader_opts.get_names().size(), column_parse::enabled);
-    col_names_ = reader_opts.get_names();
+    column_names = reader_opts.get_names();
   } else {
-    col_names_ = setColumnNames(
+    column_names = setColumnNames(
       header_, parse_opts.view(), reader_opts.get_header(), reader_opts.get_prefix());
 
-    num_actual_cols_ = num_active_cols_ = col_names_.size();
+    num_actual_cols_ = num_active_cols_ = column_names.size();
 
     column_flags.resize(num_actual_cols_, column_parse::enabled);
 
     // Rename empty column names to "Unnamed: col_index"
-    for (size_t col_idx = 0; col_idx < col_names_.size(); ++col_idx) {
-      if (col_names_[col_idx].empty()) {
-        col_names_[col_idx] = string("Unnamed: ") + std::to_string(col_idx);
+    for (size_t col_idx = 0; col_idx < column_names.size(); ++col_idx) {
+      if (column_names[col_idx].empty()) {
+        column_names[col_idx] = string("Unnamed: ") + std::to_string(col_idx);
       }
     }
 
     // Looking for duplicates
     std::unordered_map<string, int> col_names_histogram;
-    for (auto& col_name : col_names_) {
+    for (auto& col_name : column_names) {
       // Operator [] inserts a default-initialized value if the given key is not
       // present
       if (++col_names_histogram[col_name] > 1) {
@@ -374,7 +375,7 @@ table_with_metadata reader_impl::read(cudf::io::datasource* source,
           } while (col_names_histogram[col_name]++);
         } else {
           // All duplicate columns will be ignored; First appearance is parsed
-          const auto idx    = &col_name - col_names_.data();
+          const auto idx    = &col_name - column_names.data();
           column_flags[idx] = column_parse::disabled;
         }
       }
@@ -399,9 +400,9 @@ table_with_metadata reader_impl::read(cudf::io::datasource* source,
                          .size();
 
     for (const auto& name : reader_opts.get_use_cols_names()) {
-      const auto it = std::find(col_names_.begin(), col_names_.end(), name);
-      if (it != col_names_.end()) {
-        auto curr_it = it - col_names_.begin();
+      const auto it = std::find(column_names.begin(), column_names.end(), name);
+      if (it != column_names.end()) {
+        auto curr_it = it - column_names.begin();
         if (column_flags[curr_it] == column_parse::disabled) {
           column_flags[curr_it] = column_parse::enabled;
           num_active_cols_++;
@@ -418,9 +419,9 @@ table_with_metadata reader_impl::read(cudf::io::datasource* source,
     }
 
     for (const auto& name : reader_opts.get_parse_dates_names()) {
-      auto it = std::find(col_names_.begin(), col_names_.end(), name);
-      if (it != col_names_.end()) {
-        column_flags[it - col_names_.begin()] |= column_parse::as_datetime;
+      auto it = std::find(column_names.begin(), column_names.end(), name);
+      if (it != column_names.end()) {
+        column_flags[it - column_names.begin()] |= column_parse::as_datetime;
       }
     }
   }
@@ -432,9 +433,9 @@ table_with_metadata reader_impl::read(cudf::io::datasource* source,
     }
 
     for (const auto& name : reader_opts.get_parse_hex_names()) {
-      auto it = std::find(col_names_.begin(), col_names_.end(), name);
-      if (it != col_names_.end()) {
-        column_flags[it - col_names_.begin()] |= column_parse::as_hexadecimal;
+      auto it = std::find(column_names.begin(), column_names.end(), name);
+      if (it != column_names.end()) {
+        column_flags[it - column_names.begin()] |= column_parse::as_hexadecimal;
       }
     }
   }
@@ -462,11 +463,12 @@ table_with_metadata reader_impl::read(cudf::io::datasource* source,
           return get_data_types_from_column_names(  //
             column_flags,
             data_types,
-            col_names_,
+            column_names,
             num_actual_cols_);
         },
         [&](const std::vector<string>& dtypes) {
-          return parse_column_types(column_flags, dtypes, reader_opts.get_timestamp_type());
+          return parse_column_types(
+            column_flags, column_names, dtypes, reader_opts.get_timestamp_type());
         }},
       reader_opts.get_dtypes());
   }
@@ -474,8 +476,8 @@ table_with_metadata reader_impl::read(cudf::io::datasource* source,
   out_columns.reserve(column_types.size());
 
   if (num_records_ != 0) {
-    auto out_buffers =
-      decode_data(parse_opts, column_flags, data, row_offsets, column_types, stream, mr);
+    auto out_buffers = decode_data(
+      parse_opts, column_flags, column_names, data, row_offsets, column_types, stream, mr);
     for (size_t i = 0; i < column_types.size(); ++i) {
       metadata.column_names.emplace_back(out_buffers[i].name);
       if (column_types[i].id() == type_id::STRING && parse_opts.quotechar != '\0' &&
@@ -501,7 +503,7 @@ table_with_metadata reader_impl::read(cudf::io::datasource* source,
     // Handle empty metadata
     for (int col = 0; col < num_actual_cols_; ++col) {
       if (column_flags[col] & column_parse::enabled) {
-        metadata.column_names.emplace_back(col_names_[col]);
+        metadata.column_names.emplace_back(column_names[col]);
       }
     }
   }
@@ -746,6 +748,7 @@ std::vector<data_type> reader_impl::infer_column_types(
 
 std::vector<data_type> reader_impl::parse_column_types(
   std::vector<column_parse::flags>& column_flags,
+  std::vector<std::string> const& column_names,
   std::vector<std::string> const& types_as_strings,
   data_type timestamp_type)
 {
@@ -797,10 +800,10 @@ std::vector<data_type> reader_impl::parse_column_types(
 
     for (int col = 0; col < num_actual_cols_; col++) {
       if (column_flags[col] & column_parse::enabled) {
-        CUDF_EXPECTS(col_type_map.find(col_names_[col]) != col_type_map.end(),
+        CUDF_EXPECTS(col_type_map.find(column_names[col]) != col_type_map.end(),
                      "Must specify data types for all active columns");
         column_parse::flags col_flags_;
-        std::tie(dtype_, col_flags_) = get_dtype_info(col_type_map[col_names_[col]]);
+        std::tie(dtype_, col_flags_) = get_dtype_info(col_type_map[column_names[col]]);
         column_flags[col] |= col_flags_;
         CUDF_EXPECTS(dtypes.back().id() != cudf::type_id::EMPTY, "Unsupported data type");
       }
@@ -824,6 +827,7 @@ std::vector<data_type> reader_impl::parse_column_types(
 std::vector<column_buffer> reader_impl::decode_data(
   parse_options const& parse_opts,
   std::vector<column_parse::flags> const& column_flags,
+  std::vector<std::string> const& column_names,
   device_span<char const> data,
   device_span<uint64_t const> row_offsets,
   host_span<data_type const> column_types,
@@ -844,7 +848,7 @@ std::vector<column_buffer> reader_impl::decode_data(
                       stream,
                       is_final_allocation ? mr : rmm::mr::get_current_device_resource());
 
-      out_buffer.name         = col_names_[col];
+      out_buffer.name         = column_names[col];
       out_buffer.null_count() = UNKNOWN_NULL_COUNT;
       out_buffers.emplace_back(std::move(out_buffer));
       active_col++;
