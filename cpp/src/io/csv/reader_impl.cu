@@ -197,6 +197,17 @@ void erase_except_last(C& container, rmm::cuda_stream_view stream)
   container.resize(1, stream);
 }
 
+size_t find_first_row_start(char row_terminator, host_span<char const> data)
+{
+  // For now, look for the first terminator (assume the first terminator isn't within a quote)
+  // TODO: Attempt to infer this from the data
+  size_t pos = 0;
+  while (pos < data.size() && data[pos] != row_terminator) {
+    ++pos;
+  }
+  return std::min(pos + 1, data.size());
+}
+
 std::pair<rmm::device_uvector<char>, reader_impl::selected_rows_offsets>
 reader_impl::select_data_and_row_offsets(cudf::io::datasource* source,
                                          csv_reader_options const& reader_opts,
@@ -495,17 +506,6 @@ table_with_metadata reader_impl::read(cudf::io::datasource* source,
     }
   }
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
-}
-
-size_t reader_impl::find_first_row_start(char row_terminator, host_span<char const> data)
-{
-  // For now, look for the first terminator (assume the first terminator isn't within a quote)
-  // TODO: Attempt to infer this from the data
-  size_t pos = 0;
-  while (pos < data.size() && data[pos] != row_terminator) {
-    ++pos;
-  }
-  return std::min(pos + 1, data.size());
 }
 
 std::pair<rmm::device_uvector<char>, reader_impl::selected_rows_offsets>

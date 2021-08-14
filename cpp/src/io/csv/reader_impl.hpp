@@ -164,15 +164,6 @@ class reader_impl {
                                    rmm::cuda_stream_view stream);
 
   /**
-   * @brief Find the start position of the first data row
-   *
-   * @param h_data Uncompressed input data in host memory
-   *
-   * @return Byte position of the first row
-   */
-  size_t find_first_row_start(char row_terminator, host_span<char const> data);
-
-  /**
    * @brief Automatically infers each column's data type based on the CSV's data within that column.
    *
    * @param data The CSV data from which to infer the columns' data types
