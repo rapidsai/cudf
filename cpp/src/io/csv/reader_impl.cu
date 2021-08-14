@@ -122,10 +122,10 @@ string removeQuotes(string str, char quotechar)
  * @brief Parse the first row to set the column names in the raw_csv parameter.
  * The first row can be either the header row, or the first data row
  */
-std::vector<std::string> setColumnNames(std::vector<char> const& header,
-                                        parse_options_view const& parse_opts,
-                                        int header_row,
-                                        std::string prefix)
+std::vector<std::string> get_column_names(std::vector<char> const& header,
+                                          parse_options_view const& parse_opts,
+                                          int header_row,
+                                          std::string prefix)
 {
   std::vector<std::string> col_names;
 
@@ -337,8 +337,7 @@ table_with_metadata reader_impl::read(cudf::io::datasource* source,
   auto const& row_offsets = data_row_offsets.second;
 
   // Exclude the end-of-data row from number of rows with actual data
-  num_records_ = std::max(row_offsets.size(), 1ul) - 1;
-
+  auto num_records  = std::max(row_offsets.size(), 1ul) - 1;
   auto column_flags = std::vector<column_parse::flags>();
   auto column_names = std::vector<std::string>();
 
@@ -347,7 +346,7 @@ table_with_metadata reader_impl::read(cudf::io::datasource* source,
     column_flags.resize(reader_opts.get_names().size(), column_parse::enabled);
     column_names = reader_opts.get_names();
   } else {
-    column_names = setColumnNames(
+    column_names = get_column_names(
       header_, parse_opts.view(), reader_opts.get_header(), reader_opts.get_prefix());
 
     num_actual_cols_ = num_active_cols_ = column_names.size();
@@ -451,8 +450,14 @@ table_with_metadata reader_impl::read(cudf::io::datasource* source,
 
   std::vector<data_type> column_types;
   if (has_to_infer_column_types) {
-    column_types = infer_column_types(
-      parse_opts, column_flags, data, row_offsets, reader_opts.get_timestamp_type(), stream);
+    column_types = infer_column_types(  //
+      parse_opts,
+      column_flags,
+      data,
+      row_offsets,
+      num_records,
+      reader_opts.get_timestamp_type(),
+      stream);
   } else {
     column_types = std::visit(
       cudf::detail::visitor_overload{
@@ -475,9 +480,17 @@ table_with_metadata reader_impl::read(cudf::io::datasource* source,
 
   out_columns.reserve(column_types.size());
 
-  if (num_records_ != 0) {
-    auto out_buffers = decode_data(
-      parse_opts, column_flags, column_names, data, row_offsets, column_types, stream, mr);
+  if (num_records != 0) {
+    auto out_buffers = decode_data(  //
+      parse_opts,
+      column_flags,
+      column_names,
+      data,
+      row_offsets,
+      column_types,
+      num_records,
+      stream,
+      mr);
     for (size_t i = 0; i < column_types.size(); ++i) {
       metadata.column_names.emplace_back(out_buffers[i].name);
       if (column_types[i].id() == type_id::STRING && parse_opts.quotechar != '\0' &&
@@ -682,11 +695,12 @@ std::vector<data_type> reader_impl::infer_column_types(
   std::vector<column_parse::flags> const& column_flags,
   device_span<char const> data,
   device_span<uint64_t const> row_offsets,
+  int32_t num_records,
   data_type timestamp_type,
   rmm::cuda_stream_view stream)
 {
   std::vector<data_type> dtypes;
-  if (num_records_ == 0) {
+  if (num_records == 0) {
     dtypes.resize(num_active_cols_, data_type{type_id::EMPTY});
   } else {
     auto column_stats =
@@ -704,7 +718,7 @@ std::vector<data_type> reader_impl::infer_column_types(
                                            column_stats[col].negative_small_int_count +
                                            column_stats[col].positive_small_int_count;
 
-      if (column_stats[col].null_count == num_records_) {
+      if (column_stats[col].null_count == num_records) {
         // Entire column is NULL; allocate the smallest amount of memory
         dtypes.emplace_back(cudf::type_id::INT8);
       } else if (column_stats[col].string_count > 0L) {
@@ -831,6 +845,7 @@ std::vector<column_buffer> reader_impl::decode_data(
   device_span<char const> data,
   device_span<uint64_t const> row_offsets,
   host_span<data_type const> column_types,
+  int32_t num_records,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -843,7 +858,7 @@ std::vector<column_buffer> reader_impl::decode_data(
       const bool is_final_allocation = column_types[active_col].id() != type_id::STRING;
       auto out_buffer =
         column_buffer(column_types[active_col],
-                      num_records_,
+                      num_records,
                       true,
                       stream,
                       is_final_allocation ? mr : rmm::mr::get_current_device_resource());

@@ -175,6 +175,7 @@ class reader_impl {
                                             std::vector<column_parse::flags> const& column_flags,
                                             device_span<char const> data,
                                             device_span<uint64_t const> row_offsets,
+                                            int32_t num_records,
                                             data_type timestamp_type,
                                             rmm::cuda_stream_view stream);
 
@@ -204,16 +205,15 @@ class reader_impl {
                                          device_span<char const> data,
                                          device_span<uint64_t const> row_offsets,
                                          host_span<data_type const> column_types,
+                                         int32_t num_records,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr);
 
  private:
-  cudf::size_type num_records_ = 0;  // Number of rows with actual data
-  int num_active_cols_         = 0;  // Number of columns to read
-  int num_actual_cols_         = 0;  // Number of columns in the dataset
+  int num_active_cols_ = 0;  // Number of columns to read
+  int num_actual_cols_ = 0;  // Number of columns in the dataset
 
   // Intermediate data
-  // std::vector<std::string> col_names_;
   std::vector<char> header_;
 };
 
