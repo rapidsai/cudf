@@ -1480,27 +1480,19 @@ for binop in (
     setattr(
         RangeIndex,
         binop,
-        (
-            lambda self, other, binop=binop: getattr(
-                cudf.Int64Index._from_data(self._data), binop
-            )(other)
-        ),
+        lambda self, other, binop=binop: getattr(
+            cudf.Int64Index._from_data(self._data), binop
+        )(other),
     )
 
 
-for unaop in (
-    "__neg__",
-    "__pos__",
-    "__abs__",
-):
+for unaop in ("__neg__", "__pos__", "__abs__"):
     setattr(
         RangeIndex,
         binop,
-        (
-            lambda self: getattr(
-                cudf.Int64Index._from_data(self._data), binop
-            )()
-        ),
+        lambda self, binop=binop: getattr(
+            cudf.Int64Index._from_data(self._data), binop
+        )(),
     )
 
 
