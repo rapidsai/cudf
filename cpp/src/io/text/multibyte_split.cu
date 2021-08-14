@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
 #include <cudf/io/text/detail/multistate.hpp>
 #include <cudf/io/text/detail/tile_state.hpp>
@@ -33,12 +34,6 @@
 #include <memory>
 
 namespace {
-
-template <typename Dividend, typename Divisor>
-constexpr decltype(auto) ceil_div(Dividend dividend, Divisor divisor)
-{
-  return dividend / divisor + (dividend % divisor != 0);
-}
 
 using cudf::io::text::detail::multistate;
 
@@ -320,7 +315,8 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
 
     if (chunk.size() == 0) { break; }
 
-    auto tiles_in_launch = ceil_div(chunk.size(), ITEMS_PER_TILE);
+    auto tiles_in_launch =
+      cudf::util::div_rounding_up_safe(chunk.size(), static_cast<std::size_t>(ITEMS_PER_TILE));
 
     // reset the next chunk of tile state
     multibyte_split_init_kernel<<<tiles_in_launch, THREADS_PER_TILE, 0, chunk_stream>>>(  //
@@ -389,7 +385,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                      streams);
 
   // allocate results
-  auto num_tiles      = ceil_div(bytes_total, ITEMS_PER_TILE);
+  auto num_tiles      = cudf::util::div_rounding_up_safe(bytes_total, ITEMS_PER_TILE);
   auto num_results    = tile_offsets.get_inclusive_prefix(num_tiles - 1, stream);
   auto string_offsets = rmm::device_uvector<int32_t>(num_results + 2, stream, mr);
   auto string_chars   = rmm::device_uvector<char>(bytes_total, stream, mr);
