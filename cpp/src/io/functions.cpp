@@ -160,15 +160,17 @@ table_with_metadata read_json(json_reader_options const& options,
 
 table_with_metadata read_csv(csv_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
-  namespace csv = cudf::io::detail::csv;
-
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
-  auto reader =
-    std::make_unique<csv::reader>(std::move(datasources), options, rmm::cuda_stream_default, mr);
 
-  return reader->read();
+  CUDF_EXPECTS(datasources.size() == 1, "Only a single source is currently supported.");
+
+  return cudf::io::detail::csv::read_csv(  //
+    std::move(datasources[0]),
+    options,
+    rmm::cuda_stream_default,
+    mr);
 }
 
 // Freeform API wraps the detail writer class API

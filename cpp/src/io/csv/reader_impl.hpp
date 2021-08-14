@@ -66,31 +66,29 @@ using namespace cudf::io;
  *
  * Stage 4: Convert every row from csv text form to cudf binary form.
  */
-class reader::impl {
+class reader_impl {
  public:
   /**
    * @brief Constructor from a dataset source with reader options.
    *
-   * @param source Dataset source
-   * @param filepath Filepath if reading dataset from a file
-   * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<datasource> source,
-                std::string filepath,
-                csv_reader_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+  explicit reader_impl(parse_options&& parse_options, int32_t num_actual_columns);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns.
    *
+   * @param source Dataset source
+   * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource to use for device memory allocation
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(rmm::cuda_stream_view stream);
+  table_with_metadata read(cudf::io::datasource* source,
+                           csv_reader_options const& opts_,
+                           rmm::cuda_stream_view stream,
+                           rmm::mr::device_memory_resource* mr);
 
  private:
   /**
@@ -133,8 +131,10 @@ class reader::impl {
    *
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  std::pair<rmm::device_uvector<char>, reader::impl::selected_rows_offsets>
-  select_data_and_row_offsets(rmm::cuda_stream_view stream);
+  std::pair<rmm::device_uvector<char>, reader_impl::selected_rows_offsets>
+  select_data_and_row_offsets(cudf::io::datasource* source,
+                              csv_reader_options const& opts_,
+                              rmm::cuda_stream_view stream);
 
   /**
    * @brief Finds row positions in the specified input data, and loads the selected data onto GPU.
@@ -151,8 +151,9 @@ class reader::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Input data and row offsets in the device memory
    */
-  std::pair<rmm::device_uvector<char>, reader::impl::selected_rows_offsets>
-  load_data_and_gather_row_offsets(host_span<char const> data,
+  std::pair<rmm::device_uvector<char>, reader_impl::selected_rows_offsets>
+  load_data_and_gather_row_offsets(csv_reader_options const& opts_,
+                                   host_span<char const> data,
                                    size_t range_begin,
                                    size_t range_end,
                                    size_t skip_rows,
@@ -179,6 +180,7 @@ class reader::impl {
    */
   std::vector<data_type> infer_column_types(device_span<char const> data,
                                             device_span<uint64_t const> row_offsets,
+                                            data_type timestamp_type,
                                             rmm::cuda_stream_view stream);
 
   /**
@@ -204,7 +206,8 @@ class reader::impl {
    * types
    * @return List of columns' data types
    */
-  std::vector<data_type> parse_column_types(std::vector<std::string> const& types_as_strings);
+  std::vector<data_type> parse_column_types(std::vector<std::string> const& types_as_strings,
+                                            data_type timestamp_type);
 
   /**
    * @brief Converts the row-column data and outputs to column bufferrs.
@@ -217,15 +220,10 @@ class reader::impl {
   std::vector<column_buffer> decode_data(device_span<char const> data,
                                          device_span<uint64_t const> row_offsets,
                                          host_span<data_type const> column_types,
-                                         rmm::cuda_stream_view stream);
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
 
  private:
-  rmm::mr::device_memory_resource* mr_ = nullptr;
-  std::unique_ptr<datasource> source_;
-  std::string filepath_;
-  std::string compression_type_;
-  const csv_reader_options opts_;
-
   cudf::size_type num_records_ = 0;  // Number of rows with actual data
   int num_active_cols_         = 0;  // Number of columns to read
   int num_actual_cols_         = 0;  // Number of columns in the dataset
