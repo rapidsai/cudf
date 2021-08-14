@@ -72,7 +72,7 @@ class reader_impl {
    * @brief Constructor from a dataset source with reader options.
    *
    */
-  explicit reader_impl(int32_t num_actual_columns);
+  explicit reader_impl();
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns.
@@ -176,6 +176,7 @@ class reader_impl {
                                             device_span<char const> data,
                                             device_span<uint64_t const> row_offsets,
                                             int32_t num_records,
+                                            int32_t num_active_columns,
                                             data_type timestamp_type,
                                             rmm::cuda_stream_view stream);
 
@@ -189,6 +190,8 @@ class reader_impl {
   std::vector<data_type> parse_column_types(std::vector<column_parse::flags>& column_flags,
                                             std::vector<std::string> const& column_names,
                                             std::vector<std::string> const& types_as_strings,
+                                            int32_t num_actual_columns,
+                                            int32_t num_active_columns,
                                             data_type timestamp_type);
 
   /**
@@ -206,14 +209,12 @@ class reader_impl {
                                          device_span<uint64_t const> row_offsets,
                                          host_span<data_type const> column_types,
                                          int32_t num_records,
+                                         int32_t num_actual_columns,
+                                         int32_t num_active_columns,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr);
 
  private:
-  int num_active_cols_ = 0;  // Number of columns to read
-  int num_actual_cols_ = 0;  // Number of columns in the dataset
-
-  // Intermediate data
   std::vector<char> header_;
 };
 
