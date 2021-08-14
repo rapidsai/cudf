@@ -799,7 +799,7 @@ def test_categorical_setitem_with_nan():
 @pytest.mark.parametrize("dtype", list(NUMERIC_TYPES) + ["object"])
 @pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])
 def test_series_construction_with_nulls(input_obj, dtype):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     input_obj = [
         dtype.type(v) if v is not cudf.NA else cudf.NA for v in input_obj
     ]

@@ -8731,3 +8731,23 @@ def test_frame_series_where():
     expected = gdf.where(gdf.notna(), gdf.mean())
     actual = pdf.where(pdf.notna(), pdf.mean(), axis=1)
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data", [{"a": [1, 2, 3], "b": [1, 1, 0]}],
+)
+def test_frame_series_where_other(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = gdf.where(gdf["b"] == 1, cudf.NA)
+    actual = pdf.where(pdf["b"] == 1, pd.NA)
+    assert_eq(
+        actual.fillna(-1).values,
+        expected.fillna(-1).values,
+        check_dtype=False,
+    )
+
+    expected = gdf.where(gdf["b"] == 1, 0)
+    actual = pdf.where(pdf["b"] == 1, 0)
+    assert_eq(expected, actual)

@@ -449,7 +449,7 @@ class GroupBy(Serializable):
         """
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
-        _, offsets, _, grouped_values = self._grouped()
+        group_names, offsets, _, grouped_values = self._grouped()
 
         ngroups = len(offsets) - 1
         if ngroups > self._MAX_GROUPS_BEFORE_WARN:
@@ -467,9 +467,7 @@ class GroupBy(Serializable):
             return self.obj.__class__()
 
         if cudf.utils.dtypes.is_scalar(chunk_results[0]):
-            result = cudf.Series(
-                chunk_results, index=self.grouping.keys[offsets[:-1]]
-            )
+            result = cudf.Series(chunk_results, index=group_names)
             result.index.names = self.grouping.names
         elif isinstance(chunk_results[0], cudf.Series):
             result = cudf.concat(chunk_results, axis=1).T
@@ -816,6 +814,14 @@ class GroupBy(Serializable):
     def cummax(self):
         """Get the column-wise cumulative maximum value in each group."""
         return self.agg("cummax")
+
+    def first(self):
+        """Get the first non-null value in each group."""
+        return self.agg("first")
+
+    def last(self):
+        """Get the last non-null value in each group."""
+        return self.agg("last")
 
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`
