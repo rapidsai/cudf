@@ -1434,18 +1434,23 @@ class RangeIndex(BaseIndex):
             )
         return super().__mul__(other)
 
+    def _as_int64(self):
+        # Convert self to an Int64Index. This method is used to perform ops
+        # that are not defined directly on RangeIndex.
+        return cudf.Int64Index._from_data(self._data)
+
     def __getattr__(self, key):
         # For methods that are not defined for RangeIndex we attempt to operate
         # on the corresponding integer index if possible.
         try:
-            return getattr(cudf.Int64Index._from_data(self._data), key)
+            return getattr(self._as_int64(), key)
         except AttributeError:
             raise AttributeError(
                 f"'{type(self)}' object has no attribute {key}"
             )
 
     def get_loc(self, key, method=None, tolerance=None):
-        return cudf.Int64Index._from_data(self._data).get_loc(
+        return self._as_int64().get_loc(
             key, method=method, tolerance=tolerance
         )
 
@@ -1480,9 +1485,7 @@ for binop in (
     setattr(
         RangeIndex,
         binop,
-        lambda self, other, binop=binop: getattr(
-            cudf.Int64Index._from_data(self._data), binop
-        )(other),
+        lambda self, other, op=binop: getattr(self._as_int64(), op)(other),
     )
 
 
@@ -1490,9 +1493,7 @@ for unaop in ("__neg__", "__pos__", "__abs__"):
     setattr(
         RangeIndex,
         binop,
-        lambda self, binop=binop: getattr(
-            cudf.Int64Index._from_data(self._data), binop
-        )(),
+        lambda self, op=unaop: getattr(self._as_int64(), op)(),
     )
 
 
