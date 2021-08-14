@@ -71,22 +71,22 @@ class reader_impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    *
-   * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  explicit reader_impl(parse_options&& parse_options, int32_t num_actual_columns);
+  explicit reader_impl(int32_t num_actual_columns);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns.
    *
    * @param source Dataset source
    * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    *
    * @return The set of columns along with metadata
    */
   table_with_metadata read(cudf::io::datasource* source,
-                           csv_reader_options const& opts_,
+                           csv_reader_options const& reader_opts,
+                           parse_options const& parse_opts,
                            rmm::cuda_stream_view stream,
                            rmm::mr::device_memory_resource* mr);
 
@@ -133,7 +133,8 @@ class reader_impl {
    */
   std::pair<rmm::device_uvector<char>, reader_impl::selected_rows_offsets>
   select_data_and_row_offsets(cudf::io::datasource* source,
-                              csv_reader_options const& opts_,
+                              csv_reader_options const& reader_opts,
+                              parse_options const& parse_opts,
                               rmm::cuda_stream_view stream);
 
   /**
@@ -152,7 +153,8 @@ class reader_impl {
    * @return Input data and row offsets in the device memory
    */
   std::pair<rmm::device_uvector<char>, reader_impl::selected_rows_offsets>
-  load_data_and_gather_row_offsets(csv_reader_options const& opts_,
+  load_data_and_gather_row_offsets(csv_reader_options const& reader_opts,
+                                   parse_options const& parse_opts,
                                    host_span<char const> data,
                                    size_t range_begin,
                                    size_t range_end,
@@ -168,7 +170,7 @@ class reader_impl {
    *
    * @return Byte position of the first row
    */
-  size_t find_first_row_start(host_span<char const> data);
+  size_t find_first_row_start(char row_terminator, host_span<char const> data);
 
   /**
    * @brief Automatically infers each column's data type based on the CSV's data within that column.
@@ -178,7 +180,8 @@ class reader_impl {
    * @param stream The stream to which the type inference-kernel will be dispatched
    * @return The columns' inferred data types
    */
-  std::vector<data_type> infer_column_types(device_span<char const> data,
+  std::vector<data_type> infer_column_types(parse_options const& parse_opts,
+                                            device_span<char const> data,
                                             device_span<uint64_t const> row_offsets,
                                             data_type timestamp_type,
                                             rmm::cuda_stream_view stream);
@@ -217,7 +220,8 @@ class reader_impl {
    *
    * @return list of column buffers of decoded data, or ptr/size in the case of strings.
    */
-  std::vector<column_buffer> decode_data(device_span<char const> data,
+  std::vector<column_buffer> decode_data(parse_options const& parse_opts,
+                                         device_span<char const> data,
                                          device_span<uint64_t const> row_offsets,
                                          host_span<data_type const> column_types,
                                          rmm::cuda_stream_view stream,
@@ -228,8 +232,6 @@ class reader_impl {
   int num_active_cols_         = 0;  // Number of columns to read
   int num_actual_cols_         = 0;  // Number of columns in the dataset
 
-  // Parsing options
-  parse_options opts{};
   std::vector<column_parse::flags> column_flags_;
 
   // Intermediate data
