@@ -705,6 +705,13 @@ def date_range(
             # TODO: support below
             periods = math.ceil(int(end - start) / _min_offset(offset))
             _periods_not_specified = True
+
+            if periods < 0:
+                # end < start, return empty column
+                periods = 0
+            elif periods == 0:
+                # end == start, return exactly 1 timestamp (start)
+                periods = 1
     else:
         start = (cudf.Scalar(start, dtype=dtype).value.astype("int64"),)
         end = (cudf.Scalar(end, dtype=dtype).value.astype("int64"),)
