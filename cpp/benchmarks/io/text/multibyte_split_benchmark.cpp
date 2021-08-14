@@ -29,6 +29,8 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/transform.h>
 
 #include <cstdio>
@@ -40,9 +42,9 @@ using cudf::test::fixed_width_column_wrapper;
 temp_directory const temp_dir("cudf_gbench");
 
 enum data_chunk_source_type {
+  device,
   file,
   host,
-  device,
 };
 
 static cudf::string_scalar create_random_input(int32_t num_chars,
@@ -99,34 +101,37 @@ static void BM_multibyte_split(benchmark::State& state)
 
   auto delim_factor = static_cast<double>(delim_percent) / 100;
   auto device_input = create_random_input(file_size_approx, delim_factor, 0.1, delim);
-  // auto host_input   = std::string(file_size_approx, 'x');
+  auto host_input   = thrust::host_vector<char>(device_input.size());
+  auto host_string  = std::string(host_input.data(), host_input.size());
 
-  // auto temp_file_name = random_file_in_dir(temp_dir.path());
+  cudaMemcpyAsync(host_input.data(),
+                  device_input.data(),
+                  device_input.size() * sizeof(char),
+                  cudaMemcpyDeviceToHost,
+                  rmm::cuda_stream_default);
 
-  // close(mkstemp(const_cast<char*>(temp_file_name.data())));
-  // {
-  //   auto temp_fostream = std::ofstream(temp_file_name, std::ofstream::out);
-  //   temp_fostream << host_input;
-  //   temp_fostream.close();
-  // }
+  auto temp_file_name = random_file_in_dir(temp_dir.path());
+
+  close(mkstemp(const_cast<char*>(temp_file_name.data())));
+  {
+    auto temp_fostream = std::ofstream(temp_file_name, std::ofstream::out);
+    temp_fostream.write(host_input.data(), host_input.size());
+    temp_fostream.close();
+  }
 
   cudaDeviceSynchronize();
 
   auto source = std::unique_ptr<cudf::io::text::data_chunk_source>(nullptr);
 
   switch (source_type) {
-    // case data_chunk_source_type::file:    //
-    // source =
-    // cudf::io::text::make_source_from_file(temp_file_name);
-    // state.SetLabel("from file");
-    // break;
-    // case data_chunk_source_type::host:    //
-    // source = cudf::io::text::make_source(host_input);
-    // state.SetLabel("from host");
-    // break;
+    case data_chunk_source_type::file:  //
+      source = cudf::io::text::make_source_from_file(temp_file_name);
+      break;
+    case data_chunk_source_type::host:  //
+      source = cudf::io::text::make_source(host_string);
+      break;
     case data_chunk_source_type::device:  //
       source = cudf::io::text::make_source(device_input);
-      state.SetLabel("from device");
       break;
     default: CUDF_FAIL();
   }
@@ -144,14 +149,19 @@ static void BM_multibyte_split(benchmark::State& state)
 class MultibyteSplitBenchmark : public cudf::benchmark {
 };
 
-#define TRANSPOSE_BM_BENCHMARK_DEFINE(name)                                                   \
-  BENCHMARK_DEFINE_F(MultibyteSplitBenchmark, name)(::benchmark::State & state)               \
-  {                                                                                           \
-    BM_multibyte_split(state);                                                                \
-  }                                                                                           \
-  BENCHMARK_REGISTER_F(MultibyteSplitBenchmark, name)                                         \
-    ->ArgsProduct({{data_chunk_source_type::device}, {1, 4, 7}, {1, 25}, {1 << 15, 1 << 30}}) \
-    ->UseManualTime()                                                                         \
+#define TRANSPOSE_BM_BENCHMARK_DEFINE(name)                                     \
+  BENCHMARK_DEFINE_F(MultibyteSplitBenchmark, name)(::benchmark::State & state) \
+  {                                                                             \
+    BM_multibyte_split(state);                                                  \
+  }                                                                             \
+  BENCHMARK_REGISTER_F(MultibyteSplitBenchmark, name)                           \
+    ->ArgsProduct({{data_chunk_source_type::device,                             \
+                    data_chunk_source_type::file,                               \
+                    data_chunk_source_type::host},                              \
+                   {1, 4, 7},                                                   \
+                   {1, 25},                                                     \
+                   {1 << 15, 1 << 30}})                                         \
+    ->UseManualTime()                                                           \
     ->Unit(::benchmark::kMillisecond);
 
 TRANSPOSE_BM_BENCHMARK_DEFINE(multibyte_split_simple);
