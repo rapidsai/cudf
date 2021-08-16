@@ -4246,6 +4246,19 @@ class Frame(libcudf.table.Table):
 
         Examples
         --------
+        **Series**
+
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cummin()
+        0    1
+        1    1
+        2    1
+        3    1
+        4    1
+
+        **DataFrame**
+
         >>> import cudf
         >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
         >>> df.cummin()
@@ -4276,6 +4289,19 @@ class Frame(libcudf.table.Table):
 
         Examples
         --------
+        **Series**
+
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cummax()
+        0    1
+        1    5
+        2    5
+        3    5
+        4    5
+
+        **DataFrame**
+
         >>> import cudf
         >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
         >>> df.cummax()
@@ -4307,6 +4333,19 @@ class Frame(libcudf.table.Table):
 
         Examples
         --------
+        **Series**
+
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cumsum()
+        0    1
+        1    6
+        2    8
+        3    12
+        4    15
+
+        **DataFrame**
+
         >>> import cudf
         >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
         >>> s.cumsum()
@@ -4339,6 +4378,19 @@ class Frame(libcudf.table.Table):
 
         Examples
         --------
+        **Series**
+
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cumprod()
+        0    1
+        1    5
+        2    10
+        3    40
+        4    120
+
+        **DataFrame**
+
         >>> import cudf
         >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
         >>> s.cumprod()
