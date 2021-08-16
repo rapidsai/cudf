@@ -62,6 +62,7 @@ _cupy_nan_methods_map = {
     "max": "nanmax",
     "sum": "nansum",
     "prod": "nanprod",
+    "product": "nanprod",
     "mean": "nanmean",
     "std": "nanstd",
     "var": "nanvar",
@@ -6611,6 +6612,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             raise NotImplementedError(
                 "Row-wise operations currently do not " "support `bool_only`."
             )
+
+        # This parameter is only necessary for axis 0 reductions that cuDF
+        # performs internally. cupy already upcasts smaller integer/bool types
+        # to int64 when accumulating.
+        kwargs.pop("cast_to_int", None)
 
         prepared, mask, common_dtype = self._prepare_for_rowwise_op(
             method, skipna

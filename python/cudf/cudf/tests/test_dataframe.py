@@ -1850,6 +1850,7 @@ def gdf(pdf):
         "min",
         "max",
         "sum",
+        "prod",
         "product",
         "cummin",
         "cummax",
@@ -1872,22 +1873,34 @@ def test_dataframe_reductions(data, axis, func, skipna):
     pdf = pd.DataFrame(data=data)
     gdf = cudf.DataFrame.from_pandas(pdf)
 
-    # These reductions don't support axis=1
-    if axis == 1 and func in ("kurt", "skew"):
-        return
-
-    # We need cupy-supported operations when performing rowwise ops.
-    if func not in cudf.core.dataframe._cupy_nan_methods_map and axis == 1:
-        return
+    # Reductions can fail in numerous possible ways when attempting row-wise
+    # reductions, which are only partially supported. Catching the appropriate
+    # exception here allows us to detect API breakage in the form of changing
+    # exceptions.
+    expected_exception = None
+    if axis == 1:
+        if func in ("kurt", "skew"):
+            expected_exception = NotImplementedError
+        elif func not in cudf.core.dataframe._cupy_nan_methods_map:
+            if skipna is False:
+                expected_exception = NotImplementedError
+            elif any(col.nullable for name, col in gdf.iteritems()):
+                expected_exception = ValueError
+            elif func in ("cummin", "cummax"):
+                expected_exception = AttributeError
 
     # Test different degrees of freedom for var and std.
     all_kwargs = [{"ddof": 1}, {"ddof": 2}] if func in ("var", "std") else [{}]
     for kwargs in all_kwargs:
-        assert_eq(
-            getattr(pdf, func)(axis=axis, skipna=skipna, **kwargs),
-            getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),
-            check_dtype=False,
-        )
+        if expected_exception is not None:
+            with pytest.raises(expected_exception):
+                getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),
+        else:
+            assert_eq(
+                getattr(pdf, func)(axis=axis, skipna=skipna, **kwargs),
+                getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),
+                check_dtype=False,
+            )
 
 
 @pytest.mark.parametrize(
