@@ -154,8 +154,10 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     // resulting column views will be referencing potentially invalid memory.
     auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
       this->parse_input(left_data, right_data);
-    auto result = this->join(left, right, predicate);
+    auto result_size = this->join_size(left, right, predicate);
+    EXPECT_TRUE(result_size == expected_outputs.size());
 
+    auto result = this->join(left, right, predicate);
     std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
     for (size_t i = 0; i < result.first->size(); ++i) {
       // Note: Not trying to be terribly efficient here since these tests are
@@ -167,7 +169,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     std::sort(result_pairs.begin(), result_pairs.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
 
-    EXPECT_TRUE(std::equal(result_pairs.begin(), result_pairs.end(), expected_outputs.begin()));
+    EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
   }
 
   void test_nulls(std::vector<std::pair<std::vector<T>, std::vector<bool>>> left_data,
@@ -179,8 +181,10 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     // resulting column views will be referencing potentially invalid memory.
     auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
       this->parse_input(left_data, right_data);
-    auto result = this->join(left, right, predicate);
+    auto result_size = this->join_size(left, right, predicate);
+    EXPECT_TRUE(result_size == expected_outputs.size());
 
+    auto result = this->join(left, right, predicate);
     std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
     for (size_t i = 0; i < result.first->size(); ++i) {
       // Note: Not trying to be terribly efficient here since these tests are
@@ -192,7 +196,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     std::sort(result_pairs.begin(), result_pairs.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
 
-    EXPECT_TRUE(std::equal(result_pairs.begin(), result_pairs.end(), expected_outputs.begin()));
+    EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
   }
 
   /*
@@ -238,7 +242,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     thrust::sort(thrust::device, reference_pairs.begin(), reference_pairs.end());
 
     EXPECT_TRUE(thrust::equal(
-      thrust::device, result_pairs.begin(), result_pairs.end(), reference_pairs.begin()));
+      thrust::device, reference_pairs.begin(), reference_pairs.end(), result_pairs.begin()));
   }
 
   /**
@@ -249,6 +253,15 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
   virtual std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
                     std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
   join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) = 0;
+
+  /**
+   * This method must be implemented by subclasses for specific types of joins.
+   * It should be a simply forwarding of arguments to the appropriate cudf
+   * conditional join size computation API.
+   */
+  virtual std::size_t join_size(cudf::table_view left,
+                                cudf::table_view right,
+                                cudf::ast::expression predicate) = 0;
 
   /**
    * This method must be implemented by subclasses for specific types of joins.
@@ -270,6 +283,13 @@ struct ConditionalInnerJoinTest : public ConditionalJoinPairReturnTest<T> {
   join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
   {
     return cudf::conditional_inner_join(left, right, predicate);
+  }
+
+  std::size_t join_size(cudf::table_view left,
+                        cudf::table_view right,
+                        cudf::ast::expression predicate) override
+  {
+    return cudf::conditional_inner_join_size(left, right, predicate);
   }
 
   std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
@@ -384,6 +404,20 @@ TYPED_TEST(ConditionalInnerJoinTest, TestComplexConditionMultipleColumns)
              {{4, 0}, {5, 0}, {6, 0}, {7, 0}});
 };
 
+TYPED_TEST(ConditionalInnerJoinTest, TestSymmetry)
+{
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_1, col_ref_0);
+  auto expression_reverse =
+    cudf::ast::expression(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_1);
+
+  this->test(
+    {{0, 1, 2}}, {{1, 2, 3}}, expression, {{0, 0}, {0, 1}, {0, 2}, {1, 1}, {1, 2}, {2, 2}});
+  this->test(
+    {{0, 1, 2}}, {{1, 2, 3}}, expression_reverse, {{0, 0}, {0, 1}, {0, 2}, {1, 1}, {1, 2}, {2, 2}});
+};
+
 TYPED_TEST(ConditionalInnerJoinTest, TestCompareRandomToHash)
 {
   // Generate columns of 10 repeats of the integer range [0, 10), then merge
@@ -418,7 +452,7 @@ TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoNullsRowAllEqual)
 
 TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoNullsNoOutputRowAllEqual)
 {
-  this->test_nulls({{{0, 1}, {0, 1}}}, {{{0, 0}, {1, 1}}}, left_zero_eq_right_zero, {{}, {}});
+  this->test_nulls({{{0, 1}, {0, 1}}}, {{{0, 0}, {1, 1}}}, left_zero_eq_right_zero, {});
 };
 
 /**
@@ -431,6 +465,13 @@ struct ConditionalLeftJoinTest : public ConditionalJoinPairReturnTest<T> {
   join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
   {
     return cudf::conditional_left_join(left, right, predicate);
+  }
+
+  std::size_t join_size(cudf::table_view left,
+                        cudf::table_view right,
+                        cudf::ast::expression predicate) override
+  {
+    return cudf::conditional_left_join_size(left, right, predicate);
   }
 
   std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
@@ -489,6 +530,16 @@ struct ConditionalFullJoinTest : public ConditionalJoinPairReturnTest<T> {
     return cudf::conditional_full_join(left, right, predicate);
   }
 
+  std::size_t join_size(cudf::table_view left,
+                        cudf::table_view right,
+                        cudf::ast::expression predicate) override
+  {
+    // Full joins don't actually support size calculations, but to support a
+    // uniform testing framework we just calculate it from the result of doing
+    // the join.
+    return cudf::conditional_full_join(left, right, predicate).first->size();
+  }
+
   std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
             std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
   reference_join(cudf::table_view left, cudf::table_view right) override
@@ -498,6 +549,19 @@ struct ConditionalFullJoinTest : public ConditionalJoinPairReturnTest<T> {
 };
 
 TYPED_TEST_CASE(ConditionalFullJoinTest, cudf::test::IntegralTypesNotBool);
+
+TYPED_TEST(ConditionalFullJoinTest, TestOneColumnNoneEqual)
+{
+  this->test({{0, 1, 2}},
+             {{3, 4, 5}},
+             left_zero_eq_right_zero,
+             {{0, JoinNoneValue},
+              {1, JoinNoneValue},
+              {2, JoinNoneValue},
+              {JoinNoneValue, 0},
+              {JoinNoneValue, 1},
+              {JoinNoneValue, 2}});
+};
 
 TYPED_TEST(ConditionalFullJoinTest, TestTwoColumnThreeRowSomeEqual)
 {
@@ -551,8 +615,10 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
   {
     auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
       this->parse_input(left_data, right_data);
-    auto result = this->join(left, right, predicate);
+    auto result_size = this->join_size(left, right, predicate);
+    EXPECT_TRUE(result_size == expected_outputs.size());
 
+    auto result = this->join(left, right, predicate);
     std::vector<cudf::size_type> resulting_indices;
     for (size_t i = 0; i < result->size(); ++i) {
       // Note: Not trying to be terribly efficient here since these tests are
@@ -600,6 +666,15 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
   /**
    * This method must be implemented by subclasses for specific types of joins.
    * It should be a simply forwarding of arguments to the appropriate cudf
+   * conditional join size computation API.
+   */
+  virtual std::size_t join_size(cudf::table_view left,
+                                cudf::table_view right,
+                                cudf::ast::expression predicate) = 0;
+
+  /**
+   * This method must be implemented by subclasses for specific types of joins.
+   * It should be a simply forwarding of arguments to the appropriate cudf
    * hash join API for comparison with conditional joins.
    */
   virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> reference_join(
@@ -615,6 +690,13 @@ struct ConditionalLeftSemiJoinTest : public ConditionalJoinSingleReturnTest<T> {
     cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
   {
     return cudf::conditional_left_semi_join(left, right, predicate);
+  }
+
+  std::size_t join_size(cudf::table_view left,
+                        cudf::table_view right,
+                        cudf::ast::expression predicate) override
+  {
+    return cudf::conditional_left_semi_join_size(left, right, predicate);
   }
 
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> reference_join(
@@ -666,6 +748,13 @@ struct ConditionalLeftAntiJoinTest : public ConditionalJoinSingleReturnTest<T> {
     cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
   {
     return cudf::conditional_left_anti_join(left, right, predicate);
+  }
+
+  std::size_t join_size(cudf::table_view left,
+                        cudf::table_view right,
+                        cudf::ast::expression predicate) override
+  {
+    return cudf::conditional_left_anti_join_size(left, right, predicate);
   }
 
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> reference_join(
