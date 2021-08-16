@@ -6078,7 +6078,7 @@ class DatetimeProperties(object):
             name=self.series.name,
         )
         return (self.day == last_day.dt.day).fillna(False)
-    
+
     @property
     def is_quarter_start(self):
         """
@@ -6116,7 +6116,7 @@ class DatetimeProperties(object):
         dtype: bool
         """
         return ((self.day == 1) & self.month.isin([1, 4, 7, 10])).fillna(False)
-    
+
     @property
     def is_quarter_end(self):
         """
@@ -6153,7 +6153,9 @@ class DatetimeProperties(object):
         7    False
         dtype: bool
         """
-        return (self.is_month_end & self.month.isin([3, 6, 9, 12])).fillna(False)
+        return (self.is_month_end & self.month.isin([3, 6, 9, 12])).fillna(
+            False
+        )
 
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)

@@ -1410,6 +1410,7 @@ def test_is_month_end(data, dtype):
 
     assert_eq(expect, got)
 
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1427,7 +1428,7 @@ def test_is_month_end(data, dtype):
             "1970-04-1",
             "1970-01-01",
             "1969-12-11",
-            "2020-12-31"
+            "2020-12-31",
         ]
     ],
 )
@@ -1441,7 +1442,8 @@ def test_is_quarter_start(data, dtype):
     got = gs.dt.is_quarter_start
 
     assert_eq(expect, got)
-    
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1459,7 +1461,7 @@ def test_is_quarter_start(data, dtype):
             "1970-04-1",
             "1970-01-01",
             "1969-12-11",
-            "2020-12-31"
+            "2020-12-31",
         ]
     ],
 )
