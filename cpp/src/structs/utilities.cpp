@@ -205,10 +205,10 @@ flatten_nested_columns(table_view const& input,
   return flattened_table{input, column_order, null_precedence, nullability}();
 }
 
+namespace {
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 using column_index_t    = typename vector_of_columns::size_type;
 
-namespace {
 // Forward declaration, to enable recursion via `unflattener`.
 std::unique_ptr<cudf::column> unflatten_struct(vector_of_columns& flattened,
                                                column_index_t& current_index,
