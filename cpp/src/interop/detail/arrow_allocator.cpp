@@ -37,7 +37,7 @@ std::shared_ptr<arrow::Buffer> allocate_arrow_bitmap(const int64_t size, arrow::
 {
   /*
   nvcc 11.0 generates Internal Compiler Error during codegen when arrow::AllocateBuffer
-  and `ValueOrDie` or are used inside a CUDA compilation unit.
+  and `ValueOrDie` are used inside a CUDA compilation unit.
 
   To work around this issue we compile an allocation shim in C++ and use
   that from our cuda sources
