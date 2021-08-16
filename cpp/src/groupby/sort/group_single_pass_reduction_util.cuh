@@ -31,6 +31,7 @@
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 
@@ -68,16 +69,11 @@ struct ArgMax {
   }
 };
 
-/**
- * @brief Functor to store the index of tuple to column.
- *
- */
-struct tuple_index_to_column {
-  mutable_column_device_view d_result;
+struct get_tuple_second_element {
   template <typename T>
-  __device__ void operator()(size_type i, thrust::tuple<T, size_type> const& rhs)
+  __device__ size_type operator()(thrust::tuple<T, size_type> const& rhs) const
   {
-    d_result.element<size_type>(i) = thrust::get<1>(rhs);
+    return thrust::get<1>(rhs);
   }
 };
 
@@ -206,8 +202,8 @@ struct reduce_functor {
       // dictionary keys are sorted, so dictionary32 index comparison is enough.
       auto column_begin = valuesview->begin<DeviceType>();
       auto begin        = thrust::make_zip_iterator(thrust::make_tuple(column_begin, idx_begin));
-      auto result_begin = make_output_writer_iterator(thrust::make_counting_iterator<size_type>(0),
-                                                      tuple_index_to_column{*resultview});
+      auto result_begin = thrust::make_transform_output_iterator(resultview->begin<ResultDType>(),
+                                                                 get_tuple_second_element{});
       using OpType =
         std::conditional_t<(K == aggregation::ARGMAX), ArgMax<DeviceType>, ArgMin<DeviceType>>;
       thrust::reduce_by_key(rmm::exec_policy(stream),
