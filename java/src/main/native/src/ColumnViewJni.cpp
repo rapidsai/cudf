@@ -1109,8 +1109,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, j
 
     cudf::data_type n_data_type = cudf::jni::make_data_type(out_dtype, scale);
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
-    std::unique_ptr<cudf::column> result =
-        cudf::experimental::binary_operation(*lhs, *rhs, op, n_data_type);
+    std::unique_ptr<cudf::column> result = cudf::binary_operation(*lhs, *rhs, op, n_data_type);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -1141,8 +1140,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVS(JNIEnv *env, j
     cudf::data_type n_data_type = cudf::jni::make_data_type(out_dtype, scale);
 
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
-    std::unique_ptr<cudf::column> result =
-        cudf::experimental::binary_operation(*lhs, *rhs, op, n_data_type);
+    std::unique_ptr<cudf::column> result = cudf::binary_operation(*lhs, *rhs, op, n_data_type);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

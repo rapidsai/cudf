@@ -474,14 +474,12 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
         if (lhs.type().id() == type_id::DECIMAL32) {
           auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
           auto const scalar = make_fixed_point_scalar<decimal32>(factor, scale_type{-diff});
-          return cudf::detail::jit::binary_operation(
-            *scalar, rhs, binary_operator::MUL, lhs.type(), stream, mr);
+          return jit::binary_operation(*scalar, rhs, binary_operator::MUL, lhs.type(), stream, mr);
         } else {
           CUDF_EXPECTS(lhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
           auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
           auto const scalar = make_fixed_point_scalar<decimal64>(factor, scale_type{-diff});
-          return cudf::detail::jit::binary_operation(
-            *scalar, rhs, binary_operator::MUL, lhs.type(), stream, mr);
+          return jit::binary_operation(*scalar, rhs, binary_operator::MUL, lhs.type(), stream, mr);
         }
       }();
       binops::jit::binary_operation(out_view, lhs, result->view(), op, stream);
