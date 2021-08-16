@@ -38,8 +38,8 @@ class compiled_expr {
   /** All column reference nodes within the expression tree */
   std::vector<std::unique_ptr<cudf::ast::column_reference>> column_refs;
 
-  /** All expression nodes within the expression tree */
-  std::vector<std::unique_ptr<cudf::ast::expression>> expressions;
+  /** All operation nodes within the expression tree */
+  std::vector<std::unique_ptr<cudf::ast::operation>> operations;
 
   /** GPU scalar instances that correspond to literal nodes */
   std::vector<std::unique_ptr<cudf::scalar>> scalars;
@@ -58,13 +58,13 @@ public:
     return *column_refs.back();
   }
 
-  cudf::ast::expression &add_expression(std::unique_ptr<cudf::ast::expression> expr_ptr) {
-    expressions.push_back(std::move(expr_ptr));
-    return *expressions.back();
+  cudf::ast::operation &add_operation(std::unique_ptr<cudf::ast::operation> expr_ptr) {
+    operations.push_back(std::move(expr_ptr));
+    return *operations.back();
   }
 
   /** Return the expression node at the top of the tree */
-  cudf::ast::expression &get_top_expression() const { return *expressions.back(); }
+  cudf::ast::operation &get_top_operation() const { return *operations.back(); }
 };
 
 } // namespace ast
