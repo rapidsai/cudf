@@ -112,6 +112,8 @@ def _index_from_data(data: MutableMapping, name: Any = None):
             index_class_type = StringIndex
         elif isinstance(values, CategoricalColumn):
             index_class_type = CategoricalIndex
+        elif isinstance(values, IntervalColumn):
+            index_class_type = IntervalIndex
     else:
         index_class_type = cudf.MultiIndex
     return index_class_type._from_data(data, None, name)
@@ -1684,7 +1686,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         dtype = self.dtype if dtype is None else dtype
         name = self.name if name is None else name
 
-        return as_index(self._values.astype(dtype), name=name, copy=deep)
+        col = self._values.astype(dtype)
+        return _index_from_data({name: col.copy(True) if deep else col})
 
     def get_loc(self, key, method=None, tolerance=None):
         """Get integer location, slice or boolean mask for requested label.
@@ -3117,31 +3120,21 @@ def as_index(arbitrary, **kwargs) -> BaseIndex:
         idx = arbitrary.copy(deep=False)
         idx.rename(kwargs["name"], inplace=True)
         return idx
-    elif isinstance(arbitrary, NumericalColumn):
-        try:
-            return _dtype_to_index[arbitrary.dtype.type](arbitrary, **kwargs)
-        except KeyError:
-            return GenericIndex(arbitrary, **kwargs)
-    elif isinstance(arbitrary, StringColumn):
-        return StringIndex(arbitrary, **kwargs)
-    elif isinstance(arbitrary, DatetimeColumn):
-        return DatetimeIndex(arbitrary, **kwargs)
-    elif isinstance(arbitrary, TimeDeltaColumn):
-        return TimedeltaIndex(arbitrary, **kwargs)
-    elif isinstance(arbitrary, CategoricalColumn):
-        return CategoricalIndex(arbitrary, **kwargs)
-    elif isinstance(arbitrary, IntervalColumn):
-        return IntervalIndex(arbitrary, **kwargs)
+    elif isinstance(arbitrary, ColumnBase):
+        return _index_from_data({kwargs.get("name", None): arbitrary})
     elif isinstance(arbitrary, cudf.Series):
         return as_index(arbitrary._column, **kwargs)
-    elif isinstance(arbitrary, pd.RangeIndex):
-        return RangeIndex(start=arbitrary.start, stop=arbitrary.stop, **kwargs)
+    elif isinstance(arbitrary, (pd.RangeIndex, range)):
+        return RangeIndex(
+            start=arbitrary.start,
+            stop=arbitrary.stop,
+            step=arbitrary.step,
+            **kwargs,
+        )
     elif isinstance(arbitrary, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(arbitrary)
     elif isinstance(arbitrary, cudf.DataFrame):
         return cudf.MultiIndex(source_data=arbitrary)
-    elif isinstance(arbitrary, range):
-        return RangeIndex(arbitrary, **kwargs)
     return as_index(
         column.as_column(arbitrary, dtype=kwargs.get("dtype", None)), **kwargs
     )
