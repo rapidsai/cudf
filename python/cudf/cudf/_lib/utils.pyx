@@ -251,7 +251,7 @@ cdef data_from_unique_ptr(
         # Frame factories we may want to look for a less dissonant approach
         # that does not impose performance penalties. The same applies to
         # data_from_table_view below.
-        cudf.core.index.GenericIndex._from_data(
+        cudf.core.index._index_from_data(
             {
                 name: columns[i]
                 for i, name in enumerate(index_names)
@@ -301,7 +301,7 @@ cdef data_from_table_view(
                 )
             )
             column_idx += 1
-        index = cudf.core.index.GenericIndex._from_data(
+        index = cudf.core.index._index_from_data(
             dict(zip(index_names, index_columns)))
 
     # Construct the data dict

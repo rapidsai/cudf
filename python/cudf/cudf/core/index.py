@@ -90,6 +90,33 @@ def _lexsorted_equal_range(
     return lower_bound, upper_bound, sort_inds
 
 
+def _index_from_data(data: MutableMapping, name: Any = None):
+    """Construct an index of the appropriate type from some data."""
+    if len(data) == 0:
+        raise ValueError("Cannot construct Index from any empty Table")
+    if len(data) == 1:
+        values = next(iter(data.values()))
+
+        if isinstance(values, NumericalColumn):
+            try:
+                index_class_type: Type[
+                    Union[GenericIndex, cudf.MultiIndex]
+                ] = _dtype_to_index[values.dtype.type]
+            except KeyError:
+                index_class_type = GenericIndex
+        elif isinstance(values, DatetimeColumn):
+            index_class_type = DatetimeIndex
+        elif isinstance(values, TimeDeltaColumn):
+            index_class_type = TimedeltaIndex
+        elif isinstance(values, StringColumn):
+            index_class_type = StringIndex
+        elif isinstance(values, CategoricalColumn):
+            index_class_type = CategoricalIndex
+    else:
+        index_class_type = cudf.MultiIndex
+    return index_class_type._from_data(data, None, name)
+
+
 class BaseIndex(Serializable):
     """Base class for all cudf Index types."""
 
@@ -1565,43 +1592,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         StringIndex(['beetle' 'cow' 'hippo' 'lama'], dtype='object')
         """  # noqa: E501
         return super().drop_duplicates(keep=keep)
-
-    @classmethod
-    def _from_data(
-        cls,
-        data: MutableMapping,
-        index: Optional[BaseIndex] = None,
-        name: Any = None,
-    ) -> BaseIndex:
-        assert index is None
-        if not isinstance(data, cudf.core.column_accessor.ColumnAccessor):
-            data = cudf.core.column_accessor.ColumnAccessor(data)
-        if len(data) == 0:
-            raise ValueError("Cannot construct Index from any empty Table")
-        if len(data) == 1:
-            values = next(iter(data.values()))
-
-            if isinstance(values, NumericalColumn):
-                try:
-                    index_class_type: Type[GenericIndex] = _dtype_to_index[
-                        values.dtype.type
-                    ]
-                except KeyError:
-                    index_class_type = GenericIndex
-                out = index_class_type.__new__(index_class_type)
-            elif isinstance(values, DatetimeColumn):
-                out = DatetimeIndex.__new__(DatetimeIndex)
-            elif isinstance(values, TimeDeltaColumn):
-                out = TimedeltaIndex.__new__(TimedeltaIndex)
-            elif isinstance(values, StringColumn):
-                out = StringIndex.__new__(StringIndex)
-            elif isinstance(values, CategoricalColumn):
-                out = CategoricalIndex.__new__(CategoricalIndex)
-            out._data = data
-            out._index = None
-            return out
-        else:
-            return cudf.MultiIndex._from_data(data)
 
     def _copy_type_metadata(
         self, other: Frame, include_index: bool = True

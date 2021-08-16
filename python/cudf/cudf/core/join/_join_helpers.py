@@ -71,9 +71,7 @@ def _frame_select_by_indexers(
             data.set_by_label(idx.name, idx.get(frame), validate=False)
 
     result_index = (
-        cudf.core.index.GenericIndex._from_data(index_data)
-        if index_data
-        else None
+        cudf.core.index._index_from_data(index_data) if index_data else None
     )
     result = cudf.core.frame.Frame(data=data, index=result_index)
     return result

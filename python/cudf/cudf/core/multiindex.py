@@ -6,7 +6,7 @@ import numbers
 import pickle
 import warnings
 from collections.abc import Sequence
-from typing import Any, List, Mapping, Tuple, Union
+from typing import Any, List, MutableMapping, Optional, Tuple, Union
 
 import cupy
 import numpy as np
@@ -289,9 +289,17 @@ class MultiIndex(Frame, BaseIndex):
         return self._set_names(names=names, inplace=inplace)
 
     @classmethod
-    def _from_data(cls, data: Mapping, index=None) -> MultiIndex:
+    def _from_data(
+        cls,
+        data: MutableMapping,
+        index: Optional[cudf.core.index.BaseIndex] = None,
+        name: Any = None,
+    ) -> MultiIndex:
         assert index is None
-        return cls.from_frame(cudf.DataFrame._from_data(data))
+        obj = cls.from_frame(cudf.DataFrame._from_data(data))
+        if name is not None:
+            obj.name = name
+        return obj
 
     @property
     def shape(self):
@@ -1347,7 +1355,7 @@ class MultiIndex(Frame, BaseIndex):
             popped_data[n] = self._data.pop(n)
 
         # construct the popped result
-        popped = cudf.core.index.GenericIndex._from_data(popped_data)
+        popped = cudf.core.index._index_from_data(popped_data)
         popped.names = popped_names
 
         # update self
