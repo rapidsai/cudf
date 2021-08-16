@@ -6086,12 +6086,12 @@ class DatetimeProperties(object):
     def is_quarter_start(self):
         """
         Boolean indicator if the date is the first day of a quarter.
-        
+
         Returns
         -------
         Series
         Booleans indicating if dates are the begining of a quarter
-        
+
         Example
         -------
         >>> import pandas as pd, cudf
@@ -6118,18 +6118,28 @@ class DatetimeProperties(object):
         7    False
         dtype: bool
         """
-        return ((self.day == 1) & self.month.isin([1, 4, 7, 10])).fillna(False)
+        day = self.series._column.get_dt_field("day")
+        first_month = self.series._column.get_dt_field("month").isin(
+            [1, 4, 7, 10]
+        )
+
+        result = ((day == cudf.Scalar(1)) & first_month).fillna(False)
+        return Series._from_data(
+            ColumnAccessor({None: result}),
+            index=self.series._index,
+            name=self.series.name,
+        )
 
     @property
     def is_quarter_end(self):
         """
         Boolean indicator if the date is the last day of a quarter.
-        
+
         Returns
         -------
         Series
         Booleans indicating if dates are the end of a quarter
-        
+
         Example
         -------
         >>> import pandas as pd, cudf
@@ -6156,8 +6166,18 @@ class DatetimeProperties(object):
         7    False
         dtype: bool
         """
-        return (self.is_month_end & self.month.isin([3, 6, 9, 12])).fillna(
-            False
+        day = self.series._column.get_dt_field("day")
+        last_day = libcudf.datetime.last_day_of_month(self.series._column)
+        last_day = last_day.get_dt_field("day")
+        last_month = self.series._column.get_dt_field("month").isin(
+            [3, 6, 9, 12]
+        )
+
+        result = ((day == last_day) & last_month).fillna(False)
+        return Series._from_data(
+            ColumnAccessor({None: result}),
+            index=self.series._index,
+            name=self.series.name,
         )
 
     @property
