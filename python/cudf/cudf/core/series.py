@@ -3679,7 +3679,7 @@ class Series(SingleColumnFrame, Serializable):
             cats = cats.to_pandas()
         else:
             cats = pd.Series(cats, dtype="object")
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
 
         def encode(cat):
             if cat is None:

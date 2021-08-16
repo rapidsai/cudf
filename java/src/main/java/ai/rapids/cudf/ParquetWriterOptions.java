@@ -58,6 +58,11 @@ public final class ParquetWriterOptions extends ParquetColumnWriterOptions.Parqu
   }
 
   @Override
+  boolean[] getFlatIsMap() {
+    return super.getFlatBooleans(new boolean[]{}, (opt) -> opt.getFlatIsMap());
+  }
+
+  @Override
   String[] getFlatColumnNames() {
     return super.getFlatColumnNames(new String[]{});
   }

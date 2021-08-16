@@ -1966,9 +1966,9 @@ dremel_data get_dremel_data(column_view h_col,
 
     // Scan to get distance by which each offset value is shifted due to the insertion of empties
     auto scan_it = cudf::detail::make_counting_transform_iterator(
-      column_offsets[level], [off = lcv.offsets().data<size_type>()] __device__(auto i) -> int {
-        return off[i] == off[i + 1];
-      });
+      column_offsets[level],
+      [off = lcv.offsets().data<size_type>(), size = lcv.offsets().size()] __device__(
+        auto i) -> int { return (i + 1 < size) && (off[i] == off[i + 1]); });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
       rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
@@ -2053,9 +2053,9 @@ dremel_data get_dremel_data(column_view h_col,
     // Scan to get distance by which each offset value is shifted due to the insertion of dremel
     // level value fof an empty list
     auto scan_it = cudf::detail::make_counting_transform_iterator(
-      column_offsets[level], [off = lcv.offsets().data<size_type>()] __device__(auto i) -> int {
-        return off[i] == off[i + 1];
-      });
+      column_offsets[level],
+      [off = lcv.offsets().data<size_type>(), size = lcv.offsets().size()] __device__(
+        auto i) -> int { return (i + 1 < size) && (off[i] == off[i + 1]); });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
       rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());

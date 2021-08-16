@@ -97,7 +97,7 @@ cpdef read_orc(object filepaths_or_buffers,
             if timestamp_type is None else
             <type_id>(
                 <underlying_type_t_type_id> (
-                    np_to_cudf_types[np.dtype(timestamp_type)]
+                    np_to_cudf_types[cudf.dtype(timestamp_type)]
                 )
             )
         ),
