@@ -6020,7 +6020,7 @@ class DatetimeProperties(object):
         -------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
-        ...     pd.date_range(start='2000-08-026', end='2000-09-03', freq='1D'))
+        ...     pd.date_range(start='2000-08-26', end='2000-09-03', freq='1D'))
         >>> s
         0   2000-08-26
         1   2000-08-27
@@ -6051,6 +6051,82 @@ class DatetimeProperties(object):
             name=self.series.name,
         )
         return (self.day == last_day.dt.day).fillna(False)
+    
+    @property
+    def is_quarter_start(self):
+        """
+        Boolean indicator if the date is the first day of a quarter.
+        
+        Returns
+        -------
+        Series
+        Booleans indicating if dates are the begining of a quarter
+        
+        Example
+        -------
+        >>> import pandas as pd, cudf
+        >>> s = cudf.Series(
+        ...     pd.date_range(start='2000-09-26', end='2000-10-03', freq='1D'))
+        >>> s
+        0   2000-09-26
+        1   2000-09-27
+        2   2000-09-28
+        3   2000-09-29
+        4   2000-09-30
+        5   2000-10-01
+        6   2000-10-02
+        7   2000-10-03
+        dtype: datetime64[ns]
+        >>> s.dt.is_quarter_start
+        0    False
+        1    False
+        2    False
+        3    False
+        4    False
+        5     True
+        6    False
+        7    False
+        dtype: bool
+        """
+        return ((self.day == 1) & self.month.isin([1, 4, 7, 10])).fillna(False)
+    
+    @property
+    def is_quarter_end(self):
+        """
+        Boolean indicator if the date is the last day of a quarter.
+        
+        Returns
+        -------
+        Series
+        Booleans indicating if dates are the end of a quarter
+        
+        Example
+        -------
+        >>> import pandas as pd, cudf
+        >>> s = cudf.Series(
+        ...     pd.date_range(start='2000-09-26', end='2000-10-03', freq='1D'))
+        >>> s
+        0   2000-09-26
+        1   2000-09-27
+        2   2000-09-28
+        3   2000-09-29
+        4   2000-09-30
+        5   2000-10-01
+        6   2000-10-02
+        7   2000-10-03
+        dtype: datetime64[ns]
+        >>> s.dt.is_quarter_end
+        0    False
+        1    False
+        2    False
+        3    False
+        4     True
+        5    False
+        6    False
+        7    False
+        dtype: bool
+        """
+        return (self.is_month_end & self.month.isin([3, 6, 9, 12])).fillna(False)
 
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)

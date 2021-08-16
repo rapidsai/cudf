@@ -1376,3 +1376,67 @@ def test_is_month_end(data, dtype):
     got = gs.dt.is_month_end
 
     assert_eq(expect, got)
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-05-01",
+            "2020-05-31",
+            "2020-02-29",
+            None,
+            "1999-12-01",
+            "2000-12-21",
+            None,
+            "1900-02-28",
+            "1800-03-14",
+            "2100-03-10",
+            "1970-04-1",
+            "1970-01-01",
+            "1969-12-11",
+            "2020-12-31"
+        ]
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]"])
+def test_is_quarter_start(data, dtype):
+    # Series
+    ps = pd.Series(data, dtype=dtype)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.is_quarter_start
+    got = gs.dt.is_quarter_start
+
+    assert_eq(expect, got)
+    
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-05-01",
+            "2020-05-31",
+            "2020-02-29",
+            None,
+            "1999-12-01",
+            "2000-12-21",
+            None,
+            "1900-02-28",
+            "1800-03-14",
+            "2100-03-10",
+            "1970-04-1",
+            "1970-01-01",
+            "1969-12-11",
+            "2020-12-31"
+        ]
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]"])
+def test_is_quarter_end(data, dtype):
+    # Series
+    ps = pd.Series(data, dtype=dtype)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.is_quarter_end
+    got = gs.dt.is_quarter_end
+
+    assert_eq(expect, got)
