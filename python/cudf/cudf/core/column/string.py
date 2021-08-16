@@ -53,62 +53,63 @@ if TYPE_CHECKING:
 
 
 _str_to_numeric_typecast_functions = {
-    np.dtype("int8"): str_cast.stoi8,
-    np.dtype("int16"): str_cast.stoi16,
-    np.dtype("int32"): str_cast.stoi,
-    np.dtype("int64"): str_cast.stol,
-    np.dtype("uint8"): str_cast.stoui8,
-    np.dtype("uint16"): str_cast.stoui16,
-    np.dtype("uint32"): str_cast.stoui,
-    np.dtype("uint64"): str_cast.stoul,
-    np.dtype("float32"): str_cast.stof,
-    np.dtype("float64"): str_cast.stod,
-    np.dtype("bool"): str_to_boolean,
+    cudf.dtype("int8"): str_cast.stoi8,
+    cudf.dtype("int16"): str_cast.stoi16,
+    cudf.dtype("int32"): str_cast.stoi,
+    cudf.dtype("int64"): str_cast.stol,
+    cudf.dtype("uint8"): str_cast.stoui8,
+    cudf.dtype("uint16"): str_cast.stoui16,
+    cudf.dtype("uint32"): str_cast.stoui,
+    cudf.dtype("uint64"): str_cast.stoul,
+    cudf.dtype("float32"): str_cast.stof,
+    cudf.dtype("float64"): str_cast.stod,
+    cudf.dtype("bool"): str_to_boolean,
 }
 
 _numeric_to_str_typecast_functions = {
-    np.dtype("int8"): str_cast.i8tos,
-    np.dtype("int16"): str_cast.i16tos,
-    np.dtype("int32"): str_cast.itos,
-    np.dtype("int64"): str_cast.ltos,
-    np.dtype("uint8"): str_cast.ui8tos,
-    np.dtype("uint16"): str_cast.ui16tos,
-    np.dtype("uint32"): str_cast.uitos,
-    np.dtype("uint64"): str_cast.ultos,
-    np.dtype("float32"): str_cast.ftos,
-    np.dtype("float64"): str_cast.dtos,
-    np.dtype("bool"): str_cast.from_booleans,
+    cudf.dtype("int8"): str_cast.i8tos,
+    cudf.dtype("int16"): str_cast.i16tos,
+    cudf.dtype("int32"): str_cast.itos,
+    cudf.dtype("int64"): str_cast.ltos,
+    cudf.dtype("uint8"): str_cast.ui8tos,
+    cudf.dtype("uint16"): str_cast.ui16tos,
+    cudf.dtype("uint32"): str_cast.uitos,
+    cudf.dtype("uint64"): str_cast.ultos,
+    cudf.dtype("float32"): str_cast.ftos,
+    cudf.dtype("float64"): str_cast.dtos,
+    cudf.dtype("bool"): str_cast.from_booleans,
 }
 
 _datetime_to_str_typecast_functions = {
     # TODO: support Date32 UNIX days
-    # np.dtype("datetime64[D]"): str_cast.int2timestamp,
-    np.dtype("datetime64[s]"): str_cast.int2timestamp,
-    np.dtype("datetime64[ms]"): str_cast.int2timestamp,
-    np.dtype("datetime64[us]"): str_cast.int2timestamp,
-    np.dtype("datetime64[ns]"): str_cast.int2timestamp,
+    # cudf.dtype("datetime64[D]"): str_cast.int2timestamp,
+    cudf.dtype("datetime64[s]"): str_cast.int2timestamp,
+    cudf.dtype("datetime64[ms]"): str_cast.int2timestamp,
+    cudf.dtype("datetime64[us]"): str_cast.int2timestamp,
+    cudf.dtype("datetime64[ns]"): str_cast.int2timestamp,
 }
 
 _timedelta_to_str_typecast_functions = {
-    np.dtype("timedelta64[s]"): str_cast.int2timedelta,
-    np.dtype("timedelta64[ms]"): str_cast.int2timedelta,
-    np.dtype("timedelta64[us]"): str_cast.int2timedelta,
-    np.dtype("timedelta64[ns]"): str_cast.int2timedelta,
+    cudf.dtype("timedelta64[s]"): str_cast.int2timedelta,
+    cudf.dtype("timedelta64[ms]"): str_cast.int2timedelta,
+    cudf.dtype("timedelta64[us]"): str_cast.int2timedelta,
+    cudf.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
 
 
 class StringMethods(ColumnMethods):
+    """
+    Vectorized string functions for Series and Index.
+
+    This mimics pandas ``df.str`` interface. nulls stay null
+    unless handled otherwise by a particular method.
+    Patterned after Python’s string methods, with some
+    inspiration from R’s stringr package.
+    """
+
     _column: StringColumn
 
     def __init__(self, parent):
-        """
-        Vectorized string functions for Series and Index.
-
-        This mimics pandas ``df.str`` interface. nulls stay null
-        unless handled otherwise by a particular method.
-        Patterned after Python’s string methods, with some
-        inspiration from R’s stringr package.
-        """
         value_type = (
             parent.dtype.leaf_type
             if is_list_dtype(parent.dtype)
@@ -607,11 +608,12 @@ class StringMethods(ColumnMethods):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        out = libstrings.extract(self._column, pat)
-        if out._num_columns == 1 and expand is False:
-            return self._return_or_inplace(out._columns[0], expand=expand)
+        data, index = libstrings.extract(self._column, pat)
+        if len(data) == 1 and expand is False:
+            data = next(iter(data.values()))
         else:
-            return self._return_or_inplace(out, expand=expand)
+            data = cudf.core.frame.Frame(data, index)
+        return self._return_or_inplace(data, expand=expand)
 
     def contains(
         self,
@@ -748,6 +750,59 @@ class StringMethods(ColumnMethods):
                 self._column, column.as_column(pat, dtype="str")
             )
         return self._return_or_inplace(result_col)
+
+    def repeat(self, repeats: Union[int, Sequence],) -> SeriesOrIndex:
+        """
+        Duplicate each string in the Series or Index.
+        Equivalent to `str.repeat()
+        <https://pandas.pydata.org/docs/reference/api/pandas.Series.str.repeat.html>`_.
+
+        Parameters
+        ----------
+        repeats : int or sequence of int
+            Same value for all (int) or different value per (sequence).
+
+        Returns
+        -------
+        Series or Index of object
+            Series or Index of repeated string objects specified by
+            input parameter repeats.
+
+        Examples
+        --------
+        >>> s = cudf.Series(['a', 'b', 'c'])
+        >>> s
+        0    a
+        1    b
+        2    c
+        dtype: object
+
+        Single int repeats string in Series
+
+        >>> s.str.repeat(repeats=2)
+        0    aa
+        1    bb
+        2    cc
+        dtype: object
+
+        Sequence of int repeats corresponding string in Series
+
+        >>> s.str.repeat(repeats=[1, 2, 3])
+        0      a
+        1     bb
+        2    ccc
+        dtype: object
+        """
+        if can_convert_to_column(repeats):
+            return self._return_or_inplace(
+                libstrings.repeat_sequence(
+                    self._column, column.as_column(repeats, dtype="int"),
+                ),
+            )
+
+        return self._return_or_inplace(
+            libstrings.repeat_scalar(self._column, repeats)
+        )
 
     def replace(
         self,
@@ -2274,12 +2329,13 @@ class StringMethods(ColumnMethods):
             if self._column.null_count == len(self._column):
                 result_table = cudf.core.frame.Frame({0: self._column.copy()})
             else:
-                result_table = libstrings.split(
+                data, index = libstrings.split(
                     self._column, cudf.Scalar(pat, "str"), n
                 )
-                if len(result_table._data) == 1:
-                    if result_table._data[0].null_count == len(self._column):
-                        result_table = cudf.core.frame.Frame({})
+                if len(data) == 1 and data[0].null_count == len(self._column):
+                    result_table = cudf.core.frame.Frame({})
+                else:
+                    result_table = cudf.core.frame.Frame(data, index)
         else:
             result_table = libstrings.split_record(
                 self._column, cudf.Scalar(pat, "str"), n
@@ -2429,12 +2485,13 @@ class StringMethods(ColumnMethods):
             if self._column.null_count == len(self._column):
                 result_table = cudf.core.frame.Frame({0: self._column.copy()})
             else:
-                result_table = libstrings.rsplit(
-                    self._column, cudf.Scalar(pat), n
+                data, index = libstrings.rsplit(
+                    self._column, cudf.Scalar(pat, "str"), n
                 )
-                if len(result_table._data) == 1:
-                    if result_table._data[0].null_count == len(self._column):
-                        result_table = cudf.core.frame.Frame({})
+                if len(data) == 1 and data[0].null_count == len(self._column):
+                    result_table = cudf.core.frame.Frame({})
+                else:
+                    result_table = cudf.core.frame.Frame(data, index)
         else:
             result_table = libstrings.rsplit_record(
                 self._column, cudf.Scalar(pat), n
@@ -2499,7 +2556,7 @@ class StringMethods(ColumnMethods):
 
         Also available on indices:
 
-        >>> idx = cudf.core.index.StringIndex(['X 123', 'Y 999'])
+        >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
         StringIndex(['X 123' 'Y 999'], dtype='object')
 
@@ -2519,7 +2576,9 @@ class StringMethods(ColumnMethods):
             sep = " "
 
         return self._return_or_inplace(
-            libstrings.partition(self._column, cudf.Scalar(sep)),
+            cudf.core.frame.Frame(
+                *libstrings.partition(self._column, cudf.Scalar(sep))
+            ),
             expand=expand,
         )
 
@@ -2564,7 +2623,7 @@ class StringMethods(ColumnMethods):
 
         Also available on indices:
 
-        >>> idx = cudf.core.index.StringIndex(['X 123', 'Y 999'])
+        >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
         StringIndex(['X 123' 'Y 999'], dtype='object')
 
@@ -2584,7 +2643,9 @@ class StringMethods(ColumnMethods):
             sep = " "
 
         return self._return_or_inplace(
-            libstrings.rpartition(self._column, cudf.Scalar(sep)),
+            cudf.core.frame.Frame(
+                *libstrings.rpartition(self._column, cudf.Scalar(sep))
+            ),
             expand=expand,
         )
 
@@ -3234,7 +3295,7 @@ class StringMethods(ColumnMethods):
 
         This is also available on Index.
 
-        >>> index = cudf.core.index.StringIndex(['A', 'A', 'Aaba', 'cat'])
+        >>> index = cudf.Index(['A', 'A', 'Aaba', 'cat'])
         >>> index.str.count('a')
         Int64Index([0, 0, 2, 1], dtype='int64')
         """  # noqa W605
@@ -3309,8 +3370,9 @@ class StringMethods(ColumnMethods):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
+        data, index = libstrings.findall(self._column, pat)
         return self._return_or_inplace(
-            libstrings.findall(self._column, pat), expand=expand
+            cudf.core.frame.Frame(data, index), expand=expand
         )
 
     def isempty(self) -> SeriesOrIndex:
@@ -4861,7 +4923,18 @@ def _expected_types_format(types):
 
 
 class StringColumn(column.ColumnBase):
-    """Implements operations for Columns of String type
+    """
+    Implements operations for Columns of String type
+
+    Parameters
+    ----------
+    mask : Buffer
+        The validity mask
+    offset : int
+        Data offset
+    children : Tuple[Column]
+        Two non-null columns containing the string data and offsets
+        respectively
     """
 
     _start_offset: Optional[int]
@@ -4876,18 +4949,7 @@ class StringColumn(column.ColumnBase):
         null_count: int = None,
         children: Tuple["column.ColumnBase", ...] = (),
     ):
-        """
-        Parameters
-        ----------
-        mask : Buffer
-            The validity mask
-        offset : int
-            Data offset
-        children : Tuple[Column]
-            Two non-null columns containing the string data and offsets
-            respectively
-        """
-        dtype = np.dtype("object")
+        dtype = cudf.dtype("object")
 
         if size is None:
             for child in children:
@@ -5054,7 +5116,7 @@ class StringColumn(column.ColumnBase):
     def as_numerical_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
-        out_dtype = np.dtype(dtype)
+        out_dtype = cudf.dtype(dtype)
 
         if out_dtype.kind in {"i", "u"}:
             if not libstrings.is_integer(self).all():
@@ -5096,7 +5158,7 @@ class StringColumn(column.ColumnBase):
     def as_datetime_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DatetimeColumn":
-        out_dtype = np.dtype(dtype)
+        out_dtype = cudf.dtype(dtype)
 
         # infer on host from the first not na element
         # or return all null column if all values
@@ -5120,7 +5182,7 @@ class StringColumn(column.ColumnBase):
     def as_timedelta_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.TimeDeltaColumn":
-        out_dtype = np.dtype(dtype)
+        out_dtype = cudf.dtype(dtype)
         format = "%D days %H:%M:%S"
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
@@ -5232,7 +5294,7 @@ class StringColumn(column.ColumnBase):
         return col
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        to_dtype = np.dtype(to_dtype)
+        to_dtype = cudf.dtype(to_dtype)
 
         if self.dtype == to_dtype:
             return True
@@ -5379,7 +5441,7 @@ class StringColumn(column.ColumnBase):
             raise ValueError(
                 "Can not produce a view of a string column with nulls"
             )
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         str_byte_offset = self.base_children[0].element_indexing(self.offset)
         str_end_byte_offset = self.base_children[0].element_indexing(
             self.offset + self.size

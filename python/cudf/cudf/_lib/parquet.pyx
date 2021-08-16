@@ -26,7 +26,7 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
 )
 
-from cudf._lib.utils cimport get_column_names
+from cudf._lib.utils cimport data_from_unique_ptr, get_column_names
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
@@ -178,12 +178,10 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     for c in meta['columns']:
                         if c['field_name'] == idx_col:
                             index_col_names[idx_col] = c['name']
-    df = cudf.DataFrame._from_table(
-        Table.from_unique_ptr(
-            move(c_out_table.tbl),
-            column_names=column_names
-        )
-    )
+    df = cudf.DataFrame._from_data(*data_from_unique_ptr(
+        move(c_out_table.tbl),
+        column_names=column_names
+    ))
 
     update_struct_field_names(df, c_out_table.metadata.schema_info)
 
@@ -201,7 +199,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             meta_dtype = cols_dtype_map.get(col, None)
             df._data[col] = cudf.core.column.column_empty(
                 row_count=0,
-                dtype=np.dtype(meta_dtype)
+                dtype=cudf.dtype(meta_dtype)
             )
 
     # Set the index column

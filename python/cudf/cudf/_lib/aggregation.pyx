@@ -27,6 +27,8 @@ from cudf._lib.types import Interpolation
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 cimport cudf._lib.cpp.types as libcudf_types
 
+import cudf
+
 
 class AggregationKind(Enum):
     SUM = libcudf_aggregation.aggregation.Kind.SUM
@@ -154,6 +156,32 @@ cdef class Aggregation:
         return agg
 
     @classmethod
+    def first(cls):
+        cdef Aggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.make_nth_element_aggregation[aggregation](
+                0,
+                <libcudf_types.null_policy><underlying_type_t_null_policy>(
+                    NullHandling.EXCLUDE
+                )
+            )
+        )
+        return agg
+
+    @classmethod
+    def last(cls):
+        cdef Aggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.make_nth_element_aggregation[aggregation](
+                -1,
+                <libcudf_types.null_policy><underlying_type_t_null_policy>(
+                    NullHandling.EXCLUDE
+                )
+            )
+        )
+        return agg
+
+    @classmethod
     def any(cls):
         cdef Aggregation agg = cls()
         agg.c_obj = move(
@@ -251,7 +279,7 @@ cdef class Aggregation:
         nb_type = numpy_support.from_dtype(kwargs['dtype'])
         type_signature = (nb_type[:],)
         compiled_op = cudautils.compile_udf(op, type_signature)
-        output_np_dtype = np.dtype(compiled_op[1])
+        output_np_dtype = cudf.dtype(compiled_op[1])
         cpp_str = compiled_op[0].encode('UTF-8')
         if output_np_dtype not in np_to_cudf_types:
             raise TypeError(
@@ -395,7 +423,7 @@ cdef class RollingAggregation:
         nb_type = numpy_support.from_dtype(kwargs['dtype'])
         type_signature = (nb_type[:],)
         compiled_op = cudautils.compile_udf(op, type_signature)
-        output_np_dtype = np.dtype(compiled_op[1])
+        output_np_dtype = cudf.dtype(compiled_op[1])
         cpp_str = compiled_op[0].encode('UTF-8')
         if output_np_dtype not in np_to_cudf_types:
             raise TypeError(
