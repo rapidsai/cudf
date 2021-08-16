@@ -33,10 +33,7 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  auto values_type = cudf::is_dictionary(values.type())
-                       ? dictionary_column_view(values).keys().type()
-                       : values.type();
-  auto indices     = type_dispatcher(values_type,
+  auto indices = type_dispatcher(values.type(),
                                  reduce_functor<aggregation::ARGMAX>{},
                                  values,
                                  num_groups,

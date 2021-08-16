@@ -38,31 +38,6 @@ namespace cudf {
 namespace groupby {
 namespace detail {
 
-/**
- * @brief Value accessor for column which supports dictionary column too.
- *
- * @tparam T Type of the underlying column. For dictionary column, type of the key column.
- */
-template <typename T>
-struct value_accessor {
-  column_device_view const col;
-  bool const is_dict;
-  value_accessor(column_device_view const& col) : col(col), is_dict(cudf::is_dictionary(col.type()))
-  {
-  }
-
-  __device__ T value(size_type i) const
-  {
-    if (is_dict) {
-      auto keys = col.child(dictionary_column_view::keys_column_index);
-      return keys.element<T>(static_cast<size_type>(col.element<dictionary32>(i)));
-    } else {
-      return col.element<T>(i);
-    }
-  }
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(size_type i) const { return value(i); }
-};
-
 // ArgMin binary operator with tuple of (value, index)
 template <typename T>
 struct ArgMin {
@@ -129,6 +104,31 @@ struct null_as_sentinel {
   column_device_view const col;
   size_type const SENTINEL;
   __device__ size_type operator()(size_type i) const { return col.is_null(i) ? SENTINEL : i; }
+};
+
+/**
+ * @brief Value accessor for column which supports dictionary column too.
+ *
+ * @tparam T Type of the underlying column. For dictionary column, type of the key column.
+ */
+template <typename T>
+struct value_accessor {
+  column_device_view const col;
+  bool const is_dict;
+  value_accessor(column_device_view const& col) : col(col), is_dict(cudf::is_dictionary(col.type()))
+  {
+  }
+
+  __device__ T value(size_type i) const
+  {
+    if (is_dict) {
+      auto keys = col.child(dictionary_column_view::keys_column_index);
+      return keys.element<T>(static_cast<size_type>(col.element<dictionary32>(i)));
+    } else {
+      return col.element<T>(i);
+    }
+  }
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(size_type i) const { return value(i); }
 };
 
 /**
@@ -203,8 +203,8 @@ struct reduce_functor {
         (K == aggregation::ARGMAX ? cudf::detail::ARGMAX_SENTINEL : cudf::detail::ARGMIN_SENTINEL);
       auto idx_begin =
         cudf::detail::make_counting_transform_iterator(0, null_as_sentinel{*valuesview, SENTINEL});
-      auto column_begin =
-        cudf::detail::make_counting_transform_iterator(0, value_accessor<DeviceType>{*valuesview});
+      // dictionary keys are sorted, so dictionary32 index comparison is enough.
+      auto column_begin = valuesview->begin<DeviceType>();
       auto begin        = thrust::make_zip_iterator(thrust::make_tuple(column_begin, idx_begin));
       auto result_begin = make_output_writer_iterator(thrust::make_counting_iterator<size_type>(0),
                                                       tuple_index_to_column{*resultview});
