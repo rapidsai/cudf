@@ -250,7 +250,7 @@ cdef csv_reader_options make_csv_reader_options(
                     col_type = 'int32'
 
                 c_dtypes_map[str(k).encode()] = \
-                    _get_cudf_compatible_str_from_dtype(
+                    _get_cudf_data_type_from_dtype(
                         cudf.dtype(col_type))
             csv_reader_options_c.set_dtypes(c_dtypes_map)
             csv_reader_options_c.set_parse_hex(c_hex_col_names)
@@ -264,16 +264,16 @@ cdef csv_reader_options make_csv_reader_options(
             if dtype in {"hex", "hex64"}:
                 c_hex_col_indexes.push_back(0)
                 c_dtypes_list.push_back(
-                    _get_cudf_compatible_str_from_dtype('int64')
+                    _get_cudf_data_type_from_dtype('int64')
                 )
             elif dtype == "hex32":
                 c_hex_col_indexes.push_back(0)
                 c_dtypes_list.push_back(
-                    _get_cudf_compatible_str_from_dtype('int32')
+                    _get_cudf_data_type_from_dtype('int32')
                 )
             else:
                 c_dtypes_list.push_back(
-                    _get_cudf_compatible_str_from_dtype(dtype)
+                    _get_cudf_data_type_from_dtype(dtype)
                 )
             csv_reader_options_c.set_dtypes(c_dtypes_list)
             csv_reader_options_c.set_parse_hex(c_hex_col_indexes)
@@ -283,16 +283,16 @@ cdef csv_reader_options make_csv_reader_options(
                 if col_dtype in {"hex", "hex64"}:
                     c_hex_col_indexes.push_back(index)
                     c_dtypes_list.push_back(
-                        _get_cudf_compatible_str_from_dtype('int64')
+                        _get_cudf_data_type_from_dtype('int64')
                     )
                 elif col_dtype == "hex32":
                     c_hex_col_indexes.push_back(index)
                     c_dtypes_list.push_back(
-                        _get_cudf_compatible_str_from_dtype('int32')
+                        _get_cudf_data_type_from_dtype('int32')
                     )
                 else:
                     c_dtypes_list.push_back(
-                        _get_cudf_compatible_str_from_dtype(col_dtype)
+                        _get_cudf_data_type_from_dtype(col_dtype)
                     )
             csv_reader_options_c.set_dtypes(c_dtypes_list)
             csv_reader_options_c.set_parse_hex(c_hex_col_indexes)
@@ -522,7 +522,7 @@ cpdef write_csv(
         cpp_write_csv(options)
 
 
-cdef data_type _get_cudf_compatible_str_from_dtype(object dtype) except +:
+cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
     # TODO: Remove this Error message once the
     # following issue is fixed:
     # https://github.com/rapidsai/cudf/issues/3960
@@ -562,8 +562,8 @@ cdef data_type _get_cudf_compatible_str_from_dtype(object dtype) except +:
                 libcudf_types.type_id.TIMESTAMP_NANOSECONDS
             )
 
-    pd_dtype = cudf.dtype(dtype)
-    return dtype_to_data_type(pd_dtype)
+    dtype = cudf.dtype(dtype)
+    return dtype_to_data_type(dtype)
 
 
 def columns_apply_na_rep(column_names, na_rep):
