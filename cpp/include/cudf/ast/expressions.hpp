@@ -246,7 +246,7 @@ class column_reference : public expression {
 };
 
 /**
- * @brief An expression expression holds an operator and zero or more operands.
+ * @brief An operation expression holds an operator and zero or more operands.
  */
 class operation : public expression {
  public:
