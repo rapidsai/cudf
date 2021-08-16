@@ -3220,9 +3220,9 @@ class Index(BaseIndex, metaclass=IndexMeta):
         tupleize_cols=True,
         **kwargs,
     ):
-        assert cls is Index, (
-            "Index cannot be subclassed, extend BaseIndex " "instead."
-        )
+        assert (
+            cls is Index
+        ), "Index cannot be subclassed, extend BaseIndex instead."
         if tupleize_cols is not True:
             raise NotImplementedError(
                 "tupleize_cols != True is not yet supported"
