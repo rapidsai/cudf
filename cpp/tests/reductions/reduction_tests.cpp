@@ -24,8 +24,10 @@
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
+#include <cudf_test/table_utilities.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -1870,6 +1872,198 @@ TYPED_TEST(DictionaryReductionTest, Quantile)
                        this->ret_non_arithmetic,
                        cudf::make_quantile_aggregation({1}, interp),
                        output_type);
+}
+
+//-------------------------------------------------------------------
+struct ListReductionTest : public cudf::test::BaseFixture {
+  void reduction_test(cudf::column_view const& input_data,
+                      cudf::column_view const& expected_value,
+                      bool succeeded_condition,
+                      bool is_valid,
+                      std::unique_ptr<aggregation> const& agg)
+  {
+    auto statement = [&]() {
+      std::unique_ptr<cudf::scalar> result =
+        cudf::reduce(input_data, agg, cudf::data_type(cudf::type_id::LIST));
+      auto list_result = dynamic_cast<cudf::list_scalar*>(result.get());
+      EXPECT_EQ(is_valid, list_result->is_valid());
+      if (is_valid) { CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_value, list_result->view()); }
+    };
+
+    if (succeeded_condition) {
+      CUDF_EXPECT_NO_THROW(statement());
+    } else {
+      EXPECT_ANY_THROW(statement());
+    }
+  }
+};
+
+TEST_F(ListReductionTest, ListReductionNthElement)
+{
+  using ListCol    = cudf::test::lists_column_wrapper<int>;
+  using ElementCol = cudf::test::fixed_width_column_wrapper<int>;
+
+  // test without nulls
+  ListCol col{{-3}, {2, 1}, {0, 5, -3}, {-2}, {}, {28}};
+  this->reduction_test(col,
+                       ElementCol{0, 5, -3},  // expected_value,
+                       true,
+                       true,
+                       cudf::make_nth_element_aggregation(2, cudf::null_policy::INCLUDE));
+
+  // test with null-include
+  std::vector<bool> validity{1, 0, 0, 1, 1, 0};
+  ListCol col_nulls({{-3}, {2, 1}, {0, 5, -3}, {-2}, {}, {28}}, validity.begin());
+  this->reduction_test(col_nulls,
+                       ElementCol{-2},  // expected_value,
+                       true,
+                       true,
+                       cudf::make_nth_element_aggregation(1, cudf::null_policy::EXCLUDE));
+
+  // test with null-include
+  this->reduction_test(col_nulls,
+                       ElementCol{},  // expected_value,
+                       true,
+                       false,
+                       cudf::make_nth_element_aggregation(1, cudf::null_policy::INCLUDE));
+}
+
+TEST_F(ListReductionTest, NonValidListReductionNthElement)
+{
+  using ListCol    = cudf::test::lists_column_wrapper<int>;
+  using ElementCol = cudf::test::fixed_width_column_wrapper<int>;
+
+  // test against col.size() <= col.null_count()
+  std::vector<bool> validity{0};
+  this->reduction_test(ListCol{{{1, 2}}, validity.begin()},
+                       ElementCol{},  // expected_value,
+                       true,
+                       false,
+                       cudf::make_nth_element_aggregation(0, cudf::null_policy::INCLUDE));
+
+  // test against empty input
+  this->reduction_test(ListCol{},
+                       ElementCol{{0}, {0}},  // expected_value,
+                       true,
+                       false,
+                       cudf::make_nth_element_aggregation(0, cudf::null_policy::INCLUDE));
+}
+
+//-------------------------------------------------------------------
+struct StructReductionTest : public cudf::test::BaseFixture {
+  using StructCol = cudf::test::structs_column_wrapper;
+
+  void reduction_test(StructCol const& struct_column,
+                      cudf::table_view const& expected_value,
+                      bool succeeded_condition,
+                      bool is_valid,
+                      std::unique_ptr<aggregation> const& agg)
+  {
+    auto statement = [&]() {
+      std::unique_ptr<cudf::scalar> result =
+        cudf::reduce(struct_column, agg, cudf::data_type(cudf::type_id::LIST));
+      auto struct_result = dynamic_cast<cudf::struct_scalar*>(result.get());
+      EXPECT_EQ(is_valid, struct_result->is_valid());
+      if (is_valid) { CUDF_TEST_EXPECT_TABLES_EQUAL(expected_value, struct_result->view()); }
+    };
+
+    if (succeeded_condition) {
+      CUDF_EXPECT_NO_THROW(statement());
+    } else {
+      EXPECT_ANY_THROW(statement());
+    }
+  }
+};
+
+TEST_F(StructReductionTest, StructReductionNthElement)
+{
+  using ChildCol = cudf::test::fixed_width_column_wrapper<int>;
+
+  // test without nulls
+  auto child0 = *ChildCol{-3, 2, 1, 0, 5, -3, -2, 28}.release();
+  auto child1 = *ChildCol{0, 1, 2, 3, 4, 5, 6, 7}.release();
+  auto child2 =
+    *ChildCol{{-10, 10, -100, 100, -1000, 1000, -10000, 10000}, {1, 0, 0, 1, 1, 1, 0, 1}}.release();
+  std::vector<std::unique_ptr<cudf::column>> input_vector;
+  input_vector.push_back(std::make_unique<cudf::column>(child0));
+  input_vector.push_back(std::make_unique<cudf::column>(child1));
+  input_vector.push_back(std::make_unique<cudf::column>(child2));
+  StructCol struct_col(std::move(input_vector));
+  auto result_col0 = ChildCol{1};
+  auto result_col1 = ChildCol{2};
+  auto result_col2 = ChildCol{{0}, {0}};
+  this->reduction_test(
+    struct_col,
+    cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
+    true,
+    true,
+    cudf::make_nth_element_aggregation(2, cudf::null_policy::INCLUDE));
+
+  // test with null-include
+  std::vector<std::unique_ptr<cudf::column>> input_vector_null_include;
+  input_vector_null_include.push_back(std::make_unique<cudf::column>(child0));
+  input_vector_null_include.push_back(std::make_unique<cudf::column>(child1));
+  input_vector_null_include.push_back(std::make_unique<cudf::column>(child2));
+  std::vector<bool> validity{1, 1, 1, 0, 1, 0, 0, 1};
+  StructCol struct_col_null_include(std::move(input_vector_null_include), validity);
+  result_col0 = ChildCol{{0}, {0}};
+  result_col1 = ChildCol{{0}, {0}};
+  result_col2 = ChildCol{{0}, {0}};
+  this->reduction_test(
+    struct_col_null_include,
+    cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
+    true,
+    false,
+    cudf::make_nth_element_aggregation(6, cudf::null_policy::INCLUDE));
+
+  // test with null-exclude
+  std::vector<std::unique_ptr<cudf::column>> input_vector_null_exclude;
+  input_vector_null_exclude.push_back(std::make_unique<cudf::column>(child0));
+  input_vector_null_exclude.push_back(std::make_unique<cudf::column>(child1));
+  input_vector_null_exclude.push_back(std::make_unique<cudf::column>(child2));
+  StructCol struct_col_with_null_exclude(std::move(input_vector_null_exclude), validity);
+  result_col0 = ChildCol{{28}, {1}};
+  result_col1 = ChildCol{{7}, {1}};
+  result_col2 = ChildCol{{10000}, {1}};
+  this->reduction_test(
+    struct_col_with_null_exclude,
+    cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
+    true,
+    true,
+    cudf::make_nth_element_aggregation(4, cudf::null_policy::EXCLUDE));
+}
+
+TEST_F(StructReductionTest, NonValidStructReductionNthElement)
+{
+  using ChildCol = cudf::test::fixed_width_column_wrapper<int>;
+
+  // test against col.size() <= col.null_count()
+  auto child0     = ChildCol{-3, 3};
+  auto child1     = ChildCol{0, 0};
+  auto child2     = ChildCol{{-10, 10}, {0, 1}};
+  auto struct_col = StructCol{{child0, child1, child2}, {0, 0}};
+  auto ret_col0   = ChildCol{{0}, {0}};
+  auto ret_col1   = ChildCol{{0}, {0}};
+  auto ret_col2   = ChildCol{{0}, {0}};
+  this->reduction_test(struct_col,
+                       cudf::table_view{{ret_col0, ret_col1, ret_col2}},  // expected_value,
+                       true,
+                       false,
+                       cudf::make_nth_element_aggregation(0, cudf::null_policy::INCLUDE));
+
+  // test against empty input (would fail because we can not create empty struct scalar)
+  child0     = ChildCol{};
+  child1     = ChildCol{};
+  child2     = ChildCol{};
+  struct_col = StructCol{{child0, child1, child2}};
+  ret_col0   = ChildCol{};
+  ret_col1   = ChildCol{};
+  ret_col2   = ChildCol{};
+  this->reduction_test(struct_col,
+                       cudf::table_view{{ret_col0, ret_col1, ret_col2}},  // expected_value,
+                       false,
+                       false,
+                       cudf::make_nth_element_aggregation(0, cudf::null_policy::INCLUDE));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

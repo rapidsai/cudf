@@ -25,6 +25,7 @@
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
+#include <cudf/structs/structs_column_view.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -112,13 +113,29 @@ std::unique_ptr<scalar> reduce(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  std::unique_ptr<scalar> result = make_default_constructed_scalar(output_dtype, stream, mr);
-  result->set_valid_async(false, stream);
+  // Returns default scalar if input column is non-valid. In terms of nested columns, we need to
+  // handcraft the default scalar with input column.
+  if (col.size() <= col.null_count()) {
+    if (!is_nested(output_dtype)) {
+      auto result = make_default_constructed_scalar(output_dtype, stream, mr);
+      result->set_valid_async(false, stream);
+      return result;
+    } else if (col.type().id() == type_id::LIST) {
+      auto result = make_list_scalar(empty_like(col)->view(), stream, mr);
+      result->set_valid_async(false, stream);
+      return result;
+    } else if (col.type().id() == type_id::STRUCT) {
+      // Struct scalar inputs must have exactly 1 row.
+      CUDF_EXPECTS(!col.is_empty(), "Can not create empty struct scalar");
+      auto result = get_element(col, 1, stream, mr);
+      result->set_valid_async(false, stream);
+      return result;
+    } else {
+      CUDF_FAIL("Unsupported data type for default scalar");
+    }
+  }
 
-  // check if input column is empty
-  if (col.size() <= col.null_count()) return result;
-
-  result =
+  std::unique_ptr<scalar> result =
     aggregation_dispatcher(agg->kind, reduce_dispatch_functor{col, output_dtype, stream, mr}, agg);
   return result;
 }
