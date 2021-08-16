@@ -1512,12 +1512,12 @@ class csv_writer_options_builder {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  std::string filepath = "dataset.csv";
- *  cudf::io::sink_info sink_info(filepath);
+ *  auto destination = cudf::io::sink_info("dataset.csv");
+ *  auto options     = cudf::io::csv_writer_options(destination, table->view())
+ *    .na_rep(na)
+ *    .include_header(include_header)
+ *    .rows_per_chunk(rows_per_chunk);
  *
- *  cudf::io::csv_writer_options options = cudf::io::csv_writer_options(sink_info,
- * table->view()).na_rep(na).include_header(include_header).rows_per_chunk(rows_per_chunk);
- *  ...
  *  cudf::io::write_csv(options);
  * @endcode
  *

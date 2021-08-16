@@ -565,12 +565,9 @@ class orc_writer_options_builder {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  ...
- *  std::string filepath = "dataset.orc";
- *  cudf::orc_writer_options options = cudf::orc_writer_options::builder(cudf::sink_info(filepath),
- * table->view());
- *  ...
- *  cudf::write_orc(options);
+ *  auto destination = cudf::io::sink_info("dataset.orc");
+ *  auto options     = cudf::io::orc_writer_options::builder(destination, table->view());
+ *  cudf::io::write_orc(options);
  * @endcode
  *
  * @param options Settings for controlling reading behavior.

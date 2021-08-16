@@ -781,12 +781,9 @@ class parquet_writer_options_builder {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  ...
- *  std::string filepath = "dataset.parquet";
- *  cudf::io::parquet_writer_options options =
- *  cudf::io::parquet_writer_options::builder(cudf::sink_info(filepath), table->view());
- *  ...
- *  cudf::write_parquet(options);
+ *  auto destination = cudf::io::sink_info("dataset.parquet");
+ *  auto options     = cudf::io::parquet_writer_options::builder(destination, table->view());
+ *  cudf::io::write_parquet(options);
  * @endcode
  *
  * @param options Settings for controlling writing behavior.
@@ -1016,15 +1013,12 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
  * one logical table by writing a series of individual cudf::tables.
  *
  * @code
- *  ...
- *  std::string filepath = "dataset.parquet";
- *  cudf::io::chunked_parquet_writer_options options =
- *  cudf::io::chunked_parquet_writer_options::builder(cudf::sink_info(filepath), table->view());
- *  ...
- *  cudf::io::parquet_chunked_writer writer(options)
+ *  auto destination = cudf::io::sink_info("dataset.parquet");
+ *  auto options = cudf::io::chunked_parquet_writer_options::builder(destination, table->view());
+ *  auto writer  = cudf::io::parquet_chunked_writer(options);
+ *
  *  writer.write(table0)
  *  writer.write(table1)
- *  ...
  *  writer.close()
  *  @endcode
  */
