@@ -1336,6 +1336,7 @@ class Series(SingleColumnFrame, Serializable):
         *args,
         **kwargs,
     ):
+        # Specialize binops to align indices.
         if isinstance(other, SingleColumnFrame):
             if (
                 # TODO: The can_reindex logic also needs to be applied for
@@ -1358,8 +1359,13 @@ class Series(SingleColumnFrame, Serializable):
         else:
             lhs = self
 
-        # Note that we call the super on lhs, not self.
-        return super(Series, lhs)._binaryop(other, fn, fill_value, reflect)
+        return lhs._from_data(
+            data=lhs._colwise_binop(
+                lhs._make_operands_for_binop(other, fill_value, reflect, lhs),
+                fn,
+            ),
+            index=lhs._index,
+        )
 
     def add(self, other, fill_value=None, axis=0):
         """

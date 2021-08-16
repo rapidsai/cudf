@@ -3230,6 +3230,26 @@ class Frame(libcudf.table.Table):
         *args,
         **kwargs,
     ) -> Frame:
+        """Perform a binary operation between two frames.
+
+        Parameters
+        ----------
+        other : Frame
+            The second operand.
+        fn : str
+            The operation to perform.
+        fill_value : Any, default None
+            The value to replace null values with. If ``None``, nulls are not
+            filled before the operation.
+        reflect : bool, default False
+            If ``True`` the operation is reflected (i.e whether to swap the
+            left and right operands).
+
+        Returns
+        -------
+        Frame
+            A new instance containing the result of the operation.
+        """
         raise NotImplementedError
 
     @classmethod
@@ -3256,8 +3276,8 @@ class Frame(libcudf.table.Table):
 
         Returns
         -------
-        Frame
-            A subclass of Frame constructed from the result of performing the
+        Dict[ColumnBase]
+            A dict of columns constructed from the result of performing the
             requested operation on the operands.
         """
 
@@ -4318,39 +4338,32 @@ class SingleColumnFrame(Frame):
         """
         return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
-    def _binaryop(
+    def _make_operands_for_binop(
         self,
         other: T,
-        fn: str,
         fill_value: Any = None,
         reflect: bool = False,
         *args,
         **kwargs,
-    ) -> SingleColumnFrame:
-        """Perform a binary operation between two single column frames.
+    ) -> Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]]:
+        """Generate the dictionary of operands used for a binary operation.
 
         Parameters
         ----------
         other : SingleColumnFrame
             The second operand.
-        fn : str
-            The operation
         fill_value : Any, default None
             The value to replace null values with. If ``None``, nulls are not
             filled before the operation.
         reflect : bool, default False
             If ``True`` the operation is reflected (i.e whether to swap the
             left and right operands).
-        lhs : SingleColumnFrame, default None
-            The left hand operand. If ``None``, self is used. This parameter
-            allows child classes to preprocess the inputs if necessary.
 
         Returns
         -------
-        SingleColumnFrame
-            A new instance containing the result of the operation.
+        Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]]
+            The operands to be passed to _colwise_binop.
         """
-
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
         # the rhs is a _differently_ named Series-like object.
@@ -4372,15 +4385,7 @@ class SingleColumnFrame(Frame):
             except Exception:
                 return NotImplemented
 
-        operands: Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]] = {
-            result_name: (self._column, other, reflect, fill_value)
-        }
-
-        return self._from_data(
-            data=type(self)._colwise_binop(operands, fn),
-            index=self._index,
-            name=result_name,
-        )
+        return {result_name: (self._column, other, reflect, fill_value)}
 
 
 def _get_replacement_values_for_columns(

@@ -13,6 +13,7 @@ from typing import (
     Set,
     Tuple,
     Type,
+    TypeVar,
     Union,
 )
 
@@ -63,6 +64,8 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import cached_property, search_range
+
+T = TypeVar("T", bound="Frame")
 
 
 def _lexsorted_equal_range(
@@ -1461,7 +1464,7 @@ class RangeIndex(BaseIndex):
             return RangeIndex(
                 self.start * other, self.stop * other, self.step * other
             )
-        return super().__mul__(other)
+        return self._as_int64().__mul__(other)
 
     def __rmul__(self, other):
         # Multiplication is commutative.
@@ -1594,6 +1597,22 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         StringIndex(['beetle' 'cow' 'hippo' 'lama'], dtype='object')
         """  # noqa: E501
         return super().drop_duplicates(keep=keep)
+
+    def _binaryop(
+        self,
+        other: T,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        *args,
+        **kwargs,
+    ) -> SingleColumnFrame:
+        # Specialize binops to generate the appropriate output index type.
+        return _index_from_data(
+            data=self._colwise_binop(
+                self._make_operands_for_binop(other, fill_value, reflect), fn
+            ),
+        )
 
     def _copy_type_metadata(
         self, other: Frame, include_index: bool = True
