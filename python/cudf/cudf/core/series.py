@@ -64,6 +64,48 @@ from cudf.utils.utils import (
 
 
 class Series(SingleColumnFrame, Serializable):
+    """
+    One-dimensional GPU array (including time series).
+
+    Labels need not be unique but must be a hashable type. The object
+    supports both integer- and label-based indexing and provides a
+    host of methods for performing operations involving the index.
+    Statistical methods from ndarray have been overridden to
+    automatically exclude missing data (currently represented
+    as null/NaN).
+
+    Operations between Series (`+`, `-`, `/`, `*`, `**`) align
+    values based on their associated index values-– they need
+    not be the same length. The result index will be the
+    sorted union of the two indexes.
+
+    ``Series`` objects are used as columns of ``DataFrame``.
+
+    Parameters
+    ----------
+    data : array-like, Iterable, dict, or scalar value
+        Contains data stored in Series.
+
+    index : array-like or Index (1d)
+        Values must be hashable and have the same length
+        as data. Non-unique index values are allowed. Will
+        default to RangeIndex (0, 1, 2, …, n) if not provided.
+        If both a dict and index sequence are used, the index will
+        override the keys found in the dict.
+
+    dtype : str, numpy.dtype, or ExtensionDtype, optional
+        Data type for the output Series. If not specified,
+        this will be inferred from data.
+
+    name : str, optional
+        The name to give to the Series.
+
+    nan_as_null : bool, Default True
+        If ``None``/``True``, converts ``np.nan`` values to
+        ``null`` values.
+        If ``False``, leaves ``np.nan`` values as is.
+    """
+
     # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property
     def _constructor(self):
@@ -171,47 +213,6 @@ class Series(SingleColumnFrame, Serializable):
     def __init__(
         self, data=None, index=None, dtype=None, name=None, nan_as_null=True,
     ):
-        """
-        One-dimensional GPU array (including time series).
-
-        Labels need not be unique but must be a hashable type. The object
-        supports both integer- and label-based indexing and provides a
-        host of methods for performing operations involving the index.
-        Statistical methods from ndarray have been overridden to
-        automatically exclude missing data (currently represented
-        as null/NaN).
-
-        Operations between Series (`+`, `-`, `/`, `*`, `**`) align
-        values based on their associated index values-– they need
-        not be the same length. The result index will be the
-        sorted union of the two indexes.
-
-        ``Series`` objects are used as columns of ``DataFrame``.
-
-        Parameters
-        ----------
-        data : array-like, Iterable, dict, or scalar value
-            Contains data stored in Series.
-
-        index : array-like or Index (1d)
-            Values must be hashable and have the same length
-            as data. Non-unique index values are allowed. Will
-            default to RangeIndex (0, 1, 2, …, n) if not provided.
-            If both a dict and index sequence are used, the index will
-            override the keys found in the dict.
-
-        dtype : str, numpy.dtype, or ExtensionDtype, optional
-            Data type for the output Series. If not specified,
-            this will be inferred from data.
-
-        name : str, optional
-            The name to give to the Series.
-
-        nan_as_null : bool, Default True
-            If ``None``/``True``, converts ``np.nan`` values to
-            ``null`` values.
-            If ``False``, leaves ``np.nan`` values as is.
-        """
         if isinstance(data, pd.Series):
             if name is None:
                 name = data.name
@@ -457,7 +458,7 @@ class Series(SingleColumnFrame, Serializable):
             Return series without null values
         Series.drop_duplicates
             Return series with duplicate values removed
-        cudf.core.dataframe.DataFrame.drop
+        cudf.DataFrame.drop
             Drop specified labels from rows or columns in dataframe
 
         Examples
@@ -879,7 +880,7 @@ class Series(SingleColumnFrame, Serializable):
 
         See Also
         --------
-        cudf.core.dataframe.DataFrame.memory_usage : Bytes consumed by
+        cudf.DataFrame.memory_usage : Bytes consumed by
             a DataFrame.
 
         Examples
@@ -2344,22 +2345,22 @@ class Series(SingleColumnFrame, Serializable):
                 f"Operation `~` not supported on {self.dtype.type.__name__}"
             )
 
-    @copy_docstring(CategoricalAccessor.__init__)  # type: ignore
+    @copy_docstring(CategoricalAccessor)  # type: ignore
     @property
     def cat(self):
         return CategoricalAccessor(parent=self)
 
-    @copy_docstring(StringMethods.__init__)  # type: ignore
+    @copy_docstring(StringMethods)  # type: ignore
     @property
     def str(self):
         return StringMethods(parent=self)
 
-    @copy_docstring(ListMethods.__init__)  # type: ignore
+    @copy_docstring(ListMethods)  # type: ignore
     @property
     def list(self):
         return ListMethods(parent=self)
 
-    @copy_docstring(StructMethods.__init__)  # type: ignore
+    @copy_docstring(StructMethods)  # type: ignore
     @property
     def struct(self):
         return StructMethods(parent=self)
@@ -2503,10 +2504,10 @@ class Series(SingleColumnFrame, Serializable):
 
         Series.fillna : Replace null values.
 
-        cudf.core.dataframe.DataFrame.dropna : Drop rows or columns which
+        cudf.DataFrame.dropna : Drop rows or columns which
             contain null values.
 
-        cudf.core.index.Index.dropna : Drop null indices.
+        cudf.Index.dropna : Drop null indices.
 
         Examples
         --------
@@ -2845,7 +2846,7 @@ class Series(SingleColumnFrame, Serializable):
 
         See also
         --------
-        cudf.core.dataframe.DataFrame.loc
+        cudf.DataFrame.loc
 
         Examples
         --------
@@ -2868,7 +2869,7 @@ class Series(SingleColumnFrame, Serializable):
 
         See also
         --------
-        cudf.core.dataframe.DataFrame.iloc
+        cudf.DataFrame.iloc
 
         Examples
         --------
@@ -4609,7 +4610,7 @@ class Series(SingleColumnFrame, Serializable):
         Series.count
             Number of non-NA elements in a Series.
 
-        cudf.core.dataframe.DataFrame.count
+        cudf.DataFrame.count
             Number of non-NA elements in a DataFrame.
 
         Examples
@@ -5216,7 +5217,7 @@ class Series(SingleColumnFrame, Serializable):
 
         return Series(output_col, name=self.name, index=self.index)
 
-    @copy_docstring(SeriesGroupBy.__init__)
+    @copy_docstring(SeriesGroupBy)
     def groupby(
         self,
         by=None,
@@ -5944,13 +5945,39 @@ class DatetimeProperties(object):
         )
 
     @property
-    def is_month_start(self):
+    def quarter(self):
         """
-        Boolean indicator if the date is the first day of the month.
+        Integer indicator for which quarter of the year the date belongs in.
+
+        There are 4 quarters in a year. With the first quarter being from
+        January - March, second quarter being April - June, third quarter
+        being July - September and fourth quarter being October - December.
 
         Returns
         -------
         Series
+        Integer indicating which quarter the date belongs to.
+
+        Examples
+        -------
+        >>> import cudf
+        >>> s = cudf.Series(["2020-05-31 08:00:00","1999-12-31 18:40:00"],
+        ...     dtype="datetime64[ms]")
+        >>> s.dt.quarter
+        0    2
+        1    4
+        dtype: int8
+        """
+        res = libcudf.datetime.extract_quarter(self.series._column).astype(
+            np.int8
+        )
+        return Series._from_data(
+            {None: res}, index=self.series._index, name=self.series.name,
+        )
+
+    @property
+    def is_month_start(self):
+        """
         Booleans indicating if dates are the first day of the month.
         """
         return (self.day == 1).fillna(False)
@@ -6043,7 +6070,7 @@ class DatetimeProperties(object):
         7    False
         8    False
         dtype: bool
-        """
+        """  # noqa: E501
         last_day = libcudf.datetime.last_day_of_month(self.series._column)
         last_day = Series._from_data(
             ColumnAccessor({None: last_day}),
