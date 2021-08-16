@@ -6125,7 +6125,7 @@ class DatetimeProperties(object):
 
         result = ((day == cudf.Scalar(1)) & first_month).fillna(False)
         return Series._from_data(
-            ColumnAccessor({None: result}),
+            {None: result},
             index=self.series._index,
             name=self.series.name,
         )
@@ -6175,7 +6175,7 @@ class DatetimeProperties(object):
 
         result = ((day == last_day) & last_month).fillna(False)
         return Series._from_data(
-            ColumnAccessor({None: result}),
+            {None: result},
             index=self.series._index,
             name=self.series.name,
         )
