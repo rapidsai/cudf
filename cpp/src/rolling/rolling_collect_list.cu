@@ -29,18 +29,7 @@ namespace cudf {
 namespace detail {
 
 /**
- * @brief Generate mapping of each row in the COLLECT_LIST result's child column
- * to the index of the row it belongs to.
- *
- *  If
- *         input col == [A,B,C,D,E]
- *    and  preceding == [1,2,2,2,2],
- *    and  following == [1,1,1,1,0],
- *  then,
- *        collect result       == [ [A,B], [A,B,C], [B,C,D], [C,D,E], [D,E] ]
- *   i.e. result offset column == [0,2,5,8,11,13],
- *    and result child  column == [A,B,A,B,C,B,C,D,C,D,E,D,E].
- *  Mapping back to `input`    == [0,1,0,1,2,1,2,3,2,3,4,3,4]
+ * @see cudf::detail::get_list_child_to_list_row_mapping
  */
 std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view const& offsets,
                                                            rmm::cuda_stream_view stream)
@@ -103,7 +92,7 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
 }
 
 /**
- * @brief Count null entries in result of COLLECT_LIST.
+ * @see cudf::detail::count_child_nulls
  */
 size_type count_child_nulls(column_view const& input,
                             std::unique_ptr<column> const& gather_map,
@@ -122,7 +111,7 @@ size_type count_child_nulls(column_view const& input,
 }
 
 /**
- * @brief Purge entries for null inputs from gather_map, and adjust offsets.
+ * @see cudf::detail::rolling_collect_list
  */
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   column_view const& input,
