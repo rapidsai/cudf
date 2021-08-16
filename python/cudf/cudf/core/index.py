@@ -592,12 +592,12 @@ class BaseIndex(SingleColumnFrame, Serializable):
                 if is_mixed_with_object_dtype(this, other):
                     got_dtype = (
                         other.dtype
-                        if this.dtype == np.dtype("object")
+                        if this.dtype == cudf.dtype("object")
                         else this.dtype
                     )
                     raise TypeError(
                         f"cudf does not support appending an Index of "
-                        f"dtype `{np.dtype('object')}` with an Index "
+                        f"dtype `{cudf.dtype('object')}` with an Index "
                         f"of dtype `{got_dtype}`, please type-cast "
                         f"either one of them to same dtypes."
                     )
@@ -1544,7 +1544,7 @@ class RangeIndex(BaseIndex):
         """
         `dtype` of the range of values in RangeIndex.
         """
-        return np.dtype(np.int64)
+        return cudf.dtype(np.int64)
 
     @property
     def is_contiguous(self):
