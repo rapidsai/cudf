@@ -264,7 +264,12 @@ def groupby_agg(
         aggs[input_column].append(func)
         # we need to nest the result column to make the MultiIndex creation in
         # _finalize_gb_agg
-        res_cols.extend([[x] for x in result_column])
+        if not res_cols:
+            res_cols.extend([[x] for x in result_column])
+            continue
+        for i, x in enumerate(result_column):
+            res_cols[i].append(x)
+    res_cols = pd.MultiIndex.from_arrays(res_cols)
 
     # Begin graph construction
     dsk = {}
@@ -332,6 +337,8 @@ def groupby_agg(
         for col in aggs:
             _aggs[col] = _aggs[col][0]
     _meta = ddf._meta.groupby(gb_cols, as_index=as_index).agg(_aggs)
+    if str_cols_out:
+        res_cols = _meta.columns
     for s in range(split_out):
         dsk[(gb_agg_name, s)] = (
             _finalize_gb_agg,
@@ -583,21 +590,23 @@ def _finalize_gb_agg(
         gb.set_index(gb_cols, inplace=True)
 
     # Unflatten column names
-    col_array = []
-    agg_array = []
-    for col in gb.columns:
-        if col in gb_cols:
-            col_array.append(col)
-            agg_array.append("")
-        else:
-            name, agg = col.split(sep)
-            col_array.append(name)
-            agg_array.append(agg)
-    if str_cols_out:
-        gb.columns = col_array
-    elif finalize_cols:
-        gb.columns = pd.MultiIndex.from_arrays(finalize_cols)
-    else:
-        gb.columns = pd.MultiIndex.from_arrays([col_array, agg_array])
+    # col_array = []
+    # agg_array = []
+    # for col in gb.columns:
+    #     if col in gb_cols:
+    #         col_array.append(col)
+    #         agg_array.append("")
+    #     else:
+    #         name, agg = col.split(sep)
+    #         col_array.append(name)
+    #         agg_array.append(agg)
+    # if str_cols_out:
+    #     gb.columns = col_array
+    # elif finalize_cols:
+    #     gb.columns = finalize_cols
+    # else:
+    #     gb.columns = pd.MultiIndex.from_arrays([col_array, agg_array])
 
-    return gb[final_columns]
+    gb.columns = finalize_cols
+
+    return gb[finalize_cols]
