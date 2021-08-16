@@ -21,9 +21,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/valid_if.cuh>
-#include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/output_writer_iterator.cuh>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -32,6 +31,7 @@
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 
 namespace cudf {
@@ -60,43 +60,64 @@ struct value_accessor {
       return col.element<T>(i);
     }
   }
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(size_type i) const { return value(i); }
 };
 
-/**
- * @brief ArgMin binary operator, which accepts indices as operand.
- */
+// ArgMin binary operator with tuple of (value, index)
 template <typename T>
-struct ArgMin : value_accessor<T> {
-  using super_t = value_accessor<T>;
-  ArgMin(column_device_view const& col) : super_t(col) {}
-
-  CUDA_HOST_DEVICE_CALLABLE size_type operator()(size_type const& lhs, size_type const& rhs) const
+struct ArgMin {
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(thrust::tuple<T, size_type> const& lhs,
+                                            thrust::tuple<T, size_type> const& rhs) const
   {
-    if (lhs == cudf::detail::ARGMIN_SENTINEL)
+    if (thrust::get<1>(lhs) == cudf::detail::ARGMIN_SENTINEL)
       return rhs;
-    else if (rhs == cudf::detail::ARGMIN_SENTINEL)
+    else if (thrust::get<1>(rhs) == cudf::detail::ARGMIN_SENTINEL)
       return lhs;
     else
-      return super_t::value(lhs) < super_t::value(rhs) ? lhs : rhs;
+      return thrust::get<0>(lhs) < thrust::get<0>(rhs) ? lhs : rhs;
+  }
+};
+
+// ArgMax binary operator with tuple of (value, index)
+template <typename T>
+struct ArgMax {
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(thrust::tuple<T, size_type> const& lhs,
+                                            thrust::tuple<T, size_type> const& rhs) const
+  {
+    if (thrust::get<1>(lhs) == cudf::detail::ARGMIN_SENTINEL)
+      return rhs;
+    else if (thrust::get<1>(rhs) == cudf::detail::ARGMIN_SENTINEL)
+      return lhs;
+    else
+      return thrust::get<0>(lhs) > thrust::get<0>(rhs) ? lhs : rhs;
   }
 };
 
 /**
- * @brief ArgMax binary operator, which accepts indices as operand.
+ * @brief Functor to store the index of tuple to column.
+ *
  */
-template <typename T>
-struct ArgMax : value_accessor<T> {
-  using super_t = value_accessor<T>;
-  ArgMax(column_device_view const& col) : super_t(col) {}
-
-  CUDA_HOST_DEVICE_CALLABLE size_type operator()(size_type const& lhs, size_type const& rhs) const
+struct tuple_index_to_column {
+  mutable_column_device_view d_result;
+  template <typename T>
+  __device__ void operator()(size_type i, thrust::tuple<T, size_type> const& rhs)
   {
-    if (lhs == cudf::detail::ARGMIN_SENTINEL)
-      return rhs;
-    else if (rhs == cudf::detail::ARGMIN_SENTINEL)
-      return lhs;
-    else
-      return super_t::value(lhs) > super_t::value(rhs) ? lhs : rhs;
+    d_result.element<size_type>(i) = thrust::get<1>(rhs);
+  }
+};
+
+/**
+ * @brief Functor to store the boolean value to null mask.
+ */
+struct bool_to_nullmask {
+  mutable_column_device_view d_result;
+  __device__ void operator()(size_type i, bool rhs)
+  {
+    if (rhs) {
+      d_result.set_valid(i);
+    } else {
+      d_result.set_null(i);
+    }
   }
 };
 
@@ -111,7 +132,7 @@ struct null_as_sentinel {
 };
 
 /**
- * @brief Value accessor for column which supports dictionary column too.
+ * @brief Null replaced value accessor for column which supports dictionary column too.
  * For null value, returns null `init` value
  *
  * @tparam T Type of the underlying column. For dictionary column, type of the key column.
@@ -180,10 +201,13 @@ struct reduce_functor {
     if constexpr (K == aggregation::ARGMAX || K == aggregation::ARGMIN) {
       constexpr auto SENTINEL =
         (K == aggregation::ARGMAX ? cudf::detail::ARGMAX_SENTINEL : cudf::detail::ARGMIN_SENTINEL);
-      auto begin =
+      auto idx_begin =
         cudf::detail::make_counting_transform_iterator(0, null_as_sentinel{*valuesview, SENTINEL});
-      // auto column_begin = cudf::detail::make_counting_transform_iterator(
-      //   0, value_accessor<DeviceType>{*valuesview});
+      auto column_begin =
+        cudf::detail::make_counting_transform_iterator(0, value_accessor<DeviceType>{*valuesview});
+      auto begin        = thrust::make_zip_iterator(thrust::make_tuple(column_begin, idx_begin));
+      auto result_begin = make_output_writer_iterator(thrust::make_counting_iterator<size_type>(0),
+                                                      tuple_index_to_column{*resultview});
       using OpType =
         std::conditional_t<(K == aggregation::ARGMAX), ArgMax<DeviceType>, ArgMin<DeviceType>>;
       thrust::reduce_by_key(rmm::exec_policy(stream),
@@ -191,9 +215,9 @@ struct reduce_functor {
                             group_labels.data() + group_labels.size(),
                             begin,
                             thrust::make_discard_iterator(),
-                            resultview->begin<ResultDType>(),
+                            result_begin,
                             thrust::equal_to<size_type>{},
-                            OpType{*valuesview});
+                            OpType{});
     } else {
       auto init  = OpType::template identity<DeviceType>();
       auto begin = cudf::detail::make_counting_transform_iterator(
@@ -209,20 +233,16 @@ struct reduce_functor {
     }
 
     if (values.has_nulls()) {
-      rmm::device_uvector<bool> validity(num_groups, stream);
+      auto result_valid = make_output_writer_iterator(thrust::make_counting_iterator<size_type>(0),
+                                                      bool_to_nullmask{*resultview});
       thrust::reduce_by_key(rmm::exec_policy(stream),
                             group_labels.data(),
                             group_labels.data() + group_labels.size(),
                             cudf::detail::make_validity_iterator(*valuesview),
                             thrust::make_discard_iterator(),
-                            // result_valid,
-                            validity.begin(),
+                            result_valid,
                             thrust::equal_to<size_type>{},
                             thrust::logical_or<bool>{});
-      auto [null_mask, null_count] =
-        cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity<bool>{});
-      result->set_null_mask(std::move(null_mask));
-      result->set_null_count(null_count);
     }
     return result;
   }
