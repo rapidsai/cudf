@@ -231,7 +231,8 @@ struct column_to_strings_fn {
       format = "\"" + format + "\"";
     }
 
-    return cudf::strings::detail::from_timestamps(column, format, stream_, mr_);
+    return cudf::strings::detail::from_timestamps(
+      column, format, cudf::strings::timestamp_names{}, stream_, mr_);
   }
 
   template <typename column_type>

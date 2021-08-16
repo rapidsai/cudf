@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -106,6 +107,7 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
  */
 std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         std::string const& format,
+                                        timestamp_names const& names,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr);
 

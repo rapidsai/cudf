@@ -288,6 +288,65 @@ TEST_F(StringsDatetimeTest, FromTimestampDayOfYear)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(StringsDatetimeTest, FromTimestampDayOfWeekOfYear)
+{
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> timestamps{
+    1588734621L,  // 2020-05-06
+    1560948892L,  // 2019-06-19
+    -265880250L,  // 1961-07-29
+    1628194442L,  // 2021-08-05
+    // These are a sequence of dates which are particular to the ISO week and
+    // year numbers which shift through Monday and Thursday and nicely includes
+    // a leap year (1980). https://en.wikipedia.org/wiki/ISO_week_date
+    220924800L,  // 1977-01-01
+    221011200L,  // 1977-01-02
+    252374400L,  // 1977-12-31
+    252460800L,  // 1978-01-01
+    252547200L,  // 1978-01-02
+    283910400L,  // 1978-12-31
+    283996800L,  // 1979-01-01
+    315360000L,  // 1979-12-30
+    315446400L,  // 1979-12-31
+    315532800L,  // 1980-01-01
+    346809600L,  // 1980-12-28
+    346896000L,  // 1980-12-29
+    346982400L,  // 1980-12-30
+    347068800L,  // 1980-12-31
+    347155200L,  // 1981-01-01
+    378604800L,  // 1981-12-31
+    378691200L,  // 1982-01-01
+    378777600L,  // 1982-01-02
+    378864000L   // 1982-01-03
+  };
+
+  // clang-format off
+  cudf::strings::timestamp_names names{"AM", "PM",
+    {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"},
+    {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"},
+    {"January", "February", "March", "April", "May", "June", "July", 
+     "August", "September", "October", "November", "December"},
+    {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}};
+  // clang-format on
+
+  cudf::test::strings_column_wrapper expected(
+    {"[Wed 06, May 2020  3  18  3  18  2020  19]", "[Wed 19, Jun 2019  3  24  3  24  2019  25]",
+     "[Sat 29, Jul 1961  6  30  6  30  1961  30]", "[Thu 05, Aug 2021  4  31  4  31  2021  31]",
+     "[Sat 01, Jan 1977  6  00  6  00  1976  53]", "[Sun 02, Jan 1977  0  00  7  01  1976  53]",
+     "[Sat 31, Dec 1977  6  52  6  52  1977  52]", "[Sun 01, Jan 1978  0  00  7  01  1977  52]",
+     "[Mon 02, Jan 1978  1  01  1  01  1978  01]", "[Sun 31, Dec 1978  0  52  7  53  1978  52]",
+     "[Mon 01, Jan 1979  1  01  1  00  1979  01]", "[Sun 30, Dec 1979  0  52  7  52  1979  52]",
+     "[Mon 31, Dec 1979  1  53  1  52  1980  01]", "[Tue 01, Jan 1980  2  00  2  00  1980  01]",
+     "[Sun 28, Dec 1980  0  51  7  52  1980  52]", "[Mon 29, Dec 1980  1  52  1  52  1981  01]",
+     "[Tue 30, Dec 1980  2  52  2  52  1981  01]", "[Wed 31, Dec 1980  3  52  3  52  1981  01]",
+     "[Thu 01, Jan 1981  4  00  4  00  1981  01]", "[Thu 31, Dec 1981  4  52  4  52  1981  53]",
+     "[Fri 01, Jan 1982  5  00  5  00  1981  53]", "[Sat 02, Jan 1982  6  00  6  00  1981  53]",
+     "[Sun 03, Jan 1982  0  00  7  01  1981  53]"});
+
+  auto results =
+    cudf::strings::from_timestamps(timestamps, "[%a %d, %b %Y  %w  %W  %u  %U  %G  %V]", names);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsDatetimeTest, ZeroSizeStringsColumn)
 {
   cudf::column_view zero_size_column(
