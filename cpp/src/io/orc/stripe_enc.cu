@@ -667,11 +667,6 @@ __global__ void __launch_bounds__(block_size)
     return s->valid_buf[(row / 8) % encode_block_size];
   };
 
-  auto validity = [&] __device__(int row) -> uint32_t {
-    // Check if the specific bit is set in the validity buffer
-    return (validity_byte(row) >> (row % 8)) & 1;
-  };
-
   __syncthreads();
   while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
     // Encode valid map
@@ -719,7 +714,7 @@ __global__ void __launch_bounds__(block_size)
         }
         __syncthreads();
         if (!t) { s->present_out = min(present_out + nrows_out, present_rows); }
-      }
+      }F
       __syncthreads();
     }
     // Fetch non-null values
@@ -730,20 +725,22 @@ __global__ void __launch_bounds__(block_size)
         s->cur_row           = s->present_rows;
         s->strm_pos[CI_DATA] = s->cur_row * s->chunk.dtype_len;
       }
-      __syncthreads();
     } else if (s->cur_row < s->present_rows) {
       uint32_t maxnumvals = (s->chunk.type_kind == BOOLEAN) ? 2048 : 1024;
       uint32_t nrows =
         min(min(s->present_rows - s->cur_row, maxnumvals - max(s->numvals, s->numlengths)),
             encode_block_size);
       auto const row_in_group = s->cur_row + t;
-      uint32_t const valid    = (t < nrows) ? validity(row_in_group) : 0;
-      s->buf.u32[t]           = valid;
+      auto const row = s->chunk.start_row + row_in_group;
+      auto const valid    = [&](){if (t >= nrows) return false;
+        if (s->chunk.leaf_column->null_mask() == nullptr) return true;
+        return bit_is_set(s->chunk.leaf_column->null_mask(), row);
+      }();
+      s->buf.u32[t]           = valid ? 1u : 0u;
 
       // TODO: Could use a faster reduction relying on _popc() for the initial phase
       lengths_to_positions(s->buf.u32, encode_block_size, t);
       __syncthreads();
-      auto const row = s->chunk.start_row + row_in_group;
       if (valid) {
         int nz_idx = (s->nnz + s->buf.u32[t] - 1) & (maxnumvals - 1);
         switch (s->chunk.type_kind) {
