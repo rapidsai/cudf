@@ -228,13 +228,13 @@ void aggregate_result_functor::operator()<aggregation::MEAN>(aggregation const& 
 
   // TODO (dm): Special case for timestamp. Add target_type_impl for it.
   //            Blocked until we support operator+ on timestamps
-  auto result = cudf::experimental::detail::binary_operation(
-    sum_result,
-    count_result,
-    binary_operator::DIV,
-    cudf::detail::target_type(values.type(), aggregation::MEAN),
-    stream,
-    mr);
+  auto result =
+    cudf::detail::binary_operation(sum_result,
+                                   count_result,
+                                   binary_operator::DIV,
+                                   cudf::detail::target_type(values.type(), aggregation::MEAN),
+                                   stream,
+                                   mr);
   cache.add_result(col_idx, agg, std::move(result));
 };
 

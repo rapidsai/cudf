@@ -278,13 +278,13 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     column_view sum_result   = dense_results->get_result(col_idx, *sum_agg);
     column_view count_result = dense_results->get_result(col_idx, *count_agg);
 
-    auto result = cudf::experimental::detail::binary_operation(
-      sum_result,
-      count_result,
-      binary_operator::DIV,
-      cudf::detail::target_type(result_type, aggregation::MEAN),
-      stream,
-      mr);
+    auto result =
+      cudf::detail::binary_operation(sum_result,
+                                     count_result,
+                                     binary_operator::DIV,
+                                     cudf::detail::target_type(result_type, aggregation::MEAN),
+                                     stream,
+                                     mr);
     dense_results->add_result(col_idx, agg, std::move(result));
   }
 
