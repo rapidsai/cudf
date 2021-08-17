@@ -3607,8 +3607,9 @@ class Frame(libcudf.table.Table):
         other : sequence, Series, or DataFrame
             Any multiple element data structure, or list-like object.
         reflect : bool, default False
-            If ``True`` the operation is reflected (i.e whether to swap the
-            left and right operands).
+            If ``True`` the operation is reflected (i.e ``other`` is used as
+            the left operand instead of the right). This is enabled when using
+            a binary operation with a left operand that does not implement it.
 
         Returns
         -------
@@ -4608,8 +4609,9 @@ class SingleColumnFrame(Frame):
             The value to replace null values with. If ``None``, nulls are not
             filled before the operation.
         reflect : bool, default False
-            If ``True`` the operation is reflected (i.e whether to swap the
-            left and right operands).
+            If ``True`` the operation is reflected (i.e ``other`` is used as
+            the left operand instead of the right). This is enabled when using
+            a binary operation with a left operand that does not implement it.
         lhs : SingleColumnFrame, default None
             The left hand operand. If ``None``, self is used. This parameter
             allows child classes to preprocess the inputs if necessary.

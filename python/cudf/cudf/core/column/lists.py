@@ -113,8 +113,9 @@ class ListColumn(ColumnBase):
             for lists concatenation functions
 
         reflect : boolean, default False
-            If ``reflect`` is ``True``, swap the order of
-            the operands.
+            If ``True`` the operation is reflected (i.e ``other`` is used as
+            the left operand instead of the right). This is enabled when using
+            a binary operation with a left operand that does not implement it.
 
         Returns
         -------
