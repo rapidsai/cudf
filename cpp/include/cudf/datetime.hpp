@@ -209,7 +209,7 @@ std::unique_ptr<cudf::column> is_leap_year(
 /** @} */  // end of group
 
 /**
- * @brief  Round up to the nearest day
+ * @brief Round up to the nearest day
  *
  * @param[in] cudf::column_view of the input datetime values
  *
@@ -221,7 +221,7 @@ std::unique_ptr<cudf::column> ceil_day(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Round up to the nearest hour
+ * @brief Round up to the nearest hour
  *
  * @param[in] cudf::column_view of the input datetime values
  *
@@ -291,5 +291,6 @@ std::unique_ptr<column> ceil_microsecond(
 std::unique_ptr<column> ceil_nanosecond(
   column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 }  // namespace datetime
 }  // namespace cudf
