@@ -238,8 +238,8 @@ struct reduce_functor {
                             validity.begin(),
                             thrust::equal_to<size_type>{},
                             thrust::logical_or<bool>{});
-      auto [null_mask, null_count] =
-        cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity<bool>{});
+      auto [null_mask, null_count] = cudf::detail::valid_if(
+        validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
       result->set_null_mask(std::move(null_mask));
       result->set_null_count(null_count);
     }
