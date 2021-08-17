@@ -714,7 +714,7 @@ __global__ void __launch_bounds__(block_size)
         }
         __syncthreads();
         if (!t) { s->present_out = min(present_out + nrows_out, present_rows); }
-      }F
+      }
       __syncthreads();
     }
     // Fetch non-null values
