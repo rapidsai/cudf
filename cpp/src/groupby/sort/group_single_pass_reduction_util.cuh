@@ -21,8 +21,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/types.hpp>
-#include <cudf/utilities/output_writer_iterator.cuh>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -229,16 +229,19 @@ struct reduce_functor {
     }
 
     if (values.has_nulls()) {
-      auto result_valid = make_output_writer_iterator(thrust::make_counting_iterator<size_type>(0),
-                                                      bool_to_nullmask{*resultview});
+      rmm::device_uvector<bool> validity(num_groups, stream);
       thrust::reduce_by_key(rmm::exec_policy(stream),
                             group_labels.data(),
                             group_labels.data() + group_labels.size(),
                             cudf::detail::make_validity_iterator(*valuesview),
                             thrust::make_discard_iterator(),
-                            result_valid,
+                            validity.begin(),
                             thrust::equal_to<size_type>{},
                             thrust::logical_or<bool>{});
+      auto [null_mask, null_count] =
+        cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity<bool>{});
+      result->set_null_mask(std::move(null_mask));
+      result->set_null_count(null_count);
     }
     return result;
   }
