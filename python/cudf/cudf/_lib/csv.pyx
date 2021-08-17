@@ -249,7 +249,7 @@ cdef csv_reader_options make_csv_reader_options(
             for k, v in dtype.items():
                 col_type = v
                 if v in CSV_HEX_TYPE_MAP:
-                    col_type = CSV_HEX_TYPE_MAP.get(v, v)
+                    col_type = CSV_HEX_TYPE_MAP[v]
                     c_hex_col_names.push_back(str(k).encode())
 
                 c_dtypes_map[str(k).encode()] = \
@@ -265,7 +265,7 @@ cdef csv_reader_options make_csv_reader_options(
         ):
             c_dtypes_list.reserve(1)
             if dtype in CSV_HEX_TYPE_MAP:
-                dtype = CSV_HEX_TYPE_MAP.get(dtype, dtype)
+                dtype = CSV_HEX_TYPE_MAP[dtype]
                 c_hex_col_indexes.push_back(0)
 
             c_dtypes_list.push_back(
@@ -277,7 +277,7 @@ cdef csv_reader_options make_csv_reader_options(
             c_dtypes_list.reserve(len(dtype))
             for index, col_dtype in enumerate(dtype):
                 if col_dtype in CSV_HEX_TYPE_MAP:
-                    col_dtype = CSV_HEX_TYPE_MAP.get(col_dtype, col_dtype)
+                    col_dtype = CSV_HEX_TYPE_MAP[col_dtype]
                     c_hex_col_indexes.push_back(index)
 
                 c_dtypes_list.push_back(
