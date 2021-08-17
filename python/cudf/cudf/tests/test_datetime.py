@@ -1541,3 +1541,12 @@ def test_is_quarter_end(data, dtype):
     got = gs.dt.is_quarter_end
 
     assert_eq(expect, got)
+
+
+def test_error_values():
+    s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    with pytest.raises(
+        NotImplementedError,
+        match="DateTime Arrays is not yet implemented in cudf",
+    ):
+        s.values
