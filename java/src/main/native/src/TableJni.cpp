@@ -1947,7 +1947,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalLeftJoinRowCount(
     auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     auto row_count = cudf::conditional_left_join_size(*left_table, *right_table,
-                                                      condition->get_top_expression(), nulleq);
+                                                      condition->get_top_operation(), nulleq);
     return static_cast<jlong>(row_count);
   }
   CATCH_STD(env, 0);
@@ -1998,7 +1998,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalInnerJoinRowCount(
     auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     auto row_count = cudf::conditional_inner_join_size(*left_table, *right_table,
-                                                       condition->get_top_expression(), nulleq);
+                                                       condition->get_top_operation(), nulleq);
     return static_cast<jlong>(row_count);
   }
   CATCH_STD(env, 0);
@@ -2069,7 +2069,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalLeftSemiJoinRowCoun
     auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     auto row_count = cudf::conditional_left_semi_join_size(*left_table, *right_table,
-                                                           condition->get_top_expression(), nulleq);
+                                                           condition->get_top_operation(), nulleq);
     return static_cast<jlong>(row_count);
   }
   CATCH_STD(env, 0);
@@ -2120,7 +2120,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalLeftAntiJoinRowCoun
     auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     auto row_count = cudf::conditional_left_anti_join_size(*left_table, *right_table,
-                                                           condition->get_top_expression(), nulleq);
+                                                           condition->get_top_operation(), nulleq);
     return static_cast<jlong>(row_count);
   }
   CATCH_STD(env, 0);
