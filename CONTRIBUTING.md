@@ -130,6 +130,8 @@ $./build.sh libcudf
 
 #### Building and testing the `cudf` Python library
 
+- Requirement : `C++ libcudf`
+
 - To build and install in edit/develop mode the `cudf` python package, in the `python/cudf` folder:
 ```bash
 $ cd $CUDF_HOME/python/cudf
@@ -144,6 +146,8 @@ $ py.test -v cudf/cudf/tests                     # run cudf test suite
 ```
 
 #### Python dask-cudf contributors:
+
+- Requirements : `C++ libcudf`, `Python cudf`
 
 - To install in edit/develop mode the `dask-cudf` python package:
 ```bash
@@ -161,17 +165,21 @@ $ py.test -v dask_cudf                           # run dask_cudf test suite
 #### Building and testing the `libcudf_kafka` C++ library
 
 This section provides instructions for building and testing C++ libcudf_kafka. Thus, C++ libcudf_kafka only contributor will be all set after following instructions below:
- 
+
+- Requirements : `C++ libcudf`
+
 ```bash
 $ cd $CUDF_HOME
 $ # for C++ contributors 
-$./build.sh libcudf_kafka tests                  # building C++ cuDF and test components 
-$ make test                                      # running C++ cuDF unit tests
+$./build.sh libcudf_kafka tests                  # building C++ cudf_kafka and test components 
+$ make test                                      # running C++ cudf_kafka unit tests
 $ # for other contributors
 $./build.sh libcudf_kafka                     
 ```
 
 #### Python cudf-kafka contributors:
+
+- Requirements : `C++ libcudf`, `C++ libcudf_kafka`
 
 - To install in edit/develop mode the `cudf-kafka` python package:
 ```bash
@@ -181,6 +189,8 @@ $ python setup.py develop
 ```
 
 #### Python custreamz contributors:
+
+- Requirements : `C++ libcudf`, `C++ libcudf_kafka`, `Python cudf_kafka`
 
 - To install in edit/develop mode the `custreamz` python package:
 ```bash
@@ -197,7 +207,10 @@ $ py.test -v custreamz                           # run custreamz test suite
 
 #### Java contributors:
 
+- Requirements : `C++ libcudf`
+
 Please refer to [Java README](https://github.com/rapidsai/cudf/blob/branch-21.10/java/README.md)
+
 
 Done! You are ready to develop for the cuDF OSS project. But please go to [code formatting](###code-formatting) to ensure that you contributing code follows the expected format.
 
