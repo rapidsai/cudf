@@ -120,7 +120,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef cudf_io_types.source_info source = make_source_info(
         filepaths_or_buffers)
 
-    cdef vector[vector[string]] cpp_columns
+    cdef vector[string] cpp_columns
     cdef bool cpp_strings_to_categorical = strings_to_categorical
     cdef bool cpp_use_pandas_metadata = use_pandas_metadata
     cdef size_type cpp_skiprows = skiprows if skiprows is not None else 0
@@ -131,13 +131,9 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     )
 
     if columns is not None:
-        columns = [c.split(".") if c else [] for c in columns]
         cpp_columns.reserve(len(columns))
         for col in columns or []:
-            cpp_columns.push_back([])
-            for path in col:
-                cpp_columns.back().push_back(str(path).encode())
-
+            cpp_columns.push_back(str(col).encode())
     if row_groups is not None:
         cpp_row_groups = row_groups
 
