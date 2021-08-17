@@ -263,6 +263,8 @@ try:
 
     @percentile_dispatch.register((cudf.Series, cp.ndarray, cudf.Index))
     def percentile_cudf(a, q, interpolation="linear"):
+        # Cudf dispatch to the equivalent of `np.percentile`:
+        # https://numpy.org/doc/stable/reference/generated/numpy.percentile.html
         a = cudf.Series(a)
         # a is series.
         n = len(a)
@@ -273,7 +275,6 @@ try:
 
         if cudf.utils.dtypes.is_categorical_dtype(a.dtype):
             result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
-            import pandas as pd
 
             return (
                 pd.Categorical.from_codes(
