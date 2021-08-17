@@ -20,6 +20,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -163,6 +165,27 @@ std::unique_ptr<scalar> make_default_constructed_scalar(data_type type,
                                                         rmm::mr::device_memory_resource* mr)
 {
   return type_dispatcher(type, default_scalar_functor{}, stream, mr);
+}
+
+std::unique_ptr<scalar> make_empty_scalar_like(column_view const& column,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
+{
+  std::unique_ptr<scalar> result;
+  switch (column.type().id()) {
+    case type_id::LIST:
+      result = make_list_scalar(empty_like(column)->view(), stream, mr);
+      result->set_valid_async(false, stream);
+      break;
+    case type_id::STRUCT:
+      // Struct scalar inputs must have exactly 1 row.
+      CUDF_EXPECTS(!column.is_empty(), "Can not create empty struct scalar");
+      result = detail::get_element(column, 1, stream, mr);
+      result->set_valid_async(false, stream);
+      break;
+    default: result = make_default_constructed_scalar(column.type(), stream, mr);
+  }
+  return result;
 }
 
 }  // namespace cudf

@@ -122,6 +122,20 @@ std::unique_ptr<scalar> make_default_constructed_scalar(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Creates an empty (invalid) scalar of the same type as the `input` column_view.
+ *
+ * @throws std::bad_alloc if device memory allocation fails
+ *
+ * @param input Immutable view of input column to emulate
+ * @param stream CUDA stream used for device memory operations.
+ * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
+ */
+std::unique_ptr<scalar> make_empty_scalar_like(
+  column_view const& input,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Construct scalar using the given value of fixed width type
  *
  * @tparam T Datatype of the value to be represented by the scalar

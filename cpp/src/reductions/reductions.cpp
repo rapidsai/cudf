@@ -116,23 +116,10 @@ std::unique_ptr<scalar> reduce(
   // Returns default scalar if input column is non-valid. In terms of nested columns, we need to
   // handcraft the default scalar with input column.
   if (col.size() <= col.null_count()) {
-    if (!is_nested(output_dtype)) {
-      auto result = make_default_constructed_scalar(output_dtype, stream, mr);
-      result->set_valid_async(false, stream);
-      return result;
-    } else if (col.type().id() == type_id::LIST) {
-      auto result = make_list_scalar(empty_like(col)->view(), stream, mr);
-      result->set_valid_async(false, stream);
-      return result;
-    } else if (col.type().id() == type_id::STRUCT) {
-      // Struct scalar inputs must have exactly 1 row.
-      CUDF_EXPECTS(!col.is_empty(), "Can not create empty struct scalar");
-      auto result = get_element(col, 1, stream, mr);
-      result->set_valid_async(false, stream);
-      return result;
-    } else {
-      CUDF_FAIL("Unsupported data type for default scalar");
+    if (col.type().id() == type_id::EMPTY || col.type() != output_dtype) {
+      return make_default_constructed_scalar(output_dtype, stream, mr);
     }
+    return make_empty_scalar_like(col, stream, mr);
   }
 
   std::unique_ptr<scalar> result =
