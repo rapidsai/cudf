@@ -20,7 +20,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 /** Base class of every AST expression. */
-public abstract class Expression extends AstNode {
+public abstract class Operation extends AstExpression {
   public CompiledExpression compile() {
     int size = getSerializedSize();
     ByteBuffer bb = ByteBuffer.allocate(size);

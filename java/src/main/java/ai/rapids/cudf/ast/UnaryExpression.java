@@ -18,12 +18,12 @@ package ai.rapids.cudf.ast;
 
 import java.nio.ByteBuffer;
 
-/** A unary expression consisting of an operator and an operand. */
-public final class UnaryExpression extends Expression {
+/** A unary operation consisting of an operator and an operand. */
+public final class UnaryOperation extends Operation {
   private final UnaryOperator op;
-  private final AstNode input;
+  private final AstExpression input;
 
-  public UnaryExpression(UnaryOperator op, AstNode input) {
+  public UnaryOperation(UnaryOperator op, AstNode input) {
     this.op = op;
     this.input = input;
   }
@@ -37,7 +37,7 @@ public final class UnaryExpression extends Expression {
 
   @Override
   void serialize(ByteBuffer bb) {
-    NodeType.UNARY_EXPRESSION.serialize(bb);
+    ExpressionType.UNARY_EXPRESSION.serialize(bb);
     op.serialize(bb);
     input.serialize(bb);
   }

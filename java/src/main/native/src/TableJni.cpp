@@ -811,7 +811,7 @@ jlongArray cond_join_gather_maps(JNIEnv *env, jlong j_left_table, jlong j_right_
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
               std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-        join_maps = join_func(*left_table, *right_table, condition->get_top_expression(), nulleq);
+        join_maps = join_func(*left_table, *right_table, condition->get_top_operation(), nulleq);
 
     // release the underlying device buffer to Java
     auto left_map_buffer = std::make_unique<rmm::device_buffer>(join_maps.first->release());
@@ -876,7 +876,7 @@ jlongArray cond_join_gather_single_map(JNIEnv *env, jlong j_left_table, jlong j_
     auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr *>(j_condition);
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     std::unique_ptr<rmm::device_uvector<cudf::size_type>> join_map =
-        join_func(*left_table, *right_table, condition->get_top_expression(), nulleq);
+        join_func(*left_table, *right_table, condition->get_top_operation(), nulleq);
 
     // release the underlying device buffer to Java
     auto gather_map_buffer = std::make_unique<rmm::device_buffer>(join_map->release());

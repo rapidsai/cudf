@@ -19,12 +19,12 @@ package ai.rapids.cudf.ast;
 import java.nio.ByteBuffer;
 
 /** Base class of every node in an AST */
-public abstract class AstNode {
+public abstract class AstExpression {
   /**
    * Enumeration for the types of AST nodes that can appear in a serialized AST.
    * NOTE: This must be kept in sync with the `jni_serialized_node_type` in CompiledExpression.cpp!
    */
-  protected enum NodeType {
+  protected enum ExpressionType {
     VALID_LITERAL(0),
     NULL_LITERAL(1),
     COLUMN_REFERENCE(2),
@@ -33,7 +33,7 @@ public abstract class AstNode {
 
     private final byte nativeId;
 
-    NodeType(int nativeId) {
+    ExpressionType(int nativeId) {
       this.nativeId = (byte) nativeId;
       assert this.nativeId == nativeId;
     }

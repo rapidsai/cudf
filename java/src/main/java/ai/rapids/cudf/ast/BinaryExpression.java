@@ -18,13 +18,13 @@ package ai.rapids.cudf.ast;
 
 import java.nio.ByteBuffer;
 
-/** A binary expression consisting of an operator and two operands. */
-public class BinaryExpression extends Expression {
+/** A binary operation consisting of an operator and two operands. */
+public class BinaryOperation extends Operation {
   private final BinaryOperator op;
   private final AstNode leftInput;
   private final AstNode rightInput;
 
-  public BinaryExpression(BinaryOperator op, AstNode leftInput, AstNode rightInput) {
+  public BinaryOperation(BinaryOperator op, AstNode leftInput, AstNode rightInput) {
     this.op = op;
     this.leftInput = leftInput;
     this.rightInput = rightInput;
