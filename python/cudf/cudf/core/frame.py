@@ -3642,7 +3642,7 @@ class Frame(libcudf.table.Table):
         else:
             return NotImplemented
         if reflect:
-            lhs, rhs = rhs.T, lhs.T
+            lhs, rhs = rhs, lhs
 
         result = lhs.dot(rhs)
         if len(result.shape) == 1:
