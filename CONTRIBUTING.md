@@ -158,6 +158,46 @@ $ cd $CUDF_HOME/python
 $ py.test -v dask_cudf                           # run dask_cudf test suite
 ```
 
+#### Building and testing the `libcudf_kafka` C++ library
+
+This section provides instructions for building and testing C++ libcudf_kafka. Thus, C++ libcudf_kafka only contributor will be all set after following instructions below:
+ 
+```bash
+$ cd $CUDF_HOME
+$ # for C++ contributors 
+$./build.sh libcudf_kafka tests                  # building C++ cuDF and test components 
+$ make test                                      # running C++ cuDF unit tests
+$ # for other contributors
+$./build.sh libcudf_kafka                     
+```
+
+#### Python cudf-kafka contributors:
+
+- To install in edit/develop mode the `cudf-kafka` python package:
+```bash
+$ cd $CUDF_HOME/python/cudf_kafka
+$ python setup.py build_ext --inplace
+$ python setup.py develop
+```
+
+#### Python custreamz contributors:
+
+- To install in edit/develop mode the `custreamz` python package:
+```bash
+$ cd $CUDF_HOME/python/custreamz
+$ python setup.py build_ext --inplace
+$ python setup.py develop
+```
+
+- To run `custreamz` tests :
+```bash
+$ cd $CUDF_HOME/python
+$ py.test -v custreamz                           # run custreamz test suite
+```
+
+#### Java contributors:
+
+Please refer to [Java README](https://github.com/rapidsai/cudf/blob/branch-21.10/java/README.md)
 
 Done! You are ready to develop for the cuDF OSS project. But please go to [code formatting](###code-formatting) to ensure that you contributing code follows the expected format.
 
