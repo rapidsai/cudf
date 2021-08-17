@@ -2917,20 +2917,48 @@ def test_empty_column(binop, data, scalar):
 
 @pytest.mark.parametrize(
     "lhs",
-    [pd.DataFrame([[0, 1, -2, -1], [1, 1, 1, 1]]), pd.Series([1, 1, 2, 1])],
+    [
+        pd.DataFrame([[1, 2, 3, 4], [5, 6, 7, 8]]),
+        pytest.param(
+            pd.DataFrame([[1, None, None, 4], [5, 6, 7, None]]),
+            marks=pytest.mark.xfail(
+                reason="Cannot access Frame.values if frame contains nulls"
+            ),
+        ),
+        pd.DataFrame([[1.2, 2.3, 3.4, 4.5], [5.6, 6.7, 7.8, 8.9]]),
+        pd.Series([14, 15, 16, 17]),
+        pd.Series([14.15, 15.16, 16.17, 17.18]),
+        [25.5, 26.6, 27.7, 28.8],
+    ],
 )
 @pytest.mark.parametrize(
     "rhs",
     [
-        pd.DataFrame([[0, 1], [1, 2], [-1, -1], [2, 0]]),
-        pd.Series([1, 1, 2, 1]),
+        pd.DataFrame([[9, 10], [11, 12], [13, 14], [15, 16]]),
+        pd.DataFrame([[9.4, 10.5], [11.6, 12.7], [13.8, 14.9], [15.1, 16.2]]),
+        pd.Series([5, 6, 7, 8]),
+        pd.Series([5.6, 6.7, 7.8, 8.9]),
     ],
 )
 def test_binops_dot(lhs, rhs):
-    glhs = cudf.from_pandas(lhs)
-    grhs = cudf.from_pandas(rhs)
+    if isinstance(lhs, list):
+        glhs = lhs
+    else:
+        glhs = cudf.from_pandas(lhs)
 
-    expected = lhs.dot(rhs)
-    got = glhs.dot(grhs)
+    if isinstance(rhs, list):
+        grhs = rhs
+    else:
+        grhs = cudf.from_pandas(rhs)
+
+    expected = lhs @ rhs
+    got = glhs @ grhs
 
     utils.assert_eq(expected, got)
+
+    pytest.param(
+        "nanoseconds",
+        marks=pytest.mark.xfail(
+            reason="https://github.com/pandas-dev/pandas/issues/36589"
+        ),
+    ),
