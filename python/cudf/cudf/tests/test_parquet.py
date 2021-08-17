@@ -1189,6 +1189,17 @@ def select_columns_params():
                 ["struct.list.item.c"],
             ],
         ),
+        # struct with "." in field names
+        (
+            [
+                {"a.b": 1, "b.a": 2},
+                {"a.b": 10, "b.a": 20},
+                {"a.b": None, "b.a": 22},
+                {"a.b": None, "b.a": None},
+                {"a.b": 15, "b.a": None},
+            ],
+            [["struct"], ["struct.a"], ["struct.b.a"]],
+        ),
     ]
     for df_col_pair in dfs:
         for cols in df_col_pair[1]:
@@ -1196,7 +1207,7 @@ def select_columns_params():
 
 
 @pytest.mark.parametrize("data, columns", select_columns_params())
-def test_parquet_reader_struct_select_columns1(tmpdir, data, columns):
+def test_parquet_reader_struct_select_columns(tmpdir, data, columns):
     table = pa.Table.from_pydict({"struct": data})
     buff = BytesIO()
 

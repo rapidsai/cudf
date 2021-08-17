@@ -674,6 +674,64 @@ class aggregate_metadata {
         output_column_schemas.push_back(schema_idx);
       }
     } else {
+      // Convert schema into a vector of every possible path
+      std::vector<std::pair<std::string, size_t>> all_paths;
+      std::function<void(std::string, int)> add_path = [&](std::string path_till_now,
+                                                           int schema_idx) {
+        auto const& schema_elem = get_schema(schema_idx);
+        std::string curr_path   = path_till_now + schema_elem.name;
+        all_paths.emplace_back(curr_path, schema_idx);
+        for (auto const& child_idx : schema_elem.children_idx) {
+          add_path(curr_path + ".", child_idx);
+        }
+      };
+      for (auto const& child_idx : get_schema(0).children_idx) {
+        add_path("", child_idx);
+      }
+
+      // Find which of the selected paths are valid and get their schema index
+
+      // TODO: converting vec<str> into . separated str. Change API to take str
+      std::vector<std::string> use_names2;
+      std::transform(use_names.begin(),
+                     use_names.end(),
+                     std::back_inserter(use_names2),
+                     [](std::vector<std::string> vec_path) -> std::string {
+                       return std::accumulate(std::next(vec_path.begin()),
+                                              vec_path.end(),
+                                              vec_path[0],
+                                              [](std::string cumulate, std::string node) {
+                                                return cumulate + "." + node;
+                                              });
+                     });
+
+      std::vector<std::pair<std::string, size_t>> valid_selected_paths;
+      for (auto const& selected_path : use_names2) {
+        auto found_path = std::find_if(
+          all_paths.begin(), all_paths.end(), [&](std::pair<std::string, size_t>& valid_path) {
+            return valid_path.first == selected_path;
+          });
+        if (found_path != all_paths.end()) {
+          valid_selected_paths.emplace_back(selected_path, found_path->second);
+        }
+      }
+
+      // Now construct paths as vector of strings for further consumption
+      std::vector<std::vector<std::string>> use_names3;
+      std::transform(valid_selected_paths.begin(),
+                     valid_selected_paths.end(),
+                     std::back_inserter(use_names3),
+                     [&](std::pair<std::string, size_t> const& valid_path) {
+                       auto schema_idx = valid_path.second;
+                       std::vector<std::string> result_path;
+                       do {
+                         SchemaElement const& elem = get_schema(schema_idx);
+                         result_path.push_back(elem.name);
+                         schema_idx = elem.parent_idx;
+                       } while (schema_idx > 0);
+                       return std::vector<std::string>(result_path.rbegin(), result_path.rend());
+                     });
+
       std::vector<column_name_info> selected_columns;
       if (include_index) {
         std::vector<std::string> index_names = get_pandas_index_names();
