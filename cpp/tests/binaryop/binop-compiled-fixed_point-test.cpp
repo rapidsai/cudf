@@ -684,8 +684,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpThrows)
   EXPECT_THROW(cudf::binary_operation(col, col, cudf::binary_operator::LESS, non_bool_type),
                cudf::logic_error);
   // Allowed now, but not allowed in jit.
-  // EXPECT_THROW(cudf::binary_operation(col, col, cudf::binary_operator::MUL,
-  // float_type),
+  // EXPECT_THROW(cudf::binary_operation(col, col, cudf::binary_operator::MUL, float_type),
   //              cudf::logic_error);
 }
 
