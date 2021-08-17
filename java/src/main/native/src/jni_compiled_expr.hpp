@@ -7,7 +7,7 @@
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
+ *expression Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
@@ -32,14 +32,8 @@ namespace ast {
  * base AST node type. Then we do not have to track every AST node type separately.
  */
 class compiled_expr {
-  /** All literal nodes within the expression tree */
-  std::vector<std::unique_ptr<cudf::ast::literal>> literals;
-
-  /** All column reference nodes within the expression tree */
-  std::vector<std::unique_ptr<cudf::ast::column_reference>> column_refs;
-
-  /** All operation nodes within the expression tree */
-  std::vector<std::unique_ptr<cudf::ast::operation>> operations;
+  /** All expression nodes within the expression tree */
+  std::vector<std::unique_ptr<cudf::ast::expression>> expressions;
 
   /** GPU scalar instances that correspond to literal nodes */
   std::vector<std::unique_ptr<cudf::scalar>> scalars;
@@ -47,24 +41,26 @@ class compiled_expr {
 public:
   cudf::ast::literal &add_literal(std::unique_ptr<cudf::ast::literal> literal_ptr,
                                   std::unique_ptr<cudf::scalar> scalar_ptr) {
-    literals.push_back(std::move(literal_ptr));
+    expressions.push_back(std::move(literal_ptr));
     scalars.push_back(std::move(scalar_ptr));
-    return *literals.back();
+    return static_cast<cudf::ast::literal &>(*expressions.back());
   }
 
   cudf::ast::column_reference &
   add_column_ref(std::unique_ptr<cudf::ast::column_reference> ref_ptr) {
-    column_refs.push_back(std::move(ref_ptr));
-    return *column_refs.back();
+    expressions.push_back(std::move(ref_ptr));
+    return static_cast<cudf::ast::column_reference &>(*expressions.back());
   }
 
   cudf::ast::operation &add_operation(std::unique_ptr<cudf::ast::operation> expr_ptr) {
-    operations.push_back(std::move(expr_ptr));
-    return *operations.back();
+    expressions.push_back(std::move(expr_ptr));
+    return static_cast<cudf::ast::operation &>(*expressions.back());
   }
 
   /** Return the expression node at the top of the tree */
-  cudf::ast::operation &get_top_operation() const { return *operations.back(); }
+  cudf::ast::operation &get_top_operation() const {
+    return static_cast<cudf::ast::operation &>(*expressions.back());
+  }
 };
 
 } // namespace ast
