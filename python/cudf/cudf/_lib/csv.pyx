@@ -74,6 +74,12 @@ class Compression(IntEnum):
     )
 
 
+CSV_HEX_TYPE_MAP = {
+    "hex": np.dtype("int64"),
+    "hex64": np.dtype("int64"),
+    "hex32": np.dtype("int32")
+}
+
 cdef csv_reader_options make_csv_reader_options(
     object datasource,
     object lineterminator,
@@ -242,12 +248,9 @@ cdef csv_reader_options make_csv_reader_options(
         if isinstance(dtype, abc.Mapping):
             for k, v in dtype.items():
                 col_type = v
-                if v in {"hex", "hex64"}:
+                if v in CSV_HEX_TYPE_MAP:
+                    col_type = CSV_HEX_TYPE_MAP.get(v, v)
                     c_hex_col_names.push_back(str(k).encode())
-                    col_type = 'int64'
-                elif v == "hex32":
-                    c_hex_col_names.push_back(str(k).encode())
-                    col_type = 'int32'
 
                 c_dtypes_map[str(k).encode()] = \
                     _get_cudf_data_type_from_dtype(
@@ -261,39 +264,25 @@ cdef csv_reader_options make_csv_reader_options(
             ))
         ):
             c_dtypes_list.reserve(1)
-            if dtype in {"hex", "hex64"}:
+            if dtype in CSV_HEX_TYPE_MAP:
+                dtype = CSV_HEX_TYPE_MAP.get(dtype, dtype)
                 c_hex_col_indexes.push_back(0)
-                c_dtypes_list.push_back(
-                    _get_cudf_data_type_from_dtype('int64')
-                )
-            elif dtype == "hex32":
-                c_hex_col_indexes.push_back(0)
-                c_dtypes_list.push_back(
-                    _get_cudf_data_type_from_dtype('int32')
-                )
-            else:
-                c_dtypes_list.push_back(
-                    _get_cudf_data_type_from_dtype(dtype)
-                )
+
+            c_dtypes_list.push_back(
+                _get_cudf_data_type_from_dtype(dtype)
+            )
             csv_reader_options_c.set_dtypes(c_dtypes_list)
             csv_reader_options_c.set_parse_hex(c_hex_col_indexes)
         elif isinstance(dtype, abc.Iterable):
             c_dtypes_list.reserve(len(dtype))
             for index, col_dtype in enumerate(dtype):
-                if col_dtype in {"hex", "hex64"}:
+                if col_dtype in CSV_HEX_TYPE_MAP:
+                    col_dtype = CSV_HEX_TYPE_MAP.get(col_dtype, col_dtype)
                     c_hex_col_indexes.push_back(index)
-                    c_dtypes_list.push_back(
-                        _get_cudf_data_type_from_dtype('int64')
-                    )
-                elif col_dtype == "hex32":
-                    c_hex_col_indexes.push_back(index)
-                    c_dtypes_list.push_back(
-                        _get_cudf_data_type_from_dtype('int32')
-                    )
-                else:
-                    c_dtypes_list.push_back(
-                        _get_cudf_data_type_from_dtype(col_dtype)
-                    )
+
+                c_dtypes_list.push_back(
+                    _get_cudf_data_type_from_dtype(col_dtype)
+                )
             csv_reader_options_c.set_dtypes(c_dtypes_list)
             csv_reader_options_c.set_parse_hex(c_hex_col_indexes)
         else:
