@@ -105,7 +105,7 @@ struct ceil_timestamp {
         return time_point_cast<typename Timestamp::duration>(ceil<duration_us>(ts));
       case datetime_component::NANOSECOND:
         return time_point_cast<typename Timestamp::duration>(ceil<duration_ns>(ts));
-      default: return time_point_cast<typename Timestamp::duration>(ceil<duration_D>(ts));
+      default: return time_point_cast<typename Timestamp::duration>(ceil<duration_s>(ts));
     }
   }
 };
