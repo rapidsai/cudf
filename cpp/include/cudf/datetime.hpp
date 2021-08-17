@@ -211,10 +211,10 @@ std::unique_ptr<cudf::column> is_leap_year(
 /**
  * @brief Round up to the nearest day
  *
- * @param[in] cudf::column_view of the input datetime values
+ * @param cudf::column_view of the input datetime values
  *
- * @returns cudf::column of the same datetime resolution as the input column
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
  */
 std::unique_ptr<cudf::column> ceil_day(
   cudf::column_view const& column,
@@ -223,70 +223,70 @@ std::unique_ptr<cudf::column> ceil_day(
 /**
  * @brief Round up to the nearest hour
  *
- * @param[in] cudf::column_view of the input datetime values
+ * @param cudf::column_view of the input datetime values
  *
- * @returns cudf::column of the same datetime resolution as the input column
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
  */
 std::unique_ptr<cudf::column> ceil_hour(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Round up to the nearest minute
+ * @brief Round up to the nearest minute
  *
- * @param[in] cudf::column_view of the input datetime values
+ * @param cudf::column_view of the input datetime values
  *
- * @returns cudf::column of the same datetime resolution as the input column
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
  */
 std::unique_ptr<cudf::column> ceil_minute(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Round up to the nearest second
+ * @brief Round up to the nearest second
  *
- * @param[in] cudf::column_view of the input datetime values
+ * @param cudf::column_view of the input datetime values
  *
- * @returns cudf::column of the same datetime resolution as the input column
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
  */
 std::unique_ptr<cudf::column> ceil_second(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Round up to the nearest millisecond
+ * @brief Round up to the nearest millisecond
  *
- * @param[in] cudf::column_view of the input datetime values
+ * @param cudf::column_view of the input datetime values
  *
- * @returns cudf::column of the same datetime resolution as the input column
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
  */
 std::unique_ptr<column> ceil_millisecond(
   column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Round up to the nearest microsecond
+ * @brief Round up to the nearest microsecond
  *
- * @param[in] cudf::column_view of the input datetime values
+ * @param cudf::column_view of the input datetime values
  *
- * @returns cudf::column of the same datetime resolution as the input column
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
  */
 std::unique_ptr<column> ceil_microsecond(
   column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Round up to the nearest nanosecond
+ * @brief Round up to the nearest nanosecond
  *
- * @param[in] cudf::column_view of the input datetime values
+ * @param cudf::column_view of the input datetime values
  *
- * @returns cudf::column of the same datetime resolution as the input column
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
  */
 std::unique_ptr<column> ceil_nanosecond(
   column_view const& column,
