@@ -23,14 +23,14 @@ public final class UnaryOperation extends Operation {
   private final UnaryOperator op;
   private final AstExpression input;
 
-  public UnaryOperation(UnaryOperator op, AstNode input) {
+  public UnaryOperation(UnaryOperator op, AstExpression input) {
     this.op = op;
     this.input = input;
   }
 
   @Override
   int getSerializedSize() {
-    return NodeType.UNARY_EXPRESSION.getSerializedSize() +
+    return ExpressionType.UNARY_EXPRESSION.getSerializedSize() +
         op.getSerializedSize() +
         input.getSerializedSize();
   }

@@ -21,10 +21,10 @@ import java.nio.ByteBuffer;
 /** A binary operation consisting of an operator and two operands. */
 public class BinaryOperation extends Operation {
   private final BinaryOperator op;
-  private final AstNode leftInput;
-  private final AstNode rightInput;
+  private final AstExpression leftInput;
+  private final AstExpression rightInput;
 
-  public BinaryOperation(BinaryOperator op, AstNode leftInput, AstNode rightInput) {
+  public BinaryOperation(BinaryOperator op, AstExpression leftInput, AstExpression rightInput) {
     this.op = op;
     this.leftInput = leftInput;
     this.rightInput = rightInput;
@@ -32,7 +32,7 @@ public class BinaryOperation extends Operation {
 
   @Override
   int getSerializedSize() {
-    return NodeType.BINARY_EXPRESSION.getSerializedSize() +
+    return ExpressionType.BINARY_EXPRESSION.getSerializedSize() +
         op.getSerializedSize() +
         leftInput.getSerializedSize() +
         rightInput.getSerializedSize();
@@ -40,7 +40,7 @@ public class BinaryOperation extends Operation {
 
   @Override
   void serialize(ByteBuffer bb) {
-    NodeType.BINARY_EXPRESSION.serialize(bb);
+    ExpressionType.BINARY_EXPRESSION.serialize(bb);
     op.serialize(bb);
     leftInput.serialize(bb);
     rightInput.serialize(bb);

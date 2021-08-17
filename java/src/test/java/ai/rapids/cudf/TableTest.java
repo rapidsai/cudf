@@ -25,7 +25,7 @@ import ai.rapids.cudf.HostColumnVector.ListType;
 import ai.rapids.cudf.HostColumnVector.StructData;
 import ai.rapids.cudf.HostColumnVector.StructType;
 
-import ai.rapids.cudf.ast.BinaryExpression;
+import ai.rapids.cudf.ast.BinaryOperation;
 import ai.rapids.cudf.ast.BinaryOperator;
 import ai.rapids.cudf.ast.ColumnReference;
 import ai.rapids.cudf.ast.CompiledExpression;
