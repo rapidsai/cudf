@@ -87,7 +87,6 @@ def test_array_func_cudf_index(np_ar, func):
     "func",
     [
         lambda x: np.cov(x, x),
-        lambda x: np.dot(x, x),
         lambda x: np.linalg.norm(x),
         lambda x: np.linalg.det(x),
     ],
