@@ -6,8 +6,8 @@ import pyarrow as pa
 import pytest
 from numba import cuda
 
+from cudf import DataFrame, Series
 from cudf.comm.gpuarrow import GpuArrowReader
-from cudf.core import DataFrame, Series
 from cudf.testing._utils import assert_eq
 
 

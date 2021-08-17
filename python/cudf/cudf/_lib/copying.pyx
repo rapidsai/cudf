@@ -787,12 +787,12 @@ cdef class _CPackedColumns:
         """
         Construct a ``PackedColumns`` object from a ``cudf.DataFrame``.
         """
-        from cudf.core import RangeIndex, dtypes
+        import cudf.core.dtypes
 
         cdef _CPackedColumns p = _CPackedColumns.__new__(_CPackedColumns)
 
         if keep_index and (
-            not isinstance(input_table.index, RangeIndex)
+            not isinstance(input_table.index, cudf.RangeIndex)
             or input_table.index.start != 0
             or input_table.index.stop != len(input_table)
             or input_table.index.step != 1
@@ -805,7 +805,7 @@ cdef class _CPackedColumns:
         p.column_names = input_table._column_names
         p.column_dtypes = {}
         for name, col in input_table._data.items():
-            if isinstance(col.dtype, dtypes._BaseDtype):
+            if isinstance(col.dtype, cudf.core.dtypes._BaseDtype):
                 p.column_dtypes[name] = col.dtype
 
         p.c_obj = move(cpp_copying.pack(input_table_view))

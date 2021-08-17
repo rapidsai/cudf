@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import MultiIndex, Series
+from cudf import MultiIndex, Series
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,

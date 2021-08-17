@@ -886,8 +886,9 @@ class Frame(libcudf.table.Table):
         4    <NA>
         dtype: int64
         """
+        import cudf.core._internals.where
 
-        return cudf.core._internals.where(
+        return cudf.core._internals.where.where(
             frame=self, cond=cond, other=other, inplace=inplace
         )
 
@@ -3375,7 +3376,7 @@ class Frame(libcudf.table.Table):
         if index is not None:
             index = cudf.core.index.as_index(index)
 
-            if isinstance(index, cudf.core.MultiIndex):
+            if isinstance(index, cudf.MultiIndex):
                 idx_dtype_match = (
                     df.index._source_data.dtypes == index._source_data.dtypes
                 ).all()
@@ -3681,14 +3682,7 @@ class Frame(libcudf.table.Table):
         try:
             return cls._SUPPORT_AXIS_LOOKUP[axis]
         except KeyError:
-            valid_axes = ", ".join(
-                (
-                    ax
-                    for ax in cls._SUPPORT_AXIS_LOOKUP.keys()
-                    if ax is not None
-                )
-            )
-            raise ValueError(f"Invalid axis, must be one of {valid_axes}.")
+            raise ValueError(f"No axis named {axis} for object type {cls}")
 
     def _reduce(self, *args, **kwargs):
         raise NotImplementedError(
@@ -4199,6 +4193,218 @@ class Frame(libcudf.table.Table):
             **kwargs,
         )
 
+    # Scans
+    def _scan(self, op, axis=None, skipna=True, cast_to_int=False):
+        skipna = True if skipna is None else skipna
+
+        results = {}
+        for name, col in self._data.items():
+            if skipna:
+                result_col = self._data[name].nans_to_nulls()
+            else:
+                result_col = self._data[name].copy()
+                if result_col.has_nulls:
+                    # Workaround as find_first_value doesn't seem to work
+                    # incase of bools.
+                    first_index = int(
+                        result_col.isnull().astype("int8").find_first_value(1)
+                    )
+                    result_col[first_index:] = None
+
+            if (
+                cast_to_int
+                and not is_decimal_dtype(result_col.dtype)
+                and (
+                    np.issubdtype(result_col.dtype, np.integer)
+                    or np.issubdtype(result_col.dtype, np.bool_)
+                )
+            ):
+                # For reductions that accumulate a value (e.g. sum, not max)
+                # pandas returns an int64 dtype for all int or bool dtypes.
+                result_col = result_col.astype(np.int64)
+            results[name] = result_col._apply_scan_op(op)
+        # TODO: This will work for Index because it's passing self._index
+        # (which is None), but eventually we may want to remove that parameter
+        # for Index._from_data and simplify.
+        return self._from_data(results, index=self._index)
+
+    def cummin(self, axis=None, skipna=True, *args, **kwargs):
+        """
+        Return cumulative minimum of the Series or DataFrame.
+
+        Parameters
+        ----------
+
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA,
+            the result will be NA.
+
+        Returns
+        -------
+        Series or DataFrame
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cummin()
+        0    1
+        1    1
+        2    1
+        3    1
+        4    1
+
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.cummin()
+           a  b
+        0  1  7
+        1  1  7
+        2  1  7
+        3  1  7
+        """
+        return self._scan("min", axis=axis, skipna=skipna, *args, **kwargs)
+
+    def cummax(self, axis=None, skipna=True, *args, **kwargs):
+        """
+        Return cumulative maximum of the Series or DataFrame.
+
+        Parameters
+        ----------
+
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA,
+            the result will be NA.
+
+        Returns
+        -------
+        Series or DataFrame
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cummax()
+        0    1
+        1    5
+        2    5
+        3    5
+        4    5
+
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.cummax()
+           a   b
+        0  1   7
+        1  2   8
+        2  3   9
+        3  4  10
+        """
+        return self._scan("max", axis=axis, skipna=skipna, *args, **kwargs)
+
+    def cumsum(self, axis=None, skipna=True, *args, **kwargs):
+        """
+        Return cumulative sum of the Series or DataFrame.
+
+        Parameters
+        ----------
+
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA,
+            the result will be NA.
+
+
+        Returns
+        -------
+        Series or DataFrame
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cumsum()
+        0    1
+        1    6
+        2    8
+        3    12
+        4    15
+
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> s.cumsum()
+            a   b
+        0   1   7
+        1   3  15
+        2   6  24
+        3  10  34
+        """
+        return self._scan(
+            "sum", axis=axis, skipna=skipna, cast_to_int=True, *args, **kwargs
+        )
+
+    def cumprod(self, axis=None, skipna=True, *args, **kwargs):
+        """
+        Return cumulative product of the Series or DataFrame.
+
+        Parameters
+        ----------
+
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA,
+            the result will be NA.
+
+        Returns
+        -------
+        Series or DataFrame
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cumprod()
+        0    1
+        1    5
+        2    10
+        3    40
+        4    120
+
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> s.cumprod()
+            a     b
+        0   1     7
+        1   2    56
+        2   6   504
+        3  24  5040
+        """
+        return self._scan(
+            "prod", axis=axis, skipna=skipna, cast_to_int=True, *args, **kwargs
+        )
+
 
 class SingleColumnFrame(Frame):
     """A one-dimensional frame.
@@ -4227,6 +4433,12 @@ class SingleColumnFrame(Frame):
                 "numeric_only parameter is not implemented yet"
             )
         return getattr(self._column, op)(**kwargs)
+
+    def _scan(self, op, axis=None, *args, **kwargs):
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        return super()._scan(op, axis=axis, *args, **kwargs)
 
     @classmethod
     def _from_data(
@@ -4629,7 +4841,7 @@ def _get_replacement_values_for_columns(
                 col: [value]
                 if _is_non_decimal_numeric_dtype(columns_dtype_map[col])
                 else cudf.utils.utils.scalar_broadcast_to(
-                    value, (len(to_replace),), np.dtype(type(value)),
+                    value, (len(to_replace),), cudf.dtype(type(value)),
                 )
                 for col in columns_dtype_map
             }
