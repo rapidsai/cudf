@@ -1608,10 +1608,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         **kwargs,
     ) -> SingleColumnFrame:
         # Specialize binops to generate the appropriate output index type.
-        return _index_from_data(
-            data=self._colwise_binop(
-                self._make_operands_for_binop(other, fill_value, reflect), fn
-            ),
+        operands = self._make_operands_for_binop(other, fill_value, reflect)
+        return (
+            _index_from_data(data=self._colwise_binop(operands, fn),)
+            if operands is not NotImplemented
+            else NotImplemented
         )
 
     def _copy_type_metadata(

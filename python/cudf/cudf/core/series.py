@@ -1359,12 +1359,13 @@ class Series(SingleColumnFrame, Serializable):
         else:
             lhs = self
 
-        return lhs._from_data(
-            data=lhs._colwise_binop(
-                lhs._make_operands_for_binop(other, fill_value, reflect, lhs),
-                fn,
-            ),
-            index=lhs._index,
+        operands = lhs._make_operands_for_binop(other, fill_value, reflect)
+        return (
+            lhs._from_data(
+                data=lhs._colwise_binop(operands, fn), index=lhs._index,
+            )
+            if operands is not NotImplemented
+            else NotImplemented
         )
 
     def add(self, other, fill_value=None, axis=0):
