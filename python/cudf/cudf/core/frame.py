@@ -3630,7 +3630,7 @@ class Frame(libcudf.table.Table):
         1    26
         dtype: int64
         >>> [1, 2, 3, 4] @ s
-        array(10)
+        10
         """
         lhs = self.values
         if isinstance(other, Frame):
@@ -3649,6 +3649,8 @@ class Frame(libcudf.table.Table):
             result = cudf.Series(result)
         elif len(result.shape) == 2:
             result = cudf.DataFrame(result)
+        else:
+            result = result.item()
 
         return result
 
