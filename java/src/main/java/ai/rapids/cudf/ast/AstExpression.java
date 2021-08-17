@@ -17,6 +17,7 @@
 package ai.rapids.cudf.ast;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 /** Base class of every node in an AST */
 public abstract class AstExpression {
@@ -47,6 +48,14 @@ public abstract class AstExpression {
     void serialize(ByteBuffer bb) {
       bb.put(nativeId);
     }
+  }
+
+  public CompiledExpression compile() {
+    int size = getSerializedSize();
+    ByteBuffer bb = ByteBuffer.allocate(size);
+    bb.order(ByteOrder.nativeOrder());
+    serialize(bb);
+    return new CompiledExpression(bb.array());
   }
 
   /** Get the size in bytes of the serialized form of this node and all child nodes */

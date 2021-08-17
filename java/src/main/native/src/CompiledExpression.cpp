@@ -366,7 +366,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ast_CompiledExpression_computeColumn
     auto compiled_expr_ptr = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_ast);
     auto tview_ptr = reinterpret_cast<cudf::table_view const *>(j_table);
     std::unique_ptr<cudf::column> result =
-        cudf::compute_column(*tview_ptr, compiled_expr_ptr->get_top_operation());
+        cudf::compute_column(*tview_ptr, compiled_expr_ptr->get_top_expression());
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

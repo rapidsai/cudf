@@ -811,7 +811,7 @@ jlongArray cond_join_gather_maps(JNIEnv *env, jlong j_left_table, jlong j_right_
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
               std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-        join_maps = join_func(*left_table, *right_table, condition->get_top_operation(), nulleq);
+        join_maps = join_func(*left_table, *right_table, condition->get_top_expression(), nulleq);
 
     // release the underlying device buffer to Java
     auto left_map_buffer = std::make_unique<rmm::device_buffer>(join_maps.first->release());
@@ -876,7 +876,7 @@ jlongArray cond_join_gather_single_map(JNIEnv *env, jlong j_left_table, jlong j_
     auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr *>(j_condition);
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     std::unique_ptr<rmm::device_uvector<cudf::size_type>> join_map =
-        join_func(*left_table, *right_table, condition->get_top_operation(), nulleq);
+        join_func(*left_table, *right_table, condition->get_top_expression(), nulleq);
 
     // release the underlying device buffer to Java
     auto gather_map_buffer = std::make_unique<rmm::device_buffer>(join_map->release());
@@ -1947,7 +1947,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalLeftJoinRowCount(
     auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     auto row_count = cudf::conditional_left_join_size(*left_table, *right_table,
-                                                      condition->get_top_operation(), nulleq);
+                                                      condition->get_top_expression(), nulleq);
     return static_cast<jlong>(row_count);
   }
   CATCH_STD(env, 0);
@@ -1998,7 +1998,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalInnerJoinRowCount(
     auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     auto row_count = cudf::conditional_inner_join_size(*left_table, *right_table,
-                                                       condition->get_top_operation(), nulleq);
+                                                       condition->get_top_expression(), nulleq);
     return static_cast<jlong>(row_count);
   }
   CATCH_STD(env, 0);
@@ -2069,7 +2069,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalLeftSemiJoinRowCoun
     auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     auto row_count = cudf::conditional_left_semi_join_size(*left_table, *right_table,
-                                                           condition->get_top_operation(), nulleq);
+                                                           condition->get_top_expression(), nulleq);
     return static_cast<jlong>(row_count);
   }
   CATCH_STD(env, 0);
@@ -2120,7 +2120,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalLeftAntiJoinRowCoun
     auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     auto row_count = cudf::conditional_left_anti_join_size(*left_table, *right_table,
-                                                           condition->get_top_operation(), nulleq);
+                                                           condition->get_top_expression(), nulleq);
     return static_cast<jlong>(row_count);
   }
   CATCH_STD(env, 0);

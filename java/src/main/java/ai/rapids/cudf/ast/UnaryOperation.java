@@ -19,7 +19,7 @@ package ai.rapids.cudf.ast;
 import java.nio.ByteBuffer;
 
 /** A unary operation consisting of an operator and an operand. */
-public final class UnaryOperation extends Operation {
+public final class UnaryOperation extends AstExpression {
   private final UnaryOperator op;
   private final AstExpression input;
 

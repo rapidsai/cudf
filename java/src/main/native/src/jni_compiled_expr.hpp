@@ -58,9 +58,7 @@ public:
   }
 
   /** Return the expression node at the top of the tree */
-  cudf::ast::operation &get_top_operation() const {
-    return static_cast<cudf::ast::operation &>(*expressions.back());
-  }
+  cudf::ast::expression &get_top_expression() const { return *expressions.back(); }
 };
 
 } // namespace ast
