@@ -71,8 +71,8 @@ TEST_F(ArrowIOTest, S3FileSystem)
 
   // Populate the Parquet Reader Options
   cudf::io::source_info src(datasource.get());
-  std::vector<std::vector<std::string>> single_column;
-  single_column.insert(single_column.begin(), {"total_bill"});
+  std::vector<std::string> single_column;
+  single_column.insert(single_column.begin(), "total_bill");
   cudf::io::parquet_reader_options_builder builder(src);
   cudf::io::parquet_reader_options options = builder.columns(single_column).build();
 

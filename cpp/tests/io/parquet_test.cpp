@@ -827,7 +827,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
   cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
       .use_pandas_metadata(true)
-      .columns({{"int32s"}, {"floats"}, {"doubles"}});
+      .columns({"int32s", "floats", "doubles"});
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
@@ -2408,8 +2408,7 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
 
     // read them out of order
     cudf_io::parquet_reader_options read_opts =
-      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-        .columns({{"b"}, {"a"}});
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).columns({"b", "a"});
     auto result = cudf_io::read_parquet(read_opts);
 
     cudf::test::expect_columns_equal(result.tbl->view().column(0), b);
@@ -2431,8 +2430,7 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
 
     // read them out of order
     cudf_io::parquet_reader_options read_opts =
-      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-        .columns({{"b"}, {"a"}});
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).columns({"b", "a"});
     auto result = cudf_io::read_parquet(read_opts);
 
     cudf::test::expect_columns_equal(result.tbl->view().column(0), b);
@@ -2461,7 +2459,7 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
     // read them out of order
     cudf_io::parquet_reader_options read_opts =
       cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-        .columns({{"d"}, {"a"}, {"b"}, {"c"}});
+        .columns({"d", "a", "b", "c"});
     auto result = cudf_io::read_parquet(read_opts);
 
     cudf::test::expect_columns_equal(result.tbl->view().column(0), d);
@@ -2474,7 +2472,7 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
     // read them out of order
     cudf_io::parquet_reader_options read_opts =
       cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-        .columns({{"c"}, {"d"}, {"a"}, {"b"}});
+        .columns({"c", "d", "a", "b"});
     auto result = cudf_io::read_parquet(read_opts);
 
     cudf::test::expect_columns_equal(result.tbl->view().column(0), c);
@@ -2487,7 +2485,7 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
     // read them out of order
     cudf_io::parquet_reader_options read_opts =
       cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-        .columns({{"d"}, {"c"}, {"b"}, {"a"}});
+        .columns({"d", "c", "b", "a"});
     auto result = cudf_io::read_parquet(read_opts);
 
     cudf::test::expect_columns_equal(result.tbl->view().column(0), d);
@@ -2538,7 +2536,7 @@ TEST_F(ParquetReaderTest, SelectNestedColumn)
   {  // Test selecting a single leaf from the table
     cudf_io::parquet_reader_options read_args =
       cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath))
-        .columns({{"being", "particulars", "age"}});
+        .columns({"being.particulars.age"});
     const auto result = cudf_io::read_parquet(read_args);
 
     auto expect_ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
@@ -2560,7 +2558,7 @@ TEST_F(ParquetReaderTest, SelectNestedColumn)
   {  // Test selecting a non-leaf and expecting all hierarchy from that node onwards
     cudf_io::parquet_reader_options read_args =
       cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath))
-        .columns({{"being", "particulars"}});
+        .columns({"being.particulars"});
     const auto result = cudf_io::read_parquet(read_args);
 
     auto expected_weights_col =
@@ -2589,9 +2587,7 @@ TEST_F(ParquetReaderTest, SelectNestedColumn)
   {  // Test selecting struct children out of order
     cudf_io::parquet_reader_options read_args =
       cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath))
-        .columns({{"being", "particulars", "age"},
-                  {"being", "particulars", "weight"},
-                  {"being", "human?"}});
+        .columns({"being.particulars.age", "being.particulars.weight", "being.human?"});
     const auto result = cudf_io::read_parquet(read_args);
 
     auto expected_weights_col =
@@ -2842,7 +2838,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
 
     cudf_io::parquet_reader_options read_strict_opts = read_opts;
     read_strict_opts.set_strict_decimal_types(true);
-    read_strict_opts.set_columns({{"dec7p4"}, {"dec14p5"}});
+    read_strict_opts.set_columns({"dec7p4", "dec14p5"});
     EXPECT_NO_THROW(cudf_io::read_parquet(read_strict_opts));
   }
   {
@@ -2940,7 +2936,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
       cudf_io::parquet_reader_options::builder(cudf_io::source_info{
         reinterpret_cast<const char*>(fixed_len_bytes_decimal_parquet), parquet_len});
     read_opts.set_strict_decimal_types(true);
-    read_opts.set_columns({{"dec7p3"}, {"dec12p11"}});
+    read_opts.set_columns({"dec7p3", "dec12p11"});
     auto result = cudf_io::read_parquet(read_opts);
     EXPECT_EQ(result.tbl->view().num_columns(), 2);
 
@@ -2985,7 +2981,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
       std::begin(col1_data), std::end(col1_data), validity_c1, numeric::scale_type{-11});
     cudf::test::expect_columns_equal(result.tbl->view().column(1), col1);
 
-    read_opts.set_columns({{"dec20p1"}});
+    read_opts.set_columns({"dec20p1"});
     EXPECT_THROW(cudf_io::read_parquet(read_opts), cudf::logic_error);
   }
 }

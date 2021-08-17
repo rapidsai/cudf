@@ -563,7 +563,7 @@ class aggregate_metadata {
    * @return input column information, output column information, list of output column schema
    * indices
    */
-  auto select_columns(std::vector<std::vector<std::string>> const& use_names,
+  auto select_columns(std::vector<std::string> const& use_names,
                       bool include_index,
                       bool strings_to_categorical,
                       type_id timestamp_type_id,
@@ -690,23 +690,8 @@ class aggregate_metadata {
       }
 
       // Find which of the selected paths are valid and get their schema index
-
-      // TODO: converting vec<str> into . separated str. Change API to take str
-      std::vector<std::string> use_names2;
-      std::transform(use_names.begin(),
-                     use_names.end(),
-                     std::back_inserter(use_names2),
-                     [](std::vector<std::string> vec_path) -> std::string {
-                       return std::accumulate(std::next(vec_path.begin()),
-                                              vec_path.end(),
-                                              vec_path[0],
-                                              [](std::string cumulate, std::string node) {
-                                                return cumulate + "." + node;
-                                              });
-                     });
-
       std::vector<std::pair<std::string, size_t>> valid_selected_paths;
-      for (auto const& selected_path : use_names2) {
+      for (auto const& selected_path : use_names) {
         auto found_path = std::find_if(
           all_paths.begin(), all_paths.end(), [&](std::pair<std::string, size_t>& valid_path) {
             return valid_path.first == selected_path;
@@ -764,7 +749,7 @@ class aggregate_metadata {
        *   |
        *   f5
        */
-      for (auto const& path : use_names) {
+      for (auto const& path : use_names3) {
         auto array_to_find_in = &selected_columns;
         for (size_t depth = 0; depth < path.size(); ++depth) {
           // Check if the path exists in our selected_columns and if not, add it.
