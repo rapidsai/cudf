@@ -1934,6 +1934,25 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoinGatherMaps(
       });
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalLeftJoinRowCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal) {
+  JNI_NULL_CHECK(env, j_left_table, "left_table is null", 0);
+  JNI_NULL_CHECK(env, j_right_table, "right_table is null", 0);
+  JNI_NULL_CHECK(env, j_condition, "condition is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
+    auto right_table = reinterpret_cast<cudf::table_view const *>(j_right_table);
+    auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    auto row_count = cudf::conditional_left_join_size(*left_table, *right_table,
+                                                      condition->get_top_expression(), nulleq);
+    return static_cast<jlong>(row_count);
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftJoinGatherMaps(
     JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
     jboolean compare_nulls_equal) {
@@ -1942,6 +1961,18 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftJoinGather
       [](cudf::table_view const &left, cudf::table_view const &right,
          cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
         return cudf::conditional_left_join(left, right, cond_expr, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftJoinGatherMapsWithCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal, jlong j_row_count) {
+  auto row_count = static_cast<std::size_t>(j_row_count);
+  return cudf::jni::cond_join_gather_maps(
+      env, j_left_table, j_right_table, j_condition, compare_nulls_equal,
+      [row_count](cudf::table_view const &left, cudf::table_view const &right,
+                  cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
+        return cudf::conditional_left_join(left, right, cond_expr, nulleq, row_count);
       });
 }
 
@@ -1954,6 +1985,25 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoinGatherMaps(
       });
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalInnerJoinRowCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal) {
+  JNI_NULL_CHECK(env, j_left_table, "left_table is null", 0);
+  JNI_NULL_CHECK(env, j_right_table, "right_table is null", 0);
+  JNI_NULL_CHECK(env, j_condition, "condition is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
+    auto right_table = reinterpret_cast<cudf::table_view const *>(j_right_table);
+    auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    auto row_count = cudf::conditional_inner_join_size(*left_table, *right_table,
+                                                       condition->get_top_expression(), nulleq);
+    return static_cast<jlong>(row_count);
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalInnerJoinGatherMaps(
     JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
     jboolean compare_nulls_equal) {
@@ -1962,6 +2012,18 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalInnerJoinGathe
       [](cudf::table_view const &left, cudf::table_view const &right,
          cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
         return cudf::conditional_inner_join(left, right, cond_expr, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalInnerJoinGatherMapsWithCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal, jlong j_row_count) {
+  auto row_count = static_cast<std::size_t>(j_row_count);
+  return cudf::jni::cond_join_gather_maps(
+      env, j_left_table, j_right_table, j_condition, compare_nulls_equal,
+      [row_count](cudf::table_view const &left, cudf::table_view const &right,
+                  cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
+        return cudf::conditional_inner_join(left, right, cond_expr, nulleq, row_count);
       });
 }
 
@@ -1994,6 +2056,25 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoinGatherMap(
       });
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalLeftSemiJoinRowCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal) {
+  JNI_NULL_CHECK(env, j_left_table, "left_table is null", 0);
+  JNI_NULL_CHECK(env, j_right_table, "right_table is null", 0);
+  JNI_NULL_CHECK(env, j_condition, "condition is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
+    auto right_table = reinterpret_cast<cudf::table_view const *>(j_right_table);
+    auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    auto row_count = cudf::conditional_left_semi_join_size(*left_table, *right_table,
+                                                           condition->get_top_expression(), nulleq);
+    return static_cast<jlong>(row_count);
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftSemiJoinGatherMap(
     JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
     jboolean compare_nulls_equal) {
@@ -2002,6 +2083,18 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftSemiJoinGa
       [](cudf::table_view const &left, cudf::table_view const &right,
          cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
         return cudf::conditional_left_semi_join(left, right, cond_expr, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftSemiJoinGatherMapWithCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal, jlong j_row_count) {
+  auto row_count = static_cast<std::size_t>(j_row_count);
+  return cudf::jni::cond_join_gather_single_map(
+      env, j_left_table, j_right_table, j_condition, compare_nulls_equal,
+      [row_count](cudf::table_view const &left, cudf::table_view const &right,
+                  cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
+        return cudf::conditional_left_semi_join(left, right, cond_expr, nulleq, row_count);
       });
 }
 
@@ -2014,6 +2107,25 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoinGatherMap(
       });
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalLeftAntiJoinRowCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal) {
+  JNI_NULL_CHECK(env, j_left_table, "left_table is null", 0);
+  JNI_NULL_CHECK(env, j_right_table, "right_table is null", 0);
+  JNI_NULL_CHECK(env, j_condition, "condition is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
+    auto right_table = reinterpret_cast<cudf::table_view const *>(j_right_table);
+    auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    auto row_count = cudf::conditional_left_anti_join_size(*left_table, *right_table,
+                                                           condition->get_top_expression(), nulleq);
+    return static_cast<jlong>(row_count);
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftAntiJoinGatherMap(
     JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
     jboolean compare_nulls_equal) {
@@ -2022,6 +2134,18 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftAntiJoinGa
       [](cudf::table_view const &left, cudf::table_view const &right,
          cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
         return cudf::conditional_left_anti_join(left, right, cond_expr, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftAntiJoinGatherMapWithCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal, jlong j_row_count) {
+  auto row_count = static_cast<std::size_t>(j_row_count);
+  return cudf::jni::cond_join_gather_single_map(
+      env, j_left_table, j_right_table, j_condition, compare_nulls_equal,
+      [row_count](cudf::table_view const &left, cudf::table_view const &right,
+                  cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
+        return cudf::conditional_left_anti_join(left, right, cond_expr, nulleq, row_count);
       });
 }
 
