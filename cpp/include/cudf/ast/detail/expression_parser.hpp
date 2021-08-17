@@ -23,7 +23,9 @@
 
 #include <thrust/optional.h>
 
+#include <functional>
 #include <numeric>
+#include <optional>
 
 namespace cudf {
 namespace ast {
@@ -131,8 +133,8 @@ class expression_parser {
    * @param right The right table used for evaluating the abstract syntax tree.
    */
   expression_parser(node const& expr,
-                    cudf::table_view left,
-                    cudf::table_view right,
+                    cudf::table_view const& left,
+                    std::optional<std::reference_wrapper<cudf::table_view const>> right,
                     bool has_nulls,
                     rmm::cuda_stream_view stream,
                     rmm::mr::device_memory_resource* mr)
@@ -149,11 +151,11 @@ class expression_parser {
    * @param table The table used for evaluating the abstract syntax tree.
    */
   expression_parser(node const& expr,
-                    cudf::table_view table,
+                    cudf::table_view const& table,
                     bool has_nulls,
                     rmm::cuda_stream_view stream,
                     rmm::mr::device_memory_resource* mr)
-    : expression_parser(expr, table, table, has_nulls, stream, mr)
+    : expression_parser(expr, table, {}, has_nulls, stream, mr)
   {
   }
 
@@ -322,7 +324,7 @@ class expression_parser {
                           ///< owned by this class and persists until it is destroyed.
 
   cudf::table_view const& _left;
-  cudf::table_view const& _right;
+  std::optional<std::reference_wrapper<cudf::table_view const>> _right;
   cudf::size_type _node_count;
   intermediate_counter _intermediate_counter;
   bool _has_nulls;
