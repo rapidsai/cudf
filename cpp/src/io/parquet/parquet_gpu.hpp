@@ -515,7 +515,7 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
  * For each row of a chunk, gets the indices into chunk.dict_data which contains the value otherwise
  * stored in input column [row]. Stores these indices into chunk.dict_index.
  *
- * Since dict_data itself contains indices into the origical cudf column, this means that
+ * Since dict_data itself contains indices into the original cudf column, this means that
  * col[row] == col[dict_data[dict_index[row - chunk.start_row]]]
  *
  * @param chunks Column chunks [rowgroup][column]

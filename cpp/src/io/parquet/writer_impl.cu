@@ -747,23 +747,22 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   gpu::initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
   gpu::populate_chunk_hash_maps(chunks, num_rows, stream);
 
-  chunks.device_to_host(stream);
-  stream.synchronize();
+  chunks.device_to_host(stream, true);
 
   // Make decision about which chunks have dictionary
   for (auto& ck : h_chunks) {
     if (not ck.use_dictionary) { continue; }
     std::tie(ck.use_dictionary, ck.dict_rle_bits) = [&]() {
-      // We don't use dictionary if the indices are > 16 bits
-      if (ck.num_dict_entries > MAX_DICT_SIZE) { return std::make_pair(false, 0); }
-
       // calculate size of chunk if dictionary is used
 
       // If we have N unique values then the idx for the last value is N - 1 and nbits is the number
       // of bits required to encode indices into the dictionary
       auto max_dict_index = (ck.num_dict_entries > 0) ? ck.num_dict_entries - 1 : 0;
       auto nbits          = CompactProtocolReader::NumRequiredBits(max_dict_index);
-      CUDF_EXPECTS(nbits <= 16, "Maximum supported bits by dictionary encoder is 16");
+
+      // We don't use dictionary if the indices are > 16 bits because that's the maximum bitpacking
+      // bitsize we efficiently support
+      if (nbits > 16) { return std::make_pair(false, 0); }
 
       // Only these bit sizes are allowed for RLE encoding because it's compute optimized
       constexpr auto allowed_bitsizes = std::array<size_type, 6>{1, 2, 4, 8, 12, 16};
@@ -1009,11 +1008,9 @@ void writer::impl::write(table_view const& table)
   // ideally want the page size to be below 1MB so as to have enough pages to get good
   // compression/decompression performance).
   using cudf::io::parquet::gpu::max_page_fragment_size;
-  constexpr uint32_t fragment_size = 5000;
-  static_assert(fragment_size <= max_page_fragment_size,
-                "fragment size cannot be greater than max_page_fragment_size");
 
-  uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
+  uint32_t num_fragments =
+    (uint32_t)((num_rows + max_page_fragment_size - 1) / max_page_fragment_size);
   cudf::detail::hostdevice_2dvector<gpu::PageFragment> fragments(
     num_columns, num_fragments, stream);
 
@@ -1023,7 +1020,7 @@ void writer::impl::write(table_view const& table)
     leaf_column_views = create_leaf_column_device_views<gpu::parquet_column_device_view>(
       col_desc, *parent_column_table_device_view, stream);
 
-    init_page_fragments(fragments, col_desc, num_rows, fragment_size);
+    init_page_fragments(fragments, col_desc, num_rows, max_page_fragment_size);
   }
 
   size_t global_rowgroup_base = md.row_groups.size();
@@ -1038,11 +1035,12 @@ void writer::impl::write(table_view const& table)
     for (auto i = 0; i < num_columns; i++) {
       fragment_data_size += fragments[i][f].fragment_data_size;
     }
-    if (f > rowgroup_start && (rowgroup_size + fragment_data_size > max_rowgroup_size_ ||
-                               (f + 1 - rowgroup_start) * fragment_size > max_rowgroup_rows_)) {
+    if (f > rowgroup_start &&
+        (rowgroup_size + fragment_data_size > max_rowgroup_size_ ||
+         (f + 1 - rowgroup_start) * max_page_fragment_size > max_rowgroup_rows_)) {
       // update schema
       md.row_groups.resize(md.row_groups.size() + 1);
-      md.row_groups[global_r++].num_rows = (f - rowgroup_start) * fragment_size;
+      md.row_groups[global_r++].num_rows = (f - rowgroup_start) * max_page_fragment_size;
       num_rowgroups++;
       rowgroup_start = f;
       rowgroup_size  = 0;
@@ -1051,7 +1049,7 @@ void writer::impl::write(table_view const& table)
     if (f + 1 == num_fragments) {
       // update schema
       md.row_groups.resize(md.row_groups.size() + 1);
-      md.row_groups[global_r++].num_rows = num_rows - rowgroup_start * fragment_size;
+      md.row_groups[global_r++].num_rows = num_rows - rowgroup_start * max_page_fragment_size;
       num_rowgroups++;
     }
   }
@@ -1071,8 +1069,8 @@ void writer::impl::write(table_view const& table)
   hostdevice_2dvector<gpu::EncColumnChunk> chunks(num_rowgroups, num_columns, stream);
   for (uint32_t r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups;
        r++, global_r++) {
-    uint32_t fragments_in_chunk =
-      (uint32_t)((md.row_groups[global_r].num_rows + fragment_size - 1) / fragment_size);
+    uint32_t fragments_in_chunk = (uint32_t)(
+      (md.row_groups[global_r].num_rows + max_page_fragment_size - 1) / max_page_fragment_size);
     md.row_groups[global_r].total_byte_size = 0;
     md.row_groups[global_r].columns.resize(num_columns);
     for (int i = 0; i < num_columns; i++) {
@@ -1106,7 +1104,6 @@ void writer::impl::write(table_view const& table)
     start_row += (uint32_t)md.row_groups[global_r].num_rows;
   }
 
-  // Yahan banayenge nayi dictionary ka ghar
   auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, num_rows, stream);
   for (uint32_t rg = 0, global_rg = global_rowgroup_base; rg < num_rowgroups; rg++, global_rg++) {
     for (int col = 0; col < num_columns; col++) {

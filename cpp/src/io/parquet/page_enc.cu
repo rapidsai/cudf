@@ -1941,7 +1941,6 @@ void InitPageFragments(device_2dspan<PageFragment> frag,
   dim3 dim_grid(num_columns, num_fragments_per_column);  // 1 threadblock per fragment
   gpuInitPageFragments<512>
     <<<dim_grid, 512, 0, stream.value()>>>(frag, col_desc, fragment_size, num_rows);
-  stream.synchronize();
 }
 
 /**
@@ -1962,7 +1961,6 @@ void InitFragmentStatistics(device_2dspan<statistics_group> groups,
   auto grid_y = util::div_rounding_up_safe(num_fragments_per_column, 128 / cudf::detail::warp_size);
   dim3 dim_grid(num_columns, grid_y);  // 1 warp per fragment
   gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(groups, fragments, col_desc);
-  stream.synchronize();
 }
 
 /**
@@ -1989,7 +1987,6 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
   dim3 dim_grid(num_columns, num_rowgroups);  // 1 threadblock per rowgroup
   gpuInitPages<<<dim_grid, 128, 0, stream.value()>>>(
     chunks, pages, col_desc, page_grstats, chunk_grstats, num_columns);
-  stream.synchronize();
 }
 
 /**
@@ -2009,7 +2006,6 @@ void EncodePages(device_span<gpu::EncPage> pages,
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively
   // deal with one datatype.
   gpuEncodePages<128><<<num_pages, 128, 0, stream.value()>>>(pages, comp_in, comp_stat);
-  stream.synchronize();
 }
 
 /**
@@ -2021,7 +2017,6 @@ void EncodePages(device_span<gpu::EncPage> pages,
 void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
   gpuDecideCompression<<<chunks.size(), 128, 0, stream.value()>>>(chunks);
-  stream.synchronize();
 }
 
 /**
@@ -2043,7 +2038,6 @@ void EncodePageHeaders(device_span<EncPage> pages,
   // threads to coop load structs
   gpuEncodePageHeaders<<<pages.size(), 128, 0, stream.value()>>>(
     pages, comp_stat, page_stats, chunk_stats);
-  stream.synchronize();
 }
 
 /**
@@ -2058,7 +2052,6 @@ void GatherPages(device_span<EncColumnChunk> chunks,
                  rmm::cuda_stream_view stream)
 {
   gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks, pages);
-  stream.synchronize();
 }
 
 }  // namespace gpu

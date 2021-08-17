@@ -102,8 +102,9 @@ __global__ void __launch_bounds__(block_size, 1)
   auto t       = threadIdx.x;
 
   auto start_row =
-    block_x * 5000;  // This is fragment size. all chunks are multiple of these many rows.
-  size_type end_row = min(start_row + 5000, num_rows);
+    block_x *
+    max_page_fragment_size;  // This is fragment size. all chunks are multiple of these many rows.
+  size_type end_row = min(start_row + max_page_fragment_size, num_rows);
 
   __shared__ EncColumnChunk* s_chunk;
   __shared__ parquet_column_device_view s_col;
@@ -163,7 +164,7 @@ __global__ void __launch_bounds__(block_size, 1)
     // add the value to hash map
     size_type val_idx = i + t + s_start_value_idx;
     bool is_valid =
-      (i + t < s_num_values && val_idx < data_col.size()) ? data_col.is_valid(val_idx) : false;
+      (i + t < s_num_values && val_idx < data_col.size()) and data_col.is_valid(val_idx);
 
     // insert element at val_idx to hash map and count successful insertions
     size_type is_unique      = 0;
@@ -250,8 +251,8 @@ __global__ void __launch_bounds__(block_size, 1)
   auto block_x = blockIdx.x;
   auto t       = threadIdx.x;
 
-  size_type start_row = block_x * 5000;
-  size_type end_row   = min(start_row + 5000, num_rows);
+  size_type start_row = block_x * max_page_fragment_size;
+  size_type end_row   = min(start_row + max_page_fragment_size, num_rows);
 
   __shared__ EncColumnChunk s_chunk;
   __shared__ parquet_column_device_view s_col;
@@ -331,7 +332,6 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
   constexpr int block_size = 1024;
   initialize_chunk_hash_maps_kernel<block_size>
     <<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
-  stream.synchronize();
 }
 
 void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
@@ -339,20 +339,18 @@ void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks
                               rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
-  auto grid_x              = cudf::detail::grid_1d(num_rows, 5000);
-  auto num_columns         = chunks.size().second;
-  dim3 dim_grid(grid_x.num_blocks, num_columns);
+  auto const grid_x        = cudf::detail::grid_1d(num_rows, max_page_fragment_size);
+  auto const num_columns   = chunks.size().second;
+  dim3 const dim_grid(grid_x.num_blocks, num_columns);
 
   populate_chunk_hash_maps_kernel<block_size>
     <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
-  stream.synchronize();
 }
 
 void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 1024;
   collect_map_entries_kernel<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
-  stream.synchronize();
 }
 
 void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
@@ -360,13 +358,12 @@ void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                             rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
-  auto grid_x              = cudf::detail::grid_1d(num_rows, 5000);
-  auto num_columns         = chunks.size().second;
-  dim3 dim_grid(grid_x.num_blocks, num_columns);
+  auto const grid_x        = cudf::detail::grid_1d(num_rows, max_page_fragment_size);
+  auto const num_columns   = chunks.size().second;
+  dim3 const dim_grid(grid_x.num_blocks, num_columns);
 
   get_dictionary_indices_kernel<block_size>
     <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
-  stream.synchronize();
 }
 }  // namespace gpu
 }  // namespace parquet
