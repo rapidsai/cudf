@@ -3613,9 +3613,7 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     pds = pd.Series(pd.Index(["1", "18", "9"]), dtype="int")
-    gds = cudf.Series(
-        cudf.core.index.StringIndex(["1", "18", "9"]), dtype="int"
-    )
+    gds = cudf.Series(cudf.StringIndex(["1", "18", "9"]), dtype="int")
 
     assert_eq(pds, gds)
 
@@ -8770,3 +8768,23 @@ def test_dataframe_indexing_setitem_np_cp_array(array, is_error):
             "(10, 3) could not be broadcast to indexing "
             "result of shape (10, 2)",
         )
+
+
+@pytest.mark.parametrize(
+    "data", [{"a": [1, 2, 3], "b": [1, 1, 0]}],
+)
+def test_frame_series_where_other(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = gdf.where(gdf["b"] == 1, cudf.NA)
+    actual = pdf.where(pdf["b"] == 1, pd.NA)
+    assert_eq(
+        actual.fillna(-1).values,
+        expected.fillna(-1).values,
+        check_dtype=False,
+    )
+
+    expected = gdf.where(gdf["b"] == 1, 0)
+    actual = pdf.where(pdf["b"] == 1, 0)
+    assert_eq(expected, actual)
