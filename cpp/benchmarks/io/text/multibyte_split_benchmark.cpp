@@ -136,11 +136,9 @@ static void BM_multibyte_split(benchmark::State& state)
     default: CUDF_FAIL();
   }
 
-  auto delimiters = std::vector<std::string>({delim});
-
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
-    auto output = cudf::io::text::multibyte_split(*source, delimiters);
+    auto output = cudf::io::text::multibyte_split(*source, delim);
   }
 
   state.SetBytesProcessed(state.iterations() * device_input.size());

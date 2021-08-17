@@ -345,13 +345,13 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
 }
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
-                                              std::vector<std::string> const& delimiters,
+                                              std::string const& delimiter,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr,
                                               rmm::cuda_stream_pool& stream_pool)
 {
   CUDF_FUNC_RANGE();
-  auto const trie = cudf::io::text::detail::trie::create(delimiters, stream);
+  auto const trie = cudf::io::text::detail::trie::create({delimiter}, stream);
 
   CUDF_EXPECTS(trie.max_duplicate_tokens() <= multistate::max_segments,
                "delimiters must be representable by a trie with no more than 7 duplicate tokens");
@@ -409,12 +409,12 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 }  // namespace detail
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
-                                              std::vector<std::string> const& delimiters,
+                                              std::string const& delimiter,
                                               rmm::mr::device_memory_resource* mr)
 {
   auto stream      = rmm::cuda_stream_default;
   auto stream_pool = rmm::cuda_stream_pool(2);
-  auto result      = detail::multibyte_split(source, delimiters, stream, mr, stream_pool);
+  auto result      = detail::multibyte_split(source, delimiter, stream, mr, stream_pool);
 
   stream.synchronize();
 
