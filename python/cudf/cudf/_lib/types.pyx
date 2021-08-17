@@ -30,6 +30,7 @@ from cudf.utils.dtypes import (
 )
 
 cimport cudf._lib.cpp.types as libcudf_types
+import cudf
 
 
 class TypeId(IntEnum):
@@ -188,11 +189,11 @@ cdef dtype_from_lists_column_view(column_view cv):
     cdef column_view child = lv.get()[0].child()
 
     if child.type().id() == libcudf_types.type_id.LIST:
-        return ListDtype(dtype_from_lists_column_view(child))
+        return cudf.ListDtype(dtype_from_lists_column_view(child))
     elif child.type().id() == libcudf_types.type_id.EMPTY:
-        return ListDtype(np.dtype("int8"))
+        return cudf.ListDtype("int8")
     else:
-        return ListDtype(
+        return cudf.ListDtype(
             dtype_from_column_view(child)
         )
 
@@ -201,7 +202,7 @@ cdef dtype_from_structs_column_view(column_view cv):
         str(i): dtype_from_column_view(cv.child(i))
         for i in range(cv.num_children())
     }
-    return StructDtype(fields)
+    return cudf.StructDtype(fields)
 
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()
@@ -210,26 +211,26 @@ cdef dtype_from_column_view(column_view cv):
     elif tid == libcudf_types.type_id.STRUCT:
         return dtype_from_structs_column_view(cv)
     elif tid == libcudf_types.type_id.DECIMAL64:
-        return Decimal64Dtype(
-            precision=Decimal64Dtype.MAX_PRECISION,
+        return cudf.Decimal64Dtype(
+            precision=cudf.Decimal64Dtype.MAX_PRECISION,
             scale=-cv.type().scale()
         )
     elif tid == libcudf_types.type_id.DECIMAL32:
-        return Decimal32Dtype(
-            precision=Decimal32Dtype.MAX_PRECISION,
+        return cudf.Decimal32Dtype(
+            precision=cudf.Decimal32Dtype.MAX_PRECISION,
             scale=-cv.type().scale()
         )
     else:
         return cudf_to_np_types[<underlying_type_t_type_id>(tid)]
 
 cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
-    if is_list_dtype(dtype):
+    if cudf.api.types.is_list_dtype(dtype):
         tid = libcudf_types.type_id.LIST
-    elif is_struct_dtype(dtype):
+    elif cudf.api.types.is_struct_dtype(dtype):
         tid = libcudf_types.type_id.STRUCT
-    elif is_decimal64_dtype(dtype):
+    elif cudf.api.types.is_decimal64_dtype(dtype):
         tid = libcudf_types.type_id.DECIMAL64
-    elif is_decimal32_dtype(dtype):
+    elif cudf.api.types.is_decimal32_dtype(dtype):
         tid = libcudf_types.type_id.DECIMAL32
     else:
         tid = <libcudf_types.type_id> (

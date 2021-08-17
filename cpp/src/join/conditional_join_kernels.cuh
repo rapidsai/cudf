@@ -40,7 +40,7 @@ namespace detail {
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
- * @param[in] JoinKind The type of join to be performed
+ * @param[in] join_type The type of join to be performed
  * @param[in] compare_nulls Controls whether null join-key values should match or not.
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
@@ -50,10 +50,10 @@ template <int block_size, bool has_nulls>
 __global__ void compute_conditional_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
-  join_kind JoinKind,
+  join_kind join_type,
   null_equality compare_nulls,
   ast::detail::expression_device_view device_expression_data,
-  cudf::size_type* output_size)
+  std::size_t* output_size)
 {
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
@@ -65,7 +65,7 @@ __global__ void compute_conditional_join_output_size(
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
-  cudf::size_type thread_counter(0);
+  std::size_t thread_counter{0};
   cudf::size_type const left_start_idx = threadIdx.x + blockIdx.x * blockDim.x;
   cudf::size_type const left_stride    = blockDim.x * gridDim.x;
   cudf::size_type const left_num_rows  = left_table.num_rows();
@@ -81,15 +81,15 @@ __global__ void compute_conditional_join_output_size(
       auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
       evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
       if (output_dest.is_valid() && output_dest.value()) {
-        if ((JoinKind != join_kind::LEFT_ANTI_JOIN) &&
-            !(JoinKind == join_kind::LEFT_SEMI_JOIN && found_match)) {
+        if ((join_type != join_kind::LEFT_ANTI_JOIN) &&
+            !(join_type == join_kind::LEFT_SEMI_JOIN && found_match)) {
           ++thread_counter;
         }
         found_match = true;
       }
     }
-    if ((JoinKind == join_kind::LEFT_JOIN || JoinKind == join_kind::LEFT_ANTI_JOIN ||
-         JoinKind == join_kind::FULL_JOIN) &&
+    if ((join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
+         join_type == join_kind::FULL_JOIN) &&
         (!found_match)) {
       ++thread_counter;
     }
@@ -97,7 +97,7 @@ __global__ void compute_conditional_join_output_size(
 
   using BlockReduce = cub::BlockReduce<cudf::size_type, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
-  cudf::size_type block_counter = BlockReduce(temp_storage).Sum(thread_counter);
+  std::size_t block_counter = BlockReduce(temp_storage).Sum(thread_counter);
 
   // Add block counter to global counter
   if (threadIdx.x == 0) atomicAdd(output_size, block_counter);
@@ -115,7 +115,7 @@ __global__ void compute_conditional_join_output_size(
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
- * @param[in] JoinKind The type of join to be performed
+ * @param[in] join_type The type of join to be performed
  * @param compare_nulls Controls whether null join-key values should match or not.
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
@@ -128,7 +128,7 @@ __global__ void compute_conditional_join_output_size(
 template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
 __global__ void conditional_join(table_device_view left_table,
                                  table_device_view right_table,
-                                 join_kind JoinKind,
+                                 join_kind join_type,
                                  null_equality compare_nulls,
                                  cudf::size_type* join_output_l,
                                  cudf::size_type* join_output_r,
@@ -181,8 +181,8 @@ __global__ void conditional_join(table_device_view left_table,
         // that the current logic relies on the fact that we process all right
         // table rows for a single left table row on a single thread so that no
         // synchronization of found_match is required).
-        if ((JoinKind != join_kind::LEFT_ANTI_JOIN) &&
-            !(JoinKind == join_kind::LEFT_SEMI_JOIN && found_match)) {
+        if ((join_type != join_kind::LEFT_ANTI_JOIN) &&
+            !(join_type == join_kind::LEFT_SEMI_JOIN && found_match)) {
           add_pair_to_cache(left_row_index,
                             right_row_index,
                             current_idx_shared,
@@ -214,8 +214,8 @@ __global__ void conditional_join(table_device_view left_table,
 
     // Left, left anti, and full joins all require saving left columns that
     // aren't present in the right.
-    if ((JoinKind == join_kind::LEFT_JOIN || JoinKind == join_kind::LEFT_ANTI_JOIN ||
-         JoinKind == join_kind::FULL_JOIN) &&
+    if ((join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
+         join_type == join_kind::FULL_JOIN) &&
         (!found_match)) {
       add_pair_to_cache(left_row_index,
                         static_cast<cudf::size_type>(JoinNoneValue),
