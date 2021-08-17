@@ -144,27 +144,61 @@ table_with_metadata read_avro(avro_reader_options const& options,
   return reader->read(options);
 }
 
-table_with_metadata read_json(json_reader_options const& options,
-                              rmm::mr::device_memory_resource* mr)
+compression_type infer_compression_type(compression_type compression, source_info const& info)
+{
+  if (compression != compression_type::AUTO) { return compression; }
+
+  if (info.type != io_type::FILEPATH) { return compression_type::NONE; }
+
+  auto filepath = info.filepaths[0];
+
+  // Attempt to infer from the file extension
+  const auto pos = filepath.find_last_of('.');
+
+  if (pos == std::string::npos) { return {}; }
+
+  auto str_tolower = [](const auto& begin, const auto& end) {
+    std::string out;
+    std::transform(begin, end, std::back_inserter(out), ::tolower);
+    return out;
+  };
+
+  const auto ext = str_tolower(filepath.begin() + pos + 1, filepath.end());
+
+  if (ext == "gz") { return compression_type::GZIP; }
+  if (ext == "zip") { return compression_type::ZIP; }
+  if (ext == "bz2") { return compression_type::BZIP2; }
+  if (ext == "xz") { return compression_type::XZ; }
+
+  return compression_type::NONE;
+}
+
+table_with_metadata read_json(json_reader_options options, rmm::mr::device_memory_resource* mr)
 {
   namespace json = cudf::io::detail::json;
 
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
+
+  options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
+
   auto reader =
     std::make_unique<json::reader>(std::move(datasources), options, rmm::cuda_stream_default, mr);
 
   return reader->read(options);
 }
 
-table_with_metadata read_csv(csv_reader_options const& options, rmm::mr::device_memory_resource* mr)
+table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr)
 {
   namespace csv = cudf::io::detail::csv;
 
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
+
+  options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
+
   auto reader =
     std::make_unique<csv::reader>(std::move(datasources), options, rmm::cuda_stream_default, mr);
 

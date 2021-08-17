@@ -364,7 +364,7 @@ class json_reader_options_builder {
  * @return The set of columns along with metadata.
  */
 table_with_metadata read_json(
-  json_reader_options const& options,
+  json_reader_options options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

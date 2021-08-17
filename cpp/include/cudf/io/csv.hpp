@@ -1199,7 +1199,7 @@ class csv_reader_options_builder {
  * @return The set of columns along with metadata.
  */
 table_with_metadata read_csv(
-  csv_reader_options const& options,
+  csv_reader_options options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
