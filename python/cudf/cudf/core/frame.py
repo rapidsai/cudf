@@ -27,6 +27,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
+from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -4112,7 +4113,17 @@ class Frame(libcudf.table.Table):
         )
 
     # Alias for kurtosis.
-    kurt = kurtosis
+    @copy_docstring(kurtosis)
+    def kurt(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
+        return self.kurtosis(
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
 
     def skew(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs

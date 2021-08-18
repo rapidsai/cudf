@@ -6457,8 +6457,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             axis, skipna, level, numeric_only, **kwargs
         )
 
-    kurt = kurtosis
-
     def skew(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
     ):
