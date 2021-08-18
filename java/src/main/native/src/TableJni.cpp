@@ -1187,13 +1187,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
     cudf::jni::native_jintArray n_scales(env, j_scales);
     if (n_types.is_null() != n_scales.is_null()) {
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "types and scales must match null",
-                  NULL);
+                    NULL);
     }
     std::vector<cudf::data_type> data_types;
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
         JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "types and scales must match size",
-                NULL);
+                      NULL);
       }
       data_types.reserve(n_types.size());
       for (int index = 0; index < n_types.size(); index++) {
