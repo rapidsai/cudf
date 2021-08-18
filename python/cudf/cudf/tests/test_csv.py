@@ -320,7 +320,6 @@ def test_csv_reader_dtype_dict(use_names):
     dtypes = df.dtypes.to_dict()
     gdf_names = list(gdf_dtypes.keys()) if use_names else None
     pdf_names = list(pdf_dtypes.keys()) if use_names else None
-
     gdf = read_csv(StringIO(buffer), dtype=dtypes, names=gdf_names)
     pdf = pd.read_csv(StringIO(buffer), dtype=dtypes, names=pdf_names)
 

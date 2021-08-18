@@ -61,13 +61,12 @@ public class CompiledExpressionTest extends CudfTestBase {
 
   @Test
   public void testInvalidColumnReferenceTransform() {
-    // verify attempting to reference an invalid table remaps to the only valid table
+    // Verify that computeColumn throws when passed an expression operating on TableReference.RIGHT.
     UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY,
         new ColumnReference(1, TableReference.RIGHT));
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
-         CompiledExpression compiledExpr = expr.compile();
-         ColumnVector actual = compiledExpr.computeColumn(t)) {
-      assertColumnsAreEqual(t.getColumn(1), actual);
+         CompiledExpression compiledExpr = expr.compile()) {
+      Assertions.assertThrows(CudfException.class, () -> compiledExpr.computeColumn(t).close());
     }
   }
 

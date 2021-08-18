@@ -507,8 +507,8 @@ def test_character_tokenize_index():
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)
 
-    sr = cudf.core.index.as_index([""])
-    expected = cudf.core.index.StringIndex([], dtype="object")
+    sr = cudf.Index([""])
+    expected = cudf.StringIndex([], dtype="object")
 
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)
