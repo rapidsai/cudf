@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -687,9 +687,9 @@ class hash_join {
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 conditional_inner_join(
-  table_view left,
-  table_view right,
-  ast::expression binary_predicate,
+  table_view const& left,
+  table_view const& right,
+  ast::expression const& binary_predicate,
   null_equality compare_nulls            = null_equality::EQUAL,
   std::optional<std::size_t> output_size = {},
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
@@ -733,9 +733,9 @@ conditional_inner_join(
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-conditional_left_join(table_view left,
-                      table_view right,
-                      ast::expression binary_predicate,
+conditional_left_join(table_view const& left,
+                      table_view const& right,
+                      ast::expression const& binary_predicate,
                       null_equality compare_nulls            = null_equality::EQUAL,
                       std::optional<std::size_t> output_size = {},
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -778,9 +778,9 @@ conditional_left_join(table_view left,
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-conditional_full_join(table_view left,
-                      table_view right,
-                      ast::expression binary_predicate,
+conditional_full_join(table_view const& left,
+                      table_view const& right,
+                      ast::expression const& binary_predicate,
                       null_equality compare_nulls         = null_equality::EQUAL,
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -817,9 +817,9 @@ conditional_full_join(table_view left,
  * `right` .
  */
 std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
-  table_view left,
-  table_view right,
-  ast::expression binary_predicate,
+  table_view const& left,
+  table_view const& right,
+  ast::expression const& binary_predicate,
   null_equality compare_nulls            = null_equality::EQUAL,
   std::optional<std::size_t> output_size = {},
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
@@ -857,9 +857,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
  * `right` .
  */
 std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
-  table_view left,
-  table_view right,
-  ast::expression binary_predicate,
+  table_view const& left,
+  table_view const& right,
+  ast::expression const& binary_predicate,
   null_equality compare_nulls            = null_equality::EQUAL,
   std::optional<std::size_t> output_size = {},
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
@@ -883,9 +883,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  * @return The size that would result from performing the requested join.
  */
 std::size_t conditional_inner_join_size(
-  table_view left,
-  table_view right,
-  ast::expression binary_predicate,
+  table_view const& left,
+  table_view const& right,
+  ast::expression const& binary_predicate,
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -908,9 +908,9 @@ std::size_t conditional_inner_join_size(
  * @return The size that would result from performing the requested join.
  */
 std::size_t conditional_left_join_size(
-  table_view left,
-  table_view right,
-  ast::expression binary_predicate,
+  table_view const& left,
+  table_view const& right,
+  ast::expression const& binary_predicate,
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -933,9 +933,9 @@ std::size_t conditional_left_join_size(
  * @return The size that would result from performing the requested join.
  */
 std::size_t conditional_left_semi_join_size(
-  table_view left,
-  table_view right,
-  ast::expression binary_predicate,
+  table_view const& left,
+  table_view const& right,
+  ast::expression const& binary_predicate,
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -958,9 +958,9 @@ std::size_t conditional_left_semi_join_size(
  * @return The size that would result from performing the requested join.
  */
 std::size_t conditional_left_anti_join_size(
-  table_view left,
-  table_view right,
-  ast::expression binary_predicate,
+  table_view const& left,
+  table_view const& right,
+  ast::expression const& binary_predicate,
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 /** @} */  // end of group
