@@ -642,6 +642,34 @@ cdef class GroupbyAggregation:
             make_collect_set_aggregation[groupby_aggregation]())
         return agg
 
+    @classmethod
+    def first(cls):
+        cdef GroupbyAggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.
+            make_nth_element_aggregation[groupby_aggregation](
+                0,
+                <libcudf_types.null_policy><underlying_type_t_null_policy>(
+                    NullHandling.EXCLUDE
+                )
+            )
+        )
+        return agg
+
+    @classmethod
+    def last(cls):
+        cdef GroupbyAggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.
+            make_nth_element_aggregation[groupby_aggregation](
+                -1,
+                <libcudf_types.null_policy><underlying_type_t_null_policy>(
+                    NullHandling.EXCLUDE
+                )
+            )
+        )
+        return agg
+
 cdef class GroupbyScanAggregation:
     """A Cython wrapper for groupby scan aggregations.
 

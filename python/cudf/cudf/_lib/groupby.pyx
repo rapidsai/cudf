@@ -110,10 +110,6 @@ cdef class GroupBy:
         )
         return grouped_keys, grouped_values, c_group_offsets
 
-        cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
-        cdef libcudf_groupby.aggregation_request c_agg_request
-        cdef GroupbyAggregation agg_obj
-
     def aggregate_internal(self, Table values, aggregations):
         from cudf.core.column_accessor import ColumnAccessor
         cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
@@ -167,25 +163,14 @@ cdef class GroupBy:
             vector[libcudf_groupby.aggregation_result]
         ] c_result
 
-        try:
-            with nogil:
-                c_result = move(
-                    self.c_obj.get()[0].aggregate(
-                        c_agg_requests
-                    )
+        with nogil:
+            c_result = move(
+                self.c_obj.get()[0].aggregate(
+                    c_agg_requests
                 )
-        except RuntimeError as e:
-            # TODO: remove this try..except after
-            # https://github.com/rapidsai/cudf/issues/7611
-            # is resolved
-            if ("make_empty_column") in str(e):
-                raise NotImplementedError(
-                    "Aggregation not supported for empty columns"
-                ) from e
-            else:
-                raise
+            )
 
-        grouped_keys = Table.from_unique_ptr(
+        grouped_keys, _ = data_from_unique_ptr(
             move(c_result.first),
             column_names=self.keys._column_names
         )
@@ -201,7 +186,7 @@ cdef class GroupBy:
                     Column.from_unique_ptr(move(c_result.second[i].results[j]))
                 )
 
-        return Table(data=result_data, index=grouped_keys)
+        return result_data, cudf.Index._from_data(grouped_keys)
 
     def scan_internal(self, Table values, aggregations):
         from cudf.core.column_accessor import ColumnAccessor
@@ -256,23 +241,12 @@ cdef class GroupBy:
             vector[libcudf_groupby.aggregation_result]
         ] c_result
 
-        try:
-            with nogil:
-                c_result = move(
-                    self.c_obj.get()[0].scan(
-                        c_agg_requests
-                    )
+        with nogil:
+            c_result = move(
+                self.c_obj.get()[0].scan(
+                    c_agg_requests
                 )
-        except RuntimeError as e:
-            # TODO: remove this try..except after
-            # https://github.com/rapidsai/cudf/issues/7611
-            # is resolved
-            if ("make_empty_column") in str(e):
-                raise NotImplementedError(
-                    "Aggregation not supported for empty columns"
-                ) from e
-            else:
-                raise
+            )
 
         grouped_keys, _ = data_from_unique_ptr(
             move(c_result.first),
