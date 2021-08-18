@@ -134,10 +134,12 @@ class MultiIndex(BaseIndex):
             self._codes = codes
         elif len(levels) == len(codes):
             self._codes = cudf.DataFrame()
-            self._codes = cudf.DataFrame._from_data({
-                i: column.as_column(code).astype(np.int64)
-                for i, code in enumerate(codes)
-            })
+            self._codes = cudf.DataFrame._from_data(
+                {
+                    i: column.as_column(code).astype(np.int64)
+                    for i, code in enumerate(codes)
+                }
+            )
         else:
             raise ValueError(
                 "MultiIndex has unequal number of levels and "
