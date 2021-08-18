@@ -651,7 +651,7 @@ def test_groupby_with_list_of_series():
     "func",
     [
         lambda df: df.groupby("x").agg({"y": {"foo": "sum"}}),
-        lambda df: df.groupby("x").agg({"y": {"y": "sum"}}),
+        lambda df: df.groupby("x").agg({"y": {"foo": "sum", "bar": "count"}}),
     ],
 )
 def test_groupby_nested_dict(func):
