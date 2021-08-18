@@ -6337,7 +6337,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 {None: result}, as_index(self._data.names)
             )
         elif axis == 1:
-            return self._apply_support_method_axis_1(op, **kwargs)
+            return self._apply_cupy_method_axis_1(op, **kwargs)
 
     def _scan(
         self, op, axis=None, *args, **kwargs,
@@ -6347,7 +6347,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if axis == 0:
             return super()._scan(op, axis=axis, *args, **kwargs)
         elif axis == 1:
-            return self._apply_support_method_axis_1(f"cum{op}", **kwargs)
+            return self._apply_cupy_method_axis_1(f"cum{op}", **kwargs)
 
     def mode(self, axis=0, numeric_only=False, dropna=True):
         """
@@ -6475,23 +6475,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         obj = self.select_dtypes(include="bool") if bool_only else self
         return super(DataFrame, obj).any(axis, skipna, level, **kwargs)
 
-    def _apply_support_method_axis_0(self, method, *args, **kwargs):
-        result = [
-            getattr(self[col], method)(*args, **kwargs)
-            for col in self._data.names
-        ]
+    def _apply_cupy_method_axis_1(self, method, *args, **kwargs):
+        # This method uses cupy to perform scans and reductions along rows of a
+        # DataFrame. Since cuDF is designed around columnar storage and
+        # operations, we convert DataFrames to 2D cupy arrays for these ops.
 
-        if isinstance(result[0], Series):
-            support_result = result
-            result = DataFrame(index=support_result[0].index)
-            for idx, col in enumerate(self._data.names):
-                result[col] = support_result[idx]
-        else:
-            result = Series(result)
-            result = result.set_index(self._data.names)
-        return result
-
-    def _apply_support_method_axis_1(self, method, *args, **kwargs):
         # for dask metadata compatibility
         skipna = kwargs.pop("skipna", None)
         skipna = True if skipna is None else skipna
@@ -6521,13 +6509,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         min_count = kwargs.pop("min_count", None)
         if min_count not in (None, 0):
             raise NotImplementedError(
-                "Row-wise operations currently do not " "support `min_count`."
+                "Row-wise operations currently do not support `min_count`."
             )
 
         bool_only = kwargs.pop("bool_only", None)
         if bool_only not in (None, True):
             raise NotImplementedError(
-                "Row-wise operations currently do not " "support `bool_only`."
+                "Row-wise operations currently do not support `bool_only`."
             )
 
         # This parameter is only necessary for axis 0 reductions that cuDF
@@ -6586,14 +6574,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             result_df = DataFrame(result).set_index(self.index)
             result_df.columns = prepared.columns
             return result_df
-
-    def _apply_support_method(self, method, axis=0, *args, **kwargs):
-        axis = self._get_axis_from_axis_arg(axis)
-
-        if axis == 0:
-            return self._apply_support_method_axis_0(method, *args, **kwargs)
-        elif axis == 1:
-            return self._apply_support_method_axis_1(method, *args, **kwargs)
 
     def _columns_view(self, columns):
         """
