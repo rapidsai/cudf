@@ -319,25 +319,7 @@ cudf::ast::expression &compile_expression(cudf::jni::ast::compiled_expr &compile
 /** Decode a serialized AST into a native libcudf AST and associated resources */
 std::unique_ptr<cudf::jni::ast::compiled_expr> compile_serialized_ast(jni_serialized_ast &jni_ast) {
   auto jni_expr_ptr = std::make_unique<cudf::jni::ast::compiled_expr>();
-  auto const expression_type = static_cast<jni_serialized_expression_type>(jni_ast.read_byte());
-  switch (expression_type) {
-    case jni_serialized_expression_type::VALID_LITERAL:
-      (void)compile_literal(true, *jni_expr_ptr, jni_ast);
-      break;
-    case jni_serialized_expression_type::NULL_LITERAL:
-      (void)compile_literal(false, *jni_expr_ptr, jni_ast);
-      break;
-    case jni_serialized_expression_type::COLUMN_REFERENCE:
-      (void)compile_column_reference(*jni_expr_ptr, jni_ast);
-      break;
-    case jni_serialized_expression_type::UNARY_OPERATION:
-      (void)compile_unary_expression(*jni_expr_ptr, jni_ast);
-      break;
-    case jni_serialized_expression_type::BINARY_OPERATION:
-      (void)compile_binary_expression(*jni_expr_ptr, jni_ast);
-      break;
-    default: throw std::invalid_argument("data is not a serialized AST expression");
-  }
+  (void)compile_expression(*jni_expr_ptr, jni_ast);
 
   if (!jni_ast.at_eof()) {
     throw std::invalid_argument("Extra bytes at end of serialized AST");
