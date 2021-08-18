@@ -153,6 +153,7 @@ add_library(cudf
     src/aggregation/aggregation.cu
     src/aggregation/result_cache.cpp
     src/ast/expression_parser.cpp
+    src/ast/expressions.cpp
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
     src/binaryop/compiled/Add.cu
@@ -255,6 +256,7 @@ add_library(cudf
     src/interop/dlpack.cpp
     src/interop/from_arrow.cu
     src/interop/to_arrow.cu
+    src/interop/detail/arrow_allocator.cpp
     src/io/avro/avro.cpp
     src/io/avro/avro_gpu.cu
     src/io/avro/reader_impl.cu

@@ -92,6 +92,15 @@ class TimeDeltaColumn(column.ColumnBase):
             return False
         return item.view("int64") in self.as_numerical
 
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the TimeDeltaColumn.
+        """
+        raise NotImplementedError(
+            "TimeDelta Arrays is not yet implemented in cudf"
+        )
+
     def to_arrow(self) -> pa.Array:
         mask = None
         if self.nullable:

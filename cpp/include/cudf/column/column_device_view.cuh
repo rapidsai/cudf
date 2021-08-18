@@ -24,6 +24,7 @@
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -851,6 +852,14 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   __device__ column_device_view child(size_type child_index) const noexcept
   {
     return d_children[child_index];
+  }
+
+  /**
+   * @brief Returns a span containing the children of this column
+   */
+  __device__ device_span<column_device_view const> children() const noexcept
+  {
+    return device_span<column_device_view const>(d_children, _num_children);
   }
 
   /**
