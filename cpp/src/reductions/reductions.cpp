@@ -122,9 +122,7 @@ std::unique_ptr<scalar> reduce(
     return make_empty_scalar_like(col, stream, mr);
   }
 
-  std::unique_ptr<scalar> result =
-    aggregation_dispatcher(agg->kind, reduce_dispatch_functor{col, output_dtype, stream, mr}, agg);
-  return result;
+  return aggregation_dispatcher(agg->kind, reduce_dispatch_functor{col, output_dtype, stream, mr}, agg);
 }
 }  // namespace detail
 
