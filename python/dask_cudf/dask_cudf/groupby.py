@@ -241,10 +241,11 @@ def groupby_agg(
             aggs[col] = [aggs[col]]
         elif isinstance(aggs[col], dict):
             str_cols_out = False
-            aggs_renames.update(
-                {_make_name(col, v, sep=sep): k for k, v in aggs[col].items()}
-            )
-            aggs[col] = list(aggs[col].values())
+            col_aggs = []
+            for k, v in aggs[col].items():
+                aggs_renames[_make_name(col, v, sep=sep)] = k
+                col_aggs.append(v)
+            aggs[col] = col_aggs
         else:
             str_cols_out = False
         if col in gb_cols:
