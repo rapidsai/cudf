@@ -209,39 +209,5 @@ cudf::size_type count_all_from_set(const char* h_data,
   return find_all_from_set<void>(h_data, h_size, keys, 0, nullptr, stream);
 }
 
-std::string infer_compression_type(
-  const compression_type& compression_arg,
-  const std::string& filename,
-  const std::vector<std::pair<std::string, std::string>>& ext_to_comp_map)
-{
-  auto str_tolower = [](const auto& begin, const auto& end) {
-    std::string out;
-    std::transform(begin, end, std::back_inserter(out), ::tolower);
-    return out;
-  };
-
-  // Attempt to infer from user-supplied argument
-  if (compression_arg != compression_type::AUTO) {
-    switch (compression_arg) {
-      case compression_type::GZIP: return "gzip";
-      case compression_type::BZIP2: return "bz2";
-      case compression_type::ZIP: return "zip";
-      case compression_type::XZ: return "xz";
-      default: break;
-    }
-  }
-
-  // Attempt to infer from the file extension
-  const auto pos = filename.find_last_of('.');
-  if (pos != std::string::npos) {
-    const auto ext = str_tolower(filename.begin() + pos + 1, filename.end());
-    for (const auto& mapping : ext_to_comp_map) {
-      if (mapping.first == ext) { return mapping.second; }
-    }
-  }
-
-  return "none";
-}
-
 }  // namespace io
 }  // namespace cudf

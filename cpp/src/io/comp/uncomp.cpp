@@ -369,6 +369,7 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
       // Unsupported format
       break;
   }
+
   CUDF_EXPECTS(comp_data != nullptr, "Unsupported compressed stream type");
   CUDF_EXPECTS(comp_len > 0, "Unsupported compressed stream type");
 
@@ -422,17 +423,17 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
  * @return Vector containing the output uncompressed data
  */
 std::vector<char> get_uncompressed_data(host_span<char const> const data,
-                                        std::string const& compression)
+                                        compression_type compression)
 {
   int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
-  if (compression == "gzip")
-    comp_type = IO_UNCOMP_STREAM_TYPE_GZIP;
-  else if (compression == "zip")
-    comp_type = IO_UNCOMP_STREAM_TYPE_ZIP;
-  else if (compression == "bz2")
-    comp_type = IO_UNCOMP_STREAM_TYPE_BZIP2;
-  else if (compression == "xz")
-    comp_type = IO_UNCOMP_STREAM_TYPE_XZ;
+
+  switch (compression) {
+    case compression_type::GZIP: comp_type = IO_UNCOMP_STREAM_TYPE_GZIP; break;
+    case compression_type::ZIP: comp_type = IO_UNCOMP_STREAM_TYPE_ZIP; break;
+    case compression_type::BZIP2: comp_type = IO_UNCOMP_STREAM_TYPE_BZIP2; break;
+    case compression_type::XZ: comp_type = IO_UNCOMP_STREAM_TYPE_XZ; break;
+    default: break;
+  }
 
   return io_uncompress_single_h2d(data.data(), data.size(), comp_type);
 }

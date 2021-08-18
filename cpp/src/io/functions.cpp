@@ -107,10 +107,18 @@ chunked_parquet_writer_options_builder chunked_parquet_writer_options::builder(
 
 namespace {
 
-std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info const& info)
+std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info const& info,
+                                                                    size_t range_offset = 0,
+                                                                    size_t range_size   = 0)
 {
   switch (info.type) {
-    case io_type::FILEPATH: return cudf::io::datasource::create(info.filepaths);
+    case io_type::FILEPATH: {
+      auto sources = std::vector<std::unique_ptr<cudf::io::datasource>>();
+      for (auto const& filepath : info.filepaths) {
+        sources.emplace_back(cudf::io::datasource::create(filepath, range_offset, range_size));
+      }
+      return sources;
+    }
     case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.buffers);
     case io_type::USER_IMPLEMENTED: return cudf::io::datasource::create(info.user_sources);
     default: CUDF_FAIL("Unsupported source type");
@@ -144,25 +152,62 @@ table_with_metadata read_avro(avro_reader_options const& options,
   return reader->read(options);
 }
 
-table_with_metadata read_json(json_reader_options const& options,
-                              rmm::mr::device_memory_resource* mr)
+compression_type infer_compression_type(compression_type compression, source_info const& info)
+{
+  if (compression != compression_type::AUTO) { return compression; }
+
+  if (info.type != io_type::FILEPATH) { return compression_type::NONE; }
+
+  auto filepath = info.filepaths[0];
+
+  // Attempt to infer from the file extension
+  const auto pos = filepath.find_last_of('.');
+
+  if (pos == std::string::npos) { return {}; }
+
+  auto str_tolower = [](const auto& begin, const auto& end) {
+    std::string out;
+    std::transform(begin, end, std::back_inserter(out), ::tolower);
+    return out;
+  };
+
+  const auto ext = str_tolower(filepath.begin() + pos + 1, filepath.end());
+
+  if (ext == "gz") { return compression_type::GZIP; }
+  if (ext == "zip") { return compression_type::ZIP; }
+  if (ext == "bz2") { return compression_type::BZIP2; }
+  if (ext == "xz") { return compression_type::XZ; }
+
+  return compression_type::NONE;
+}
+
+table_with_metadata read_json(json_reader_options options, rmm::mr::device_memory_resource* mr)
 {
   namespace json = cudf::io::detail::json;
 
   CUDF_FUNC_RANGE();
 
-  auto datasources = make_datasources(options.get_source());
+  options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
+
+  auto datasources = make_datasources(options.get_source(),
+                                      options.get_byte_range_offset(),
+                                      options.get_byte_range_size_with_padding());
+
   auto reader =
     std::make_unique<json::reader>(std::move(datasources), options, rmm::cuda_stream_default, mr);
 
   return reader->read(options);
 }
 
-table_with_metadata read_csv(csv_reader_options const& options, rmm::mr::device_memory_resource* mr)
+table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
-  auto datasources = make_datasources(options.get_source());
+  options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
+
+  auto datasources = make_datasources(options.get_source(),
+                                      options.get_byte_range_offset(),
+                                      options.get_byte_range_size_with_padding());
 
   CUDF_EXPECTS(datasources.size() == 1, "Only a single source is currently supported.");
 

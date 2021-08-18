@@ -57,7 +57,6 @@ class reader::impl {
   rmm::mr::device_memory_resource* mr_ = nullptr;
 
   std::vector<std::unique_ptr<datasource>> sources_;
-  std::vector<std::string> filepaths_;
   std::vector<uint8_t> buffer_;
 
   const char* uncomp_data_ = nullptr;
@@ -69,7 +68,7 @@ class reader::impl {
 
   size_t byte_range_offset_ = 0;
   size_t byte_range_size_   = 0;
-  bool load_whole_file_     = true;
+  bool load_whole_source_   = true;
 
   table_metadata metadata_;
   std::vector<data_type> dtypes_;
@@ -110,8 +109,9 @@ class reader::impl {
    *
    * @param[in] range_offset Number of bytes offset from the start
    * @param[in] range_size Bytes to read; use `0` for all remaining data
+   * @param[in] range_size_padded Bytes to read with padding; use `0` for all remaining data
    */
-  void ingest_raw_input(size_t range_offset, size_t range_size);
+  void ingest_raw_input(size_t range_offset, size_t range_size, size_t range_size_padded);
 
   /**
    * @brief Extract the JSON objects keys from the input file with object rows.
@@ -186,7 +186,6 @@ class reader::impl {
    * @brief Constructor from a dataset source with reader options.
    */
   explicit impl(std::vector<std::unique_ptr<datasource>>&& sources,
-                std::vector<std::string> const& filepaths,
                 json_reader_options const& options,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr);
