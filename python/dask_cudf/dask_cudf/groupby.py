@@ -243,7 +243,7 @@ def groupby_agg(
             str_cols_out = False
             col_aggs = []
             for k, v in aggs[col].items():
-                aggs_renames[_make_name(col, v, sep=sep)] = k
+                aggs_renames[col, v] = k
                 col_aggs.append(v)
             aggs[col] = col_aggs
         else:
@@ -322,9 +322,7 @@ def groupby_agg(
         agg_array = []
         for col, agg in _meta.columns:
             col_array.append(col)
-            agg_array.append(
-                aggs_renames.get(_make_name(col, agg, sep=sep), agg)
-            )
+            agg_array.append(aggs_renames.get((col, agg), agg))
         _meta.columns = pd.MultiIndex.from_arrays([col_array, agg_array])
     for s in range(split_out):
         dsk[(gb_agg_name, s)] = (
@@ -582,7 +580,7 @@ def _finalize_gb_agg(
         else:
             name, agg = col.split(sep)
             col_array.append(name)
-            agg_array.append(aggs_renames.get(col, agg))
+            agg_array.append(aggs_renames.get((name, agg), agg))
     if str_cols_out:
         gb.columns = col_array
     else:
