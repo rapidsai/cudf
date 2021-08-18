@@ -147,20 +147,20 @@ class MultiIndex(BaseIndex):
         self._validate_levels_and_codes(self._levels, self._codes)
 
         source_data = cudf.DataFrame()
-        for i, name in enumerate(self._codes.columns):
-            codes = as_index(self._codes[name]._column)
-            if -1 in self._codes[name].values:
+        for i, n in enumerate(self._codes.columns):
+            codes = as_index(self._codes[n]._column)
+            if -1 in self._codes[n].values:
                 # Must account for null(s) in _source_data column
                 level = cudf.DataFrame(
-                    {name: [None] + list(self._levels[i])},
+                    {n: [None] + list(self._levels[i])},
                     index=range(-1, len(self._levels[i])),
                 )
             else:
-                level = cudf.DataFrame({name: self._levels[i]})
+                level = cudf.DataFrame({n: self._levels[i]})
 
-            source_data[name] = libcudf.copying.gather(
+            source_data[n] = libcudf.copying.gather(
                 level, codes._data.columns[0]
-            )[0][name]
+            )[0][n]
 
         self._data = source_data._data
         self.names = names
