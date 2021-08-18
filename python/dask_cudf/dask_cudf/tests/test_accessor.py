@@ -443,16 +443,16 @@ def test_sorting(data, ascending, na_position, ignore_index):
 #############################################################################
 #                            Struct Accessor                                #
 #############################################################################
+struct_accessor_data_params = [
+    [{"a": 5, "b": 10}, {"a": 3, "b": 7}, {"a": -3, "b": 11}],
+    [{"a": None, "b": 1}, {"a": None, "b": 0}, {"a": -3, "b": None}],
+    [{"a": 1, "b": 2}],
+    [{"a": 1, "b": 3, "c": 4}],
+]
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        [{"a": 5, "b": 10}, {"a": 3, "b": 7}, {"a": -3, "b": 11}],
-        [{"a": None, "b": 1}, {"a": None, "b": 0}, {"a": -3, "b": None}],
-        [{"a": 1, "b": 2}],
-        [{"b": 3, "c": 4}],
-    ],
+    "data", struct_accessor_data_params,
 )
 def test_create_struct_series(data):
     expect = pd.Series(data)
@@ -461,12 +461,7 @@ def test_create_struct_series(data):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        [{"a": 5, "b": 10}, {"a": 3, "b": 7}, {"a": -3, "b": 11}],
-        [{"a": None, "b": 1}, {"a": None, "b": 0}, {"a": -3, "b": None}],
-        [{"a": 1, "b": 2}],
-    ],
+    "data", struct_accessor_data_params,
 )
 def test_struct_field_str(data):
     for test_key in ["a", "b"]:
@@ -476,13 +471,7 @@ def test_struct_field_str(data):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        [{"a": 5, "b": 10}, {"a": 3, "b": 7}, {"a": -3, "b": 11}],
-        [{"a": None, "b": 1}, {"a": None, "b": 0}, {"a": -3, "b": None}],
-        [{"a": 1, "b": 2}],
-        [{"b": 3, "c": 4}],
-    ],
+    "data", struct_accessor_data_params,
 )
 def test_struct_field_integer(data):
     for test_key in [0, 1]:
@@ -492,13 +481,7 @@ def test_struct_field_integer(data):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        [{"a": 5, "b": 10}, {"a": 3, "b": 7}, {"a": -3, "b": 11}],
-        [{"a": None, "b": 1}, {"a": None, "b": 0}, {"a": -3, "b": None}],
-        [{"a": 1, "b": 2}],
-        [{"b": 3, "c": 4}],
-    ],
+    "data", struct_accessor_data_params,
 )
 def test_dask_struct_field_Key_Error(data):
     got = dgd.from_cudf(Series(data), 2)
@@ -509,13 +492,7 @@ def test_dask_struct_field_Key_Error(data):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        [{"a": 5, "b": 10}, {"a": 3, "b": 7}, {"a": -3, "b": 11}],
-        [{"a": None, "b": 1}, {"a": None, "b": 0}, {"a": -3, "b": None}],
-        [{"a": 1, "b": 2}],
-        [{"b": 3, "c": 4}],
-    ],
+    "data", struct_accessor_data_params,
 )
 def test_dask_struct_field_Int_Error(data):
     # breakpoint()
