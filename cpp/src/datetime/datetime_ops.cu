@@ -180,7 +180,6 @@ struct dispatch_ceil {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const
   {
-    CUDF_EXPECTS(is_timestamp(column.type()), "Column type should be timestamp");
     auto size            = column.size();
     auto output_col_type = data_type{cudf::type_to_id<Timestamp>()};
 
@@ -364,11 +363,11 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
 }
 
 std::unique_ptr<column> ceil_general(column_view const& column,
-                                     datetime_component Component,
+                                     datetime_component component,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  switch (Component) {
+  switch (component) {
     case datetime_component::DAY:
       return cudf::type_dispatcher(column.type(),
                                    dispatch_ceil<detail::ceil_timestamp<datetime_component::DAY>>{},
@@ -417,13 +416,7 @@ std::unique_ptr<column> ceil_general(column_view const& column,
         column,
         stream,
         mr);
-    default:
-      return cudf::type_dispatcher(
-        column.type(),
-        dispatch_ceil<detail::ceil_timestamp<datetime_component::SECOND>>{},
-        column,
-        stream,
-        mr);
+    default: CUDF_FAIL("Unexpected resolution");
   }
 }
 
