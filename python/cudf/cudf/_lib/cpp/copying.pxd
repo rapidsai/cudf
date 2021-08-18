@@ -122,7 +122,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         vector[size_type] splits
     ) except +
 
-    cdef struct packed_columns:
+    cdef cppclass packed_columns:
         unique_ptr[metadata] metadata_
         unique_ptr[device_buffer] gpu_data
 

@@ -19,6 +19,7 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def split(Column source_strings,
@@ -45,7 +46,7 @@ def split(Column source_strings,
             maxsplit
         ))
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=range(0, c_result.get()[0].num_columns())
     )
@@ -104,7 +105,7 @@ def rsplit(Column source_strings,
             maxsplit
         ))
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=range(0, c_result.get()[0].num_columns())
     )

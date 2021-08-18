@@ -17,7 +17,7 @@ from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import to_cudf_compatible_scalar
 
 # The size of the mask in bytes
-mask_dtype = np.dtype(np.int32)
+mask_dtype = cudf.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
 
 
@@ -42,10 +42,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     if isinstance(size, (tuple, list)):
         size = size[0]
 
-    if scalar is None or (
-        isinstance(scalar, (np.datetime64, np.timedelta64))
-        and np.isnat(scalar)
-    ):
+    if cudf._lib.scalar._is_null_host_scalar(scalar):
         if dtype is None:
             dtype = "object"
         return column.column_empty(size, dtype=dtype, masked=True)
@@ -70,7 +67,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
     dtype = scalar.dtype
 
-    if np.dtype(dtype).kind in ("O", "U"):
+    if cudf.dtype(dtype).kind in ("O", "U"):
         gather_map = column.full(size, 0, dtype="int32")
         scalar_str_col = column.as_column([scalar], dtype="str")
         return scalar_str_col[gather_map]
