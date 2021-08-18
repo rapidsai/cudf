@@ -33,21 +33,7 @@ class StructMethods:
         1    3
         dtype: int64
         """
-        try:
-
-            if isinstance(key, int):
-                typ = self.d_series._meta.dtype.fields[
-                    list(self.d_series._meta.dtype.fields)[key]
-                ]
-            else:
-                typ = self.d_series._meta.dtype.fields[key]
-
-        except KeyError:
-            raise KeyError(f"Field '{key}' is not in the set of existing keys")
-        except TypeError:
-            raise IndexError(
-                f"Index '{key}' is greater than the number of fields"
-            )
+        typ = self.d_series._meta.struct.field(key).dtype
 
         return self.d_series.map_partitions(
             lambda s: s.struct.field(key),
