@@ -17,7 +17,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -101,13 +100,13 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
 
 /**
  * @copydoc from_timestamps(strings_column_view const&,std::string
- * const&,rmm::mr::device_memory_resource*)
+ * const&,strings_column_view const&,rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         std::string const& format,
-                                        timestamp_names const& names,
+                                        strings_column_view const& names,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr);
 

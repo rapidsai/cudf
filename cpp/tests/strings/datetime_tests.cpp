@@ -320,12 +320,12 @@ TEST_F(StringsDatetimeTest, FromTimestampDayOfWeekOfYear)
   };
 
   // clang-format off
-  cudf::strings::timestamp_names names{"AM", "PM",
-    {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"},
-    {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"},
-    {"January", "February", "March", "April", "May", "June", "July", 
-     "August", "September", "October", "November", "December"},
-    {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}};
+  cudf::test::strings_column_wrapper names({"AM", "PM",
+    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
+    "January", "February", "March", "April", "May", "June", "July", 
+    "August", "September", "October", "November", "December",
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"});
   // clang-format on
 
   cudf::test::strings_column_wrapper expected(
@@ -342,8 +342,8 @@ TEST_F(StringsDatetimeTest, FromTimestampDayOfWeekOfYear)
      "[Fri 01, Jan 1982  5  00  5  00  1981  53]", "[Sat 02, Jan 1982  6  00  6  00  1981  53]",
      "[Sun 03, Jan 1982  0  00  7  01  1981  53]"});
 
-  auto results =
-    cudf::strings::from_timestamps(timestamps, "[%a %d, %b %Y  %w  %W  %u  %U  %G  %V]", names);
+  auto results = cudf::strings::from_timestamps(
+    timestamps, "[%a %d, %b %Y  %w  %W  %u  %U  %G  %V]", cudf::strings_column_view(names));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

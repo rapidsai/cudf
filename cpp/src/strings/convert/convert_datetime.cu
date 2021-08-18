@@ -620,89 +620,8 @@ constexpr size_type days_in_week      = 7;
 constexpr size_type months_in_year    = 12;
 
 /**
- * @brief Creates a strings column with the given format names.
- *
- * The layout looks like the following
- * ```
- * ["AM", "PM",
- *  "Sunday", "Monday", ..., "Saturday",
- *  "Sun", "Mon", ..., "Sat",
- *  "January", "February", ..., "December",
- *  "Jan", "Feb", ... "Dec" ]
- * ```
- *
- * All values are optional. The 'AM' and 'PM' strings are added if not
- * present for backwards compatibility with the previous behavior.
+ * @brief Time components used by the date_time_formatter
  */
-std::unique_ptr<column> names_to_strings_column(timestamp_names const& names,
-                                                rmm::cuda_stream_view stream)
-{
-  auto const am_str = names.am_str.empty() ? std::string("AM") : names.am_str;
-  auto const pm_str = names.pm_str.empty() ? std::string("PM") : names.pm_str;
-
-  auto size_fn = [](std::string const& name) { return name.size(); };
-  std::vector<int32_t> offsets(format_names_size + 1, 0);
-  offsets[0] = am_str.size();
-  offsets[1] = pm_str.size();
-  CUDF_EXPECTS(names.weekdays.size() == 0 || names.weekdays.size() == days_in_week,
-               "Invalid weekdays vector");
-  std::transform(
-    names.weekdays.begin(), names.weekdays.end(), offsets.begin() + offset_weekdays, size_fn);
-  CUDF_EXPECTS(
-    names.weekday_abbreviations.size() == 0 || names.weekday_abbreviations.size() == days_in_week,
-    "Invalid weekday_abbreviations vector");
-  std::transform(names.weekday_abbreviations.begin(),
-                 names.weekday_abbreviations.end(),
-                 offsets.begin() + offset_weekdays + days_in_week,
-                 size_fn);
-  CUDF_EXPECTS(names.months.size() == 0 || names.months.size() == months_in_year,
-               "Invalid months vector");
-  std::transform(
-    names.months.begin(), names.months.end(), offsets.begin() + offset_months, size_fn);
-  CUDF_EXPECTS(
-    names.month_abbreviations.size() == 0 || names.month_abbreviations.size() == months_in_year,
-    "Invalid month_abbreviations vector");
-  std::transform(names.month_abbreviations.begin(),
-                 names.month_abbreviations.end(),
-                 offsets.begin() + offset_months + months_in_year,
-                 size_fn);
-  std::exclusive_scan(offsets.begin(), offsets.end(), offsets.begin(), size_type{0});
-
-  std::vector<char> chars;
-  chars.insert(chars.end(), am_str.begin(), am_str.end());
-  chars.insert(chars.end(), pm_str.begin(), pm_str.end());
-  for (auto name : names.weekdays) {
-    chars.insert(chars.end(), name.begin(), name.end());
-  }
-  for (auto name : names.weekday_abbreviations) {
-    chars.insert(chars.end(), name.begin(), name.end());
-  }
-  for (auto name : names.months) {
-    chars.insert(chars.end(), name.begin(), name.end());
-  }
-  for (auto name : names.month_abbreviations) {
-    chars.insert(chars.end(), name.begin(), name.end());
-  }
-
-  auto d_offsets = cudf::detail::make_device_uvector_async(offsets, stream);
-  auto d_chars   = cudf::detail::make_device_uvector_async(chars, stream);
-  // save these before the release() calls
-  auto const offsets_size = static_cast<size_type>(d_offsets.size());
-  auto const chars_size   = static_cast<size_type>(d_chars.size());
-
-  auto offsets_child = std::make_unique<column>(
-    data_type{type_id::INT32}, offsets_size, d_offsets.release(), rmm::device_buffer{}, 0);
-  auto chars_child = std::make_unique<column>(
-    data_type{type_id::INT8}, chars_size, d_chars.release(), rmm::device_buffer{}, 0);
-
-  return make_strings_column(format_names_size,
-                             std::move(offsets_child),
-                             std::move(chars_child),
-                             0,
-                             rmm::device_buffer{},
-                             stream);
-}
-
 struct time_components {
   int8_t hour;
   int8_t minute;
@@ -710,6 +629,11 @@ struct time_components {
   int32_t subsecond;
 };
 
+/**
+ * @brief Base class for the `from_timestamps_size_fn` and the `date_time_formatter`
+ *
+ * These contain some common utility functions used by both subclasses.
+ */
 template <typename T>
 struct from_timestamp_base {
   /**
@@ -814,7 +738,8 @@ struct from_timestamps_size_fn : public from_timestamp_base<T> {
             cuda::std::chrono::year_month_weekday(days.value()).weekday().c_encoding();
           auto const day_idx =
             day_of_week + offset_weekdays + (item.value == 'a' ? days_in_week : 0);
-          bytes += d_format_names.element<cudf::string_view>(day_idx).size_bytes();
+          if (day_idx < d_format_names.size())
+            bytes += d_format_names.element<cudf::string_view>(day_idx).size_bytes();
           break;
         }
         case 'b':    // month abbreviated
@@ -824,14 +749,17 @@ struct from_timestamps_size_fn : public from_timestamp_base<T> {
             static_cast<uint32_t>(cuda::std::chrono::year_month_day(days.value()).month());
           auto const month_idx =
             month - 1 + offset_months + (item.value == 'b' ? months_in_year : 0);
-          bytes += d_format_names.element<cudf::string_view>(month_idx).size_bytes();
+          if (month_idx < d_format_names.size())
+            bytes += d_format_names.element<cudf::string_view>(month_idx).size_bytes();
           break;
         }
         case 'p':  // AM/PM
         {
           auto times = get_time_components(d_timestamps.element<T>(idx).time_since_epoch().count());
-          bytes += d_format_names.element<cudf::string_view>(static_cast<int>(times.hour >= 12))
-                     .size_bytes();
+          bytes += d_format_names.size() > 1
+                     ? d_format_names.element<cudf::string_view>(static_cast<int>(times.hour >= 12))
+                         .size_bytes()
+                     : 2;
           break;
         }
         default: {
@@ -1010,8 +938,12 @@ struct datetime_formatter : public from_timestamp_base<T> {
         case 'p':  // am or pm
         {
           // 0 = 12am, 12 = 12pm
-          auto const am_pm =
-            d_format_names.element<cudf::string_view>(static_cast<int>(timeparts.hour >= 12));
+          auto const am_pm = [&] {
+            if (d_format_names.size() > 1)
+              return d_format_names.element<cudf::string_view>(
+                static_cast<int>(timeparts.hour >= 12));
+            return string_view(timeparts.hour >= 12 ? "PM" : "AM", 2);
+          }();
           ptr = copy_string(ptr, am_pm);
           break;
         }
@@ -1052,7 +984,8 @@ struct datetime_formatter : public from_timestamp_base<T> {
             cuda::std::chrono::year_month_weekday(days).weekday().c_encoding();
           auto const day_idx =
             day_of_week + offset_weekdays + (item.value == 'a' ? days_in_week : 0);
-          ptr = copy_string(ptr, d_format_names.element<cudf::string_view>(day_idx));
+          if (d_format_names.size())
+            ptr = copy_string(ptr, d_format_names.element<cudf::string_view>(day_idx));
           break;
         }
         case 'b':    // abbreviated month of the year
@@ -1060,7 +993,8 @@ struct datetime_formatter : public from_timestamp_base<T> {
           auto const month = static_cast<uint32_t>(ymd.month());
           auto const month_idx =
             month - 1 + offset_months + (item.value == 'b' ? months_in_year : 0);
-          ptr = copy_string(ptr, d_format_names.element<cudf::string_view>(month_idx));
+          if (d_format_names.size())
+            ptr = copy_string(ptr, d_format_names.element<cudf::string_view>(month_idx));
           break;
         }
         default: break;
@@ -1114,16 +1048,17 @@ struct dispatch_from_timestamps_fn {
 //
 std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         std::string const& format,
-                                        timestamp_names const& names,
+                                        strings_column_view const& names,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
   if (timestamps.is_empty()) return make_empty_column(data_type{type_id::STRING});
 
   CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
+  CUDF_EXPECTS(names.is_empty() || names.size() == format_names_size,
+               "Invalid size for format names.");
 
-  auto const names_column   = names_to_strings_column(names, stream);
-  auto const d_names_column = column_device_view::create(names_column->view(), stream);
+  auto const d_names = column_device_view::create(names.parent(), stream);
 
   // This API supports a few more specifiers than to_timestamps.
   // clang-format off
@@ -1138,7 +1073,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   auto [offsets_column, chars_column] = cudf::type_dispatcher(timestamps.type(),
                                                               dispatch_from_timestamps_fn(),
                                                               *d_timestamps,
-                                                              *d_names_column,
+                                                              *d_names,
                                                               d_format_items,
                                                               stream,
                                                               mr);
@@ -1158,7 +1093,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
 
 std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         std::string const& format,
-                                        timestamp_names const& names,
+                                        strings_column_view const& names,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();

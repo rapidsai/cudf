@@ -30,48 +30,6 @@ namespace strings {
  */
 
 /**
- * @brief Format names to be used with the weekday, month, and am/pm specifiers
- * in the `from_timestamps()` API.
- *
- * These names can be retrieved for specific locales using the `nl_langinfo`
- * functions from C++ `clocale` (std) library or the Python `locale` library.
- *
- * For example, the following can be used to retrieve the German date strings:
- * @code{.cpp}
- * #include <clocale>
- * #include <langinfo.h>
- *
- * // first, install language pack using: apt-get install language-pack-de
- * {
- *   // set to a German language locale for date settings
- *   std::setlocale(LC_TIME, "de_DE.UTF-8");
- *
- *   cudf::strings::timestamp_names names{nl_langinfo(AM_STR), nl_langinfo(PM_STR),
- *     {nl_langinfo(DAY_1), nl_langinfo(DAY_2), nl_langinfo(DAY_3), nl_langinfo(DAY_4),
- *      nl_langinfo(DAY_5), nl_langinfo(DAY_6), nl_langinfo(DAY_7)},
- *     {nl_langinfo(ABDAY_1), nl_langinfo(ABDAY_2), nl_langinfo(ABDAY_3), nl_langinfo(ABDAY_4),
- *      nl_langinfo(ABDAY_5), nl_langinfo(ABDAY_6), nl_langinfo(ABDAY_7)},
- *     {nl_langinfo(MON_1), nl_langinfo(MON_2), nl_langinfo(MON_3), nl_langinfo(MON_4),
- *      nl_langinfo(MON_5), nl_langinfo(MON_6), nl_langinfo(MON_7), nl_langinfo(MON_8),
- *      nl_langinfo(MON_9), nl_langinfo(MON_10), nl_langinfo(MON_11), nl_langinfo(MON_12)},
- *     {nl_langinfo(ABMON_1), nl_langinfo(ABMON_2), nl_langinfo(ABMON_3), nl_langinfo(ABMON_4),
- *      nl_langinfo(ABMON_5), nl_langinfo(ABMON_6), nl_langinfo(ABMON_7), nl_langinfo(ABMON_8),
- *      nl_langinfo(ABMON_9), nl_langinfo(ABMON_10), nl_langinfo(ABMON_11), nl_langinfo(ABMON_12)}};
- *
- *   std::setlocale(LC_TIME,""); // reset to default locale
- * }
- * @endcode
- */
-struct timestamp_names {
-  std::string am_str;                              ///< AM
-  std::string pm_str;                              ///< PM
-  std::vector<std::string> weekdays;               ///< Sunday - Saturday
-  std::vector<std::string> weekday_abbreviations;  ///< Sun - Sat
-  std::vector<std::string> months;                 ///< January - December
-  std::vector<std::string> month_abbreviations;    ///< Jan - Dec
-};
-
-/**
  * @brief Returns a new timestamp column converting a strings column into
  * timestamps using the provided format pattern.
  *
@@ -187,10 +145,10 @@ std::unique_ptr<column> is_timestamp(
  * | \%V | Week of the year per ISO-8601 format: 01-53 |
  * | \%G | Year based on the ISO-8601 weeks: 0000-9999 |
  * | \%p | AM/PM from `timestamp_names::am_str/pm_str` |
- * | \%a | Weekday from `timestamp_names::weekday_abbreviations` |
- * | \%A | Weekday from `timestamp_names::weekdays` |
- * | \%b | Month name from `timestamp_names::month_abbreviations` |
- * | \%B | Month name from `timestamp_names::months` |
+ * | \%a | Weekday abbreviation from the `names` parameter |
+ * | \%A | Weekday from the `names` parameter |
+ * | \%b | Month name abbreviation from the `names` parameter |
+ * | \%B | Month name from the `names` parameter |
  *
  * Additional descriptions can be found here:
  * https://en.cppreference.com/w/cpp/chrono/system_clock/formatter
@@ -209,20 +167,67 @@ std::unique_ptr<column> is_timestamp(
  * the subsecond value.
  * If the precision is lower than the units, the subsecond value may be truncated.
  *
+ * If the "%a", "%A", "%b", "%B" specifiers are included in the format, the caller
+ * should provide the format names in the `names` strings column using the following
+ * as a guide:
+ *
+ * @code{.pseudo}
+ * ["AM", "PM",                             // specify the AM/PM strings
+ *  "Sunday", "Monday", ..., "Saturday",    // Weekday full names
+ *  "Sun", "Mon", ..., "Sat",               // Weekday abbreviated names
+ *  "January", "February", ..., "December", // Month full names
+ *  "Jan", "Feb", ..., "Dec"]               // Month abbreviated names
+ * @endcode
+ *
+ * The result is undefined if the format names are not provided for these specifiers.
+ *
+ * These format names can be retrieved for specific locales using the `nl_langinfo`
+ * functions from C++ `clocale` (std) library or the Python `locale` library.
+ *
+ * The following code is an example of retrieving these strings from the locale
+ * using c++ std functions:
+ * @code{.cpp}
+ * #include <clocale>
+ * #include <langinfo.h>
+ *
+ * // note: install language pack on Ubuntu using 'apt-get install language-pack-de'
+ * {
+ *   // set to a German language locale for date settings
+ *   std::setlocale(LC_TIME, "de_DE.UTF-8");
+ *
+ *   std::vector<std::string> names({nl_langinfo(AM_STR), nl_langinfo(PM_STR),
+ *     nl_langinfo(DAY_1), nl_langinfo(DAY_2), nl_langinfo(DAY_3), nl_langinfo(DAY_4),
+ *      nl_langinfo(DAY_5), nl_langinfo(DAY_6), nl_langinfo(DAY_7),
+ *     nl_langinfo(ABDAY_1), nl_langinfo(ABDAY_2), nl_langinfo(ABDAY_3), nl_langinfo(ABDAY_4),
+ *      nl_langinfo(ABDAY_5), nl_langinfo(ABDAY_6), nl_langinfo(ABDAY_7),
+ *     nl_langinfo(MON_1), nl_langinfo(MON_2), nl_langinfo(MON_3), nl_langinfo(MON_4),
+ *      nl_langinfo(MON_5), nl_langinfo(MON_6), nl_langinfo(MON_7), nl_langinfo(MON_8),
+ *      nl_langinfo(MON_9), nl_langinfo(MON_10), nl_langinfo(MON_11), nl_langinfo(MON_12),
+ *     nl_langinfo(ABMON_1), nl_langinfo(ABMON_2), nl_langinfo(ABMON_3), nl_langinfo(ABMON_4),
+ *      nl_langinfo(ABMON_5), nl_langinfo(ABMON_6), nl_langinfo(ABMON_7), nl_langinfo(ABMON_8),
+ *      nl_langinfo(ABMON_9), nl_langinfo(ABMON_10), nl_langinfo(ABMON_11), nl_langinfo(ABMON_12)});
+ *
+ *   std::setlocale(LC_TIME,""); // reset to default locale
+ * }
+ * @endcode
+ *
  * @throw cudf::logic_error if `timestamps` column parameter is not a timestamp type.
+ * @throw cudf::logic_error if the `format` string is empty
+ * @throw cudf::logic_error if `names.size()` is an invalid size: 0 or 40 strings
  *
  * @param timestamps Timestamp values to convert.
  * @param format The string specifying output format.
  *        Default format is "%Y-%m-%dT%H:%M:%SZ".
  * @param names The string names to use for weekdays ("%a", "%A") and months ("%b", "%B")
+ *        Default is an empty `strings_column_view`
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with formatted timestamps.
  */
-
 std::unique_ptr<column> from_timestamps(
   column_view const& timestamps,
   std::string const& format           = "%Y-%m-%dT%H:%M:%SZ",
-  timestamp_names const& names        = timestamp_names{},
+  strings_column_view const& names    = strings_column_view(column_view{
+    data_type{type_id::STRING}, 0, nullptr}),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
