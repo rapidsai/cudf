@@ -186,7 +186,8 @@ endif(CUDF_JNI_ARROW_STATIC)
 
 find_library(ARROW_LIBRARY ${CUDF_JNI_ARROW_LIBNAME} REQUIRED
   HINTS "$ENV{ARROW_ROOT}/lib"
-        "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/release")
+        "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/release"
+        "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/debug")
 
 if(NOT ARROW_LIBRARY)
   if(CUDF_JNI_ARROW_STATIC)
@@ -261,6 +262,7 @@ set(SOURCE_FILES
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
     "src/ColumnViewJni.cpp"
+    "src/CompiledExpression.cpp"
     "src/ContiguousTableJni.cpp"
     "src/HostMemoryBufferNativeUtilsJni.cpp"
     "src/NvcompJni.cpp"

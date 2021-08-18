@@ -14,7 +14,25 @@
 # limitations under the License.
 #=============================================================================
 
-function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_PYTHON ENABLE_PARQUET)
+function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENABLE_PYTHON ENABLE_PARQUET)
+
+    if(BUILD_STATIC)
+        if(TARGET arrow_static AND TARGET arrow_cuda_static)
+            list(APPEND ARROW_LIBRARIES arrow_static)
+            list(APPEND ARROW_LIBRARIES arrow_cuda_static)
+            set(ARROW_FOUND TRUE PARENT_SCOPE)
+            set(ARROW_LIBRARIES ${ARROW_LIBRARIES} PARENT_SCOPE)
+            return()
+        endif()
+    else()
+        if(TARGET arrow_shared AND TARGET arrow_cuda_shared)
+            list(APPEND ARROW_LIBRARIES arrow_shared)
+            list(APPEND ARROW_LIBRARIES arrow_cuda_shared)
+            set(ARROW_FOUND TRUE PARENT_SCOPE)
+            set(ARROW_LIBRARIES ${ARROW_LIBRARIES} PARENT_SCOPE)
+            return()
+        endif()
+    endif()
 
     set(ARROW_BUILD_SHARED ON)
     set(ARROW_BUILD_STATIC OFF)
@@ -40,12 +58,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_PYTHON E
         list(APPEND ARROW_PYTHON_OPTIONS "ARROW_PYTHON ON")
         # Arrow's logic to build Boost from source is busted, so we have to get it from the system.
         list(APPEND ARROW_PYTHON_OPTIONS "BOOST_SOURCE SYSTEM")
-        # Arrow's logic to find Thrift is busted, so we have to build it from
-        # source. Why can't we use `THRIFT_SOURCE BUNDLED` you might ask?
-        # Because that's _also_ busted. The only thing that seems to is to set
-        # _all_ dependencies to bundled, then optionall un-set BOOST_SOURCE to
-        # SYSTEM.
-        list(APPEND ARROW_PYTHON_OPTIONS "ARROW_DEPENDENCY_SOURCE BUNDLED")
+        list(APPEND ARROW_PYTHON_OPTIONS "Thrift_SOURCE BUNDLED")
+        list(APPEND ARROW_PYTHON_OPTIONS "ARROW_DEPENDENCY_SOURCE AUTO")
     endif()
 
     # Set this so Arrow correctly finds the CUDA toolkit when the build machine
@@ -68,6 +82,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_PYTHON E
                         "ARROW_CXXFLAGS -w"
                         "ARROW_JEMALLOC OFF"
                         "ARROW_S3 ${ENABLE_S3}"
+                        "ARROW_ORC ${ENABLE_ORC}"
                         # e.g. needed by blazingsql-io
                         "ARROW_PARQUET ${ENABLE_PARQUET}"
                         ${ARROW_PYTHON_OPTIONS}
@@ -144,14 +159,31 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_PYTHON E
     set(ARROW_FOUND "${ARROW_FOUND}" PARENT_SCOPE)
     set(ARROW_LIBRARIES "${ARROW_LIBRARIES}" PARENT_SCOPE)
 
+    if(TARGET arrow_shared)
+        get_target_property(arrow_is_imported arrow_shared IMPORTED)
+        if(NOT arrow_is_imported)
+            export(TARGETS arrow_shared arrow_cuda_shared
+                FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
+                NAMESPACE   cudf::)
+        endif()
+    elseif(TARGET arrow_static)
+        get_target_property(arrow_is_imported arrow_static IMPORTED)
+        if(NOT arrow_is_imported)
+            export(TARGETS arrow_static arrow_cuda_static
+                FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
+                NAMESPACE   cudf::)
+        endif()
+    endif()
+
 endfunction()
 
-set(CUDF_VERSION_Arrow 4.0.1)
+set(CUDF_VERSION_Arrow 5.0.0)
 
 find_and_configure_arrow(
     ${CUDF_VERSION_Arrow}
     ${CUDF_USE_ARROW_STATIC}
     ${CUDF_ENABLE_ARROW_S3}
+    ${CUDF_ENABLE_ARROW_ORC}
     ${CUDF_ENABLE_ARROW_PYTHON}
     ${CUDF_ENABLE_ARROW_PARQUET}
 )

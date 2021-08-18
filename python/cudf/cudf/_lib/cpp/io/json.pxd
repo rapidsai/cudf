@@ -2,6 +2,7 @@
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
+from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -25,7 +26,8 @@ cdef extern from "cudf/io/json.hpp" \
         bool is_enabled_dayfirst() except+
 
         # setter
-        void set_dtypes(vector[string] types) except+
+        void set_dtypes(vector[data_type] types) except+
+        void set_dtypes(map[string, data_type] types) except+
         void set_compression(
             cudf_io_types.compression_type compression
         ) except+
@@ -46,6 +48,12 @@ cdef extern from "cudf/io/json.hpp" \
         ) except+
         json_reader_options_builder& dtypes(
             vector[string] types
+        ) except+
+        json_reader_options_builder& dtypes(
+            vector[data_type] types
+        ) except+
+        json_reader_options_builder& dtypes(
+            map[string, data_type] types
         ) except+
         json_reader_options_builder& compression(
             cudf_io_types.compression_type compression

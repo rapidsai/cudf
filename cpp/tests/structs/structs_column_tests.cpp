@@ -192,6 +192,10 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestStructsContainingLists)
   auto struct_col =
     cudf::test::structs_column_wrapper{{names_col, lists_col}, {1, 1, 1, 1, 0, 0}}.release();
 
+  EXPECT_EQ(struct_col->size(), num_rows);
+  EXPECT_EQ(struct_col->view().child(0).size(), num_rows);
+  EXPECT_EQ(struct_col->view().child(1).size(), num_rows);
+
   // Check that the last two rows are null for all members.
 
   // For `Name` member, indices 4 and 5 are null.
@@ -200,15 +204,9 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestStructsContainingLists)
       return i < 4;
     })}.release();
 
-  cudf::test::expect_columns_equivalent(struct_col->view().child(0), expected_names_col->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(struct_col->view().child(0), expected_names_col->view());
 
   // For the `List` member, indices 4, 5 should be null.
-  // FIXME:  The way list columns are currently compared is not ideal for testing
-  //         structs' list members. Rather than comparing for equivalence,
-  //         column_comparator_impl<list_view> currently checks that list's data (child)
-  //         and offsets match perfectly.
-  //         This causes two "equivalent lists" to compare unequal, if the data columns
-  //         have different values at an index where the value is null.
   auto expected_last_two_lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>{
     {
       {1, 2, 3},
@@ -218,14 +216,11 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestStructsContainingLists)
       {7, 8},  // Null.
       {9}      // Null.
     },
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i == 0;
-    })}.release();
+    cudf::detail::make_counting_transform_iterator(
+      0, [](auto i) { return i < 4; })}.release();
 
-  // FIXME: Uncomment after list comparison is fixed.
-  // cudf::test::expect_columns_equivalent(
-  //  struct_col->view().child(1),
-  //  expected_last_two_lists_col->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(struct_col->view().child(1),
+                                      expected_last_two_lists_col->view());
 }
 
 TYPED_TEST(TypedStructColumnWrapperTest, StructOfStructs)
@@ -254,6 +249,10 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfStructs)
 
   auto struct_2 =
     cudf::test::structs_column_wrapper{{is_human_col, struct_1}, {0, 1, 1, 1, 1, 1}}.release();
+
+  EXPECT_EQ(struct_2->size(), num_rows);
+  EXPECT_EQ(struct_2->view().child(0).size(), num_rows);
+  EXPECT_EQ(struct_2->view().child(1).size(), num_rows);
 
   // Verify that the child/grandchild columns are as expected.
   auto expected_names_col =
@@ -327,6 +326,10 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestNullMaskPropagationForNonNullStruct
     }
       .release();
 
+  EXPECT_EQ(struct_2->size(), num_rows);
+  EXPECT_EQ(struct_2->view().child(0).size(), num_rows);
+  EXPECT_EQ(struct_2->view().child(1).size(), num_rows);
+
   // Verify that the child/grandchild columns are as expected.
 
   // Top-struct has 1 null (at index 0).
@@ -387,9 +390,9 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructsWithMembersWithDifferentRowCount
 
 TYPED_TEST(TypedStructColumnWrapperTest, TestListsOfStructs)
 {
-  // Test structs with two members:
+  // Test list containing structs with two members
   //  1. Name: String
-  //  2. List: List<TypeParam>
+  //  2. Age:  TypeParam
 
   std::initializer_list<std::string> names = {"Samuel Vimes",
                                               "Carrot Ironfoundersson",
@@ -398,7 +401,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestListsOfStructs)
                                               "Detritus",
                                               "Mr Slant"};
 
-  auto num_rows{std::distance(names.begin(), names.end())};
+  auto num_struct_rows{std::distance(names.begin(), names.end())};
 
   // `Name` column has all valid values.
   auto names_col = cudf::test::strings_column_wrapper{names.begin(), names.end()};
@@ -409,6 +412,9 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestListsOfStructs)
 
   auto struct_col =
     cudf::test::structs_column_wrapper({names_col, ages_col}, {1, 1, 1, 0, 0, 1}).release();
+
+  EXPECT_EQ(struct_col->size(), num_struct_rows);
+  EXPECT_EQ(struct_col->view().child(0).size(), num_struct_rows);
 
   auto expected_unchanged_struct_col = cudf::column(*struct_col);
 
@@ -427,11 +433,6 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestListsOfStructs)
 
   cudf::test::expect_columns_equivalent(expected_unchanged_struct_col,
                                         cudf::lists_column_view(*list_col).child());
-
-#ifndef NDEBUG
-  std::cout << "Printing list col: \n";
-  cudf::test::print(*list_col);
-#endif
 }
 
 TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
