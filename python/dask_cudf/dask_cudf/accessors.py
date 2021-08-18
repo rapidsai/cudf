@@ -1,9 +1,6 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 
-# from cudf.python.dask_cudf.dask_cudf.core import Index
-
-
 class StructMethods:
     def __init__(self, d_series):
         self.d_series = d_series
