@@ -93,7 +93,10 @@ class cufile_input : public cufile_io_base {
    */
   virtual std::unique_ptr<datasource::buffer> read(size_t offset,
                                                    size_t size,
-                                                   rmm::cuda_stream_view stream) = 0;
+                                                   rmm::cuda_stream_view stream)
+  {
+    CUDF_FAIL("these classes that support read must override it.");
+  }
 
   /**
    * @brief Reads into existing device memory.
@@ -107,7 +110,10 @@ class cufile_input : public cufile_io_base {
    *
    * @return The number of bytes read
    */
-  virtual size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) = 0;
+  virtual size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) 
+  {
+    CUDF_FAIL("these classes that support read must override it.");
+  }
 
   /**
    * @brief Asynchronously reads into existing device memory.
@@ -124,7 +130,10 @@ class cufile_input : public cufile_io_base {
   virtual std::future<size_t> read_async(size_t offset,
                                          size_t size,
                                          uint8_t* dst,
-                                         rmm::cuda_stream_view stream) = 0;
+                                         rmm::cuda_stream_view stream)
+  {
+    CUDF_FAIL("these classes that support read_async must override it.");
+  }
 };
 
 /**
