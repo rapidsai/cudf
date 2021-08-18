@@ -44,7 +44,9 @@ namespace parquet {
 
 using cudf::io::detail::string_index_pair;
 
-constexpr size_type MAX_DICT_SIZE = std::numeric_limits<uint16_t>::max();
+// Total number of unsigned 16 bit values
+constexpr size_type MAX_DICT_SIZE =
+  std::numeric_limits<uint16_t>::max() - std::numeric_limits<uint16_t>::min() + 1;
 
 /**
  * @brief Struct representing an input column in the file.
