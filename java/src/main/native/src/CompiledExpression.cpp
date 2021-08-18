@@ -20,65 +20,13 @@
 
 #include <cudf/ast/nodes.hpp>
 #include <cudf/ast/operators.hpp>
-#include <cudf/ast/transform.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
 #include "cudf_jni_apis.hpp"
-
-namespace cudf {
-namespace jni {
-namespace ast {
-
-/**
- * A class to capture all of the resources associated with a compiled AST expression.
- * AST nodes do not own their child nodes, so every node in the expression tree
- * must be explicitly tracked in order to free the underlying resources for each node.
- *
- * This should be cleaned up a bit after the libcudf AST refactoring in
- * https://github.com/rapidsai/cudf/pull/8815 when a virtual destructor is added to the
- * base AST node type. Then we do not have to track every AST node type separately.
- */
-class compiled_expr {
-  /** All literal nodes within the expression tree */
-  std::vector<std::unique_ptr<cudf::ast::literal>> literals;
-
-  /** All column reference nodes within the expression tree */
-  std::vector<std::unique_ptr<cudf::ast::column_reference>> column_refs;
-
-  /** All expression nodes within the expression tree */
-  std::vector<std::unique_ptr<cudf::ast::expression>> expressions;
-
-  /** GPU scalar instances that correspond to literal nodes */
-  std::vector<std::unique_ptr<cudf::scalar>> scalars;
-
-public:
-  cudf::ast::literal &add_literal(std::unique_ptr<cudf::ast::literal> literal_ptr,
-                                  std::unique_ptr<cudf::scalar> scalar_ptr) {
-    literals.push_back(std::move(literal_ptr));
-    scalars.push_back(std::move(scalar_ptr));
-    return *literals.back();
-  }
-
-  cudf::ast::column_reference &
-  add_column_ref(std::unique_ptr<cudf::ast::column_reference> ref_ptr) {
-    column_refs.push_back(std::move(ref_ptr));
-    return *column_refs.back();
-  }
-
-  cudf::ast::expression &add_expression(std::unique_ptr<cudf::ast::expression> expr_ptr) {
-    expressions.push_back(std::move(expr_ptr));
-    return *expressions.back();
-  }
-
-  /** Return the expression node at the top of the tree */
-  cudf::ast::expression &get_top_expression() const { return *expressions.back(); }
-};
-
-} // namespace ast
-} // namespace jni
-} // namespace cudf
+#include "jni_compiled_expr.hpp"
 
 namespace {
 
@@ -418,7 +366,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ast_CompiledExpression_computeColumn
     auto compiled_expr_ptr = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_ast);
     auto tview_ptr = reinterpret_cast<cudf::table_view const *>(j_table);
     std::unique_ptr<cudf::column> result =
-        cudf::ast::compute_column(*tview_ptr, compiled_expr_ptr->get_top_expression());
+        cudf::compute_column(*tview_ptr, compiled_expr_ptr->get_top_expression());
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

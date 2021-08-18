@@ -58,6 +58,7 @@ struct reader_column_meta {
 
   std::vector<column_validity_info>
     parent_column_data;  // consists of parent column valid_map and null count
+  std::vector<size_type> parent_column_index;
 
   std::vector<uint32_t> child_start_row;  // start row of child columns [stripe][column]
   std::vector<uint32_t>

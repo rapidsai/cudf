@@ -44,6 +44,7 @@ option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks"
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
+option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
 option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
 option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
 option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
@@ -151,8 +152,7 @@ add_library(cudf
     src/aggregation/aggregation.cpp
     src/aggregation/aggregation.cu
     src/aggregation/result_cache.cpp
-    src/ast/linearizer.cpp
-    src/ast/transform.cu
+    src/ast/expression_parser.cpp
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
     src/binaryop/compiled/Add.cu
@@ -255,6 +255,7 @@ add_library(cudf
     src/interop/dlpack.cpp
     src/interop/from_arrow.cu
     src/interop/to_arrow.cu
+    src/interop/detail/arrow_allocator.cpp
     src/io/avro/avro.cpp
     src/io/avro/avro_gpu.cu
     src/io/avro/reader_impl.cu
@@ -301,9 +302,11 @@ add_library(cudf
     src/jit/cache.cpp
     src/jit/parser.cpp
     src/jit/type.cpp
+    src/join/conditional_join.cu
     src/join/cross_join.cu
     src/join/hash_join.cu
     src/join/join.cu
+    src/join/join_utils.cu
     src/join/semi_join.cu
     src/lists/contains.cu
     src/lists/combine/concatenate_list_elements.cu
@@ -435,6 +438,7 @@ add_library(cudf
     src/text/subword/wordpiece_tokenizer.cu
     src/text/tokenize.cu
     src/transform/bools_to_mask.cu
+    src/transform/compute_column.cu
     src/transform/encode.cu
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
@@ -542,7 +546,7 @@ if(NOT TARGET CUDA::cuda_driver)
     message(FATAL_ERROR "Building libcudf requires `libcuda.so` to be present.
         This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded.")
 endif()
-target_link_libraries(cudf PRIVATE CUDA::cuda_driver)
+target_link_libraries(cudf PUBLIC CUDA::cuda_driver)
 
 # Add cuFile interface if available
 if(TARGET cuFile::cuFile_interface)
@@ -627,9 +631,11 @@ endif()
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
 
+include(CPack)
+
 include(GNUInstallDirs)
 
-set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/cudf)
+set(INSTALL_CONFIGDIR lib/cmake/cudf)
 set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME cudf)
 
 # install target for cudf_base and the proxy libcudf.so
@@ -677,22 +683,6 @@ configure_package_config_file(cmake/cudf-build-config.cmake.in ${CUDF_BINARY_DIR
 
 write_basic_package_version_file(${CUDF_BINARY_DIR}/cudf-config-version.cmake
                                  COMPATIBILITY SameMinorVersion)
-
-if(TARGET arrow_shared)
-    get_target_property(arrow_is_imported arrow_shared IMPORTED)
-    if(NOT arrow_is_imported)
-        export(TARGETS arrow_shared arrow_cuda_shared
-            FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
-            NAMESPACE   cudf::)
-    endif()
-elseif(TARGET arrow_static)
-    get_target_property(arrow_is_imported arrow_static IMPORTED)
-    if(NOT arrow_is_imported)
-        export(TARGETS arrow_static arrow_cuda_static
-            FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
-            NAMESPACE   cudf::)
-    endif()
-endif()
 
 if(TARGET gtest)
     get_target_property(gtest_is_imported gtest IMPORTED)

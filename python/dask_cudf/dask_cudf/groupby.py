@@ -16,6 +16,8 @@ from dask.dataframe.core import (
 from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
 from dask.highlevelgraph import HighLevelGraph
 
+import cudf
+
 
 class CudfDataFrameGroupBy(DataFrameGroupBy):
     def __init__(self, *args, **kwargs):
@@ -71,15 +73,28 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             "min",
             "max",
             "collect",
+            "first",
+            "last",
         }
         if (
             isinstance(self.obj, DaskDataFrame)
-            and isinstance(self.index, (str, list))
+            and (
+                isinstance(self.index, str)
+                or (
+                    isinstance(self.index, list)
+                    and all(isinstance(x, str) for x in self.index)
+                )
+            )
             and _is_supported(arg, _supported)
         ):
+            if isinstance(self._meta.grouping.keys, cudf.MultiIndex):
+                keys = self._meta.grouping.keys.names
+            else:
+                keys = self._meta.grouping.keys.name
+
             return groupby_agg(
                 self.obj,
-                self.index,
+                keys,
                 arg,
                 split_every=split_every,
                 split_out=split_out,
@@ -127,7 +142,10 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             "min",
             "max",
             "collect",
+            "first",
+            "last",
         }
+
         if (
             isinstance(self.obj, DaskDataFrame)
             and isinstance(self.index, (str, list))
@@ -165,7 +183,16 @@ def groupby_agg(
 
         This aggregation algorithm only supports the following options:
 
-        {"count", "mean", "std", "var", "sum", "min", "max", "collect"}
+        - "count"
+        - "mean"
+        - "std"
+        - "var"
+        - "sum"
+        - "min"
+        - "max"
+        - "collect"
+        - "first"
+        - "last"
 
         This "optimized" approach is more performant than the algorithm
         in `dask.dataframe`, because it allows the cudf backend to
@@ -208,6 +235,8 @@ def groupby_agg(
         "min",
         "max",
         "collect",
+        "first",
+        "last",
     }
     if not _is_supported(aggs, _supported):
         raise ValueError(

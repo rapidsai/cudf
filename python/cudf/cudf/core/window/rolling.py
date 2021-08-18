@@ -215,7 +215,7 @@ class Rolling(GetAttrGetItemMixin):
                 self.center,
                 agg_name,
             )
-        return sr._copy_construct(data=result_col)
+        return sr._from_data({sr.name: result_col}, sr._index)
 
     def _apply_agg_dataframe(self, df, agg_name):
         result_df = cudf.DataFrame({})
@@ -258,12 +258,12 @@ class Rolling(GetAttrGetItemMixin):
 
         See also
         --------
-        cudf.core.series.Series.applymap : Apply an elementwise function to
+        cudf.Series.applymap : Apply an elementwise function to
             transform the values in the Column.
 
         Notes
         -----
-        See notes of the :meth:`cudf.core.series.Series.applymap`
+        See notes of the :meth:`cudf.Series.applymap`
 
         """
         has_nulls = False
@@ -353,14 +353,15 @@ class Rolling(GetAttrGetItemMixin):
 
 
 class RollingGroupby(Rolling):
-    def __init__(self, groupby, window, min_periods=None, center=False):
-        """
-        Grouped rolling window calculation.
+    """
+    Grouped rolling window calculation.
 
-        See also
-        --------
-        cudf.core.window.Rolling
-        """
+    See also
+    --------
+    cudf.core.window.Rolling
+    """
+
+    def __init__(self, groupby, window, min_periods=None, center=False):
         sort_order = groupby.grouping.keys.argsort()
 
         # TODO: there may be overlap between the columns

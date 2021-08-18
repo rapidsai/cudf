@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/ast/detail/linearizer.hpp>
+#include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/nodes.hpp>
 #include <cudf/ast/operators.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -56,7 +56,7 @@ device_data_reference::device_data_reference(device_data_reference_type referenc
 {
 }
 
-cudf::size_type linearizer::intermediate_counter::take()
+cudf::size_type expression_parser::intermediate_counter::take()
 {
   auto const first_missing = find_first_missing();
   used_values.insert(used_values.cbegin() + first_missing, first_missing);
@@ -64,7 +64,7 @@ cudf::size_type linearizer::intermediate_counter::take()
   return first_missing;
 }
 
-void linearizer::intermediate_counter::give(cudf::size_type value)
+void expression_parser::intermediate_counter::give(cudf::size_type value)
 {
   // TODO: add comment
   auto const lower_bound = std::lower_bound(used_values.cbegin(), used_values.cend(), value);
@@ -72,18 +72,7 @@ void linearizer::intermediate_counter::give(cudf::size_type value)
     used_values.erase(lower_bound);
 }
 
-/**
- * @brief Find the first missing value in a contiguous sequence of integers.
- *
- * From a sorted container of integers, find the first "missing" value.
- * For example, {0, 1, 2, 4, 5} is missing 3, and {1, 2, 3} is missing 0.
- * If there are no missing values, return the size of the container.
- *
- * @param start Starting index.
- * @param end Ending index.
- * @return cudf::size_type Smallest value not already in the container.
- */
-cudf::size_type linearizer::intermediate_counter::find_first_missing() const
+cudf::size_type expression_parser::intermediate_counter::find_first_missing() const
 {
   if (used_values.empty() || (used_values.front() != 0)) { return 0; }
   // Search for the first non-contiguous pair of elements.
@@ -94,7 +83,7 @@ cudf::size_type linearizer::intermediate_counter::find_first_missing() const
            : used_values.size();  // No missing elements. Return the next element in the sequence.
 }
 
-cudf::size_type linearizer::visit(literal const& expr)
+cudf::size_type expression_parser::visit(literal const& expr)
 {
   _node_count++;                                                 // Increment the node index
   auto const data_type     = expr.get_data_type();               // Resolve node type
@@ -106,14 +95,23 @@ cudf::size_type linearizer::visit(literal const& expr)
   return add_data_reference(source);
 }
 
-cudf::size_type linearizer::visit(column_reference const& expr)
+cudf::size_type expression_parser::visit(column_reference const& expr)
 {
   // Increment the node index
   _node_count++;
   // Resolve node type
-  auto const data_type = expr.get_table_source() == table_reference::LEFT
-                           ? expr.get_data_type(_left)
-                           : expr.get_data_type(_right);
+  cudf::data_type data_type;
+  if (expr.get_table_source() == table_reference::LEFT) {
+    data_type = expr.get_data_type(_left);
+  } else {
+    if (_right.has_value()) {
+      data_type = expr.get_data_type(*_right);
+    } else {
+      CUDF_FAIL(
+        "Your expression contains a reference to the RIGHT table even though it will only be "
+        "evaluated on a single table (by convention, the LEFT table).");
+    }
+  }
   // Push data reference
   auto const source = detail::device_data_reference(detail::device_data_reference_type::COLUMN,
                                                     data_type,
@@ -122,14 +120,14 @@ cudf::size_type linearizer::visit(column_reference const& expr)
   return add_data_reference(source);
 }
 
-cudf::size_type linearizer::visit(expression const& expr)
+cudf::size_type expression_parser::visit(expression const& expr)
 {
   // Increment the node index
   auto const node_index = _node_count++;
   // Visit children (operands) of this node
   auto const operand_data_ref_indices = visit_operands(expr.get_operands());
   // Resolve operand types
-  auto data_ref = [this](auto const& index) { return data_references()[index].data_type; };
+  auto data_ref = [this](auto const& index) { return _data_references[index].data_type; };
   auto begin    = thrust::make_transform_iterator(operand_data_ref_indices.cbegin(), data_ref);
   auto end      = begin + operand_data_ref_indices.size();
   auto const operand_types = std::vector<cudf::data_type>(begin, end);
@@ -145,7 +143,7 @@ cudf::size_type linearizer::visit(expression const& expr)
     operand_data_ref_indices.cbegin(),
     operand_data_ref_indices.cend(),
     [this](auto const& data_reference_index) {
-      auto const operand_source = data_references()[data_reference_index];
+      auto const operand_source = _data_references[data_reference_index];
       if (operand_source.reference_type == detail::device_data_reference_type::INTERMEDIATE) {
         auto const intermediate_index = operand_source.data_index;
         _intermediate_counter.give(intermediate_index);
@@ -167,7 +165,8 @@ cudf::size_type linearizer::visit(expression const& expr)
       if (!cudf::is_fixed_width(data_type)) {
         CUDF_FAIL(
           "The output data type is not a fixed-width type but must be stored in an intermediate.");
-      } else if (cudf::size_of(data_type) > sizeof(std::int64_t)) {
+      } else if (cudf::size_of(data_type) > (_has_nulls ? sizeof(IntermediateDataType<true>)
+                                                        : sizeof(IntermediateDataType<false>))) {
         CUDF_FAIL("The output data type is too large to be stored in an intermediate.");
       }
       return detail::device_data_reference(
@@ -183,14 +182,14 @@ cudf::size_type linearizer::visit(expression const& expr)
   return index;
 }
 
-cudf::data_type linearizer::root_data_type() const
+cudf::data_type expression_parser::output_type() const
 {
-  return data_references().empty() ? cudf::data_type(cudf::type_id::EMPTY)
-                                   : data_references().back().data_type;
+  return _data_references.empty() ? cudf::data_type(cudf::type_id::EMPTY)
+                                  : _data_references.back().data_type;
 }
 
-std::vector<cudf::size_type> linearizer::visit_operands(
-  std::vector<std::reference_wrapper<const node>> operands)
+std::vector<cudf::size_type> expression_parser::visit_operands(
+  std::vector<std::reference_wrapper<detail::node const>> operands)
 {
   auto operand_data_reference_indices = std::vector<cudf::size_type>();
   for (auto const& operand : operands) {
@@ -200,7 +199,7 @@ std::vector<cudf::size_type> linearizer::visit_operands(
   return operand_data_reference_indices;
 }
 
-cudf::size_type linearizer::add_data_reference(detail::device_data_reference data_ref)
+cudf::size_type expression_parser::add_data_reference(detail::device_data_reference data_ref)
 {
   // If an equivalent data reference already exists, return its index. Otherwise add this data
   // reference and return the new index.
@@ -215,12 +214,15 @@ cudf::size_type linearizer::add_data_reference(detail::device_data_reference dat
 
 }  // namespace detail
 
-cudf::size_type literal::accept(detail::linearizer& visitor) const { return visitor.visit(*this); }
-cudf::size_type column_reference::accept(detail::linearizer& visitor) const
+cudf::size_type literal::accept(detail::expression_parser& visitor) const
 {
   return visitor.visit(*this);
 }
-cudf::size_type expression::accept(detail::linearizer& visitor) const
+cudf::size_type column_reference::accept(detail::expression_parser& visitor) const
+{
+  return visitor.visit(*this);
+}
+cudf::size_type expression::accept(detail::expression_parser& visitor) const
 {
   return visitor.visit(*this);
 }

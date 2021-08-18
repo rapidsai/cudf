@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.core import DataFrame, GenericIndex, Series
+from cudf import DataFrame, GenericIndex, Series
 from cudf.core.buffer import Buffer
 from cudf.testing._utils import assert_eq
 

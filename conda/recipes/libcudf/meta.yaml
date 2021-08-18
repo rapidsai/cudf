@@ -37,7 +37,7 @@ requirements:
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 4.0.1 *cuda
+    - arrow-cpp 5.0.0 *cuda
     - arrow-cpp-proc * cuda
     - dlpack>=0.5,<0.6.0a0
   run:
@@ -51,8 +51,7 @@ test:
     - test -f $PREFIX/lib/libcudf.so
     - test -f $PREFIX/lib/libcudftestutil.a
     - test -f $PREFIX/include/cudf/aggregation.hpp
-    - test -f $PREFIX/include/cudf/ast/transform.hpp
-    - test -f $PREFIX/include/cudf/ast/detail/linearizer.hpp
+    - test -f $PREFIX/include/cudf/ast/detail/expression_parser.hpp
     - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
     - test -f $PREFIX/include/cudf/ast/nodes.hpp
     - test -f $PREFIX/include/cudf/ast/operators.hpp
@@ -102,6 +101,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/utilities/integer_utils.hpp
     - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
     - test -f $PREFIX/include/cudf/detail/utilities/vector_factories.hpp
+    - test -f $PREFIX/include/cudf/detail/utilities/visitor_overload.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/encode.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/merge.hpp
