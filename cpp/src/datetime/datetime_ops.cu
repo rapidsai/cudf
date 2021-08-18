@@ -235,6 +235,9 @@ struct add_calendrical_months_functor {
     // Return an empty column if source column is empty
     if (size == 0) return make_empty_column(output_col_type);
 
+    // The nullmask of `output` cannot be determined without information from
+    // the `months` type (column or scalar). Therefore, it is initialized as
+    // `UNALLOCATED` and assigned at a later stage.
     auto output =
       make_fixed_width_column(output_col_type, size, mask_state::UNALLOCATED, stream, mr);
     auto output_mview = output->mutable_view();
