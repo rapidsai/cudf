@@ -17,15 +17,28 @@
 package ai.rapids.cudf.ast;
 
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
-/** Base class of every AST expression. */
-public abstract class Expression extends AstNode {
-  public CompiledExpression compile() {
-    int size = getSerializedSize();
-    ByteBuffer bb = ByteBuffer.allocate(size);
-    bb.order(ByteOrder.nativeOrder());
-    serialize(bb);
-    return new CompiledExpression(bb.array());
+/** A unary operation consisting of an operator and an operand. */
+public final class UnaryOperation extends AstExpression {
+  private final UnaryOperator op;
+  private final AstExpression input;
+
+  public UnaryOperation(UnaryOperator op, AstExpression input) {
+    this.op = op;
+    this.input = input;
+  }
+
+  @Override
+  int getSerializedSize() {
+    return ExpressionType.UNARY_EXPRESSION.getSerializedSize() +
+        op.getSerializedSize() +
+        input.getSerializedSize();
+  }
+
+  @Override
+  void serialize(ByteBuffer bb) {
+    ExpressionType.UNARY_EXPRESSION.serialize(bb);
+    op.serialize(bb);
+    input.serialize(bb);
   }
 }

@@ -15,8 +15,6 @@
  */
 #pragma once
 
-#include <cudf/ast/detail/operators.hpp>
-#include <cudf/ast/operators.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -25,21 +23,75 @@
 
 namespace cudf {
 namespace ast {
-namespace detail {
 
-// Forward declaration
+// Forward declaration.
+namespace detail {
 class expression_parser;
+}
+
 /**
- * @brief A generic node that can be evaluated to return a value.
+ * @brief A generic expression that can be evaluated to return a value.
  *
  * This class is a part of a "visitor" pattern with the `linearizer` class.
  * Nodes inheriting from this class can accept visitors.
  */
-struct node {
-  virtual cudf::size_type accept(expression_parser& visitor) const = 0;
+struct expression {
+  virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
+
+  virtual ~expression() {}
 };
 
-}  // namespace detail
+/**
+ * @brief Enum of supported operators.
+ */
+enum class ast_operator {
+  // Binary operators
+  ADD,            ///< operator +
+  SUB,            ///< operator -
+  MUL,            ///< operator *
+  DIV,            ///< operator / using common type of lhs and rhs
+  TRUE_DIV,       ///< operator / after promoting type to floating point
+  FLOOR_DIV,      ///< operator / after promoting to 64 bit floating point and then
+                  ///< flooring the result
+  MOD,            ///< operator %
+  PYMOD,          ///< operator % but following python's sign rules for negatives
+  POW,            ///< lhs ^ rhs
+  EQUAL,          ///< operator ==
+  NOT_EQUAL,      ///< operator !=
+  LESS,           ///< operator <
+  GREATER,        ///< operator >
+  LESS_EQUAL,     ///< operator <=
+  GREATER_EQUAL,  ///< operator >=
+  BITWISE_AND,    ///< operator &
+  BITWISE_OR,     ///< operator |
+  BITWISE_XOR,    ///< operator ^
+  LOGICAL_AND,    ///< operator &&
+  LOGICAL_OR,     ///< operator ||
+  // Unary operators
+  IDENTITY,    ///< Identity function
+  SIN,         ///< Trigonometric sine
+  COS,         ///< Trigonometric cosine
+  TAN,         ///< Trigonometric tangent
+  ARCSIN,      ///< Trigonometric sine inverse
+  ARCCOS,      ///< Trigonometric cosine inverse
+  ARCTAN,      ///< Trigonometric tangent inverse
+  SINH,        ///< Hyperbolic sine
+  COSH,        ///< Hyperbolic cosine
+  TANH,        ///< Hyperbolic tangent
+  ARCSINH,     ///< Hyperbolic sine inverse
+  ARCCOSH,     ///< Hyperbolic cosine inverse
+  ARCTANH,     ///< Hyperbolic tangent inverse
+  EXP,         ///< Exponential (base e, Euler number)
+  LOG,         ///< Natural Logarithm (base e)
+  SQRT,        ///< Square-root (x^0.5)
+  CBRT,        ///< Cube-root (x^(1.0/3))
+  CEIL,        ///< Smallest integer value not less than arg
+  FLOOR,       ///< largest integer value not greater than arg
+  ABS,         ///< Absolute value
+  RINT,        ///< Rounds the floating-point argument arg to an integer value
+  BIT_INVERT,  ///< Bitwise Not (~)
+  NOT          ///< Logical Not (!)
+};
 
 /**
  * @brief Enum of table references.
@@ -55,7 +107,7 @@ enum class table_reference {
 /**
  * @brief A literal value used in an abstract syntax tree.
  */
-class literal : public detail::node {
+class literal : public expression {
  public:
   /**
    * @brief Construct a new literal object.
@@ -117,14 +169,14 @@ class literal : public detail::node {
 };
 
 /**
- * @brief A node referring to data from a column in a table.
+ * @brief A expression referring to data from a column in a table.
  */
-class column_reference : public detail::node {
+class column_reference : public expression {
  public:
   /**
    * @brief Construct a new column reference object
    *
-   * @param column_index Index of this column in the table (provided when the node is
+   * @param column_index Index of this column in the table (provided when the expression is
    * evaluated).
    * @param table_source Which table to use in cases with two tables (e.g. joins).
    */
@@ -194,43 +246,33 @@ class column_reference : public detail::node {
 };
 
 /**
- * @brief An expression node holds an operator and zero or more operands.
+ * @brief An operation expression holds an operator and zero or more operands.
  */
-class expression : public detail::node {
+class operation : public expression {
  public:
   /**
-   * @brief Construct a new unary expression object.
+   * @brief Construct a new unary operation object.
    *
    * @param op Operator
-   * @param input Input node (operand)
+   * @param input Input expression (operand)
    */
-  expression(ast_operator op, node const& input) : op(op), operands({input})
-  {
-    if (cudf::ast::detail::ast_operator_arity(op) != 1) {
-      CUDF_FAIL("The provided operator is not a unary operator.");
-    }
-  }
+  operation(ast_operator op, expression const& input);
 
   /**
-   * @brief Construct a new binary expression object.
+   * @brief Construct a new binary operation object.
    *
    * @param op Operator
-   * @param left Left input node (left operand)
-   * @param right Right input node (right operand)
+   * @param left Left input expression (left operand)
+   * @param right Right input expression (right operand)
    */
-  expression(ast_operator op, node const& left, node const& right) : op(op), operands({left, right})
-  {
-    if (cudf::ast::detail::ast_operator_arity(op) != 2) {
-      CUDF_FAIL("The provided operator is not a binary operator.");
-    }
-  }
+  operation(ast_operator op, expression const& left, expression const& right);
 
-  // expression only stores references to nodes, so it does not accept r-value
-  // references: the calling code must own the nodes.
-  expression(ast_operator op, node&& input)                   = delete;
-  expression(ast_operator op, node&& left, node&& right)      = delete;
-  expression(ast_operator op, node&& left, node const& right) = delete;
-  expression(ast_operator op, node const& left, node&& right) = delete;
+  // operation only stores references to expressions, so it does not accept r-value
+  // references: the calling code must own the expressions.
+  operation(ast_operator op, expression&& input)                         = delete;
+  operation(ast_operator op, expression&& left, expression&& right)      = delete;
+  operation(ast_operator op, expression&& left, expression const& right) = delete;
+  operation(ast_operator op, expression const& left, expression&& right) = delete;
 
   /**
    * @brief Get the operator.
@@ -242,9 +284,9 @@ class expression : public detail::node {
   /**
    * @brief Get the operands.
    *
-   * @return std::vector<std::reference_wrapper<const node>>
+   * @return std::vector<std::reference_wrapper<const expression>>
    */
-  std::vector<std::reference_wrapper<node const>> get_operands() const { return operands; }
+  std::vector<std::reference_wrapper<expression const>> get_operands() const { return operands; }
 
   /**
    * @brief Accepts a visitor class.
@@ -256,7 +298,7 @@ class expression : public detail::node {
 
  private:
   ast_operator const op;
-  std::vector<std::reference_wrapper<node const>> const operands;
+  std::vector<std::reference_wrapper<expression const>> const operands;
 };
 
 }  // namespace ast
