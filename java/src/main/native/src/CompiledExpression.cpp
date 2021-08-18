@@ -321,6 +321,15 @@ std::unique_ptr<cudf::jni::ast::compiled_expr> compile_serialized_ast(jni_serial
   auto jni_expr_ptr = std::make_unique<cudf::jni::ast::compiled_expr>();
   auto const expression_type = static_cast<jni_serialized_expression_type>(jni_ast.read_byte());
   switch (expression_type) {
+    case jni_serialized_expression_type::VALID_LITERAL:
+      (void)compile_literal(true, *jni_expr_ptr, jni_ast);
+      break;
+    case jni_serialized_expression_type::NULL_LITERAL:
+      (void)compile_literal(false, *jni_expr_ptr, jni_ast);
+      break;
+    case jni_serialized_expression_type::COLUMN_REFERENCE:
+      (void)compile_column_reference(*jni_expr_ptr, jni_ast);
+      break;
     case jni_serialized_expression_type::UNARY_OPERATION:
       (void)compile_unary_expression(*jni_expr_ptr, jni_ast);
       break;
