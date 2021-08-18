@@ -1535,3 +1535,18 @@ def test_multiindex_indexing(key):
     pi = gi.to_pandas()
 
     assert_eq(gi[key], pi[key], exact=False)
+
+
+def test_multiIndex_duplicate_names():
+    gi = cudf.MultiIndex(
+        levels=[["a", "b"], ["b", "a"]],
+        codes=[[0, 0], [0, 1]],
+        names=["a", "a"],
+    )
+    pi = pd.MultiIndex(
+        levels=[["a", "b"], ["b", "a"]],
+        codes=[[0, 0], [0, 1]],
+        names=["a", "a"],
+    )
+
+    assert_eq(gi, pi)
