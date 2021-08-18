@@ -1171,3 +1171,21 @@ def test_writer_timestamp_stream_size(datadir, tmpdir):
     got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "fname",
+    [
+        "TestOrcFile.NoIndStrm.StructWithNoNulls.orc",
+        "TestOrcFile.NoIndStrm.StructAndIntWithNulls.orc",
+        "TestOrcFile.NoIndStrm.StructAndIntWithNulls.TwoStripes.orc",
+        "TestOrcFile.NoIndStrm.IntWithNulls.orc",
+    ],
+)
+def test_no_row_group_index_orc_read(datadir, fname):
+    fpath = datadir / fname
+
+    got = pa.orc.ORCFile(fpath).read()
+    expect = cudf.read_orc(fpath)
+
+    assert got.equals(expect.to_arrow())
