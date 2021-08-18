@@ -410,6 +410,8 @@ def crosstab(
         Values to group by in the columns.
     """
     breakpoint()
+    data = {**dict(zip(np.unique(index),index)),**dict(zip(np.unique(columns),columns)),}
+    df = cudf.DataFrame(data)
     columns_idx = cudf.core.index.Index(columns)
     columns_labels, columns_idx = columns_idx._encode()
     index_labels, index_idx = cudf.core.index.Index(index)._encode()
@@ -423,8 +425,8 @@ def crosstab(
     def as_tuple(x):
         return x if isinstance(x, tuple) else (x,)
 
-    for col in columns:
-        names = [as_tuple(col) + as_tuple(name) for name in column_labels]
+    for v in df:
+        names = [as_tuple(v) + as_tuple(name) for name in column_labels]
         nrows = len(index_labels)
         ncols = len(names)
         num_elements = nrows * ncols
@@ -900,7 +902,6 @@ def _pivot(df, index, columns):
     columns : cudf.Index
         Column labels of the result
     """
-    breakpoint()
     columns_labels, columns_idx = columns._encode()
     index_labels, index_idx = index._encode()
     column_labels = columns_labels.to_pandas().to_flat_index()
