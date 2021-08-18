@@ -190,19 +190,6 @@ class RollingTest : public cudf::test::BaseFixture {
     auto reference =
       create_reference_output(op, input, preceding_window, following_window, min_periods);
 
-#if 0
-    std::cout << "input:\n";
-    cudf::test::print(input, std::cout, ", ");
-    std::cout << "\n";
-    std::cout << "output:\n";
-    cudf::test::print(*output, std::cout, ", ");
-    std::cout << "\n";
-    std::cout << "reference:\n";
-    cudf::test::print(reference, std::cout, ", ");
-    std::cout << "\n";
-    std::cout << "\n";
-#endif
-
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, *reference);
   }
 
