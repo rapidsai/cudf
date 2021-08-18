@@ -581,7 +581,7 @@ class aggregate_metadata {
 
     std::vector<column_buffer> output_columns;
     std::vector<input_column_info> input_columns;
-    std::deque<int> nesting;
+    std::vector<int> nesting;
 
     // Return true if column path is valid. e.g. if the path is {"struct1", "child1"}, then it is
     // valid if "struct1.child1" exists in this file's schema. If "struct1" exists but "child1" is
@@ -593,7 +593,8 @@ class aggregate_metadata {
         if (schema_idx < 0) { return false; }
         auto const& schema_elem = get_schema(schema_idx);
 
-        // if I am a stub, continue on
+        // if schema_elem is a stub then it does not exist in the column_name_info and column_buffer
+        // hierarchy. So continue on
         if (schema_elem.is_stub()) {
           // is this legit?
           CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
@@ -674,13 +675,18 @@ class aggregate_metadata {
         output_column_schemas.push_back(schema_idx);
       }
     } else {
+      struct path_info {
+        std::string full_path;
+        int schema_idx;
+      };
+
       // Convert schema into a vector of every possible path
-      std::vector<std::pair<std::string, size_t>> all_paths;
+      std::vector<path_info> all_paths;
       std::function<void(std::string, int)> add_path = [&](std::string path_till_now,
                                                            int schema_idx) {
         auto const& schema_elem = get_schema(schema_idx);
         std::string curr_path   = path_till_now + schema_elem.name;
-        all_paths.emplace_back(curr_path, schema_idx);
+        all_paths.push_back({curr_path, schema_idx});
         for (auto const& child_idx : schema_elem.children_idx) {
           add_path(curr_path + ".", child_idx);
         }
@@ -690,14 +696,14 @@ class aggregate_metadata {
       }
 
       // Find which of the selected paths are valid and get their schema index
-      std::vector<std::pair<std::string, size_t>> valid_selected_paths;
+      std::vector<path_info> valid_selected_paths;
       for (auto const& selected_path : use_names) {
-        auto found_path = std::find_if(
-          all_paths.begin(), all_paths.end(), [&](std::pair<std::string, size_t>& valid_path) {
-            return valid_path.first == selected_path;
+        auto found_path =
+          std::find_if(all_paths.begin(), all_paths.end(), [&](path_info& valid_path) {
+            return valid_path.full_path == selected_path;
           });
         if (found_path != all_paths.end()) {
-          valid_selected_paths.emplace_back(selected_path, found_path->second);
+          valid_selected_paths.push_back({selected_path, found_path->schema_idx});
         }
       }
 
@@ -706,8 +712,8 @@ class aggregate_metadata {
       std::transform(valid_selected_paths.begin(),
                      valid_selected_paths.end(),
                      std::back_inserter(use_names3),
-                     [&](std::pair<std::string, size_t> const& valid_path) {
-                       auto schema_idx = valid_path.second;
+                     [&](path_info const& valid_path) {
+                       auto schema_idx = valid_path.schema_idx;
                        std::vector<std::string> result_path;
                        do {
                          SchemaElement const& elem = get_schema(schema_idx);
