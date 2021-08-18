@@ -27,6 +27,9 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
+from cudf.core.window import Rolling
+from cudf.utils import ioutils
+from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -4405,6 +4408,216 @@ class Frame(libcudf.table.Table):
             "prod", axis=axis, skipna=skipna, cast_to_int=True, *args, **kwargs
         )
 
+    @ioutils.doc_to_json()
+    def to_json(self, path_or_buf=None, *args, **kwargs):
+        """{docstring}"""
+
+        return cudf.io.json.to_json(
+            self, path_or_buf=path_or_buf, *args, **kwargs
+        )
+
+    @ioutils.doc_to_hdf()
+    def to_hdf(self, path_or_buf, key, *args, **kwargs):
+        """{docstring}"""
+
+        cudf.io.hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
+
+    @ioutils.doc_to_dlpack()
+    def to_dlpack(self):
+        """{docstring}"""
+
+        return cudf.io.dlpack.to_dlpack(self)
+
+    def to_string(self):
+        """
+        Convert to string
+
+        cuDF uses Pandas internals for efficient string formatting.
+        Set formatting options using pandas string formatting options and
+        cuDF objects will print identically to Pandas objects.
+
+        cuDF supports `null/None` as a value in any column type, which
+        is transparently supported during this output process.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2]
+        >>> df['val'] = [float(i + 10) for i in range(3)]
+        >>> df.to_string()
+        '   key   val\\n0    0  10.0\\n1    1  11.0\\n2    2  12.0'
+        """
+        return self.__repr__()
+
+    def __str__(self):
+        return self.to_string()
+
+    def head(self, n=5):
+        """
+        Return the first `n` rows.
+        This function returns the first `n` rows for the object based
+        on position. It is useful for quickly testing if your object
+        has the right type of data in it.
+        For negative values of `n`, this function returns all rows except
+        the last `n` rows, equivalent to ``df[:-n]``.
+
+        Parameters
+        ----------
+        n : int, default 5
+            Number of rows to select.
+
+        Returns
+        -------
+        same type as caller
+            The first `n` rows of the caller object.
+
+        See Also
+        --------
+        Frame.tail: Returns the last `n` rows.
+
+        Examples
+        --------
+        >>> ser = cudf.Series(['alligator', 'bee', 'falcon',
+        ... 'lion', 'monkey', 'parrot', 'shark', 'whale', 'zebra'])
+        >>> ser
+        0    alligator
+        1          bee
+        2       falcon
+        3         lion
+        4       monkey
+        5       parrot
+        6        shark
+        7        whale
+        8        zebra
+        dtype: object
+
+        Viewing the first 5 lines
+
+        >>> ser.head()
+        0    alligator
+        1          bee
+        2       falcon
+        3         lion
+        4       monkey
+        dtype: object
+
+        Viewing the first `n` lines (three in this case)
+
+        >>> ser.head(3)
+        0    alligator
+        1          bee
+        2       falcon
+        dtype: object
+
+        For negative values of `n`
+
+        >>> ser.head(-3)
+        0    alligator
+        1          bee
+        2       falcon
+        3         lion
+        4       monkey
+        5       parrot
+        dtype: object
+
+        For Dataframe
+
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
+        >>> df.head(2)
+           key   val
+        0    0  10.0
+        1    1  11.0
+        """
+        return self.iloc[:n]
+
+    def tail(self, n=5):
+        """
+        Returns the last n rows as a new DataFrame or Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
+        >>> df.tail(2)
+           key   val
+        3    3  13.0
+        4    4  14.0
+
+        >>> import cudf
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> ser.tail(2)
+        3    1
+        4    0
+        """
+        if n == 0:
+            return self.iloc[0:0]
+
+        return self.iloc[-n:]
+
+    @copy_docstring(Rolling)
+    def rolling(
+        self, window, min_periods=None, center=False, axis=0, win_type=None
+    ):
+        return Rolling(
+            self,
+            window,
+            min_periods=min_periods,
+            center=center,
+            axis=axis,
+            win_type=win_type,
+        )
+
+    def nans_to_nulls(self):
+        """
+        Convert nans (if any) to nulls
+
+        Returns
+        -------
+        DataFrame or Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> series = cudf.Series([1, 2, np.nan, None, 10], nan_as_null=False)
+        >>> series
+        0     1.0
+        1     2.0
+        2     NaN
+        3    <NA>
+        4    10.0
+        dtype: float64
+        >>> series.nans_to_nulls()
+        0     1.0
+        1     2.0
+        2    <NA>
+        3    <NA>
+        4    10.0
+        dtype: float64
+        """
+        return self._from_data(
+            {
+                name: col.copy().nans_to_nulls()
+                for name, col in self._data.items()
+            },
+            self._index,
+        )
+
+    def __invert__(self):
+        """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
+        return self._from_data(
+            {
+                name: _apply_inverse_column(col)
+                for name, col in self._data.items()
+            },
+            self._index,
+        )
+
 
 class SingleColumnFrame(Frame):
     """A one-dimensional frame.
@@ -5133,3 +5346,15 @@ def _drop_rows_by_labels(
             return res
         else:
             return obj.join(key_df, how="leftanti")
+
+
+def _apply_inverse_column(col: ColumnBase) -> ColumnBase:
+    """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
+    if np.issubdtype(col.dtype, np.integer):
+        return col.unary_operator("invert")
+    elif np.issubdtype(col.dtype, np.bool_):
+        return col.unary_operator("not")
+    else:
+        raise TypeError(
+            f"Operation `~` not supported on {col.dtype.type.__name__}"
+        )

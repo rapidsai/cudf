@@ -1094,124 +1094,6 @@ class Series(SingleColumnFrame, Serializable):
                 {self.name: self._column.take(col_inds, keep_index=False)}
             )
 
-    def head(self, n=5):
-        """
-        Return the first `n` rows.
-        This function returns the first `n` rows for the object based
-        on position. It is useful for quickly testing if your object
-        has the right type of data in it.
-        For negative values of `n`, this function returns all rows except
-        the last `n` rows, equivalent to ``df[:-n]``.
-
-        Parameters
-        ----------
-        n : int, default 5
-            Number of rows to select.
-
-        Returns
-        -------
-        same type as caller
-            The first `n` rows of the caller object.
-
-        See Also
-        --------
-        Series.tail: Returns the last `n` rows.
-
-        Examples
-        --------
-        >>> ser = cudf.Series(['alligator', 'bee', 'falcon',
-        ... 'lion', 'monkey', 'parrot', 'shark', 'whale', 'zebra'])
-        >>> ser
-        0    alligator
-        1          bee
-        2       falcon
-        3         lion
-        4       monkey
-        5       parrot
-        6        shark
-        7        whale
-        8        zebra
-        dtype: object
-
-        Viewing the first 5 lines
-
-        >>> ser.head()
-        0    alligator
-        1          bee
-        2       falcon
-        3         lion
-        4       monkey
-        dtype: object
-
-        Viewing the first `n` lines (three in this case)
-
-        >>> ser.head(3)
-        0    alligator
-        1          bee
-        2       falcon
-        dtype: object
-
-        For negative values of `n`
-
-        >>> ser.head(-3)
-        0    alligator
-        1          bee
-        2       falcon
-        3         lion
-        4       monkey
-        5       parrot
-        dtype: object
-        """
-        return self.iloc[:n]
-
-    def tail(self, n=5):
-        """
-        Returns the last n rows as a new Series
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([4, 3, 2, 1, 0])
-        >>> ser.tail(2)
-        3    1
-        4    0
-        """
-        if n == 0:
-            return self.iloc[0:0]
-
-        return self.iloc[-n:]
-
-    def to_string(self):
-        """Convert to string
-
-        Uses Pandas formatting internals to produce output identical to Pandas.
-        Use the Pandas formatting settings directly in Pandas to control cuDF
-        output.
-
-        Returns
-        -------
-        str
-            String representation of Series
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series(['a', None, 'b', 'c', None])
-        >>> series
-        0       a
-        1    <NA>
-        2       b
-        3       c
-        4    <NA>
-        dtype: object
-        >>> series.to_string()
-        '0       a\\n1    <NA>\\n2       b\\n3       c\\n4    <NA>\\ndtype: object'
-        """  # noqa : E501
-        return self.__repr__()
-
-    def __str__(self):
-        return self.to_string()
-
     def __repr__(self):
         _, height = get_terminal_size()
         max_rows = (
@@ -2332,17 +2214,6 @@ class Series(SingleColumnFrame, Serializable):
             other=other, fn="ge", fill_value=fill_value, can_reindex=True
         )
 
-    def __invert__(self):
-        """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
-        if np.issubdtype(self.dtype, np.integer):
-            return self._unaryop("invert")
-        elif np.issubdtype(self.dtype, np.bool_):
-            return self._unaryop("not")
-        else:
-            raise TypeError(
-                f"Operation `~` not supported on {self.dtype.type.__name__}"
-            )
-
     @copy_docstring(CategoricalAccessor)  # type: ignore
     @property
     def cat(self):
@@ -2692,38 +2563,6 @@ class Series(SingleColumnFrame, Serializable):
         <class 'numpy.ndarray'>
         """
         return self._column.to_array(fillna=fillna)
-
-    def nans_to_nulls(self):
-        """
-        Convert nans (if any) to nulls
-
-        Returns
-        -------
-        Series
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import numpy as np
-        >>> series = cudf.Series([1, 2, np.nan, None, 10], nan_as_null=False)
-        >>> series
-        0     1.0
-        1     2.0
-        2     NaN
-        3    <NA>
-        4    10.0
-        dtype: float64
-        >>> series.nans_to_nulls()
-        0     1.0
-        1     2.0
-        2    <NA>
-        3    <NA>
-        4    10.0
-        dtype: float64
-        """
-        return self._from_data(
-            {self.name: self._column.nans_to_nulls()}, self._index
-        )
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         if bool_only not in (None, True):
@@ -5027,39 +4866,6 @@ class Series(SingleColumnFrame, Serializable):
         return SeriesGroupBy(
             self, by=by, level=level, dropna=dropna, sort=sort
         )
-
-    @copy_docstring(Rolling)
-    def rolling(
-        self, window, min_periods=None, center=False, axis=0, win_type=None
-    ):
-        return Rolling(
-            self,
-            window,
-            min_periods=min_periods,
-            center=center,
-            axis=axis,
-            win_type=win_type,
-        )
-
-    @ioutils.doc_to_json()
-    def to_json(self, path_or_buf=None, *args, **kwargs):
-        """{docstring}"""
-
-        return cudf.io.json.to_json(
-            self, path_or_buf=path_or_buf, *args, **kwargs
-        )
-
-    @ioutils.doc_to_hdf()
-    def to_hdf(self, path_or_buf, key, *args, **kwargs):
-        """{docstring}"""
-
-        cudf.io.hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
-
-    @ioutils.doc_to_dlpack()
-    def to_dlpack(self):
-        """{docstring}"""
-
-        return cudf.io.dlpack.to_dlpack(self)
 
     def rename(self, index=None, copy=True):
         """
