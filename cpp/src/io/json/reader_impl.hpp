@@ -68,7 +68,7 @@ class reader::impl {
 
   size_t byte_range_offset_ = 0;
   size_t byte_range_size_   = 0;
-  bool load_whole_file_     = true;
+  bool load_whole_source_   = true;
 
   table_metadata metadata_;
   std::vector<data_type> dtypes_;
@@ -186,7 +186,6 @@ class reader::impl {
    * @brief Constructor from a dataset source with reader options.
    */
   explicit impl(std::vector<std::unique_ptr<datasource>>&& sources,
-                std::vector<std::string> const& filepaths,
                 json_reader_options const& options,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr);

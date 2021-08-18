@@ -231,7 +231,7 @@ void reader::impl::ingest_raw_input(size_t range_offset,
 
   byte_range_offset_ = range_offset;
   byte_range_size_   = range_size;
-  load_whole_file_   = byte_range_offset_ == 0 && byte_range_size_ == 0;
+  load_whole_source_ = byte_range_offset_ == 0 && byte_range_size_ == 0;
 }
 
 /**
@@ -256,7 +256,7 @@ void reader::impl::decompress_input(rmm::cuda_stream_view stream)
     uncomp_data_ = uncomp_data_owner_.data();
     uncomp_size_ = uncomp_data_owner_.size();
   }
-  if (load_whole_file_) data_ = rmm::device_buffer(uncomp_data_, uncomp_size_, stream);
+  if (load_whole_source_) data_ = rmm::device_buffer(uncomp_data_, uncomp_size_, stream);
 }
 
 rmm::device_uvector<uint64_t> reader::impl::find_record_starts(rmm::cuda_stream_view stream)
@@ -268,7 +268,7 @@ rmm::device_uvector<uint64_t> reader::impl::find_record_starts(rmm::cuda_stream_
   if (allow_newlines_in_strings_) { chars_to_count.push_back('\"'); }
   // If not starting at an offset, add an extra row to account for the first row in the file
   cudf::size_type prefilter_count = ((byte_range_offset_ == 0) ? 1 : 0);
-  if (load_whole_file_) {
+  if (load_whole_source_) {
     prefilter_count += count_all_from_set(data_, chars_to_count, stream);
   } else {
     prefilter_count += count_all_from_set(uncomp_data_, uncomp_size_, chars_to_count, stream);
@@ -286,7 +286,7 @@ rmm::device_uvector<uint64_t> reader::impl::find_record_starts(rmm::cuda_stream_
   std::vector<char> chars_to_find{'\n'};
   if (allow_newlines_in_strings_) { chars_to_find.push_back('\"'); }
   // Passing offset = 1 to return positions AFTER the found character
-  if (load_whole_file_) {
+  if (load_whole_source_) {
     find_all_from_set(data_, chars_to_find, 1, find_result_ptr, stream);
   } else {
     find_all_from_set(uncomp_data_, uncomp_size_, chars_to_find, 1, find_result_ptr, stream);
@@ -619,7 +619,6 @@ table_with_metadata reader::impl::convert_data_to_table(device_span<uint64_t con
 }
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
-                   std::vector<std::string> const& filepaths,
                    json_reader_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
@@ -678,8 +677,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
 {
-  std::vector<std::string> file_paths = {};  // Empty filepaths
-  _impl = std::make_unique<impl>(std::move(sources), file_paths, options, stream, mr);
+  _impl = std::make_unique<impl>(std::move(sources), options, stream, mr);
 }
 
 // Destructor within this translation unit
