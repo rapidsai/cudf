@@ -862,7 +862,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 result._copy_type_metadata(self, include_index=keep_index)
                 if self.index is not None:
                     if keep_index:
-                        result._index.names = self._index.names
+                        result._index.names = self.index.names
                     else:
                         # Adding index of type RangeIndex back to
                         # result
