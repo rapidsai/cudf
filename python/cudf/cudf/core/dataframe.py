@@ -525,11 +525,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         # Use the column directly to avoid duplicating the index
         # need to pickle column names to handle numpy integer columns
-        header["column_names"] = pickle.dumps(tuple(self._data.names))
-        column_header, column_frames = column.serialize_columns(self._columns)
-        header["columns"] = column_header
+        header["columns"], column_frames = column.serialize_columns(
+            self._columns
+        )
+        header["column_frame_count"] = len(column_frames)
         frames.extend(column_frames)
 
+        header["column_names"] = pickle.dumps(tuple(self._data.names))
         return header, frames
 
     @classmethod

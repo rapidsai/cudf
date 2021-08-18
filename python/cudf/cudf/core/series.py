@@ -329,15 +329,16 @@ class Series(SingleColumnFrame, Serializable):
     def serialize(self):
         header = {}
         frames = []
-        header["index"], index_frames = self._index.serialize()
-        header["name"] = pickle.dumps(self.name)
-        frames.extend(index_frames)
-        header["index_frame_count"] = len(index_frames)
-        header["column"], column_frames = self._column.serialize()
         header["type-serialized"] = pickle.dumps(type(self))
-        frames.extend(column_frames)
-        header["column_frame_count"] = len(column_frames)
+        header["index"], index_frames = self._index.serialize()
+        header["index_frame_count"] = len(index_frames)
+        frames.extend(index_frames)
 
+        header["column"], column_frames = self._column.serialize()
+        header["column_frame_count"] = len(column_frames)
+        frames.extend(column_frames)
+
+        header["name"] = pickle.dumps(self.name)
         return header, frames
 
     @property
