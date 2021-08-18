@@ -935,7 +935,7 @@ jlongArray combine_join_results(JNIEnv *env, cudf::table &left_results,
   return combine_join_results(env, std::move(left_cols), std::move(right_cols));
 }
 
-inline cudf::column_view remove_validity_from_col(cudf::column_view column_view) {
+cudf::column_view remove_validity_from_col(cudf::column_view column_view) {
   if (column_view.nullable() && column_view.null_count() == 0) {
     // null_mask is allocated but no nulls present therefore we create a new column_view without the
     // null_mask to avoid things blowing up in reading the parquet file
@@ -958,7 +958,7 @@ inline cudf::column_view remove_validity_from_col(cudf::column_view column_view)
   }
 }
 
-inline cudf::table_view remove_validity_if_needed(cudf::table_view *input_table_view) {
+cudf::table_view remove_validity_if_needed(cudf::table_view *input_table_view) {
   std::vector<cudf::column_view> views;
   views.reserve(input_table_view->num_columns());
   for (auto it = input_table_view->begin(); it != input_table_view->end(); it++) {
