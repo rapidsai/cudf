@@ -107,10 +107,18 @@ chunked_parquet_writer_options_builder chunked_parquet_writer_options::builder(
 
 namespace {
 
-std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info const& info)
+std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info const& info,
+                                                                    size_t range_offset = 0,
+                                                                    size_t range_size   = 0)
 {
   switch (info.type) {
-    case io_type::FILEPATH: return cudf::io::datasource::create(info.filepaths);
+    case io_type::FILEPATH: {
+      auto sources = std::vector<std::unique_ptr<cudf::io::datasource>>();
+      for (auto const& filepath : info.filepaths) {
+        sources.emplace_back(cudf::io::datasource::create(filepath, range_offset, range_size));
+      }
+      return sources;
+    }
     case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.buffers);
     case io_type::USER_IMPLEMENTED: return cudf::io::datasource::create(info.user_sources);
     default: CUDF_FAIL("Unsupported source type");
@@ -179,9 +187,11 @@ table_with_metadata read_json(json_reader_options options, rmm::mr::device_memor
 
   CUDF_FUNC_RANGE();
 
-  auto datasources = make_datasources(options.get_source());
-
   options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
+
+  auto datasources = make_datasources(options.get_source(),
+                                      options.get_byte_range_offset(),
+                                      options.get_byte_range_size_with_padding());
 
   auto reader =
     std::make_unique<json::reader>(std::move(datasources), options, rmm::cuda_stream_default, mr);
@@ -195,9 +205,11 @@ table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_
 
   CUDF_FUNC_RANGE();
 
-  auto datasources = make_datasources(options.get_source());
-
   options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
+
+  auto datasources = make_datasources(options.get_source(),
+                                      options.get_byte_range_offset(),
+                                      options.get_byte_range_size_with_padding());
 
   auto reader =
     std::make_unique<csv::reader>(std::move(datasources), options, rmm::cuda_stream_default, mr);

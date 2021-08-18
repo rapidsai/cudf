@@ -50,31 +50,6 @@ namespace detail {
 namespace json {
 using namespace cudf::io;
 
-namespace {
-/**
- * @brief Estimates the maximum expected length or a row, based on the number
- * of columns
- *
- * If the number of columns is not available, it will return a value large
- * enough for most use cases
- *
- * @param[in] num_columns Number of columns in the JSON file (optional)
- *
- * @return Estimated maximum size of a row, in bytes
- */
-constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept
-{
-  constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
-  constexpr size_t column_bytes  = 64;
-  constexpr size_t base_padding  = 1024;  // 1KB
-  return num_columns == 0
-           ? max_row_bytes  // Use flat size if the # of columns is not known
-           : base_padding +
-               num_columns * column_bytes;  // Expand size based on the # of columns, if available
-}
-
-}  // anonymous namespace
-
 /**
  * @brief Aggregate the table containing keys info by their hash values.
  *
@@ -231,16 +206,12 @@ std::pair<std::vector<std::string>, col_map_ptr_type> reader::impl::get_json_obj
  *
  * @param[in] range_offset Number of bytes offset from the start
  * @param[in] range_size Bytes to read; use `0` for all remaining data
+ * @param[in] range_size_padded Bytes to read with padding; use `0` for all remaining data
  */
-void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
+void reader::impl::ingest_raw_input(size_t range_offset,
+                                    size_t range_size,
+                                    size_t range_size_padded)
 {
-  size_t map_range_size = 0;
-  if (range_size != 0) {
-    auto const dtype_option_size =
-      std::visit([](const auto& dtypes) { return dtypes.size(); }, options_.get_dtypes());
-    map_range_size = range_size + calculate_max_row_size(dtype_option_size);
-  }
-
   // Iterate through the user defined sources and read the contents into the local buffer
   CUDF_EXPECTS(!sources_.empty(), "No sources were defined");
   size_t total_source_size = 0;
@@ -253,7 +224,7 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
   size_t bytes_read = 0;
   for (const auto& source : sources_) {
     if (!source->is_empty()) {
-      auto data_size = (map_range_size != 0) ? map_range_size : source->size();
+      auto data_size = (range_size_padded != 0) ? range_size_padded : source->size();
       bytes_read += source->host_read(range_offset, data_size, &buffer_[bytes_read]);
     }
   }
@@ -675,10 +646,11 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 table_with_metadata reader::impl::read(json_reader_options const& options,
                                        rmm::cuda_stream_view stream)
 {
-  auto range_offset = options.get_byte_range_offset();
-  auto range_size   = options.get_byte_range_size();
+  auto range_offset      = options.get_byte_range_offset();
+  auto range_size        = options.get_byte_range_size();
+  auto range_size_padded = options.get_byte_range_size_with_padding();
 
-  ingest_raw_input(range_offset, range_size);
+  ingest_raw_input(range_offset, range_size, range_size_padded);
   CUDF_EXPECTS(buffer_.size() != 0, "Ingest failed: input data is null.\n");
 
   decompress_input(stream);

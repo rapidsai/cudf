@@ -58,31 +58,6 @@ using namespace cudf::io::csv;
 using namespace cudf::io;
 
 /**
- * @brief Estimates the maximum expected length or a row, based on the number
- * of columns
- *
- * If the number of columns is not available, it will return a value large
- * enough for most use cases
- *
- * @param[in] num_columns Number of columns in the CSV file (optional)
- *
- * @return Estimated maximum size of a row, in bytes
- */
-constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
-{
-  constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
-  constexpr size_t column_bytes  = 64;
-  constexpr size_t base_padding  = 1024;  // 1KB
-  if (num_columns == 0) {
-    // Use flat size if the number of columns is not known
-    return max_row_bytes;
-  } else {
-    // Expand the size based on the number of columns, if available
-    return base_padding + num_columns * column_bytes;
-  }
-}
-
-/**
  * @brief Translates a dtype string and returns its dtype enumeration and any
  * extended dtype flags that are supported by cuIO. Often, this is a column
  * with the same underlying dtype the basic types, but with different parsing
@@ -199,31 +174,21 @@ void erase_except_last(C& container, rmm::cuda_stream_view stream)
 std::pair<rmm::device_uvector<char>, reader::impl::selected_rows_offsets>
 reader::impl::select_data_and_row_offsets(rmm::cuda_stream_view stream)
 {
-  auto range_offset  = opts_.get_byte_range_offset();
-  auto range_size    = opts_.get_byte_range_size();
-  auto skip_rows     = opts_.get_skiprows();
-  auto skip_end_rows = opts_.get_skipfooter();
-  auto num_rows      = opts_.get_nrows();
+  auto range_offset      = opts_.get_byte_range_offset();
+  auto range_size        = opts_.get_byte_range_size();
+  auto range_size_padded = opts_.get_byte_range_size_with_padding();
+  auto skip_rows         = opts_.get_skiprows();
+  auto skip_end_rows     = opts_.get_skipfooter();
+  auto num_rows          = opts_.get_nrows();
 
   if (range_offset > 0 || range_size > 0) {
     CUDF_EXPECTS(opts_.get_compression() == compression_type::NONE,
                  "Reading compressed data using `byte range` is unsupported");
   }
 
-  size_t map_range_size = 0;
-
-  if (range_size != 0) {
-    auto num_given_dtypes =
-      std::visit([](const auto& dtypes) { return dtypes.size(); }, opts_.get_dtypes());
-    const auto num_columns = std::max(opts_.get_names().size(), num_given_dtypes);
-    map_range_size         = range_size + calculateMaxRowSize(num_columns);
-  }
-
-  // TODO: provide hint to datasource that we should memory map any underlying file.
-
   // Transfer source data to GPU
   if (!source_->is_empty()) {
-    auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
+    auto data_size = (range_size_padded != 0) ? range_size_padded : source_->size();
     auto buffer    = source_->host_read(range_offset, data_size);
 
     auto h_data = host_span<char const>(  //

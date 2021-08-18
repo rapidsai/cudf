@@ -109,8 +109,9 @@ class reader::impl {
    *
    * @param[in] range_offset Number of bytes offset from the start
    * @param[in] range_size Bytes to read; use `0` for all remaining data
+   * @param[in] range_size_padded Bytes to read with padding; use `0` for all remaining data
    */
-  void ingest_raw_input(size_t range_offset, size_t range_size);
+  void ingest_raw_input(size_t range_offset, size_t range_size, size_t range_size_padded);
 
   /**
    * @brief Extract the JSON objects keys from the input file with object rows.
