@@ -269,7 +269,7 @@ class aggregate_orc_metadata {
   size_type const num_rows;
   size_type const num_columns;
   size_type const num_stripes;
-  bool row_grp_idx = true;
+  bool row_grp_idx_present = true;
 
   /**
    * @brief Create a metadata object from each element in the source vector
@@ -369,7 +369,7 @@ class aggregate_orc_metadata {
     return per_file_metadata[source_idx].get_column_name(column_idx);
   }
 
-  auto is_row_grp_idx_avbl() const { return row_grp_idx; }
+  auto is_row_grp_idx_present() const { return row_grp_idx_present; }
 
   std::vector<cudf::io::orc::metadata::stripe_source_mapping> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
@@ -460,7 +460,7 @@ class aggregate_orc_metadata {
           ProtobufReader(sf_data, sf_length)
             .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
           mapping.stripe_info[i].second = &per_file_metadata[mapping.source_idx].stripefooters[i];
-          if (stripe->indexLength == 0) row_grp_idx = false;
+          if (stripe->indexLength == 0) row_grp_idx_present = false;
         }
       }
     }
@@ -1163,7 +1163,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       const bool use_index =
         (_use_index == true) &&
         // Do stripes have row group index
-        _metadata->is_row_grp_idx_avbl() &&
+        _metadata->is_row_grp_idx_present() &&
         // Only use if we don't have much work with complete columns & stripes
         // TODO: Consider nrows, gpu, and tune the threshold
         (num_rows > _metadata->get_row_index_stride() && !(_metadata->get_row_index_stride() & 7) &&
