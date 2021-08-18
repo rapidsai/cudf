@@ -41,8 +41,7 @@ from cudf.core.frame import Frame, SingleColumnFrame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
-from cudf.core.window import Rolling
-from cudf.utils import cudautils, docutils, ioutils
+from cudf.utils import cudautils, docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
