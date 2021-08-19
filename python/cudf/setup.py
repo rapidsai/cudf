@@ -11,11 +11,9 @@ from distutils.sysconfig import get_python_lib
 
 import numpy as np
 import pyarrow as pa
-
+from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
-
-from Cython.Build import cythonize
 
 try:
     from Cython.Distutils.build_ext import new_build_ext as build_ext
