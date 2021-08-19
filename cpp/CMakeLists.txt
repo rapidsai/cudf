@@ -138,6 +138,9 @@ include(cmake/thirdparty/CUDF_GetArrow.cmake)
 include(cmake/thirdparty/CUDF_GetDLPack.cmake)
 # find libcu++
 include(cmake/thirdparty/CUDF_GetLibcudacxx.cmake)
+# find cuCollections
+# Should come after including thrust and libcudacxx
+include(cmake/thirdparty/CUDF_GetcuCollections.cmake)
 # find or install GoogleTest
 include(cmake/thirdparty/CUDF_GetGTest.cmake)
 # preprocess jitify-able kernels
@@ -153,6 +156,7 @@ add_library(cudf
     src/aggregation/aggregation.cu
     src/aggregation/result_cache.cpp
     src/ast/expression_parser.cpp
+    src/ast/expressions.cpp
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
     src/binaryop/compiled/Add.cu
@@ -255,6 +259,7 @@ add_library(cudf
     src/interop/dlpack.cpp
     src/interop/from_arrow.cu
     src/interop/to_arrow.cu
+    src/interop/detail/arrow_allocator.cpp
     src/io/avro/avro.cpp
     src/io/avro/avro_gpu.cu
     src/io/avro/reader_impl.cu
@@ -283,7 +288,7 @@ add_library(cudf
     src/io/orc/writer_impl.cu
     src/io/parquet/compact_protocol_writer.cpp
     src/io/parquet/page_data.cu
-    src/io/parquet/page_dict.cu
+    src/io/parquet/chunk_dict.cu
     src/io/parquet/page_enc.cu
     src/io/parquet/page_hdr.cu
     src/io/parquet/parquet.cpp
@@ -525,7 +530,8 @@ target_link_libraries(cudf
            PUBLIC ZLIB::ZLIB
                   ${ARROW_LIBRARIES}
                   cudf::Thrust
-                  rmm::rmm)
+                  rmm::rmm
+           PRIVATE cuco::cuco)
 
 if(CUDA_STATIC_RUNTIME)
     # Tell CMake what CUDA language runtime to use
