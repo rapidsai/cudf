@@ -35,32 +35,23 @@ namespace detail {
 std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view const& offsets,
                                                            rmm::cuda_stream_view stream)
 {
-  // First, reduce offsets column by key, to identify the number of times
-  // an offset appears.
-  // Next, scatter the count for each offset (except the first and last),
+  // First, scatter the count for each repeated offset (except the first and last),
   // into a column of N `0`s, where N == number of child rows.
-  // For the example above:
+  // For example:
   //   offsets        == [0, 2, 5, 8, 11, 13]
   //   scatter result == [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]
   //
-  // If the above example had an empty list row at index 2,
-  // the same columns would look as follows:
+  // An example with empty list row at index 2:
   //   offsets        == [0, 2, 5, 5, 8, 11, 13]
   //   scatter result == [0, 0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 1, 0]
   //
-  // Note: To correctly handle null list rows at the beginning of
-  // the output column, care must be taken to skip the first `0`
-  // in the offsets column, when running `reduce_by_key()`.
-  // This accounts for the `0` added by default to the offsets
-  // column, marking the beginning of the column.
-
   auto const num_child_rows{
     cudf::detail::get_value<size_type>(offsets, offsets.size() - 1, stream)};
-
   auto per_row_mapping = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, num_child_rows, mask_state::UNALLOCATED, stream);
   auto per_row_mapping_begin = per_row_mapping->mutable_view().template begin<size_type>();
   thrust::fill_n(rmm::exec_policy(stream), per_row_mapping_begin, num_child_rows, 0);
+
   auto const begin = thrust::make_counting_iterator<size_type>(0);
   thrust::scatter_if(rmm::exec_policy(stream),
                      begin,
@@ -71,12 +62,13 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
                      [offset = offsets.begin<size_type>()] __device__(auto i) {
                        return offset[i] != offset[i + 1];
                      });  // [0,0,1,0,0,3,...]
-  // Next, generate mapping with inclusive_scan(max) on scatter() result.
+
+  // Next, generate mapping with inclusive_scan(max) on the scatter result.
   // For the example above:
   //   scatter result == [0, 0, 1, 0, 0, 2, 0, 0, 3, 0, 0, 4, 0]
   //   inclusive_scan == [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4]
   //
-  // For the case with an empty list at index 3:
+  // For the case with an empty list at index 2:
   //   scatter result == [0, 0, 1, 0, 0, 3, 0, 0, 4, 0, 0, 5, 0]
   //   inclusive_scan == [0, 0, 1, 1, 1, 3, 3, 3, 4, 4, 4, 5, 5]
   thrust::inclusive_scan(rmm::exec_policy(stream),
