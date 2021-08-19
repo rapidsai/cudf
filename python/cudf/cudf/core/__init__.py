@@ -2,7 +2,7 @@
 
 from cudf.core import _internals, buffer, column, column_accessor, common
 from cudf.core.buffer import Buffer
-from cudf.core.dataframe import DataFrame, from_pandas, merge
+from cudf.core.dataframe import DataFrame, from_pandas, merge, from_dataframe
 from cudf.core.index import (
     BaseIndex,
     CategoricalIndex,

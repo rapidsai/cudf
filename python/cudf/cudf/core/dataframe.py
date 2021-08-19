@@ -53,6 +53,8 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import GetAttrGetItemMixin
+from cudf.core import df_protocol
+
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -7410,6 +7412,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         return super()._explode(column, ignore_index)
 
+    def __dataframe__(self, nan_as_null : bool = False):
+        return df_protocol.__dataframe__(self, nan_as_null=nan_as_null)
+    
+def from_dataframe(df, copy = False):
+    return df_protocol.from_dataframe(df, copy=copy)
 
 def from_pandas(obj, nan_as_null=None):
     """
@@ -7684,7 +7691,7 @@ def _drop_columns(df: DataFrame, columns: Iterable, errors: str):
             else:
                 raise e
 
-from cudf.core.df_protocol import __dataframe__, from_dataframe
+# from cudf.core.df_protocol import __dataframe__, from_dataframe
 
-DataFrame.__dataframe__ = __dataframe__
-DataFrame.from_dataframe = from_dataframe
+# DataFrame.__dataframe__ = __dataframe__
+# DataFrame.from_dataframe = from_dataframe

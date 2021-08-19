@@ -41,6 +41,7 @@ from cudf.core import (
     UInt64Index,
     cut,
     from_pandas,
+    from_dataframe,
     interval_range,
     merge,
 )
