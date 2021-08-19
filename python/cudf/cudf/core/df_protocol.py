@@ -348,7 +348,7 @@ class _CuDFColumn:
 
     """
 
-    def __init__(self, column) -> None:
+    def __init__(self, column, nan_as_null=False) -> None:
         """
         Note: doesn't deal with extension arrays yet, just assume a regular
         Series/ndarray for now.
@@ -358,6 +358,7 @@ class _CuDFColumn:
 
         # Store the column as a private attribute
         self._col = column
+        self._nan_as_null = nan_as_null
 
     @property
     def size(self) -> int:
