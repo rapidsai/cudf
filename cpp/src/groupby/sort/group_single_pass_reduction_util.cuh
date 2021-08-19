@@ -124,7 +124,7 @@ struct value_accessor {
       return col.element<T>(i);
     }
   }
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(size_type i) const { return value(i); }
+  __device__ auto operator()(size_type i) const { return value(i); }
 };
 
 /**
@@ -184,11 +184,7 @@ struct reduce_functor {
                          : data_type{type_to_id<ResultType>()};
 
     std::unique_ptr<column> result =
-      make_fixed_width_column(result_type,
-                              num_groups,
-                              values.has_nulls() ? mask_state::ALL_NULL : mask_state::UNALLOCATED,
-                              stream,
-                              mr);
+      make_fixed_width_column(result_type, num_groups, mask_state::UNALLOCATED, stream, mr);
 
     if (values.is_empty()) { return result; }
 
