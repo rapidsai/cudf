@@ -103,6 +103,12 @@ class GroupBy(Serializable):
             zip(group_names.to_pandas(), grouped_index._split(offsets[1:-1]))
         )
 
+    def get_group(self, name, obj=None):
+        if obj is None:
+            obj = self.obj
+
+        return obj.loc[self.groups[name]]
+
     def size(self):
         """
         Return the size of each group.
