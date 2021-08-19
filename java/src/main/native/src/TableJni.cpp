@@ -2345,11 +2345,19 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
     for (int i = 0; i < n_values.size(); i++) {
       cudf::groupby::aggregation_request req;
       int col_index = n_values[i];
+
+      cudf::groupby_aggregation *agg =
+          dynamic_cast<cudf::groupby_aggregation *>(n_agg_instances[i]);
+      JNI_ARG_CHECK(env, agg != nullptr, "aggregation is not an instance of groupby_aggregation",
+                    nullptr);
+      std::unique_ptr<cudf::groupby_aggregation> cloned(
+          dynamic_cast<cudf::groupby_aggregation *>(agg->clone().release()));
+
       if (col_index == previous_index) {
-        requests.back().aggregations.push_back(n_agg_instances[i]->clone());
+        requests.back().aggregations.push_back(std::move(cloned));
       } else {
         req.values = n_input_table->column(col_index);
-        req.aggregations.push_back(n_agg_instances[i]->clone());
+        req.aggregations.push_back(std::move(cloned));
         requests.push_back(std::move(req));
       }
       previous_index = col_index;
@@ -2401,17 +2409,25 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByScan(
 
     // Aggregates are passed in already grouped by column, so we just need to fill it in
     // as we go.
-    std::vector<cudf::groupby::aggregation_request> requests;
+    std::vector<cudf::groupby::scan_request> requests;
 
     int previous_index = -1;
     for (int i = 0; i < n_values.size(); i++) {
-      cudf::groupby::aggregation_request req;
+      cudf::groupby::scan_request req;
       int col_index = n_values[i];
+
+      cudf::groupby_scan_aggregation *agg =
+          dynamic_cast<cudf::groupby_scan_aggregation *>(n_agg_instances[i]);
+      JNI_ARG_CHECK(env, agg != nullptr,
+                    "aggregation is not an instance of groupby_scan_aggregation", nullptr);
+      std::unique_ptr<cudf::groupby_scan_aggregation> cloned(
+          dynamic_cast<cudf::groupby_scan_aggregation *>(agg->clone().release()));
+
       if (col_index == previous_index) {
-        requests.back().aggregations.push_back(n_agg_instances[i]->clone());
+        requests.back().aggregations.push_back(std::move(cloned));
       } else {
         req.values = n_input_table->column(col_index);
-        req.aggregations.push_back(n_agg_instances[i]->clone());
+        req.aggregations.push_back(std::move(cloned));
         requests.push_back(std::move(req));
       }
       previous_index = col_index;

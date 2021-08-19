@@ -106,8 +106,7 @@ class aggregation {
 };
 
 /**
- * @brief Derived class intended for enforcing operation-specific restrictions
- * when calling various cudf functions.
+ * @brief Derived class intended for rolling_window specific aggregation usage.
  *
  * As an example, rolling_window will only accept rolling_aggregation inputs,
  * and the appropriate derived classes (sum_aggregation, mean_aggregation, etc)
@@ -119,6 +118,28 @@ class rolling_aggregation : public virtual aggregation {
 
  protected:
   rolling_aggregation() {}
+};
+
+/**
+ * @brief Derived class intended for groupby specific aggregation usage.
+ */
+class groupby_aggregation : public virtual aggregation {
+ public:
+  ~groupby_aggregation() = default;
+
+ protected:
+  groupby_aggregation() {}
+};
+
+/**
+ * @brief Derived class intended for groupby specific scan usage.
+ */
+class groupby_scan_aggregation : public virtual aggregation {
+ public:
+  ~groupby_scan_aggregation() = default;
+
+ protected:
+  groupby_scan_aggregation() {}
 };
 
 enum class udf_type : bool { CUDA, PTX };
