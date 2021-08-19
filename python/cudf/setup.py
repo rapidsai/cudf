@@ -11,10 +11,16 @@ from distutils.sysconfig import get_python_lib
 
 import numpy as np
 import pyarrow as pa
-from Cython.Build import cythonize
-from Cython.Distutils import build_ext
+
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
+
+from Cython.Build import cythonize
+
+try:
+    from Cython.Distutils.build_ext import new_build_ext as build_ext
+except ImportError:
+    from setuptools.command.build_ext import build_ext
 
 import versioneer
 
@@ -90,6 +96,11 @@ install_requires.append(
     "cupy-cuda" + get_cuda_version_from_header(cuda_include_dir)
 )
 
+try:
+    nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
+except Exception:
+    nthreads = 0
+
 CUDF_HOME = os.environ.get(
     "CUDF_HOME",
     os.path.abspath(
@@ -105,17 +116,14 @@ CUDF_ROOT = os.environ.get(
     ),
 )
 
-try:
-    nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
-except Exception:
-    nthreads = 0
-
 cmdclass = versioneer.get_cmdclass()
 
 
-class build_ext_and_proto(build_ext):
+class build_ext_and_proto_no_debug(build_ext):
     def build_extensions(self):
         try:
+            # Don't compile debug symbols
+            self.compiler.compiler_so.remove("-g")
             # Silence the '-Wstrict-prototypes' warning
             self.compiler.compiler_so.remove("-Wstrict-prototypes")
         except Exception:
@@ -161,7 +169,7 @@ class build_ext_and_proto(build_ext):
         build_ext.run(self)
 
 
-cmdclass["build_ext"] = build_ext_and_proto
+cmdclass["build_ext"] = build_ext_and_proto_no_debug
 
 extensions = [
     Extension(
