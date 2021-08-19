@@ -942,11 +942,12 @@ cudf::column_view remove_validity_from_col(cudf::column_view column_view) {
       // null_mask is allocated but no nulls present therefore we create a new column_view without
       // the null_mask to avoid things blowing up in reading the parquet file
       if (column_view.type().id() == cudf::type_id::STRING) {
-        ret.reset(new cudf::column_view(column_view.type(), column_view.size(), nullptr, nullptr,
-                                           0, column_view.offset(), {column_view.child(0), column_view.child(1)}));
+        ret.reset(new cudf::column_view(column_view.type(), column_view.size(), nullptr, nullptr, 0,
+                                        column_view.offset(),
+                                        {column_view.child(0), column_view.child(1)}));
       } else {
-        ret.reset(new cudf::column_view(column_view.type(), column_view.size(), column_view.head(), nullptr, 0,
-                           column_view.offset()));
+        ret.reset(new cudf::column_view(column_view.type(), column_view.size(), column_view.head(),
+                                        nullptr, 0, column_view.offset()));
       }
       return *ret.release();
     } else {
@@ -959,11 +960,11 @@ cudf::column_view remove_validity_from_col(cudf::column_view column_view) {
       children.push_back(remove_validity_from_col(*it));
     }
     if (!column_view.nullable() || !column_view.null_count() == 0) {
-      ret.reset(new cudf::column_view(column_view.type(), column_view.size(), nullptr, column_view.null_mask(),
-                           0, column_view.offset(), children));
+      ret.reset(new cudf::column_view(column_view.type(), column_view.size(), nullptr,
+                                      column_view.null_mask(), 0, column_view.offset(), children));
     } else {
       ret.reset(new cudf::column_view(column_view.type(), column_view.size(), nullptr, nullptr, 0,
-                           column_view.offset(), children));
+                                      column_view.offset(), children));
     }
     return *ret.release();
   }
@@ -988,16 +989,16 @@ extern "C" {
 
 // This is a method purely added for testing remove_validity_if_needed method
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_removeNullMasksIfNeeded(JNIEnv *env, jclass,
-                                                                      jlong j_table_view) {
+                                                                               jlong j_table_view) {
   JNI_NULL_CHECK(env, j_table_view, "table view handle is null", 0);
   try {
-    cudf::table_view* tview = reinterpret_cast<cudf::table_view*>(j_table_view);
+    cudf::table_view *tview = reinterpret_cast<cudf::table_view *>(j_table_view);
     cudf::table_view result = cudf::jni::remove_validity_if_needed(tview);
     cudf::table m_tbl(result);
     std::vector<std::unique_ptr<cudf::column>> cols = m_tbl.release();
     auto results = cudf::jni::native_jlongArray(env, cols.size());
     int i = 0;
-    for (auto it = cols.begin() ; it != cols.end() ; it++) {
+    for (auto it = cols.begin(); it != cols.end(); it++) {
       results[i++] = reinterpret_cast<jlong>(it->release());
     }
     return results.get_jArray();
