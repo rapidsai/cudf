@@ -381,7 +381,7 @@ class Series(SingleColumnFrame, Serializable):
         col_typ = pickle.loads(header["column"]["type-serialized"])
         column = col_typ.deserialize(header["column"], frames[:column_nframes])
 
-        return Series(column, index=index, name=name)
+        return cls._from_data({name: column}, index=index)
 
     def _get_columns_by_label(self, labels, downcast=False):
         """Return the column specified by `labels`
