@@ -15,7 +15,9 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/io/parquet.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
@@ -24,6 +26,9 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/fill.h>
+#include <thrust/tabulate.h>
 
 using namespace cudf;
 
@@ -190,6 +195,66 @@ TEST_F(RowBitCount, StringsWithNulls)
   cudf::test::fixed_width_column_wrapper<size_type> expected(size_iter, size_iter + strings.size());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+}
+
+namespace {
+
+/**
+ * @brief __device__ functor to multiply input by 2, defined out of line because __device__ lambdas
+ * cannot be defined in a TEST_F().
+ */
+struct times_2 {
+  int32_t __device__ operator()(int32_t i) const { return i * 2; }
+};
+
+}  // namespace
+
+TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
+{
+  // Tests that `row_bit_count()` can handle struct<list<int32_t>> with more
+  // than max_block_size (256) rows.
+  // With a large number of rows, computation spills to multiple thread-blocks,
+  // thus exercising the branch-stack comptutation.
+  // The contents of the input column aren't as pertinent to this test as the
+  // column size. For what it's worth, it looks as follows:
+  //   [ struct({0,1}), struct({2,3}), struct({4,5}), ... ]
+
+  using namespace cudf;
+  auto constexpr num_rows = 256 * 2;  // Exceeding a block size.
+
+  // List child column = {0, 1, 2, 3, 4, ..., 2*num_rows};
+  auto ints      = make_numeric_column(data_type{type_id::INT32}, num_rows * 2);
+  auto ints_view = ints->mutable_view();
+  thrust::tabulate(thrust::device,
+                   ints_view.begin<int32_t>(),
+                   ints_view.end<int32_t>(),
+                   thrust::identity<int32_t>());
+
+  // List offsets = {0, 2, 4, 6, 8, ..., num_rows*2};
+  auto list_offsets      = make_numeric_column(data_type{type_id::INT32}, num_rows + 1);
+  auto list_offsets_view = list_offsets->mutable_view();
+  thrust::tabulate(thrust::device,
+                   list_offsets_view.begin<offset_type>(),
+                   list_offsets_view.end<offset_type>(),
+                   times_2{});
+
+  // List<int32_t> = {{0,1}, {2,3}, {4,5}, ..., {2*(num_rows-1), 2*num_rows-1}};
+  auto lists_column = make_lists_column(num_rows, std::move(list_offsets), std::move(ints), 0, {});
+
+  // Struct<List<int32_t>.
+  auto struct_members = std::vector<std::unique_ptr<column>>{};
+  struct_members.emplace_back(std::move(lists_column));
+  auto structs_column = make_structs_column(num_rows, std::move(struct_members), 0, {});
+
+  // Compute row_bit_count, and compare.
+  auto row_bit_counts          = row_bit_count(table_view{{structs_column->view()}});
+  auto expected_row_bit_counts = make_numeric_column(data_type{type_id::INT32}, num_rows);
+  thrust::fill_n(thrust::device,
+                 expected_row_bit_counts->mutable_view().begin<int32_t>(),
+                 num_rows,
+                 CHAR_BIT * (2 * sizeof(int32_t) + sizeof(offset_type)));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(row_bit_counts->view(), expected_row_bit_counts->view());
 }
 
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> build_struct_column()
