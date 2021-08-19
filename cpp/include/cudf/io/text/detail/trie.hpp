@@ -34,28 +34,6 @@ namespace io {
 namespace text {
 namespace detail {
 
-struct trie_builder_node {
-  uint8_t match_length;
-  std::unordered_map<char, std::unique_ptr<trie_builder_node>> children;
-
-  void insert(std::string s) { insert(s.c_str(), s.size()); }
-
-  trie_builder_node& insert(char const* s, uint16_t size) { return this->insert(s, size, 0); }
-
- private:
-  trie_builder_node& insert(char const* s, uint16_t size, uint8_t depth)
-  {
-    if (size == 0) {
-      match_length = depth;
-      return *this;
-    }
-
-    if (children[*s] == nullptr) { children[*s] = std::make_unique<trie_builder_node>(); }
-
-    return children[*s]->insert(s + 1, size - 1, depth + 1);
-  }
-};
-
 struct trie_node {
   char token;
   uint8_t match_length;
@@ -118,21 +96,65 @@ struct trie_device_view {
   }
 };
 
+/**
+ * @brief A flat trie contained in device memory.
+ */
 struct trie {
  private:
   cudf::size_type _max_duplicate_tokens;
   rmm::device_uvector<trie_node> _nodes;
 
- public:
   trie(cudf::size_type max_duplicate_tokens, rmm::device_uvector<trie_node>&& nodes)
     : _max_duplicate_tokens(max_duplicate_tokens), _nodes(std::move(nodes))
   {
   }
 
+  /**
+   * @brief Used to build a hierarchical trie which can then be flattened.
+   */
+  struct trie_builder_node {
+    uint8_t match_length;
+    std::unordered_map<char, std::unique_ptr<trie_builder_node>> children;
+
+    /**
+     * @brief Insert the string in to the trie tree, growing the trie as necessary
+     */
+    void insert(std::string s) { insert(s.c_str(), s.size(), 0); }
+
+   private:
+    trie_builder_node& insert(char const* s, uint16_t size, uint8_t depth)
+    {
+      if (size == 0) {
+        match_length = depth;
+        return *this;
+      }
+
+      if (children[*s] == nullptr) { children[*s] = std::make_unique<trie_builder_node>(); }
+
+      return children[*s]->insert(s + 1, size - 1, depth + 1);
+    }
+  };
+
+ public:
+  /**
+   * @brief Gets the number of nodes contained in this trie.
+   */
   cudf::size_type size() const { return _nodes.size(); }
 
+  /**
+   * @brief A pessimistic count of duplicate tokens in the trie. Used to determine the maximum
+   * possible stack size required to compute matches of this trie in parallel.
+   */
   cudf::size_type max_duplicate_tokens() const { return _max_duplicate_tokens; }
 
+  /**
+   * @brief Create a trie which represents the given pattern.
+   *
+   * @param pattern The pattern to store in the trie
+   * @param stream The stream to use for allocation and copy
+   * @param mr Memory resource to use for the device memory allocation
+   * @return The trie.
+   */
   static trie create(std::string const& pattern,
                      rmm::cuda_stream_view stream,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
@@ -141,6 +163,14 @@ struct trie {
     return create(std::vector<std::string>{pattern}, stream, mr);
   }
 
+  /**
+   * @brief Create a trie which represents the given pattern.
+   *
+   * @param pattern The patterns to store in the trie
+   * @param stream The stream to use for allocation and copy
+   * @param mr Memory resource to use for the device memory allocation
+   * @return The trie.
+   */
   static trie create(std::vector<std::string> const& patterns,
                      rmm::cuda_stream_view stream,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())

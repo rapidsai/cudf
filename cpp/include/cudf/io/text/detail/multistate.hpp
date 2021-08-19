@@ -24,35 +24,74 @@ namespace text {
 namespace detail {
 
 /**
- * @brief represents a single (begin, end] pair of possible state transition history.
- *
- */
-struct multistate_segment {
- public:
-  static auto constexpr max_states = 16;
-  constexpr multistate_segment() : _data(0) {}
-  constexpr multistate_segment(uint8_t head, uint8_t tail) : _data((head & 0b1111) | (tail << 4)) {}
-
-  constexpr uint8_t get_head() const { return _data & 0b1111; }
-  constexpr uint8_t get_tail() const { return _data >> 4; }
-
- private:
-  uint8_t _data;
-};
-
-/**
- * @brief Holds up to 7 transition history segments
+ * @brief Represents up to 7 segments
  */
 struct multistate {
+ private:
+  /**
+   * @brief represents a (head, tail] segment, stored as a single 8 bit value
+   */
+  struct multistate_segment {
+   public:
+    /**
+     * @brief Creates a segment which represents (0, 0]
+     */
+
+    constexpr multistate_segment() : _data(0) {}
+    /**
+     * @brief Creates a segment which represents (head, tail]
+     *
+     * @param head the (head, ____] value. Undefined behavior for values >= 16
+     * @param tail the (____, tail] value. Undefined behavior for values >= 16
+     */
+
+    constexpr multistate_segment(uint8_t head, uint8_t tail) : _data((head & 0b1111) | (tail << 4))
+    {
+    }
+
+    /**
+     * @brief Get's the (head, ____] value from the segment.
+     */
+    constexpr uint8_t get_head() const { return _data & 0b1111; }
+
+    /**
+     * @brief Get's the (____, tail] value from the segment.
+     */
+    constexpr uint8_t get_tail() const { return _data >> 4; }
+
+   private:
+    uint8_t _data;
+  };
+
  public:
-  static auto constexpr max_segments = 7;
+  /**
+   * @brief The maximum state (head or tail) this multistate can represent
+   */
+
+  static auto constexpr max_segment_value = 15;
+  /**
+   * @brief The maximum number of segments this multistate can represent
+   */
+  static auto constexpr max_segment_count = 7;
+
+  /**
+   * @brief Enqueues a (head, tail] segment to this multistate
+   *
+   * @note: The behavior of this function is undefined if size() => max_segment_count
+   */
   constexpr void enqueue(uint8_t head, uint8_t tail)
   {
     _segments[_size++] = multistate_segment(head, tail);
   }
 
+  /**
+   * @brief get's the number of segments this multistate represents
+   */
   constexpr uint8_t size() const { return _size; }
 
+  /**
+   * @brief get's the highest (____, tail] value this multistate represents
+   */
   constexpr uint8_t max_tail() const
   {
     uint8_t maximum = 0;
@@ -64,12 +103,19 @@ struct multistate {
     return maximum;
   }
 
+  /**
+   * @brief get's the Nth (head, ____] value state this multistate represents
+   */
   constexpr uint8_t get_head(uint8_t idx) const { return _segments[idx].get_head(); }
+
+  /**
+   * @brief get's the Nth (____, tail] value state this multistate represents
+   */
   constexpr uint8_t get_tail(uint8_t idx) const { return _segments[idx].get_tail(); }
 
  private:
   uint8_t _size = 0;
-  multistate_segment _segments[max_segments];
+  multistate_segment _segments[max_segment_count];
 };
 
 /**
