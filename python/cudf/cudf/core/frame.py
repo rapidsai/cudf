@@ -3604,7 +3604,7 @@ class Frame(libcudf.table.Table):
 
         Parameters
         ----------
-        other : sequence, Series, or DataFrame
+        other : Sequence, Series, or DataFrame
             Any multiple element data structure, or list-like object.
         reflect : bool, default False
             If ``True`` the operation is reflected (i.e ``other`` is used as
@@ -3638,7 +3638,7 @@ class Frame(libcudf.table.Table):
             rhs = other.values
         elif isinstance(other, cupy.ndarray):
             rhs = other
-        elif isinstance(other, abc.Sequence):
+        elif isinstance(other, (abc.Sequence, np.ndarray)):
             rhs = cupy.asarray(other)
         else:
             return NotImplemented
@@ -3647,13 +3647,10 @@ class Frame(libcudf.table.Table):
 
         result = lhs.dot(rhs)
         if len(result.shape) == 1:
-            result = cudf.Series(result)
-        elif len(result.shape) == 2:
-            result = cudf.DataFrame(result)
-        else:
-            result = result.item()
-
-        return result
+            return cudf.Series(result)
+        if len(result.shape) == 2:
+            return cudf.DataFrame(result)
+        return result.item()
 
     # Binary arithmetic operations.
     def __add__(self, other):
