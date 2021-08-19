@@ -200,7 +200,8 @@ public final class Table implements AutoCloseable {
    * into a java
    * object to try and pull out all of the options.  If this becomes unwieldy we can change it.
    * @param columnNames       names of all of the columns, even the ones filtered out
-   * @param dTypes            types of all of the columns as strings.  Why strings? who knows.
+   * @param dTypeIds          native types IDs of all of the columns.
+   * @param dTypeScales       scale of the type for all of the columns.
    * @param filterColumnNames name of the columns to read, or an empty array if we want to read
    *                          all of them
    * @param filePath          the path of the file to read, or null if no path should be read.
@@ -214,7 +215,8 @@ public final class Table implements AutoCloseable {
    * @param trueValues        values that should be treated as boolean true
    * @param falseValues       values that should be treated as boolean false
    */
-  private static native long[] readCSV(String[] columnNames, String[] dTypes,
+  private static native long[] readCSV(String[] columnNames,
+                                       int[] dTypeIds, int[] dTypeScales,
                                        String[] filterColumnNames,
                                        String filePath, long address, long length,
                                        int headerRow, byte delim, byte quote,
@@ -652,7 +654,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readCSV(Schema schema, CSVOptions opts, File path) {
     return new Table(
-        readCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
+        readCSV(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
             opts.getIncludeColumnNames(), path.getAbsolutePath(),
             0, 0,
             opts.getHeaderRow(),
@@ -725,7 +727,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    return new Table(readCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
+    return new Table(readCSV(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
         opts.getIncludeColumnNames(), null,
         buffer.getAddress() + offset, len,
         opts.getHeaderRow(),

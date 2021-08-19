@@ -120,7 +120,8 @@ struct empty_column_constructor {
 };
 
 /// Make an empty table with appropriate types for requested aggs
-auto empty_results(host_span<aggregation_request const> requests)
+template <typename RequestType>
+auto empty_results(host_span<RequestType const> requests)
 {
   std::vector<aggregation_result> empty_results;
 
@@ -144,7 +145,8 @@ auto empty_results(host_span<aggregation_request const> requests)
 }
 
 /// Verifies the agg requested on the request's values is valid
-void verify_valid_requests(host_span<aggregation_request const> requests)
+template <typename RequestType>
+void verify_valid_requests(host_span<RequestType const> requests)
 {
   CUDF_EXPECTS(
     std::all_of(
@@ -184,7 +186,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
 // Compute scan requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan(
-  host_span<aggregation_request const> requests, rmm::mr::device_memory_resource* mr)
+  host_span<scan_request const> requests, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
