@@ -30,10 +30,6 @@ import ai.rapids.cudf.ast.BinaryOperator;
 import ai.rapids.cudf.ast.ColumnReference;
 import ai.rapids.cudf.ast.CompiledExpression;
 import ai.rapids.cudf.ast.TableReference;
-import org.apache.arrow.memory.RootAllocator;
-import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.ipc.ArrowFileReader;
-import org.apache.arrow.vector.ipc.SeekableReadChannel;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -110,7 +106,7 @@ public class TableTest extends CudfTestBase {
    * @param colName The name of the column
    */
   public static void assertColumnsAreEqual(ColumnView expected, ColumnView cv, String colName) {
-    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
+    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true, false);
   }
 
   /**
@@ -120,7 +116,7 @@ public class TableTest extends CudfTestBase {
    * @param colName The name of the host column
    */
   public static void assertColumnsAreEqual(HostColumnVector expected, HostColumnVector cv, String colName) {
-    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
+    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true, false);
   }
 
   /**
@@ -129,7 +125,7 @@ public class TableTest extends CudfTestBase {
    * @param cv The input Struct column
    */
   public static void assertStructColumnsAreEqual(ColumnView expected, ColumnView cv) {
-    assertPartialStructColumnsAreEqual(expected, 0, expected.getRowCount(), cv, "unnamed", true);
+    assertPartialStructColumnsAreEqual(expected, 0, expected.getRowCount(), cv, "unnamed", true, false);
   }
 
   /**
@@ -139,13 +135,14 @@ public class TableTest extends CudfTestBase {
    * @param length The number of rows to consider
    * @param cv The input Struct column
    * @param colName The name of the column
-   * @param enableNullCheck Whether to check for nulls in the Struct column
+   * @param enableNullCountCheck Whether to check for nulls in the Struct column
+   * @param enableNullabilityCheck Whether the table have a validity mask
    */
   public static void assertPartialStructColumnsAreEqual(ColumnView expected, long rowOffset, long length,
-      ColumnView cv, String colName, boolean enableNullCheck) {
+      ColumnView cv, String colName, boolean enableNullCountCheck, boolean enableNullabilityCheck) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
-      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
+      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCountCheck, enableNullabilityCheck);
     }
   }
 
@@ -155,12 +152,13 @@ public class TableTest extends CudfTestBase {
    * @param cv The input column
    * @param colName The name of the column
    * @param enableNullCheck Whether to check for nulls in the column
+   * @param enableNullabilityCheck Whether the table have a validity mask
    */
   public static void assertPartialColumnsAreEqual(ColumnView expected, long rowOffset, long length,
-      ColumnView cv, String colName, boolean enableNullCheck) {
+      ColumnView cv, String colName, boolean enableNullCheck, boolean enableNullabilityCheck) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
-      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
+      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck, enableNullabilityCheck);
     }
   }
 
@@ -171,17 +169,20 @@ public class TableTest extends CudfTestBase {
    * @param length  number of rows from starting offset
    * @param cv The input host column
    * @param colName The name of the host column
-   * @param enableNullCheck Whether to check for nulls in the host column
+   * @param enableNullCountCheck Whether to check for nulls in the host column
    */
   public static void assertPartialColumnsAreEqual(HostColumnVectorCore expected, long rowOffset, long length,
-                                                  HostColumnVectorCore cv, String colName, boolean enableNullCheck) {
+                                                  HostColumnVectorCore cv, String colName, boolean enableNullCountCheck, boolean enableNullabilityCheck) {
     assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
     assertEquals(length, cv.getRowCount(), "Row Count For Column " + colName);
     assertEquals(expected.getNumChildren(), cv.getNumChildren(), "Child Count for Column " + colName);
-    if (enableNullCheck) {
+    if (enableNullCountCheck) {
       assertEquals(expected.getNullCount(), cv.getNullCount(), "Null Count For Column " + colName);
     } else {
       // TODO add in a proper check when null counts are supported by serializing a partitioned column
+    }
+    if (enableNullabilityCheck) {
+      assertEquals(expected.hasValidityVector(), cv.hasValidityVector(), "Column nullability is different than expected");
     }
     DType type = expected.getType();
     for (long expectedRow = rowOffset; expectedRow < (rowOffset + length); expectedRow++) {
@@ -268,7 +269,7 @@ public class TableTest extends CudfTestBase {
           }
           assertPartialColumnsAreEqual(expected.getNestedChildren().get(0), expectedChildRowOffset,
               numChildRows, cv.getNestedChildren().get(0), colName + " list child",
-              enableNullCheck);
+              enableNullCountCheck, enableNullabilityCheck);
           break;
         case STRUCT:
           List<HostColumnVectorCore> expectedChildren = expected.getNestedChildren();
@@ -279,7 +280,7 @@ public class TableTest extends CudfTestBase {
             String childName = colName + " child " + i;
             assertEquals(length, cvChild.getRowCount(), "Row Count for Column " + colName);
             assertPartialColumnsAreEqual(expectedChild, rowOffset, length, cvChild,
-                colName, enableNullCheck);
+                colName, enableNullCountCheck, enableNullabilityCheck);
           }
           break;
         default:
@@ -295,9 +296,10 @@ public class TableTest extends CudfTestBase {
    * @param length the number of rows to check
    * @param table the input table to compare against expected
    * @param enableNullCheck whether to check for nulls or not
+   * @param enableNullabilityCheck whether the table have a validity mask
    */
   public static void assertPartialTablesAreEqual(Table expected, long rowOffset, long length, Table table,
-                                                 boolean enableNullCheck) {
+                                                 boolean enableNullCheck, boolean enableNullabilityCheck) {
     assertEquals(expected.getNumberOfColumns(), table.getNumberOfColumns());
     assertEquals(length, table.getRowCount(), "ROW COUNT");
     for (int col = 0; col < expected.getNumberOfColumns(); col++) {
@@ -307,7 +309,7 @@ public class TableTest extends CudfTestBase {
       if (rowOffset != 0 || length != expected.getRowCount()) {
         name = name + " PART " + rowOffset + "-" + (rowOffset + length - 1);
       }
-      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name, enableNullCheck);
+      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name, enableNullCheck, enableNullabilityCheck);
     }
   }
 
@@ -317,7 +319,7 @@ public class TableTest extends CudfTestBase {
    * @param table the input table to compare against expected
    */
   public static void assertTablesAreEqual(Table expected, Table table) {
-    assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table, true);
+    assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table, true, false);
   }
 
   void assertTablesHaveSameValues(HashMap<Object, Integer>[] expectedTable, Table table) {
@@ -2950,7 +2952,7 @@ public class TableTest extends CudfTestBase {
           try (Table found = JCudfSerialization.readAndConcat(
               headers.toArray(new JCudfSerialization.SerializedTableHeader[headers.size()]),
               buffers.toArray(new HostMemoryBuffer[buffers.size()]))) {
-            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found, false);
+            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found, false, false);
           }
         } finally {
           for (HostMemoryBuffer buff: buffers) {
@@ -3003,7 +3005,7 @@ public class TableTest extends CudfTestBase {
         try (Table result = JCudfSerialization.readAndConcat(
             new JCudfSerialization.SerializedTableHeader[] {header, header},
             new HostMemoryBuffer[] {buff, buff})) {
-          assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), result, false);
+          assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), result, false, false);
         }
       }
     }
@@ -3044,7 +3046,7 @@ public class TableTest extends CudfTestBase {
               buffers.toArray(new HostMemoryBuffer[buffers.size()]), bout2);
           ByteArrayInputStream bin2 = new ByteArrayInputStream(bout2.toByteArray());
           try (JCudfSerialization.TableAndRowCountPair found = JCudfSerialization.readTableFrom(bin2)) {
-            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found.getTable(), false);
+            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found.getTable(), false, false);
             assertEquals(found.getTable(), found.getContiguousTable().getTable());
             assertNotNull(found.getContiguousTable().getBuffer());
           }
@@ -3070,7 +3072,7 @@ public class TableTest extends CudfTestBase {
           JCudfSerialization.writeToStream(t, bout, i, len);
           ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
           try (JCudfSerialization.TableAndRowCountPair found = JCudfSerialization.readTableFrom(bin)) {
-            assertPartialTablesAreEqual(t, i, len, found.getTable(), i == 0 && len == t.getRowCount());
+            assertPartialTablesAreEqual(t, i, len, found.getTable(), i == 0 && len == t.getRowCount(), false);
             assertEquals(found.getTable(), found.getContiguousTable().getTable());
             assertNotNull(found.getContiguousTable().getBuffer());
           }
@@ -6075,6 +6077,29 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  ColumnView replaceValidity(ColumnView cv, DeviceMemoryBuffer validity) {
+    assert (validity.length >= BitVectorHelper.getValidityAllocationSizeInBytes(cv.rows));
+    if (cv.type.isNestedType()) {
+      ColumnView[] children = cv.getChildColumnViews();
+      try {
+        return new ColumnView(cv.type,
+            cv.rows,
+            Optional.of(0L),
+            validity,
+            cv.getOffsets(),
+            children);
+      } finally {
+        for (ColumnView v : children) {
+          if (v != null) {
+            v.close();
+          }
+        }
+      }
+    } else {
+      return new ColumnView(cv.type, cv.rows, Optional.of(0L), cv.getData(), validity, cv.getOffsets());
+    }
+  }
+
   @Test
   void testRemoveNullMasksIfNeeded() {
     ListType nestedType = new ListType(true, new StructType(false,
@@ -6094,44 +6119,38 @@ public class TableTest extends CudfTestBase {
              Arrays.asList(structData1, structData2),
              Arrays.asList(structData1, structData2))) {
       //Then we take the created ColumnVectors and add validity masks even though the nullCount = 0
-      try (ColumnVector cv0 = new ColumnVector(nonNullVector0.type, nonNullVector0.rows,
-          Optional.of(0L),
-          new DeviceMemoryBuffer(nonNullVector0.getData().address,
-              nonNullVector0.getData().length, Cuda.DEFAULT_STREAM),
-          DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(nonNullVector0.rows)),
-          nonNullVector0.getOffsets() == null ? null :
-              new DeviceMemoryBuffer(nonNullVector0.getOffsets().address,
-                  nonNullVector0.getOffsets().length,
-                  Cuda.DEFAULT_STREAM));
-           ColumnVector cv1 = new ColumnVector(nonNullVector1.type, nonNullVector1.rows,
-               Optional.of(0L),
-               null,
-               DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityLengthInBytes(nonNullVector1.rows)),
-               nonNullVector1.getOffsets() == null ? null :
-                   new DeviceMemoryBuffer(nonNullVector1.getOffsets().address,
-                       nonNullVector1.getOffsets().length,
-                       Cuda.DEFAULT_STREAM), null,
-               Arrays.stream(nonNullVector1.getChildColumnViews()).mapToLong((cv)-> cv.getNativeView()).toArray());
-           ColumnVector cv2 = new ColumnVector(nonNullVector2.type,
-               nonNullVector2.rows, Optional.of(0L),
-               new DeviceMemoryBuffer(nonNullVector2.getData().address,
-                   nonNullVector2.getData().length,
-                   Cuda.DEFAULT_STREAM),
-               DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityLengthInBytes(nonNullVector2.rows)),
-               new DeviceMemoryBuffer(nonNullVector2.getOffsets().address,
-                   nonNullVector2.getOffsets().length,
-                   Cuda.DEFAULT_STREAM))) {
+      long allocSize = BitVectorHelper.getValidityAllocationSizeInBytes(nonNullVector0.rows);
+      DeviceMemoryBuffer dm0 = DeviceMemoryBuffer.allocate(allocSize);
+      Cuda.memset(dm0.address, (byte) 0xFF, allocSize);
+      DeviceMemoryBuffer dm1 = DeviceMemoryBuffer.allocate(allocSize);
+      Cuda.memset(dm1.address, (byte) 0xFF, allocSize);
+      DeviceMemoryBuffer dm2 = DeviceMemoryBuffer.allocate(allocSize);
+      Cuda.memset(dm2.address, (byte) 0xFF, allocSize);
+      DeviceMemoryBuffer dm3_child = DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(2));
+      Cuda.memset(dm3_child.address, (byte) 0xFF, BitVectorHelper.getValidityAllocationSizeInBytes(2));
+
+      try (ColumnVector cv0 = replaceValidity(nonNullVector0, dm0).copyToColumnVector();
+           ColumnView struct = nonNullVector1.getChildColumnView(0);
+           ColumnView structChild0 = struct.getChildColumnView(0);
+           ColumnView newStructChild0 = replaceValidity(structChild0, dm3_child);
+           ColumnView newStruct = struct.replaceChildrenWithViews(new int[]{0}, new ColumnView[]{newStructChild0});
+           ColumnView list = nonNullVector1.replaceChildrenWithViews(new int[]{0}, new ColumnView[]{newStruct});
+           ColumnVector cv1 = replaceValidity(list, dm1).copyToColumnVector();
+           ColumnVector cv2 = replaceValidity(nonNullVector2, dm2).copyToColumnVector()) {
 
         try (Table t = new Table(new ColumnVector[]{cv0, cv1, cv2});
-             Table tableWithoutNullMask = removeNullMasksIfNeeded(t)) {
-          for (int i = 0; i < tableWithoutNullMask.getNumberOfColumns(); i++) {
-            ColumnVector originalColumn = t.getColumn(i);
-            assertEquals(true, originalColumn.hasValidityVector());
-            assertEquals(0, originalColumn.getNullCount());
-            ColumnVector resultColumn = tableWithoutNullMask.getColumn(i);
-            assertEquals(false, resultColumn.hasValidityVector());
-            assertEquals(0, resultColumn.getNullCount());
-          }
+             Table tableWithoutNullMask = removeNullMasksIfNeeded(t);
+             Table expected = new Table(new ColumnVector[]{nonNullVector0, nonNullVector1, nonNullVector2})) {
+          assertTrue(t.getColumn(0).hasValidityVector());
+          assertTrue(t.getColumn(1).hasValidityVector());
+          assertTrue(t.getColumn(2).hasValidityVector());
+
+          assertPartialTablesAreEqual(expected,
+              0,
+              expected.getRowCount(),
+              tableWithoutNullMask,
+              true,
+              true);
         }
       }
     }

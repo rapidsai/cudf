@@ -936,24 +936,17 @@ jlongArray combine_join_results(JNIEnv *env, cudf::table &left_results,
 }
 
 cudf::column_view remove_validity_from_col(cudf::column_view column_view) {
-  std::unique_ptr<cudf::column_view> ret;
-  if (!cudf::is_nested(column_view.type())) {
+  if (!cudf::is_compound(column_view.type())) {
     if (column_view.nullable() && column_view.null_count() == 0) {
       // null_mask is allocated but no nulls present therefore we create a new column_view without
       // the null_mask to avoid things blowing up in reading the parquet file
-      if (column_view.type().id() == cudf::type_id::STRING) {
-        ret.reset(new cudf::column_view(column_view.type(), column_view.size(), nullptr, nullptr, 0,
-                                        column_view.offset(),
-                                        {column_view.child(0), column_view.child(1)}));
-      } else {
-        ret.reset(new cudf::column_view(column_view.type(), column_view.size(), column_view.head(),
-                                        nullptr, 0, column_view.offset()));
-      }
-      return *ret.release();
+      return cudf::column_view(column_view.type(), column_view.size(), column_view.head(), nullptr,
+                               0, column_view.offset());
     } else {
       return cudf::column_view(column_view);
     }
   } else {
+    std::unique_ptr<cudf::column_view> ret;
     std::vector<cudf::column_view> children;
     children.reserve(column_view.num_children());
     for (auto it = column_view.child_begin(); it != column_view.child_end(); it++) {
