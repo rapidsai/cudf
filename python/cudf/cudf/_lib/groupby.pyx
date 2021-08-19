@@ -22,6 +22,8 @@ from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+import cudf
+
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
@@ -44,6 +46,7 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table, table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.cpp.utilities.host_span cimport host_span
+from cudf._lib.utils cimport data_from_unique_ptr
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.
@@ -96,20 +99,16 @@ cdef class GroupBy:
         c_grouped_values = move(c_groups.values)
         c_group_offsets = c_groups.offsets
 
-        grouped_keys = Table.from_unique_ptr(
+        grouped_keys = cudf.Index._from_data(*data_from_unique_ptr(
             move(c_grouped_keys),
             column_names=range(c_grouped_keys.get()[0].num_columns())
-        )
-        grouped_values = Table.from_unique_ptr(
+        ))
+        grouped_values = data_from_unique_ptr(
             move(c_grouped_values),
             index_names=values._index_names,
             column_names=values._column_names
         )
         return grouped_keys, grouped_values, c_group_offsets
-
-        cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
-        cdef libcudf_groupby.aggregation_request c_agg_request
-        cdef GroupbyAggregation agg_obj
 
     def aggregate_internal(self, Table values, aggregations):
         from cudf.core.column_accessor import ColumnAccessor
@@ -164,25 +163,14 @@ cdef class GroupBy:
             vector[libcudf_groupby.aggregation_result]
         ] c_result
 
-        try:
-            with nogil:
-                c_result = move(
-                    self.c_obj.get()[0].aggregate(
-                        c_agg_requests
-                    )
+        with nogil:
+            c_result = move(
+                self.c_obj.get()[0].aggregate(
+                    c_agg_requests
                 )
-        except RuntimeError as e:
-            # TODO: remove this try..except after
-            # https://github.com/rapidsai/cudf/issues/7611
-            # is resolved
-            if ("make_empty_column") in str(e):
-                raise NotImplementedError(
-                    "Aggregation not supported for empty columns"
-                ) from e
-            else:
-                raise
+            )
 
-        grouped_keys = Table.from_unique_ptr(
+        grouped_keys, _ = data_from_unique_ptr(
             move(c_result.first),
             column_names=self.keys._column_names
         )
@@ -198,7 +186,7 @@ cdef class GroupBy:
                     Column.from_unique_ptr(move(c_result.second[i].results[j]))
                 )
 
-        return Table(data=result_data, index=grouped_keys)
+        return result_data, cudf.Index._from_data(grouped_keys)
 
     def scan_internal(self, Table values, aggregations):
         from cudf.core.column_accessor import ColumnAccessor
@@ -253,25 +241,14 @@ cdef class GroupBy:
             vector[libcudf_groupby.aggregation_result]
         ] c_result
 
-        try:
-            with nogil:
-                c_result = move(
-                    self.c_obj.get()[0].scan(
-                        c_agg_requests
-                    )
+        with nogil:
+            c_result = move(
+                self.c_obj.get()[0].scan(
+                    c_agg_requests
                 )
-        except RuntimeError as e:
-            # TODO: remove this try..except after
-            # https://github.com/rapidsai/cudf/issues/7611
-            # is resolved
-            if ("make_empty_column") in str(e):
-                raise NotImplementedError(
-                    "Aggregation not supported for empty columns"
-                ) from e
-            else:
-                raise
+            )
 
-        grouped_keys = Table.from_unique_ptr(
+        grouped_keys, _ = data_from_unique_ptr(
             move(c_result.first),
             column_names=self.keys._column_names
         )
@@ -287,7 +264,29 @@ cdef class GroupBy:
                     Column.from_unique_ptr(move(c_result.second[i].results[j]))
                 )
 
-        return Table(data=result_data, index=grouped_keys)
+        return result_data, cudf.Index._from_data(grouped_keys)
+
+    def aggregate(self, Table values, aggregations):
+        """
+        Parameters
+        ----------
+        values : Table
+        aggregations
+            A dict mapping column names in `Table` to a list of aggregations
+            to perform on that column
+
+            Each aggregation may be specified as:
+            - a string (e.g., "max")
+            - a lambda/function
+
+        Returns
+        -------
+        Table of aggregated values
+        """
+        if _is_all_scan_aggregate(aggregations):
+            return self.scan_internal(values, aggregations)
+
+        return self.aggregate_internal(values, aggregations)
 
     def aggregate(self, Table values, aggregations):
         """
@@ -334,16 +333,16 @@ cdef class GroupBy:
                 self.c_obj.get()[0].shift(view, offsets, c_fill_values)
             )
 
-        grouped_keys = Table.from_unique_ptr(
+        grouped_keys = cudf.Index._from_data(*data_from_unique_ptr(
             move(c_result.first),
             column_names=self.keys._column_names
-        )
+        ))
 
-        shifted = Table.from_unique_ptr(
+        shifted, _ = data_from_unique_ptr(
             move(c_result.second), column_names=values._column_names
         )
 
-        return Table(data=shifted._data, index=grouped_keys)
+        return shifted, grouped_keys
 
     def replace_nulls(self, Table values, object method):
         cdef table_view val_view = values.view()
@@ -361,12 +360,10 @@ cdef class GroupBy:
                 self.c_obj.get()[0].replace_nulls(val_view, policies)
             )
 
-        grouped_result = Table.from_unique_ptr(
+        return data_from_unique_ptr(
             move(c_result.second), column_names=values._column_names
-        )
+        )[0]
 
-        result = Table(data=grouped_result._data)
-        return result
 
 _GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax"}
 

@@ -22,7 +22,6 @@ from numba import cuda
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import as_device_scalar
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.core.buffer import Buffer
@@ -49,62 +48,63 @@ if TYPE_CHECKING:
 
 
 class CategoricalAccessor(ColumnMethods):
+    """
+    Accessor object for categorical properties of the Series values.
+    Be aware that assigning to `categories` is a inplace operation,
+    while all methods return new categorical data per default.
+
+    Parameters
+    ----------
+    column : Column
+    parent : Series or CategoricalIndex
+
+    Examples
+    --------
+    >>> s = cudf.Series([1,2,3], dtype='category')
+    >>> s
+    >>> s
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [1, 2, 3]
+    >>> s.cat.categories
+    Int64Index([1, 2, 3], dtype='int64')
+    >>> s.cat.reorder_categories([3,2,1])
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [3, 2, 1]
+    >>> s.cat.remove_categories([1])
+    0    <NA>
+    1       2
+    2       3
+    dtype: category
+    Categories (2, int64): [2, 3]
+    >>> s.cat.set_categories(list('abcde'))
+    0    <NA>
+    1    <NA>
+    2    <NA>
+    dtype: category
+    Categories (5, object): ['a', 'b', 'c', 'd', 'e']
+    >>> s.cat.as_ordered()
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [1 < 2 < 3]
+    >>> s.cat.as_unordered()
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [1, 2, 3]
+    """
+
     _column: CategoricalColumn
 
     def __init__(self, parent: SeriesOrIndex):
-        """
-        Accessor object for categorical properties of the Series values.
-        Be aware that assigning to `categories` is a inplace operation,
-        while all methods return new categorical data per default.
-
-        Parameters
-        ----------
-        column : Column
-        parent : Series or CategoricalIndex
-
-        Examples
-        --------
-        >>> s = cudf.Series([1,2,3], dtype='category')
-        >>> s
-        >>> s
-        0    1
-        1    2
-        2    3
-        dtype: category
-        Categories (3, int64): [1, 2, 3]
-        >>> s.cat.categories
-        Int64Index([1, 2, 3], dtype='int64')
-        >>> s.cat.reorder_categories([3,2,1])
-        0    1
-        1    2
-        2    3
-        dtype: category
-        Categories (3, int64): [3, 2, 1]
-        >>> s.cat.remove_categories([1])
-        0    <NA>
-        1       2
-        2       3
-        dtype: category
-        Categories (2, int64): [2, 3]
-        >>> s.cat.set_categories(list('abcde'))
-        0    <NA>
-        1    <NA>
-        2    <NA>
-        dtype: category
-        Categories (5, object): ['a', 'b', 'c', 'd', 'e']
-        >>> s.cat.as_ordered()
-        0    1
-        1    2
-        2    3
-        dtype: category
-        Categories (3, int64): [1 < 2 < 3]
-        >>> s.cat.as_unordered()
-        0    1
-        1    2
-        2    3
-        dtype: category
-        Categories (3, int64): [1, 2, 3]
-        """
         if not is_categorical_dtype(parent.dtype):
             raise AttributeError(
                 "Can only use .cat accessor with a 'category' dtype"
@@ -525,50 +525,12 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (2, int64): [1, 10]
         """
-        ordered = ordered if ordered is not None else self.ordered
-        new_categories = column.as_column(new_categories)
-
-        if isinstance(new_categories, CategoricalColumn):
-            new_categories = new_categories.categories
-
-        # when called with rename=True, the pandas behavior is
-        # to replace the current category values with the new
-        # categories.
-        if rename:
-            # enforce same length
-            if len(new_categories) != len(self._column.categories):
-                raise ValueError(
-                    "new_categories must have the same "
-                    "number of items as old categories"
-                )
-
-            out_col = column.build_categorical_column(
-                categories=new_categories,
-                codes=self._column.base_children[0],
-                mask=self._column.base_mask,
-                size=self._column.size,
-                offset=self._column.offset,
-                ordered=ordered,
-            )
-        else:
-            out_col = self._column
-            if not (type(out_col.categories) is type(new_categories)):
-                # If both categories are of different Column types,
-                # return a column full of Nulls.
-                out_col = _create_empty_categorical_column(
-                    self._column,
-                    CategoricalDtype(
-                        categories=new_categories, ordered=ordered
-                    ),
-                )
-            elif (
-                not out_col._categories_equal(new_categories, ordered=ordered)
-                or not self.ordered == ordered
-            ):
-                out_col = out_col._set_categories(
-                    new_categories, ordered=ordered,
-                )
-        return self._return_or_inplace(out_col, inplace=inplace)
+        return self._return_or_inplace(
+            self._column.set_categories(
+                new_categories=new_categories, ordered=ordered, rename=rename
+            ),
+            inplace=inplace,
+        )
 
     def reorder_categories(
         self,
@@ -648,7 +610,19 @@ class CategoricalAccessor(ColumnMethods):
 
 
 class CategoricalColumn(column.ColumnBase):
-    """Implements operations for Columns of Categorical type
+    """
+    Implements operations for Columns of Categorical type
+
+    Parameters
+    ----------
+    dtype : CategoricalDtype
+    mask : Buffer
+        The validity mask
+    offset : int
+        Data offset
+    children : Tuple[ColumnBase]
+        Two non-null columns containing the categories and codes
+        respectively
     """
 
     dtype: cudf.core.dtypes.CategoricalDtype
@@ -664,18 +638,7 @@ class CategoricalColumn(column.ColumnBase):
         null_count: int = None,
         children: Tuple["column.ColumnBase", ...] = (),
     ):
-        """
-        Parameters
-        ----------
-        dtype : CategoricalDtype
-        mask : Buffer
-            The validity mask
-        offset : int
-            Data offset
-        children : Tuple[ColumnBase]
-            Two non-null columns containing the categories and codes
-            respectively
-        """
+
         if size is None:
             for child in children:
                 assert child.offset == 0
@@ -882,7 +845,9 @@ class CategoricalColumn(column.ColumnBase):
             return self if inplace else self.copy()
 
         fill_code = self._encode(fill_value)
-        fill_scalar = as_device_scalar(fill_code, self.codes.dtype)
+        fill_scalar = cudf._lib.scalar.as_device_scalar(
+            fill_code, self.codes.dtype
+        )
 
         result = self if inplace else self.copy()
 

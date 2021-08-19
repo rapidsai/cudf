@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import DataFrame
+from cudf import DataFrame
 from cudf.testing._utils import assert_eq
 from cudf.utils import queryutils
 
