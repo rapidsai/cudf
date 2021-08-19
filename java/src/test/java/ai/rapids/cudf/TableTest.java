@@ -53,19 +53,14 @@ import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static ai.rapids.cudf.ParquetColumnWriterOptions.mapColumn;
 import static ai.rapids.cudf.ParquetWriterOptions.listBuilder;
 import static ai.rapids.cudf.ParquetWriterOptions.structBuilder;
 import static ai.rapids.cudf.Table.TestBuilder;
+import static ai.rapids.cudf.Table.removeNullMasksIfNeeded;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -6076,6 +6071,68 @@ public class TableTest extends CudfTestBase {
         filtered = filteredTable.getColumn(2);
         assertEquals(DType.create(DType.DTypeEnum.DECIMAL64, -11), filtered.getType());
         assertEquals(0, filtered.getRowCount());
+      }
+    }
+  }
+
+  @Test
+  void testRemoveNullMasksIfNeeded() {
+    ListType nestedType = new ListType(true, new StructType(false,
+        new BasicType(true, DType.INT32),
+        new BasicType(true, DType.INT64)));
+
+    List data1 = Arrays.asList(10, 20L);
+    List data2 = Arrays.asList(50, 60L);
+    HostColumnVector.StructData structData1 = new HostColumnVector.StructData(data1);
+    HostColumnVector.StructData structData2 = new HostColumnVector.StructData(data2);
+
+    //First we create ColumnVectors
+    try (ColumnVector nonNullVector0 = ColumnVector.fromBoxedInts(1, 2, 3);
+         ColumnVector nonNullVector2 = ColumnVector.fromStrings("1", "2", "3");
+         ColumnVector nonNullVector1 = ColumnVector.fromLists(nestedType,
+             Arrays.asList(structData1, structData2),
+             Arrays.asList(structData1, structData2),
+             Arrays.asList(structData1, structData2))) {
+      //Then we take the created ColumnVectors and add validity masks even though the nullCount = 0
+      try (ColumnVector cv0 = new ColumnVector(nonNullVector0.type, nonNullVector0.rows,
+          Optional.of(0L),
+          new DeviceMemoryBuffer(nonNullVector0.getData().address,
+              nonNullVector0.getData().length, Cuda.DEFAULT_STREAM),
+          DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(nonNullVector0.rows)),
+          nonNullVector0.getOffsets() == null ? null :
+              new DeviceMemoryBuffer(nonNullVector0.getOffsets().address,
+                  nonNullVector0.getOffsets().length,
+                  Cuda.DEFAULT_STREAM));
+           ColumnVector cv1 = new ColumnVector(nonNullVector1.type, nonNullVector1.rows,
+               Optional.of(0L),
+               null,
+               DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityLengthInBytes(nonNullVector1.rows)),
+               nonNullVector1.getOffsets() == null ? null :
+                   new DeviceMemoryBuffer(nonNullVector1.getOffsets().address,
+                       nonNullVector1.getOffsets().length,
+                       Cuda.DEFAULT_STREAM), null,
+               Arrays.stream(nonNullVector1.getChildColumnViews()).mapToLong((cv)-> cv.getNativeView()).toArray());
+           ColumnVector cv2 = new ColumnVector(nonNullVector2.type,
+               nonNullVector2.rows, Optional.of(0L),
+               new DeviceMemoryBuffer(nonNullVector2.getData().address,
+                   nonNullVector2.getData().length,
+                   Cuda.DEFAULT_STREAM),
+               DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityLengthInBytes(nonNullVector2.rows)),
+               new DeviceMemoryBuffer(nonNullVector2.getOffsets().address,
+                   nonNullVector2.getOffsets().length,
+                   Cuda.DEFAULT_STREAM))) {
+
+        try (Table t = new Table(new ColumnVector[]{cv0, cv1, cv2});
+             Table tableWithoutNullMask = removeNullMasksIfNeeded(t)) {
+          for (int i = 0; i < tableWithoutNullMask.getNumberOfColumns(); i++) {
+            ColumnVector originalColumn = t.getColumn(i);
+            assertEquals(true, originalColumn.hasValidityVector());
+            assertEquals(0, originalColumn.getNullCount());
+            ColumnVector resultColumn = tableWithoutNullMask.getColumn(i);
+            assertEquals(false, resultColumn.hasValidityVector());
+            assertEquals(0, resultColumn.getNullCount());
+          }
+        }
       }
     }
   }

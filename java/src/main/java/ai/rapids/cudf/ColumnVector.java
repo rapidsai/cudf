@@ -1121,7 +1121,7 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * This method is evolving, unstable and currently test only.
+   * This method is evolving and unstable.
    * Please use with caution and expect it to change in the future.
    */
   public static<T> ColumnVector fromLists(HostColumnVector.DataType dataType, List<T>... lists) {
@@ -1131,7 +1131,7 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * This method is evolving, unstable and currently test only.
+   * This method is evolving and unstable.
    * Please use with caution and expect it to change in the future.
    */
   public static ColumnVector fromStructs(HostColumnVector.DataType dataType,
@@ -1142,7 +1142,7 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * This method is evolving, unstable and currently test only.
+   * This method is evolving and unstable.
    * Please use with caution and expect it to change in the future.
    */
   public static ColumnVector fromStructs(HostColumnVector.DataType dataType,
@@ -1152,7 +1152,7 @@ public final class ColumnVector extends ColumnView {
     }
   }
   /**
-   * This method is evolving, unstable and currently test only.
+   * This method is evolving and unstable.
    * Please use with caution and expect it to change in the future.
    */
   public static ColumnVector emptyStructs(HostColumnVector.DataType dataType, long numRows) {

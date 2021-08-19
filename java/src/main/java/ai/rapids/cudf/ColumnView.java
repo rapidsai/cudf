@@ -141,6 +141,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns the child column views for this view
+   * Please note that it is the responsibility of the caller to close these views.
+   * @return an array of child column views
+   */
+  public final ColumnView[] getChildColumnViews() {
+    int numChildren = getNumChildren();
+    if (!getType().isNestedType()) {
+      return null;
+    }
+    ColumnView[] views = new ColumnView[numChildren];
+    for (int i = 0 ; i < numChildren ; i++) {
+      views[i] = getChildColumnView(i);
+    }
+    return views;
+  }
+
+  /**
    * Returns the child column view at a given index.
    * Please note that it is the responsibility of the caller to close this view.
    * @param childIndex the index of the child
