@@ -1440,6 +1440,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     create_columns(std::move(out_buffers), out_columns, schema_info, stream);
   }
 
+  if (not out_columns.empty()) {
+    printf("RGSL: null count is %d \n", out_columns[0]->null_count());
+    auto col = out_columns[0]->view();
+  }
   // Return column names (must match order of returned columns)
   out_metadata.column_names.reserve(schema_info.size());
   std::transform(schema_info.cbegin(),
