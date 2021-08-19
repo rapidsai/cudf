@@ -473,7 +473,11 @@ void reader::impl::set_data_types(device_span<uint64_t const> rec_starts,
     std::visit([](const auto& dtypes) { return dtypes.empty(); }, options_.get_dtypes());
   if (!has_to_infer_column_types) {
     dtypes_ = std::visit(cudf::detail::visitor_overload{
-                           [&](const std::vector<data_type>& dtypes) { return dtypes; },
+                           [&](const std::vector<data_type>& dtypes) {
+                             CUDF_EXPECTS(dtypes.size() == metadata_.column_names.size(),
+                                          "Must specify types for all columns");
+                             return dtypes;
+                           },
                            [&](const std::map<std::string, data_type>& dtypes) {
                              std::vector<data_type> sorted_dtypes;
                              std::transform(std::cbegin(metadata_.column_names),

@@ -1858,7 +1858,11 @@ TEST_F(CsvReaderTest, HeaderEmbeddedDelimiter)
   cudf_io::csv_reader_options in_opts =
     cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
       .names(names)
-      .dtypes({dtype<int32_t>(), dtype<cudf::string_view>(), dtype<int32_t>(), dtype<int32_t>(),  dtype<int32_t>()});  
+      .dtypes({dtype<int32_t>(),
+               dtype<cudf::string_view>(),
+               dtype<int32_t>(),
+               dtype<int32_t>(),
+               dtype<int32_t>()});
   auto result = cudf_io::read_csv(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result.tbl->view());

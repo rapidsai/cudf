@@ -27,7 +27,6 @@
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/table/table.hpp>
@@ -420,13 +419,8 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
   if (has_to_infer_column_types) {
     column_types = infer_column_types(data, row_offsets, stream);
   } else {
-    column_types = std::visit(
-      cudf::detail::visitor_overload{
-        [&](const std::vector<data_type>& data_types) { return select_data_types(data_types); },
-        [&](const std::map<std::string, data_type>& data_types) {
-          return select_data_types(data_types);
-        }},
-      opts_.get_dtypes());
+    column_types = std::visit([&](auto const& data_types) { return select_data_types(data_types); },
+                              opts_.get_dtypes());
   }
 
   out_columns.reserve(column_types.size());
