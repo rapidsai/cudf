@@ -115,8 +115,7 @@ class csv_reader_options {
   // Conversion settings
 
   // Per-column types; disables type inference on those columns
-  std::variant<std::vector<std::string>, std::vector<data_type>, std::map<std::string, data_type>>
-    _dtypes;
+  std::variant<std::vector<data_type>, std::map<std::string, data_type>> _dtypes;
   // Additional values to recognize as boolean true values
   std::vector<std::string> _true_values{"True", "TRUE", "true"};
   // Additional values to recognize as boolean false values
@@ -305,8 +304,7 @@ class csv_reader_options {
   /**
    * @brief Returns per-column types.
    */
-  std::variant<std::vector<std::string>,
-               std::vector<data_type>,
+  std::variant<std::vector<data_type>,
                std::map<std::string, data_type>> const&
   get_dtypes() const
   {
@@ -607,20 +605,6 @@ class csv_reader_options {
    * @param types Vector specifying the columns' target data types.
    */
   void set_dtypes(std::vector<data_type> types) { _dtypes = std::move(types); }
-
-  /**
-   * @brief Sets per-column types, specified by the type's respective string representation.
-   *
-   * @param types Vector of dtypes in which the column needs to be read.
-   */
-  [[deprecated(
-    "The string-based interface will be deprecated."
-    "Use dtypes(std::vector<data_type>) or "
-    "dtypes(std::map<std::string, data_type>) instead.")]] void
-  set_dtypes(std::vector<std::string> types)
-  {
-    _dtypes = std::move(types);
-  }
 
   /**
    * @brief Sets additional values to recognize as boolean true values.
@@ -1062,22 +1046,6 @@ class csv_reader_options_builder {
    * @return this for chaining.
    */
   csv_reader_options_builder& dtypes(std::vector<data_type> types)
-  {
-    options._dtypes = std::move(types);
-    return *this;
-  }
-
-  /**
-   * @brief Sets per-column types, specified by the type's respective string representation.
-   *
-   * @param types Vector of dtypes in which the column needs to be read.
-   * @return this for chaining.
-   */
-  [[deprecated(
-    "The string-based interface will be deprecated."
-    "Use dtypes(std::vector<data_type>) or "
-    "dtypes(std::map<std::string, data_type>) instead.")]] csv_reader_options_builder&
-  dtypes(std::vector<std::string> types)
   {
     options._dtypes = std::move(types);
     return *this;
