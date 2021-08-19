@@ -66,14 +66,12 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
 namespace {
 /**
  * @brief Check whether the specified column is of type `STRUCT`.
- *
  */
 bool is_struct(cudf::column_view const& col) { return col.type().id() == type_id::STRUCT; }
 
 /**
- * @brief Check whether the specified column is of type LIST,
- *        or any LISTs in its descendent columns.
- *
+ * @brief Check whether the specified column is of type LIST, or any LISTs in its descendent
+ * columns.
  */
 bool is_or_has_lists(cudf::column_view const& col)
 {
@@ -195,8 +193,7 @@ flatten_nested_columns(table_view const& input,
                        std::vector<null_order> const& null_precedence,
                        column_nullability nullability)
 {
-  auto const has_struct = std::any_of(
-    input.begin(), input.end(), [](auto const& col) { return col.type().id() == type_id::STRUCT; });
+  auto const has_struct = std::any_of(input.begin(), input.end(), is_struct);
   if (not has_struct) {
     return std::make_tuple(
       input, column_order, null_precedence, std::vector<std::unique_ptr<column>>{});
@@ -227,9 +224,8 @@ class unflattener {
 
   auto operator()(column_view const& blueprint)
   {
-    return blueprint.type().id() == type_id::STRUCT
-             ? unflatten_struct(flattened, current_index, blueprint)
-             : std::move(flattened[current_index++]);
+    return is_struct(blueprint) ? unflatten_struct(flattened, current_index, blueprint)
+                                : std::move(flattened[current_index++]);
   }
 
  private:

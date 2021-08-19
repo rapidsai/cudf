@@ -63,7 +63,7 @@ TYPED_TEST(TypedStructUtilitiesTest, ListsAtTopLevelUnsupported)
   using lists = lists_column_wrapper<T, int32_t>;
   using nums  = fixed_width_column_wrapper<T, int32_t>;
 
-  auto lists_col = lists{{0, 1}, {22, 333}, {4444, 55555, 666666}};
+  auto lists_col = lists{{0, 1}, {22, 33}, {44, 55, 66}};
   auto nums_col  = nums{{0, 1, 2}, null_at(6)};
 
   EXPECT_THROW(flatten_unflatten_compare(cudf::table_view{{lists_col, nums_col}}),
@@ -76,7 +76,7 @@ TYPED_TEST(TypedStructUtilitiesTest, NestedListsUnsupported)
   using lists = lists_column_wrapper<T, int32_t>;
   using nums  = fixed_width_column_wrapper<T, int32_t>;
 
-  auto lists_member = lists{{0, 1}, {22, 333}, {4444, 55555, 666666}};
+  auto lists_member = lists{{0, 1}, {22, 33}, {44, 55, 66}};
   auto nums_member  = nums{{0, 1, 2}, null_at(6)};
   auto structs_col  = structs{{nums_member, lists_member}};
 
@@ -91,7 +91,7 @@ TYPED_TEST(TypedStructUtilitiesTest, NoStructs)
   using T    = TypeParam;
   using nums = fixed_width_column_wrapper<T, int32_t>;
 
-  auto nums_col        = nums{{0, 1, 22, 333, 4444, 55555, 666666}, null_at(0)};
+  auto nums_col        = nums{{0, 1, 22, 33, 44, 55, 66}, null_at(0)};
   auto strings_col     = strings{{"", "1", "22", "333", "4444", "55555", "666666"}, null_at(1)};
   auto nuther_nums_col = nums{{0, 1, 2, 3, 4, 5, 6}, null_at(6)};
 
@@ -103,7 +103,7 @@ TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStruct)
   using T    = TypeParam;
   using nums = fixed_width_column_wrapper<T, int32_t>;
 
-  auto nums_member    = nums{{0, 1, 22, 333, 4444, 55555, 666666}, null_at(0)};
+  auto nums_member    = nums{{0, 1, 22, 333, 44, 55, 66}, null_at(0)};
   auto strings_member = strings{{"", "1", "22", "333", "4444", "55555", "666666"}, null_at(1)};
   auto structs_col    = structs{{nums_member, strings_member}};
   auto nums_col       = nums{{0, 1, 2, 3, 4, 5, 6}, null_at(6)};
@@ -116,7 +116,7 @@ TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStructWithNulls)
   using T    = TypeParam;
   using nums = fixed_width_column_wrapper<T, int32_t>;
 
-  auto nums_member    = nums{{0, 1, 22, 333, 4444, 55555, 666666}, null_at(0)};
+  auto nums_member    = nums{{0, 1, 22, 333, 44, 55, 66}, null_at(0)};
   auto strings_member = strings{{"", "1", "22", "333", "4444", "55555", "666666"}, null_at(1)};
   auto structs_col    = structs{{nums_member, strings_member}, null_at(2)};
   auto nums_col       = nums{{0, 1, 2, 3, 4, 5, 6}, null_at(6)};
@@ -131,12 +131,12 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStruct)
 
   auto nums_col = nums{{0, 1, 2, 3, 4, 5, 6}, null_at(6)};
 
-  auto struct_0_nums_member = nums{{0, 1, 22, 333, 4444, 55555, 666666}, null_at(0)};
+  auto struct_0_nums_member = nums{{0, 1, 22, 33, 44, 55, 66}, null_at(0)};
   auto struct_0_strings_member =
     strings{{"", "1", "22", "333", "4444", "55555", "666666"}, null_at(1)};
   auto structs_1_structs_member = structs{{struct_0_nums_member, struct_0_strings_member}};
 
-  auto struct_1_nums_member  = nums{{0, 1, 22, 333, 4444, 55555, 666666}, null_at(3)};
+  auto struct_1_nums_member  = nums{{0, 1, 22, 33, 44, 55, 66}, null_at(3)};
   auto struct_of_structs_col = structs{{struct_1_nums_member, structs_1_structs_member}};
 
   flatten_unflatten_compare(cudf::table_view{{nums_col, struct_of_structs_col}});
@@ -149,13 +149,13 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtLeafLevel)
 
   auto nums_col = nums{{0, 1, 2, 3, 4, 5, 6}, null_at(6)};
 
-  auto struct_0_nums_member = nums{{0, 1, 22, 333, 4444, 55555, 666666}, null_at(0)};
+  auto struct_0_nums_member = nums{{0, 1, 22, 33, 44, 55, 66}, null_at(0)};
   auto struct_0_strings_member =
     strings{{"", "1", "22", "333", "4444", "55555", "666666"}, null_at(1)};
   auto structs_1_structs_member =
     structs{{struct_0_nums_member, struct_0_strings_member}, null_at(2)};
 
-  auto struct_1_nums_member  = nums{{0, 1, 22, 333, 4444, 55555, 666666}, null_at(3)};
+  auto struct_1_nums_member  = nums{{0, 1, 22, 33, 44, 55, 66}, null_at(3)};
   auto struct_of_structs_col = structs{{struct_1_nums_member, structs_1_structs_member}};
 
   flatten_unflatten_compare(cudf::table_view{{nums_col, struct_of_structs_col}});
@@ -168,12 +168,12 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtTopLevel)
 
   auto nums_col = nums{{0, 1, 2, 3, 4, 5, 6}, null_at(6)};
 
-  auto struct_0_nums_member = nums{{0, 1, 22, 333, 4444, 55555, 666666}, null_at(0)};
+  auto struct_0_nums_member = nums{{0, 1, 22, 33, 44, 55, 66}, null_at(0)};
   auto struct_0_strings_member =
     strings{{"", "1", "22", "333", "4444", "55555", "666666"}, null_at(1)};
   auto structs_1_structs_member = structs{{struct_0_nums_member, struct_0_strings_member}};
 
-  auto struct_1_nums_member = nums{{0, 1, 22, 333, 4444, 55555, 666666}, null_at(3)};
+  auto struct_1_nums_member = nums{{0, 1, 22, 33, 44, 55, 66}, null_at(3)};
   auto struct_of_structs_col =
     structs{{struct_1_nums_member, structs_1_structs_member}, null_at(4)};
 
@@ -187,13 +187,13 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
 
   auto nums_col = nums{{0, 1, 2, 3, 4, 5, 6}, null_at(6)};
 
-  auto struct_0_nums_member = nums{{0, 1, 22, 333, 4444, 55555, 666666}, null_at(0)};
+  auto struct_0_nums_member = nums{{0, 1, 22, 33, 44, 55, 66}, null_at(0)};
   auto struct_0_strings_member =
     strings{{"", "1", "22", "333", "4444", "55555", "666666"}, null_at(1)};
   auto structs_1_structs_member =
     structs{{struct_0_nums_member, struct_0_strings_member}, null_at(2)};
 
-  auto struct_1_nums_member = nums{{0, 1, 22, 333, 4444, 55555, 666666}, null_at(3)};
+  auto struct_1_nums_member = nums{{0, 1, 22, 33, 44, 55, 66}, null_at(3)};
   auto struct_of_structs_col =
     structs{{struct_1_nums_member, structs_1_structs_member}, null_at(4)};
 
