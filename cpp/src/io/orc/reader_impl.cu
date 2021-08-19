@@ -1214,7 +1214,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           if (total_data_size == 0) {
             auto valid_stream_data = false;
             // In case ROW GROUP INDEX is not present and all columns are structs with no null
-            // stream, there is nothing to read at this level, so we have to skip assertion.
+            // stream, there is nothing to read at this level.
             if (stripe_info->indexLength == 0) {
               auto fn_check_dtype = [](auto dtype) { return dtype.id() == type_id::STRUCT; };
               valid_stream_data =
@@ -1310,8 +1310,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             if (chunk.type_kind == orc::TIMESTAMP) {
               chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
             }
-            for (int k = 0; k < gpu::CI_NUM_STREAMS and not is_stream_empty; k++) {
-              chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
+            if (not is_stream_empty) {
+              for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
+                chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
+              }
             }
           }
           stripe_start_row += num_rows_per_stripe;

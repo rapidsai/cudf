@@ -56,6 +56,7 @@ column_view_base::column_view_base(data_type type,
   CUDF_EXPECTS(offset >= 0, "Invalid offset.");
 
   if ((null_count > 0) and (type.id() != type_id::EMPTY)) {
+    if (nullptr == null_mask) printf("RGSL: The null count is %d \n", null_count);
     CUDF_EXPECTS(nullptr != null_mask, "Invalid null mask for non-zero null count.");
   }
 }
