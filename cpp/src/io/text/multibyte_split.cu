@@ -205,38 +205,6 @@ namespace io {
 namespace text {
 namespace detail {
 
-template <typename T>
-std::unique_ptr<column> create_column(rmm::device_uvector<T>&& values)
-{
-  auto size  = values.size();
-  auto dtype = cudf::data_type{cudf::type_to_id<T>()};
-
-  CUDF_EXPECTS(dtype.id() != type_id::EMPTY, "column type_id cannot be EMPTY");
-
-  return std::make_unique<cudf::column>(dtype, size, values.release(), rmm::device_buffer(), 0);
-}
-
-std::unique_ptr<column> create_char_column(rmm::device_uvector<char>&& values)
-{
-  auto size  = values.size();
-  auto dtype = cudf::data_type{type_id::INT8};
-
-  return std::make_unique<cudf::column>(dtype, size, values.release(), rmm::device_buffer(), 0);
-}
-
-std::unique_ptr<column> create_strings_column(rmm::device_uvector<char>&& chars,
-                                              rmm::device_uvector<int32_t>&& offsets,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
-{
-  auto num_strings    = offsets.size() - 1;
-  auto chars_column   = create_char_column(std::move(chars));
-  auto offsets_column = create_column(std::move(offsets));
-
-  return cudf::make_strings_column(
-    num_strings, std::move(offsets_column), std::move(chars_column), 0, {}, stream, mr);
-}
-
 void fork_stream(std::vector<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
 {
   cudaEvent_t event;
@@ -387,9 +355,9 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
   // first and last element are set manually to zero and size of input, respectively.
   // kernel is only responsible for determining delimiter offsets
-  auto const x = string_offsets.size() - 1;
+  auto string_count = static_cast<cudf::size_type>(string_offsets.size() - 1);
   string_offsets.set_element_to_zero_async(0, stream);
-  string_offsets.set_element_async(x, bytes_total, stream);
+  string_offsets.set_element_async(string_count, bytes_total, stream);
 
   multibyte_split_scan_full_source(
     source,
@@ -401,9 +369,8 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     stream,
     streams);
 
-  auto res = create_strings_column(std::move(string_chars), std::move(string_offsets), stream, mr);
-
-  return res;
+  return cudf::make_strings_column(
+    string_count, std::move(string_offsets), std::move(string_chars));
 }
 
 }  // namespace detail
