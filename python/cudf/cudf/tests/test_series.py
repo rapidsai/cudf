@@ -1230,3 +1230,10 @@ def test_explode(data, ignore_index, p_index):
 def test_nested_series_from_sequence_data(data, expected):
     actual = cudf.Series(data)
     assert_eq(actual, expected)
+
+
+def test_series_upcast_float16():
+    array = cp.ones(5, dtype=cp.float16)
+    actual_series = cudf.Series(array)
+    expected_series = cudf.Series(array.astype("float32"))
+    assert_eq(actual_series, expected_series)

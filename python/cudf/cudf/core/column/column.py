@@ -1741,7 +1741,7 @@ def as_column(
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
-        current_dtype = cudf.dtype(desc["typestr"])
+        current_dtype = np.dtype(desc["typestr"])
 
         arb_dtype = cudf.dtype(current_dtype)
 
