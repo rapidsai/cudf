@@ -50,7 +50,7 @@ class parquet_reader_options_builder;
 class parquet_reader_options {
   source_info _source;
 
-  // Names of column to read; empty is all
+  // Path in schema of column to read; empty is all
   std::vector<std::string> _columns;
 
   // List of individual row groups to read (ignored if empty)
