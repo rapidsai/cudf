@@ -19,7 +19,7 @@ package ai.rapids.cudf.ast;
 import java.nio.ByteBuffer;
 
 /**
- * Enumeration of AST operations that can appear in a unary expression.
+ * Enumeration of AST operators that can appear in a unary operation.
  * NOTE: This must be kept in sync with `jni_to_unary_operator` in CompiledExpression.cpp!
  */
 public enum UnaryOperator {

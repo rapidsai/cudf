@@ -495,7 +495,7 @@ class DateOffset:
                     dtype = "int16"
                 else:
                     unit = self._UNITS_TO_CODES[k]
-                    dtype = np.dtype(f"timedelta64[{unit}]")
+                    dtype = cudf.dtype(f"timedelta64[{unit}]")
                 scalars[k] = cudf.Scalar(v, dtype=dtype)
 
         self._scalars = scalars
