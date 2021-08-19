@@ -575,8 +575,8 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         break;
       }
       case TypeKind::TIMESTAMP:
-        add_RLE_stream(gpu::CI_DATA, DATA, TypeKind::INT);
-        add_RLE_stream(gpu::CI_DATA2, SECONDARY, TypeKind::INT);
+        add_RLE_stream(gpu::CI_DATA, DATA, TypeKind::LONG);
+        add_RLE_stream(gpu::CI_DATA2, SECONDARY, TypeKind::LONG);
         column.set_orc_encoding(DIRECT_V2);
         break;
       case TypeKind::DECIMAL:
@@ -678,9 +678,7 @@ encoded_data writer::impl::encode_columns(orc_table_view const& orc_table,
           ck.dtype_len = column.type_width();
         }
         ck.scale = column.scale();
-        if (ck.type_kind == TypeKind::DECIMAL) {
-          ck.decimal_offsets = device_span<uint32_t>{column.decimal_offsets(), ck.num_rows};
-        }
+        if (ck.type_kind == TypeKind::DECIMAL) { ck.decimal_offsets = column.decimal_offsets(); }
       }
     }
   }
@@ -1140,26 +1138,28 @@ void writer::impl::init_state()
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
-/**
- * @brief pre-order append ORC device columns
- */
-void __device__ append_orc_device_column(uint32_t& idx,
-                                         thrust::optional<uint32_t> parent_idx,
-                                         device_span<orc_column_device_view> cols,
-                                         column_device_view col)
-{
-  auto const current_idx = idx;
-  cols[current_idx]      = orc_column_device_view{col, parent_idx};
-  idx++;
-  if (col.type().id() == type_id::LIST) {
-    append_orc_device_column(
-      idx, current_idx, cols, col.child(lists_column_view::child_column_index));
+template <typename T>
+struct device_stack {
+  __device__ device_stack(T* stack_storage, int capacity)
+    : stack(stack_storage), capacity(capacity), size(0)
+  {
   }
-  if (col.type().id() == type_id::STRUCT) {
-    for (auto child_idx = 0; child_idx < col.num_child_columns(); ++child_idx) {
-      append_orc_device_column(idx, current_idx, cols, col.child(child_idx));
-    }
+  __device__ void push(T const& val)
+  {
+    cudf_assert(size < capacity and "Stack overflow");
+    stack[size++] = val;
   }
+  __device__ T pop()
+  {
+    cudf_assert(size > 0 and "Stack underflow");
+    return stack[--size];
+  }
+  __device__ bool empty() { return size == 0; }
+
+ private:
+  T* stack;
+  int capacity;
+  int size;
 };
 
 orc_table_view make_orc_table_view(table_view const& table,
@@ -1189,13 +1189,40 @@ orc_table_view make_orc_table_view(table_view const& table,
   }
 
   rmm::device_uvector<orc_column_device_view> d_orc_columns(orc_columns.size(), stream);
+  using stack_value_type = thrust::pair<column_device_view const*, thrust::optional<uint32_t>>;
+  rmm::device_uvector<stack_value_type> stack_storage(orc_columns.size(), stream);
 
+  // pre-order append ORC device columns
   cudf::detail::device_single_thread(
-    [d_orc_cols = device_span<orc_column_device_view>{d_orc_columns},
-     d_table    = d_table] __device__() mutable {
+    [d_orc_cols         = device_span<orc_column_device_view>{d_orc_columns},
+     d_table            = d_table,
+     stack_storage      = stack_storage.data(),
+     stack_storage_size = stack_storage.size()] __device__() {
+      device_stack stack(stack_storage, stack_storage_size);
+
+      thrust::for_each(thrust::seq,
+                       thrust::make_reverse_iterator(d_table.end()),
+                       thrust::make_reverse_iterator(d_table.begin()),
+                       [&stack](column_device_view const& c) {
+                         stack.push({&c, thrust::nullopt});
+                       });
+
       uint32_t idx = 0;
-      for (auto const& column : d_table) {
-        append_orc_device_column(idx, thrust::nullopt, d_orc_cols, column);
+      while (not stack.empty()) {
+        auto [col, parent] = stack.pop();
+        d_orc_cols[idx]    = orc_column_device_view{*col, parent};
+
+        if (col->type().id() == type_id::LIST) {
+          stack.push({&col->children()[lists_column_view::child_column_index], idx});
+        } else if (col->type().id() == type_id::STRUCT) {
+          thrust::for_each(thrust::seq,
+                           thrust::make_reverse_iterator(col->children().end()),
+                           thrust::make_reverse_iterator(col->children().begin()),
+                           [&stack, idx](column_device_view const& c) {
+                             stack.push({&c, idx});
+                           });
+        }
+        idx++;
       }
     },
     stream);

@@ -161,7 +161,7 @@ struct DeviceRollingArgMinMax {
     // strictly speaking, I think it would be ok to make this work
     // for comparable types as well.  but right now the only use case is
     // for MIN/MAX on strings.
-    return std::is_same<T, cudf::string_view>::value;
+    return std::is_same_v<T, cudf::string_view>;
   }
 
   DeviceRollingArgMinMax(size_type _min_periods) : min_periods(_min_periods) {}
@@ -1156,7 +1156,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
 
   min_periods = std::max(min_periods, 0);
 
-  auto udf_agg = dynamic_cast<udf_aggregation const&>(agg);
+  auto& udf_agg = dynamic_cast<udf_aggregation const&>(agg);
 
   std::string hash = "prog_rolling." + std::to_string(std::hash<std::string>{}(udf_agg._source));
 

@@ -48,8 +48,8 @@ namespace detail {
  */
 template <typename ColumnView>
 class table_view_base {
-  static_assert(std::is_same<ColumnView, column_view>::value or
-                  std::is_same<ColumnView, mutable_column_view>::value,
+  static_assert(std::is_same_v<ColumnView, column_view> or
+                  std::is_same_v<ColumnView, mutable_column_view>,
                 "table_view_base can only be instantiated with column_view or "
                 "column_view_base.");
 
@@ -256,6 +256,11 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
    */
   mutable_table_view(std::vector<mutable_table_view> const& views);
 };
+
+inline bool nullable(table_view const& view)
+{
+  return std::any_of(view.begin(), view.end(), [](auto const& col) { return col.nullable(); });
+}
 
 inline bool has_nulls(table_view const& view)
 {

@@ -114,14 +114,6 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   // result = [6, 1, 11, 1, 1]
   //
-  auto validity_iter = cudf::detail::make_counting_transform_iterator(
-    0,
-    [row_indices = row_indices.begin<size_type>(),
-     validity    = c.null_mask(),
-     offset      = c.offset()] __device__(int index) {
-      auto const true_index = row_indices[index] + offset;
-      return !validity || cudf::bit_is_set(validity, true_index) ? 1 : 0;
-    });
   auto output_row_iter = cudf::detail::make_counting_transform_iterator(
     0,
     [row_indices  = row_indices.begin<size_type>(),
@@ -136,8 +128,9 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
                      output_row_iter,
                      output_row_iter + row_indices.size(),
                      output_row_start->view().begin<size_type>(),
-                     validity_iter,
-                     result->mutable_view().begin<size_type>());
+                     row_size_iter,
+                     result->mutable_view().begin<size_type>(),
+                     [] __device__(auto row_size) { return row_size != 0; });
 
   // generate keys for each output row
   //
@@ -150,11 +143,12 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
                    keys->mutable_view().end<size_type>(),
                    [] __device__() { return 0; });
   thrust::scatter_if(rmm::exec_policy(),
-                     validity_iter,
-                     validity_iter + row_indices.size(),
+                     row_size_iter,
+                     row_size_iter + row_indices.size(),
                      output_row_start->view().begin<size_type>(),
-                     validity_iter,
-                     keys->mutable_view().begin<size_type>());
+                     row_size_iter,
+                     keys->mutable_view().begin<size_type>(),
+                     [] __device__(auto row_size) { return row_size != 0; });
   thrust::inclusive_scan(rmm::exec_policy(),
                          keys->view().begin<size_type>(),
                          keys->view().end<size_type>(),
@@ -252,8 +246,8 @@ struct column_property_comparator {
   }
 
   template <typename T,
-            std::enable_if_t<!std::is_same<T, cudf::list_view>::value &&
-                             !std::is_same<T, cudf::struct_view>::value>* = nullptr>
+            std::enable_if_t<!std::is_same_v<T, cudf::list_view> &&
+                             !std::is_same_v<T, cudf::struct_view>>* = nullptr>
   bool operator()(cudf::column_view const& lhs,
                   cudf::column_view const& rhs,
                   cudf::column_view const& lhs_row_indices,
@@ -263,7 +257,7 @@ struct column_property_comparator {
     return compare_common(lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity);
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::list_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::list_view>>* = nullptr>
   bool operator()(cudf::column_view const& lhs,
                   cudf::column_view const& rhs,
                   cudf::column_view const& lhs_row_indices,
@@ -294,7 +288,7 @@ struct column_property_comparator {
     return true;
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::struct_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>* = nullptr>
   bool operator()(cudf::column_view const& lhs,
                   cudf::column_view const& rhs,
                   cudf::column_view const& lhs_row_indices,
@@ -955,7 +949,7 @@ struct column_view_printer {
   }
 
   template <typename Element,
-            typename std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
+            typename std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     //
@@ -976,7 +970,7 @@ struct column_view_printer {
   }
 
   template <typename Element,
-            typename std::enable_if_t<std::is_same<Element, cudf::dictionary32>::value>* = nullptr>
+            typename std::enable_if_t<std::is_same_v<Element, cudf::dictionary32>>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     cudf::dictionary_column_view dictionary(col);
@@ -1023,7 +1017,7 @@ struct column_view_printer {
   }
 
   template <typename Element,
-            typename std::enable_if_t<std::is_same<Element, cudf::list_view>::value>* = nullptr>
+            typename std::enable_if_t<std::is_same_v<Element, cudf::list_view>>* = nullptr>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
@@ -1052,7 +1046,7 @@ struct column_view_printer {
   }
 
   template <typename Element,
-            typename std::enable_if_t<std::is_same<Element, cudf::struct_view>::value>* = nullptr>
+            typename std::enable_if_t<std::is_same_v<Element, cudf::struct_view>>* = nullptr>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
