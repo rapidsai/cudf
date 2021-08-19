@@ -23,6 +23,7 @@
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/logging_resource_adaptor.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
@@ -344,6 +345,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(
     bool use_pool_alloc = allocation_mode & 1;
     bool use_managed_mem = allocation_mode & 2;
     bool use_arena_alloc = allocation_mode & 4;
+    bool use_async_alloc = allocation_mode & 8;
     if (use_pool_alloc) {
       auto pool_limit = (max_pool_size > 0) ?
                             thrust::optional<std::size_t>{static_cast<std::size_t>(max_pool_size)} :
@@ -355,6 +357,15 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
             std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_limit);
       }
+    } else if (use_async_alloc) {
+      // the cuda_async_memory_resource uses cudaMemPool_t internally. This pool is different than others:
+      // - pool_size: is used to prime the pool rather than allocate and keep (see the second argument)
+      // - max_pool_size: is not really a limit, it is instead the maximum that can be cached, where
+      //   when going above this number, the allocator releases memory to the OS (see
+      //   `cudaMemPoolAttrReleaseThreshold`). Note this threshold doesn't mean that the process
+      //   can't allocate the whole GPU.
+      Initialized_resource = std::make_shared<rmm::mr::cuda_async_memory_resource>(
+          pool_size, max_pool_size);
     } else if (use_arena_alloc) {
       std::size_t pool_limit = (max_pool_size > 0) ? static_cast<std::size_t>(max_pool_size) :
                                                      std::numeric_limits<std::size_t>::max();

@@ -82,11 +82,7 @@ public class Rmm {
    * call if a specific device is already set.
    * <p>NOTE: All cudf methods will set the chosen CUDA device in the CUDA
    * context of the calling thread after this returns.
-   * @param allocationMode Allocation strategy to use. Bit set using
-   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL},
-   *                       {@link RmmAllocationMode#ARENA} and
-   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
+   * @param allocationMode Allocation strategy to use. Bit set using {@link RmmAllocationMode}
    * @param enableLogging  Enable logging memory manager events
    * @param poolSize       The initial pool size in bytes
    * @throws IllegalStateException if RMM has already been initialized
@@ -103,11 +99,7 @@ public class Rmm {
    * call if a specific device is already set.
    * <p>NOTE: All cudf methods will set the chosen CUDA device in the CUDA
    * context of the calling thread after this returns.
-   * @param allocationMode Allocation strategy to use. Bit set using
-   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL},
-   *                       {@link RmmAllocationMode#ARENA} and
-   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
+   * @param allocationMode Allocation strategy to use. Bit set using {@link RmmAllocationMode}
    * @param enableLogging  Enable logging memory manager events
    * @param poolSize       The initial pool size in bytes
    * @param maxPoolSize    The maximum size the pool is allowed to grow. If the specified value
@@ -135,11 +127,7 @@ public class Rmm {
    * call if a specific device is already set.
    * <p>NOTE: All cudf methods will set the chosen CUDA device in the CUDA
    * context of the calling thread after this returns.
-   * @param allocationMode Allocation strategy to use. Bit set using
-   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL},
-   *                       {@link RmmAllocationMode#ARENA} and
-   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
+   * @param allocationMode Allocation strategy to use. Bit set using {@link RmmAllocationMode}
    * @param logConf        How to do logging or null if you don't want to
    * @param poolSize       The initial pool size in bytes
    * @throws IllegalStateException if RMM has already been initialized
@@ -156,19 +144,16 @@ public class Rmm {
    * call if a specific device is already set.
    * <p>NOTE: All cudf methods will set the chosen CUDA device in the CUDA
    * context of the calling thread after this returns.
-   * @param allocationMode Allocation strategy to use. Bit set using
-   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL},
-   *                       {@link RmmAllocationMode#ARENA} and
-   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
+   * @param allocationMode Allocation strategy to use. Bit set using {@link RmmAllocationMode}
    * @param logConf        How to do logging or null if you don't want to
    * @param poolSize       The initial pool size in bytes
    * @param maxPoolSize    The maximum size the pool is allowed to grow. If the specified value
    *                       is <= 0 then the pool size will not be artificially limited.
    * @throws IllegalStateException if RMM has already been initialized
    * @throws IllegalArgumentException if a max pool size is specified but the allocation mode
-   *                                  is not {@link RmmAllocationMode#POOL} or
-   *                                  {@link RmmAllocationMode#ARENA}, or the maximum pool size is
+   *                                  is not {@link RmmAllocationMode#POOL}
+   *                                  {@link RmmAllocationMode#ARENA},
+   *                                  {@link RmmAllocationMode#ASYNC} or the maximum pool size is
    *                                  below the initial size.
    */
   public static synchronized void initialize(int allocationMode, LogConf logConf, long poolSize,
@@ -183,11 +168,7 @@ public class Rmm {
    * call if a specific device is already set.
    * <p>NOTE: All cudf methods will set the chosen CUDA device in the CUDA
    * context of the calling thread after this returns.
-   * @param allocationMode Allocation strategy to use. Bit set using
-   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL},
-   *                       {@link RmmAllocationMode#ARENA} and
-   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
+   * @param allocationMode Allocation strategy to use. Bit set using {@link RmmAllocationMode}
    * @param logConf        How to do logging or null if you don't want to
    * @param poolSize       The initial pool size in bytes
    * @param maxPoolSize    The maximum size the pool is allowed to grow. If the specified value
@@ -197,8 +178,9 @@ public class Rmm {
    *                            are aligned with `allocationAlignment`.
    * @throws IllegalStateException if RMM has already been initialized
    * @throws IllegalArgumentException if a max pool size is specified but the allocation mode
-   *                                  is not {@link RmmAllocationMode#POOL} or
-   *                                  {@link RmmAllocationMode#ARENA}, or the maximum pool size is
+   *                                  is not {@link RmmAllocationMode#POOL}
+   *                                  {@link RmmAllocationMode#ARENA},
+   *                                  {@link RmmAllocationMode#ASYNC} or the maximum pool size is
    *                                  below the initial size.
    */
   public static synchronized void initialize(int allocationMode, LogConf logConf, long poolSize,
@@ -207,9 +189,11 @@ public class Rmm {
       throw new IllegalStateException("RMM is already initialized");
     }
     if (maxPoolSize > 0) {
-      if (allocationMode != RmmAllocationMode.POOL && allocationMode != RmmAllocationMode.ARENA) {
+      if (allocationMode != RmmAllocationMode.POOL &&
+          allocationMode != RmmAllocationMode.ARENA &&
+          allocationMode != RmmAllocationMode.ASYNC) {
         throw new IllegalArgumentException(
-                "Pool limit only supported in POOL or ARENA allocation mode");
+                "Pool limit only supported in POOL, ARENA, or ASYNC allocation mode");
       }
       if (maxPoolSize < poolSize) {
         throw new IllegalArgumentException("Pool limit of " + maxPoolSize
