@@ -410,8 +410,6 @@ def crosstab(
         Values to group by in the columns.
     """
     breakpoint()
-    data = {**dict(zip(np.unique(index),index)),**dict(zip(np.unique(columns),columns)),}
-    df = cudf.DataFrame(data)
     columns_idx = cudf.core.index.Index(columns)
     columns_labels, columns_idx = columns_idx._encode()
     index_labels, index_idx = cudf.core.index.Index(index)._encode()
@@ -421,6 +419,48 @@ def crosstab(
     result = cudf.core.column_accessor.ColumnAccessor(
         multiindex=True, level_names=(None,) + (colnames,)
     )
+
+
+    rownames = _get_names(index, rownames, prefix="row")
+
+    colnames = _get_names(columns, colnames, prefix="col")
+
+    # duplicate names mapped to unique names for pivot op
+    (
+        rownames_mapper,
+        unique_rownames,
+        colnames_mapper,
+        unique_colnames,
+    ) = _build_names_mapper(rownames, colnames)
+
+
+    data = {
+        **dict(zip(unique_rownames, index)),        data = {**dict(zip(np.unique(index),index)),**dict(zip(np.unique(columns),columns)),}
+        **dict(zip(unique_colnames, columns)),
+    }
+
+    df = DataFrame(data, index=common_idx)
+
+    if values is None:
+        df["__dummy__"] = 0
+        kwargs = {"aggfunc": len, "fill_value": 0}
+
+    table = df.pivot_table(
+        "__dummy__",
+        index=unique_rownames,
+        columns=unique_colnames,
+        margins=margins,
+        margins_name=margins_name,
+        dropna=dropna,
+        **kwargs,
+    )
+
+    table = table.rename_axis(index=rownames_mapper, axis=0)
+    table = table.rename_axis(columns=colnames_mapper, axis=1)
+
+
+
+
 
     def as_tuple(x):
         return x if isinstance(x, tuple) else (x,)
@@ -454,35 +494,47 @@ def crosstab(
     )
 
 
-    # df = data
-    # if values is None:
-    #     values = df._columns_view(
-    #         col for col in df._column_names if col not in (index, columns)
-    #     )
-    # else:
-    #     values = df._columns_view(values)
-    # if index is None:
-    #     index = df.index
-    # else:
-    #     index = cudf.core.index.Index(df.loc[:, index])
-    # columns = cudf.Index(df.loc[:, columns])
+def _get_names(arrs, names, prefix: str = "row"):
+    if names is None:
+        names = []
+        for i, arr in enumerate(arrs):
+            if isinstance(arr, Series) and arr.name is not None:
+                names.append(arr.name)
+            else:
+                names.append(f"{prefix}_{i}")
+    else:
+        if len(names) != len(arrs):
+            raise AssertionError("arrays and names must have the same length")
+        if not isinstance(names, list):
+            names = list(names)
 
-    # # Create a DataFrame composed of columns from both
-    # # columns and index
-    # columns_index = {}
-    # columns_index = {
-    #     i: col
-    #     for i, col in enumerate(
-    #         itertools.chain(index._data.columns, columns._data.columns)
-    #     )
-    # }
-    # columns_index = cudf.DataFrame(columns_index)
+    return names
 
-    # # # Check that each row is unique:
-    # # if len(columns_index) != len(columns_index.drop_duplicates()):
-    # #     raise ValueError("Duplicate index-column pairs found. Cannot reshape.")
 
-    # return _pivot(values, index, columns)
+   def  _build_names_mapper(rownames: list[str], colnames: list[str]):
+       def get_duplicates(names):
+        seen: set = set()
+        return {name for name in names if name not in seen}
+
+        shared_names = set(rownames).intersection(set(colnames))
+        dup_names = get_duplicates(rownames) | get_duplicates(colnames) | shared_names
+
+        rownames_mapper = {
+            f"row_{i}": name for i, name in enumerate(rownames) if name in dup_names
+        }
+        unique_rownames = [
+            f"row_{i}" if name in dup_names else name for i, name in enumerate(rownames)
+        ]
+
+        colnames_mapper = {
+            f"col_{i}": name for i, name in enumerate(colnames) if name in dup_names
+        }
+        unique_colnames = [
+            f"col_{i}" if name in dup_names else name for i, name in enumerate(colnames)
+        ]
+
+        return rownames_mapper, unique_rownames, colnames_mapper, unique_colnames
+
 
 
 def melt(
