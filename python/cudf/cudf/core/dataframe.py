@@ -7683,3 +7683,8 @@ def _drop_columns(df: DataFrame, columns: Iterable, errors: str):
                 pass
             else:
                 raise e
+
+from cudf.core.df_protocol import __dataframe__, from_dataframe
+
+DataFrame.__dataframe__ = __dataframe__
+DataFrame.from_dataframe = from_dataframe
