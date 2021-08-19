@@ -2916,49 +2916,40 @@ def test_empty_column(binop, data, scalar):
 
 
 @pytest.mark.parametrize(
-    "lhs",
+    "df",
     [
-        pd.DataFrame([[1, 2, 3, 4], [5, 6, 7, 8]]),
+        cudf.DataFrame([[1, 2, 3, 4], [5, 6, 7, 8]]),
         pytest.param(
-            pd.DataFrame([[1, None, None, 4], [5, 6, 7, None]]),
+            cudf.DataFrame([[1, None, None, 4], [5, 6, 7, None]]),
             marks=pytest.mark.xfail(
                 reason="Cannot access Frame.values if frame contains nulls"
             ),
         ),
-        pd.DataFrame([[1.2, 2.3, 3.4, 4.5], [5.6, 6.7, 7.8, 8.9]]),
-        pd.Series([14, 15, 16, 17]),
-        pd.Series([14.15, 15.16, 16.17, 17.18]),
-        [25.5, 26.6, 27.7, 28.8],
+        cudf.DataFrame([[1.2, 2.3, 3.4, 4.5], [5.6, 6.7, 7.8, 8.9]]),
+        cudf.Series([14, 15, 16, 17]),
+        cudf.Series([14.15, 15.16, 16.17, 17.18]),
     ],
 )
 @pytest.mark.parametrize(
-    "rhs",
+    "other",
     [
+        cudf.DataFrame([[9, 10], [11, 12], [13, 14], [15, 16]]),
+        cudf.DataFrame(
+            [[9.4, 10.5], [11.6, 12.7], [13.8, 14.9], [15.1, 16.2]]
+        ),
+        cudf.Series([5, 6, 7, 8]),
+        cudf.Series([5.6, 6.7, 7.8, 8.9]),
         pd.DataFrame([[9, 10], [11, 12], [13, 14], [15, 16]]),
-        pd.DataFrame([[9.4, 10.5], [11.6, 12.7], [13.8, 14.9], [15.1, 16.2]]),
         pd.Series([5, 6, 7, 8]),
-        pd.Series([5.6, 6.7, 7.8, 8.9]),
+        np.array([5, 6, 7, 8]),
+        [25.5, 26.6, 27.7, 28.8],
     ],
 )
-def test_binops_dot(lhs, rhs):
-    if isinstance(lhs, list):
-        glhs = lhs
-    else:
-        glhs = cudf.from_pandas(lhs)
+def test_binops_dot(df, other):
+    pdf = df.to_pandas()
+    host_other = other.to_pandas() if hasattr(other, "to_pandas") else other
 
-    if isinstance(rhs, list):
-        grhs = rhs
-    else:
-        grhs = cudf.from_pandas(rhs)
-
-    expected = lhs @ rhs
-    got = glhs @ grhs
+    expected = pdf @ host_other
+    got = df @ other
 
     utils.assert_eq(expected, got)
-
-    pytest.param(
-        "nanoseconds",
-        marks=pytest.mark.xfail(
-            reason="https://github.com/pandas-dev/pandas/issues/36589"
-        ),
-    ),

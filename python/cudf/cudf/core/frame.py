@@ -3638,7 +3638,9 @@ class Frame(libcudf.table.Table):
             rhs = other.values
         elif isinstance(other, cupy.ndarray):
             rhs = other
-        elif isinstance(other, (abc.Sequence, np.ndarray)):
+        elif isinstance(
+            other, (abc.Sequence, np.ndarray, pd.DataFrame, pd.Series)
+        ):
             rhs = cupy.asarray(other)
         else:
             return NotImplemented
