@@ -288,6 +288,16 @@ TEST_F(StringsDatetimeTest, FromTimestampDayOfYear)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+// Format names used for some specifiers in from_timestamps
+// clang-format off
+cudf::test::strings_column_wrapper format_names({"AM", "PM",
+  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+  "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
+  "January", "February", "March", "April", "May", "June", "July", 
+  "August", "September", "October", "November", "December",
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"});
+// clang-format on
+
 TEST_F(StringsDatetimeTest, FromTimestampDayOfWeekOfYear)
 {
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> timestamps{
@@ -319,15 +329,6 @@ TEST_F(StringsDatetimeTest, FromTimestampDayOfWeekOfYear)
     378864000L   // 1982-01-03
   };
 
-  // clang-format off
-  cudf::test::strings_column_wrapper names({"AM", "PM",
-    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
-    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
-    "January", "February", "March", "April", "May", "June", "July", 
-    "August", "September", "October", "November", "December",
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"});
-  // clang-format on
-
   cudf::test::strings_column_wrapper expected(
     {"[Wed 06, May 2020  3  18  3  18  2020  19]", "[Wed 19, Jun 2019  3  24  3  24  2019  25]",
      "[Sat 29, Jul 1961  6  30  6  30  1961  30]", "[Thu 05, Aug 2021  4  31  4  31  2021  31]",
@@ -343,7 +344,42 @@ TEST_F(StringsDatetimeTest, FromTimestampDayOfWeekOfYear)
      "[Sun 03, Jan 1982  0  00  7  01  1981  53]"});
 
   auto results = cudf::strings::from_timestamps(
-    timestamps, "[%a %d, %b %Y  %w  %W  %u  %U  %G  %V]", cudf::strings_column_view(names));
+    timestamps, "[%a %d, %b %Y  %w  %W  %u  %U  %G  %V]", cudf::strings_column_view(format_names));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsDatetimeTest, FromTimestampWeekdayMonthYear)
+{
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> timestamps{
+    1642951560L,  // 2022-01-23 15:26:00 Sunday
+    1645059720L,  // 2022-02-17 01:02:00 Thursday
+    1647167880L,  // 2022-03-13 10:38:00 Sunday
+    1649276040L,  // 2022-04-06 20:14:00 Wednesday
+    1588734621L,  // 2020-05-06 03:10:21 Wednesday
+    1560948892L,  // 2019-06-19 12:54:52 Wednesday
+    -265880250L,  // 1961-07-29 16:22:30 Saturday
+    1628194442L,  // 2021-08-05 20:14:02 Thursday
+    1632410760L,  // 2021-09-23 15:26:00 Thursday
+    1633464842L,  // 2021-10-05 20:14:02 Tuesday
+    1636100042L,  // 2021-11-05 08:14:02 Friday
+    1638757202L   // 2021-12-06 02:20:00 Monday
+  };
+
+  cudf::test::strings_column_wrapper expected({"[Sunday January 23, 2022: 03 PM]",
+                                               "[Thursday February 17, 2022: 01 AM]",
+                                               "[Sunday March 13, 2022: 10 AM]",
+                                               "[Wednesday April 06, 2022: 08 PM]",
+                                               "[Wednesday May 06, 2020: 03 AM]",
+                                               "[Wednesday June 19, 2019: 12 PM]",
+                                               "[Saturday July 29, 1961: 04 PM]",
+                                               "[Thursday August 05, 2021: 08 PM]",
+                                               "[Thursday September 23, 2021: 03 PM]",
+                                               "[Tuesday October 05, 2021: 08 PM]",
+                                               "[Friday November 05, 2021: 08 AM]",
+                                               "[Monday December 06, 2021: 02 AM]"});
+
+  auto results = cudf::strings::from_timestamps(
+    timestamps, "[%A %B %d, %Y: %I %p]", cudf::strings_column_view(format_names));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -383,6 +419,7 @@ TEST_F(StringsDatetimeTest, Errors)
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> timestamps{
     1530705600};
   EXPECT_THROW(cudf::strings::from_timestamps(timestamps, ""), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::from_timestamps(timestamps, "%A %B", view), cudf::logic_error);
 }
 
 TEST_F(StringsDatetimeTest, ToTimestampSingleSpecifier)
