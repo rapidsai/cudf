@@ -275,10 +275,10 @@ inline auto random_values(size_t size)
 TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
 {
   auto sequence =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i % 400); });
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
-  constexpr auto num_rows = 100;
+  constexpr auto num_rows = 800;
   column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
 
   std::vector<std::unique_ptr<column>> cols;
