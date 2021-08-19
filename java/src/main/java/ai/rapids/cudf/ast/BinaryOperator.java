@@ -19,7 +19,7 @@ package ai.rapids.cudf.ast;
 import java.nio.ByteBuffer;
 
 /**
- * Enumeration of AST operations that can appear in a binary expression.
+ * Enumeration of AST operators that can appear in a binary operation.
  * NOTE: This must be kept in sync with `jni_to_binary_operator` in CompiledExpression.cpp!
  */
 public enum BinaryOperator {
