@@ -43,8 +43,6 @@ find_dependency(ZLIB)
 
 # add third party dependencies using CPM
 include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetCPM.cmake)
-# find boost
-include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_FindBoost.cmake)
 # find jitify
 include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetJitify.cmake)
 # find thrust/cub
@@ -59,6 +57,18 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-arrow-targets.cmake")
 else()
   if(NOT DEFINED CUDF_USE_ARROW_STATIC)
     set(CUDF_USE_ARROW_STATIC OFF)
+  endif()
+  if (NOT DEFINED CUDF_ENABLE_ARROW_S3)
+    set(CUDF_ENABLE_ARROW_S3 OFF)
+  endif()
+  if (NOT DEFINED CUDF_ENABLE_ARROW_ORC)
+    set(CUDF_ENABLE_ARROW_ORC OFF)
+  endif()
+  if (NOT DEFINED CUDF_ENABLE_ARROW_PYTHON)
+    set(CUDF_ENABLE_ARROW_PYTHON OFF)
+  endif()
+  if (NOT DEFINED CUDF_ENABLE_ARROW_PARQUET)
+    set(CUDF_ENABLE_ARROW_PARQUET OFF)
   endif()
   include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetArrow.cmake)
 endif()

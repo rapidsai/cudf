@@ -126,7 +126,7 @@ std::unique_ptr<column> url_encode(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
@@ -142,7 +142,7 @@ std::unique_ptr<column> url_encode(
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   // build chars column
-  auto chars_column = create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
@@ -326,7 +326,7 @@ std::unique_ptr<column> url_decode(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   auto offset_count = strings_count + 1;
   auto d_offsets    = strings.offsets().data<int32_t>() + strings.offset();
@@ -335,9 +335,9 @@ std::unique_ptr<column> url_decode(
   size_type chars_start = (strings.offset() == 0) ? 0
                                                   : cudf::detail::get_value<int32_t>(
                                                       strings.offsets(), strings.offset(), stream);
-  size_type chars_end = (offset_count == strings.offsets().size())
-                          ? strings.chars_size()
-                          : cudf::detail::get_value<int32_t>(
+  size_type chars_end   = (offset_count == strings.offsets().size())
+                            ? strings.chars_size()
+                            : cudf::detail::get_value<int32_t>(
                               strings.offsets(), strings.offset() + strings_count, stream);
   size_type chars_bytes = chars_end - chars_start;
 
@@ -392,8 +392,7 @@ std::unique_ptr<column> url_decode(
 
   // create the chars column
   auto chars_column =
-    create_chars_child_column(strings_count,
-                              chars_bytes - (esc_count * 2),  // replacing 3 bytes with 1
+    create_chars_child_column(chars_bytes - (esc_count * 2),  // replacing 3 bytes with 1
                               stream,
                               mr);
   auto d_out_chars = chars_column->mutable_view().data<char>();

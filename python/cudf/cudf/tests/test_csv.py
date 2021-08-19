@@ -14,7 +14,7 @@ import pytest
 
 import cudf
 from cudf import read_csv
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -320,7 +320,6 @@ def test_csv_reader_dtype_dict(use_names):
     dtypes = df.dtypes.to_dict()
     gdf_names = list(gdf_dtypes.keys()) if use_names else None
     pdf_names = list(pdf_dtypes.keys()) if use_names else None
-
     gdf = read_csv(StringIO(buffer), dtype=dtypes, names=gdf_names)
     pdf = pd.read_csv(StringIO(buffer), dtype=dtypes, names=pdf_names)
 
@@ -979,6 +978,22 @@ def test_csv_reader_filepath_or_buffer(tmpdir, path_or_buf, src):
     assert_eq(expect, got)
 
 
+def test_small_zip(tmpdir):
+    df = pd.DataFrame(
+        {
+            "a": [1997] * 2,
+            "b": ["Ford"] * 2,
+            "c": ["Super, luxurious truck"] * 2,
+        }
+    )
+
+    fname = tmpdir.join("small_zip_file.zip")
+    df.to_csv(fname, index=False)
+
+    got = cudf.read_csv(fname)
+    assert_eq(df, got)
+
+
 def test_csv_reader_carriage_return(tmpdir):
     rows = 1000
     names = ["int_row", "int_double_row"]
@@ -1243,6 +1258,17 @@ def test_csv_reader_column_names(names):
         assert list(df) == ["0", "1", "2"]
     else:
         assert list(df) == list(names)
+
+
+def test_csv_reader_repeated_column_name():
+    buffer = """A,A,A.1,A,A.2,A,A.4,A,A
+                1,2,3.1,4,a.2,a,a.4,a,a
+                2,4,6.1,8,b.2,b,b.4,b,b"""
+
+    # pandas and cudf to have same repeated column names
+    pdf = pd.read_csv(StringIO(buffer))
+    gdf = cudf.read_csv(StringIO(buffer))
+    assert_eq(pdf.columns, gdf.columns)
 
 
 def test_csv_reader_bools_false_positives(tmpdir):
@@ -1583,10 +1609,8 @@ def test_csv_writer_column_and_header_options(
 
 def test_csv_writer_empty_columns_parameter(cudf_mixed_dataframe):
     df = cudf_mixed_dataframe
-
-    buffer = BytesIO()
-    with pytest.raises(RuntimeError):
-        df.to_csv(buffer, columns=[], index=False)
+    write_str = df.to_csv(columns=[], index=False)
+    assert_eq(write_str, "\n")
 
 
 def test_csv_writer_multiindex(tmpdir):
@@ -1979,3 +2003,13 @@ def test_to_csv_compression_error():
     error_message = "Writing compressed csv is not currently supported in cudf"
     with pytest.raises(NotImplementedError, match=re.escape(error_message)):
         df.to_csv("test.csv", compression=compression)
+
+
+def test_empty_df_no_index():
+    actual = cudf.DataFrame({})
+    buffer = BytesIO()
+    actual.to_csv(buffer, index=False)
+
+    result = cudf.read_csv(buffer)
+
+    assert_eq(actual, result)

@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <numeric>
 
 namespace cudf {
 namespace structs {
@@ -53,7 +54,11 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                    return cudf::detail::concatenate(cols, stream, mr);
                  });
 
-  size_type const total_length = children[0]->size();
+  // get total length from concatenated children; if no child exists, we would compute it
+  auto const acc_size_fn = [](size_type s, column_view const& c) { return s + c.size(); };
+  auto const total_length =
+    !children.empty() ? children[0]->size()
+                      : std::accumulate(columns.begin(), columns.end(), size_type{0}, acc_size_fn);
 
   // if any of the input columns have nulls, construct the output mask
   bool const has_nulls =

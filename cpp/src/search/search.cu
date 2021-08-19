@@ -100,11 +100,17 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   // It will return any new dictionary columns created as well as updated table_views.
   auto const matched = dictionary::detail::match_dictionaries({t, values}, stream);
 
+  // Prepare to flatten the structs column
+  auto const has_null_elements   = has_nested_nulls(t) or has_nested_nulls(values);
+  auto const flatten_nullability = has_null_elements
+                                     ? structs::detail::column_nullability::FORCE
+                                     : structs::detail::column_nullability::MATCH_INCOMING;
+
   // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
-  auto const t_flattened =
-    structs::detail::flatten_nested_columns(matched.second.front(), column_order, null_precedence);
+  auto const t_flattened = structs::detail::flatten_nested_columns(
+    matched.second.front(), column_order, null_precedence, flatten_nullability);
   auto const values_flattened =
-    structs::detail::flatten_nested_columns(matched.second.back(), {}, {});
+    structs::detail::flatten_nested_columns(matched.second.back(), {}, {}, flatten_nullability);
 
   auto const t_d      = table_device_view::create(std::get<0>(t_flattened), stream);
   auto const values_d = table_device_view::create(std::get<0>(values_flattened), stream);
@@ -118,7 +124,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
     detail::make_device_uvector_async(null_precedence_flattened, stream);
 
   auto const count_it = thrust::make_counting_iterator<size_type>(0);
-  if (has_nulls(t) or has_nulls(values)) {
+  if (has_null_elements) {
     auto const comp = row_lexicographic_comparator<true>(
       lhs, rhs, column_order_dv.data(), null_precedence_dv.data());
     launch_search(
@@ -163,17 +169,17 @@ struct contains_scalar_dispatch {
 };
 
 template <>
-bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& col,
-                                                           scalar const& value,
-                                                           rmm::cuda_stream_view stream)
+bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const&,
+                                                           scalar const&,
+                                                           rmm::cuda_stream_view)
 {
   CUDF_FAIL("list_view type not supported yet");
 }
 
 template <>
-bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& col,
-                                                             scalar const& value,
-                                                             rmm::cuda_stream_view stream)
+bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const&,
+                                                             scalar const&,
+                                                             rmm::cuda_stream_view)
 {
   CUDF_FAIL("struct_view type not supported yet");
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,21 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
-
-#include <cudf_test/column_wrapper.hpp>
-#include <random>
-
 #include "../fixture/benchmark_fixture.hpp"
 #include "../synchronization/synchronization.hpp"
 
-#include <cudf/detail/iterator.cuh>  // include iterator header
-// for reduction tests
-#include <thrust/device_vector.h>
-#include <cub/device/device_reduce.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
+#include <rmm/device_uvector.hpp>
+
+#include <cub/device/device_reduce.cuh>
+
+#include <benchmark/benchmark.h>
+
+#include <random>
 
 template <typename T>
 T random_int(T min, T max)
@@ -48,7 +50,7 @@ inline auto reduce_by_cub(OutputIterator result, InputIterator d_in, int num_ite
     nullptr, temp_storage_bytes, d_in, result, num_items, cudf::DeviceSum{}, init);
 
   // Allocate temporary storage
-  rmm::device_buffer d_temp_storage(temp_storage_bytes);
+  rmm::device_buffer d_temp_storage(temp_storage_bytes, rmm::cuda_stream_default);
 
   // Run reduction
   cub::DeviceReduce::Reduce(
@@ -59,7 +61,7 @@ inline auto reduce_by_cub(OutputIterator result, InputIterator d_in, int num_ite
 
 // -----------------------------------------------------------------------------
 template <typename T>
-void raw_stream_bench_cub(cudf::column_view &col, rmm::device_vector<T> &result)
+void raw_stream_bench_cub(cudf::column_view& col, rmm::device_uvector<T>& result)
 {
   // std::cout << "raw stream cub: " << "\t";
 
@@ -71,7 +73,7 @@ void raw_stream_bench_cub(cudf::column_view &col, rmm::device_vector<T> &result)
 };
 
 template <typename T, bool has_null>
-void iterator_bench_cub(cudf::column_view &col, rmm::device_vector<T> &result)
+void iterator_bench_cub(cudf::column_view& col, rmm::device_uvector<T>& result)
 {
   // std::cout << "iterator cub " << ( (has_null) ? "<true>: " : "<false>: " ) << "\t";
 
@@ -89,7 +91,7 @@ void iterator_bench_cub(cudf::column_view &col, rmm::device_vector<T> &result)
 
 // -----------------------------------------------------------------------------
 template <typename T>
-void raw_stream_bench_thrust(cudf::column_view &col, rmm::device_vector<T> &result)
+void raw_stream_bench_thrust(cudf::column_view& col, rmm::device_uvector<T>& result)
 {
   // std::cout << "raw stream thust: " << "\t\t";
 
@@ -100,7 +102,7 @@ void raw_stream_bench_thrust(cudf::column_view &col, rmm::device_vector<T> &resu
 }
 
 template <typename T, bool has_null>
-void iterator_bench_thrust(cudf::column_view &col, rmm::device_vector<T> &result)
+void iterator_bench_thrust(cudf::column_view& col, rmm::device_uvector<T>& result)
 {
   // std::cout << "iterator thust " << ( (has_null) ? "<true>: " : "<false>: " ) << "\t";
 
@@ -122,7 +124,7 @@ class Iterator : public cudf::benchmark {
 };
 
 template <class TypeParam, bool cub_or_thrust, bool raw_or_iterator>
-void BM_iterator(benchmark::State &state)
+void BM_iterator(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   using T      = TypeParam;
@@ -131,7 +133,8 @@ void BM_iterator(benchmark::State &state)
   cudf::test::fixed_width_column_wrapper<T> wrap_hasnull_F(num_gen, num_gen + column_size);
   cudf::column_view hasnull_F = wrap_hasnull_F;
 
-  rmm::device_vector<T> dev_result(1, T{0});
+  // Initialize dev_result to false
+  auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<TypeParam>(1);
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     if (cub_or_thrust) {
@@ -162,8 +165,8 @@ __device__ thrust::pair<T, bool> operator+(thrust::pair<T, bool> lhs, thrust::pa
 }
 // -----------------------------------------------------------------------------
 template <typename T, bool has_null>
-void pair_iterator_bench_cub(cudf::column_view &col,
-                             rmm::device_vector<thrust::pair<T, bool>> &result)
+void pair_iterator_bench_cub(cudf::column_view& col,
+                             rmm::device_uvector<thrust::pair<T, bool>>& result)
 {
   thrust::pair<T, bool> init{0, false};
   auto d_col    = cudf::column_device_view::create(col);
@@ -173,8 +176,8 @@ void pair_iterator_bench_cub(cudf::column_view &col,
 }
 
 template <typename T, bool has_null>
-void pair_iterator_bench_thrust(cudf::column_view &col,
-                                rmm::device_vector<thrust::pair<T, bool>> &result)
+void pair_iterator_bench_thrust(cudf::column_view& col,
+                                rmm::device_uvector<thrust::pair<T, bool>>& result)
 {
   thrust::pair<T, bool> init{0, false};
   auto d_col = cudf::column_device_view::create(col);
@@ -184,7 +187,7 @@ void pair_iterator_bench_thrust(cudf::column_view &col,
 }
 
 template <class TypeParam, bool cub_or_thrust>
-void BM_pair_iterator(benchmark::State &state)
+void BM_pair_iterator(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   using T      = TypeParam;
@@ -198,7 +201,8 @@ void BM_pair_iterator(benchmark::State &state)
   cudf::column_view hasnull_F = wrap_hasnull_F;
   cudf::column_view hasnull_T = wrap_hasnull_T;
 
-  rmm::device_vector<thrust::pair<T, bool>> dev_result(1, {T{0}, false});
+  // Initialize dev_result to false
+  auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<thrust::pair<T, bool>>(1);
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     if (cub_or_thrust) {

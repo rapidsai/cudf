@@ -120,6 +120,11 @@ struct is_host_span_supported_container<  //
   thrust::host_vector<T, Alloc>> : std::true_type {
 };
 
+template <typename T, typename Alloc>
+struct is_host_span_supported_container<  //
+  std::basic_string<T, std::char_traits<T>, Alloc>> : std::true_type {
+};
+
 template <typename T, std::size_t Extent = cudf::dynamic_extent>
 struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, host_span<T, Extent>>;
@@ -253,10 +258,13 @@ class base_2dspan {
     return row * size.second + column;
   }
 
-  constexpr RowType<T, dynamic_extent> operator[](size_t row)
+  constexpr RowType<T, dynamic_extent> operator[](size_t row) const
   {
     return {this->data() + flatten_index(row, 0, this->size()), this->size().second};
   }
+
+  constexpr RowType<T, dynamic_extent> front() const { return (*this)[0]; }
+  constexpr RowType<T, dynamic_extent> back() const { return (*this)[size().first - 1]; }
 
   constexpr base_2dspan subspan(size_t first_row, size_t num_rows) const noexcept
   {

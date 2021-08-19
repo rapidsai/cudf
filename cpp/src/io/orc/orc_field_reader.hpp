@@ -41,10 +41,10 @@ namespace orc {
 template <int index>
 struct FunctionSwitchImpl {
   template <typename... Operator>
-  static inline void run(ProtobufReader *pbr,
-                         const uint8_t *end,
-                         const int &encoded_field_number,
-                         std::tuple<Operator...> &ops)
+  static inline void run(ProtobufReader* pbr,
+                         const uint8_t* end,
+                         const int& encoded_field_number,
+                         std::tuple<Operator...>& ops)
   {
     if (encoded_field_number == std::get<index>(ops).encoded_field_number) {
       std::get<index>(ops)(pbr, end);
@@ -57,10 +57,10 @@ struct FunctionSwitchImpl {
 template <>
 struct FunctionSwitchImpl<0> {
   template <typename... Operator>
-  static inline void run(ProtobufReader *pbr,
-                         const uint8_t *end,
-                         const int &encoded_field_number,
-                         std::tuple<Operator...> &ops)
+  static inline void run(ProtobufReader* pbr,
+                         const uint8_t* end,
+                         const int& encoded_field_number,
+                         std::tuple<Operator...>& ops)
   {
     if (encoded_field_number == std::get<0>(ops).encoded_field_number) {
       std::get<0>(ops)(pbr, end);
@@ -78,10 +78,10 @@ struct FunctionSwitchImpl<0> {
  * pointed to by the functors.
  */
 template <typename T, typename... Operator>
-inline void ProtobufReader::function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op)
+inline void ProtobufReader::function_builder(T& s, size_t maxlen, std::tuple<Operator...>& op)
 {
   constexpr int index = std::tuple_size<std::tuple<Operator...>>::value - 1;
-  auto *const end     = std::min(m_cur + maxlen, m_end);
+  auto* const end     = std::min(m_cur + maxlen, m_end);
   while (m_cur < end) {
     auto const field = get<uint32_t>();
     FunctionSwitchImpl<index>::run(this, end, field, op);

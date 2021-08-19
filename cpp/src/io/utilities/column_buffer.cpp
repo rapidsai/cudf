@@ -54,15 +54,7 @@ void column_buffer::create(size_type _size,
 }
 
 /**
- * @brief Creates a column from an existing set of device memory buffers.
- *
- * @throws std::bad_alloc if device memory allocation fails
- *
- * @param buffer Column buffer descriptors
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory
- *
- * @return `std::unique_ptr<cudf::column>` Column from the existing device data
+ * @copydoc cudf::io::detail::make_column
  */
 std::unique_ptr<column> make_column(column_buffer& buffer,
                                     column_name_info* schema_info,
@@ -136,6 +128,69 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
                                       std::move(buffer._null_mask),
                                       buffer._null_count);
     }
+  }
+}
+
+/**
+ * @copydoc cudf::io::detail::empty_like
+ */
+std::unique_ptr<column> empty_like(column_buffer& buffer,
+                                   column_name_info* schema_info,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
+{
+  if (schema_info != nullptr) { schema_info->name = buffer.name; }
+
+  switch (buffer.type.id()) {
+    case type_id::LIST: {
+      // make offsets column
+      auto offsets = cudf::make_empty_column(data_type{type_id::INT32});
+
+      column_name_info* child_info = nullptr;
+      if (schema_info != nullptr) {
+        schema_info->children.push_back(column_name_info{"offsets"});
+        schema_info->children.push_back(column_name_info{""});
+        child_info = &schema_info->children.back();
+      }
+
+      // make child column
+      CUDF_EXPECTS(buffer.children.size() > 0, "Encountered malformed column_buffer");
+      auto child = empty_like(buffer.children[0], child_info, stream, mr);
+
+      // make the final list column
+      return make_lists_column(0,
+                               std::move(offsets),
+                               std::move(child),
+                               buffer._null_count,
+                               std::move(buffer._null_mask),
+                               stream,
+                               mr);
+    } break;
+
+    case type_id::STRUCT: {
+      std::vector<std::unique_ptr<cudf::column>> output_children;
+      output_children.reserve(buffer.children.size());
+      std::transform(buffer.children.begin(),
+                     buffer.children.end(),
+                     std::back_inserter(output_children),
+                     [&](column_buffer& col) {
+                       column_name_info* child_info = nullptr;
+                       if (schema_info != nullptr) {
+                         schema_info->children.push_back(column_name_info{""});
+                         child_info = &schema_info->children.back();
+                       }
+                       return empty_like(col, child_info, stream, mr);
+                     });
+
+      return make_structs_column(0,
+                                 std::move(output_children),
+                                 buffer._null_count,
+                                 std::move(buffer._null_mask),
+                                 stream,
+                                 mr);
+    } break;
+
+    default: return cudf::make_empty_column(buffer.type);
   }
 }
 

@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.StringJoiner;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -578,6 +579,40 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   /**
+   * Create a new string vector from the given values.  This API
+   * supports inline nulls.
+   */
+  public static HostColumnVector fromUTF8Strings(byte[]... values) {
+    int rows = values.length;
+    long nullCount = 0;
+    long bufferSize = 0;
+    // How many bytes do we need to hold the data.
+    for (byte[] s: values) {
+      if (s == null) {
+        nullCount++;
+      } else {
+        bufferSize += s.length;
+      }
+    }
+
+    BiConsumer<Builder, byte[]> appendUTF8 = nullCount == 0 ?
+      (b, s) -> b.appendUTF8String(s) :
+      (b, s) -> {
+        if (s == null) {
+          b.appendNull();
+        } else {
+          b.appendUTF8String(s);
+        }
+      };
+
+    return build(rows, bufferSize, (b) -> {
+      for (byte[] s: values) {
+        appendUTF8.accept(b, s);
+      }
+    });
+  }
+
+  /**
    * Create a new vector from the given values.  This API supports inline nulls,
    * but is much slower than building from primitive array of unscaledValues.
    * Notice:
@@ -1085,9 +1120,11 @@ public final class HostColumnVector extends HostColumnVectorCore {
       } else if (listElement instanceof BigDecimal) {
         childBuilder.append((BigDecimal) listElement);
       } else if (listElement instanceof List) {
-        childBuilder.append((List) listElement);
+        childBuilder.append((List<?>) listElement);
       } else if (listElement instanceof StructData) {
         childBuilder.append((StructData) listElement);
+      } else if (listElement instanceof byte[]) {
+        childBuilder.appendUTF8String((byte[]) listElement);
       } else {
         throw new IllegalStateException("Unexpected element type: " + listElement.getClass());
       }

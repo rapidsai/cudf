@@ -53,7 +53,7 @@ T get_distribution_mean(distribution_params<T> const& dist)
       auto const range_size = dist.lower_bound < dist.upper_bound
                                 ? dist.upper_bound - dist.lower_bound
                                 : dist.lower_bound - dist.upper_bound;
-      auto const p = geometric_dist_p(range_size);
+      auto const p          = geometric_dist_p(range_size);
       if (dist.lower_bound < dist.upper_bound)
         return dist.lower_bound + (1. / p);
       else
@@ -108,7 +108,8 @@ size_t avg_element_bytes(data_profile const& profile, cudf::type_id tid)
 /**
  * @brief Functor that computes a random column element with the given data profile.
  *
- * The implementation is SFINAEd for diffent type groups. Currently only used for fixed-width types.
+ * The implementation is SFINAEd for different type groups. Currently only used for fixed-width
+ * types.
  */
 template <typename T, typename Enable = void>
 struct random_value_fn;
@@ -170,7 +171,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> 
 template <typename T>
 struct random_value_fn<
   T,
-  typename std::enable_if_t<!std::is_same<T, bool>::value && cudf::is_numeric<T>()>> {
+  typename std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_numeric<T>()>> {
   T const lower_bound;
   T const upper_bound;
   distribution_fn<T> dist;
@@ -193,7 +194,7 @@ struct random_value_fn<
  * @brief Creates an boolean value with given probability of returning `true`.
  */
 template <typename T>
-struct random_value_fn<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
+struct random_value_fn<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
   std::bernoulli_distribution b_dist;
 
   random_value_fn(distribution_params<bool> const& desc) : b_dist{desc.probability_true} {}
@@ -234,7 +235,7 @@ struct stored_as {
 
 // Use `int8_t` for bools because that's how they're stored in columns
 template <typename T>
-struct stored_as<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
+struct stored_as<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
   using type = int8_t;
 };
 

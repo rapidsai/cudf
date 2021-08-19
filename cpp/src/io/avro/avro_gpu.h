@@ -33,7 +33,7 @@ struct schemadesc_s {
   uint32_t kind;   // avro type kind
   uint32_t count;  // for records/unions: number of following child columns, for nulls: global
                    // null_count, for enums: dictionary ofs
-  void *dataptr;   // Ptr to column data, or null if column not selected
+  void* dataptr;   // Ptr to column data, or null if column not selected
 };
 
 /**
@@ -50,10 +50,10 @@ struct schemadesc_s {
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] stream CUDA stream to use, default 0
  */
-void DecodeAvroColumnData(block_desc_s *blocks,
-                          schemadesc_s *schema,
+void DecodeAvroColumnData(block_desc_s* blocks,
+                          schemadesc_s* schema,
                           cudf::device_span<string_index_pair> global_dictionary,
-                          const uint8_t *avro_data,
+                          const uint8_t* avro_data,
                           uint32_t num_blocks,
                           uint32_t schema_len,
                           size_t max_rows              = ~0,

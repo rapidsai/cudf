@@ -17,21 +17,21 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/utilities/error.hpp>
 
-#include <memory>
+using namespace cudf::test::iterators;
 
 using bools_col   = cudf::test::fixed_width_column_wrapper<bool>;
 using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
 using structs_col = cudf::test::structs_column_wrapper;
 using strings_col = cudf::test::strings_column_wrapper;
 
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::FIRST_ERROR};
 constexpr int32_t null{0};  // Mark for null child elements
 constexpr int32_t XXX{0};   // Mark for null struct elements
 
@@ -47,15 +47,14 @@ using TestTypes = cudf::test::Concat<cudf::test::IntegralTypes,
 TYPED_TEST_CASE(TypedStructScatterTest, TestTypes);
 
 namespace {
-void test_scatter(std::unique_ptr<cudf::column> const& structs_src,
-                  std::unique_ptr<cudf::column> const& structs_tgt,
-                  std::unique_ptr<cudf::column> const& structs_expected,
-                  std::unique_ptr<cudf::column> const& scatter_map)
+auto scatter_structs(std::unique_ptr<cudf::column> const& structs_src,
+                     std::unique_ptr<cudf::column> const& structs_tgt,
+                     std::unique_ptr<cudf::column> const& scatter_map)
 {
   auto const source = cudf::table_view{std::vector<cudf::column_view>{structs_src->view()}};
   auto const target = cudf::table_view{std::vector<cudf::column_view>{structs_tgt->view()}};
   auto const result = cudf::scatter(source, scatter_map->view(), target);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_expected->view(), result->get_column(0));
+  return result->get_column(0);
 }
 }  // namespace
 
@@ -65,14 +64,14 @@ TYPED_TEST(TypedStructScatterTest, EmptyInputTest)
   using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   auto child_col_src     = col_wrapper{};
-  auto const structs_src = structs_col{{child_col_src}, std::vector<bool>{}}.release();
+  auto const structs_src = structs_col{{child_col_src}}.release();
 
   auto child_col_tgt     = col_wrapper{};
-  auto const structs_tgt = structs_col{{child_col_tgt}, std::vector<bool>{}}.release();
+  auto const structs_tgt = structs_col{{child_col_tgt}}.release();
 
   auto const scatter_map = int32s_col{}.release();
-  test_scatter(structs_src, structs_tgt, structs_src, scatter_map);
-  test_scatter(structs_src, structs_tgt, structs_tgt, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *structs_src, scatter_structs(structs_src, structs_tgt, scatter_map), verbosity);
 }
 
 // Test case when only the scatter map is empty
@@ -80,81 +79,49 @@ TYPED_TEST(TypedStructScatterTest, EmptyScatterMapTest)
 {
   using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
-  auto child_col_src =
-    col_wrapper{{0, 1, 2, 3, null, XXX},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; })};
-  auto const structs_src = structs_col{
-    {child_col_src}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 5;
-    })}.release();
+  auto child_col_src     = col_wrapper{{0, 1, 2, 3, null, XXX}, null_at(4)};
+  auto const structs_src = structs_col{{child_col_src}, null_at(5)}.release();
 
-  auto child_col_tgt =
-    col_wrapper{{50, null, 70, XXX, 90, 100},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  auto const structs_tgt = structs_col{
-    {child_col_tgt}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 3;
-    })}.release();
+  auto child_col_tgt     = col_wrapper{{50, null, 70, XXX, 90, 100}, null_at(1)};
+  auto const structs_tgt = structs_col{{child_col_tgt}, null_at(3)}.release();
 
   auto const scatter_map = int32s_col{}.release();
-  test_scatter(structs_src, structs_tgt, structs_tgt, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *structs_tgt, scatter_structs(structs_src, structs_tgt, scatter_map), verbosity);
 }
 
 TYPED_TEST(TypedStructScatterTest, ScatterAsCopyTest)
 {
   using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
-  auto child_col_src =
-    col_wrapper{{0, 1, 2, 3, null, XXX},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; })};
-  auto const structs_src = structs_col{
-    {child_col_src}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 5;
-    })}.release();
+  auto child_col_src     = col_wrapper{{0, 1, 2, 3, null, XXX}, null_at(4)};
+  auto const structs_src = structs_col{{child_col_src}, null_at(5)}.release();
 
-  auto child_col_tgt =
-    col_wrapper{{50, null, 70, XXX, 90, 100},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  auto const structs_tgt = structs_col{
-    {child_col_tgt}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 3;
-    })}.release();
+  auto child_col_tgt     = col_wrapper{{50, null, 70, XXX, 90, 100}, null_at(1)};
+  auto const structs_tgt = structs_col{{child_col_tgt}, null_at(3)}.release();
 
   // Scatter as copy: the target should be the same as source
   auto const scatter_map = int32s_col{0, 1, 2, 3, 4, 5}.release();
-  test_scatter(structs_src, structs_tgt, structs_src, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *structs_src, scatter_structs(structs_src, structs_tgt, scatter_map), verbosity);
 }
 
 TYPED_TEST(TypedStructScatterTest, ScatterAsLeftShiftTest)
 {
   using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
-  auto child_col_src =
-    col_wrapper{{0, 1, 2, 3, null, XXX},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; })};
-  auto const structs_src = structs_col{
-    {child_col_src}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 5;
-    })}.release();
+  auto child_col_src     = col_wrapper{{0, 1, 2, 3, null, XXX}, null_at(4)};
+  auto const structs_src = structs_col{{child_col_src}, null_at(5)}.release();
 
-  auto child_col_tgt =
-    col_wrapper{{50, null, 70, XXX, 90, 100},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  auto const structs_tgt = structs_col{
-    {child_col_tgt}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 3;
-    })}.release();
+  auto child_col_tgt     = col_wrapper{{50, null, 70, XXX, 90, 100}, null_at(1)};
+  auto const structs_tgt = structs_col{{child_col_tgt}, null_at(3)}.release();
 
-  auto child_col_expected =
-    col_wrapper{{2, 3, null, XXX, 0, 1},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2; })};
-  auto structs_expected = structs_col{
-    {child_col_expected}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 3;
-    })}.release();
+  auto child_col_expected = col_wrapper{{2, 3, null, XXX, 0, 1}, null_at(2)};
+  auto structs_expected   = structs_col{{child_col_expected}, null_at(3)}.release();
 
   auto const scatter_map = int32s_col{-2, -1, 0, 1, 2, 3}.release();
-  test_scatter(structs_src, structs_tgt, structs_expected, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *structs_expected, scatter_structs(structs_src, structs_tgt, scatter_map), verbosity);
 }
 
 TYPED_TEST(TypedStructScatterTest, SimpleScatterTests)
@@ -162,44 +129,26 @@ TYPED_TEST(TypedStructScatterTest, SimpleScatterTests)
   using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   // Source data
-  auto child_col_src =
-    col_wrapper{{0, 1, 2, 3, null, XXX},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; })};
-  auto const structs_src = structs_col{
-    {child_col_src}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 5;
-    })}.release();
+  auto child_col_src     = col_wrapper{{0, 1, 2, 3, null, XXX}, null_at(4)};
+  auto const structs_src = structs_col{{child_col_src}, null_at(5)}.release();
 
   // Target data
-  auto child_col_tgt =
-    col_wrapper{{50, null, 70, XXX, 90, 100},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  auto const structs_tgt = structs_col{
-    {child_col_tgt}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 3;
-    })}.release();
+  auto child_col_tgt     = col_wrapper{{50, null, 70, XXX, 90, 100}, null_at(1)};
+  auto const structs_tgt = structs_col{{child_col_tgt}, null_at(3)}.release();
 
   // Expected data
-  auto child_col_expected1 =
-    col_wrapper{{1, null, 70, XXX, 0, 2},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  auto const structs_expected1 = structs_col{
-    {child_col_expected1}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 3;
-    })}.release();
-  auto const scatter_map1 = int32s_col{-2, 0, 5}.release();
-  test_scatter(structs_src, structs_tgt, structs_expected1, scatter_map1);
+  auto child_col_expected1     = col_wrapper{{1, null, 70, XXX, 0, 2}, null_at(1)};
+  auto const structs_expected1 = structs_col{{child_col_expected1}, null_at(3)}.release();
+  auto const scatter_map1      = int32s_col{-2, 0, 5}.release();
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *structs_expected1, scatter_structs(structs_src, structs_tgt, scatter_map1), verbosity);
 
   // Expected data
-  auto child_col_expected2 =
-    col_wrapper{{1, null, 70, 3, 0, 2},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  auto const structs_expected2 = structs_col{
-    {child_col_expected2}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return true;
-    })}.release();
-  auto const scatter_map2 = int32s_col{-2, 0, 5, 3}.release();
-  test_scatter(structs_src, structs_tgt, structs_expected2, scatter_map2);
+  auto child_col_expected2     = col_wrapper{{1, null, 70, 3, 0, 2}, null_at(1)};
+  auto const structs_expected2 = structs_col{{child_col_expected2}, no_nulls()}.release();
+  auto const scatter_map2      = int32s_col{-2, 0, 5, 3}.release();
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *structs_expected2, scatter_structs(structs_src, structs_tgt, scatter_map2), verbosity);
 }
 
 TYPED_TEST(TypedStructScatterTest, ComplexDataScatterTest)
@@ -209,61 +158,41 @@ TYPED_TEST(TypedStructScatterTest, ComplexDataScatterTest)
 
   // Source data
   auto names_column_src =
-    strings_col{{"Newton", "Washington", "Cherry", "Kiwi", "Lemon", "Tomato"},
-                cudf::detail::make_counting_transform_iterator(0, [](auto) { return true; })};
-  auto ages_column_src =
-    col_wrapper{{5, 10, 15, 20, 25, 30},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; })};
+    strings_col{{"Newton", "Washington", "Cherry", "Kiwi", "Lemon", "Tomato" /*XXX*/}, no_nulls()};
+  auto ages_column_src = col_wrapper{{5, 10, 15, 20, null, XXX}, null_at(4)};
   auto is_human_col_src =
-    bools_col{{true, true, false, false, false, false},
-              cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; })};
+    bools_col{{true, true, false, false /*null*/, false, false /*XXX*/}, null_at(3)};
+  auto const structs_src =
+    structs_col{{names_column_src, ages_column_src, is_human_col_src}, null_at(5)}.release();
 
   // Target data
-  auto names_column_tgt =
-    strings_col{{"String 0", "String 1", "String 2", "String 3", "String 4", "String 5"},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; })};
-  auto ages_column_tgt =
-    col_wrapper{{50, 60, 70, 80, 90, 100},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  auto is_human_col_tgt =
-    bools_col{{true, true, true, true, true, true},
-              cudf::detail::make_counting_transform_iterator(0, [](auto) { return true; })};
+  auto names_column_tgt = strings_col{
+    {"String 0" /*null*/, "String 1", "String 2" /*XXX*/, "String 3", "String 4", "String 5"},
+    null_at(0)};
+  auto ages_column_tgt  = col_wrapper{{50, null, XXX, 80, 90, 100}, null_at(1)};
+  auto is_human_col_tgt = bools_col{{true, true, true /*XXX*/, true, true, true}, no_nulls()};
+  auto const structs_tgt =
+    structs_col{{names_column_tgt, ages_column_tgt, is_human_col_tgt}, null_at(2)}.release();
 
   // Expected data
-  auto names_column_expected =
-    strings_col{{"String 0", "Lemon", "Kiwi", "Cherry", "Washington", "Newton"},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; })};
-  auto ages_column_expected =
-    col_wrapper{{50, 25, 20, 15, 10, 5},
-                cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
+  auto names_column_expected = strings_col{
+    {"String 0" /*null*/, "Lemon", "Kiwi", "Cherry", "Washington", "Newton"}, null_at(0)};
+  auto ages_column_expected = col_wrapper{{50, null, 20, 15, 10, 5}, null_at(1)};
   auto is_human_col_expected =
-    bools_col{{true, false, false, false, true, true},
-              cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2; })};
-
-  auto const structs_src = structs_col{
-    {names_column_src, ages_column_src, is_human_col_src},
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 5;
-    })}.release();
-  auto const structs_tgt = structs_col{
-    {names_column_tgt, ages_column_tgt, is_human_col_tgt},
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i != 2;
-    })}.release();
-  auto const structs_expected = structs_col{
-    {names_column_expected, ages_column_expected, is_human_col_expected},
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return true;
-    })}.release();
+    bools_col{{true, false, false /*null*/, false, true, true}, null_at(2)};
+  auto const structs_expected =
+    structs_col{{names_column_expected, ages_column_expected, is_human_col_expected}, no_nulls()}
+      .release();
 
   // The first element of the target is not overwritten
   auto const scatter_map = int32s_col{-1, 4, 3, 2, 1}.release();
-  test_scatter(structs_src, structs_tgt, structs_expected, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *structs_expected, scatter_structs(structs_src, structs_tgt, scatter_map), verbosity);
 }
 
 TYPED_TEST(TypedStructScatterTest, ScatterStructOfListsTest)
 {
-  // Testing gather() on struct<list<numeric>>
+  // Testing scatter() on struct<list<numeric>>
   using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
   // Source data
@@ -289,26 +218,43 @@ TYPED_TEST(TypedStructScatterTest, ScatterStructOfListsTest)
 
   // The first 2 elements of the target is not overwritten
   auto const scatter_map = int32s_col{-3, -2, -1, 5, 4, 3, 2}.release();
-  test_scatter(structs_src, structs_tgt, structs_expected, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *structs_expected, scatter_structs(structs_src, structs_tgt, scatter_map), verbosity);
 }
 
-TYPED_TEST(TypedStructScatterTest, ScatterSourceSmallerThanTarget)
+TYPED_TEST(TypedStructScatterTest, SourceSmallerThanTargetScatterTest)
 {
-  using namespace cudf;
-  using namespace cudf::test;
+  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
-  using fixed_width     = fixed_width_column_wrapper<TypeParam, int32_t>;
-  using structs_col     = structs_column_wrapper;
-  using scatter_map_col = fixed_width_column_wrapper<offset_type, int32_t>;
+  auto child_col_src     = col_wrapper{22, 55};
+  auto const structs_src = structs_col{{child_col_src}}.release();
 
-  auto source_child   = fixed_width{22, 55};
-  auto target_child   = fixed_width{0, 1, 2, 3, 4, 5, 6};
-  auto expected_child = fixed_width{0, 1, 22, 3, 4, 55, 6};
+  auto child_col_tgt     = col_wrapper{0, 1, 2, 3, 4, 5, 6};
+  auto const structs_tgt = structs_col{{child_col_tgt}}.release();
 
-  auto const source      = structs_col{{source_child}}.release();
-  auto const target      = structs_col{{target_child}}.release();
-  auto const scatter_map = scatter_map_col{2, 5}.release();
-  auto const expected    = structs_col{{expected_child}}.release();
+  auto child_col_expected     = col_wrapper{0, 1, 22, 3, 4, 55, 6};
+  auto const structs_expected = structs_col{{child_col_expected}}.release();
 
-  test_scatter(source, target, expected, scatter_map);
+  auto const scatter_map = int32s_col{2, 5}.release();
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *structs_expected, scatter_structs(structs_src, structs_tgt, scatter_map), verbosity);
+}
+
+TYPED_TEST(TypedStructScatterTest, IntStructNullMaskRegression)
+{
+  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  auto child_tgt      = col_wrapper({0, null, 2}, null_at(1));
+  auto struct_col_tgt = structs_col({child_tgt}).release();
+
+  auto child_src      = col_wrapper{20};
+  auto struct_col_src = structs_col({child_src}).release();
+
+  auto scatter_map = int32s_col{2}.release();
+
+  auto expected_child  = col_wrapper({0, null, 20}, null_at(1));
+  auto expected_struct = structs_col({expected_child}).release();
+
+  auto const result = scatter_structs(struct_col_src, struct_col_tgt, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_struct, result, verbosity);
 }

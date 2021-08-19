@@ -53,5 +53,5 @@ endif()
 # Debug options
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     message(VERBOSE "CUDF: Building with debugging flags")
-    list(APPEND CUDF_CUDA_FLAGS -G -Xcompiler=-rdynamic)
+    list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-rdynamic)
 endif()

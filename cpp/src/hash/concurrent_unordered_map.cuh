@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-#ifndef CONCURRENT_UNORDERED_MAP_CUH
-#define CONCURRENT_UNORDERED_MAP_CUH
+#pragma once
 
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <hash/hash_allocator.cuh>
 #include <hash/helper_functions.cuh>
 #include <hash/managed.cuh>
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/utilities/error.hpp>
@@ -30,7 +29,6 @@
 
 #include <thrust/pair.h>
 
-#include <cassert>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -59,11 +57,14 @@ using packed_t = typename packed<sizeof(pair_type)>::type;
  * equal in size to a type where atomicCAS is natively supported, it is more
  * efficient to "pack" the pair and insert it with a single atomicCAS.
  *
- * @note Only integral key and value types may be packed because we use
+ * Only integral key and value types may be packed because we use
  * bitwise equality comparison, which may not be valid for non-integral
  * types.
  *
- * @tparam pair_type The pair type in question
+ * Also, the `pair_type` must not contain any padding bits otherwise
+ * accessing the packed value would be undefined.
+ *
+ * @tparam pair_type The pair type that will be packed
  * @return true If the pair type can be packed
  * @return false  If the pair type cannot be packed
  */
@@ -73,7 +74,8 @@ template <typename pair_type,
 constexpr bool is_packable()
 {
   return std::is_integral<key_type>::value and std::is_integral<value_type>::value and
-         not std::is_void<packed_t<pair_type>>::value;
+         not std::is_void<packed_t<pair_type>>::value and
+         std::has_unique_object_representations_v<pair_type>;
 }
 
 /**
@@ -263,7 +265,7 @@ class concurrent_unordered_map {
    */
   template <typename pair_type = value_type>
   __device__ std::enable_if_t<is_packable<pair_type>(), insert_result> attempt_insert(
-    value_type* insert_location, value_type const& insert_pair)
+    value_type* const __restrict__ insert_location, value_type const& insert_pair)
   {
     pair_packer<pair_type> const unused{thrust::make_pair(m_unused_key, m_unused_element)};
     pair_packer<pair_type> const new_pair{insert_pair};
@@ -541,5 +543,3 @@ class concurrent_unordered_map {
     CUDA_TRY(cudaGetLastError());
   }
 };
-
-#endif  // CONCURRENT_UNORDERED_MAP_CUH

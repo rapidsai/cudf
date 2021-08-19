@@ -3,7 +3,7 @@
 from cudf._lib import interop as libdlpack
 from cudf.core.column import ColumnBase
 from cudf.core.dataframe import DataFrame
-from cudf.core.index import Index
+from cudf.core.index import BaseIndex
 from cudf.core.series import Series
 from cudf.utils import ioutils
 
@@ -35,12 +35,12 @@ def from_dlpack(pycapsule_obj):
     tensor is row-major, transpose it before passing it to this function.
     """
 
-    res = libdlpack.from_dlpack(pycapsule_obj)
+    data, _ = libdlpack.from_dlpack(pycapsule_obj)
 
-    if res._num_columns == 1:
-        return Series(res._data[0])
+    if len(data) == 1:
+        return Series._from_data(data)
     else:
-        return DataFrame(data=res._data)
+        return DataFrame._from_data(data)
 
 
 @ioutils.doc_to_dlpack()
@@ -71,7 +71,7 @@ def to_dlpack(cudf_obj):
     if len(cudf_obj) == 0:
         raise ValueError("Cannot create DLPack tensor of 0 size")
 
-    if isinstance(cudf_obj, (DataFrame, Series, Index)):
+    if isinstance(cudf_obj, (DataFrame, Series, BaseIndex)):
         gdf_cols = cudf_obj
     elif isinstance(cudf_obj, ColumnBase):
         gdf_cols = cudf_obj.as_frame()

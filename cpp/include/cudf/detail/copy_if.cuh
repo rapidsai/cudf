@@ -214,12 +214,12 @@ struct DeviceType<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
 };
 
 template <typename T>
-struct DeviceType<T, std::enable_if_t<std::is_same<numeric::decimal32, T>::value>> {
+struct DeviceType<T, std::enable_if_t<std::is_same_v<numeric::decimal32, T>>> {
   using type = typename cudf::device_storage_type_t<T>;
 };
 
 template <typename T>
-struct DeviceType<T, std::enable_if_t<std::is_same<numeric::decimal64, T>::value>> {
+struct DeviceType<T, std::enable_if_t<std::is_same_v<numeric::decimal64, T>>> {
   using type = typename cudf::device_storage_type_t<T>;
 };
 
@@ -278,9 +278,9 @@ struct scatter_gather_functor {
   std::unique_ptr<cudf::column> operator()(
     cudf::column_view const& input,
     cudf::size_type const& output_size,
-    cudf::size_type const* block_offsets,
+    cudf::size_type const*,
     Filter filter,
-    cudf::size_type per_thread,
+    cudf::size_type,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {

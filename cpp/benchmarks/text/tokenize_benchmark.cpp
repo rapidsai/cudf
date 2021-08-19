@@ -31,7 +31,7 @@
 class TextTokenize : public cudf::benchmark {
 };
 
-enum class tokenize_type { single, multi, count, count_multi, ngrams };
+enum class tokenize_type { single, multi, count, count_multi, ngrams, characters };
 
 static void BM_tokenize(benchmark::State& state, tokenize_type tt)
 {
@@ -48,17 +48,27 @@ static void BM_tokenize(benchmark::State& state, tokenize_type tt)
   for (auto _ : state) {
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     switch (tt) {
-      case tokenize_type::single: nvtext::tokenize(input); break;
+      case tokenize_type::single:
+        // single whitespace delimiter
+        nvtext::tokenize(input);
+        break;
       case tokenize_type::multi:
         nvtext::tokenize(input, cudf::strings_column_view(delimiters));
         break;
-      case tokenize_type::count: nvtext::count_tokens(input); break;
+      case tokenize_type::count:
+        // single whitespace delimiter
+        nvtext::count_tokens(input);
+        break;
       case tokenize_type::count_multi:
         nvtext::count_tokens(input, cudf::strings_column_view(delimiters));
         break;
       case tokenize_type::ngrams:
         // default is bigrams
         nvtext::ngrams_tokenize(input);
+        break;
+      case tokenize_type::characters:
+        // every character becomes a string
+        nvtext::character_tokenize(input);
         break;
     }
   }
@@ -90,3 +100,4 @@ NVTEXT_BENCHMARK_DEFINE(multi)
 NVTEXT_BENCHMARK_DEFINE(count)
 NVTEXT_BENCHMARK_DEFINE(count_multi)
 NVTEXT_BENCHMARK_DEFINE(ngrams)
+NVTEXT_BENCHMARK_DEFINE(characters)

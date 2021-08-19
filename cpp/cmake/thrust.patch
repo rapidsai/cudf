@@ -42,3 +42,42 @@ index 1ffeef0..5e80800 100644
            for (int ITEM = 1; ITEM < ITEMS_PER_THREAD; ++ITEM)
            {
              if (ITEMS_PER_THREAD * tid + ITEM < num_remaining)
+diff a/cub/device/dispatch/dispatch_radix_sort.cuh b/cub/device/dispatch/dispatch_radix_sort.cuh
+index 41eb1d2..f2893b4 100644
+--- a/cub/device/dispatch/dispatch_radix_sort.cuh
++++ b/cub/device/dispatch/dispatch_radix_sort.cuh
+@@ -723,7 +723,7 @@ struct DeviceRadixSortPolicy
+ 
+ 
+     /// SM60 (GP100)
+-    struct Policy600 : ChainedPolicy<600, Policy600, Policy500>
++    struct Policy600 : ChainedPolicy<600, Policy600, Policy600>
+     {
+         enum {
+             PRIMARY_RADIX_BITS      = (sizeof(KeyT) > 1) ? 7 : 5,    // 6.9B 32b keys/s (Quadro P100)
+diff a/cub/device/dispatch/dispatch_reduce.cuh b/cub/device/dispatch/dispatch_reduce.cuh
+index f6aee45..dd64301 100644
+--- a/cub/device/dispatch/dispatch_reduce.cuh
++++ b/cub/device/dispatch/dispatch_reduce.cuh
+@@ -284,7 +284,7 @@ struct DeviceReducePolicy
+     };
+ 
+     /// SM60
+-    struct Policy600 : ChainedPolicy<600, Policy600, Policy350>
++    struct Policy600 : ChainedPolicy<600, Policy600, Policy600>
+     {
+         // ReducePolicy (P100: 591 GB/s @ 64M 4B items; 583 GB/s @ 256M 1B items)
+         typedef AgentReducePolicy<
+diff a/cub/device/dispatch/dispatch_scan.cuh b/cub/device/dispatch/dispatch_scan.cuh
+index c0c6d59..937ee31 100644
+--- a/cub/device/dispatch/dispatch_scan.cuh
++++ b/cub/device/dispatch/dispatch_scan.cuh
+@@ -178,7 +178,7 @@ struct DeviceScanPolicy
+     };
+ 
+     /// SM600
+-    struct Policy600 : ChainedPolicy<600, Policy600, Policy520>
++    struct Policy600 : ChainedPolicy<600, Policy600, Policy600>
+     {
+         typedef AgentScanPolicy<
+                 128, 15,                                        ///< Threads per block, items per thread

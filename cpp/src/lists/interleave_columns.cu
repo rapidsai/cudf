@@ -106,7 +106,7 @@ struct compute_string_sizes_and_interleave_lists_fn {
   offset_type* d_offsets{nullptr};
 
   // If d_chars == nullptr: only compute sizes and validities of the output strings.
-  // If d_chars != nullptr: only concatenate strings.
+  // If d_chars != nullptr: only interleave lists of strings.
   char* d_chars{nullptr};
 
   // We need to set `1` or `0` for the validities of the strings in the child column.
@@ -128,7 +128,7 @@ struct compute_string_sizes_and_interleave_lists_fn {
     auto const str_offsets =
       str_col.child(strings_column_view::offsets_column_index).template data<offset_type>();
 
-    // The indices of the strings within the source list.
+    // The range of indices of the strings within the source list.
     auto const start_str_idx = list_offsets[list_id];
     auto const end_str_idx   = list_offsets[list_id + 1];
 
@@ -167,34 +167,29 @@ struct interleave_list_entries_fn {
     column_view const& output_list_offsets,
     size_type num_output_lists,
     size_type num_output_entries,
-    bool has_null_mask,
+    bool data_has_null_mask,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const noexcept
   {
     auto const table_dv_ptr = table_device_view::create(input);
-    auto const comp_fn      = compute_string_sizes_and_interleave_lists_fn{
-      *table_dv_ptr, output_list_offsets.template begin<offset_type>(), has_null_mask};
+    auto comp_fn            = compute_string_sizes_and_interleave_lists_fn{
+      *table_dv_ptr, output_list_offsets.template begin<offset_type>(), data_has_null_mask};
 
-    if (has_null_mask) {
-      auto [offsets_column, chars_column, null_mask, null_count] =
-        cudf::strings::detail::make_strings_children_with_null_mask(
-          comp_fn, num_output_lists, num_output_entries, stream, mr);
-      return make_strings_column(num_output_entries,
-                                 std::move(offsets_column),
-                                 std::move(chars_column),
-                                 null_count,
-                                 std::move(null_mask),
-                                 stream,
-                                 mr);
-    }
+    auto validities =
+      rmm::device_uvector<int8_t>(data_has_null_mask ? num_output_entries : 0, stream);
+    comp_fn.d_validities = validities.data();
 
     auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
       comp_fn, num_output_lists, num_output_entries, stream, mr);
+
+    auto [null_mask, null_count] = cudf::detail::valid_if(
+      validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr);
+
     return make_strings_column(num_output_entries,
                                std::move(offsets_column),
                                std::move(chars_column),
-                               0,
-                               rmm::device_buffer{},
+                               null_count,
+                               std::move(null_mask),
                                stream,
                                mr);
   }
@@ -205,12 +200,11 @@ struct interleave_list_entries_fn {
     column_view const& output_list_offsets,
     size_type num_output_lists,
     size_type num_output_entries,
-    bool has_null_mask,
+    bool data_has_null_mask,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const noexcept
   {
     auto const num_cols     = input.num_columns();
-    auto const num_rows     = input.num_rows();
     auto const table_dv_ptr = table_device_view::create(input);
 
     // The output child column.
@@ -222,7 +216,8 @@ struct interleave_list_entries_fn {
     auto output_dv_ptr = mutable_column_device_view::create(*output);
 
     // The array of int8_t to store entry validities.
-    auto validities = rmm::device_uvector<int8_t>(has_null_mask ? num_output_entries : 0, stream);
+    auto validities =
+      rmm::device_uvector<int8_t>(data_has_null_mask ? num_output_entries : 0, stream);
 
     thrust::for_each_n(
       rmm::exec_policy(stream),
@@ -233,7 +228,7 @@ struct interleave_list_entries_fn {
        d_validities = validities.begin(),
        d_offsets    = output_list_offsets.template begin<offset_type>(),
        d_output     = output_dv_ptr->template begin<T>(),
-       has_null_mask] __device__(size_type const idx) {
+       data_has_null_mask] __device__(size_type const idx) {
         auto const col_id     = idx % num_cols;
         auto const list_id    = idx / num_cols;
         auto const& lists_col = table_dv.column(col_id);
@@ -242,13 +237,14 @@ struct interleave_list_entries_fn {
           lists_col.offset();
         auto const& data_col = lists_col.child(lists_column_view::child_column_index);
 
-        // The indices of the entries within the source list.
-        auto const start_idx   = list_offsets[list_id];
-        auto const end_idx     = list_offsets[list_id + 1];
+        // The range of indices of the entries within the source list.
+        auto const start_idx = list_offsets[list_id];
+        auto const end_idx   = list_offsets[list_id + 1];
+
         auto const write_start = d_offsets[idx];
 
         // Fill the validities array if necessary.
-        if (has_null_mask) {
+        if (data_has_null_mask) {
           for (auto read_idx = start_idx, write_idx = write_start; read_idx < end_idx;
                ++read_idx, ++write_idx) {
             d_validities[write_idx] = static_cast<int8_t>(data_col.is_valid(read_idx));
@@ -263,7 +259,7 @@ struct interleave_list_entries_fn {
           thrust::seq, input_ptr, input_ptr + sizeof(T) * (end_idx - start_idx), output_ptr);
       });
 
-    if (has_null_mask) {
+    if (data_has_null_mask) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
         validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr);
       if (null_count > 0) { output->set_null_mask(null_mask, null_count); }
@@ -323,13 +319,17 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   auto const num_output_lists = input.num_rows() * input.num_columns();
   auto const num_output_entries =
     cudf::detail::get_value<offset_type>(offsets_view, num_output_lists, stream);
+  auto const data_has_null_mask =
+    std::any_of(std::cbegin(input), std::cend(input), [](auto const& col) {
+      return col.child(lists_column_view::child_column_index).nullable();
+    });
   auto list_entries = type_dispatcher<dispatch_storage_type>(entry_type,
                                                              interleave_list_entries_fn{},
                                                              input,
                                                              offsets_view,
                                                              num_output_lists,
                                                              num_output_entries,
-                                                             has_null_mask,
+                                                             data_has_null_mask,
                                                              stream,
                                                              mr);
 

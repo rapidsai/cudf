@@ -25,6 +25,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
+#include <cudf/detail/replace/nulls.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/replace.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -40,10 +41,13 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
+#include <thrust/functional.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/scan.h>
 #include <thrust/transform.h>
 
 namespace {  // anonymous
@@ -194,10 +198,10 @@ struct replace_nulls_column_kernel_forwarder {
   }
 
   template <typename col_type, CUDF_ENABLE_IF(not cudf::is_rep_layout_compatible<col_type>())>
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
-                                           cudf::column_view const& replacement,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const&,
+                                           cudf::column_view const&,
+                                           rmm::cuda_stream_view,
+                                           rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("No specialization exists for the given type.");
   }
@@ -249,9 +253,8 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
     cudf::detail::get_value<int32_t>(offsets_view, offsets_view.size() - 1, stream);
 
   // Allocate chars array and output null mask
-  cudf::size_type null_count = input.size() - valid_counter.value(stream);
   std::unique_ptr<cudf::column> output_chars =
-    cudf::strings::detail::create_chars_child_column(input.size(), bytes, stream, mr);
+    cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
 
   auto output_chars_view = output_chars->mutable_view();
 
@@ -286,8 +289,8 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
 
 template <typename T>
 struct replace_nulls_functor {
-  T* value_it;
-  replace_nulls_functor(T* _value_it) : value_it(_value_it) {}
+  T const* value_it;
+  replace_nulls_functor(T const* _value_it) : value_it(_value_it) {}
   __device__ T operator()(T input, bool is_valid) { return is_valid ? input : *value_it; }
 };
 
@@ -309,7 +312,7 @@ struct replace_nulls_scalar_kernel_forwarder {
     auto output_view = output->mutable_view();
 
     using ScalarType = cudf::scalar_type_t<col_type>;
-    auto s1          = static_cast<ScalarType const&>(replacement);
+    auto& s1         = static_cast<ScalarType const&>(replacement);
     auto device_in   = cudf::column_device_view::create(input);
 
     auto func = replace_nulls_functor<col_type>{s1.data()};
@@ -323,10 +326,10 @@ struct replace_nulls_scalar_kernel_forwarder {
   }
 
   template <typename col_type, std::enable_if_t<not cudf::is_fixed_width<col_type>()>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
-                                           cudf::scalar const& replacement,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const&,
+                                           cudf::scalar const&,
+                                           rmm::cuda_stream_view,
+                                           rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("No specialization exists for the given type.");
   }
@@ -357,22 +360,6 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
 }
 
 /**
- * @brief Functor used by `inclusive_scan` to determine the index to gather from in
- *        the result column. When current row in input column is NULL, return previous
- *        accumulated index, otherwise return the current index. The second element in
- *        the return tuple is discarded.
- */
-struct replace_policy_functor {
-  __device__ thrust::tuple<cudf::size_type, bool> operator()(
-    thrust::tuple<cudf::size_type, bool> const& lhs,
-    thrust::tuple<cudf::size_type, bool> const& rhs)
-  {
-    return thrust::get<1>(rhs) ? thrust::make_tuple(thrust::get<0>(rhs), true)
-                               : thrust::make_tuple(thrust::get<0>(lhs), true);
-  }
-};
-
-/**
  * @brief Function used by replace_nulls policy
  */
 
@@ -390,7 +377,7 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
   auto gm_begin = thrust::make_zip_iterator(
     thrust::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
 
-  auto func = replace_policy_functor();
+  auto func = cudf::detail::replace_policy_functor();
   if (replace_policy == cudf::replace_policy::PRECEDING) {
     thrust::inclusive_scan(
       rmm::exec_policy(stream), in_begin, in_begin + input.size(), gm_begin, func);
@@ -405,7 +392,8 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
                                      gather_map.begin(),
                                      gather_map.end(),
                                      cudf::out_of_bounds_policy::DONT_CHECK,
-                                     stream);
+                                     stream,
+                                     mr);
 
   return std::move(output->release()[0]);
 }
@@ -414,6 +402,7 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
 
 namespace cudf {
 namespace detail {
+
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
                                             rmm::cuda_stream_view stream,

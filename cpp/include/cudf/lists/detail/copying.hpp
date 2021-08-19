@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ namespace detail {
  * @param start Index to first list to select in the column
  * @param end One past the index to last list to select in the column
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocatet the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New lists column of size (end - start)
  */
 std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
@@ -47,6 +47,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                                          size_type end,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr);
+
 }  // namespace detail
 }  // namespace lists
 }  // namespace cudf

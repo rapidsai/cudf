@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/scalar/scalar_factories.hpp>
@@ -159,6 +161,35 @@ TYPED_TEST(FixedPointScalarFactory, ValueProvided)
   EXPECT_EQ(fp_s->value(), rep_value);
   EXPECT_TRUE(fp_s->is_valid());
   EXPECT_TRUE(s->is_valid());
+}
+
+struct StructScalarFactory : public ScalarFactoryTest {
+};
+
+TEST_F(StructScalarFactory, Basic)
+{
+  cudf::test::fixed_width_column_wrapper<int> col0{1};
+  cudf::test::strings_column_wrapper col1{"abc"};
+  cudf::test::lists_column_wrapper<int> col2{{1, 2, 3}};
+  cudf::test::structs_column_wrapper struct_col({col0, col1, col2});
+  cudf::column_view cv = static_cast<cudf::column_view>(struct_col);
+  std::vector<cudf::column_view> children(cv.child_begin(), cv.child_end());
+
+  // table_view constructor
+  {
+    auto sc = cudf::make_struct_scalar(cudf::table_view{children});
+    auto s  = static_cast<cudf::scalar_type_t<cudf::struct_view>*>(sc.get());
+    EXPECT_TRUE(s->is_valid());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cudf::table_view{children}, s->view());
+  }
+
+  // host_span constructor
+  {
+    auto sc = cudf::make_struct_scalar(cudf::host_span<cudf::column_view const>{children});
+    auto s  = static_cast<cudf::scalar_type_t<cudf::struct_view>*>(sc.get());
+    EXPECT_TRUE(s->is_valid());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cudf::table_view{children}, s->view());
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

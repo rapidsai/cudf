@@ -4,8 +4,6 @@ import warnings
 from collections import defaultdict
 from uuid import uuid4
 
-from fsspec.core import get_fs_token_paths
-from fsspec.utils import stringify_path
 from pyarrow import dataset as ds, parquet as pq
 
 import cudf
@@ -29,14 +27,6 @@ def _get_partition_groups(df, partition_cols, preserve_index=False):
         df.iloc[splits[i] : splits[i + 1]].copy(deep=False)
         for i in range(0, len(splits) - 1)
     ]
-
-
-def _ensure_filesystem(passed_filesystem, path):
-    if passed_filesystem is None:
-        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
-            0
-        ]
-    return passed_filesystem
 
 
 # Logic chosen to match: https://arrow.apache.org/
@@ -87,7 +77,7 @@ def write_to_dataset(
         kwargs for to_parquet function.
     """
 
-    fs = _ensure_filesystem(fs, root_path)
+    fs = ioutils._ensure_filesystem(fs, root_path)
     fs.mkdirs(root_path, exist_ok=True)
     metadata = []
 
@@ -202,8 +192,10 @@ def read_parquet(
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
         if ioutils.is_directory(source, **kwargs):
-            fs = _ensure_filesystem(passed_filesystem=None, path=source)
-            source = stringify_path(source)
+            fs = ioutils._ensure_filesystem(
+                passed_filesystem=None, path=source
+            )
+            source = ioutils.stringify_pathlike(source)
             source = fs.sep.join([source, "*.parquet"])
 
         tmp_source, compression = ioutils.get_filepath_or_buffer(
@@ -217,6 +209,10 @@ def read_parquet(
             filepath_or_buffer.extend(tmp_source)
         else:
             filepaths_or_buffers.append(tmp_source)
+
+    if columns is not None:
+        if not is_list_like(columns):
+            raise ValueError("Expected list like for columns")
 
     if filters is not None:
         # Convert filters to ds.Expression

@@ -29,6 +29,7 @@ target_link_libraries(cudf_datagen
                       GTest::gmock_main
                       GTest::gtest_main
                       benchmark::benchmark
+                      nvbench::nvbench
                       Threads::Threads
                       cudf)
 
@@ -50,9 +51,17 @@ target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen)
 function(ConfigureBench CMAKE_BENCH_NAME)
     add_executable(${CMAKE_BENCH_NAME} ${ARGN})
     set_target_properties(${CMAKE_BENCH_NAME}
-        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gbenchmarks>")
+        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>")
     target_link_libraries(${CMAKE_BENCH_NAME}
         PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main)
+endfunction()
+
+function(ConfigureNVBench CMAKE_BENCH_NAME)
+    add_executable(${CMAKE_BENCH_NAME} ${ARGN})
+    set_target_properties(${CMAKE_BENCH_NAME}
+        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>")
+    target_link_libraries(${CMAKE_BENCH_NAME}
+        PRIVATE cudf_benchmark_common cudf_datagen nvbench::main)
 endfunction()
 
 ###################################################################################################
@@ -66,6 +75,10 @@ ConfigureBench(GATHER_BENCH copying/gather_benchmark.cu)
 ###################################################################################################
 # - scatter benchmark -----------------------------------------------------------------------------
 ConfigureBench(SCATTER_BENCH copying/scatter_benchmark.cu)
+
+###################################################################################################
+# - lists scatter benchmark -----------------------------------------------------------------------
+ConfigureBench(SCATTER_LISTS_BENCH lists/copying/scatter_lists_benchmark.cu)
 
 ###################################################################################################
 # - contiguous_split benchmark  -------------------------------------------------------------------
@@ -89,7 +102,8 @@ ConfigureBench(STREAM_COMPACTION_BENCH stream_compaction/drop_duplicates_benchma
 
 ###################################################################################################
 # - join benchmark --------------------------------------------------------------------------------
-ConfigureBench(JOIN_BENCH join/join_benchmark.cu)
+ConfigureBench(JOIN_BENCH join/join_benchmark.cu join/conditional_join_benchmark.cu)
+ConfigureNVBench(JOIN_NVBENCH join/join_nvbench.cu)
 
 ###################################################################################################
 # - iterator benchmark ----------------------------------------------------------------------------
@@ -143,7 +157,9 @@ ConfigureBench(GROUPBY_BENCH
 
 ###################################################################################################
 # - hashing benchmark -----------------------------------------------------------------------------
-ConfigureBench(HASHING_BENCH hashing/hashing_benchmark.cpp)
+ConfigureBench(HASHING_BENCH
+  hashing/hash_benchmark.cpp
+  hashing/partition_benchmark.cpp)
 
 ###################################################################################################
 # - merge benchmark -------------------------------------------------------------------------------
@@ -189,6 +205,7 @@ ConfigureBench(AST_BENCH ast/transform_benchmark.cpp)
 # - binaryop benchmark ----------------------------------------------------------------------------
 ConfigureBench(BINARYOP_BENCH
   binaryop/binaryop_benchmark.cpp
+  binaryop/compiled_binaryop_benchmark.cpp
   binaryop/jit_binaryop_benchmark.cpp)
 
 ###################################################################################################
@@ -209,12 +226,14 @@ ConfigureBench(STRINGS_BENCH
   string/contains_benchmark.cpp
   string/convert_datetime_benchmark.cpp
   string/convert_durations_benchmark.cpp
-  string/convert_floats_benchmark.cpp
+  string/convert_fixed_point_benchmark.cpp
+  string/convert_numerics_benchmark.cpp
   string/copy_benchmark.cpp
   string/extract_benchmark.cpp
   string/factory_benchmark.cu
   string/filter_benchmark.cpp
   string/find_benchmark.cpp
+  string/repeat_strings_benchmark.cpp
   string/replace_benchmark.cpp
   string/replace_re_benchmark.cpp
   string/split_benchmark.cpp

@@ -40,10 +40,10 @@ class list_device_view {
     cudf_assert(row_index >= 0 && row_index < lists_column.size() && row_index < offsets.size() &&
                 "row_index out of bounds");
 
-    begin_offset = offsets.element<size_type>(row_index);
+    begin_offset = offsets.element<size_type>(row_index + lists_column.offset());
     cudf_assert(begin_offset >= 0 && begin_offset <= lists_column.child().size() &&
                 "begin_offset out of bounds.");
-    _size = offsets.element<size_type>(row_index + 1) - begin_offset;
+    _size = offsets.element<size_type>(row_index + 1 + lists_column.offset()) - begin_offset;
   }
 
   ~list_device_view() = default;
@@ -271,13 +271,13 @@ class list_device_view {
     }
 
    private:
-    template <typename R, std::enable_if_t<std::is_same<R, rep_type>::value, void>* = nullptr>
+    template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
     CUDA_DEVICE_CALLABLE rep_type get_rep(cudf::size_type i) const
     {
       return list.element<R>(i);
     }
 
-    template <typename R, std::enable_if_t<not std::is_same<R, rep_type>::value, void>* = nullptr>
+    template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
     CUDA_DEVICE_CALLABLE rep_type get_rep(cudf::size_type i) const
     {
       return list.element<R>(i).value();

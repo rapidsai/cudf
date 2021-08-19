@@ -21,6 +21,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
+#include <cudf/strings/detail/convert/fixed_point.cuh>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
@@ -33,12 +34,14 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/optional.h>
 #include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
+
 /**
  * @brief Converts strings into an integers and records decimal places.
  *
@@ -50,57 +53,21 @@ struct string_to_decimal_fn {
   column_device_view const d_strings;
   int32_t const scale;
 
+  string_to_decimal_fn(column_device_view const& d_strings, int32_t scale)
+    : d_strings(d_strings), scale(scale)
+  {
+  }
+
   __device__ DecimalType operator()(size_type idx) const
   {
-    if (d_strings.is_null(idx)) return 0;
+    if (d_strings.is_null(idx)) { return 0; }
     auto const d_str = d_strings.element<string_view>(idx);
-    if (d_str.empty()) return 0;
+    if (d_str.empty()) { return 0; }
 
-    auto const sign = [&] {
-      if (d_str.data()[0] == '-') return -1;
-      if (d_str.data()[0] == '+') return 1;
-      return 0;
-    }();
-    auto iter = d_str.data() + (sign != 0);
+    auto iter           = d_str.data();
+    auto const iter_end = d_str.data() + d_str.size_bytes();
 
-    int64_t value = 0;
-    if (scale >= 0) {
-      // find end-point which is (begin + max(0,length-scale))
-      // where length = number bytes up to the decimal point
-      auto const iter_end =
-        iter +
-        std::max(0,
-                 static_cast<int32_t>(thrust::distance(
-                   iter, thrust::find(thrust::seq, iter, d_str.data() + d_str.size_bytes(), '.'))) -
-                   scale);
-      // only convert up to the number characters needed for the specified scale
-      while (iter != iter_end) {
-        auto const chr = *iter++;
-        if (chr < '0' || chr > '9') break;
-        value = (value * 10) + static_cast<int64_t>(chr - '0');
-      }
-    } else {  // scale < 0
-      auto const iter_end = d_str.data() + d_str.size_bytes();
-      int32_t curr_scale  = scale;
-      bool decimal_found  = false;
-      // convert up through the decimal point until the
-      // end of the string or until curr_scale==0
-      while (iter != iter_end) {
-        auto const chr = *iter++;
-        if (chr >= '0' && chr <= '9') {
-          if (decimal_found && (curr_scale == 0)) break;  // processing done
-          value = (value * 10) + static_cast<int64_t>(chr - '0');
-          curr_scale += (decimal_found && (curr_scale < 0));
-        } else if (chr == '.') {
-          decimal_found = true;
-        } else
-          break;
-      }
-      // account for any left over scale
-      value *= static_cast<int64_t>(exp10(static_cast<double>(-curr_scale)));
-    }
-
-    return static_cast<DecimalType>(value * (sign == 0 ? 1 : sign));
+    return parse_decimal<DecimalType>(iter, iter_end, scale);
   }
 };
 
@@ -115,57 +82,41 @@ struct string_to_decimal_check_fn {
   column_device_view const d_strings;
   int32_t const scale;
 
+  string_to_decimal_check_fn(column_device_view const& d_strings, int32_t scale)
+    : d_strings(d_strings), scale(scale)
+  {
+  }
+
   __device__ bool operator()(size_type idx) const
   {
-    if (d_strings.is_null(idx)) return false;
+    if (d_strings.is_null(idx)) { return false; }
     auto const d_str = d_strings.element<string_view>(idx);
-    if (d_str.empty()) return false;
+    if (d_str.empty()) { return false; }
 
     auto iter = d_str.data() + static_cast<int>((d_str.data()[0] == '-' || d_str.data()[0] == '+'));
 
-    // The following variables identify 3 possible locations in the decimal string
-    //     +123456789.09876543
-    //            ^  ^        ^
-    //      check-^  ^        ^- end
-    //               ^- decimal
-    // The iter_check value will be unique when scale > 0 and
-    // the number of digits left of the decimal point is larger than the scale.
-    auto const iter_end     = d_str.data() + d_str.size_bytes();
-    auto const iter_decimal = thrust::find(thrust::seq, iter, iter_end, '.');
-    auto const iter_check =
-      scale < 0
-        ? iter_decimal
-        : iter + std::max(0, static_cast<int32_t>(thrust::distance(iter, iter_decimal)) - scale);
+    auto const iter_end = d_str.data() + d_str.size_bytes();
 
-    DecimalType value  = 0;      // used for overflow checking
-    bool decimal_found = false;  // mainly for checking duplicate decimal points
-    int32_t curr_scale = scale;  // running scale for scale < 0 case
-    while (iter != iter_end) {   // check all bytes for valid characters
-      auto const chr = *iter++;
-      if (chr == '.' && !decimal_found) {
-        decimal_found = true;
-        continue;
-      }
-      if (chr < '0' || chr > '9') return false;            // invalid character check
-      if (iter > iter_check && curr_scale >= 0) continue;  // overflow checking no longer needed
+    auto [value, exp_offset] = parse_integer(iter, iter_end);
 
-      // check for overflow in the integer component
-      auto const digit     = static_cast<DecimalType>(chr - '0');
-      auto const max_check = (std::numeric_limits<DecimalType>::max() - digit) / DecimalType{10};
-      if (value > max_check) return false;
-      value = (value * DecimalType{10}) + digit;
+    // only exponent notation is expected here
+    if ((iter < iter_end) && (*iter != 'e' && *iter != 'E')) { return false; }
+    ++iter;
 
-      // increment running scale if we are right of the decimal point
-      curr_scale += (decimal_found && curr_scale < 0);
+    int32_t exp_ten = 0;  // check exponent overflow
+    if (iter < iter_end) {
+      auto exp_result = parse_exponent<true>(iter, iter_end);
+      if (!exp_result) { return false; }
+      exp_ten = exp_result.value();
     }
-    // check overflow on any remaining negative scale value
-    if ((curr_scale < 0) &&
-        (value > (std::numeric_limits<DecimalType>::max() /
-                  static_cast<DecimalType>(exp10(static_cast<double>(-curr_scale))))))
-      return false;
+    exp_ten += exp_offset;
 
-    // everything passed
-    return true;
+    // finally, check for overflow based on the exp_ten and scale values
+    return (exp_ten < scale)
+             ? true
+             : value <= static_cast<uint64_t>(
+                          std::numeric_limits<DecimalType>::max() /
+                          static_cast<DecimalType>(exp10(static_cast<double>(exp_ten - scale))));
   }
 };
 
@@ -241,7 +192,7 @@ namespace {
  * @brief Calculate the size of the each string required for
  * converting each value in base-10 format.
  *
- * ouput format is [-]integer.fraction
+ * output format is [-]integer.fraction
  */
 template <typename DecimalType>
 struct decimal_to_string_size_fn {
@@ -334,7 +285,7 @@ struct dispatch_from_fixed_point_fn {
     // build chars column
     auto const bytes =
       cudf::detail::get_value<int32_t>(offsets_column->view(), input.size(), stream);
-    auto chars_column = detail::create_chars_child_column(input.size(), bytes, stream, mr);
+    auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
     auto d_chars      = chars_column->mutable_view().template data<char>();
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
@@ -365,7 +316,7 @@ std::unique_ptr<column> from_fixed_point(column_view const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return detail::make_empty_strings_column(stream, mr);
+  if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
   return type_dispatcher(input.type(), dispatch_from_fixed_point_fn{}, input, stream, mr);
 }
 

@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
-import functools
 import decimal
+import functools
 from collections.abc import Sequence
 from typing import FrozenSet, Set, Union
 
@@ -17,7 +17,7 @@ from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import to_cudf_compatible_scalar
 
 # The size of the mask in bytes
-mask_dtype = np.dtype(np.int32)
+mask_dtype = cudf.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
 
 
@@ -42,10 +42,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     if isinstance(size, (tuple, list)):
         size = size[0]
 
-    if scalar is None or (
-        isinstance(scalar, (np.datetime64, np.timedelta64))
-        and np.isnat(scalar)
-    ):
+    if cudf._lib.scalar._is_null_host_scalar(scalar):
         if dtype is None:
             dtype = "object"
         return column.column_empty(size, dtype=dtype, masked=True)
@@ -70,7 +67,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
     dtype = scalar.dtype
 
-    if np.dtype(dtype).kind in ("O", "U"):
+    if cudf.dtype(dtype).kind in ("O", "U"):
         gather_map = column.full(size, 0, dtype="int32")
         scalar_str_col = column.as_column([scalar], dtype="str")
         return scalar_str_col[gather_map]
@@ -490,3 +487,22 @@ def _create_pandas_series(
         copy=copy,
         fastpath=fastpath,
     )
+
+
+def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
+    """Makes best effort to convert an array of indices into a python slice.
+    If the conversion is not possible, return input. `indices` are expected
+    to be valid.
+    """
+    # TODO: improve efficiency by avoiding sync.
+    if len(indices) == 1:
+        x = indices[0].item()
+        return slice(x, x + 1)
+    if len(indices) == 2:
+        x1, x2 = indices[0].item(), indices[1].item()
+        return slice(x1, x2 + 1, x2 - x1)
+    start, step = indices[0].item(), (indices[1] - indices[0]).item()
+    stop = start + step * len(indices)
+    if (indices == cp.arange(start, stop, step)).all():
+        return slice(start, stop, step)
+    return indices

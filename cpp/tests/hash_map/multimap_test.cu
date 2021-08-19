@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,17 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+
 #include <hash/concurrent_unordered_multimap.cuh>
 #include <hash/hash_allocator.cuh>
 
-#include <cudf_test/base_fixture.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
-
-#include <thrust/device_vector.h>
 
 #include <gtest/gtest.h>
 
-#include <cstdlib>
-#include <iostream>
 #include <limits>
-#include <vector>
 
 // This is necessary to do a parametrized typed-test over multiple template
 // arguments

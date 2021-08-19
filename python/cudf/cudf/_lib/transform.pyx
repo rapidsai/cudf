@@ -1,33 +1,33 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-import cudf
 import numpy as np
+
+import cudf
 from cudf.utils import cudautils
 
 from libc.stdint cimport uintptr_t
-
-from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
 from libcpp.pair cimport pair
+from libcpp.string cimport string
+from libcpp.utility cimport move
+
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
-from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
+
 from cudf.core.buffer import Buffer
 
-from cudf._lib.cpp.types cimport (
-    bitmask_type,
-    data_type,
-    size_type,
-    type_id,
-)
+from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
+
 from cudf._lib.types import np_to_cudf_types
-from cudf._lib.types cimport underlying_type_t_type_id
+
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.types cimport underlying_type_t_type_id
+from cudf._lib.utils cimport data_from_unique_ptr
 
 from numba.np import numpy_support
 
@@ -58,8 +58,9 @@ def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     Given a mask buffer, returns a boolean column representng bit 0 -> False
     and 1 -> True within range of [begin_bit, end_bit),
     """
-    if not isinstance(mask_buffer, cudf.core.Buffer):
-        raise TypeError("mask_buffer is not an instance of cudf.core.Buffer")
+    if not isinstance(mask_buffer, cudf.core.buffer.Buffer):
+        raise TypeError("mask_buffer is not an instance of "
+                        "cudf.core.buffer.Buffer")
     cdef bitmask_type* bit_mask = <bitmask_type*><uintptr_t>(mask_buffer.ptr)
 
     cdef unique_ptr[column] result
@@ -98,7 +99,7 @@ def transform(Column input, op):
     nb_signature = (nb_type,)
     compiled_op = cudautils.compile_udf(op, nb_signature)
     c_str = compiled_op[0].encode('UTF-8')
-    np_dtype = np.dtype(compiled_op[1])
+    np_dtype = cudf.dtype(compiled_op[1])
 
     try:
         c_tid = <type_id> (
@@ -123,6 +124,27 @@ def transform(Column input, op):
     return Column.from_unique_ptr(move(c_output))
 
 
+def masked_udf(Table incols, op, output_type):
+    cdef table_view data_view = incols.data_view()
+    cdef string c_str = op.encode("UTF-8")
+    cdef type_id c_tid
+    cdef data_type c_dtype
+
+    c_tid = <type_id> (
+        <underlying_type_t_type_id> np_to_cudf_types[output_type]
+    )
+    c_dtype = data_type(c_tid)
+
+    with nogil:
+        c_output = move(libcudf_transform.generalized_masked_op(
+            data_view,
+            c_str,
+            c_dtype,
+        ))
+
+    return Column.from_unique_ptr(move(c_output))
+
+
 def table_encode(Table input):
     cdef table_view c_input = input.data_view()
     cdef pair[unique_ptr[table], unique_ptr[column]] c_result
@@ -131,7 +153,7 @@ def table_encode(Table input):
         c_result = move(libcudf_transform.encode(c_input))
 
     return (
-        Table.from_unique_ptr(
+        *data_from_unique_ptr(
             move(c_result.first),
             column_names=input._column_names,
         ),

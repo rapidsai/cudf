@@ -144,6 +144,16 @@ The following guidelines apply to organizing `#include` lines.
  * Always check that includes are only necessary for the file in which they are included. 
    Try to avoid excessive including especially in header files. Double check this when you remove 
    code.
+ * Use quotes `"` to include local headers from the same relative source directory. This should only
+   occur in source files and non-public header files. Otherwise use angle brackets `<>` around 
+   included header filenames.
+ * Avoid relative paths with `..` when possible. Paths with `..` are necessary when including 
+   (internal) headers from source paths not in the same directory as the including file, 
+   because source paths are not passed with `-I`.
+ * Avoid including library internal headers from non-internal files. For example, try not to include
+   headers from libcudf `src` directories in tests or in libcudf public headers. If you find 
+   yourself doing this, start a discussion about moving (parts of) the included internal header 
+   to a public header.
 
 # libcudf Data Structures
 
@@ -246,7 +256,31 @@ An *immutable*, non-owning view of a table.
 
 ### `cudf::mutable_table_view`
 
-A *mutable*, non-owning view of a table. 
+A *mutable*, non-owning view of a table.
+
+## Spans
+
+libcudf provides `span` classes that mimic C++20 `std::span`, which is a lightweight
+view of a contiguous sequence of objects. libcudf provides two classes, `host_span` and 
+`device_span`, which can be constructed from multiple container types, or from a pointer 
+(host or device, respectively) and size, or from iterators. `span` types are useful for defining 
+generic (internal) interfaces which work with multiple input container types. `device_span` can be
+constructed from `thrust::device_vector`, `rmm::device_vector`, or `rmm::device_uvector`. 
+`host_span` can be constructed from `thrust::host_vector`, `std::vector`, or `std::basic_string`.
+
+If you are definining internal (detail) functions that operate on vectors, use spans for the input 
+vector parameters rather than a specific vector type, to make your functions more widely applicable.
+
+When a `span` refers to immutable elements, use `span<T const>`, not `span<T> const`. Since a span
+is lightweight view, it does not propagate `const`-ness. Therefore, `const` should be applied to
+the template type parameter, not to the `span` itself. Also, `span` should be passed by value 
+because it is a lightweight view. APIS in libcudf that take spans as input will look like the 
+following function that copies device data to a host `std::vector`.
+
+```c++
+template <typename T>
+std::vector<T> make_std_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
+```
 
 ## `cudf::scalar`
 
@@ -254,6 +288,11 @@ A `cudf::scalar` is an object that can represent a singular, nullable value of a
 currently supported by cudf. Each type of value is represented by a separate type of scalar class 
 which are all derived from `cudf::scalar`. e.g. A `numeric_scalar` holds a single numerical value, 
 a `string_scalar` holds a single string. The data for the stored value resides in device memory.
+
+A `list_scalar` holds the underlying data of a single list. This means the underlying data can be any type
+that cudf supports. For example, a `list_scalar` representing a list of integers stores a `cudf::column`
+of type `INT32`. A `list_scalar` representing a list of lists of integers stores a `cudf::column` of
+type `LIST`, which in turn stores a column of type `INT32`.
 
 |Value type|Scalar class|Notes|
 |-|-|-|
@@ -263,6 +302,7 @@ a `string_scalar` holds a single string. The data for the stored value resides i
 |timestamp|`timestamp_scalar<T>` | `T` can be `timestamp_D`, `timestamp_s`, etc.|
 |duration|`duration_scalar<T>` | `T` can be `duration_D`, `duration_s`, etc.|
 |string|`string_scalar`| This class object is immutable|
+|list|`list_scalar`| Underlying data can be any type supported by cudf |
 
 ### Construction
 `scalar`s can be created using either their respective constructors or using factory functions like 
@@ -285,10 +325,15 @@ auto s1 = static_cast<ScalarType *>(s.get());
 ```
 
 ### Passing to device
-Each scalar type has a corresponding non-owning device view class which allows access to the value 
-and its validity from the device. This can be obtained using the function 
+Each scalar type, except `list_scalar`, has a corresponding non-owning device view class which allows
+access to the value and its validity from the device. This can be obtained using the function 
 `get_scalar_device_view(ScalarType s)`. Note that a device view is not provided for a base scalar 
 object, only for the derived typed scalar class objects.
+
+The underlying data for `list_scalar` can be accessed via `view()` method. For non-nested data,
+the device view can be obtained via function `column_device_view::create(column_view)`. For nested
+data, a specialized device view for list columns can be constructed via
+`lists_column_device_view(column_device_view)`.
 
 # libcudf++ API and Implementation
 
@@ -331,6 +376,7 @@ namespace detail{
 } // namespace detail
 
 void external_function(...){
+    CUDF_FUNC_RANGE(); // Auto generates NVTX range for lifetime of this function
     detail::external_function(...);
 }
 ```
@@ -343,6 +389,12 @@ asynchrony if and when we add an asynchronous API to libcudf.
 
 **Note:** `cudaDeviceSynchronize()` should *never* be used.
  This limits the ability to do any multi-stream/multi-threaded work with libcudf APIs.
+
+ ### NVTX Ranges
+
+ In order to aid in performance optimization and debugging, all compute intensive libcudf functions should have a corresponding NVTX range.
+ In libcudf, we have a convenience macro `CUDF_FUNC_RANGE()` that will automatically annotate the lifetime of the enclosing function and use the functions name as the name of the NVTX range. 
+ For more information about NVTX, see [here](https://github.com/NVIDIA/NVTX/tree/dev/cpp).
 
  ### Stream Creation
 
@@ -403,9 +455,9 @@ Allocates a specified number of bytes of untyped, uninitialized device memory us
 `device_memory_resource`. If no resource is explicitly provided, uses 
 `rmm::mr::get_current_device_resource()`. 
 
-`rmm::device_buffer` is copyable and movable. A copy performs a deep copy of the `device_buffer`'s 
-device memory, whereas a move moves ownership of the device memory from one `device_buffer` to 
-another.
+`rmm::device_buffer` is movable and copyable on a stream. A copy performs a deep copy of the 
+`device_buffer`'s device memory on the specified stream, whereas a move moves ownership of the 
+device memory from one `device_buffer` to another.
 
 ```c++
 // Allocates at least 100 bytes of uninitialized device memory 
@@ -413,11 +465,15 @@ another.
 rmm::device_buffer buff(100, stream, mr); 
 void * raw_data = buff.data(); // Raw pointer to underlying device memory
 
-rmm::device_buffer copy(buff); // Deep copies `buff` into `copy`
-rmm::device_buffer moved_to(std::move(buff)); // Moves contents of `buff` into `moved_to`
+// Deep copies `buff` into `copy` on `stream`
+rmm::device_buffer copy(buff, stream); 
+
+// Moves contents of `buff` into `moved_to`
+rmm::device_buffer moved_to(std::move(buff)); 
 
 custom_memory_resource *mr...;
-rmm::device_buffer custom_buff(100, mr); // Allocates 100 bytes from the custom_memory_resource
+// Allocates 100 bytes from the custom_memory_resource
+rmm::device_buffer custom_buff(100, mr, stream); 
 ```
 
 #### `rmm::device_scalar<T>`
@@ -443,8 +499,12 @@ int host_value = int_scalar.value();
 Allocates a specified number of elements of the specified type. If no initialization value is 
 provided, all elements are default initialized (this incurs a kernel launch).
 
-**Note**: `rmm::device_vector<T>` is not yet updated to use `device_memory_resource`s, but support 
-is forthcoming. Likewise, `device_vector` operations cannot be stream ordered.
+**Note**: We have removed all usage of `rmm::device_vector` and `thrust::device_vector` from
+libcudf, and you should not use it in new code in libcudf without careful consideration. Instead, 
+use `rmm::device_uvector` along with the utility factories in `device_factories.hpp`. These 
+utilities enable creation of `uvector`s from host-side vectors, or creating zero-initialized
+`uvector`s, so that they are as convenient to use as `device_vector`. Avoiding `device_vector` has
+a number of benefits, as described in the following section on `rmm::device_uvector`.
 
 #### `rmm::device_uvector<T>`
 
@@ -453,7 +513,9 @@ differences:
 - As an optimization, elements are uninitialized and no synchronization occurs at construction.
 This limits the types `T` to trivially copyable types.
 - All operations are stream ordered (i.e., they accept a `cuda_stream_view` specifying the stream 
-on which the operation is performed).
+on which the operation is performed). This improves safety when using non-default streams.
+- `device_uvector.hpp` does not include any `__device__` code, unlike `thrust/device_vector.hpp`, 
+  which means `device_uvector`s can be used in `.cpp` files, rather than just in `.cu` files.
 
 ```c++
 cuda_stream s;
@@ -953,21 +1015,18 @@ this compound column representation of strings.
 
 ## Structs columns
 
-Structs are represented similarly to lists, except that they have multiple child data columns.
-The parent column's type is `STRUCT` and contains no data, but its size represents the number of 
-structs in the column, and its null mask represents the validity of each struct element. The parent 
-has `N + 1` children, where `N` is the number of fields in the struct. 
+A struct is a nested data type with a set of child columns each representing an individual field
+of a logical struct. Field names are not represented.
 
-1. A non-nullable column of `INT32` elements that indicates the offset to the beginning of each 
-   struct in each dense column of elements.
-2. For each field, a column containing the actual field data and optional null mask for all elements
-   of all the structs packed together.
-   
-With this representation, `child[0][offsets[i]]` is the first field of struct `i`, 
-`child[1][offsets[i]]` is the second field of struct `i`, etc.
+A structs column with `N` fields has `N` children. Each child is a column storing all the data
+of a single field packed column-wise, with an optional null mask. The parent column's type is
+`STRUCT` and contains no data, its size represents the number of struct rows in the column, and its
+null mask represents the validity of each struct element.
 
-As defined in the [Apache Arrow specification](https://arrow.apache.org/docs/format/Columnar.html#struct-layout),
-in addition to the struct column's null mask, each struct field column has its own optional null
+With this representation, `child[0][10]` is row 10 of the first field of the struct, `child[1][42]`
+is row 42 of the second field of the struct.
+
+Notice that in addition to the struct column's null mask, each struct field column has its own optional null
 mask. A struct field's validity can vary independently from the corresponding struct row. For
 instance, a non-null struct row might have a null field. However, the fields of a null struct row
 are deemed to be null as well. For example, consider a struct column of type 

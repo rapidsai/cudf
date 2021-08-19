@@ -3,11 +3,12 @@ import decimal
 
 import numpy as np
 import pyarrow as pa
+from pandas._libs.missing import NAType as pd_NAType
 
-from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
+import cudf
 from cudf.core.column.column import ColumnBase
-from cudf.core.dtypes import Decimal64Dtype
-from cudf.core.index import Index
+from cudf.core.dtypes import Decimal64Dtype, ListDtype, StructDtype
+from cudf.core.index import BaseIndex
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
@@ -16,45 +17,46 @@ from cudf.utils.dtypes import (
 
 
 class Scalar(object):
+    """
+    A GPU-backed scalar object with NumPy scalar like properties
+    May be used in binary operations against other scalars, cuDF
+    Series, DataFrame, and Index objects.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.Scalar(42, dtype='int64')
+    Scalar(42, dtype=int64)
+    >>> cudf.Scalar(42, dtype='int32') + cudf.Scalar(42, dtype='float64')
+    Scalar(84.0, dtype=float64)
+    >>> cudf.Scalar(42, dtype='int64') + np.int8(21)
+    Scalar(63, dtype=int64)
+    >>> x = cudf.Scalar(42, dtype='datetime64[s]')
+    >>> y = cudf.Scalar(21, dtype='timedelta64[ns])
+    >>> x - y
+    Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
+    >>> cudf.Series([1,2,3]) + cudf.Scalar(1)
+    0    2
+    1    3
+    2    4
+    dtype: int64
+    >>> df = cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]})
+    >>> slr = cudf.Scalar(10, dtype='uint8')
+    >>> df - slr
+       a    b
+    0 -9 -5.5
+    1 -8 -4.5
+    2 -7 -3.5
+
+    Parameters
+    ----------
+    value : Python Scalar, NumPy Scalar, or cuDF Scalar
+        The scalar value to be converted to a GPU backed scalar object
+    dtype : np.dtype or string specifier
+        The data type
+    """
+
     def __init__(self, value, dtype=None):
-        """
-        A GPU-backed scalar object with NumPy scalar like properties
-        May be used in binary operations against other scalars, cuDF
-        Series, DataFrame, and Index objects.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> cudf.Scalar(42, dtype='int64')
-        Scalar(42, dtype=int64)
-        >>> cudf.Scalar(42, dtype='int32') + cudf.Scalar(42, dtype='float64')
-        Scalar(84.0, dtype=float64)
-        >>> cudf.Scalar(42, dtype='int64') + np.int8(21)
-        Scalar(63, dtype=int64)
-        >>> x = cudf.Scalar(42, dtype='datetime64[s]')
-        >>> y = cudf.Scalar(21, dtype='timedelta64[ns])
-        >>> x - y
-        Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
-        >>> cudf.Series([1,2,3]) + cudf.Scalar(1)
-        0    2
-        1    3
-        2    4
-        dtype: int64
-        >>> df = cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]})
-        >>> slr = cudf.Scalar(10, dtype='uint8')
-        >>> df - slr
-           a    b
-        0 -9 -5.5
-        1 -8 -4.5
-        2 -7 -3.5
-
-        Parameters
-        ----------
-        value : Python Scalar, NumPy Scalar, or cuDF Scalar
-            The scalar value to be converted to a GPU backed scalar object
-        dtype : np.dtype or string specifier
-            The data type
-        """
 
         self._host_value = None
         self._host_dtype = None
@@ -66,7 +68,7 @@ class Scalar(object):
                 self._host_dtype = value._host_dtype
             else:
                 self._device_value = value._device_value
-        elif isinstance(value, DeviceScalar):
+        elif isinstance(value, cudf._lib.scalar.DeviceScalar):
             self._device_value = value
         else:
             self._host_value, self._host_dtype = self._preprocess_host_value(
@@ -84,7 +86,7 @@ class Scalar(object):
     @property
     def device_value(self):
         if self._device_value is None:
-            self._device_value = DeviceScalar(
+            self._device_value = cudf._lib.scalar.DeviceScalar(
                 self._host_value, self._host_dtype
             )
         return self._device_value
@@ -100,7 +102,7 @@ class Scalar(object):
     def dtype(self):
         if self._is_host_value_current:
             if isinstance(self._host_value, str):
-                return np.dtype("object")
+                return cudf.dtype("object")
             else:
                 return self._host_dtype
         else:
@@ -109,13 +111,39 @@ class Scalar(object):
     def is_valid(self):
         if not self._is_host_value_current:
             self._device_value_to_host()
-        return not _is_null_host_scalar(self._host_value)
+        return not cudf._lib.scalar._is_null_host_scalar(self._host_value)
 
     def _device_value_to_host(self):
         self._host_value = self._device_value._to_host_scalar()
 
     def _preprocess_host_value(self, value, dtype):
-        valid = not _is_null_host_scalar(value)
+        valid = not cudf._lib.scalar._is_null_host_scalar(value)
+
+        if isinstance(value, list):
+            if dtype is not None:
+                raise TypeError("Lists may not be cast to a different dtype")
+            else:
+                dtype = ListDtype.from_arrow(
+                    pa.infer_type([value], from_pandas=True)
+                )
+                return value, dtype
+        elif isinstance(dtype, ListDtype):
+            if value not in {None, NA}:
+                raise ValueError(f"Can not coerce {value} to ListDtype")
+            else:
+                return NA, dtype
+
+        if isinstance(value, dict):
+            if dtype is None:
+                dtype = StructDtype.from_arrow(
+                    pa.infer_type([value], from_pandas=True)
+                )
+            return value, dtype
+        elif isinstance(dtype, StructDtype):
+            if value not in {None, NA}:
+                raise ValueError(f"Can not coerce {value} to StructDType")
+            else:
+                return NA, dtype
 
         if isinstance(dtype, Decimal64Dtype):
             value = pa.scalar(
@@ -144,7 +172,7 @@ class Scalar(object):
                 dtype = value.dtype
 
         if not isinstance(dtype, Decimal64Dtype):
-            dtype = np.dtype(dtype)
+            dtype = cudf.dtype(dtype)
 
         if not valid:
             value = NA
@@ -159,7 +187,7 @@ class Scalar(object):
         if self._is_host_value_current and self._is_device_value_current:
             return
         elif self._is_host_value_current and not self._is_device_value_current:
-            self._device_value = DeviceScalar(
+            self._device_value = cudf._lib.scalar.DeviceScalar(
                 self._host_value, self._host_dtype
             )
         elif self._is_device_value_current and not self._is_host_value_current:
@@ -296,13 +324,13 @@ class Scalar(object):
                     and self.dtype.char == other.dtype.char == "M"
                 ):
                     res, _ = np.datetime_data(max(self.dtype, other.dtype))
-                    return np.dtype("m8" + f"[{res}]")
+                    return cudf.dtype("m8" + f"[{res}]")
                 return np.result_type(self.dtype, other.dtype)
 
-        return np.dtype(out_dtype)
+        return cudf.dtype(out_dtype)
 
     def _scalar_binop(self, other, op):
-        if isinstance(other, (ColumnBase, Series, Index, np.ndarray)):
+        if isinstance(other, (ColumnBase, Series, BaseIndex, np.ndarray)):
             # dispatch to column implementation
             return NotImplemented
         other = to_cudf_compatible_scalar(other)
@@ -330,9 +358,9 @@ class Scalar(object):
 
         if op in {"__ceil__", "__floor__"}:
             if self.dtype.char in "bBhHf?":
-                return np.dtype("float32")
+                return cudf.dtype("float32")
             else:
-                return np.dtype("float64")
+                return cudf.dtype("float64")
         return self.dtype
 
     def _scalar_unaop(self, op):
@@ -354,15 +382,11 @@ class Scalar(object):
         return Scalar(self.value, dtype)
 
 
-class _NAType(object):
-    def __init__(self):
-        pass
-
-    def __repr__(self):
-        return "<NA>"
-
-    def __bool__(self):
-        raise TypeError("boolean value of cudf.NA is ambiguous")
+class _NAType(pd_NAType):
+    # Pandas NAType enforces a single instance exists at a time
+    # instantiating this class will yield the existing instance
+    # of pandas._libs.missing.NAType, id(cudf.NA) == id(pd.NA).
+    pass
 
 
 NA = _NAType()

@@ -1,5 +1,6 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
+import json
 import re
 import urllib.parse
 from contextlib import ExitStack as does_not_raise
@@ -17,8 +18,7 @@ from cudf import concat
 from cudf.core._compat import PANDAS_GE_110
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
-from cudf.tests.test_joining import assert_join_results_equal
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,
@@ -200,11 +200,7 @@ def test_string_astype(dtype):
     ps = pd.Series(data)
     gs = cudf.Series(data)
 
-    # Pandas str --> bool typecasting always returns True if there's a string
-    if dtype.startswith("bool"):
-        expect = ps == "True"
-    else:
-        expect = ps.astype(dtype)
+    expect = ps.astype(dtype)
     got = gs.astype(dtype)
 
     assert_eq(expect, got)
@@ -856,6 +852,32 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
         assert_eq(expect, got)
 
 
+@pytest.mark.parametrize(
+    "data", [["hello", "world", None, "", "!"]],
+)
+@pytest.mark.parametrize(
+    "repeats",
+    [
+        2,
+        0,
+        -3,
+        [5, 4, 3, 2, 6],
+        [5, None, 3, 2, 6],
+        [0, 0, 0, 0, 0],
+        [-1, -2, -3, -4, -5],
+        [None, None, None, None, None],
+    ],
+)
+def test_string_repeat(data, repeats):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.str.repeat(repeats)
+    got = gs.str.repeat(repeats)
+
+    assert_eq(expect, got)
+
+
 # Pandas isn't respect the `n` parameter so ignoring it in test parameters
 @pytest.mark.parametrize(
     "pat,regex",
@@ -916,196 +938,6 @@ def test_string_split(data, pat, n, expand):
     got = gs.str.split(pat=pat, n=n, expand=expand)
 
     assert_eq(expect, got)
-
-
-@pytest.mark.parametrize(
-    "str_data",
-    [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]],
-)
-@pytest.mark.parametrize("num_keys", [1, 2, 3])
-@pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
-def test_string_join_key(str_data, num_keys, how):
-    other_data = [1, 2, 3, 4, 5][: len(str_data)]
-
-    pdf = pd.DataFrame()
-    gdf = cudf.DataFrame()
-    for i in range(num_keys):
-        pdf[i] = pd.Series(str_data, dtype="str")
-        gdf[i] = cudf.Series(str_data, dtype="str")
-    pdf["a"] = other_data
-    gdf["a"] = other_data
-
-    pdf2 = pdf.copy()
-    gdf2 = gdf.copy()
-
-    expect = pdf.merge(pdf2, on=list(range(num_keys)), how=how)
-    got = gdf.merge(gdf2, on=list(range(num_keys)), how=how)
-
-    if len(expect) == 0 and len(got) == 0:
-        expect = expect.reset_index(drop=True)
-        got = got[expect.columns]  # reorder columns
-
-    if how == "right":
-        got = got[expect.columns]  # reorder columns
-
-    assert_join_results_equal(expect, got, how=how)
-
-
-@pytest.mark.parametrize(
-    "str_data_nulls",
-    [
-        ["a", "b", "c"],
-        ["a", "b", "f", "g"],
-        ["f", "g", "h", "i", "j"],
-        ["f", "g", "h"],
-        [None, None, None, None, None],
-        [],
-    ],
-)
-def test_string_join_key_nulls(str_data_nulls):
-    str_data = ["a", "b", "c", "d", "e"]
-    other_data = [1, 2, 3, 4, 5]
-
-    other_data_nulls = [6, 7, 8, 9, 10][: len(str_data_nulls)]
-
-    pdf = pd.DataFrame()
-    gdf = cudf.DataFrame()
-    pdf["key"] = pd.Series(str_data, dtype="str")
-    gdf["key"] = cudf.Series(str_data, dtype="str")
-    pdf["vals"] = other_data
-    gdf["vals"] = other_data
-
-    pdf2 = pd.DataFrame()
-    gdf2 = cudf.DataFrame()
-    pdf2["key"] = pd.Series(str_data_nulls, dtype="str")
-    gdf2["key"] = cudf.Series(str_data_nulls, dtype="str")
-    pdf2["vals"] = pd.Series(other_data_nulls, dtype="int64")
-    gdf2["vals"] = cudf.Series(other_data_nulls, dtype="int64")
-
-    expect = pdf.merge(pdf2, on="key", how="left")
-    got = gdf.merge(gdf2, on="key", how="left")
-    got["vals_y"] = got["vals_y"].fillna(-1)
-
-    if len(expect) == 0 and len(got) == 0:
-        expect = expect.reset_index(drop=True)
-        got = got[expect.columns]
-
-    expect["vals_y"] = expect["vals_y"].fillna(-1).astype("int64")
-
-    assert_join_results_equal(expect, got, how="left")
-
-
-@pytest.mark.parametrize(
-    "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
-)
-@pytest.mark.parametrize("num_cols", [1, 2, 3])
-@pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
-def test_string_join_non_key(str_data, num_cols, how):
-    other_data = [1, 2, 3, 4, 5][: len(str_data)]
-
-    pdf = pd.DataFrame()
-    gdf = cudf.DataFrame()
-    for i in range(num_cols):
-        pdf[i] = pd.Series(str_data, dtype="str")
-        gdf[i] = cudf.Series(str_data, dtype="str")
-    pdf["a"] = other_data
-    gdf["a"] = other_data
-
-    pdf2 = pdf.copy()
-    gdf2 = gdf.copy()
-
-    expect = pdf.merge(pdf2, on=["a"], how=how)
-    got = gdf.merge(gdf2, on=["a"], how=how)
-
-    if len(expect) == 0 and len(got) == 0:
-        expect = expect.reset_index(drop=True)
-        got = got[expect.columns]
-
-    if how == "right":
-        got = got[expect.columns]  # reorder columns
-
-    assert_join_results_equal(expect, got, how=how)
-
-
-@pytest.mark.parametrize(
-    "str_data_nulls",
-    [
-        ["a", "b", "c"],
-        ["a", "b", "f", "g"],
-        ["f", "g", "h", "i", "j"],
-        ["f", "g", "h"],
-        [None, None, None, None, None],
-        [],
-    ],
-)
-def test_string_join_non_key_nulls(str_data_nulls):
-    str_data = ["a", "b", "c", "d", "e"]
-    other_data = [1, 2, 3, 4, 5]
-
-    other_data_nulls = [6, 7, 8, 9, 10][: len(str_data_nulls)]
-
-    pdf = pd.DataFrame()
-    gdf = cudf.DataFrame()
-    pdf["vals"] = pd.Series(str_data, dtype="str")
-    gdf["vals"] = cudf.Series(str_data, dtype="str")
-    pdf["key"] = other_data
-    gdf["key"] = other_data
-
-    pdf2 = pd.DataFrame()
-    gdf2 = cudf.DataFrame()
-    pdf2["vals"] = pd.Series(str_data_nulls, dtype="str")
-    gdf2["vals"] = cudf.Series(str_data_nulls, dtype="str")
-    pdf2["key"] = pd.Series(other_data_nulls, dtype="int64")
-    gdf2["key"] = cudf.Series(other_data_nulls, dtype="int64")
-
-    expect = pdf.merge(pdf2, on="key", how="left")
-    got = gdf.merge(gdf2, on="key", how="left")
-
-    if len(expect) == 0 and len(got) == 0:
-        expect = expect.reset_index(drop=True)
-        got = got[expect.columns]
-
-    assert_join_results_equal(expect, got, how="left")
-
-
-def test_string_join_values_nulls():
-    left_dict = [
-        {"b": "MATCH 1", "a": 1.0},
-        {"b": "MATCH 1", "a": 1.0},
-        {"b": "LEFT NO MATCH 1", "a": -1.0},
-        {"b": "MATCH 2", "a": 2.0},
-        {"b": "MATCH 2", "a": 2.0},
-        {"b": "MATCH 1", "a": 1.0},
-        {"b": "MATCH 1", "a": 1.0},
-        {"b": "MATCH 2", "a": 2.0},
-        {"b": "MATCH 2", "a": 2.0},
-        {"b": "LEFT NO MATCH 2", "a": -2.0},
-        {"b": "MATCH 3", "a": 3.0},
-        {"b": "MATCH 3", "a": 3.0},
-    ]
-
-    right_dict = [
-        {"b": "RIGHT NO MATCH 1", "c": -1.0},
-        {"b": "MATCH 3", "c": 3.0},
-        {"b": "MATCH 2", "c": 2.0},
-        {"b": "RIGHT NO MATCH 2", "c": -2.0},
-        {"b": "RIGHT NO MATCH 3", "c": -3.0},
-        {"b": "MATCH 1", "c": 1.0},
-    ]
-
-    left_pdf = pd.DataFrame(left_dict)
-    right_pdf = pd.DataFrame(right_dict)
-
-    left_gdf = cudf.DataFrame.from_pandas(left_pdf)
-    right_gdf = cudf.DataFrame.from_pandas(right_pdf)
-
-    expect = left_pdf.merge(right_pdf, how="left", on="b")
-    got = left_gdf.merge(right_gdf, how="left", on="b")
-
-    expect = expect.sort_values(by=["a", "b", "c"]).reset_index(drop=True)
-    got = got.sort_values(by=["a", "b", "c"]).reset_index(drop=True)
-
-    assert_join_results_equal(expect, got, how="left")
 
 
 @pytest.mark.parametrize(
@@ -1317,7 +1149,6 @@ def test_string_no_children_properties():
     assert empty_col.children == ()
     assert empty_col.size == 0
 
-    assert empty_col._nbytes == 0
     assert getsizeof(empty_col) >= 0  # Accounts for Python GC overhead
 
 
@@ -2526,9 +2357,12 @@ def test_string_hex_to_int(data):
 
     gsr = cudf.Series(data)
 
-    got = gsr.str.htoi()
     expected = cudf.Series([263988422296292, 0, 281474976710655])
 
+    got = gsr.str.htoi()
+    assert_eq(expected, got)
+
+    got = gsr.str.hex_to_int()  # alias
     assert_eq(expected, got)
 
 
@@ -2585,7 +2419,9 @@ def test_string_ip4_to_int():
     expected = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449])
 
     got = gsr.str.ip2int()
+    assert_eq(expected, got)
 
+    got = gsr.str.ip_to_int()  # alias
     assert_eq(expected, got)
 
 
@@ -2932,6 +2768,145 @@ def test_string_slice_with_mask():
     assert_eq(actual, expected)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "category":"reference",
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ],
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "category":"reference",
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        }
+                    ]
+                }
+            }
+            """,
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """,
+        ],
+    ],
+)
+def test_string_get_json_object_n(data):
+    gs = cudf.Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(
+        json.loads(gs.str.get_json_object("$.store")[0]),
+        ps.apply(lambda x: json.loads(x)["store"])[0],
+    )
+    assert_eq(
+        json.loads(gs.str.get_json_object("$.store.book")[0]),
+        ps.apply(lambda x: json.loads(x)["store"]["book"])[0],
+    )
+    assert_eq(
+        gs.str.get_json_object("$.store.book[0].category"),
+        ps.apply(lambda x: json.loads(x)["store"]["book"][0]["category"]),
+    )
+
+
+@pytest.mark.parametrize(
+    "json_path", ["$.store", "$.store.book", "$.store.book[*].category", " "]
+)
+def test_string_get_json_object_empty_json_strings(json_path):
+    gs = cudf.Series(
+        [
+            """
+            {
+                "":{
+                    "":[
+                        {
+                            "":"",
+                            "":"",
+                            "":""
+                        },
+                        {
+                            "":"fiction",
+                            "":"",
+                            "title":""
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+
+    got = gs.str.get_json_object(json_path)
+    expect = cudf.Series([None], dtype="object")
+
+    assert_eq(got, expect)
+
+
+@pytest.mark.parametrize("json_path", ["a", ".", "/.store"])
+def test_string_get_json_object_invalid_JSONPath(json_path):
+    gs = cudf.Series(
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "category":"reference",
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+
+    with pytest.raises(ValueError):
+        gs.str.get_json_object(json_path)
+
+
 def test_str_join_lists_error():
     sr = cudf.Series([["a", "a"], ["b"], ["c"]])
 
@@ -2991,7 +2966,7 @@ def test_str_join_lists_error():
             "__",
             "=",
             None,
-            cudf.Series(["a__b", "=", "=__hello__=__world"]),
+            cudf.Series(["a__b", None, "=__hello__=__world"]),
         ),
         (
             cudf.Series(
@@ -3005,7 +2980,7 @@ def test_str_join_lists_error():
             ["-", "_", "**", "!"],
             None,
             None,
-            cudf.Series(["a--b", "", "**hello****world", None]),
+            cudf.Series(["a--b", None, "**hello****world", None]),
         ),
         (
             cudf.Series(
@@ -3020,12 +2995,7 @@ def test_str_join_lists_error():
             "rep_str",
             "sep_str",
             cudf.Series(
-                [
-                    "a-rep_str-b",
-                    "rep_str",
-                    "rep_str**hello**rep_str**world",
-                    None,
-                ]
+                ["a-rep_str-b", None, "rep_str**hello**rep_str**world", None]
             ),
         ),
         (
@@ -3033,14 +3003,14 @@ def test_str_join_lists_error():
             ["-", "_", None],
             "rep_str",
             None,
-            cudf.Series(["rep_str-a", "rep_str", None]),
+            cudf.Series(["rep_str-a", None, None]),
         ),
         (
             cudf.Series([[None, "a"], [None], None]),
             ["-", "_", None],
             None,
             "sep_str",
-            cudf.Series(["-a", "", None]),
+            cudf.Series(["-a", None, None]),
         ),
     ],
 )

@@ -152,6 +152,16 @@ public final class ColumnVector extends ColumnView {
     incRefCountInternal(true);
   }
 
+
+  /**
+   * For a ColumnVector this is really just incrementing the reference count.
+   * @return this
+   */
+  @Override
+  public ColumnVector copyToColumnVector() {
+    return incRefCount();
+  }
+
   /**
    * Retrieves the column_view for a cudf::column and if it fails to do so, the column is deleted
    * and the exception is thrown to the caller.
@@ -488,7 +498,7 @@ public final class ColumnVector extends ColumnView {
    * Concatenate columns of strings together, combining a corresponding row from each column
    * into a single string row of a new column with no separator string inserted between each
    * combined string and maintaining null values in combined rows.
-   * @param columns array of columns containing strings.
+   * @param columns array of columns containing strings, must be non-empty
    * @return A new java column vector containing the concatenated strings.
    */
   public static ColumnVector stringConcatenate(ColumnView[] columns) {
@@ -500,31 +510,133 @@ public final class ColumnVector extends ColumnView {
 
   /**
    * Concatenate columns of strings together, combining a corresponding row from each column into
+   * a single string row of a new column. This version includes the separator for null rows
+   * if 'narep' is valid.
+   * @param separator string scalar inserted between each string being merged.
+   * @param narep string scalar indicating null behavior. If set to null and any string in the row
+   *              is null the resulting string will be null. If not null, null values in any column
+   *              will be replaced by the specified string.
+   * @param columns array of columns containing strings, must be non-empty
+   * @return A new java column vector containing the concatenated strings.
+   */
+  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnView[] columns) {
+    return stringConcatenate(separator, narep, columns, true);
+  }
+
+  /**
+   * Concatenate columns of strings together, combining a corresponding row from each column into
    * a single string row of a new column.
    * @param separator string scalar inserted between each string being merged.
    * @param narep string scalar indicating null behavior. If set to null and any string in the row
    *              is null the resulting string will be null. If not null, null values in any column
    *              will be replaced by the specified string.
-   * @param columns array of columns containing strings, must be more than 2 columns
+   * @param columns array of columns containing strings, must be non-empty
+   * @param separateNulls if true, then the separator is included for null rows if
+   *                       `narep` is valid.
    * @return A new java column vector containing the concatenated strings.
    */
-  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnView[] columns) {
-    assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
+  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnView[] columns,
+      boolean separateNulls) {
+    assert columns != null : "input columns should not be null";
+    assert columns.length > 0 : "input columns should not be empty";
     assert separator != null : "separator scalar provided may not be null";
     assert separator.getType().equals(DType.STRING) : "separator scalar must be a string scalar";
     assert narep != null : "narep scalar provided may not be null";
     assert narep.getType().equals(DType.STRING) : "narep scalar must be a string scalar";
-    long size = columns[0].getRowCount();
-    long[] column_views = new long[columns.length];
 
+    long[] columnViews = new long[columns.length];
     for(int i = 0; i < columns.length; i++) {
       assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getType().equals(DType.STRING) : "All columns must be of type string for .cat() operation";
-      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must have the same number of rows";
-      column_views[i] = columns[i].getNativeView();
+      columnViews[i] = columns[i].getNativeView();
     }
 
-    return new ColumnVector(stringConcatenation(column_views, separator.getScalarHandle(), narep.getScalarHandle()));
+    return new ColumnVector(stringConcatenation(columnViews, separator.getScalarHandle(),
+        narep.getScalarHandle(), separateNulls));
+  }
+
+  /**
+   * Concatenate columns of strings together using a separator specified for each row
+   * and returns the result as a string column. If the row separator for a given row is null,
+   * output column for that row is null. Null column values for a given row are skipped.
+   * @param columns array of columns containing strings
+   * @param sepCol strings column that provides the separator for a given row
+   * @return A new java column vector containing the concatenated strings with separator between.
+   */
+  public static ColumnVector stringConcatenate(ColumnView[] columns, ColumnView sepCol) {
+    try (Scalar nullString = Scalar.fromString(null);
+         Scalar emptyString = Scalar.fromString("")) {
+      return stringConcatenate(columns, sepCol, nullString, emptyString, false);
+    }
+  }
+
+  /**
+   * Concatenate columns of strings together using a separator specified for each row
+   * and returns the result as a string column. If the row separator for a given row is null,
+   * output column for that row is null unless separatorNarep is provided.
+   * The separator is applied between two output row values if the separateNulls
+   * is `YES` or only between valid rows if separateNulls is `NO`.
+   * @param columns array of columns containing strings
+   * @param sepCol strings column that provides the separator for a given row
+   * @param separatorNarep string scalar indicating null behavior when a separator is null.
+   *                        If set to null and the separator is null the resulting string will
+   *                        be null. If not null, this string will be used in place of a null
+   *                        separator.
+   * @param colNarep string that should be used in place of any null strings
+   *                  found in any column.
+   * @param separateNulls if true, then the separator is included for null rows if
+   *                       `colNarep` is valid.
+   * @return A new java column vector containing the concatenated strings with separator between.
+   */
+  public static ColumnVector stringConcatenate(ColumnView[] columns,
+      ColumnView sepCol, Scalar separatorNarep, Scalar colNarep, boolean separateNulls) {
+    assert columns.length >= 1 : ".stringConcatenate() operation requires at least 1 column";
+    assert separatorNarep != null : "separator narep scalar provided may not be null";
+    assert colNarep != null : "column narep scalar provided may not be null";
+    assert separatorNarep.getType().equals(DType.STRING) : "separator naprep scalar must be a string scalar";
+    assert colNarep.getType().equals(DType.STRING) : "column narep scalar must be a string scalar";
+
+    long[] columnViews = new long[columns.length];
+    for(int i = 0; i < columns.length; i++) {
+      assert columns[i] != null : "Column vectors passed may not be null";
+      columnViews[i] = columns[i].getNativeView();
+    }
+
+    return new ColumnVector(stringConcatenationSepCol(columnViews, sepCol.getNativeView(),
+      separatorNarep.getScalarHandle(), colNarep.getScalarHandle(), separateNulls));
+  }
+
+  /**
+   * Concatenate columns of lists horizontally (row by row), combining a corresponding row
+   * from each column into a single list row of a new column.
+   * NOTICE: Any concatenation involving a null list element will result in a null list.
+   *
+   * @param columns array of columns containing lists, must be non-empty
+   * @return A new java column vector containing the concatenated lists.
+   */
+  public static ColumnVector listConcatenateByRow(ColumnView... columns) {
+    return listConcatenateByRow(false, columns);
+  }
+
+  /**
+   * Concatenate columns of lists horizontally (row by row), combining a corresponding row
+   * from each column into a single list row of a new column.
+   *
+   * @param ignoreNull whether to ignore null list element of input columns: If true, null list
+   *                   will be ignored from concatenation; Otherwise, any concatenation involving
+   *                   a null list element will result in a null list
+   * @param columns    array of columns containing lists, must be non-empty
+   * @return A new java column vector containing the concatenated lists.
+   */
+  public static ColumnVector listConcatenateByRow(boolean ignoreNull, ColumnView... columns) {
+    assert columns != null : "input columns should not be null";
+    assert columns.length > 0 : "input columns should not be empty";
+
+    long[] columnViews = new long[columns.length];
+    for(int i = 0; i < columns.length; i++) {
+      columnViews[i] = columns[i].getNativeView();
+    }
+
+    return new ColumnVector(concatListByRow(columnViews, ignoreNull));
   }
 
   /**
@@ -668,6 +780,56 @@ public final class ColumnVector extends ColumnView {
       throws CudfException;
 
   private static native long concatenate(long[] viewHandles) throws CudfException;
+
+  /**
+   * Native method to concatenate columns of lists horizontally (row by row), combining a row
+   * from each column into a single list.
+   *
+   * @param columnViews array of longs holding the native handles of the column_views to combine.
+   * @return native handle of the resulting cudf column, used to construct the Java column
+   * by the listConcatenateByRow method.
+   */
+  private static native long concatListByRow(long[] columnViews, boolean ignoreNull);
+
+  /**
+   * Native method to concatenate columns of strings together, combining a row from
+   * each column into a single string.
+   *
+   * @param columnViews array of longs holding the native handles of the column_views to combine.
+   * @param separator   string scalar inserted between each string being merged, may not be null.
+   * @param narep       string scalar indicating null behavior. If set to null and any string in
+   *                    the row is null the resulting string will be null. If not null, null
+   *                    values in any column will be replaced by the specified string. The
+   *                    underlying value in the string scalar may be null, but the object passed
+   *                    in may not.
+   * @param separate_nulls boolean if true, then the separator is included for null rows if
+   *                       `narep` is valid.
+   * @return native handle of the resulting cudf column, used to construct the Java column
+   * by the stringConcatenate method.
+   */
+  private static native long stringConcatenation(long[] columnViews, long separator, long narep,
+                                                 boolean separate_nulls);
+
+  /**
+   * Native method to concatenate columns of strings together using a separator specified for each row
+   * and returns the result as a string column.
+   * @param columnViews array of longs holding the native handles of the column_views to combine.
+   * @param sep_column long holding the native handle of the strings_column_view used as separators.
+   * @param separator_narep string scalar indicating null behavior when a separator is null.
+   *                        If set to null and the separator is null the resulting string will
+   *                        be null. If not null, this string will be used in place of a null
+   *                        separator.
+   * @param col_narep string String scalar that should be used in place of any null strings
+   *                         found in any column.
+   * @param separate_nulls boolean if true, then the separator is included for null rows if
+   *                       `col_narep` is valid.
+   * @return native handle of the resulting cudf column, used to construct the Java column.
+   */
+  private static native long stringConcatenationSepCol(long[] columnViews,
+                                                       long sep_column,
+                                                       long separator_narep,
+                                                       long col_narep,
+                                                       boolean separate_nulls);
 
   /**
    * Native method to hash each row of the given table. Hashing function dispatched on the
@@ -1220,6 +1382,16 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Create a new string vector from the given values.  This API
+   * supports inline nulls.
+   */
+  public static ColumnVector fromUTF8Strings(byte[]... values) {
+    try (HostColumnVector host = HostColumnVector.fromUTF8Strings(values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
    * Create a new vector from the given values.  This API supports inline nulls,
    * but is much slower than building from primitive array of unscaledValues.
    * Notice:
@@ -1433,4 +1605,48 @@ public final class ColumnVector extends ColumnView {
     return build(DType.TIMESTAMP_NANOSECONDS, values.length, (b) -> b.appendBoxed(values));
   }
 
+  /**
+   * Creates an empty column according to the data type.
+   *
+   * It will create all the nested columns by iterating all the children in the input
+   * type object 'colType'.
+   *
+   * The performance is not good, so use it carefully. We may want to move this implementation
+   * to the native once figuring out a way to pass the nested data type to the native.
+   *
+   * @param colType the data type of the empty column
+   * @return an empty ColumnVector with its children. Each children contains zero elements.
+   * Users should close the ColumnVector to avoid memory leak.
+   */
+  public static ColumnVector empty(HostColumnVector.DataType colType) {
+    if (colType == null || colType.getType() == null) {
+      throw new IllegalArgumentException("The data type and its 'DType' should NOT be null.");
+    }
+    if (colType instanceof HostColumnVector.BasicType) {
+      // Non nested type
+      DType dt = colType.getType();
+      return new ColumnVector(makeEmptyCudfColumn(dt.typeId.getNativeId(), dt.getScale()));
+    } else if (colType instanceof HostColumnVector.ListType) {
+      // List type
+      assert colType.getNumChildren() == 1 : "List type requires one child type";
+      try (ColumnVector child = empty(colType.getChild(0))) {
+        return makeList(child);
+      }
+    } else if (colType instanceof HostColumnVector.StructType) {
+      // Struct type
+      ColumnVector[] children = new ColumnVector[colType.getNumChildren()];
+      try {
+        for (int i = 0; i < children.length; i++) {
+          children[i] = empty(colType.getChild(i));
+        }
+        return makeStruct(children);
+      } finally {
+        for (ColumnVector cv : children) {
+          if (cv != null) cv.close();
+        }
+      }
+    } else {
+      throw new IllegalArgumentException("Unsupported data type: " + colType);
+    }
+  }
 }

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <algorithm>
+
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
 #include <cudf/aggregation.hpp>
@@ -36,13 +38,14 @@
 #include <cudf/search.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/types.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
+#include "jni_compiled_expr.hpp"
+#include "jni_utils.hpp"
 #include "row_conversion.hpp"
-
-#include <algorithm>
 
 namespace cudf {
 namespace jni {
@@ -235,7 +238,7 @@ public:
       }
 
       // There is an option to have a file writer too, with metadata
-      auto tmp_writer = arrow::ipc::NewStreamWriter(sink.get(), arrow_tab->schema());
+      auto tmp_writer = arrow::ipc::MakeStreamWriter(sink, arrow_tab->schema());
       if (!tmp_writer.ok()) {
         throw std::runtime_error(tmp_writer.status().message());
       }
@@ -253,7 +256,7 @@ public:
     initialized = false;
   }
 
-  std::vector<cudf::column_metadata> get_column_metadata(const cudf::table_view& tview) {
+  std::vector<cudf::column_metadata> get_column_metadata(const cudf::table_view &tview) {
     if (!column_names.empty() && columns_meta.empty()) {
       // Rebuild the structure of column meta according to table schema.
       // All the tables written by this writer should share the same schema,
@@ -274,7 +277,7 @@ public:
   }
 
 private:
-  cudf::column_metadata build_one_column_meta(const cudf::column_view& cview, size_t& idx,
+  cudf::column_metadata build_one_column_meta(const cudf::column_view &cview, size_t &idx,
                                               const bool consume_name = true) {
     auto col_meta = cudf::column_metadata{};
     if (consume_name) {
@@ -299,7 +302,7 @@ private:
     return col_meta;
   }
 
-  std::string& get_column_name(const size_t idx) {
+  std::string &get_column_name(const size_t idx) {
     if (idx < 0 || idx >= column_names.size()) {
       throw cudf::jni::jni_exception("Missing names for columns or nested struct columns");
     }
@@ -612,6 +615,12 @@ jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &t
   return convert_table_for_return(env, table_result, extra);
 }
 
+jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &first_table,
+                                    std::unique_ptr<cudf::table> &second_table) {
+  std::vector<std::unique_ptr<cudf::column>> second_tmp = second_table->release();
+  return convert_table_for_return(env, first_table, second_tmp);
+}
+
 // Convert the JNI boolean array of key column sort order to a vector of cudf::order
 // for groupby.
 std::vector<cudf::order> resolve_column_order(JNIEnv *env, jbooleanArray jkeys_sort_desc,
@@ -626,9 +635,9 @@ std::vector<cudf::order> resolve_column_order(JNIEnv *env, jbooleanArray jkeys_s
   std::vector<cudf::order> column_order(keys_sort_num);
   if (keys_sort_num > 0) {
     std::transform(keys_sort_desc.data(), keys_sort_desc.data() + keys_sort_num,
-        column_order.begin(),
-        [](jboolean is_desc) { return is_desc ? cudf::order::DESCENDING
-                                              : cudf::order::ASCENDING; });
+                   column_order.begin(), [](jboolean is_desc) {
+                     return is_desc ? cudf::order::DESCENDING : cudf::order::ASCENDING;
+                   });
   }
   return column_order;
 }
@@ -647,14 +656,85 @@ std::vector<cudf::null_order> resolve_null_precedence(JNIEnv *env, jbooleanArray
   std::vector<cudf::null_order> null_precedence(null_order_num);
   if (null_order_num > 0) {
     std::transform(keys_null_first.data(), keys_null_first.data() + null_order_num,
-        null_precedence.begin(),
-        [](jboolean null_before) { return null_before ? cudf::null_order::BEFORE
-                                                      : cudf::null_order::AFTER; });
+                   null_precedence.begin(), [](jboolean null_before) {
+                     return null_before ? cudf::null_order::BEFORE : cudf::null_order::AFTER;
+                   });
   }
   return null_precedence;
 }
 
 namespace {
+
+int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
+                        std::vector<std::string> &col_names,
+                        cudf::jni::native_jbooleanArray &nullability,
+                        cudf::jni::native_jbooleanArray &is_int96,
+                        cudf::jni::native_jintArray &precisions,
+                        cudf::jni::native_jbooleanArray &is_map,
+                        cudf::jni::native_jintArray &children, int num_children, int read_index) {
+  int write_index = 0;
+  for (int i = 0; i < num_children; i++, write_index++) {
+    cudf::io::column_in_metadata child;
+    child.set_name(col_names[read_index])
+        .set_decimal_precision(precisions[read_index])
+        .set_int96_timestamps(is_int96[read_index])
+        .set_nullability(nullability[read_index]);
+    if (is_map[read_index]) {
+      child.set_list_column_as_map();
+    }
+    column_metadata.add_child(child);
+    int childs_children = children[read_index++];
+    if (childs_children > 0) {
+      read_index =
+          set_column_metadata(column_metadata.child(write_index), col_names, nullability, is_int96,
+                              precisions, is_map, children, childs_children, read_index);
+    }
+  }
+  return read_index;
+}
+
+void createTableMetaData(JNIEnv *env, jint num_children, jobjectArray &j_col_names,
+                         jintArray &j_children, jbooleanArray &j_col_nullability,
+                         jobjectArray &j_metadata_keys, jobjectArray &j_metadata_values,
+                         jint j_compression, jint j_stats_freq, jbooleanArray &j_isInt96,
+                         jintArray &j_precisions, jbooleanArray &j_is_map,
+                         cudf::io::table_input_metadata &metadata) {
+  cudf::jni::auto_set_device(env);
+  cudf::jni::native_jstringArray col_names(env, j_col_names);
+  cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
+  cudf::jni::native_jbooleanArray isInt96(env, j_isInt96);
+  cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
+  cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
+  cudf::jni::native_jintArray precisions(env, j_precisions);
+  cudf::jni::native_jintArray children(env, j_children);
+  cudf::jni::native_jbooleanArray is_map(env, j_is_map);
+
+  auto cpp_names = col_names.as_cpp_vector();
+
+  int top_level_children = num_children;
+
+  metadata.column_metadata.resize(top_level_children);
+  int read_index = 0; // the read_index, which will be used to read the arrays
+  for (int i = read_index, write_index = 0; i < top_level_children; i++, write_index++) {
+    metadata.column_metadata[write_index]
+        .set_name(cpp_names[read_index])
+        .set_nullability(col_nullability[read_index])
+        .set_int96_timestamps(isInt96[read_index])
+        .set_decimal_precision(precisions[read_index]);
+    if (is_map[read_index]) {
+      metadata.column_metadata[write_index].set_list_column_as_map();
+    }
+    int childs_children = children[read_index++];
+    if (childs_children > 0) {
+      read_index =
+          set_column_metadata(metadata.column_metadata[write_index], cpp_names, col_nullability,
+                              isInt96, precisions, is_map, children, childs_children, read_index);
+    }
+  }
+  for (auto i = 0; i < meta_keys.size(); ++i) {
+    metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
+  }
+}
 
 // Check that window parameters are valid.
 bool valid_window_parameters(native_jintArray const &values,
@@ -665,7 +745,17 @@ bool valid_window_parameters(native_jintArray const &values,
          values.size() == preceding.size() && values.size() == following.size();
 }
 
-// Generate gather maps needed to manifest the result of a join between two tables.
+// Check that window parameters are valid.
+bool valid_window_parameters(native_jintArray const &values,
+                             native_jpointerArray<cudf::aggregation> const &ops,
+                             native_jintArray const &min_periods,
+                             native_jpointerArray<cudf::scalar> const &preceding,
+                             native_jpointerArray<cudf::scalar> const &following) {
+  return values.size() == ops.size() && values.size() == min_periods.size() &&
+         values.size() == preceding.size() && values.size() == following.size();
+}
+
+// Generate gather maps needed to manifest the result of an equi-join between two tables.
 // The resulting Java long array contains the following at each index:
 //   0: Size of each gather map in bytes
 //   1: Device address of the gather map for the left table
@@ -700,7 +790,44 @@ jlongArray join_gather_maps(JNIEnv *env, jlong j_left_keys, jlong j_right_keys,
   CATCH_STD(env, NULL);
 }
 
-// Generate gather maps needed to manifest the result of a join between two tables.
+// Generate gather maps needed to manifest the result of a conditional join between two tables.
+// The resulting Java long array contains the following at each index:
+//   0: Size of each gather map in bytes
+//   1: Device address of the gather map for the left table
+//   2: Host address of the rmm::device_buffer instance that owns the left gather map data
+//   3: Device address of the gather map for the right table
+//   4: Host address of the rmm::device_buffer instance that owns the right gather map data
+template <typename T>
+jlongArray cond_join_gather_maps(JNIEnv *env, jlong j_left_table, jlong j_right_table,
+                                 jlong j_condition, jboolean compare_nulls_equal, T join_func) {
+  JNI_NULL_CHECK(env, j_left_table, "left_table is null", NULL);
+  JNI_NULL_CHECK(env, j_right_table, "right_table is null", NULL);
+  JNI_NULL_CHECK(env, j_condition, "condition is null", NULL);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
+    auto right_table = reinterpret_cast<cudf::table_view const *>(j_right_table);
+    auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+              std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
+        join_maps = join_func(*left_table, *right_table, condition->get_top_expression(), nulleq);
+
+    // release the underlying device buffer to Java
+    auto left_map_buffer = std::make_unique<rmm::device_buffer>(join_maps.first->release());
+    auto right_map_buffer = std::make_unique<rmm::device_buffer>(join_maps.second->release());
+    cudf::jni::native_jlongArray result(env, 5);
+    result[0] = static_cast<jlong>(left_map_buffer->size());
+    result[1] = reinterpret_cast<jlong>(left_map_buffer->data());
+    result[2] = reinterpret_cast<jlong>(left_map_buffer.release());
+    result[3] = reinterpret_cast<jlong>(right_map_buffer->data());
+    result[4] = reinterpret_cast<jlong>(right_map_buffer.release());
+    return result.get_jArray();
+  }
+  CATCH_STD(env, NULL);
+}
+
+// Generate a gather map needed to manifest the result of a semi/anti join between two tables.
 // The resulting Java long array contains the following at each index:
 //   0: Size of the gather map in bytes
 //   1: Device address of the gather map
@@ -717,6 +844,39 @@ jlongArray join_gather_single_map(JNIEnv *env, jlong j_left_keys, jlong j_right_
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
     std::unique_ptr<rmm::device_uvector<cudf::size_type>> join_map =
         join_func(*left_keys, *right_keys, nulleq);
+
+    // release the underlying device buffer to Java
+    auto gather_map_buffer = std::make_unique<rmm::device_buffer>(join_map->release());
+    cudf::jni::native_jlongArray result(env, 3);
+    result[0] = static_cast<jlong>(gather_map_buffer->size());
+    result[1] = reinterpret_cast<jlong>(gather_map_buffer->data());
+    result[2] = reinterpret_cast<jlong>(gather_map_buffer.release());
+    return result.get_jArray();
+  }
+  CATCH_STD(env, NULL);
+}
+
+// Generate a gather map needed to manifest the result of a conditional semi/anti join
+// between two tables.
+// The resulting Java long array contains the following at each index:
+//   0: Size of the gather map in bytes
+//   1: Device address of the gather map
+//   2: Host address of the rmm::device_buffer instance that owns the gather map data
+template <typename T>
+jlongArray cond_join_gather_single_map(JNIEnv *env, jlong j_left_table, jlong j_right_table,
+                                       jlong j_condition, jboolean compare_nulls_equal,
+                                       T join_func) {
+  JNI_NULL_CHECK(env, j_left_table, "left_table is null", NULL);
+  JNI_NULL_CHECK(env, j_right_table, "right_table is null", NULL);
+  JNI_NULL_CHECK(env, j_condition, "condition is null", NULL);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
+    auto right_table = reinterpret_cast<cudf::table_view const *>(j_right_table);
+    auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr *>(j_condition);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    std::unique_ptr<rmm::device_uvector<cudf::size_type>> join_map =
+        join_func(*left_table, *right_table, condition->get_top_expression(), nulleq);
 
     // release the underlying device buffer to Java
     auto gather_map_buffer = std::make_unique<rmm::device_buffer>(join_map->release());
@@ -782,8 +942,7 @@ jlongArray combine_join_results(JNIEnv *env, cudf::table &left_results,
 
 extern "C" {
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_createCudfTableView(JNIEnv *env,
-                                                                      jclass,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_createCudfTableView(JNIEnv *env, jclass,
                                                                       jlongArray j_cudf_columns) {
   JNI_NULL_CHECK(env, j_cudf_columns, "columns are null", 0);
 
@@ -864,13 +1023,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_sortOrder(JNIEnv *env, jclass,
     jsize num_columns_is_desc = n_is_descending.size();
 
     JNI_ARG_CHECK(env, num_columns_is_desc == num_columns,
-            "columns and is_descending lengths don't match", 0);
+                  "columns and is_descending lengths don't match", 0);
 
     const cudf::jni::native_jbooleanArray n_are_nulls_smallest(env, j_are_nulls_smallest);
     jsize num_columns_null_smallest = n_are_nulls_smallest.size();
 
     JNI_ARG_CHECK(env, num_columns_null_smallest == num_columns,
-            "columns and is_descending lengths don't match", 0);
+                  "columns and is_descending lengths don't match", 0);
 
     std::vector<cudf::order> order(n_is_descending.size());
     for (int i = 0; i < n_is_descending.size(); i++) {
@@ -893,7 +1052,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_sortOrder(JNIEnv *env, jclass,
   CATCH_STD(env, 0);
 }
 
-
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv *env, jclass,
                                                                jlong j_input_table,
                                                                jlongArray j_sort_keys_columns,
@@ -915,13 +1073,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv *env, jcla
     jsize num_columns_is_desc = n_is_descending.size();
 
     JNI_ARG_CHECK(env, num_columns_is_desc == num_columns,
-            "columns and is_descending lengths don't match", 0);
+                  "columns and is_descending lengths don't match", 0);
 
     const cudf::jni::native_jbooleanArray n_are_nulls_smallest(env, j_are_nulls_smallest);
     jsize num_columns_null_smallest = n_are_nulls_smallest.size();
 
     JNI_ARG_CHECK(env, num_columns_null_smallest == num_columns,
-            "columns and areNullsSmallest lengths don't match", 0);
+                  "columns and areNullsSmallest lengths don't match", 0);
 
     std::vector<cudf::order> order(n_is_descending.size());
     for (int i = 0; i < n_is_descending.size(); i++) {
@@ -969,13 +1127,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv *env, jclass
     jsize num_columns_is_desc = n_is_descending.size();
 
     JNI_ARG_CHECK(env, num_columns_is_desc == num_columns,
-            "columns and is_descending lengths don't match", NULL);
+                  "columns and is_descending lengths don't match", NULL);
 
     const cudf::jni::native_jbooleanArray n_are_nulls_smallest(env, j_are_nulls_smallest);
     jsize num_columns_null_smallest = n_are_nulls_smallest.size();
 
     JNI_ARG_CHECK(env, num_columns_null_smallest == num_columns,
-            "columns and areNullsSmallest lengths don't match", NULL);
+                  "columns and areNullsSmallest lengths don't match", NULL);
 
     std::vector<int> indexes(n_sort_key_indexes.size());
     for (int i = 0; i < n_sort_key_indexes.size(); i++) {
@@ -1066,8 +1224,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
-    JNIEnv *env, jclass, jobjectArray filter_col_names, jstring inputfilepath,
-    jlong buffer, jlong buffer_length, jint unit, jboolean strict_decimal_types) {
+    JNIEnv *env, jclass, jobjectArray filter_col_names, jstring inputfilepath, jlong buffer,
+    jlong buffer_length, jint unit, jboolean strict_decimal_types) {
   bool read_buffer = true;
   if (buffer == 0) {
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
@@ -1111,55 +1269,33 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
-    JNIEnv *env, jclass, jobjectArray j_col_names, jbooleanArray j_col_nullability,
-    jobjectArray j_metadata_keys, jobjectArray j_metadata_values, jint j_compression,
-    jint j_stats_freq, jboolean j_isInt96, jintArray j_precisions, jobject consumer) {
+    JNIEnv *env, jclass, jobjectArray j_col_names, jint j_num_children, jintArray j_children,
+    jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
+    jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions,
+    jbooleanArray j_is_map, jobject consumer) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
   JNI_NULL_CHECK(env, j_metadata_values, "null metadata values", 0);
   JNI_NULL_CHECK(env, consumer, "null consumer", 0);
   try {
-    cudf::jni::auto_set_device(env);
-    using namespace cudf::io;
-    cudf::jni::native_jstringArray col_names(env, j_col_names);
-    cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
-    cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
-    cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
-    cudf::jni::native_jintArray precisions(env, j_precisions);
-
-    auto cpp_names = col_names.as_cpp_vector();
-    table_input_metadata metadata;
-    metadata.column_metadata.resize(col_nullability.size());
-    for (int i = 0; i < col_nullability.size(); i++) {
-       metadata.column_metadata[i]
-           .set_name(cpp_names[i])
-           .set_nullability(col_nullability[i])
-           .set_int96_timestamps(j_isInt96);
-    }
-
-    // Precisions is not always set
-    for (int i = 0; i < precisions.size(); i++) {
-       metadata.column_metadata[i]
-           .set_decimal_precision(precisions[i]);
-    }
-
-    for (auto i = 0; i < meta_keys.size(); ++i) {
-      metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
-    }
-
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
+
+    using namespace cudf::io;
+    using namespace cudf::jni;
     sink_info sink{data_sink.get()};
-    std::vector<uint8_t> const v_precisions(
-        precisions.data(), precisions.data() + precisions.size());
+    table_input_metadata metadata;
+    createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability,
+                        j_metadata_keys, j_metadata_values, j_compression, j_stats_freq, j_isInt96,
+                        j_precisions, j_is_map, metadata);
+
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
             .metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
             .build();
-
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
     cudf::jni::native_parquet_writer_handle *ret =
         new cudf::jni::native_parquet_writer_handle(std::move(writer_ptr), std::move(data_sink));
@@ -1169,44 +1305,24 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
-    JNIEnv *env, jclass, jobjectArray j_col_names, jbooleanArray j_col_nullability,
-    jobjectArray j_metadata_keys, jobjectArray j_metadata_values, jint j_compression,
-    jint j_stats_freq, jboolean j_isInt96, jintArray j_precisions, jstring j_output_path) {
+    JNIEnv *env, jclass, jobjectArray j_col_names, jint j_num_children, jintArray j_children,
+    jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
+    jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions,
+    jbooleanArray j_is_map, jstring j_output_path) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
   JNI_NULL_CHECK(env, j_metadata_values, "null metadata values", 0);
   JNI_NULL_CHECK(env, j_output_path, "null output path", 0);
   try {
-    cudf::jni::auto_set_device(env);
-    using namespace cudf::io;
-    cudf::jni::native_jstringArray col_names(env, j_col_names);
-    cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
-    cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
-    cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
     cudf::jni::native_jstring output_path(env, j_output_path);
-    cudf::jni::native_jintArray precisions(env, j_precisions);
 
-    auto cpp_names = col_names.as_cpp_vector();
+    using namespace cudf::io;
+    using namespace cudf::jni;
     table_input_metadata metadata;
-    metadata.column_metadata.resize(col_nullability.size());
-    for (int i = 0; i < col_nullability.size(); i++) {
-       metadata.column_metadata[i]
-           .set_name(cpp_names[i])
-           .set_nullability(col_nullability[i])
-           .set_int96_timestamps(j_isInt96);
-    }
-
-    // Precisions is not always set
-    for (int i = 0; i < precisions.size(); i++) {
-       metadata.column_metadata[i]
-           .set_decimal_precision(precisions[i]);
-    }
-
-    for (auto i = 0; i < meta_keys.size(); ++i) {
-      metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
-    }
-
+    createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability,
+                        j_metadata_keys, j_metadata_values, j_compression, j_stats_freq, j_isInt96,
+                        j_precisions, j_is_map, metadata);
     sink_info sink{output_path.get()};
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
@@ -1261,8 +1377,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetEnd(JNIEnv *env, jc
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readORC(
-    JNIEnv *env, jclass, jobjectArray filter_col_names, jstring inputfilepath,
-    jlong buffer, jlong buffer_length, jboolean usingNumPyTypes, jint unit) {
+    JNIEnv *env, jclass, jobjectArray filter_col_names, jstring inputfilepath, jlong buffer,
+    jlong buffer_length, jboolean usingNumPyTypes, jint unit) {
   bool read_buffer = true;
   if (buffer == 0) {
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
@@ -1770,10 +1886,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoin(
     std::vector<cudf::size_type> right_join_cols(
         right_join_cols_arr.data(), right_join_cols_arr.data() + right_join_cols_arr.size());
 
-    std::unique_ptr<cudf::table> result = cudf::left_semi_join(
-        *n_left_table, *n_right_table, left_join_cols, right_join_cols,
-        static_cast<bool>(compare_nulls_equal) ? cudf::null_equality::EQUAL :
-                                                 cudf::null_equality::UNEQUAL);
+    std::unique_ptr<cudf::table> result =
+        cudf::left_semi_join(*n_left_table, *n_right_table, left_join_cols, right_join_cols,
+                             static_cast<bool>(compare_nulls_equal) ? cudf::null_equality::EQUAL :
+                                                                      cudf::null_equality::UNEQUAL);
 
     return cudf::jni::convert_table_for_return(env, result);
   }
@@ -1799,10 +1915,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoin(
     std::vector<cudf::size_type> right_join_cols(
         right_join_cols_arr.data(), right_join_cols_arr.data() + right_join_cols_arr.size());
 
-    std::unique_ptr<cudf::table> result = cudf::left_anti_join(
-        *n_left_table, *n_right_table, left_join_cols, right_join_cols,
-        static_cast<bool>(compare_nulls_equal) ? cudf::null_equality::EQUAL :
-                                                 cudf::null_equality::UNEQUAL);
+    std::unique_ptr<cudf::table> result =
+        cudf::left_anti_join(*n_left_table, *n_right_table, left_join_cols, right_join_cols,
+                             static_cast<bool>(compare_nulls_equal) ? cudf::null_equality::EQUAL :
+                                                                      cudf::null_equality::UNEQUAL);
 
     return cudf::jni::convert_table_for_return(env, result);
   }
@@ -1818,12 +1934,96 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoinGatherMaps(
       });
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalLeftJoinRowCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal) {
+  JNI_NULL_CHECK(env, j_left_table, "left_table is null", 0);
+  JNI_NULL_CHECK(env, j_right_table, "right_table is null", 0);
+  JNI_NULL_CHECK(env, j_condition, "condition is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
+    auto right_table = reinterpret_cast<cudf::table_view const *>(j_right_table);
+    auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    auto row_count = cudf::conditional_left_join_size(*left_table, *right_table,
+                                                      condition->get_top_expression(), nulleq);
+    return static_cast<jlong>(row_count);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftJoinGatherMaps(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal) {
+  return cudf::jni::cond_join_gather_maps(
+      env, j_left_table, j_right_table, j_condition, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::table_view const &right,
+         cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
+        return cudf::conditional_left_join(left, right, cond_expr, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftJoinGatherMapsWithCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal, jlong j_row_count) {
+  auto row_count = static_cast<std::size_t>(j_row_count);
+  return cudf::jni::cond_join_gather_maps(
+      env, j_left_table, j_right_table, j_condition, compare_nulls_equal,
+      [row_count](cudf::table_view const &left, cudf::table_view const &right,
+                  cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
+        return cudf::conditional_left_join(left, right, cond_expr, nulleq, row_count);
+      });
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoinGatherMaps(
     JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal) {
   return cudf::jni::join_gather_maps(
       env, j_left_keys, j_right_keys, compare_nulls_equal,
       [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
         return cudf::inner_join(left, right, nulleq);
+      });
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalInnerJoinRowCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal) {
+  JNI_NULL_CHECK(env, j_left_table, "left_table is null", 0);
+  JNI_NULL_CHECK(env, j_right_table, "right_table is null", 0);
+  JNI_NULL_CHECK(env, j_condition, "condition is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
+    auto right_table = reinterpret_cast<cudf::table_view const *>(j_right_table);
+    auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    auto row_count = cudf::conditional_inner_join_size(*left_table, *right_table,
+                                                       condition->get_top_expression(), nulleq);
+    return static_cast<jlong>(row_count);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalInnerJoinGatherMaps(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal) {
+  return cudf::jni::cond_join_gather_maps(
+      env, j_left_table, j_right_table, j_condition, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::table_view const &right,
+         cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
+        return cudf::conditional_inner_join(left, right, cond_expr, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalInnerJoinGatherMapsWithCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal, jlong j_row_count) {
+  auto row_count = static_cast<std::size_t>(j_row_count);
+  return cudf::jni::cond_join_gather_maps(
+      env, j_left_table, j_right_table, j_condition, compare_nulls_equal,
+      [row_count](cudf::table_view const &left, cudf::table_view const &right,
+                  cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
+        return cudf::conditional_inner_join(left, right, cond_expr, nulleq, row_count);
       });
 }
 
@@ -1836,6 +2036,17 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_fullJoinGatherMaps(
       });
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalFullJoinGatherMaps(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal) {
+  return cudf::jni::cond_join_gather_maps(
+      env, j_left_table, j_right_table, j_condition, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::table_view const &right,
+         cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
+        return cudf::conditional_full_join(left, right, cond_expr, nulleq);
+      });
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoinGatherMap(
     JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal) {
   return cudf::jni::join_gather_single_map(
@@ -1845,12 +2056,96 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoinGatherMap(
       });
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalLeftSemiJoinRowCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal) {
+  JNI_NULL_CHECK(env, j_left_table, "left_table is null", 0);
+  JNI_NULL_CHECK(env, j_right_table, "right_table is null", 0);
+  JNI_NULL_CHECK(env, j_condition, "condition is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
+    auto right_table = reinterpret_cast<cudf::table_view const *>(j_right_table);
+    auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    auto row_count = cudf::conditional_left_semi_join_size(*left_table, *right_table,
+                                                           condition->get_top_expression(), nulleq);
+    return static_cast<jlong>(row_count);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftSemiJoinGatherMap(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal) {
+  return cudf::jni::cond_join_gather_single_map(
+      env, j_left_table, j_right_table, j_condition, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::table_view const &right,
+         cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
+        return cudf::conditional_left_semi_join(left, right, cond_expr, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftSemiJoinGatherMapWithCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal, jlong j_row_count) {
+  auto row_count = static_cast<std::size_t>(j_row_count);
+  return cudf::jni::cond_join_gather_single_map(
+      env, j_left_table, j_right_table, j_condition, compare_nulls_equal,
+      [row_count](cudf::table_view const &left, cudf::table_view const &right,
+                  cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
+        return cudf::conditional_left_semi_join(left, right, cond_expr, nulleq, row_count);
+      });
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoinGatherMap(
     JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal) {
   return cudf::jni::join_gather_single_map(
       env, j_left_keys, j_right_keys, compare_nulls_equal,
       [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
         return cudf::left_anti_join(left, right, nulleq);
+      });
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalLeftAntiJoinRowCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal) {
+  JNI_NULL_CHECK(env, j_left_table, "left_table is null", 0);
+  JNI_NULL_CHECK(env, j_right_table, "right_table is null", 0);
+  JNI_NULL_CHECK(env, j_condition, "condition is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
+    auto right_table = reinterpret_cast<cudf::table_view const *>(j_right_table);
+    auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    auto row_count = cudf::conditional_left_anti_join_size(*left_table, *right_table,
+                                                           condition->get_top_expression(), nulleq);
+    return static_cast<jlong>(row_count);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftAntiJoinGatherMap(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal) {
+  return cudf::jni::cond_join_gather_single_map(
+      env, j_left_table, j_right_table, j_condition, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::table_view const &right,
+         cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
+        return cudf::conditional_left_anti_join(left, right, cond_expr, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftAntiJoinGatherMapWithCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
+    jboolean compare_nulls_equal, jlong j_row_count) {
+  auto row_count = static_cast<std::size_t>(j_row_count);
+  return cudf::jni::cond_join_gather_single_map(
+      env, j_left_table, j_right_table, j_condition, compare_nulls_equal,
+      [row_count](cudf::table_view const &left, cudf::table_view const &right,
+                  cudf::ast::expression const &cond_expr, cudf::null_equality nulleq) {
+        return cudf::conditional_left_anti_join(left, right, cond_expr, nulleq, row_count);
       });
 }
 
@@ -1924,9 +2219,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_partition(JNIEnv *env, jc
     cudf::column_view *n_part_column = reinterpret_cast<cudf::column_view *>(partition_column);
     cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
 
-    auto result = cudf::partition(*n_input_table,
-                                  *n_part_column,
-                                  number_of_partitions);
+    auto result = cudf::partition(*n_input_table, *n_part_column, number_of_partitions);
 
     for (size_t i = 0; i < result.second.size() - 1; i++) {
       // for what ever reason partition returns the length of the result at then
@@ -1940,12 +2233,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_partition(JNIEnv *env, jc
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(JNIEnv *env, jclass,
-                                                                     jlong input_table,
-                                                                     jintArray columns_to_hash,
-                                                                     jint hash_function,
-                                                                     jint number_of_partitions,
-                                                                     jintArray output_offsets) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(
+    JNIEnv *env, jclass, jlong input_table, jintArray columns_to_hash, jint hash_function,
+    jint number_of_partitions, jintArray output_offsets) {
 
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, columns_to_hash, "columns_to_hash is null", NULL);
@@ -1967,10 +2257,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(JNIEnv *env
     }
 
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result =
-        cudf::hash_partition(*n_input_table,
-                             columns_to_hash_vec,
-                             number_of_partitions,
-                             hash_func);
+        cudf::hash_partition(*n_input_table, columns_to_hash_vec, number_of_partitions, hash_func);
 
     for (size_t i = 0; i < result.second.size(); i++) {
       n_output_offsets[i] = result.second[i];
@@ -2006,9 +2293,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_roundRobinPartition(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
-    JNIEnv *env, jclass, jlong input_table, jintArray keys,
-    jintArray aggregate_column_indices, jlongArray agg_instances, jboolean ignore_null_keys,
-    jboolean jkey_sorted, jbooleanArray jkeys_sort_desc, jbooleanArray jkeys_null_first) {
+    JNIEnv *env, jclass, jlong input_table, jintArray keys, jintArray aggregate_column_indices,
+    jlongArray agg_instances, jboolean ignore_null_keys, jboolean jkey_sorted,
+    jbooleanArray jkeys_sort_desc, jbooleanArray jkeys_null_first) {
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, keys, "input keys are null", NULL);
   JNI_NULL_CHECK(env, aggregate_column_indices, "input aggregate_column_indices are null", NULL);
@@ -2027,16 +2314,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
     }
 
     cudf::table_view n_keys_table(n_keys_cols);
-    auto column_order = cudf::jni::resolve_column_order(env, jkeys_sort_desc,
-                                                        n_keys.size());
-    auto null_precedence = cudf::jni::resolve_null_precedence(env, jkeys_null_first,
-                                                              n_keys.size());
-    cudf::groupby::groupby grouper(n_keys_table,
-                                   ignore_null_keys ? cudf::null_policy::EXCLUDE
-                                                    : cudf::null_policy::INCLUDE,
-                                   jkey_sorted ? cudf::sorted::YES : cudf::sorted::NO,
-                                   column_order,
-                                   null_precedence);
+    auto column_order = cudf::jni::resolve_column_order(env, jkeys_sort_desc, n_keys.size());
+    auto null_precedence = cudf::jni::resolve_null_precedence(env, jkeys_null_first, n_keys.size());
+    cudf::groupby::groupby grouper(
+        n_keys_table, ignore_null_keys ? cudf::null_policy::EXCLUDE : cudf::null_policy::INCLUDE,
+        jkey_sorted ? cudf::sorted::YES : cudf::sorted::NO, column_order, null_precedence);
 
     // Aggregates are passed in already grouped by column, so we just need to fill it in
     // as we go.
@@ -2068,6 +2350,120 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
       }
     }
     return cudf::jni::convert_table_for_return(env, result.first, result_columns);
+  }
+  CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByScan(
+    JNIEnv *env, jclass, jlong input_table, jintArray keys, jintArray aggregate_column_indices,
+    jlongArray agg_instances, jboolean ignore_null_keys, jboolean jkey_sorted,
+    jbooleanArray jkeys_sort_desc, jbooleanArray jkeys_null_first) {
+  JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
+  JNI_NULL_CHECK(env, keys, "input keys are null", NULL);
+  JNI_NULL_CHECK(env, aggregate_column_indices, "input aggregate_column_indices are null", NULL);
+  JNI_NULL_CHECK(env, agg_instances, "agg_instances are null", NULL);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
+    cudf::jni::native_jintArray n_keys(env, keys);
+    cudf::jni::native_jintArray n_values(env, aggregate_column_indices);
+    cudf::jni::native_jpointerArray<cudf::aggregation> n_agg_instances(env, agg_instances);
+    std::vector<cudf::column_view> n_keys_cols;
+    n_keys_cols.reserve(n_keys.size());
+    for (int i = 0; i < n_keys.size(); i++) {
+      n_keys_cols.push_back(n_input_table->column(n_keys[i]));
+    }
+
+    cudf::table_view n_keys_table(n_keys_cols);
+    auto column_order = cudf::jni::resolve_column_order(env, jkeys_sort_desc, n_keys.size());
+    auto null_precedence = cudf::jni::resolve_null_precedence(env, jkeys_null_first, n_keys.size());
+    cudf::groupby::groupby grouper(
+        n_keys_table, ignore_null_keys ? cudf::null_policy::EXCLUDE : cudf::null_policy::INCLUDE,
+        jkey_sorted ? cudf::sorted::YES : cudf::sorted::NO, column_order, null_precedence);
+
+    // Aggregates are passed in already grouped by column, so we just need to fill it in
+    // as we go.
+    std::vector<cudf::groupby::aggregation_request> requests;
+
+    int previous_index = -1;
+    for (int i = 0; i < n_values.size(); i++) {
+      cudf::groupby::aggregation_request req;
+      int col_index = n_values[i];
+      if (col_index == previous_index) {
+        requests.back().aggregations.push_back(n_agg_instances[i]->clone());
+      } else {
+        req.values = n_input_table->column(col_index);
+        req.aggregations.push_back(n_agg_instances[i]->clone());
+        requests.push_back(std::move(req));
+      }
+      previous_index = col_index;
+    }
+
+    std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::groupby::aggregation_result>> result =
+        grouper.scan(requests);
+
+    std::vector<std::unique_ptr<cudf::column>> result_columns;
+    int agg_result_size = result.second.size();
+    for (int agg_result_index = 0; agg_result_index < agg_result_size; agg_result_index++) {
+      int col_agg_size = result.second[agg_result_index].results.size();
+      for (int col_agg_index = 0; col_agg_index < col_agg_size; col_agg_index++) {
+        result_columns.push_back(std::move(result.second[agg_result_index].results[col_agg_index]));
+      }
+    }
+    return cudf::jni::convert_table_for_return(env, result.first, result_columns);
+  }
+  CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByReplaceNulls(
+    JNIEnv *env, jclass, jlong input_table, jintArray keys, jintArray replace_column_indices,
+    jbooleanArray is_preceding, jboolean ignore_null_keys, jboolean jkey_sorted,
+    jbooleanArray jkeys_sort_desc, jbooleanArray jkeys_null_first) {
+  JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
+  JNI_NULL_CHECK(env, keys, "input keys are null", NULL);
+  JNI_NULL_CHECK(env, replace_column_indices, "input replace_column_indices are null", NULL);
+  JNI_NULL_CHECK(env, is_preceding, "is_preceding are null", NULL);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
+    cudf::jni::native_jintArray n_keys(env, keys);
+    cudf::jni::native_jintArray n_values(env, replace_column_indices);
+    cudf::jni::native_jbooleanArray n_is_preceding(env, is_preceding);
+    std::vector<cudf::column_view> n_keys_cols;
+    n_keys_cols.reserve(n_keys.size());
+    for (int i = 0; i < n_keys.size(); i++) {
+      n_keys_cols.push_back(n_input_table->column(n_keys[i]));
+    }
+
+    cudf::table_view n_keys_table(n_keys_cols);
+    auto column_order = cudf::jni::resolve_column_order(env, jkeys_sort_desc, n_keys.size());
+    auto null_precedence = cudf::jni::resolve_null_precedence(env, jkeys_null_first, n_keys.size());
+    cudf::groupby::groupby grouper(
+        n_keys_table, ignore_null_keys ? cudf::null_policy::EXCLUDE : cudf::null_policy::INCLUDE,
+        jkey_sorted ? cudf::sorted::YES : cudf::sorted::NO, column_order, null_precedence);
+
+    // Aggregates are passed in already grouped by column, so we just need to fill it in
+    // as we go.
+    std::vector<cudf::column_view> n_replace_cols;
+    n_replace_cols.reserve(n_values.size());
+    for (int i = 0; i < n_values.size(); i++) {
+      n_replace_cols.push_back(n_input_table->column(n_values[i]));
+    }
+    cudf::table_view n_replace_table(n_replace_cols);
+
+    std::vector<cudf::replace_policy> policies;
+    policies.reserve(n_is_preceding.size());
+    for (int i = 0; i < n_is_preceding.size(); i++) {
+      policies.push_back(n_is_preceding[i] ? cudf::replace_policy::PRECEDING :
+                                             cudf::replace_policy::FOLLOWING);
+    }
+
+    std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> result =
+        grouper.replace_nulls(n_replace_table, policies);
+
+    return cudf::jni::convert_table_for_return(env, result.first, result.second);
   }
   CATCH_STD(env, NULL);
 }
@@ -2229,8 +2625,8 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv 
     cudf::jni::native_jobjectArray<jobject> n_result =
         cudf::jni::contiguous_table_array(env, result.size());
     for (size_t i = 0; i < result.size(); i++) {
-      n_result.set(i, cudf::jni::contiguous_table_from(env, result[i].data,
-                                                       result[i].table.num_rows()));
+      n_result.set(
+          i, cudf::jni::contiguous_table_from(env, result[i].data, result[i].table.num_rows()));
     }
     return n_result.wrapped();
   }
@@ -2275,15 +2671,19 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
 
     std::vector<std::unique_ptr<cudf::column>> result_columns;
     for (int i(0); i < values.size(); ++i) {
+      cudf::rolling_aggregation *agg = dynamic_cast<cudf::rolling_aggregation *>(agg_instances[i]);
+      JNI_ARG_CHECK(env, agg != nullptr, "aggregation is not an instance of rolling_aggregation",
+                    nullptr);
+
       int agg_column_index = values[i];
       if (default_output[i] != nullptr) {
         result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
             groupby_keys, input_table->column(agg_column_index), *default_output[i], preceding[i],
-            following[i], min_periods[i], agg_instances[i]->clone())));
+            following[i], min_periods[i], *agg)));
       } else {
-        result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
-            groupby_keys, input_table->column(agg_column_index), preceding[i], following[i],
-            min_periods[i], agg_instances[i]->clone())));
+        result_columns.emplace_back(std::move(
+            cudf::grouped_rolling_window(groupby_keys, input_table->column(agg_column_index),
+                                         preceding[i], following[i], min_periods[i], *agg)));
       }
     }
 
@@ -2293,20 +2693,21 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAggregate(
-    JNIEnv *env, jclass, jlong j_input_table, jintArray j_keys,
-    jintArray j_timestamp_column_indices, jbooleanArray j_is_timestamp_ascending,
-    jintArray j_aggregate_column_indices, jlongArray j_agg_instances, jintArray j_min_periods,
-    jintArray j_preceding, jintArray j_following, 
-    jbooleanArray j_unbounded_preceding, jbooleanArray j_unbounded_following, 
-    jboolean ignore_null_keys) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggregate(
+    JNIEnv *env, jclass, jlong j_input_table, jintArray j_keys, jintArray j_orderby_column_indices,
+    jbooleanArray j_is_orderby_ascending, jintArray j_aggregate_column_indices,
+    jlongArray j_agg_instances, jintArray j_min_periods, jlongArray j_preceding,
+    jlongArray j_following, jbooleanArray j_unbounded_preceding,
+    jbooleanArray j_unbounded_following, jboolean ignore_null_keys) {
 
   JNI_NULL_CHECK(env, j_input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, j_keys, "input keys are null", NULL);
-  JNI_NULL_CHECK(env, j_timestamp_column_indices, "input timestamp_column_indices are null", NULL);
-  JNI_NULL_CHECK(env, j_is_timestamp_ascending, "input timestamp_ascending is null", NULL);
+  JNI_NULL_CHECK(env, j_orderby_column_indices, "input orderby_column_indices are null", NULL);
+  JNI_NULL_CHECK(env, j_is_orderby_ascending, "input orderby_ascending is null", NULL);
   JNI_NULL_CHECK(env, j_aggregate_column_indices, "input aggregate_column_indices are null", NULL);
   JNI_NULL_CHECK(env, j_agg_instances, "agg_instances are null", NULL);
+  JNI_NULL_CHECK(env, j_preceding, "preceding are null", NULL);
+  JNI_NULL_CHECK(env, j_following, "following are null", NULL);
 
   try {
     cudf::jni::auto_set_device(env);
@@ -2316,15 +2717,15 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
     // Convert from j-types to native.
     cudf::table_view *input_table{reinterpret_cast<cudf::table_view *>(j_input_table)};
     cudf::jni::native_jintArray keys{env, j_keys};
-    cudf::jni::native_jintArray timestamps{env, j_timestamp_column_indices};
-    cudf::jni::native_jbooleanArray timestamp_ascending{env, j_is_timestamp_ascending};
+    cudf::jni::native_jintArray orderbys{env, j_orderby_column_indices};
+    cudf::jni::native_jbooleanArray orderbys_ascending{env, j_is_orderby_ascending};
     cudf::jni::native_jintArray values{env, j_aggregate_column_indices};
     cudf::jni::native_jpointerArray<cudf::aggregation> agg_instances(env, j_agg_instances);
     cudf::jni::native_jintArray min_periods{env, j_min_periods};
-    cudf::jni::native_jintArray preceding{env, j_preceding};
-    cudf::jni::native_jintArray following{env, j_following};
     cudf::jni::native_jbooleanArray unbounded_preceding{env, j_unbounded_preceding};
     cudf::jni::native_jbooleanArray unbounded_following{env, j_unbounded_following};
+    cudf::jni::native_jpointerArray<cudf::scalar> preceding(env, j_preceding);
+    cudf::jni::native_jpointerArray<cudf::scalar> following(env, j_following);
 
     if (not valid_window_parameters(values, agg_instances, min_periods, preceding, following)) {
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
@@ -2339,20 +2740,44 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
     std::vector<std::unique_ptr<cudf::column>> result_columns;
     for (int i(0); i < values.size(); ++i) {
       int agg_column_index = values[i];
-      result_columns.emplace_back(
-        std::move(
-          cudf::grouped_time_range_rolling_window(
-            groupby_keys, 
-            input_table->column(timestamps[i]),
-            timestamp_ascending[i] ? cudf::order::ASCENDING : cudf::order::DESCENDING,
-            input_table->column(agg_column_index), 
-            unbounded_preceding[i] ? cudf::window_bounds::unbounded() : cudf::window_bounds::get(preceding[i]), 
-            unbounded_following[i] ? cudf::window_bounds::unbounded() : cudf::window_bounds::get(following[i]), 
-            min_periods[i],
-            agg_instances[i]->clone()
-          )
-        )
-      );
+      cudf::column_view const &order_by_column = input_table->column(orderbys[i]);
+      cudf::data_type order_by_type = order_by_column.type();
+      cudf::data_type unbounded_type = order_by_type;
+
+      if (unbounded_preceding[i] || unbounded_following[i]) {
+        switch (order_by_type.id()) {
+          case cudf::type_id::TIMESTAMP_DAYS:
+            unbounded_type = cudf::data_type{cudf::type_id::DURATION_DAYS};
+            break;
+          case cudf::type_id::TIMESTAMP_SECONDS:
+            unbounded_type = cudf::data_type{cudf::type_id::DURATION_SECONDS};
+            break;
+          case cudf::type_id::TIMESTAMP_MILLISECONDS:
+            unbounded_type = cudf::data_type{cudf::type_id::DURATION_MILLISECONDS};
+            break;
+          case cudf::type_id::TIMESTAMP_MICROSECONDS:
+            unbounded_type = cudf::data_type{cudf::type_id::DURATION_MICROSECONDS};
+            break;
+          case cudf::type_id::TIMESTAMP_NANOSECONDS:
+            unbounded_type = cudf::data_type{cudf::type_id::DURATION_NANOSECONDS};
+            break;
+          default: break;
+        }
+      }
+
+      cudf::rolling_aggregation *agg = dynamic_cast<cudf::rolling_aggregation *>(agg_instances[i]);
+      JNI_ARG_CHECK(env, agg != nullptr, "aggregation is not an instance of rolling_aggregation",
+                    nullptr);
+
+      result_columns.emplace_back(std::move(cudf::grouped_range_rolling_window(
+          groupby_keys, order_by_column,
+          orderbys_ascending[i] ? cudf::order::ASCENDING : cudf::order::DESCENDING,
+          input_table->column(agg_column_index),
+          unbounded_preceding[i] ? cudf::range_window_bounds::unbounded(unbounded_type) :
+                                   cudf::range_window_bounds::get(*preceding[i]),
+          unbounded_following[i] ? cudf::range_window_bounds::unbounded(unbounded_type) :
+                                   cudf::range_window_bounds::get(*following[i]),
+          min_periods[i], *agg)));
     }
 
     auto result_table = std::make_unique<cudf::table>(std::move(result_columns));
@@ -2417,24 +2842,20 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_explodeOuterPosition(JNIE
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_rowBitCount(JNIEnv* env, jclass, jlong j_table) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_rowBitCount(JNIEnv *env, jclass, jlong j_table) {
   JNI_NULL_CHECK(env, j_table, "table is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    auto t = reinterpret_cast<cudf::table_view*>(j_table);
+    auto t = reinterpret_cast<cudf::table_view *>(j_table);
     std::unique_ptr<cudf::column> result = cudf::row_bit_count(*t);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv *env, jclass,
-                                                                    jlong jinput_table,
-                                                                    jintArray jkey_indices,
-                                                                    jboolean jignore_null_keys,
-                                                                    jboolean jkey_sorted,
-                                                                    jbooleanArray jkeys_sort_desc,
-                                                                    jbooleanArray jkeys_null_first) {
+JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(
+    JNIEnv *env, jclass, jlong jinput_table, jintArray jkey_indices, jboolean jignore_null_keys,
+    jboolean jkey_sorted, jbooleanArray jkeys_sort_desc, jbooleanArray jkeys_null_first) {
   JNI_NULL_CHECK(env, jinput_table, "table native handle is null", 0);
   JNI_NULL_CHECK(env, jkey_indices, "key indices are null", 0);
   // Two main steps to split the groups in the input table.
@@ -2452,17 +2873,16 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(J
     std::vector<cudf::size_type> key_indices(n_key_indices.data(),
                                              n_key_indices.data() + n_key_indices.size());
     auto keys = input_table->select(key_indices);
-    auto null_handling = jignore_null_keys ? cudf::null_policy::EXCLUDE
-                                           : cudf::null_policy::INCLUDE;
+    auto null_handling =
+        jignore_null_keys ? cudf::null_policy::EXCLUDE : cudf::null_policy::INCLUDE;
     auto keys_are_sorted = jkey_sorted ? cudf::sorted::YES : cudf::sorted::NO;
-    auto column_order = cudf::jni::resolve_column_order(env, jkeys_sort_desc,
-                                                        key_indices.size());
-    auto null_precedence = cudf::jni::resolve_null_precedence(env, jkeys_null_first,
-                                                              key_indices.size());
+    auto column_order = cudf::jni::resolve_column_order(env, jkeys_sort_desc, key_indices.size());
+    auto null_precedence =
+        cudf::jni::resolve_null_precedence(env, jkeys_null_first, key_indices.size());
 
     // Constructs a groupby
-    cudf::groupby::groupby grouper(keys, null_handling, keys_are_sorted,
-                                   column_order, null_precedence);
+    cudf::groupby::groupby grouper(keys, null_handling, keys_are_sorted, column_order,
+                                   null_precedence);
 
     // 1) Gets the groups(keys, offsets, values) from groupby.
     //
@@ -2479,7 +2899,7 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(J
         // not key column, so adds it as value column.
         value_indices.emplace_back(index);
       }
-      index ++;
+      index++;
     }
     cudf::table_view values_view = input_table->select(value_indices);
     cudf::groupby::groupby::groups groups = grouper.get_groups(values_view);
@@ -2492,31 +2912,32 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(J
     auto key_view_it = key_view.begin();
     for (auto key_id : key_indices) {
       grouped_cols.at(key_id) = std::move(*key_view_it);
-      key_view_it ++;
+      key_view_it++;
     }
     // value columns
     auto value_view = groups.values->view();
     auto value_view_it = value_view.begin();
     for (auto value_id : value_indices) {
       grouped_cols.at(value_id) = std::move(*value_view_it);
-      value_view_it ++;
+      value_view_it++;
     }
     cudf::table_view grouped_table(grouped_cols);
     // When no key columns, uses the input table instead, because the output
     // of 'get_groups' is empty.
-    auto& grouped_view = key_indices.empty() ? *input_table : grouped_table;
+    auto &grouped_view = key_indices.empty() ? *input_table : grouped_table;
 
     // Resolves the split indices from offsets vector directly to avoid copying. Since
     // the offsets vector may be very large if there are too many small groups.
-    std::vector<cudf::size_type>& split_indices = groups.offsets;
+    std::vector<cudf::size_type> &split_indices = groups.offsets;
     // Offsets laysout is [0, split indices..., num_rows] or [0] for empty keys, so
     // need to removes the first and last elements.
     split_indices.erase(split_indices.begin());
-    if (!split_indices.empty()) { split_indices.pop_back(); }
+    if (!split_indices.empty()) {
+      split_indices.pop_back();
+    }
 
     // 2) Splits the groups.
-    std::vector<cudf::packed_table> result =
-        cudf::contiguous_split(grouped_view, split_indices);
+    std::vector<cudf::packed_table> result = cudf::contiguous_split(grouped_view, split_indices);
     // Release the grouped table right away after split done.
     groups.keys.reset(nullptr);
     groups.values.reset(nullptr);
@@ -2525,8 +2946,8 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(J
     cudf::jni::native_jobjectArray<jobject> n_result =
         cudf::jni::contiguous_table_array(env, result.size());
     for (size_t i = 0; i < result.size(); i++) {
-      n_result.set(i, cudf::jni::contiguous_table_from(env, result[i].data,
-                                                       result[i].table.num_rows()));
+      n_result.set(
+          i, cudf::jni::contiguous_table_from(env, result[i].data, result[i].table.num_rows()));
     }
     return n_result.wrapped();
   }

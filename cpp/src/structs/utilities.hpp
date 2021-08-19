@@ -76,6 +76,24 @@ flatten_nested_columns(table_view const& input,
                        std::vector<null_order> const& null_precedence,
                        column_nullability nullability = column_nullability::MATCH_INCOMING);
 
+/**
+ * @brief Pushdown nulls from a parent mask into a child column, using AND.
+ *
+ * This function will recurse through all struct descendants. It is expected that
+ * the size of `parent_null_mask` in bits is the same as `child.size()`
+ *
+ * @param parent_null_mask The mask to be applied to descendants
+ * @param parent_null_count Null count in the null mask
+ * @param column Column to apply the null mask to.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr     Device memory resource used to allocate new device memory.
+ */
+void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
+                              size_type parent_null_count,
+                              column& child,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr);
+
 }  // namespace detail
 }  // namespace structs
 }  // namespace cudf

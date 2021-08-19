@@ -1,34 +1,42 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+import pickle
+
 import pandas as pd
 
+from libc.stdint cimport int32_t, int64_t, uint8_t, uintptr_t
 from libcpp cimport bool
-from libcpp.memory cimport make_unique, unique_ptr, shared_ptr, make_shared
-from libcpp.vector cimport vector
+from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
 from libcpp.utility cimport move
-from libc.stdint cimport int32_t, int64_t
+from libcpp.vector cimport vector
+
+from rmm._lib.device_buffer cimport DeviceBuffer
+
+from cudf.core.buffer import Buffer
 
 from cudf._lib.column cimport Column
+
 from cudf._lib.scalar import as_device_scalar
+
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
-from cudf._lib.reduce import minmax
 
+from cudf._lib.reduce import minmax
+from cudf.core.abc import Serializable
+
+cimport cudf._lib.cpp.copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport (
-    column_view,
-    mutable_column_view
-)
+from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
+from cudf._lib.cpp.lists.gather cimport (
+    segmented_gather as cpp_segmented_gather,
+)
+from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
-from cudf._lib.cpp.lists.gather cimport (
-    segmented_gather as cpp_segmented_gather
-)
-cimport cudf._lib.cpp.copying as cpp_copying
+from cudf._lib.utils cimport data_from_table_view, data_from_unique_ptr
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
@@ -172,7 +180,7 @@ def gather(
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=(
@@ -204,18 +212,16 @@ def _scatter_table(Table source_table, Column scatter_map,
             )
         )
 
-    out_table = Table.from_unique_ptr(
+    data, _ = data_from_unique_ptr(
         move(c_result),
         column_names=target_table._column_names,
         index_names=None
     )
 
-    out_table._index = (
+    return data, (
         None if target_table._index is None else target_table._index.copy(
             deep=False)
     )
-
-    return out_table
 
 
 def _scatter_scalar(scalars, Column scatter_map,
@@ -244,18 +250,16 @@ def _scatter_scalar(scalars, Column scatter_map,
             )
         )
 
-    out_table = Table.from_unique_ptr(
+    data, _ = data_from_unique_ptr(
         move(c_result),
         column_names=target_table._column_names,
         index_names=None
     )
 
-    out_table._index = (
+    return data, (
         None if target_table._index is None else target_table._index.copy(
             deep=False)
     )
-
-    return out_table
 
 
 def scatter(object input, object scatter_map, Table target,
@@ -274,6 +278,47 @@ def scatter(object input, object scatter_map, Table target,
         return _scatter_table(input, scatter_map, target, bounds_check)
     else:
         return _scatter_scalar(input, scatter_map, target, bounds_check)
+
+
+def _reverse_column(Column source_column):
+    cdef column_view reverse_column_view = source_column.view()
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(cpp_copying.reverse(
+            reverse_column_view
+        ))
+
+    return Column.from_unique_ptr(
+        move(c_result)
+    )
+
+
+def _reverse_table(Table source_table):
+    cdef table_view reverse_table_view = source_table.view()
+
+    cdef unique_ptr[table] c_result
+    with nogil:
+        c_result = move(cpp_copying.reverse(
+            reverse_table_view
+        ))
+
+    return data_from_unique_ptr(
+        move(c_result),
+        column_names=source_table._column_names,
+        index_names=source_table._index_names
+    )
+
+
+def reverse(object source):
+    """
+    Reversing a column or a table
+    """
+    if isinstance(source, Column):
+        return _reverse_column(source)
+    else:
+        return _reverse_table(source)
 
 
 def column_empty_like(Column input_column):
@@ -324,7 +369,7 @@ def table_empty_like(Table input_table, bool keep_index=True):
     with nogil:
         c_result = move(cpp_copying.empty_like(input_table_view))
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=input_table._column_names,
         index_names=(
@@ -387,8 +432,8 @@ def table_slice(Table input_table, object indices, bool keep_index=True):
         )
 
     num_of_result_cols = c_result.size()
-    result =[
-        Table.from_table_view(
+    return [
+        data_from_table_view(
             c_result[i],
             input_table,
             column_names=input_table._column_names,
@@ -398,8 +443,6 @@ def table_slice(Table input_table, object indices, bool keep_index=True):
                 else None
             )
         ) for i in range(num_of_result_cols)]
-
-    return result
 
 
 def column_split(Column input_column, object splits):
@@ -458,8 +501,8 @@ def table_split(Table input_table, object splits, bool keep_index=True):
         )
 
     num_of_result_cols = c_result.size()
-    result = [
-        Table.from_table_view(
+    return [
+        data_from_table_view(
             c_result[i],
             input_table,
             column_names=input_table._column_names,
@@ -467,8 +510,6 @@ def table_split(Table input_table, object splits, bool keep_index=True):
                 keep_index is True)
             else None
         ) for i in range(num_of_result_cols)]
-
-    return result
 
 
 def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
@@ -595,7 +636,7 @@ def _boolean_mask_scatter_table(Table input_table, Table target_table,
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=target_table._column_names,
         index_names=target_table._index._column_names
@@ -625,13 +666,15 @@ def _boolean_mask_scatter_scalar(list input_scalars, Table target_table,
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=target_table._column_names,
         index_names=target_table._index._column_names
     )
 
 
+# TODO: This function is currently unused but should be used in
+# ColumnBase.__setitem__, see https://github.com/rapidsai/cudf/issues/8667.
 def boolean_mask_scatter(object input, Table target_table,
                          Column boolean_mask):
 
@@ -708,7 +751,7 @@ def sample(Table input, size_type n,
             cpp_copying.sample(tbl_view, n, replacement, seed)
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_output),
         column_names=input._column_names,
         index_names=(
@@ -735,3 +778,176 @@ def segmented_gather(Column source_column, Column gather_map):
 
     result = Column.from_unique_ptr(move(c_result))
     return result
+
+
+cdef class _CPackedColumns:
+
+    @staticmethod
+    cdef _CPackedColumns from_py_table(Table input_table, keep_index=True):
+        """
+        Construct a ``PackedColumns`` object from a ``cudf.DataFrame``.
+        """
+        import cudf.core.dtypes
+
+        cdef _CPackedColumns p = _CPackedColumns.__new__(_CPackedColumns)
+
+        if keep_index and (
+            not isinstance(input_table.index, cudf.RangeIndex)
+            or input_table.index.start != 0
+            or input_table.index.stop != len(input_table)
+            or input_table.index.step != 1
+        ):
+            input_table_view = input_table.view()
+            p.index_names = input_table._index_names
+        else:
+            input_table_view = input_table.data_view()
+
+        p.column_names = input_table._column_names
+        p.column_dtypes = {}
+        for name, col in input_table._data.items():
+            if isinstance(col.dtype, cudf.core.dtypes._BaseDtype):
+                p.column_dtypes[name] = col.dtype
+
+        p.c_obj = move(cpp_copying.pack(input_table_view))
+
+        return p
+
+    @property
+    def gpu_data_ptr(self):
+        return int(<uintptr_t>self.c_obj.gpu_data.get()[0].data())
+
+    @property
+    def gpu_data_size(self):
+        return int(<size_t>self.c_obj.gpu_data.get()[0].size())
+
+    def serialize(self):
+        header = {}
+        frames = []
+
+        gpu_data = Buffer(self.gpu_data_ptr, self.gpu_data_size, self)
+        data_header, data_frames = gpu_data.serialize()
+        header["data"] = data_header
+        frames.extend(data_frames)
+
+        header["column-names"] = self.column_names
+        header["index-names"] = self.index_names
+        if self.c_obj.metadata_.get()[0].data() != NULL:
+            header["metadata"] = list(
+                <uint8_t[:self.c_obj.metadata_.get()[0].size()]>
+                self.c_obj.metadata_.get()[0].data()
+            )
+
+        column_dtypes = {}
+        for name, dtype in self.column_dtypes.items():
+            dtype_header, dtype_frames = dtype.serialize()
+            column_dtypes[name] = (
+                dtype_header,
+                (len(frames), len(frames) + len(dtype_frames)),
+            )
+            frames.extend(dtype_frames)
+        header["column-dtypes"] = column_dtypes
+
+        return header, frames
+
+    @staticmethod
+    def deserialize(header, frames):
+        cdef _CPackedColumns p = _CPackedColumns.__new__(_CPackedColumns)
+
+        gpu_data = Buffer.deserialize(header["data"], frames)
+
+        dbuf = DeviceBuffer(
+            ptr=gpu_data.ptr,
+            size=gpu_data.nbytes
+        )
+
+        cdef cpp_copying.packed_columns data
+        data.metadata_ = move(
+            make_unique[cpp_copying.metadata](
+                move(<vector[uint8_t]>header.get("metadata", []))
+            )
+        )
+        data.gpu_data = move(dbuf.c_obj)
+
+        p.c_obj = move(data)
+        p.column_names = header["column-names"]
+        p.index_names = header["index-names"]
+
+        column_dtypes = {}
+        for name, dtype in header["column-dtypes"].items():
+            dtype_header, (start, stop) = dtype
+            column_dtypes[name] = pickle.loads(
+                dtype_header["type-serialized"]
+            ).deserialize(dtype_header, frames[start:stop])
+        p.column_dtypes = column_dtypes
+
+        return p
+
+    def unpack(self):
+        output_table = Table(*data_from_table_view(
+            cpp_copying.unpack(self.c_obj),
+            self,
+            self.column_names,
+            self.index_names
+        ))
+
+        for name, dtype in self.column_dtypes.items():
+            output_table._data[name] = (
+                output_table._data[name]._with_type_metadata(dtype)
+            )
+
+        return output_table
+
+
+class PackedColumns(Serializable):
+    """
+    A packed representation of a ``cudf.Table``, with all columns residing
+    in a single GPU memory buffer.
+    """
+
+    def __init__(self, data):
+        self._data = data
+
+    def __reduce__(self):
+        return self.deserialize, self.serialize()
+
+    @property
+    def __cuda_array_interface__(self):
+        return {
+            "data": (self._data.gpu_data_ptr, False),
+            "shape": (self._data.gpu_data_size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 0
+        }
+
+    def serialize(self):
+        header, frames = self._data.serialize()
+        header["type-serialized"] = pickle.dumps(type(self))
+
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        return cls(_CPackedColumns.deserialize(header, frames))
+
+    @classmethod
+    def from_py_table(cls, input_table, keep_index=True):
+        return cls(_CPackedColumns.from_py_table(input_table, keep_index))
+
+    def unpack(self):
+        return self._data.unpack()
+
+
+def pack(input_table, keep_index=True):
+    """
+    Pack the columns of a ``cudf.Table`` into a single GPU memory buffer.
+    """
+    return PackedColumns.from_py_table(input_table, keep_index)
+
+
+def unpack(packed):
+    """
+    Unpack the results of packing a ``cudf.Table``, returning a new
+    ``Table`` in the process.
+    """
+    return packed.unpack()

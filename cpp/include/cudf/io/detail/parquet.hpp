@@ -54,22 +54,26 @@ class reader {
    *
    * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::vector<std::string> const& filepaths,
                   parquet_reader_options const& options,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                  rmm::cuda_stream_view stream,
+                  rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Constructor from an array of datasources
    *
    * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   parquet_reader_options const& options,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                  rmm::cuda_stream_view stream,
+                  rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -103,14 +107,14 @@ class writer {
    * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior
    * @param mode Option to write at once or in chunks
-   * @param mr Device memory resource to use for device memory allocation
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   parquet_writer_options const& options,
-                  SingleWriteMode mode                = SingleWriteMode::YES,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
+                  SingleWriteMode mode,
+                  rmm::cuda_stream_view stream,
+                  rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Constructor for writer to handle chunked parquet options.
@@ -118,16 +122,16 @@ class writer {
    * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior for chunked writer
    * @param mode Option to write at once or in chunks
-   * @param mr Device memory resource to use for device memory allocation
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    *
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   chunked_parquet_writer_options const& options,
-                  SingleWriteMode mode                = SingleWriteMode::NO,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
+                  SingleWriteMode mode,
+                  rmm::cuda_stream_view stream,
+                  rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header

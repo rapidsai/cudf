@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import math
 import warnings
 from distutils.version import LooseVersion
@@ -8,36 +9,27 @@ import pandas as pd
 from tlz import partition_all
 
 import dask
+import dask.dataframe.optimize
 from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
-from dask.compatibility import apply
-from dask.context import _globals
-from dask.core import flatten
-from dask.dataframe.core import Scalar, finalize, handle_out, map_partitions
+from dask.dataframe.core import (
+    Scalar,
+    finalize,
+    handle_out,
+    make_meta as dask_make_meta,
+    map_partitions,
+)
 from dask.dataframe.utils import raise_on_meta_error
 from dask.highlevelgraph import HighLevelGraph
-from dask.optimization import cull, fuse
-from dask.utils import M, OperatorMethodMixin, derived_from, funcname
+from dask.utils import M, OperatorMethodMixin, apply, derived_from, funcname
 
 import cudf
 from cudf import _lib as libcudf
 
 from dask_cudf import sorting
+from dask_cudf.accessors import ListMethods
 
 DASK_VERSION = LooseVersion(dask.__version__)
-
-
-def optimize(dsk, keys, **kwargs):
-    flatkeys = list(flatten(keys)) if isinstance(keys, list) else [keys]
-    dsk, dependencies = cull(dsk, flatkeys)
-    dsk, dependencies = fuse(
-        dsk,
-        keys,
-        dependencies=dependencies,
-        ave_width=_globals.get("fuse_ave_width", 1),
-    )
-    dsk, _ = cull(dsk, keys)
-    return dsk
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
@@ -58,7 +50,6 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
     """
 
     __dask_scheduler__ = staticmethod(dask.get)
-    __dask_optimize__ = staticmethod(optimize)
 
     def __dask_postcompute__(self):
         return finalize, ()
@@ -71,7 +62,7 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self._name = name
-        meta = dd.core.make_meta(meta)
+        meta = dask_make_meta(meta)
         if not isinstance(meta, self._partition_type):
             raise TypeError(
                 f"Expected meta to specify type "
@@ -114,7 +105,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             out[k] = v
             return out
 
-        meta = assigner(self._meta, k, dd.core.make_meta(v))
+        meta = assigner(self._meta, k, dask_make_meta(v))
         return self.map_partitions(assigner, k, v, meta=meta)
 
     def apply_rows(self, func, incols, outcols, kwargs=None, cache_key=None):
@@ -244,6 +235,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
         set_divisions=False,
         **kwargs,
     ):
+        if kwargs:
+            raise ValueError(
+                f"Unsupported input arguments passed : {list(kwargs.keys())}"
+            )
+
         if self.npartitions == 1:
             df = self.map_partitions(M.sort_values, by)
         else:
@@ -413,6 +409,10 @@ class Series(_Frame, dd.core.Series):
         from .groupby import CudfSeriesGroupBy
 
         return CudfSeriesGroupBy(self, *args, **kwargs)
+
+    @property
+    def list(self):
+        return ListMethods(self)
 
 
 class Index(Series, dd.core.Index):
@@ -672,7 +672,7 @@ def reduction(
     if meta is None:
         meta_chunk = _emulate(apply, chunk, args, chunk_kwargs)
         meta = _emulate(apply, aggregate, [[meta_chunk]], aggregate_kwargs)
-    meta = dd.core.make_meta(meta)
+    meta = dask_make_meta(meta)
 
     graph = HighLevelGraph.from_collections(b, dsk, dependencies=args)
     return dd.core.new_dd_object(graph, b, meta, (None, None))

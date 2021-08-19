@@ -79,7 +79,7 @@ struct brotli_dictionary_s {
 constexpr int brotli_min_dictionary_word_length = 4;
 constexpr int brotli_max_dictionary_word_length = 24;
 
-const brotli_dictionary_s *get_brotli_dictionary(void);
+const brotli_dictionary_s* get_brotli_dictionary(void);
 
 }  // namespace io
 }  // namespace cudf

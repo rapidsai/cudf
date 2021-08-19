@@ -75,6 +75,12 @@ class lists_column_device_view {
    */
   CUDA_DEVICE_CALLABLE bool is_null(size_type idx) const { return underlying.is_null(idx); }
 
+  /**
+   * @brief Fetches the offset of the underlying column_device_view,
+   *        in case it is a sliced/offset column.
+   */
+  CUDA_DEVICE_CALLABLE size_type offset() const { return underlying.offset(); }
+
  private:
   column_device_view underlying;
 };

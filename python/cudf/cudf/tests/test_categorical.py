@@ -9,7 +9,11 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import (
+    NUMERIC_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 
 @pytest.fixture
@@ -790,3 +794,50 @@ def test_categorical_setitem_with_nan():
         [1, np.nan, np.nan, np.nan, np.nan, None], nan_as_null=False
     ).astype(gs.dtype)
     assert_eq(gs, expected_series)
+
+
+@pytest.mark.parametrize("dtype", list(NUMERIC_TYPES) + ["object"])
+@pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])
+def test_series_construction_with_nulls(input_obj, dtype):
+    dtype = cudf.dtype(dtype)
+    input_obj = [
+        dtype.type(v) if v is not cudf.NA else cudf.NA for v in input_obj
+    ]
+
+    expect = pd.Series(input_obj, dtype="category")
+    got = cudf.Series(input_obj, dtype="category").to_pandas()
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": cudf.Series(["a", "b", "c", "a", "c", "b"]).astype("category")},
+        {
+            "a": cudf.Series(["a", "a", "b", "b"]).astype("category"),
+            "b": cudf.Series(["b", "b", "c", "c"]).astype("category"),
+            "c": cudf.Series(["c", "c", "a", "a"]).astype("category"),
+        },
+        {
+            "a": cudf.Series(["a", None, "b", "b"]).astype("category"),
+            "b": cudf.Series(["b", "b", None, "c"]).astype("category"),
+            "c": cudf.Series(["c", "c", "a", None]).astype("category"),
+        },
+    ],
+)
+def test_serialize_categorical_columns(data):
+    df = cudf.DataFrame(data)
+    recreated = df.__class__.deserialize(*df.serialize())
+    assert_eq(recreated, df)
+
+
+@pytest.mark.parametrize(
+    "data", [["$ 1", "$ 2", "hello"], ["($) 1", "( 2", "hello", "^1$"]]
+)
+@pytest.mark.parametrize("value", ["$ 1", "hello", "$", "^1$"])
+def test_categorical_string_index_contains(data, value):
+    idx = cudf.CategoricalIndex(data)
+    pidx = idx.to_pandas()
+
+    assert_eq(value in idx, value in pidx)

@@ -22,7 +22,7 @@
 
 /**
  * @file column_view.hpp
- * @brief column view class definitons
+ * @brief column view class definitions
  */
 
 namespace cudf {
@@ -58,13 +58,13 @@ class column_view_base {
    *`data<T>()`.
    *
    * This function will only participate in overload resolution if `is_rep_layout_compatible<T>()`
-   * or `std::is_same<T,void>::value` are true.
+   * or `std::is_same_v<T,void>` are true.
    *
    * @tparam The type to cast to
    * @return T const* Typed pointer to underlying data
    */
   template <typename T = void,
-            CUDF_ENABLE_IF(std::is_same<T, void>::value or is_rep_layout_compatible<T>())>
+            CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   T const* head() const noexcept
   {
     return static_cast<T const*>(_data);
@@ -452,7 +452,7 @@ class mutable_column_view : public detail::column_view_base {
    * the specified type.
    *
    * This function will only participate in overload resolution if `is_rep_layout_compatible<T>()`
-   * or `std::is_same<T,void>::value` are true.
+   * or `std::is_same_v<T,void>` are true.
    *
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
@@ -463,7 +463,7 @@ class mutable_column_view : public detail::column_view_base {
    * @return T* Typed pointer to underlying data
    */
   template <typename T = void,
-            CUDF_ENABLE_IF(std::is_same<T, void>::value or is_rep_layout_compatible<T>())>
+            CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   T* head() const noexcept
   {
     return const_cast<T*>(detail::column_view_base::head<T>());

@@ -1,35 +1,38 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp cimport bool
-from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
 from cudf._lib.types cimport (
-    underlying_type_t_order,
-    underlying_type_t_null_order,
-    underlying_type_t_sorted,
     underlying_type_t_interpolation,
+    underlying_type_t_null_order,
+    underlying_type_t_order,
+    underlying_type_t_sorted,
 )
+
 from cudf._lib.types import Interpolation
+
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.quantiles cimport (
+    quantile as cpp_quantile,
+    quantiles as cpp_quantiles,
+)
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport (
     interpolation,
     null_order,
     order,
-    sorted,
     order_info,
+    sorted,
 )
-from cudf._lib.cpp.quantiles cimport (
-    quantile as cpp_quantile,
-    quantiles as cpp_quantiles,
-)
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def quantile(
@@ -116,7 +119,7 @@ def quantiles(Table source_table,
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names
     )

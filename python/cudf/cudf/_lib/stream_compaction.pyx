@@ -2,27 +2,30 @@
 
 import pandas as pd
 
-from libcpp.memory cimport unique_ptr
-from libcpp.vector cimport vector
-from libcpp.utility cimport move
 from libcpp cimport bool
+from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-from cudf._lib.table cimport Table
-
-from cudf._lib.cpp.types cimport (
-    size_type, null_policy, nan_policy, null_equality
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.stream_compaction cimport (
+    apply_boolean_mask as cpp_apply_boolean_mask,
+    distinct_count as cpp_distinct_count,
+    drop_duplicates as cpp_drop_duplicates,
+    drop_nulls as cpp_drop_nulls,
+    duplicate_keep_option,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.stream_compaction cimport (
-    duplicate_keep_option,
-    drop_nulls as cpp_drop_nulls,
-    apply_boolean_mask as cpp_apply_boolean_mask,
-    drop_duplicates as cpp_drop_duplicates,
-    distinct_count as cpp_distinct_count
+from cudf._lib.cpp.types cimport (
+    nan_policy,
+    null_equality,
+    null_policy,
+    size_type,
 )
+from cudf._lib.table cimport Table
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
@@ -76,7 +79,7 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=(
@@ -113,7 +116,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=(
@@ -190,7 +193,7 @@ def drop_duplicates(Table source_table,
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=(

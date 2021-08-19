@@ -8,14 +8,60 @@ from fsspec.utils import infer_compression
 
 from dask import dataframe as dd
 from dask.base import tokenize
-from dask.compatibility import apply
 from dask.dataframe.io.csv import make_reader
-from dask.utils import parse_bytes
+from dask.utils import apply, parse_bytes
 
 import cudf
 
 
 def read_csv(path, chunksize="256 MiB", **kwargs):
+    """
+    Read CSV files into a dask_cudf.DataFrame
+
+    This API parallelizes the ``cudf.read_csv`` function in the following ways:
+
+    It supports loading many files at once using globstrings:
+
+    >>> import dask_cudf
+    >>> df = dask_cudf.read_csv("myfiles.*.csv")
+
+    In some cases it can break up large files:
+
+    >>> df = dask_cudf.read_csv("largefile.csv", chunksize="256 MiB")
+
+    It can read CSV files from external resources (e.g. S3, HTTP, FTP)
+
+    >>> df = dask_cudf.read_csv("s3://bucket/myfiles.*.csv")
+    >>> df = dask_cudf.read_csv("https://www.mycloud.com/sample.csv")
+
+    Internally ``dask_cudf.read_csv`` uses ``cudf.read_csv`` and supports
+    many of the same keyword arguments with the same performance guarantees.
+    See the docstring for ``cudf.read_csv()`` for more information on available
+    keyword arguments.
+
+    Parameters
+    ----------
+    path : str, path object, or file-like object
+        Either a path to a file (a str, pathlib.Path, or
+        py._path.local.LocalPath), URL (including http, ftp, and S3 locations),
+        or any object with a read() method (such as builtin open() file
+        handler function or StringIO).
+    chunksize : int or str, default "256 MiB"
+        The target task partition size. If `None`, a single block
+        is used for each file.
+    **kwargs : dict
+        Passthrough key-word arguments that are sent to ``cudf.read_csv``.
+
+    Examples
+    --------
+    >>> import dask_cudf
+    >>> ddf = dask_cudf.read_csv("sample.csv", usecols=["a", "b"])
+    >>> ddf.compute()
+       a      b
+    0  1     hi
+    1  2  hello
+    2  3     ai
+    """
     if "://" in str(path):
         func = make_reader(cudf.read_csv, "read_csv", "CSV")
         return func(path, blocksize=chunksize, **kwargs)

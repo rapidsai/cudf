@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,22 @@
  * limitations under the License.
  */
 
-#ifndef __GENERATE_INPUT_TABLES_CUH
-#define __GENERATE_INPUT_TABLES_CUH
-
-#include <curand.h>
-#include <curand_kernel.h>
-#include <thrust/distance.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/sequence.h>
-#include <cassert>
+#pragma once
 
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/distance.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/sequence.h>
+
+#include <curand.h>
+#include <curand_kernel.h>
+
+#include <cassert>
 
 __global__ static void init_curand(curandState* state, const int nstates)
 {
@@ -137,7 +141,7 @@ __global__ void init_probe_tbl(key_type* const probe_tbl,
  * (e.g. device memory, zero copy memory or unified memory). Each value in the build table
  * will be from [0,rand_max] and if uniq_build_tbl_keys is true it is ensured that each value
  * will be uniq in the build table. Each value in the probe table will be also in the build
- * table with a propability of selectivity and a random number from
+ * table with a probability of selectivity and a random number from
  * [0,rand_max] \setminus \{build_tbl\} otherwise.
  *
  * @param[out] build_tbl            The build table to generate. Usually the smaller table used to
@@ -146,7 +150,7 @@ __global__ void init_probe_tbl(key_type* const probe_tbl,
  * @param[out] probe_tbl            The probe table to generate. Usually the larger table used to
  *                                  probe into the hash table created from the build table.
  * @param[in] build_tbl_size        number of keys in the build table
- * @param[in] selectivity           propability with which an element of the probe table is
+ * @param[in] selectivity           probability with which an element of the probe table is
  *                                  present in the build table.
  * @param[in] rand_max              maximum random number to generate. I.e. random numbers are
  *                                  integers from [0,rand_max].
@@ -165,7 +169,7 @@ void generate_input_tables(key_type* const build_tbl,
   // expense of not being that accurate with applying the selectivity an especially more memory
   // efficient implementations would be to partition the random numbers into two intervals and then
   // let one table choose random numbers from only one interval and the other only select with
-  // selectivity propability from the same interval and from the other in the other cases.
+  // selective probability from the same interval and from the other in the other cases.
 
   static_assert(std::is_signed<key_type>::value, "key_type needs to be signed for lottery to work");
 
@@ -188,64 +192,63 @@ void generate_input_tables(key_type* const build_tbl,
 
   const int num_states =
     num_sms * std::max(num_blocks_init_build_tbl, num_blocks_init_probe_tbl) * block_size;
-  rmm::device_vector<curandState> devStates(num_states);
+  rmm::device_uvector<curandState> devStates(num_states, rmm::cuda_stream_default);
 
-  init_curand<<<(num_states - 1) / block_size + 1, block_size>>>(devStates.data().get(),
-                                                                 num_states);
+  init_curand<<<(num_states - 1) / block_size + 1, block_size>>>(devStates.data(), num_states);
 
   CHECK_CUDA(0);
 
-  rmm::device_vector<key_type> build_tbl_sorted(build_tbl_size);
-
   size_type lottery_size =
     rand_max < std::numeric_limits<key_type>::max() - 1 ? rand_max + 1 : rand_max;
-  rmm::device_vector<key_type> lottery(lottery_size);
+  rmm::device_uvector<key_type> lottery(lottery_size, rmm::cuda_stream_default);
 
-  if (uniq_build_tbl_keys) { thrust::sequence(thrust::device, lottery.begin(), lottery.end(), 0); }
+  if (uniq_build_tbl_keys) {
+    thrust::sequence(rmm::exec_policy(), lottery.begin(), lottery.end(), 0);
+  }
 
   init_build_tbl<key_type, size_type>
     <<<num_sms * num_blocks_init_build_tbl, block_size>>>(build_tbl,
                                                           build_tbl_size,
                                                           rand_max,
                                                           uniq_build_tbl_keys,
-                                                          lottery.data().get(),
+                                                          lottery.data(),
                                                           lottery_size,
-                                                          devStates.data().get(),
+                                                          devStates.data(),
                                                           num_states);
 
   CHECK_CUDA(0);
 
-  CUDA_TRY(cudaMemcpy(build_tbl_sorted.data().get(),
+  rmm::device_uvector<key_type> build_tbl_sorted(build_tbl_size, rmm::cuda_stream_default);
+
+  CUDA_TRY(cudaMemcpy(build_tbl_sorted.data(),
                       build_tbl,
                       build_tbl_size * sizeof(key_type),
                       cudaMemcpyDeviceToDevice));
 
-  thrust::sort(thrust::device, build_tbl_sorted.begin(), build_tbl_sorted.end());
+  thrust::sort(rmm::exec_policy(), build_tbl_sorted.begin(), build_tbl_sorted.end());
 
   // Exclude keys used in build table from lottery
   thrust::counting_iterator<key_type> first_lottery_elem(0);
   thrust::counting_iterator<key_type> last_lottery_elem = first_lottery_elem + lottery_size;
-  key_type* lottery_end                                 = thrust::set_difference(thrust::device,
+  key_type* lottery_end                                 = thrust::set_difference(rmm::exec_policy(),
                                                  first_lottery_elem,
                                                  last_lottery_elem,
                                                  build_tbl_sorted.begin(),
                                                  build_tbl_sorted.end(),
-                                                 lottery.data().get());
+                                                 lottery.data());
 
-  lottery_size = thrust::distance(lottery.data().get(), lottery_end);
+  lottery_size = thrust::distance(lottery.data(), lottery_end);
 
   init_probe_tbl<key_type, size_type>
     <<<num_sms * num_blocks_init_build_tbl, block_size>>>(probe_tbl,
                                                           probe_tbl_size,
                                                           build_tbl,
                                                           build_tbl_size,
-                                                          lottery.data().get(),
+                                                          lottery.data(),
                                                           lottery_size,
                                                           selectivity,
-                                                          devStates.data().get(),
+                                                          devStates.data(),
                                                           num_states);
 
   CHECK_CUDA(0);
 }
-
-#endif  // __GENERATE_INPUT_TABLES_CUH

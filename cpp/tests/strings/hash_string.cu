@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,21 @@
  * limitations under the License.
  */
 
+#include "./utilities.h"
+#include "rmm/exec_policy.hpp"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include "./utilities.h"
 
-#include <thrust/execution_policy.h>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/transform.h>
 #include <vector>
 
@@ -58,8 +64,8 @@ TEST_F(StringsHashTest, HashTest)
   auto strings_column = cudf::column_device_view::create(strings_view.parent());
   auto d_view         = *strings_column;
 
-  thrust::device_vector<uint32_t> d_values(strings_view.size());
-  thrust::transform(thrust::device,
+  rmm::device_uvector<uint32_t> d_values(strings_view.size(), rmm::cuda_stream_default);
+  thrust::transform(rmm::exec_policy(),
                     thrust::make_counting_iterator<uint32_t>(0),
                     thrust::make_counting_iterator<uint32_t>(strings_view.size()),
                     d_values.begin(),
@@ -67,6 +73,7 @@ TEST_F(StringsHashTest, HashTest)
 
   uint32_t h_expected[] = {
     2739798893, 2739798893, 3506676360, 1891213601, 3778137224, 0, 0, 1551088011};
-  thrust::host_vector<uint32_t> h_values(d_values);
-  for (uint32_t idx = 0; idx < h_values.size(); ++idx) EXPECT_EQ(h_values[idx], h_expected[idx]);
+  auto h_values = cudf::detail::make_host_vector_sync(d_values);
+  for (uint32_t idx = 0; idx < h_values.size(); ++idx)
+    EXPECT_EQ(h_values[idx], h_expected[idx]);
 }

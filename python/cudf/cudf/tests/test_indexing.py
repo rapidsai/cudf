@@ -9,8 +9,12 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
-from cudf.tests import utils
-from cudf.tests.utils import INTEGER_TYPES, assert_eq, assert_exceptions_equal
+from cudf.testing import _utils as utils
+from cudf.testing._utils import (
+    INTEGER_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 index_dtypes = INTEGER_TYPES
 
@@ -661,7 +665,6 @@ def test_dataframe_iloc(nelem):
     assert_eq(gdf.iloc[np.array([0])], pdf.loc[np.array([0])])
 
 
-@pytest.mark.xfail(raises=AssertionError, reason="Series.index are different")
 def test_dataframe_iloc_tuple():
     gdf = cudf.DataFrame()
     nelem = 123
@@ -674,11 +677,8 @@ def test_dataframe_iloc_tuple():
     pdf["a"] = ha
     pdf["b"] = hb
 
-    # We don't support passing the column names into the index quite yet
-    got = gdf.iloc[1, [1]]
-    expect = pdf.iloc[1, [1]]
-
-    assert_eq(got, expect)
+    assert_eq(gdf.iloc[1, [1]], pdf.iloc[1, [1]], check_dtype=False)
+    assert_eq(gdf.iloc[:, -1], pdf.iloc[:, -1])
 
 
 @pytest.mark.xfail(
@@ -1404,6 +1404,10 @@ def test_iloc_with_lists(data, key):
     psr = pd.Series(data)
     gsr = cudf.Series(data)
     assert_eq(psr.iloc[key], gsr.iloc[key])
+
+    pdf = pd.DataFrame({"a": data, "b": data})
+    gdf = cudf.DataFrame({"a": data, "b": data})
+    assert_eq(pdf.iloc[key], gdf.iloc[key])
 
 
 @pytest.mark.parametrize("key", [5, -10, "0", "a", np.array(5), np.array("a")])

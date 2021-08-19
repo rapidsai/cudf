@@ -285,6 +285,85 @@ TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
   }
 }
 
+struct CopyEmptyNested : public cudf::test::BaseFixture {
+};
+
+TEST_F(CopyEmptyNested, CopyIfElseTestEmptyNestedColumns)
+{
+  // lists
+  {
+    cudf::test::lists_column_wrapper<cudf::string_view> col{{{"abc", "def"}, {"xyz"}}};
+    auto lhs = cudf::empty_like(col);
+    auto rhs = cudf::empty_like(col);
+    cudf::test::fixed_width_column_wrapper<bool> mask{};
+
+    auto expected = empty_like(col);
+
+    auto out = cudf::copy_if_else(*lhs, *rhs, mask);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), *expected);
+  }
+
+  // structs
+  {
+    cudf::test::lists_column_wrapper<cudf::string_view> _col0{{{"abc", "def"}, {"xyz"}}};
+    auto col0 = cudf::empty_like(_col0);
+    cudf::test::fixed_width_column_wrapper<int> col1;
+
+    std::vector<std::unique_ptr<cudf::column>> cols;
+    cols.push_back(std::move(col0));
+    cols.push_back(col1.release());
+    cudf::test::structs_column_wrapper struct_col(std::move(cols));
+    auto lhs = cudf::empty_like(struct_col);
+    auto rhs = cudf::empty_like(struct_col);
+
+    cudf::test::fixed_width_column_wrapper<bool> mask{};
+
+    auto expected = cudf::empty_like(struct_col);
+
+    auto out = cudf::copy_if_else(*lhs, *rhs, mask);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), *expected);
+  }
+}
+
+TEST_F(CopyEmptyNested, CopyIfElseTestEmptyNestedScalars)
+{
+  // lists
+  {
+    cudf::test::lists_column_wrapper<cudf::string_view> _col{{{"abc", "def"}, {"xyz"}}};
+    std::unique_ptr<cudf::scalar> lhs = cudf::get_element(_col, 0);
+    std::unique_ptr<cudf::scalar> rhs = cudf::get_element(_col, 0);
+
+    cudf::test::fixed_width_column_wrapper<bool> mask{};
+
+    auto expected = empty_like(_col);
+
+    auto out = cudf::copy_if_else(*lhs, *rhs, mask);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), *expected);
+  }
+
+  // structs
+  {
+    cudf::test::lists_column_wrapper<cudf::string_view> col0{{{"abc", "def"}, {"xyz"}}};
+    cudf::test::fixed_width_column_wrapper<int> col1{1};
+
+    cudf::table_view tbl({col0, col1});
+    cudf::struct_scalar lhs(tbl);
+    cudf::struct_scalar rhs(tbl);
+
+    std::vector<std::unique_ptr<cudf::column>> cols;
+    cols.push_back(col0.release());
+    cols.push_back(col1.release());
+    cudf::test::structs_column_wrapper struct_col(std::move(cols));
+
+    cudf::test::fixed_width_column_wrapper<bool> mask{};
+
+    auto expected = cudf::empty_like(struct_col);
+
+    auto out = cudf::copy_if_else(lhs, rhs, mask);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), *expected);
+  }
+}
+
 template <typename T>
 struct CopyTestNumeric : public cudf::test::BaseFixture {
 };

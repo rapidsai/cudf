@@ -265,7 +265,7 @@ TEST_F(JoinTest, FullJoinOnNulls)
   cols_gold.push_back(col_gold_3.release());
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
-  
+
   Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
@@ -549,7 +549,7 @@ TEST_F(JoinTest, LeftJoinOnNulls)
                                      {   1,     1,    0});
   column_wrapper<int32_t> col_gold_5{{   2,     8,   -1},
                                      {   1,     1,    0}};
-  
+
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
@@ -579,7 +579,7 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   result_sort_order = cudf::sorted_order(result->view());
   sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  
+
   col_gold_0 = {{   3,    -1,    2},
                 {   1,     0,    1}};
   col_gold_1 = {{ "s0",  "s1", "s2"},
@@ -605,29 +605,6 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   sorted_gold     = cudf::gather(gold_nulls_unequal.view(), *gold_sort_order);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
-}
-
-TEST_F(JoinTest, InnerJoinSizeOverflow)
-{
-  auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  zero->set_valid(true);
-  static_cast<cudf::scalar_type_t<int32_t> *>(zero.get())->set_value(0);
-
-  // Should cause size overflow, raise exception
-  int32_t left  = 4;
-  int32_t right = 1073741825;
-
-  auto col0_0 = cudf::make_column_from_scalar(*zero, left);
-  auto col1_0 = cudf::make_column_from_scalar(*zero, right);
-
-  CVector cols0, cols1;
-  cols0.push_back(std::move(col0_0));
-  cols1.push_back(std::move(col1_0));
-
-  Table t0(std::move(cols0));
-  Table t1(std::move(cols1));
-
-  EXPECT_THROW(cudf::inner_join(t0, t1, {0}, {0}), cudf::logic_error);
 }
 
 TEST_F(JoinTest, InnerJoinNoNulls)
@@ -805,7 +782,7 @@ TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-// // Test to check join behaviour when join keys are null.
+// // Test to check join behavior when join keys are null.
 TEST_F(JoinTest, InnerJoinOnNulls)
 {
   // clang-format off
@@ -849,7 +826,7 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   cols_gold.push_back(col_gold_3.release());
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
-  
+
   Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
@@ -1248,8 +1225,13 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
     Table t0(std::move(cols0));
 
-    auto result = hash_join.full_join(t0);
+    auto output_size                         = hash_join.full_join_size(t0);
+    std::optional<std::size_t> optional_size = output_size;
 
+    std::size_t const size_gold = 9;
+    EXPECT_EQ(output_size, size_gold);
+
+    auto result = hash_join.full_join(t0, cudf::null_equality::EQUAL, optional_size);
     auto result_table =
       cudf::table_view({cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                           static_cast<cudf::size_type>(result.first->size()),
@@ -1281,7 +1263,13 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
     Table t0(std::move(cols0));
 
-    auto result = hash_join.left_join(t0);
+    auto output_size                         = hash_join.left_join_size(t0);
+    std::optional<std::size_t> optional_size = output_size;
+
+    std::size_t const size_gold = 5;
+    EXPECT_EQ(output_size, size_gold);
+
+    auto result = hash_join.left_join(t0, cudf::null_equality::EQUAL, optional_size);
     auto result_table =
       cudf::table_view({cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                           static_cast<cudf::size_type>(result.first->size()),
@@ -1313,7 +1301,13 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
     Table t0(std::move(cols0));
 
-    auto result = hash_join.inner_join(t0);
+    auto output_size                         = hash_join.inner_join_size(t0);
+    std::optional<std::size_t> optional_size = output_size;
+
+    std::size_t const size_gold = 3;
+    EXPECT_EQ(output_size, size_gold);
+
+    auto result = hash_join.inner_join(t0, cudf::null_equality::EQUAL, optional_size);
     auto result_table =
       cudf::table_view({cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                           static_cast<cudf::size_type>(result.first->size()),

@@ -50,7 +50,7 @@ class parquet_reader_options_builder;
 class parquet_reader_options {
   source_info _source;
 
-  // Names of column to read; empty is all
+  // Path in schema of column to read; empty is all
   std::vector<std::string> _columns;
 
   // List of individual row groups to read (ignored if empty)
@@ -339,7 +339,7 @@ class parquet_reader_options_builder {
   /**
    * @brief move parquet_reader_options member once it's built.
    */
-  operator parquet_reader_options &&() { return std::move(options); }
+  operator parquet_reader_options&&() { return std::move(options); }
 
   /**
    * @brief move parquet_reader_options member once it's built.
@@ -392,6 +392,17 @@ class column_in_metadata {
   std::vector<column_in_metadata> children;
 
  public:
+  /**
+   * @brief Get the children of this column metadata
+   *
+   * @return this for chaining
+   */
+  column_in_metadata& add_child(column_in_metadata const& child)
+  {
+    children.push_back(child);
+    return *this;
+  }
+
   /**
    * @brief Set the name of this column
    *
@@ -758,7 +769,7 @@ class parquet_writer_options_builder {
   /**
    * @brief move parquet_writer_options member once it's built.
    */
-  operator parquet_writer_options &&() { return std::move(options); }
+  operator parquet_writer_options&&() { return std::move(options); }
 
   /**
    * @brief move parquet_writer_options member once it's built.
@@ -962,7 +973,7 @@ class chunked_parquet_writer_options_builder {
    * @brief Set to true if timestamps should be written as
    * int96 types instead of int64 types. Even though int96 is deprecated and is
    * not an internal type for cudf, it needs to be written for backwards
-   * compatability reasons.
+   * compatibility reasons.
    *
    * @param enabled Boolean value to enable/disable int96 timestamps.
    * @return this for chaining.
@@ -976,7 +987,7 @@ class chunked_parquet_writer_options_builder {
   /**
    * @brief move chunked_parquet_writer_options member once it's built.
    */
-  operator chunked_parquet_writer_options &&() { return std::move(options); }
+  operator chunked_parquet_writer_options&&() { return std::move(options); }
 
   /**
    * @brief move chunked_parquet_writer_options member once it's is built.

@@ -67,7 +67,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   }();
 
   // set scalar is valid
-  result->set_valid((col.null_count() < col.size()), stream);
+  result->set_valid_async(col.null_count() < col.size(), stream);
   return result;
 }
 
@@ -105,10 +105,10 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
   }();
 
   auto const scale = [&] {
-    if (std::is_same<Op, cudf::reduction::op::product>::value) {
+    if (std::is_same_v<Op, cudf::reduction::op::product>) {
       auto const valid_count = static_cast<int32_t>(col.size() - col.null_count());
       return numeric::scale_type{col.type().scale() * valid_count};
-    } else if (std::is_same<Op, cudf::reduction::op::sum_of_squares>::value) {
+    } else if (std::is_same_v<Op, cudf::reduction::op::sum_of_squares>) {
       return numeric::scale_type{col.type().scale() * 2};
     }
     return numeric::scale_type{col.type().scale()};
@@ -147,7 +147,7 @@ std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
   }();
 
   // set scalar is valid
-  result->set_valid((col.null_count() < col.size()), stream);
+  result->set_valid_async(col.null_count() < col.size(), stream);
   return result;
 }
 
@@ -252,9 +252,8 @@ struct same_element_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported()
   {
-    return !(cudf::is_dictionary<ElementType>() ||
-             std::is_same<ElementType, cudf::list_view>::value ||
-             std::is_same<ElementType, cudf::struct_view>::value);
+    return !(cudf::is_dictionary<ElementType>() || std::is_same_v<ElementType, cudf::list_view> ||
+             std::is_same_v<ElementType, cudf::struct_view>);
   }
 
   template <typename IndexType,
@@ -264,7 +263,7 @@ struct same_element_type_dispatcher {
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
   {
-    auto index = static_cast<numeric_scalar<IndexType> const&>(keys_index);
+    auto& index = static_cast<numeric_scalar<IndexType> const&>(keys_index);
     return cudf::detail::get_element(keys, index.value(stream), stream, mr);
   }
 

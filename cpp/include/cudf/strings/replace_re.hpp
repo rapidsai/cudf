@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,22 +72,24 @@ std::unique_ptr<column> replace_re(
 
 /**
  * @brief For each string, replaces any character sequence matching the given pattern
- * using the repl template for back-references.
+ * using the replacement template for back-references.
  *
  * Any null string entries return corresponding null output column entries.
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
+ * @throw cudf::logic_error if capture index values in `replacement` are not in range 1-99
+ *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression patterns to search within each string.
- * @param repl The replacement template for creating the output string.
+ * @param replacement The replacement template for creating the output string.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> replace_with_backrefs(
   strings_column_view const& strings,
   std::string const& pattern,
-  std::string const& repl,
+  std::string const& replacement,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace strings

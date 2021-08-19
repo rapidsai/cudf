@@ -1,13 +1,15 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import re
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import (
+from cudf.core.dtypes import Decimal64Dtype
+from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
     assert_eq,
@@ -301,6 +303,8 @@ def test_series_fillna_numerical(psr, data_dtype, fill_value, inplace):
         [1, None, None, 2, 3, 4],
         [None, None, 1, 2, None, 3, 4],
         [1, 2, None, 3, 4, None, None],
+        [0] + [None] * 14,
+        [None] * 14 + [0],
     ],
 )
 @pytest.mark.parametrize("container", [pd.Series, pd.DataFrame])
@@ -330,6 +334,58 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
         actual = gdata
 
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "gsr_data",
+    [
+        cudf.Series(["2.34", "5.2", "7.47", None, "92.29", None]).astype(
+            Decimal64Dtype(7, 2)
+        ),
+        cudf.Series(["-74.56", None, "-23.73", "34.55", "2.89", None]).astype(
+            Decimal64Dtype(7, 2)
+        ),
+        cudf.Series(
+            ["85.955", np.nan, "-3.243", np.nan, "29.492", np.nan]
+        ).astype(Decimal64Dtype(8, 3)),
+        cudf.Series(
+            ["2.964", None, "57.432", "-989.330", None, "56.444"]
+        ).astype(Decimal64Dtype(8, 3)),
+        cudf.Series(
+            [np.nan, "55.2498", np.nan, "-5.2965", "-28.9423", np.nan]
+        ).astype(Decimal64Dtype(10, 4)),
+    ],
+)
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        42,
+        -123,
+        Decimal("8.2"),
+        Decimal("-12.87"),
+        cudf.Series([None, -854, 9533, -274, -845, 7924], dtype="int32"),
+        cudf.Series(["-53.5", "13.4", "-64.3", None, "42.42", None]).astype(
+            Decimal64Dtype(7, 2)
+        ),
+        cudf.Series(
+            ["57.45", np.nan, np.nan, "686.49", "-55.5", "73.24"],
+        ).astype(Decimal64Dtype(7, 2)),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_fillna_decimal(gsr_data, fill_value, inplace):
+    gsr = gsr_data.copy(deep=True)
+    psr = gsr.to_pandas()
+
+    if isinstance(fill_value, cudf.Series):
+        p_fill_value = fill_value.to_pandas()
+    else:
+        p_fill_value = fill_value
+
+    expected = psr.fillna(p_fill_value, inplace=inplace)
+    got = gsr.fillna(fill_value, inplace=inplace)
+
+    assert_eq(expected, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -1219,3 +1275,69 @@ def test_series_replace_errors():
         lfunc_args_and_kwargs=([{"a": 1}, object()],),
         rfunc_args_and_kwargs=([{"a": 1}, object()],),
     )
+
+
+@pytest.mark.parametrize(
+    "gsr,old,new,expected",
+    [
+        (
+            cudf.Series(["a", "b", "c", None]),
+            None,
+            "a",
+            cudf.Series(["a", "b", "c", "a"]),
+        ),
+        (
+            cudf.Series(["a", "b", "c", None]),
+            [None, "a", "a"],
+            ["c", "b", "d"],
+            cudf.Series(["d", "b", "c", "c"]),
+        ),
+        (
+            cudf.Series(["a", "b", "c", None]),
+            [None, "a"],
+            ["b", None],
+            cudf.Series([None, "b", "c", "b"]),
+        ),
+        (
+            cudf.Series(["a", "b", "c", None]),
+            [None, None],
+            [None, None],
+            cudf.Series(["a", "b", "c", None]),
+        ),
+        (cudf.Series([1, 2, None, 3]), None, 10, cudf.Series([1, 2, 10, 3])),
+        (
+            cudf.Series([1, 2, None, 3]),
+            [None, 1, 1],
+            [3, 2, 4],
+            cudf.Series([4, 2, 3, 3]),
+        ),
+        (
+            cudf.Series([1, 2, None, 3]),
+            [None, 1],
+            [2, None],
+            cudf.Series([None, 2, 2, 3]),
+        ),
+        (
+            cudf.Series(["a", "q", "t", None], dtype="category"),
+            None,
+            "z",
+            cudf.Series(["a", "q", "t", "z"], dtype="category"),
+        ),
+        (
+            cudf.Series(["a", "q", "t", None], dtype="category"),
+            [None, "a", "q"],
+            ["z", None, None],
+            cudf.Series([None, None, "t", "z"], dtype="category"),
+        ),
+        (
+            cudf.Series(["a", None, "t", None], dtype="category"),
+            [None, "t"],
+            ["p", None],
+            cudf.Series(["a", "p", None, "p"], dtype="category"),
+        ),
+    ],
+)
+def test_replace_nulls(gsr, old, new, expected):
+
+    actual = gsr.replace(old, new)
+    assert_eq(expected, actual)
