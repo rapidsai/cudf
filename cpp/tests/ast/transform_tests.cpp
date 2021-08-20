@@ -308,9 +308,9 @@ TEST_F(TransformTest, UnaryNotNulls)
   auto expression = cudf::ast::operation(cudf::ast::ast_operator::NOT, col_ref_0);
 
   auto result   = cudf::compute_column(table, expression);
-  auto expected = column_wrapper<bool>{{false, true, false, false}, {0, 0, 1, 1}};
+  auto expected = column_wrapper<bool>{{false, true, true, false}, {0, 0, 1, 1}};
 
-  // cudf::test::expect_columns_equal(expected, result->view(), verbosity);
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, UnaryTrigonometry)

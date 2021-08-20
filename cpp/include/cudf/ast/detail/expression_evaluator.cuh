@@ -598,8 +598,9 @@ struct expression_evaluator {
      */
     template <ast_operator op,
               typename OutputType,
-              std::enable_if_t<detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
-                                                         Input>>* = nullptr>
+              std::enable_if_t<
+                detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
+                                          possibly_null_value_t<Input, has_nulls>>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
                                possibly_null_value_t<Input, has_nulls> const input,
@@ -614,8 +615,9 @@ struct expression_evaluator {
 
     template <ast_operator op,
               typename OutputType,
-              std::enable_if_t<!detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
-                                                          Input>>* = nullptr>
+              std::enable_if_t<
+                !detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
+                                           possibly_null_value_t<Input, has_nulls>>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
                                possibly_null_value_t<Input, has_nulls> const input,
@@ -650,11 +652,12 @@ struct expression_evaluator {
      * @param rhs Right input to the operation.
      * @param output Output data reference.
      */
-    template <
-      ast_operator op,
-      typename OutputType,
-      std::enable_if_t<
-        detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>, LHS, RHS>>* = nullptr>
+    template <ast_operator op,
+              typename OutputType,
+              std::enable_if_t<detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
+                                                          possibly_null_value_t<LHS, has_nulls>,
+                                                          possibly_null_value_t<RHS, has_nulls>>>* =
+                nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
                                possibly_null_value_t<LHS, has_nulls> const lhs,
@@ -688,11 +691,12 @@ struct expression_evaluator {
       }
     }
 
-    template <
-      ast_operator op,
-      typename OutputType,
-      std::enable_if_t<
-        !detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>, LHS, RHS>>* = nullptr>
+    template <ast_operator op,
+              typename OutputType,
+              std::enable_if_t<
+                !detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
+                                            possibly_null_value_t<LHS, has_nulls>,
+                                            possibly_null_value_t<RHS, has_nulls>>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
                                possibly_null_value_t<LHS, has_nulls> const lhs,
