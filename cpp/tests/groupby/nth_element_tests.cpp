@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -435,8 +435,11 @@ TEST_F(groupby_nth_element_structs_test, Basics)
   auto expected_ch1    = doubles{1.2, 4.51, -0.07, 0.0};
   auto expected_ch2    = strings{"a", "d", "g", ""};
   auto expected_values = structs{{expected_ch0, expected_ch1, expected_ch2}, {0, 1, 1, 0}};
-  test_single_agg(
-    keys, values, expected_keys, expected_values, cudf::make_nth_element_aggregation(1));
+  test_single_agg(keys,
+                  values,
+                  expected_keys,
+                  expected_values,
+                  cudf::make_nth_element_aggregation<groupby_aggregation>(1));
 
   expected_keys   = ints{0, 1, 2, 3};
   expected_ch0    = ints{0, 4, 6, 9};
@@ -447,7 +450,7 @@ TEST_F(groupby_nth_element_structs_test, Basics)
                   values,
                   expected_keys,
                   expected_values,
-                  cudf::make_nth_element_aggregation(0, null_policy::EXCLUDE));
+                  cudf::make_nth_element_aggregation<groupby_aggregation>(0, null_policy::EXCLUDE));
 }
 
 TEST_F(groupby_nth_element_structs_test, NestedStructs)
@@ -472,8 +475,11 @@ TEST_F(groupby_nth_element_structs_test, NestedStructs)
   auto expected_ch1        = structs{expected_ch0_of_ch1, expected_ch1_of_ch1};
   auto expected_ch2        = lists{{1, 2, 3}, {5, 6}, {7}, {}};
   auto expected_values     = structs{{expected_ch0, expected_ch1, expected_ch2}, {0, 1, 1, 0}};
-  test_single_agg(
-    keys, values, expected_keys, expected_values, cudf::make_nth_element_aggregation(1));
+  test_single_agg(keys,
+                  values,
+                  expected_keys,
+                  expected_values,
+                  cudf::make_nth_element_aggregation<groupby_aggregation>(1));
 
   expected_keys       = ints{0, 1, 2, 3};
   expected_ch0        = ints{0, 4, 6, 9};
@@ -486,7 +492,7 @@ TEST_F(groupby_nth_element_structs_test, NestedStructs)
                   values,
                   expected_keys,
                   expected_values,
-                  cudf::make_nth_element_aggregation(0, null_policy::EXCLUDE));
+                  cudf::make_nth_element_aggregation<groupby_aggregation>(0, null_policy::EXCLUDE));
 }
 
 TEST_F(groupby_nth_element_structs_test, EmptyInput)
@@ -507,8 +513,11 @@ TEST_F(groupby_nth_element_structs_test, EmptyInput)
   auto expected_ch1    = doubles{};
   auto expected_ch2    = strings{};
   auto expected_values = structs{{expected_ch0, expected_ch1, expected_ch2}};
-  test_single_agg(
-    keys, values, expected_keys, expected_values, cudf::make_nth_element_aggregation(0));
+  test_single_agg(keys,
+                  values,
+                  expected_keys,
+                  expected_values,
+                  cudf::make_nth_element_aggregation<groupby_aggregation>(0));
 }
 }  // namespace test
 }  // namespace cudf
