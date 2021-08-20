@@ -73,12 +73,11 @@ bool is_struct(cudf::column_view const& col) { return col.type().id() == type_id
  * @brief Check whether the specified column is of type LIST, or any LISTs in its descendent
  * columns.
  */
-bool is_or_has_lists(cudf::column_view const& col)
+bool is_or_has_nested_lists(cudf::column_view const& col)
 {
   auto is_list = [](cudf::column_view const& col) { return col.type().id() == type_id::LIST; };
 
-  return is_list(col) ||
-         (is_struct(col) && std::any_of(col.child_begin(), col.child_end(), is_or_has_lists));
+  return is_list(col) || std::any_of(col.child_begin(), col.child_end(), is_or_has_nested_lists);
 }
 }  // namespace
 
@@ -112,7 +111,7 @@ struct flattened_table {
 
   void fail_if_unsupported_types(table_view const& input) const
   {
-    auto const has_lists = std::any_of(input.begin(), input.end(), is_or_has_lists);
+    auto const has_lists = std::any_of(input.begin(), input.end(), is_or_has_nested_lists);
     CUDF_EXPECTS(not has_lists, "Flattening LIST columns is not supported.");
   }
 
@@ -273,7 +272,7 @@ std::unique_ptr<cudf::table> unflatten_nested_columns(std::unique_ptr<cudf::tabl
                                                       table_view const& blueprint)
 {
   // Bail, if LISTs are present.
-  auto const has_lists = std::any_of(blueprint.begin(), blueprint.end(), is_or_has_lists);
+  auto const has_lists = std::any_of(blueprint.begin(), blueprint.end(), is_or_has_nested_lists);
   CUDF_EXPECTS(not has_lists, "Unflattening LIST columns is not supported.");
 
   // If there are no STRUCTs, unflattening is a NOOP.
