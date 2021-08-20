@@ -193,7 +193,7 @@ class build_ext_and_proto_no_debug(_build_ext):
                     src.write(new_src_content)
 
         # Run original Cython build_ext command
-        build_ext.run(self)
+        _build_ext.run(self)
 
 
 extensions = [
