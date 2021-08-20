@@ -779,9 +779,7 @@ struct single_dispatch_binary_operator_types {
   template <typename LHS,
             typename F,
             typename... Ts,
-            std::enable_if_t<is_valid_binary_op<OperatorFunctor,
-                                                possibly_null_value_t<LHS, has_nulls>,
-                                                possibly_null_value_t<LHS, has_nulls>>>* = nullptr>
+            std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, LHS>>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
   {
     f.template operator()<OperatorFunctor,
@@ -792,9 +790,7 @@ struct single_dispatch_binary_operator_types {
   template <typename LHS,
             typename F,
             typename... Ts,
-            std::enable_if_t<!is_valid_binary_op<OperatorFunctor,
-                                                 possibly_null_value_t<LHS, has_nulls>,
-                                                 possibly_null_value_t<LHS, has_nulls>>>* = nullptr>
+            std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, LHS>>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
   {
 #ifndef __CUDA_ARCH__
