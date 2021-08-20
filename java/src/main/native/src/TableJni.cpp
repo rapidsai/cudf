@@ -929,12 +929,70 @@ jlongArray combine_join_results(JNIEnv *env, cudf::table &left_results,
   return combine_join_results(env, std::move(left_cols), std::move(right_cols));
 }
 
+cudf::column_view remove_validity_from_col(cudf::column_view column_view) {
+  if (!cudf::is_compound(column_view.type())) {
+    if (column_view.nullable() && column_view.null_count() == 0) {
+      // null_mask is allocated but no nulls present therefore we create a new column_view without
+      // the null_mask to avoid things blowing up in reading the parquet file
+      return cudf::column_view(column_view.type(), column_view.size(), column_view.head(), nullptr,
+                               0, column_view.offset());
+    } else {
+      return cudf::column_view(column_view);
+    }
+  } else {
+    std::unique_ptr<cudf::column_view> ret;
+    std::vector<cudf::column_view> children;
+    children.reserve(column_view.num_children());
+    for (auto it = column_view.child_begin(); it != column_view.child_end(); it++) {
+      children.push_back(remove_validity_from_col(*it));
+    }
+    if (!column_view.nullable() || column_view.null_count() != 0) {
+      ret.reset(new cudf::column_view(column_view.type(), column_view.size(), nullptr,
+                                      column_view.null_mask(), column_view.null_count(),
+                                      column_view.offset(), children));
+    } else {
+      ret.reset(new cudf::column_view(column_view.type(), column_view.size(), nullptr, nullptr, 0,
+                                      column_view.offset(), children));
+    }
+    return *ret.release();
+  }
+}
+
+cudf::table_view remove_validity_if_needed(cudf::table_view *input_table_view) {
+  std::vector<cudf::column_view> views;
+  views.reserve(input_table_view->num_columns());
+  for (auto it = input_table_view->begin(); it != input_table_view->end(); it++) {
+    views.push_back(remove_validity_from_col(*it));
+  }
+
+  return cudf::table_view(views);
+}
+
 } // namespace
 
 } // namespace jni
 } // namespace cudf
 
 extern "C" {
+
+// This is a method purely added for testing remove_validity_if_needed method
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_removeNullMasksIfNeeded(JNIEnv *env, jclass,
+                                                                               jlong j_table_view) {
+  JNI_NULL_CHECK(env, j_table_view, "table view handle is null", 0);
+  try {
+    cudf::table_view *tview = reinterpret_cast<cudf::table_view *>(j_table_view);
+    cudf::table_view result = cudf::jni::remove_validity_if_needed(tview);
+    cudf::table m_tbl(result);
+    std::vector<std::unique_ptr<cudf::column>> cols = m_tbl.release();
+    auto results = cudf::jni::native_jlongArray(env, cols.size());
+    int i = 0;
+    for (auto it = cols.begin(); it != cols.end(); it++) {
+      results[i++] = reinterpret_cast<jlong>(it->release());
+    }
+    return results.get_jArray();
+  }
+  CATCH_STD(env, 0);
+}
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_createCudfTableView(JNIEnv *env, jclass,
                                                                       jlongArray j_cudf_columns) {
@@ -1357,7 +1415,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetChunk(JNIEnv *env, 
   JNI_NULL_CHECK(env, j_state, "null state", );
 
   using namespace cudf::io;
-  cudf::table_view *tview = reinterpret_cast<cudf::table_view *>(j_table);
+  cudf::table_view *tview_with_empty_nullmask = reinterpret_cast<cudf::table_view *>(j_table);
+  cudf::table_view tview = cudf::jni::remove_validity_if_needed(tview_with_empty_nullmask);
   cudf::jni::native_parquet_writer_handle *state =
       reinterpret_cast<cudf::jni::native_parquet_writer_handle *>(j_state);
 
@@ -1367,7 +1426,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetChunk(JNIEnv *env, 
   }
   try {
     cudf::jni::auto_set_device(env);
-    state->writer->write(*tview);
+    state->writer->write(tview);
   }
   CATCH_STD(env, )
 }

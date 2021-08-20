@@ -170,10 +170,19 @@ public final class Table implements AutoCloseable {
     return total;
   }
 
+  /**
+   * This method is internal and exposed purely for testing purpopses
+   */
+  static Table removeNullMasksIfNeeded(Table table) {
+    return new Table(removeNullMasksIfNeeded(table.nativeHandle));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // NATIVE APIs
   /////////////////////////////////////////////////////////////////////////////
-  
+
+  private static native long[] removeNullMasksIfNeeded(long tableView) throws CudfException;
+
   private static native ContiguousTable[] contiguousSplit(long inputTable, int[] indices);
 
   private static native long[] partition(long inputTable, long partitionView,
