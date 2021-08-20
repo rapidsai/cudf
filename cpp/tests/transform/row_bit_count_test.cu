@@ -220,7 +220,7 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
   //   [ struct({0,1}), struct({2,3}), struct({4,5}), ... ]
 
   using namespace cudf;
-  auto constexpr num_rows = 256 * 2;  // Exceeding a block size.
+  auto constexpr num_rows = 1024 * 2;  // Exceeding a block size.
 
   // List child column = {0, 1, 2, 3, 4, ..., 2*num_rows};
   auto ints      = make_numeric_column(data_type{type_id::INT32}, num_rows * 2);
