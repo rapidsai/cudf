@@ -57,6 +57,7 @@ enum class ast_operator {
   PYMOD,          ///< operator % but following python's sign rules for negatives
   POW,            ///< lhs ^ rhs
   EQUAL,          ///< operator ==
+  NULL_EQUAL,     ///< operator ==, but nulls compare equal
   NOT_EQUAL,      ///< operator !=
   LESS,           ///< operator <
   GREATER,        ///< operator >

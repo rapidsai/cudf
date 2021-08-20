@@ -92,6 +92,22 @@ TEST_F(TransformTest, BasicAddition)
   cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
+TEST_F(TransformTest, BasicEquality)
+{
+  auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
+  auto c_1   = column_wrapper<int32_t>{3, 7, 1, 0};
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
+
+  auto expected = column_wrapper<bool>{true, false, true, false};
+  auto result   = cudf::compute_column(table, expression);
+
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
+}
+
 TEST_F(TransformTest, BasicAdditionLarge)
 {
   auto a     = thrust::make_counting_iterator(0);
@@ -298,21 +314,6 @@ TEST_F(TransformTest, UnaryNot)
   cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
-TEST_F(TransformTest, UnaryNotNulls)
-{
-  auto c_0   = column_wrapper<int32_t>{{3, 0, 0, 50}, {0, 0, 1, 1}};
-  auto table = cudf::table_view{{c_0}};
-
-  auto col_ref_0 = cudf::ast::column_reference(0);
-
-  auto expression = cudf::ast::operation(cudf::ast::ast_operator::NOT, col_ref_0);
-
-  auto result   = cudf::compute_column(table, expression);
-  auto expected = column_wrapper<bool>{{false, true, true, false}, {0, 0, 1, 1}};
-
-  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
-}
-
 TEST_F(TransformTest, UnaryTrigonometry)
 {
   auto c_0   = column_wrapper<double>{0.0, M_PI / 4, M_PI / 3};
@@ -454,6 +455,37 @@ TEST_F(TransformTest, PyMod)
 
   auto result   = cudf::compute_column(table, expression);
   auto expected = column_wrapper<double>{1.0, 0.0, 1.0, 0.0};
+
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
+}
+
+TEST_F(TransformTest, BasicEqualityNulls)
+{
+  auto c_0   = column_wrapper<int32_t>{{3, 20, 1, 50}, {1, 1, 1, 0}};
+  auto c_1   = column_wrapper<int32_t>{{3, 7, 1, 0}, {1, 1, 1, 0}};
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col_ref_0, col_ref_1);
+
+  auto expected = column_wrapper<bool>{{true, false, true, true}, {1, 1, 1, 1}};
+  auto result   = cudf::compute_column(table, expression);
+
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
+}
+
+TEST_F(TransformTest, UnaryNotNulls)
+{
+  auto c_0   = column_wrapper<int32_t>{{3, 0, 0, 50}, {0, 0, 1, 1}};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref_0 = cudf::ast::column_reference(0);
+
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::NOT, col_ref_0);
+
+  auto result   = cudf::compute_column(table, expression);
+  auto expected = column_wrapper<bool>{{false, true, true, false}, {0, 0, 1, 1}};
 
   cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }

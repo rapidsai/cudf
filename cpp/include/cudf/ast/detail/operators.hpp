@@ -84,6 +84,9 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op
     case ast_operator::EQUAL:
       f.template operator()<ast_operator::EQUAL>(std::forward<Ts>(args)...);
       break;
+    case ast_operator::NULL_EQUAL:
+      f.template operator()<ast_operator::NULL_EQUAL>(std::forward<Ts>(args)...);
+      break;
     case ast_operator::NOT_EQUAL:
       f.template operator()<ast_operator::NOT_EQUAL>(std::forward<Ts>(args)...);
       break;
@@ -374,6 +377,18 @@ struct operator_functor<ast_operator::POW, false> {
 
 template <>
 struct operator_functor<ast_operator::EQUAL, false> {
+  static constexpr auto arity{2};
+
+  template <typename LHS, typename RHS>
+  CUDA_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs == rhs)
+  {
+    return lhs == rhs;
+  }
+};
+
+// TODO: Try to alias this if possible.
+template <>
+struct operator_functor<ast_operator::NULL_EQUAL, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
@@ -760,7 +775,7 @@ struct operator_functor<ast_operator::NOT, false> {
 template <ast_operator op>
 struct operator_functor<op, true> : operator_functor<op, false> {
   using operator_functor<op, false>::arity;
-  // using operator_functor<op, false>::operator();
+
   template <typename LHS,
             typename RHS,
             std::size_t arity_placeholder             = arity,
@@ -771,8 +786,8 @@ struct operator_functor<op, true> : operator_functor<op, false> {
     using Out =
       possibly_null_value_t<decltype(operator_functor<op, false>::operator()(*lhs, *rhs)), true>;
     return (lhs.has_value() && rhs.has_value())
-             ? Out(operator_functor<op, false>::operator()(*lhs, *rhs))
-             : Out();
+             ? Out{operator_functor<op, false>::operator()(*lhs, *rhs)}
+             : Out{};
   }
 
   template <typename Input,
@@ -783,7 +798,34 @@ struct operator_functor<op, true> : operator_functor<op, false> {
   {
     using Out =
       possibly_null_value_t<decltype(operator_functor<op, false>::operator()(*input)), true>;
-    return input.has_value() ? Out(operator_functor<op, false>::operator()(*input)) : Out();
+    return input.has_value() ? Out{operator_functor<op, false>::operator()(*input)} : Out{};
+  }
+};
+
+// NULL_EQUAL must compare two nulls as equal.
+template <>
+struct operator_functor<ast_operator::NULL_EQUAL, true>
+  : operator_functor<ast_operator::NULL_EQUAL, false> {
+  using operator_functor<ast_operator::NULL_EQUAL, false>::arity;
+
+  template <typename LHS, typename RHS>
+  CUDA_DEVICE_CALLABLE auto operator()(LHS const lhs, RHS const rhs) -> possibly_null_value_t<
+    decltype(operator_functor<ast_operator::NULL_EQUAL, false>::operator()(*lhs, *rhs)),
+    true>
+  {
+    using Out =
+      possibly_null_value_t<decltype(operator_functor<ast_operator::NULL_EQUAL, false>::operator()(
+                              *lhs, *rhs)),
+                            true>;
+
+    // Case 1: Both null, so the output is based on compare_nulls.
+    if (!lhs.has_value() && !rhs.has_value()) { return Out{true}; }
+    // Case 2: Neither is null, so the output is given by the operation.
+    if (lhs.has_value() && rhs.has_value()) {
+      return Out{operator_functor<ast_operator::NULL_EQUAL, false>::operator()(*lhs, *rhs)};
+    }
+    // Case 3: One value is null, while the other is not, so we propagate nulls.
+    return Out{};
   }
 };
 
