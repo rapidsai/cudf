@@ -124,7 +124,7 @@ std::unique_ptr<scalar> make_default_constructed_scalar(
 /**
  * @brief Creates an empty (invalid) scalar of the same type as the `input` column_view.
  *
- * @throw std::bad_alloc if device memory allocation fails
+ * @throw cudf::logic_error if the `input` column is struct type and empty
  *
  * @param input Immutable view of input column to emulate
  * @param stream CUDA stream used for device memory operations.

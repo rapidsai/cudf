@@ -1874,7 +1874,6 @@ TYPED_TEST(DictionaryReductionTest, Quantile)
                        output_type);
 }
 
-//-------------------------------------------------------------------
 struct ListReductionTest : public cudf::test::BaseFixture {
   void reduction_test(cudf::column_view const& input_data,
                       cudf::column_view const& expected_value,
@@ -1979,7 +1978,6 @@ TEST_F(ListReductionTest, NonValidListReductionNthElement)
                        cudf::make_nth_element_aggregation(0, cudf::null_policy::INCLUDE));
 }
 
-//-------------------------------------------------------------------
 struct StructReductionTest : public cudf::test::BaseFixture {
   using SCW = cudf::test::structs_column_wrapper;
 
