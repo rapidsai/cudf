@@ -198,15 +198,6 @@ class reader::impl {
   std::vector<data_type> select_data_types(std::vector<data_type> const& dtypes);
 
   /**
-   * @brief Parses the columns' data types from the vector of dtypes that are provided as strings.
-   *
-   * @param types_as_strings The vector of strings from which to parse the columns' target data
-   * types
-   * @return List of columns' data types
-   */
-  std::vector<data_type> parse_column_types(std::vector<std::string> const& types_as_strings);
-
-  /**
    * @brief Converts the row-column data and outputs to column bufferrs.
    *
    * @param column_types Column types
