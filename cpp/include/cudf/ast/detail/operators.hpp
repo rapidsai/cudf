@@ -827,7 +827,6 @@ struct single_dispatch_binary_operator_types {
  * This functor performs single dispatch, which assumes lhs_type == rhs_type. This may not be true
  * for all binary operators but holds for all currently implemented operators.
  */
-template <bool has_nulls>
 struct type_dispatch_binary_op {
   /**
    * @brief Performs type dispatch for a binary operator.
@@ -849,7 +848,8 @@ struct type_dispatch_binary_op {
     // Single dispatch (assume lhs_type == rhs_type)
     type_dispatcher(
       lhs_type,
-      detail::single_dispatch_binary_operator_types<operator_functor<op, has_nulls>>{},
+      // Always non-null operator since this is just for the purpose of type determination.
+      detail::single_dispatch_binary_operator_types<operator_functor<op, false>>{},
       std::forward<F>(f),
       std::forward<Ts>(args)...);
   }
@@ -865,12 +865,12 @@ struct type_dispatch_binary_op {
  * @param f Forwarded functor to be called.
  * @param args Forwarded arguments to `operator()` of `f`.
  */
-template <bool has_nulls, typename F, typename... Ts>
+template <typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr void binary_operator_dispatcher(
   ast_operator op, cudf::data_type lhs_type, cudf::data_type rhs_type, F&& f, Ts&&... args)
 {
   ast_operator_dispatcher(op,
-                          detail::type_dispatch_binary_op<has_nulls>{},
+                          detail::type_dispatch_binary_op{},
                           lhs_type,
                           rhs_type,
                           std::forward<F>(f),
@@ -913,15 +913,16 @@ struct dispatch_unary_operator_types {
 /**
  * @brief Functor performing a type dispatch for a unary operator.
  */
-template <bool has_nulls>
 struct type_dispatch_unary_op {
   template <ast_operator op, typename F, typename... Ts>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type input_type, F&& f, Ts&&... args)
   {
-    type_dispatcher(input_type,
-                    detail::dispatch_unary_operator_types<operator_functor<op, has_nulls>>{},
-                    std::forward<F>(f),
-                    std::forward<Ts>(args)...);
+    type_dispatcher(
+      input_type,
+      // Always non-null operator since this is just for the purpose of type determination.
+      detail::dispatch_unary_operator_types<operator_functor<op, false>>{},
+      std::forward<F>(f),
+      std::forward<Ts>(args)...);
   }
 };
 
@@ -934,14 +935,14 @@ struct type_dispatch_unary_op {
  * @param f Forwarded functor to be called.
  * @param args Forwarded arguments to `operator()` of `f`.
  */
-template <bool has_nulls, typename F, typename... Ts>
+template <typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr void unary_operator_dispatcher(ast_operator op,
                                                                    cudf::data_type input_type,
                                                                    F&& f,
                                                                    Ts&&... args)
 {
   ast_operator_dispatcher(op,
-                          detail::type_dispatch_unary_op<has_nulls>{},
+                          detail::type_dispatch_unary_op{},
                           input_type,
                           std::forward<F>(f),
                           std::forward<Ts>(args)...);
@@ -1018,18 +1019,16 @@ struct return_type_functor {
  * @param operand_types Vector of input types to the operator.
  * @return cudf::data_type Return type of the operator.
  */
-template <bool has_nulls>
 inline cudf::data_type ast_operator_return_type(ast_operator op,
                                                 std::vector<cudf::data_type> const& operand_types)
 {
   auto result = cudf::data_type(cudf::type_id::EMPTY);
   switch (operand_types.size()) {
     case 1:
-      unary_operator_dispatcher<has_nulls>(
-        op, operand_types[0], detail::return_type_functor{}, result);
+      unary_operator_dispatcher(op, operand_types[0], detail::return_type_functor{}, result);
       break;
     case 2:
-      binary_operator_dispatcher<has_nulls>(
+      binary_operator_dispatcher(
         op, operand_types[0], operand_types[1], detail::return_type_functor{}, result);
       break;
     default: CUDF_FAIL("Unsupported operator return type."); break;
