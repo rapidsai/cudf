@@ -7,7 +7,7 @@ import numpy as np
 from pyarrow import parquet as pq
 
 from dask import dataframe as dd
-from dask.dataframe.io.parquet.arrow import ArrowEngine
+from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
 try:
     from dask.dataframe.io.parquet import (
@@ -19,12 +19,20 @@ except ImportError:
 import cudf
 from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
+from cudf.utils.dtypes import cudf_dtype_from_pa_type
 
 
-class CudfEngine(ArrowEngine):
+class CudfEngine(ArrowDatasetEngine):
     @staticmethod
     def read_metadata(*args, **kwargs):
-        meta, stats, parts, index = ArrowEngine.read_metadata(*args, **kwargs)
+        meta, stats, parts, index = ArrowDatasetEngine.read_metadata(
+            *args, **kwargs
+        )
+        if parts:
+            # Re-set "object" dtypes align with pa schema
+            set_object_dtypes_from_pa_schema(
+                meta, parts[0].get("common_kwargs", {}).get("schema", None),
+            )
 
         # If `strings_to_categorical==True`, convert objects to int32
         strings_to_cats = kwargs.get("strings_to_categorical", False)
@@ -59,7 +67,6 @@ class CudfEngine(ArrowEngine):
             pieces = [pieces]
 
         strings_to_cats = kwargs.get("strings_to_categorical", False)
-
         if len(pieces) > 1:
 
             paths = []
@@ -72,6 +79,9 @@ class CudfEngine(ArrowEngine):
                     rgs.append(None)
                 else:
                     (path, row_group, partition_keys) = piece
+
+                    row_group = None if row_group == [None] else row_group
+
                     paths.append(path)
                     rgs.append(
                         [row_group]
@@ -96,6 +106,7 @@ class CudfEngine(ArrowEngine):
                 partition_keys = []
             else:
                 (path, row_group, partition_keys) = pieces[0]
+                row_group = None if row_group == [None] else row_group
 
             if cudf.utils.ioutils._is_local_filesystem(fs):
                 df = cudf.read_parquet(
@@ -117,6 +128,9 @@ class CudfEngine(ArrowEngine):
                         **kwargs.get("read", {}),
                     )
 
+        # Re-set "object" dtypes align with pa schema
+        set_object_dtypes_from_pa_schema(df, kwargs.get("schema", None))
+
         if index and (index[0] in df.columns):
             df = df.set_index(index[0])
         elif index is False and set(df.index.names).issubset(columns):
@@ -127,17 +141,22 @@ class CudfEngine(ArrowEngine):
         if partition_keys:
             if partitions is None:
                 raise ValueError("Must pass partition sets")
-            for i, (name, index2) in enumerate(partition_keys):
-                categories = [
-                    val.as_py() for val in partitions.levels[i].dictionary
-                ]
 
-                col = as_column(index2).as_frame().repeat(len(df))._data[None]
+            for i, (name, index2) in enumerate(partition_keys):
+
+                # Build the column from `codes` directly
+                # (since the category is often a larger dtype)
+                codes = (
+                    as_column(partitions[i].keys.index(index2))
+                    .as_frame()
+                    .repeat(len(df))
+                    ._data[None]
+                )
                 df[name] = build_categorical_column(
-                    categories=categories,
-                    codes=as_column(col.base_data, dtype=col.dtype),
-                    size=col.size,
-                    offset=col.offset,
+                    categories=partitions[i].keys,
+                    codes=codes,
+                    size=codes.size,
+                    offset=codes.offset,
                     ordered=False,
                 )
 
@@ -233,6 +252,18 @@ class CudfEngine(ArrowEngine):
             return meta
 
 
+def set_object_dtypes_from_pa_schema(df, schema):
+    # Simple utility to modify cudf DataFrame
+    # "object" dtypes to agree with a specific
+    # pyarrow schema.
+    if schema:
+        for name in df.columns:
+            if name in schema.names and df[name].dtype == "O":
+                df[name] = df[name].astype(
+                    cudf_dtype_from_pa_type(schema.field(name).type)
+                )
+
+
 def read_parquet(
     path,
     columns=None,
@@ -243,9 +274,9 @@ def read_parquet(
     """ Read parquet files into a Dask DataFrame
 
     Calls ``dask.dataframe.read_parquet`` to cordinate the execution of
-    ``cudf.read_parquet``, and ultimately read multiple partitions into a
-    single Dask dataframe. The Dask version must supply an ``ArrowEngine``
-    class to support full functionality.
+    ``cudf.read_parquet``, and ultimately read multiple partitions into
+    a single Dask dataframe. The Dask version must supply an
+    ``ArrowDatasetEngine`` class to support full functionality.
     See ``cudf.read_parquet`` and Dask documentation for further details.
 
     Examples

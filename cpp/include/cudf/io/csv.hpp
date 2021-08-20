@@ -115,8 +115,7 @@ class csv_reader_options {
   // Conversion settings
 
   // Per-column types; disables type inference on those columns
-  std::variant<std::vector<std::string>, std::vector<data_type>, std::map<std::string, data_type>>
-    _dtypes;
+  std::variant<std::vector<data_type>, std::map<std::string, data_type>> _dtypes;
   // Additional values to recognize as boolean true values
   std::vector<std::string> _true_values{"True", "TRUE", "true"};
   // Additional values to recognize as boolean false values
@@ -305,10 +304,7 @@ class csv_reader_options {
   /**
    * @brief Returns per-column types.
    */
-  std::variant<std::vector<std::string>,
-               std::vector<data_type>,
-               std::map<std::string, data_type>> const&
-  get_dtypes() const
+  std::variant<std::vector<data_type>, std::map<std::string, data_type>> const& get_dtypes() const
   {
     return _dtypes;
   }
@@ -607,20 +603,6 @@ class csv_reader_options {
    * @param types Vector specifying the columns' target data types.
    */
   void set_dtypes(std::vector<data_type> types) { _dtypes = std::move(types); }
-
-  /**
-   * @brief Sets per-column types, specified by the type's respective string representation.
-   *
-   * @param types Vector of dtypes in which the column needs to be read.
-   */
-  [[deprecated(
-    "The string-based interface will be deprecated."
-    "Use dtypes(std::vector<data_type>) or "
-    "dtypes(std::map<std::string, data_type>) instead.")]] void
-  set_dtypes(std::vector<std::string> types)
-  {
-    _dtypes = std::move(types);
-  }
 
   /**
    * @brief Sets additional values to recognize as boolean true values.
@@ -1068,22 +1050,6 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Sets per-column types, specified by the type's respective string representation.
-   *
-   * @param types Vector of dtypes in which the column needs to be read.
-   * @return this for chaining.
-   */
-  [[deprecated(
-    "The string-based interface will be deprecated."
-    "Use dtypes(std::vector<data_type>) or "
-    "dtypes(std::map<std::string, data_type>) instead.")]] csv_reader_options_builder&
-  dtypes(std::vector<std::string> types)
-  {
-    options._dtypes = std::move(types);
-    return *this;
-  }
-
-  /**
    * @brief Sets additional values to recognize as boolean true values.
    *
    * @param vals Vector of values to be considered to be `true`.
@@ -1185,11 +1151,9 @@ class csv_reader_options_builder {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  std::string filepath = "dataset.csv";
- *  cudf::io::csv_reader_options options =
- * cudf::io::csv_reader_options::builder(cudf::source_info(filepath));
- *  ...
- *  auto result = cudf::read_csv(options);
+ *  auto source  = cudf::io::source_info("dataset.csv");
+ *  auto options = cudf::io::csv_reader_options::builder(source);
+ *  auto result  = cudf::io::read_csv(options);
  * @endcode
  *
  * @param options Settings for controlling reading behavior.
@@ -1514,12 +1478,12 @@ class csv_writer_options_builder {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  std::string filepath = "dataset.csv";
- *  cudf::io::sink_info sink_info(filepath);
+ *  auto destination = cudf::io::sink_info("dataset.csv");
+ *  auto options     = cudf::io::csv_writer_options(destination, table->view())
+ *    .na_rep(na)
+ *    .include_header(include_header)
+ *    .rows_per_chunk(rows_per_chunk);
  *
- *  cudf::io::csv_writer_options options = cudf::io::csv_writer_options(sink_info,
- * table->view()).na_rep(na).include_header(include_header).rows_per_chunk(rows_per_chunk);
- *  ...
  *  cudf::io::write_csv(options);
  * @endcode
  *

@@ -13,7 +13,7 @@ import pytest
 
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
-from cudf.core import DataFrame, Series
+from cudf import DataFrame, Series
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -1475,3 +1475,78 @@ def test_is_year_end(data, dtype):
     got = gs.dt.is_year_end
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-05-01",
+            "2020-05-31",
+            "2020-02-29",
+            None,
+            "1999-12-01",
+            "2000-12-21",
+            None,
+            "1900-02-28",
+            "1800-03-14",
+            "2100-03-10",
+            "1970-04-1",
+            "1970-01-01",
+            "1969-12-11",
+            "2020-12-31",
+        ]
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]"])
+def test_is_quarter_start(data, dtype):
+    # Series
+    ps = pd.Series(data, dtype=dtype)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.is_quarter_start
+    got = gs.dt.is_quarter_start
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-05-01",
+            "2020-05-31",
+            "2020-02-29",
+            None,
+            "1999-12-01",
+            "2000-12-21",
+            None,
+            "1900-02-28",
+            "1800-03-14",
+            "2100-03-10",
+            "1970-04-1",
+            "1970-01-01",
+            "1969-12-11",
+            "2020-12-31",
+        ]
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]"])
+def test_is_quarter_end(data, dtype):
+    # Series
+    ps = pd.Series(data, dtype=dtype)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.is_quarter_end
+    got = gs.dt.is_quarter_end
+
+    assert_eq(expect, got)
+
+
+def test_error_values():
+    s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    with pytest.raises(
+        NotImplementedError,
+        match="DateTime Arrays is not yet implemented in cudf",
+    ):
+        s.values

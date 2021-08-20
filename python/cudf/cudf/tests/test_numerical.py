@@ -390,7 +390,7 @@ def test_to_numeric_error(data, errors):
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])
 def test_series_construction_with_nulls(dtype, input_obj):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     # numpy case
 
     expect = pd.Series(input_obj, dtype=cudf_dtypes_to_pandas_dtypes[dtype])
