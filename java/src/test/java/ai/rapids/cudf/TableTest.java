@@ -6077,14 +6077,14 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  ColumnView replaceValidity(ColumnView cv, DeviceMemoryBuffer validity) {
+  ColumnView replaceValidity(ColumnView cv, DeviceMemoryBuffer validity, long nullCount) {
     assert (validity.length >= BitVectorHelper.getValidityAllocationSizeInBytes(cv.rows));
     if (cv.type.isNestedType()) {
       ColumnView[] children = cv.getChildColumnViews();
       try {
         return new ColumnView(cv.type,
             cv.rows,
-            Optional.of(0L),
+            Optional.of(nullCount),
             validity,
             cv.getOffsets(),
             children);
@@ -6096,12 +6096,12 @@ public class TableTest extends CudfTestBase {
         }
       }
     } else {
-      return new ColumnView(cv.type, cv.rows, Optional.of(0L), cv.getData(), validity, cv.getOffsets());
+      return new ColumnView(cv.type, cv.rows, Optional.of(nullCount), cv.getData(), validity, cv.getOffsets());
     }
   }
 
   @Test
-  void testRemoveNullMasksIfNeededNoNulls() {
+  void testRemoveNullMasksIfNeeded() {
     ListType nestedType = new ListType(true, new StructType(false,
         new BasicType(true, DType.INT32),
         new BasicType(true, DType.INT64)));
@@ -6120,37 +6120,47 @@ public class TableTest extends CudfTestBase {
              Arrays.asList(structData1, structData2))) {
       //Then we take the created ColumnVectors and add validity masks even though the nullCount = 0
       long allocSize = BitVectorHelper.getValidityAllocationSizeInBytes(nonNullVector0.rows);
-      DeviceMemoryBuffer dm0 = DeviceMemoryBuffer.allocate(allocSize);
-      Cuda.memset(dm0.address, (byte) 0xFF, allocSize);
-      DeviceMemoryBuffer dm1 = DeviceMemoryBuffer.allocate(allocSize);
-      Cuda.memset(dm1.address, (byte) 0xFF, allocSize);
-      DeviceMemoryBuffer dm2 = DeviceMemoryBuffer.allocate(allocSize);
-      Cuda.memset(dm2.address, (byte) 0xFF, allocSize);
-      DeviceMemoryBuffer dm3_child = DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(2));
-      Cuda.memset(dm3_child.address, (byte) 0xFF, BitVectorHelper.getValidityAllocationSizeInBytes(2));
+      try (DeviceMemoryBuffer dm0 = DeviceMemoryBuffer.allocate(allocSize);
+           DeviceMemoryBuffer dm1 = DeviceMemoryBuffer.allocate(allocSize);
+           DeviceMemoryBuffer dm2 = DeviceMemoryBuffer.allocate(allocSize);
+           DeviceMemoryBuffer dm3_child =
+               DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(2))) {
+        Cuda.memset(dm0.address, (byte) 0xFF, allocSize);
+        Cuda.memset(dm1.address, (byte) 0xFF, allocSize);
+        Cuda.memset(dm2.address, (byte) 0xFF, allocSize);
+        Cuda.memset(dm3_child.address, (byte) 0xFF,
+            BitVectorHelper.getValidityAllocationSizeInBytes(2));
 
-      try (ColumnVector cv0 = replaceValidity(nonNullVector0, dm0).copyToColumnVector();
-           ColumnView struct = nonNullVector1.getChildColumnView(0);
-           ColumnView structChild0 = struct.getChildColumnView(0);
-           ColumnView newStructChild0 = replaceValidity(structChild0, dm3_child);
-           ColumnView newStruct = struct.replaceChildrenWithViews(new int[]{0}, new ColumnView[]{newStructChild0});
-           ColumnView list = nonNullVector1.replaceChildrenWithViews(new int[]{0}, new ColumnView[]{newStruct});
-           ColumnVector cv1 = replaceValidity(list, dm1).copyToColumnVector();
-           ColumnVector cv2 = replaceValidity(nonNullVector2, dm2).copyToColumnVector()) {
+        try (ColumnView cv0View = replaceValidity(nonNullVector0, dm0, 0);
+             ColumnVector cv0 = cv0View.copyToColumnVector();
+             ColumnView struct = nonNullVector1.getChildColumnView(0);
+             ColumnView structChild0 = struct.getChildColumnView(0);
+             ColumnView newStructChild0 = replaceValidity(structChild0, dm3_child, 0);
+             ColumnView newStruct = struct.replaceChildrenWithViews(new int[]{0}, new ColumnView[]{newStructChild0});
+             ColumnView list = nonNullVector1.replaceChildrenWithViews(new int[]{0}, new ColumnView[]{newStruct});
+             ColumnView cv1View = replaceValidity(list, dm1, 0);
+             ColumnVector cv1 = cv1View.copyToColumnVector();
+             ColumnView cv2View = replaceValidity(nonNullVector2, dm2, 0);
+             ColumnVector cv2 = cv2View.copyToColumnVector()) {
 
-        try (Table t = new Table(new ColumnVector[]{cv0, cv1, cv2});
-             Table tableWithoutNullMask = removeNullMasksIfNeeded(t);
-             Table expected = new Table(new ColumnVector[]{nonNullVector0, nonNullVector1, nonNullVector2})) {
-          assertTrue(t.getColumn(0).hasValidityVector());
-          assertTrue(t.getColumn(1).hasValidityVector());
-          assertTrue(t.getColumn(2).hasValidityVector());
+          try (Table t = new Table(new ColumnVector[]{cv0, cv1, cv2});
+               Table tableWithoutNullMask = removeNullMasksIfNeeded(t);
+               ColumnView tableStructChild0 = t.getColumn(1).getChildColumnView(0).getChildColumnView(0);
+               ColumnVector tableStructChild0Cv = tableStructChild0.copyToColumnVector();
+               Table expected = new Table(new ColumnVector[]{nonNullVector0, nonNullVector1,
+                nonNullVector2})) {
+            assertTrue(t.getColumn(0).hasValidityVector());
+            assertTrue(t.getColumn(1).hasValidityVector());
+            assertTrue(t.getColumn(2).hasValidityVector());
+            assertTrue(tableStructChild0Cv.hasValidityVector());
 
-          assertPartialTablesAreEqual(expected,
-              0,
-              expected.getRowCount(),
-              tableWithoutNullMask,
-              true,
-              true);
+            assertPartialTablesAreEqual(expected,
+                0,
+                expected.getRowCount(),
+                tableWithoutNullMask,
+                true,
+                true);
+          }
         }
       }
     }
@@ -6175,65 +6185,9 @@ public class TableTest extends CudfTestBase {
              null,
              Arrays.asList(structData1, structData2),
              Arrays.asList(structData1, structData2))) {
-      try (Table expected = new Table(new ColumnVector[]{nonNullVector0, nonNullVector2});
+      try (Table expected = new Table(new ColumnVector[]{nonNullVector0, nonNullVector1, nonNullVector2});
            Table unchangedTable = removeNullMasksIfNeeded(expected)) {
         assertTablesAreEqual(expected, unchangedTable);
-      }
-    }
-  }
-
-  @Test
-  void testRemoveNullMasksIfNeeded() {
-    ListType nestedType = new ListType(true, new StructType(false,
-        new BasicType(true, DType.INT32),
-        new BasicType(true, DType.INT64)));
-
-    List data1 = Arrays.asList(10, 20L);
-    List data2 = Arrays.asList(50, 60L);
-    HostColumnVector.StructData structData1 = new HostColumnVector.StructData(data1);
-    HostColumnVector.StructData structData2 = new HostColumnVector.StructData(data2);
-
-    //First we create ColumnVectors
-    try (ColumnVector nonNullVector0 = ColumnVector.fromBoxedInts(1, 2, 3);
-         ColumnVector nonNullVector2 = ColumnVector.fromStrings("1", "2", "3");
-         ColumnVector nonNullVector1 = ColumnVector.fromLists(nestedType,
-             Arrays.asList(structData1, structData2),
-             Arrays.asList(structData1, structData2),
-             Arrays.asList(structData1, structData2))) {
-      //Then we take the created ColumnVectors and add validity masks even though the nullCount = 0
-      long allocSize = BitVectorHelper.getValidityAllocationSizeInBytes(nonNullVector0.rows);
-      DeviceMemoryBuffer dm0 = DeviceMemoryBuffer.allocate(allocSize);
-      Cuda.memset(dm0.address, (byte) 0xFF, allocSize);
-      DeviceMemoryBuffer dm1 = DeviceMemoryBuffer.allocate(allocSize);
-      Cuda.memset(dm1.address, (byte) 0xFF, allocSize);
-      DeviceMemoryBuffer dm2 = DeviceMemoryBuffer.allocate(allocSize);
-      Cuda.memset(dm2.address, (byte) 0xFF, allocSize);
-      DeviceMemoryBuffer dm3_child = DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(2));
-      Cuda.memset(dm3_child.address, (byte) 0xFF, BitVectorHelper.getValidityAllocationSizeInBytes(2));
-
-      try (ColumnVector cv0 = replaceValidity(nonNullVector0, dm0).copyToColumnVector();
-           ColumnView struct = nonNullVector1.getChildColumnView(0);
-           ColumnView structChild0 = struct.getChildColumnView(0);
-           ColumnView newStructChild0 = replaceValidity(structChild0, dm3_child);
-           ColumnView newStruct = struct.replaceChildrenWithViews(new int[]{0}, new ColumnView[]{newStructChild0});
-           ColumnView list = nonNullVector1.replaceChildrenWithViews(new int[]{0}, new ColumnView[]{newStruct});
-           ColumnVector cv1 = replaceValidity(list, dm1).copyToColumnVector();
-           ColumnVector cv2 = replaceValidity(nonNullVector2, dm2).copyToColumnVector()) {
-
-        try (Table t = new Table(new ColumnVector[]{cv0, cv1, cv2});
-             Table tableWithoutNullMask = removeNullMasksIfNeeded(t);
-             Table expected = new Table(new ColumnVector[]{nonNullVector0, nonNullVector1, nonNullVector2})) {
-          assertTrue(t.getColumn(0).hasValidityVector());
-          assertTrue(t.getColumn(1).hasValidityVector());
-          assertTrue(t.getColumn(2).hasValidityVector());
-
-          assertPartialTablesAreEqual(expected,
-              0,
-              expected.getRowCount(),
-              tableWithoutNullMask,
-              true,
-              true);
-        }
       }
     }
   }

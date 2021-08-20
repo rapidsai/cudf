@@ -1121,7 +1121,7 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * This method is evolving and unstable.
+   * This method is evolving, unstable and currently test only.
    * Please use with caution and expect it to change in the future.
    */
   public static<T> ColumnVector fromLists(HostColumnVector.DataType dataType, List<T>... lists) {
