@@ -111,7 +111,7 @@ col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes,
  *
  * @return std::unique_ptr<table> cudf table with three columns (offsets, lengths, hashes)
  */
-std::unique_ptr<table> create_json_keys_info_table(const parse_options_view& options,
+std::unique_ptr<table> create_json_keys_info_table(parse_options_view const& parse_opts,
                                                    device_span<char const> const data,
                                                    device_span<uint64_t const> const row_offsets,
                                                    rmm::cuda_stream_view stream)
@@ -119,7 +119,7 @@ std::unique_ptr<table> create_json_keys_info_table(const parse_options_view& opt
   // Count keys
   rmm::device_scalar<unsigned long long int> key_counter(0, stream);
   cudf::io::json::gpu::collect_keys_info(
-    options, data, row_offsets, key_counter.data(), {}, stream);
+    parse_opts, data, row_offsets, key_counter.data(), {}, stream);
 
   // Allocate columns to store hash value, length, and offset of each JSON object key in the input
   auto const num_keys = key_counter.value(stream);
@@ -135,7 +135,7 @@ std::unique_ptr<table> create_json_keys_info_table(const parse_options_view& opt
   key_counter.set_value_to_zero_async(stream);
   // Fill the allocated columns
   cudf::io::json::gpu::collect_keys_info(
-    options, data, row_offsets, key_counter.data(), {*info_table_mdv}, stream);
+    parse_opts, data, row_offsets, key_counter.data(), {*info_table_mdv}, stream);
   return info_table;
 }
 
@@ -232,9 +232,11 @@ void reader_impl::ingest_raw_input(std::vector<std::unique_ptr<datasource>> cons
  * Sets the uncomp_data_ and uncomp_size_ data members
  * Loads the data into device memory if byte range parameters are not used
  */
-void reader_impl::decompress_input(std::vector<uint8_t> const& buffer, rmm::cuda_stream_view stream)
+void reader_impl::decompress_input(json_reader_options const& read_opts,
+                                   std::vector<uint8_t> const& buffer,
+                                   rmm::cuda_stream_view stream)
 {
-  if (options_.get_compression() == compression_type::NONE) {
+  if (read_opts.get_compression() == compression_type::NONE) {
     // Do not use the owner vector here to avoid extra copy
     uncomp_data_ = reinterpret_cast<const char*>(buffer.data());
     uncomp_size_ = buffer.size();
@@ -243,7 +245,7 @@ void reader_impl::decompress_input(std::vector<uint8_t> const& buffer, rmm::cuda
       host_span<char const>(                     //
         reinterpret_cast<const char*>(buffer.data()),
         buffer.size()),
-      options_.get_compression());
+      read_opts.get_compression());
 
     uncomp_data_ = uncomp_data_owner_.data();
     uncomp_size_ = uncomp_data_owner_.size();
@@ -458,11 +460,12 @@ std::vector<data_type> reader_impl::parse_data_types(
   return dtypes;
 }
 
-void reader_impl::set_data_types(device_span<uint64_t const> rec_starts,
+void reader_impl::set_data_types(json_reader_options const& reader_opts,
+                                 device_span<uint64_t const> rec_starts,
                                  rmm::cuda_stream_view stream)
 {
   bool has_to_infer_column_types =
-    std::visit([](const auto& dtypes) { return dtypes.empty(); }, options_.get_dtypes());
+    std::visit([](const auto& dtypes) { return dtypes.empty(); }, reader_opts.get_dtypes());
   if (!has_to_infer_column_types) {
     dtypes_ = std::visit(
       cudf::detail::visitor_overload{
@@ -480,7 +483,7 @@ void reader_impl::set_data_types(device_span<uint64_t const> rec_starts,
           return sorted_dtypes;
         },
         [&](std::vector<std::string> const& dtypes) { return parse_data_types(dtypes); }},
-      options_.get_dtypes());
+      reader_opts.get_dtypes());
   } else {
     CUDF_EXPECTS(rec_starts.size() != 0, "No data available for data type inference.\n");
     auto const num_columns       = metadata_.column_names.size();
@@ -611,18 +614,6 @@ table_with_metadata reader_impl::convert_data_to_table(device_span<uint64_t cons
   return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata_};
 }
 
-reader_impl::reader_impl(json_reader_options const& options, rmm::cuda_stream_view stream)
-  : options_(options)
-{
-  CUDF_EXPECTS(options_.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
-
-  opts_.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
-  opts_.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
-  opts_.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
-
-  opts_.dayfirst = options.is_enabled_dayfirst();
-}
-
 /**
  * @brief Read an entire set or a subset of data from the source
  *
@@ -633,13 +624,21 @@ reader_impl::reader_impl(json_reader_options const& options, rmm::cuda_stream_vi
  * @return Table and its metadata
  */
 table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& sources,
-                                      json_reader_options const& options,
+                                      json_reader_options const& reader_opts,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  auto range_offset      = options.get_byte_range_offset();
-  auto range_size        = options.get_byte_range_size();
-  auto range_size_padded = options.get_byte_range_size_with_padding();
+  CUDF_EXPECTS(reader_opts.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
+
+  opts_.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
+  opts_.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
+  opts_.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
+
+  opts_.dayfirst = reader_opts.is_enabled_dayfirst();
+
+  auto range_offset      = reader_opts.get_byte_range_offset();
+  auto range_size        = reader_opts.get_byte_range_size();
+  auto range_size_padded = reader_opts.get_byte_range_size_with_padding();
 
   std::vector<uint8_t> buffer;
 
@@ -647,7 +646,7 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
 
   CUDF_EXPECTS(buffer.size() != 0, "Ingest failed: input data is null.\n");
 
-  decompress_input(buffer, stream);
+  decompress_input(reader_opts, buffer, stream);
 
   CUDF_EXPECTS(uncomp_data_ != nullptr, "Ingest failed: uncompressed input data is null.\n");
   CUDF_EXPECTS(uncomp_size_ != 0, "Ingest failed: uncompressed input data has zero size.\n");
@@ -661,7 +660,7 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
   set_column_names(rec_starts, stream);
   CUDF_EXPECTS(!metadata_.column_names.empty(), "Error determining column names.\n");
 
-  set_data_types(rec_starts, stream);
+  set_data_types(reader_opts, rec_starts, stream);
   CUDF_EXPECTS(!dtypes_.empty(), "Error in data type detection.\n");
 
   return convert_data_to_table(rec_starts, stream, mr);
@@ -674,7 +673,7 @@ table_with_metadata read_json(std::vector<std::unique_ptr<cudf::io::datasource>>
 {
   CUDF_EXPECTS(not sources.empty(), "No sources were defined");
 
-  auto impl = std::make_unique<reader_impl>(options, stream);
+  auto impl = std::make_unique<reader_impl>();
 
   return table_with_metadata{impl->read(sources, options, stream, mr)};
 }

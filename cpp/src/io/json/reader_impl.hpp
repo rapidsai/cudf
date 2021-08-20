@@ -52,8 +52,6 @@ using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_ma
 class reader_impl {
  public:
  private:
-  const json_reader_options options_{};
-
   const char* uncomp_data_ = nullptr;
   size_t uncomp_size_      = 0;
 
@@ -126,7 +124,9 @@ class reader_impl {
    *
    * Sets the uncomp_data_ and uncomp_size_ data members
    */
-  void decompress_input(std::vector<uint8_t> const& buffer, rmm::cuda_stream_view stream);
+  void decompress_input(json_reader_options const& options,
+                        std::vector<uint8_t> const& buffer,
+                        rmm::cuda_stream_view stream);
 
   /**
    * @brief Finds all record starts in the file.
@@ -165,10 +165,13 @@ class reader_impl {
    *
    * If user does not pass the data types, deduces types from the file content
    *
+   * @param[in] reader_opts Settings for controlling reading behavior
    * @param[in] rec_starts Record starts in device memory
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    */
-  void set_data_types(device_span<uint64_t const> rec_starts, rmm::cuda_stream_view stream);
+  void set_data_types(json_reader_options const& reader_opts,
+                      device_span<uint64_t const> rec_starts,
+                      rmm::cuda_stream_view stream);
 
   /**
    * @brief Parse the input data and store results a table
@@ -184,11 +187,6 @@ class reader_impl {
                                             rmm::mr::device_memory_resource* mr);
 
  public:
-  /**
-   * @brief Constructor from a dataset source with reader options.
-   */
-  explicit reader_impl(json_reader_options const& options, rmm::cuda_stream_view stream);
-
   /**
    * @brief Read an entire set or a subset of data from the source
    *
