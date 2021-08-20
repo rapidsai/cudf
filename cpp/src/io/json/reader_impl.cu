@@ -447,15 +447,16 @@ std::vector<data_type> reader_impl::parse_data_types(
   return dtypes;
 }
 
-void reader_impl::set_data_types(json_reader_options const& reader_opts,
-                                 parse_options_view const& parse_opts,
-                                 device_span<uint64_t const> rec_starts,
-                                 rmm::cuda_stream_view stream)
+std::vector<data_type> reader_impl::get_data_types(json_reader_options const& reader_opts,
+                                                   parse_options_view const& parse_opts,
+                                                   device_span<uint64_t const> rec_starts,
+                                                   rmm::cuda_stream_view stream)
 {
   bool has_to_infer_column_types =
     std::visit([](const auto& dtypes) { return dtypes.empty(); }, reader_opts.get_dtypes());
+
   if (!has_to_infer_column_types) {
-    dtypes_ = std::visit(
+    return std::visit(
       cudf::detail::visitor_overload{
         [&](const std::vector<data_type>& dtypes) { return dtypes; },
         [&](const std::map<std::string, data_type>& dtypes) {
@@ -511,25 +512,30 @@ void reader_impl::set_data_types(json_reader_options const& reader_opts,
       }
     };
 
+    std::vector<data_type> dtypes;
+
     std::transform(std::cbegin(h_column_infos),
                    std::cend(h_column_infos),
-                   std::back_inserter(dtypes_),
+                   std::back_inserter(dtypes),
                    [&](auto const& cinfo) { return data_type{get_type_id(cinfo)}; });
+
+    return dtypes;
   }
 }
 
 table_with_metadata reader_impl::convert_data_to_table(parse_options_view const& parse_opts,
+                                                       std::vector<data_type> const& dtypes,
                                                        device_span<uint64_t const> rec_starts,
                                                        rmm::cuda_stream_view stream,
                                                        rmm::mr::device_memory_resource* mr)
 {
-  const auto num_columns = dtypes_.size();
+  const auto num_columns = dtypes.size();
   const auto num_records = rec_starts.size();
 
   // alloc output buffers.
   std::vector<column_buffer> out_buffers;
   for (size_t col = 0; col < num_columns; ++col) {
-    out_buffers.emplace_back(dtypes_[col], num_records, true, stream, mr);
+    out_buffers.emplace_back(dtypes[col], num_records, true, stream, mr);
   }
 
   thrust::host_vector<data_type> h_dtypes(num_columns);
@@ -537,7 +543,7 @@ table_with_metadata reader_impl::convert_data_to_table(parse_options_view const&
   thrust::host_vector<bitmask_type*> h_valid(num_columns);
 
   for (size_t i = 0; i < num_columns; ++i) {
-    h_dtypes[i] = dtypes_[i];
+    h_dtypes[i] = dtypes[i];
     h_data[i]   = out_buffers[i].data();
     h_valid[i]  = out_buffers[i].null_mask();
   }
@@ -651,10 +657,11 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
   set_column_names(parse_opts.view(), rec_starts, stream);
   CUDF_EXPECTS(!metadata_.column_names.empty(), "Error determining column names.\n");
 
-  set_data_types(reader_opts, parse_opts.view(), rec_starts, stream);
-  CUDF_EXPECTS(!dtypes_.empty(), "Error in data type detection.\n");
+  auto dtypes = get_data_types(reader_opts, parse_opts.view(), rec_starts, stream);
 
-  return convert_data_to_table(parse_opts.view(), rec_starts, stream, mr);
+  CUDF_EXPECTS(not dtypes.empty(), "Error in data type detection.\n");
+
+  return convert_data_to_table(parse_opts.view(), dtypes, rec_starts, stream, mr);
 }
 
 table_with_metadata read_json(std::vector<std::unique_ptr<cudf::io::datasource>>& sources,
