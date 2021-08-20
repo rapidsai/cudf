@@ -701,11 +701,13 @@ class regex_compiler {
         regex_parser::Item item = in[i];
         if (item.d.yycount.n <= 0) {
           // need to erase
-          for (std::size_t j = 0; j < i - rep_start; j++) out.pop_back();
+          for (std::size_t j = 0; j < i - rep_start; j++)
+            out.pop_back();
         } else {
           // repeat
           for (int j = 1; j < item.d.yycount.n; j++)
-            for (std::size_t k = rep_start; k < i; k++) out.push_back(in[k]);
+            for (std::size_t k = rep_start; k < i; k++)
+              out.push_back(in[k]);
         }
 
         // optional repeats
@@ -715,7 +717,8 @@ class regex_compiler {
             o_item.t    = LBRA_NC;
             o_item.d.yy = 0;
             out.push_back(o_item);
-            for (std::size_t k = rep_start; k < i; k++) out.push_back(in[k]);
+            for (std::size_t k = rep_start; k < i; k++)
+              out.push_back(in[k]);
           }
           for (int j = item.d.yycount.n; j < item.d.yycount.m; j++) {
             regex_parser::Item o_item;
@@ -746,7 +749,8 @@ class regex_compiler {
             }
           } else  // copy it once then put '*'
           {
-            for (std::size_t k = rep_start; k < i; k++) out.push_back(in[k]);
+            for (std::size_t k = rep_start; k < i; k++)
+              out.push_back(in[k]);
 
             if (item.t == COUNTED) {
               o_item.t = STAR;
@@ -841,12 +845,14 @@ void reprog::optimize1()
     if (_insts[i].type != NOP) {
       {
         int target_id = _insts[i].u2.next_id;
-        while (_insts[target_id].type == NOP) target_id = _insts[target_id].u2.next_id;
+        while (_insts[target_id].type == NOP)
+          target_id = _insts[target_id].u2.next_id;
         _insts[i].u2.next_id = target_id;
       }
       if (_insts[i].type == OR) {
         int target_id = _insts[i].u1.right_id;
-        while (_insts[target_id].type == NOP) target_id = _insts[target_id].u2.next_id;
+        while (_insts[target_id].type == NOP)
+          target_id = _insts[target_id].u2.next_id;
         _insts[i].u1.right_id = target_id;
       }
     }
@@ -854,7 +860,8 @@ void reprog::optimize1()
   // skip NOPs from the beginning
   {
     int target_id = _startinst_id;
-    while (_insts[target_id].type == NOP) target_id = _insts[target_id].u2.next_id;
+    while (_insts[target_id].type == NOP)
+      target_id = _insts[target_id].u2.next_id;
     _startinst_id = target_id;
   }
   // actually remove the no-ops
@@ -950,7 +957,8 @@ void reprog::print()
   printf("startinst_id=%d\n", _startinst_id);
   if (_startinst_ids.size() > 0) {
     printf("startinst_ids:");
-    for (size_t i = 0; i < _startinst_ids.size(); i++) printf(" %d", _startinst_ids[i]);
+    for (size_t i = 0; i < _startinst_ids.size(); i++)
+      printf(" %d", _startinst_ids[i]);
     printf("\n");
   }
 

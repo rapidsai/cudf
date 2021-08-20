@@ -28,7 +28,7 @@ elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
   set(CUDF_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
-project(CUDF VERSION 0.20.0 LANGUAGES C CXX)
+project(CUDF VERSION 21.10.00 LANGUAGES C CXX)
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake,
 # causing subsequent runs to have different values for the `Threads::Threads` target.
@@ -40,10 +40,14 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
-option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
+option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
+option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
+option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
+option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
@@ -53,10 +57,11 @@ option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
-message(VERBOSE "CUDF: Configure CMake to build (google) benchmarks: ${BUILD_BENCHMARKS}")
+message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
 message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
+message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_ENABLE_ARROW_S3}")
 message(VERBOSE "CUDF: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
 message(VERBOSE "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}")
 message(VERBOSE "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler: ${CUDA_ENABLE_LINEINFO}")
@@ -121,8 +126,6 @@ find_package(ZLIB REQUIRED)
 find_package(Threads REQUIRED)
 # add third party dependencies using CPM
 include(cmake/thirdparty/CUDF_GetCPM.cmake)
-# find boost
-include(cmake/thirdparty/CUDF_FindBoost.cmake)
 # find jitify
 include(cmake/thirdparty/CUDF_GetJitify.cmake)
 # find nvCOMP
@@ -137,6 +140,9 @@ include(cmake/thirdparty/CUDF_GetArrow.cmake)
 include(cmake/thirdparty/CUDF_GetDLPack.cmake)
 # find libcu++
 include(cmake/thirdparty/CUDF_GetLibcudacxx.cmake)
+# find cuCollections
+# Should come after including thrust and libcudacxx
+include(cmake/thirdparty/CUDF_GetcuCollections.cmake)
 # find or install GoogleTest
 include(cmake/thirdparty/CUDF_GetGTest.cmake)
 # preprocess jitify-able kernels
@@ -151,15 +157,45 @@ add_library(cudf
     src/aggregation/aggregation.cpp
     src/aggregation/aggregation.cu
     src/aggregation/result_cache.cpp
-    src/ast/linearizer.cpp
-    src/ast/transform.cu
+    src/ast/expression_parser.cpp
+    src/ast/expressions.cpp
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
+    src/binaryop/compiled/Add.cu
+    src/binaryop/compiled/ATan2.cu
+    src/binaryop/compiled/BitwiseAnd.cu
+    src/binaryop/compiled/BitwiseOr.cu
+    src/binaryop/compiled/BitwiseXor.cu
+    src/binaryop/compiled/Less.cu
+    src/binaryop/compiled/Greater.cu
+    src/binaryop/compiled/LessEqual.cu
+    src/binaryop/compiled/GreaterEqual.cu
+    src/binaryop/compiled/Div.cu
+    src/binaryop/compiled/equality_ops.cu
+    src/binaryop/compiled/FloorDiv.cu
+    src/binaryop/compiled/LogBase.cu
+    src/binaryop/compiled/LogicalAnd.cu
+    src/binaryop/compiled/LogicalOr.cu
+    src/binaryop/compiled/Mod.cu
+    src/binaryop/compiled/Mul.cu
+    src/binaryop/compiled/NullMax.cu
+    src/binaryop/compiled/NullMin.cu
+    src/binaryop/compiled/PMod.cu
+    src/binaryop/compiled/Pow.cu
+    src/binaryop/compiled/PyMod.cu
+    src/binaryop/compiled/ShiftLeft.cu
+    src/binaryop/compiled/ShiftRight.cu
+    src/binaryop/compiled/ShiftRightUnsigned.cu
+    src/binaryop/compiled/Sub.cu
+    src/binaryop/compiled/TrueDiv.cu
+    src/binaryop/compiled/util.cpp
     src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
+    src/bitmask/is_element_valid.cpp
     src/column/column.cu
     src/column/column_device_view.cu
     src/column/column_factories.cpp
+    src/column/column_factories.cu
     src/column/column_view.cpp
     src/comms/ipc/ipc.cpp
     src/copying/concatenate.cu
@@ -170,10 +206,11 @@ add_library(cudf
     src/copying/gather.cu
     src/copying/get_element.cu
     src/copying/pack.cpp
+    src/copying/reverse.cu
     src/copying/sample.cu
     src/copying/scatter.cu
     src/copying/shift.cu
-    src/copying/slice.cpp
+    src/copying/slice.cu
     src/copying/split.cpp
     src/copying/segmented_shift.cu
     src/datetime/datetime_ops.cu
@@ -193,13 +230,16 @@ add_library(cudf
     src/filling/sequence.cu
     src/groupby/groupby.cu
     src/groupby/hash/groupby.cu
+    src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_argmax.cu
     src/groupby/sort/group_argmin.cu
-    src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_collect.cu
     src/groupby/sort/group_count.cu
+    src/groupby/sort/group_m2.cu
     src/groupby/sort/group_max.cu
     src/groupby/sort/group_min.cu
+    src/groupby/sort/group_merge_lists.cu
+    src/groupby/sort/group_merge_m2.cu
     src/groupby/sort/group_nth_element.cu
     src/groupby/sort/group_nunique.cu
     src/groupby/sort/group_product.cu
@@ -208,14 +248,20 @@ add_library(cudf
     src/groupby/sort/group_sum.cu
     src/groupby/sort/scan.cpp
     src/groupby/sort/group_count_scan.cu
+    src/groupby/sort/group_dense_rank_scan.cu
     src/groupby/sort/group_max_scan.cu
     src/groupby/sort/group_min_scan.cu
+    src/groupby/sort/group_rank_scan.cu
     src/groupby/sort/group_sum_scan.cu
+    src/groupby/sort/group_replace_nulls.cu
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
+    src/hash/md5_hash.cu
+    src/hash/murmur_hash.cu
     src/interop/dlpack.cpp
     src/interop/from_arrow.cu
     src/interop/to_arrow.cu
+    src/interop/detail/arrow_allocator.cpp
     src/io/avro/avro.cpp
     src/io/avro/avro_gpu.cu
     src/io/avro/reader_impl.cu
@@ -244,32 +290,38 @@ add_library(cudf
     src/io/orc/writer_impl.cu
     src/io/parquet/compact_protocol_writer.cpp
     src/io/parquet/page_data.cu
-    src/io/parquet/page_dict.cu
+    src/io/parquet/chunk_dict.cu
     src/io/parquet/page_enc.cu
     src/io/parquet/page_hdr.cu
     src/io/parquet/parquet.cpp
     src/io/parquet/reader_impl.cu
     src/io/parquet/writer_impl.cu
-    src/io/statistics/column_stats.cu
+    src/io/statistics/orc_column_statistics.cu
+    src/io/statistics/parquet_column_statistics.cu
     src/io/utilities/column_buffer.cpp
     src/io/utilities/data_sink.cpp
     src/io/utilities/datasource.cpp
     src/io/utilities/file_io_utilities.cpp
     src/io/utilities/parsing_utils.cu
+    src/io/utilities/trie.cu
     src/io/utilities/type_conversion.cpp
     src/jit/cache.cpp
     src/jit/parser.cpp
     src/jit/type.cpp
+    src/join/conditional_join.cu
     src/join/cross_join.cu
     src/join/hash_join.cu
     src/join/join.cu
+    src/join/join_utils.cu
     src/join/semi_join.cu
     src/lists/contains.cu
-    src/lists/concatenate_rows.cu
+    src/lists/combine/concatenate_list_elements.cu
+    src/lists/combine/concatenate_rows.cu
     src/lists/copying/concatenate.cu
     src/lists/copying/copying.cu
     src/lists/copying/gather.cu
     src/lists/copying/segmented_gather.cu
+    src/lists/copying/scatter_helper.cu
     src/lists/count_elements.cu
     src/lists/drop_list_duplicates.cu
     src/lists/explode.cu
@@ -292,7 +344,9 @@ add_library(cudf
     src/reductions/nth_element.cu
     src/reductions/product.cu
     src/reductions/reductions.cpp
-    src/reductions/scan.cu
+    src/reductions/scan/scan.cpp
+    src/reductions/scan/scan_exclusive.cu
+    src/reductions/scan/scan_inclusive.cu
     src/reductions/std.cu
     src/reductions/sum.cu
     src/reductions/sum_of_squares.cu
@@ -329,8 +383,8 @@ add_library(cudf
     src/strings/char_types/char_cases.cu
     src/strings/char_types/char_types.cu
     src/strings/combine/concatenate.cu
-    src/strings/combine/concatenate_list_elements.cu
     src/strings/combine/join.cu
+    src/strings/combine/join_list_elements.cu
     src/strings/contains.cu
     src/strings/convert/convert_booleans.cu
     src/strings/convert/convert_datetime.cu
@@ -343,6 +397,7 @@ add_library(cudf
     src/strings/convert/convert_urls.cu
     src/strings/copying/concatenate.cu
     src/strings/copying/copying.cu
+    src/strings/copying/shift.cu
     src/strings/extract.cu
     src/strings/filling/fill.cu
     src/strings/filter_chars.cu
@@ -353,9 +408,8 @@ add_library(cudf
     src/strings/json/json_path.cu
     src/strings/regex/regcomp.cpp
     src/strings/regex/regexec.cu
+    src/strings/repeat_strings.cu
     src/strings/replace/backref_re.cu
-    src/strings/replace/backref_re_large.cu
-    src/strings/replace/backref_re_medium.cu
     src/strings/replace/multi_re.cu
     src/strings/replace/replace.cu
     src/strings/replace/replace_re.cu
@@ -373,7 +427,7 @@ add_library(cudf
     src/structs/copying/concatenate.cu
     src/structs/structs_column_factories.cu
     src/structs/structs_column_view.cpp
-    src/structs/utilities.cu
+    src/structs/utilities.cpp
     src/table/table.cpp
     src/table/table_device_view.cu
     src/table/table_view.cpp
@@ -390,6 +444,7 @@ add_library(cudf
     src/text/subword/wordpiece_tokenizer.cu
     src/text/tokenize.cu
     src/transform/bools_to_mask.cu
+    src/transform/compute_column.cu
     src/transform/encode.cu
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
@@ -401,6 +456,7 @@ add_library(cudf
     src/unary/nan_ops.cu
     src/unary/null_ops.cu
     src/utilities/default_stream.cpp
+    src/utilities/type_checks.cpp
 )
 
 set_target_properties(cudf
@@ -474,23 +530,31 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(cudf
            PUBLIC ZLIB::ZLIB
-                  Boost::filesystem
                   ${ARROW_LIBRARIES}
                   cudf::Thrust
                   nvCOMP::nvcomp
-                  rmm::rmm)
+                  rmm::rmm
+           PRIVATE cuco::cuco)
 
 if(CUDA_STATIC_RUNTIME)
     # Tell CMake what CUDA language runtime to use
     set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Static)
     # Make sure to export to consumers what runtime we used
-    target_link_libraries(cudf PUBLIC CUDA::cudart_static CUDA::cuda_driver)
+    target_link_libraries(cudf PUBLIC CUDA::cudart_static)
 else()
     # Tell CMake what CUDA language runtime to use
     set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
     # Make sure to export to consumers what runtime we used
-    target_link_libraries(cudf PUBLIC CUDA::cudart CUDA::cuda_driver)
+    target_link_libraries(cudf PUBLIC CUDA::cudart)
 endif()
+
+# The CUDA::cuda_driver is needed due to JITIFY sources which
+# directly call the cuda driver API
+if(NOT TARGET CUDA::cuda_driver)
+    message(FATAL_ERROR "Building libcudf requires `libcuda.so` to be present.
+        This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded.")
+endif()
+target_link_libraries(cudf PUBLIC CUDA::cuda_driver)
 
 # Add cuFile interface if available
 if(TARGET cuFile::cuFile_interface)
@@ -567,15 +631,19 @@ if(CUDF_BUILD_BENCHMARKS)
         GIT_SHALLOW     TRUE
         OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
                         "BENCHMARK_ENABLE_INSTALL OFF")
+    # Find or install NVBench
+    include(cmake/thirdparty/CUDF_GetNVBench.cmake)
     add_subdirectory(benchmarks)
 endif()
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
 
+include(CPack)
+
 include(GNUInstallDirs)
 
-set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/cudf)
+set(INSTALL_CONFIGDIR lib/cmake/cudf)
 set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME cudf)
 
 # install target for cudf_base and the proxy libcudf.so
@@ -596,16 +664,6 @@ install(DIRECTORY
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
-
-install(DIRECTORY ${Thrust_SOURCE_DIR}/
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust
-  PATTERN "*.py" EXCLUDE
-  PATTERN "benchmark" EXCLUDE
-  PATTERN "build" EXCLUDE
-  PATTERN "doc" EXCLUDE
-  PATTERN "examples" EXCLUDE
-  PATTERN "test" EXCLUDE
-  PATTERN "testing" EXCLUDE)
 
 include(CMakePackageConfigHelpers)
 
@@ -642,22 +700,6 @@ configure_package_config_file(cmake/cudf-build-config.cmake.in ${CUDF_BINARY_DIR
 
 write_basic_package_version_file(${CUDF_BINARY_DIR}/cudf-config-version.cmake
                                  COMPATIBILITY SameMinorVersion)
-
-if(TARGET arrow_shared)
-    get_target_property(arrow_is_imported arrow_shared IMPORTED)
-    if(NOT arrow_is_imported)
-        export(TARGETS arrow_shared arrow_cuda_shared
-            FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
-            NAMESPACE   cudf::)
-    endif()
-elseif(TARGET arrow_static)
-    get_target_property(arrow_is_imported arrow_static IMPORTED)
-    if(NOT arrow_is_imported)
-        export(TARGETS arrow_static arrow_cuda_static
-            FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
-            NAMESPACE   cudf::)
-    endif()
-endif()
 
 if(TARGET gtest)
     get_target_property(gtest_is_imported gtest IMPORTED)

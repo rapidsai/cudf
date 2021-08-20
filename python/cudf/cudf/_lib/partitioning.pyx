@@ -1,23 +1,22 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp cimport bool
-from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr
-from libcpp.vector cimport vector
+from libcpp.pair cimport pair
 from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-from cudf._lib.table cimport Table
-
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.partitioning cimport partition as cpp_partition
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.table cimport Table
 
-from cudf._lib.cpp.partitioning cimport (
-    partition as cpp_partition,
-)
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
+
 cimport cudf._lib.cpp.types as libcudf_types
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def partition(Table source_table, Column partition_map,
@@ -46,7 +45,7 @@ def partition(Table source_table, Column partition_map,
         )
 
     return (
-        Table.from_unique_ptr(
+        *data_from_unique_ptr(
             move(c_result.first),
             column_names=source_table._column_names,
             index_names=source_table._index_names if(

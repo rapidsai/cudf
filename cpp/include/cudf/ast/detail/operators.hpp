@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/ast/operators.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -295,8 +295,8 @@ struct operator_functor<ast_operator::MOD> {
 
   template <typename LHS,
             typename RHS,
-            typename CommonType = std::common_type_t<LHS, RHS>,
-            std::enable_if_t<std::is_same<CommonType, float>::value>* = nullptr>
+            typename CommonType                                  = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_same_v<CommonType, float>>* = nullptr>
   CUDA_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
     -> decltype(fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)))
   {
@@ -305,8 +305,8 @@ struct operator_functor<ast_operator::MOD> {
 
   template <typename LHS,
             typename RHS,
-            typename CommonType = std::common_type_t<LHS, RHS>,
-            std::enable_if_t<std::is_same<CommonType, double>::value>* = nullptr>
+            typename CommonType                                   = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_same_v<CommonType, double>>* = nullptr>
   CUDA_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
     -> decltype(fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)))
   {
@@ -334,8 +334,8 @@ struct operator_functor<ast_operator::PYMOD> {
 
   template <typename LHS,
             typename RHS,
-            typename CommonType = std::common_type_t<LHS, RHS>,
-            std::enable_if_t<std::is_same<CommonType, float>::value>* = nullptr>
+            typename CommonType                                  = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_same_v<CommonType, float>>* = nullptr>
   CUDA_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
     -> decltype(fmodf(fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)) +
                         static_cast<CommonType>(rhs),
@@ -348,8 +348,8 @@ struct operator_functor<ast_operator::PYMOD> {
 
   template <typename LHS,
             typename RHS,
-            typename CommonType = std::common_type_t<LHS, RHS>,
-            std::enable_if_t<std::is_same<CommonType, double>::value>* = nullptr>
+            typename CommonType                                   = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_same_v<CommonType, double>>* = nullptr>
   CUDA_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
     -> decltype(fmod(fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)) +
                        static_cast<CommonType>(rhs),
@@ -753,43 +753,6 @@ struct operator_functor<ast_operator::NOT> {
   }
 };
 
-#if 0
-/**
- * @brief Functor used to double-type-dispatch binary operators.
- *
- * This functor's `operator()` is templated to validate calls to its operators based on the input
- * type, as determined by the `is_valid_binary_op` trait.
- *
- * @tparam OperatorFunctor Binary operator functor.
- */
-template <typename OperatorFunctor>
-struct double_dispatch_binary_operator_types {
-  template <typename LHS,
-            typename RHS,
-            typename F,
-            typename... Ts,
-            std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
-  {
-    f.template operator()<OperatorFunctor, LHS, RHS>(std::forward<Ts>(args)...);
-  }
-
-  template <typename LHS,
-            typename RHS,
-            typename F,
-            typename... Ts,
-            std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
-  {
-#ifndef __CUDA_ARCH__
-    CUDF_FAIL("Invalid binary operation.");
-#else
-    cudf_assert(false && "Invalid binary operation.");
-#endif
-  }
-};
-#endif
-
 /**
  * @brief Functor used to single-type-dispatch binary operators.
  *
@@ -824,14 +787,6 @@ struct single_dispatch_binary_operator_types {
   }
 };
 
-struct single_dispatch_binary_operator {
-  template <typename LHS, typename F, typename... Ts>
-  CUDA_DEVICE_CALLABLE auto operator()(F&& f, Ts&&... args)
-  {
-    f.template operator()<LHS, LHS>(std::forward<Ts>(args)...);
-  }
-};
-
 /**
  * @brief Functor performing a type dispatch for a binary operator.
  *
@@ -856,16 +811,6 @@ struct type_dispatch_binary_op {
                                             F&& f,
                                             Ts&&... args)
   {
-#if 0
-    // Double dispatch
-    /*
-    double_type_dispatcher(lhs_type,
-                           rhs_type,
-                           detail::double_dispatch_binary_operator_types<operator_functor<op>>{},
-                           std::forward<F>(f),
-                           std::forward<Ts>(args)...);
-    */
-#endif
     // Single dispatch (assume lhs_type == rhs_type)
     type_dispatcher(lhs_type,
                     detail::single_dispatch_binary_operator_types<operator_functor<op>>{},

@@ -57,8 +57,8 @@ void BM_group_shift(benchmark::State& state)
 
   cudf::groupby::groupby gb_obj(cudf::table_view({keys}));
 
-  cudf::size_type offset =
-    static_cast<cudf::size_type>(column_size / float(num_groups) * 0.5);  // forward shift half way
+  std::vector<cudf::size_type> offsets{
+    static_cast<cudf::size_type>(column_size / float(num_groups) * 0.5)};  // forward shift half way
   // null fill value
   auto fill_value = cudf::make_default_constructed_scalar(cudf::data_type(cudf::type_id::INT64));
   // non null fill value
@@ -66,7 +66,7 @@ void BM_group_shift(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = gb_obj.shift(vals, offset, *fill_value);
+    auto result = gb_obj.shift(cudf::table_view{{vals}}, offsets, {*fill_value});
   }
 }
 

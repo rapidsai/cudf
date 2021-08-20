@@ -19,8 +19,6 @@
 #include <cstdint>
 #include <io/utilities/column_type_histogram.hpp>
 
-class SerialTrieNode;
-
 namespace cudf {
 namespace io {
 namespace csv {

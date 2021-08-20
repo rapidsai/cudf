@@ -6,21 +6,17 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.column cimport Column
+cimport cudf._lib.cpp.filling as cpp_filling
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport (
-    column_view,
-    mutable_column_view
-)
+from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
-
-cimport cudf._lib.cpp.filling as cpp_filling
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def fill_in_place(Column destination, int begin, int end, DeviceScalar value):
@@ -75,7 +71,7 @@ def _repeat_via_column(Table inp, Column count, bool check_count):
             c_check_count
         ))
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=inp._column_names,
         index_names=inp._index_names
@@ -92,7 +88,7 @@ def _repeat_via_size_type(Table inp, size_type count):
             count
         ))
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=inp._column_names,
         index_names=inp._index_names

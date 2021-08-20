@@ -27,7 +27,6 @@
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <thrust/device_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <iostream>
@@ -37,7 +36,7 @@ using aggregation = cudf::aggregation;
 
 template <typename T>
 typename std::enable_if<!cudf::is_timestamp_t<T>::value, std::vector<T>>::type convert_values(
-  std::vector<int> const &int_values)
+  std::vector<int> const& int_values)
 {
   std::vector<T> v(int_values.size());
   std::transform(int_values.begin(), int_values.end(), v.begin(), [](int x) {
@@ -49,7 +48,7 @@ typename std::enable_if<!cudf::is_timestamp_t<T>::value, std::vector<T>>::type c
 
 template <typename T>
 typename std::enable_if<cudf::is_timestamp_t<T>::value, std::vector<T>>::type convert_values(
-  std::vector<int> const &int_values)
+  std::vector<int> const& int_values)
 {
   std::vector<T> v(int_values.size());
   std::transform(int_values.begin(), int_values.end(), v.begin(), [](int x) {
@@ -60,16 +59,16 @@ typename std::enable_if<cudf::is_timestamp_t<T>::value, std::vector<T>>::type co
 }
 
 template <typename T>
-cudf::test::fixed_width_column_wrapper<T> construct_null_column(std::vector<T> const &values,
-                                                                std::vector<bool> const &bools)
+cudf::test::fixed_width_column_wrapper<T> construct_null_column(std::vector<T> const& values,
+                                                                std::vector<bool> const& bools)
 {
   if (values.size() > bools.size()) { throw std::logic_error("input vector size mismatch."); }
   return cudf::test::fixed_width_column_wrapper<T>(values.begin(), values.end(), bools.begin());
 }
 
 template <typename T>
-std::vector<T> replace_nulls(std::vector<T> const &values,
-                             std::vector<bool> const &bools,
+std::vector<T> replace_nulls(std::vector<T> const& values,
+                             std::vector<bool> const& bools,
                              T identity)
 {
   std::vector<T> v(values.size());
@@ -86,7 +85,7 @@ template <typename T>
 struct ReductionTest : public cudf::test::BaseFixture {
   // Sum/Prod/SumOfSquare never support non arithmetics
   static constexpr bool ret_non_arithmetic =
-    (std::is_arithmetic<T>::value || std::is_same<T, bool>::value) ? true : false;
+    (std::is_arithmetic<T>::value || std::is_same_v<T, bool>) ? true : false;
 
   ReductionTest() {}
 
@@ -96,7 +95,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
   void reduction_test(const cudf::column_view underlying_column,
                       T_out expected_value,
                       bool succeeded_condition,
-                      std::unique_ptr<aggregation> const &agg,
+                      std::unique_ptr<aggregation> const& agg,
                       cudf::data_type output_dtype = cudf::data_type{},
                       bool expected_null           = false)
   {
@@ -105,7 +104,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
     auto statement = [&]() {
       std::unique_ptr<cudf::scalar> result = cudf::reduce(underlying_column, agg, output_dtype);
       using ScalarType                     = cudf::scalar_type_t<T_out>;
-      auto result1                         = static_cast<ScalarType *>(result.get());
+      auto result1                         = static_cast<ScalarType*>(result.get());
       EXPECT_EQ(expected_null, !result1->is_valid());
       if (result1->is_valid()) { EXPECT_EQ(expected_value, result1->value()); }
     };
@@ -149,8 +148,8 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   auto res = cudf::minmax(col);
 
   using ScalarType = cudf::scalar_type_t<T>;
-  auto min_result  = static_cast<ScalarType *>(res.first.get());
-  auto max_result  = static_cast<ScalarType *>(res.second.get());
+  auto min_result  = static_cast<ScalarType*>(res.first.get());
+  auto max_result  = static_cast<ScalarType*>(res.second.get());
   EXPECT_EQ(min_result->value(), expected_min_result);
   EXPECT_EQ(max_result->value(), expected_max_result);
 
@@ -171,8 +170,8 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   auto null_res = cudf::minmax(col_nulls);
 
   using ScalarType     = cudf::scalar_type_t<T>;
-  auto min_null_result = static_cast<ScalarType *>(null_res.first.get());
-  auto max_null_result = static_cast<ScalarType *>(null_res.second.get());
+  auto min_null_result = static_cast<ScalarType*>(null_res.first.get());
+  auto max_null_result = static_cast<ScalarType*>(null_res.second.get());
   EXPECT_EQ(min_null_result->value(), expected_min_null_result);
   EXPECT_EQ(max_null_result->value(), expected_max_null_result);
 
@@ -203,8 +202,8 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   auto all_null_res = cudf::minmax(col_all_nulls);
 
   using ScalarType         = cudf::scalar_type_t<T>;
-  auto min_all_null_result = static_cast<ScalarType *>(all_null_res.first.get());
-  auto max_all_null_result = static_cast<ScalarType *>(all_null_res.second.get());
+  auto min_all_null_result = static_cast<ScalarType*>(all_null_res.first.get());
+  auto max_all_null_result = static_cast<ScalarType*>(all_null_res.second.get());
   EXPECT_EQ(min_all_null_result->is_valid(), false);
   EXPECT_EQ(max_all_null_result->is_valid(), false);
 }
@@ -245,7 +244,7 @@ TYPED_TEST(ReductionTest, Product)
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1});
   std::vector<TypeParam> v = convert_values<TypeParam>(int_values);
 
-  auto calc_prod = [](std::vector<T> &v) {
+  auto calc_prod = [](std::vector<T>& v) {
     T expected_value =
       std::accumulate(v.begin(), v.end(), T{1}, [](T acc, T i) { return acc * i; });
     return expected_value;
@@ -274,7 +273,7 @@ TYPED_TEST(ReductionTest, SumOfSquare)
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
   std::vector<T> v = convert_values<T>(int_values);
 
-  auto calc_reduction = [](std::vector<T> &v) {
+  auto calc_reduction = [](std::vector<T>& v) {
     T value = std::accumulate(v.begin(), v.end(), T{0}, [](T acc, T i) { return acc + i * i; });
     return value;
   };
@@ -374,7 +373,7 @@ TYPED_TEST(MultiStepReductionTest, Mean)
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
 
-  auto calc_mean = [](std::vector<T> &v, cudf::size_type valid_count) {
+  auto calc_mean = [](std::vector<T>& v, cudf::size_type valid_count) {
     double sum = std::accumulate(v.begin(), v.end(), double{0});
     return sum / valid_count;
   };
@@ -403,13 +402,19 @@ TYPED_TEST(MultiStepReductionTest, Mean)
                        cudf::data_type(cudf::type_id::FLOAT64));
 }
 
+// This test is disabled for only a Debug build because a compiler error
+// documented in cpp/src/reductions/std.cu and cpp/src/reductions/var.cu
+#ifdef NDEBUG
 TYPED_TEST(MultiStepReductionTest, var_std)
+#else
+TYPED_TEST(MultiStepReductionTest, DISABLED_var_std)
+#endif
 {
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
 
-  auto calc_var = [](std::vector<T> &v, cudf::size_type valid_count) {
+  auto calc_var = [](std::vector<T>& v, cudf::size_type valid_count) {
     double mean = std::accumulate(v.begin(), v.end(), double{0});
     mean /= valid_count;
 
@@ -454,9 +459,9 @@ TYPED_TEST(MultiStepReductionTest, var_std)
 
 template <typename T>
 struct ReductionMultiStepErrorCheck : public ReductionTest<T> {
-  void reduction_error_check(cudf::test::fixed_width_column_wrapper<T> &col,
+  void reduction_error_check(cudf::test::fixed_width_column_wrapper<T>& col,
                              bool succeeded_condition,
-                             std::unique_ptr<aggregation> const &agg,
+                             std::unique_ptr<aggregation> const& agg,
                              cudf::data_type output_dtype)
   {
     const cudf::column_view underlying_column = col;
@@ -472,7 +477,13 @@ struct ReductionMultiStepErrorCheck : public ReductionTest<T> {
 
 TYPED_TEST_CASE(ReductionMultiStepErrorCheck, cudf::test::AllTypes);
 
+// This test is disabled for only a Debug build because a compiler error
+// documented in cpp/src/reductions/std.cu and cpp/src/reductions/var.cu
+#ifdef NDEBUG
 TYPED_TEST(ReductionMultiStepErrorCheck, ErrorHandling)
+#else
+TYPED_TEST(ReductionMultiStepErrorCheck, DISABLED_ErrorHandling)
+#endif
 {
   using T = TypeParam;
   std::vector<int> int_values({-3, 2});
@@ -517,10 +528,10 @@ TYPED_TEST(ReductionMultiStepErrorCheck, ErrorHandling)
 
 struct ReductionDtypeTest : public cudf::test::BaseFixture {
   template <typename T_in, typename T_out>
-  void reduction_test(std::vector<int> &int_values,
+  void reduction_test(std::vector<int>& int_values,
                       T_out expected_value,
                       bool succeeded_condition,
-                      std::unique_ptr<aggregation> const &agg,
+                      std::unique_ptr<aggregation> const& agg,
                       cudf::data_type out_dtype,
                       bool expected_overflow = false)
   {
@@ -531,7 +542,7 @@ struct ReductionDtypeTest : public cudf::test::BaseFixture {
     auto statement = [&]() {
       std::unique_ptr<cudf::scalar> result = cudf::reduce(col, agg, out_dtype);
       using ScalarType                     = cudf::scalar_type_t<T_out>;
-      auto result1                         = static_cast<ScalarType *>(result.get());
+      auto result1                         = static_cast<ScalarType*>(result.get());
       if (result1->is_valid() && !expected_overflow) {
         EXPECT_EQ(expected_value, result1->value());
       }
@@ -701,13 +712,19 @@ struct ReductionParamTest : public ReductionTest<double>,
 
 INSTANTIATE_TEST_CASE_P(ddofParam, ReductionParamTest, ::testing::Range(1, 5));
 
+// This test is disabled for only a Debug build because a compiler error
+// documented in cpp/src/reductions/std.cu and cpp/src/reductions/var.cu
+#ifdef NDEBUG
 TEST_P(ReductionParamTest, std_var)
+#else
+TEST_P(ReductionParamTest, DISABLED_std_var)
+#endif
 {
   int ddof = GetParam();
   std::vector<double> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
 
-  auto calc_var = [ddof](std::vector<double> &v, cudf::size_type valid_count) {
+  auto calc_var = [ddof](std::vector<double>& v, cudf::size_type valid_count) {
     double mean = std::accumulate(v.begin(), v.end(), double{0});
     mean /= valid_count;
 
@@ -755,7 +772,7 @@ struct StringReductionTest : public cudf::test::BaseFixture,
   void reduction_test(const cudf::column_view underlying_column,
                       std::string expected_value,
                       bool succeeded_condition,
-                      std::unique_ptr<aggregation> const &agg,
+                      std::unique_ptr<aggregation> const& agg,
                       cudf::data_type output_dtype = cudf::data_type{})
   {
     if (cudf::data_type{} == output_dtype) output_dtype = underlying_column.type();
@@ -763,7 +780,7 @@ struct StringReductionTest : public cudf::test::BaseFixture,
     auto statement = [&]() {
       std::unique_ptr<cudf::scalar> result = cudf::reduce(underlying_column, agg, output_dtype);
       using ScalarType                     = cudf::scalar_type_t<cudf::string_view>;
-      auto result1                         = static_cast<ScalarType *>(result.get());
+      auto result1                         = static_cast<ScalarType*>(result.get());
       EXPECT_TRUE(result1->is_valid());
       if (!result1->is_valid())
         std::cout << "expected=" << expected_value << ",got=" << result1->to_string() << std::endl;
@@ -827,14 +844,14 @@ TEST_P(StringReductionTest, MinMax)
 
   // MINMAX
   auto result = cudf::minmax(col);
-  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.first.get())->to_string(),
+  EXPECT_EQ(static_cast<cudf::string_scalar*>(result.first.get())->to_string(),
             expected_min_result);
-  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.second.get())->to_string(),
+  EXPECT_EQ(static_cast<cudf::string_scalar*>(result.second.get())->to_string(),
             expected_max_result);
   result = cudf::minmax(col_nulls);
-  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.first.get())->to_string(),
+  EXPECT_EQ(static_cast<cudf::string_scalar*>(result.first.get())->to_string(),
             expected_min_null_result);
-  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.second.get())->to_string(),
+  EXPECT_EQ(static_cast<cudf::string_scalar*>(result.second.get())->to_string(),
             expected_max_null_result);
 }
 
@@ -848,9 +865,9 @@ TEST_P(StringReductionTest, DictionaryMinMax)
   std::string expected_max_result = *(std::max_element(host_strings.begin(), host_strings.end()));
 
   auto result = cudf::minmax(col);
-  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.first.get())->to_string(),
+  EXPECT_EQ(static_cast<cudf::string_scalar*>(result.first.get())->to_string(),
             expected_min_result);
-  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.second.get())->to_string(),
+  EXPECT_EQ(static_cast<cudf::string_scalar*>(result.second.get())->to_string(),
             expected_max_result);
 
   // column with nulls
@@ -868,9 +885,9 @@ TEST_P(StringReductionTest, DictionaryMinMax)
   expected_max_result = *(std::max_element(r_strings.begin(), r_strings.end()));
 
   result = cudf::minmax(col_nulls);
-  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.first.get())->to_string(),
+  EXPECT_EQ(static_cast<cudf::string_scalar*>(result.first.get())->to_string(),
             expected_min_result);
-  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.second.get())->to_string(),
+  EXPECT_EQ(static_cast<cudf::string_scalar*>(result.second.get())->to_string(),
             expected_max_result);
 
   // test sliced column
@@ -878,9 +895,9 @@ TEST_P(StringReductionTest, DictionaryMinMax)
   // 3->2 and 7->5 because r_strings contains no null entries
   expected_min_result = *(std::min_element(r_strings.begin() + 2, r_strings.begin() + 5));
   expected_max_result = *(std::max_element(r_strings.begin() + 2, r_strings.begin() + 5));
-  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.first.get())->to_string(),
+  EXPECT_EQ(static_cast<cudf::string_scalar*>(result.first.get())->to_string(),
             expected_min_result);
-  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.second.get())->to_string(),
+  EXPECT_EQ(static_cast<cudf::string_scalar*>(result.second.get())->to_string(),
             expected_max_result);
 }
 
@@ -919,7 +936,7 @@ TYPED_TEST(ReductionTest, Median)
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
   double expected_value = [] {
-    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_same_v<T, bool>) return 1.0;
     if (std::is_signed<T>::value) return 3.0;
     return 13.5;
   }();
@@ -928,7 +945,7 @@ TYPED_TEST(ReductionTest, Median)
 
   auto col_odd              = cudf::split(col, {1})[1];
   double expected_value_odd = [] {
-    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_same_v<T, bool>) return 1.0;
     if (std::is_signed<T>::value) return 0.0;
     return 14.0;
   }();
@@ -937,7 +954,7 @@ TYPED_TEST(ReductionTest, Median)
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
   double expected_null_value                          = [] {
-    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_same_v<T, bool>) return 1.0;
     if (std::is_signed<T>::value) return 0.0;
     return 13.0;
   }();
@@ -947,7 +964,7 @@ TYPED_TEST(ReductionTest, Median)
 
   auto col_nulls_odd             = cudf::split(col_nulls, {1})[1];
   double expected_null_value_odd = [] {
-    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_same_v<T, bool>) return 1.0;
     if (std::is_signed<T>::value) return -6.5;
     return 13.5;
   }();
@@ -968,7 +985,7 @@ TYPED_TEST(ReductionTest, Quantile)
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  double expected_value0 = std::is_same<T, bool>::value || std::is_unsigned<T>::value ? v[4] : v[6];
+  double expected_value0 = std::is_same_v<T, bool> || std::is_unsigned<T>::value ? v[4] : v[6];
   this->reduction_test(
     col, expected_value0, this->ret_non_arithmetic, cudf::make_quantile_aggregation({0.0}, interp));
   double expected_value1 = v[3];
@@ -998,7 +1015,7 @@ TYPED_TEST(ReductionTest, UniqueCount)
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  cudf::size_type expected_value = std::is_same<T, bool>::value ? 2 : 6;
+  cudf::size_type expected_value = std::is_same_v<T, bool> ? 2 : 6;
   this->reduction_test(col,
                        expected_value,
                        this->ret_non_arithmetic,
@@ -1010,8 +1027,8 @@ TYPED_TEST(ReductionTest, UniqueCount)
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  cudf::size_type expected_null_value0                = std::is_same<T, bool>::value ? 3 : 7;
-  cudf::size_type expected_null_value1                = std::is_same<T, bool>::value ? 2 : 6;
+  cudf::size_type expected_null_value0                = std::is_same_v<T, bool> ? 3 : 7;
+  cudf::size_type expected_null_value1                = std::is_same_v<T, bool> ? 2 : 6;
 
   this->reduction_test(col_nulls,
                        expected_null_value0,
@@ -1046,7 +1063,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProductZeroScale)
   auto const out_type = static_cast<cudf::column_view>(column).type();
 
   auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
-  auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+  auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
   auto const result_fp     = decimalXX{result_scalar->value()};
 
   EXPECT_EQ(result_fp, expected);
@@ -1067,7 +1084,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProduct)
     auto const expected = decimalXX{scaled_integer<RepType>{36, scale_type{i * 6}}};
 
     auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   }
@@ -1087,7 +1104,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProductWithNulls)
     auto const expected = decimalXX{scaled_integer<RepType>{6, scale_type{i * 3}}};
 
     auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   }
@@ -1108,7 +1125,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSum)
     auto const out_type = static_cast<cudf::column_view>(column).type();
 
     auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   }
@@ -1132,7 +1149,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumAlternate)
   auto const out_type = static_cast<cudf::column_view>(column).type();
 
   auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
-  auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+  auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
   EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   EXPECT_EQ(result_scalar->fixed_point_value(), TEN);
@@ -1152,7 +1169,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumFractional)
     auto const expected = decimalXX{scaled_integer<RepType>{666, scale}};
 
     auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   }
@@ -1175,7 +1192,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumLarge)
     auto const expected       = decimalXX{scaled_integer<RepType>{expected_value, scale}};
 
     auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   }
@@ -1195,7 +1212,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMin)
     auto const out_type = static_cast<cudf::column_view>(column).type();
 
     auto const result        = cudf::reduce(column, cudf::make_min_aggregation(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), ONE);
   }
@@ -1216,7 +1233,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMinLarge)
     auto const expected = decimalXX{0, scale};
 
     auto const result        = cudf::reduce(column, cudf::make_min_aggregation(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   }
@@ -1236,7 +1253,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMax)
     auto const out_type = static_cast<cudf::column_view>(column).type();
 
     auto const result        = cudf::reduce(column, cudf::make_max_aggregation(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), FOUR);
   }
@@ -1257,7 +1274,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMaxLarge)
     auto const expected = decimalXX{scaled_integer<RepType>{42, scale}};
 
     auto const result        = cudf::reduce(column, cudf::make_max_aggregation(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   }
@@ -1276,7 +1293,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNUnique)
     auto const out_type = static_cast<cudf::column_view>(column).type();
 
     auto const result        = cudf::reduce(column, cudf::make_nunique_aggregation(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<cudf::size_type> *>(result.get());
+    auto const result_scalar = static_cast<cudf::scalar_type_t<cudf::size_type>*>(result.get());
 
     EXPECT_EQ(result_scalar->value(), 4);
   }
@@ -1296,7 +1313,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumOfSquares)
     auto const expected = decimalXX{scaled_integer<RepType>{30, scale_type{i * 2}}};
 
     auto const result = cudf::reduce(column, cudf::make_sum_of_squares_aggregation(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   }
@@ -1316,7 +1333,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMedianOddNumberOfElements)
     auto const expected = decimalXX{scaled_integer<RepType>{2, scale}};
 
     auto const result        = cudf::reduce(column, cudf::make_median_aggregation(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   }
@@ -1336,7 +1353,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMedianEvenNumberOfElements
     auto const expected = decimalXX{scaled_integer<RepType>{25, scale}};
 
     auto const result        = cudf::reduce(column, cudf::make_median_aggregation(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   }
@@ -1358,7 +1375,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionQuantile)
       auto const expected = decimalXX{scaled_integer<RepType>{i + 1, scale}};
       auto const result   = cudf::reduce(
         column, cudf::make_quantile_aggregation({i / 4.0}, cudf::interpolation::LINEAR), out_type);
-      auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+      auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
       EXPECT_EQ(result_scalar->fixed_point_value(), expected);
     }
   }
@@ -1381,7 +1398,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNthElement)
       auto const expected = decimalXX{scaled_integer<RepType>{values[i], scale}};
       auto const result   = cudf::reduce(
         column, cudf::make_nth_element_aggregation(i, cudf::null_policy::INCLUDE), out_type);
-      auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+      auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
       EXPECT_EQ(result_scalar->fixed_point_value(), expected);
     }
   }
@@ -1594,7 +1611,7 @@ TYPED_TEST(DictionaryReductionTest, Product)
   std::vector<TypeParam> v = convert_values<TypeParam>(int_values);
   cudf::data_type output_type{cudf::type_to_id<T>()};
 
-  auto calc_prod = [](std::vector<T> const &v) {
+  auto calc_prod = [](std::vector<T> const& v) {
     return std::accumulate(v.cbegin(), v.cend(), T{1}, [](T acc, T i) { return acc * i; });
   };
 
@@ -1625,7 +1642,7 @@ TYPED_TEST(DictionaryReductionTest, SumOfSquare)
   std::vector<T> v = convert_values<T>(int_values);
   cudf::data_type output_type{cudf::type_to_id<T>()};
 
-  auto calc_reduction = [](std::vector<T> const &v) {
+  auto calc_reduction = [](std::vector<T> const& v) {
     return std::accumulate(v.cbegin(), v.cend(), T{0}, [](T acc, T i) { return acc + i * i; });
   };
 
@@ -1656,7 +1673,7 @@ TYPED_TEST(DictionaryReductionTest, Mean)
   std::vector<T> v = convert_values<T>(int_values);
   cudf::data_type output_type{cudf::type_to_id<double>()};
 
-  auto calc_mean = [](std::vector<T> const &v, cudf::size_type valid_count) {
+  auto calc_mean = [](std::vector<T> const& v, cudf::size_type valid_count) {
     double sum = std::accumulate(v.cbegin(), v.cend(), double{0});
     return sum / valid_count;
   };
@@ -1682,14 +1699,18 @@ TYPED_TEST(DictionaryReductionTest, Mean)
                        output_type);
 }
 
+#ifdef NDEBUG
 TYPED_TEST(DictionaryReductionTest, VarStd)
+#else
+TYPED_TEST(DictionaryReductionTest, DISABLED_VarStd)
+#endif
 {
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<T> v = convert_values<T>(int_values);
   cudf::data_type output_type{cudf::type_to_id<double>()};
 
-  auto calc_var = [](std::vector<T> const &v, cudf::size_type valid_count) {
+  auto calc_var = [](std::vector<T> const& v, cudf::size_type valid_count) {
     double mean = std::accumulate(v.cbegin(), v.cend(), double{0});
     mean /= valid_count;
     double sum_of_sq = std::accumulate(
@@ -1823,7 +1844,7 @@ TYPED_TEST(DictionaryReductionTest, Quantile)
 
   // test without nulls
   cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
-  double expected_value = std::is_same<T, bool>::value || std::is_unsigned<T>::value ? 0.0 : -20.0;
+  double expected_value = std::is_same_v<T, bool> || std::is_unsigned<T>::value ? 0.0 : -20.0;
   this->reduction_test(col,
                        expected_value,
                        this->ret_non_arithmetic,

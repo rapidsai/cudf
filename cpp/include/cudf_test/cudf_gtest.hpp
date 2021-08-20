@@ -34,10 +34,10 @@
  * redefines them properly.
  */
 
-#define Types Types_NOT_USED
-#define Types0 Types0_NOT_USED
-#define TypeList TypeList_NOT_USED
-#define Templates Templates_NOT_USED
+#define Types      Types_NOT_USED
+#define Types0     Types0_NOT_USED
+#define TypeList   TypeList_NOT_USED
+#define Templates  Templates_NOT_USED
 #define Templates0 Templates0_NOT_USED
 #include <gtest/internal/gtest-type-util.h>
 #undef Types
@@ -104,7 +104,7 @@ struct TypeList<Types<TYPES...>> {
       {                                                             \
         try {                                                       \
           x;                                                        \
-        } catch (const exception &e) {                              \
+        } catch (const exception& e) {                              \
           ASSERT_NE(nullptr, e.what());                             \
           EXPECT_THAT(e.what(), testing::StartsWith((startswith))); \
           EXPECT_THAT(e.what(), testing::EndsWith((endswith)));     \

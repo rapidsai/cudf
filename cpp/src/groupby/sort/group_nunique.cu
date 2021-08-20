@@ -93,15 +93,9 @@ struct nunique_functor {
     return result;
   }
 
-  template <typename T>
+  template <typename T, typename... Args>
   typename std::enable_if_t<!cudf::is_equality_comparable<T, T>(), std::unique_ptr<column>>
-  operator()(column_view const& values,
-             cudf::device_span<size_type const> group_labels,
-             size_type const num_groups,
-             cudf::device_span<size_type const> group_offsets,
-             null_policy null_handling,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+  operator()(Args&&...)
   {
     CUDF_FAIL("list_view group_nunique not supported yet");
   }

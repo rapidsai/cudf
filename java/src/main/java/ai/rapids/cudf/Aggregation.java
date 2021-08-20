@@ -22,9 +22,9 @@ import java.util.Arrays;
 
 /**
  * Represents an aggregation operation.  Please note that not all aggregations work, or even make
- * since in all types of aggregation operations.
+ * sense in all types of aggregation operations.
  */
-public abstract class Aggregation {
+abstract class Aggregation {
     static {
         NativeDepsLoader.loadNativeDeps();
     }
@@ -56,56 +56,26 @@ public abstract class Aggregation {
         ROW_NUMBER(17),
         COLLECT_LIST(18),
         COLLECT_SET(19),
-        LEAD(20),
-        LAG(21),
-        PTX(22),
-        CUDA(23);
+        MERGE_LISTS(20),
+        MERGE_SETS(21),
+        LEAD(22),
+        LAG(23),
+        PTX(24),
+        CUDA(25),
+        M2(26),
+        MERGE_M2(27),
+        RANK(28),
+        DENSE_RANK(29);
 
         final int nativeId;
 
         Kind(int nativeId) {this.nativeId = nativeId;}
     }
 
-    /*
-     * This is analogous to the native 'null_policy'.
-     */
-    public enum NullPolicy {
-        EXCLUDE(false),
-        INCLUDE(true);
-
-        NullPolicy(boolean includeNulls) { this.includeNulls = includeNulls; }
-
-        final boolean includeNulls;
-    }
-
-    /*
-     * This is analogous to the native 'null_equality'.
-     */
-    public enum NullEquality {
-        UNEQUAL(false),
-        EQUAL(true);
-
-        NullEquality(boolean nullsEqual) { this.nullsEqual = nullsEqual; }
-
-        final boolean nullsEqual;
-    }
-
-    /*
-     * This is analogous to the native 'nan_equality'.
-     */
-    public enum NaNEquality {
-        UNEQUAL(false),
-        ALL_EQUAL(true);
-
-        NaNEquality(boolean nansEqual) { this.nansEqual = nansEqual; }
-
-        final boolean nansEqual;
-    }
-
     /**
      * An Aggregation that only needs a kind and nothing else.
      */
-    private static final class NoParamAggregation extends Aggregation {
+    private static class NoParamAggregation extends Aggregation {
         public NoParamAggregation(Kind kind) {
             super(kind);
         }
@@ -132,11 +102,11 @@ public abstract class Aggregation {
         }
     }
 
-    private static final class NthAggregation extends Aggregation {
+    static final class NthAggregation extends Aggregation {
         private final int offset;
         private final NullPolicy nullPolicy;
 
-        public NthAggregation(int offset, NullPolicy nullPolicy) {
+        private NthAggregation(int offset, NullPolicy nullPolicy) {
             super(Kind.NTH_ELEMENT);
             this.offset = offset;
             this.nullPolicy = nullPolicy;
@@ -164,7 +134,7 @@ public abstract class Aggregation {
         }
     }
 
-    private static final class DdofAggregation extends Aggregation {
+    private static class DdofAggregation extends Aggregation {
         private final int ddof;
 
         public DdofAggregation(Kind kind, int ddof) {
@@ -194,7 +164,7 @@ public abstract class Aggregation {
         }
     }
 
-    private static final class CountLikeAggregation extends Aggregation {
+    private static class CountLikeAggregation extends Aggregation {
         private final NullPolicy nullPolicy;
 
         public CountLikeAggregation(Kind kind, NullPolicy nullPolicy) {
@@ -224,7 +194,7 @@ public abstract class Aggregation {
         }
     }
 
-    private static class QuantileAggregation extends Aggregation {
+    private static final class QuantileAggregation extends Aggregation {
         private final QuantileMethod method;
         private final double[] quantiles;
 
@@ -305,10 +275,10 @@ public abstract class Aggregation {
         }
     }
 
-    private static final class CollectListAggregation extends Aggregation {
+    static final class CollectListAggregation extends Aggregation {
         private final NullPolicy nullPolicy;
 
-        public CollectListAggregation(NullPolicy nullPolicy) {
+        private CollectListAggregation(NullPolicy nullPolicy) {
             super(Kind.COLLECT_LIST);
             this.nullPolicy = nullPolicy;
         }
@@ -335,12 +305,12 @@ public abstract class Aggregation {
         }
     }
 
-    private static final class CollectSetAggregation extends Aggregation {
+    static final class CollectSetAggregation extends Aggregation {
         private final NullPolicy nullPolicy;
         private final NullEquality nullEquality;
         private final NaNEquality nanEquality;
 
-        public CollectSetAggregation(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
+        private CollectSetAggregation(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
             super(Kind.COLLECT_SET);
             this.nullPolicy = nullPolicy;
             this.nullEquality = nullEquality;
@@ -376,18 +346,44 @@ public abstract class Aggregation {
         }
     }
 
+    static final class MergeSetsAggregation extends Aggregation {
+        private final NullEquality nullEquality;
+        private final NaNEquality nanEquality;
+
+        private MergeSetsAggregation(NullEquality nullEquality, NaNEquality nanEquality) {
+            super(Kind.MERGE_SETS);
+            this.nullEquality = nullEquality;
+            this.nanEquality = nanEquality;
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createMergeSetsAgg(nullEquality.nullsEqual, nanEquality.nansEqual);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode()
+                + Boolean.hashCode(nullEquality.nullsEqual)
+                + Boolean.hashCode(nanEquality.nansEqual);
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof MergeSetsAggregation) {
+                MergeSetsAggregation o = (MergeSetsAggregation) other;
+                return o.nullEquality == this.nullEquality && o.nanEquality == this.nanEquality;
+            }
+            return false;
+        }
+    }
+
     protected final Kind kind;
 
     protected Aggregation(Kind kind) {
         this.kind = kind;
-    }
-
-    /**
-     * Add a column to the Aggregation so it can be used on a specific column of data.
-     * @param columnIndex the index of the column to operate on.
-     */
-    public AggregationOnColumn onColumn(int columnIndex) {
-        return new AggregationOnColumn(this, columnIndex);
     }
 
     /**
@@ -427,50 +423,69 @@ public abstract class Aggregation {
 
     static native void close(long ptr);
 
+    static final class SumAggregation extends NoParamAggregation {
+        private SumAggregation() {
+            super(Kind.SUM);
+        }
+    }
+
     /**
      * Sum reduction.
      */
-    public static Aggregation sum() {
-        return new NoParamAggregation(Kind.SUM);
+    static SumAggregation sum() {
+        return new SumAggregation();
+    }
+
+    static final class ProductAggregation extends NoParamAggregation {
+        private ProductAggregation() {
+            super(Kind.PRODUCT);
+        }
     }
 
     /**
      * Product reduction.
      */
-    public static Aggregation product() {
-        return new NoParamAggregation(Kind.PRODUCT);
+    static ProductAggregation product() {
+        return new ProductAggregation();
+    }
+
+    static final class MinAggregation extends NoParamAggregation {
+        private MinAggregation() {
+            super(Kind.MIN);
+        }
     }
 
     /**
      * Min reduction.
      */
-    public static Aggregation min() {
-        return new NoParamAggregation(Kind.MIN);
+    static MinAggregation min() {
+        return new MinAggregation();
+    }
+
+    static final class MaxAggregation extends NoParamAggregation {
+        private MaxAggregation() {
+            super(Kind.MAX);
+        }
     }
 
     /**
      * Max reduction.
      */
-    public static Aggregation max() {
-        return new NoParamAggregation(Kind.MAX);
+    static MaxAggregation max() {
+        return new MaxAggregation();
+    }
+
+    static final class CountAggregation extends CountLikeAggregation {
+        private CountAggregation(NullPolicy nullPolicy) {
+            super(Kind.COUNT, nullPolicy);
+        }
     }
 
     /**
      * Count number of valid, a.k.a. non-null, elements.
      */
-    public static Aggregation count() {
+    static CountAggregation count() {
         return count(NullPolicy.EXCLUDE);
-    }
-
-    /**
-     * Count number of elements.
-     * (This is deprecated, use {@link Aggregation#count(NullPolicy nullPolicy)} instead)
-     * @param includeNulls true if nulls should be counted. false if only non-null values should be
-     *                     counted.
-     */
-    @Deprecated
-    public static Aggregation count(boolean includeNulls) {
-        return count(includeNulls ? NullPolicy.INCLUDE : NullPolicy.EXCLUDE);
     }
 
     /**
@@ -478,8 +493,14 @@ public abstract class Aggregation {
      * @param nullPolicy INCLUDE if nulls should be counted. EXCLUDE if only non-null values
      *                   should be counted.
      */
-    public static Aggregation count(NullPolicy nullPolicy) {
-        return new CountLikeAggregation(Kind.COUNT, nullPolicy);
+    static CountAggregation count(NullPolicy nullPolicy) {
+        return new CountAggregation(nullPolicy);
+    }
+
+    static final class AnyAggregation extends NoParamAggregation {
+        private AnyAggregation() {
+            super(Kind.ANY);
+        }
     }
 
     /**
@@ -487,8 +508,14 @@ public abstract class Aggregation {
      * if any of the elements in the range are true or non-zero, otherwise produces a false or 0.
      * Null values are skipped.
      */
-    public static Aggregation any() {
-        return new NoParamAggregation(Kind.ANY);
+    static AnyAggregation any() {
+        return new AnyAggregation();
+    }
+
+    static final class AllAggregation extends NoParamAggregation {
+        private AllAggregation() {
+            super(Kind.ALL);
+        }
     }
 
     /**
@@ -496,28 +523,59 @@ public abstract class Aggregation {
      * the range are true or non-zero, otherwise produces a false or 0.
      * Null values are skipped.
      */
-    public static Aggregation all() {
-        return new NoParamAggregation(Kind.ALL);
+    static AllAggregation all() {
+        return new AllAggregation();
+    }
+
+    static final class SumOfSquaresAggregation extends NoParamAggregation {
+        private SumOfSquaresAggregation() {
+            super(Kind.SUM_OF_SQUARES);
+        }
     }
 
     /**
      * Sum of squares reduction.
      */
-    public static Aggregation sumOfSquares() {
-        return new NoParamAggregation(Kind.SUM_OF_SQUARES);
+    static SumOfSquaresAggregation sumOfSquares() {
+        return new SumOfSquaresAggregation();
+    }
+
+    static final class MeanAggregation extends NoParamAggregation {
+        private MeanAggregation() {
+            super(Kind.MEAN);
+        }
     }
 
     /**
      * Arithmetic mean reduction.
      */
-    public static Aggregation mean() {
-        return new NoParamAggregation(Kind.MEAN);
+    static MeanAggregation mean() {
+        return new MeanAggregation();
+    }
+
+    static final class M2Aggregation extends NoParamAggregation {
+        private M2Aggregation() {
+            super(Kind.M2);
+        }
+    }
+
+    /**
+     * Sum of square of differences from mean.
+     */
+    static M2Aggregation M2() {
+        return new M2Aggregation();
+    }
+
+    static final class VarianceAggregation extends DdofAggregation {
+        private VarianceAggregation(int ddof) {
+            super(Kind.VARIANCE, ddof);
+        }
     }
 
     /**
      * Variance aggregation with 1 as the delta degrees of freedom.
      */
-    public static Aggregation variance() {
+    static VarianceAggregation variance() {
         return variance(1);
     }
 
@@ -526,15 +584,21 @@ public abstract class Aggregation {
      * @param ddof delta degrees of freedom. The divisor used in calculation of variance is
      *             <code>N - ddof</code>, where N is the population size.
      */
-    public static Aggregation variance(int ddof) {
-        return new DdofAggregation(Kind.VARIANCE, ddof);
+    static VarianceAggregation variance(int ddof) {
+        return new VarianceAggregation(ddof);
     }
 
+
+    static final class StandardDeviationAggregation extends DdofAggregation {
+        private StandardDeviationAggregation(int ddof) {
+            super(Kind.STD, ddof);
+        }
+    }
 
     /**
      * Standard deviation aggregation with 1 as the delta degrees of freedom.
      */
-    public static Aggregation standardDeviation() {
+    static StandardDeviationAggregation standardDeviation() {
         return standardDeviation(1);
     }
 
@@ -543,29 +607,41 @@ public abstract class Aggregation {
      * @param ddof delta degrees of freedom. The divisor used in calculation of std is
      *             <code>N - ddof</code>, where N is the population size.
      */
-    public static Aggregation standardDeviation(int ddof) {
-        return new DdofAggregation(Kind.STD, ddof);
+    static StandardDeviationAggregation standardDeviation(int ddof) {
+        return new StandardDeviationAggregation(ddof);
+    }
+
+    static final class MedianAggregation extends NoParamAggregation {
+        private MedianAggregation() {
+            super(Kind.MEDIAN);
+        }
     }
 
     /**
      * Median reduction.
      */
-    public static Aggregation median() {
-        return new NoParamAggregation(Kind.MEDIAN);
+    static MedianAggregation median() {
+        return new MedianAggregation();
     }
 
     /**
      * Aggregate to compute the specified quantiles. Uses linear interpolation by default.
      */
-    public static Aggregation quantile(double ... quantiles) {
+    static QuantileAggregation quantile(double ... quantiles) {
         return quantile(QuantileMethod.LINEAR, quantiles);
     }
 
     /**
      * Aggregate to compute various quantiles.
      */
-    public static Aggregation quantile(QuantileMethod method, double ... quantiles) {
+    static QuantileAggregation quantile(QuantileMethod method, double ... quantiles) {
         return new QuantileAggregation(method, quantiles);
+    }
+
+    static final class ArgMaxAggregation extends NoParamAggregation {
+        private ArgMaxAggregation() {
+            super(Kind.ARGMAX);
+        }
     }
 
     /**
@@ -574,8 +650,14 @@ public abstract class Aggregation {
      * prior to doing the aggregation. This would result in an index into the sorted data being
      * returned.
      */
-    public static Aggregation argMax() {
-        return new NoParamAggregation(Kind.ARGMAX);
+    static ArgMaxAggregation argMax() {
+        return new ArgMaxAggregation();
+    }
+
+    static final class ArgMinAggregation extends NoParamAggregation {
+        private ArgMinAggregation() {
+            super(Kind.ARGMIN);
+        }
     }
 
     /**
@@ -584,27 +666,21 @@ public abstract class Aggregation {
      * prior to doing the aggregation. This would result in an index into the sorted data being
      * returned.
      */
-    public static Aggregation argMin() {
-        return new NoParamAggregation(Kind.ARGMIN);
+    static ArgMinAggregation argMin() {
+        return new ArgMinAggregation();
+    }
+
+    static final class NuniqueAggregation extends CountLikeAggregation {
+        private NuniqueAggregation(NullPolicy nullPolicy) {
+            super(Kind.NUNIQUE, nullPolicy);
+        }
     }
 
     /**
      * Number of unique, non-null, elements.
      */
-    public static Aggregation nunique() {
+    static NuniqueAggregation nunique() {
         return nunique(NullPolicy.EXCLUDE);
-    }
-
-    /**
-     * Number of unique elements.
-     * (This is deprecated, use {@link Aggregation#nunique(NullPolicy nullPolicy)} instead)
-     * @param includeNulls true if nulls should be counted else false. If nulls are counted they
-     *                     compare as equal so multiple null values in a range would all only
-     *                     increase the count by 1.
-     */
-    @Deprecated
-    public static Aggregation nunique(boolean includeNulls) {
-        return nunique(includeNulls ? NullPolicy.INCLUDE : NullPolicy.EXCLUDE);
     }
 
     /**
@@ -613,8 +689,8 @@ public abstract class Aggregation {
      *                   compare as equal so multiple null values in a range would all only
      *                   increase the count by 1.
      */
-    public static Aggregation nunique(NullPolicy nullPolicy) {
-        return new CountLikeAggregation(Kind.NUNIQUE, nullPolicy);
+    static NuniqueAggregation nunique(NullPolicy nullPolicy) {
+        return new NuniqueAggregation(nullPolicy);
     }
 
     /**
@@ -622,21 +698,8 @@ public abstract class Aggregation {
      * @param offset the offset to look at. Negative numbers go from the end of the group. Any
      *               value outside of the group range results in a null.
      */
-    public static Aggregation nth(int offset) {
+    static NthAggregation nth(int offset) {
         return nth(offset, NullPolicy.INCLUDE);
-    }
-
-    /**
-     * Get the nth element in a group.
-     * (This is deprecated, use {@link Aggregation#nth(int offset, NullPolicy nullPolicy)} instead)
-     * @param offset the offset to look at. Negative numbers go from the end of the group. Any
-     *               value outside of the group range results in a null.
-     * @param includeNulls true if nulls should be included in the aggregation or false if they
-     *                     should be skipped.
-     */
-    @Deprecated
-    public static Aggregation nth(int offset, boolean includeNulls) {
-        return nth(offset, includeNulls ? NullPolicy.INCLUDE : NullPolicy.EXCLUDE);
     }
 
     /**
@@ -646,41 +709,53 @@ public abstract class Aggregation {
      * @param nullPolicy INCLUDE if nulls should be included in the aggregation or EXCLUDE if they
      *                   should be skipped.
      */
-    public static Aggregation nth(int offset, NullPolicy nullPolicy) {
+    static NthAggregation nth(int offset, NullPolicy nullPolicy) {
         return new NthAggregation(offset, nullPolicy);
     }
 
+    static final class RowNumberAggregation extends NoParamAggregation {
+        private RowNumberAggregation() {
+            super(Kind.ROW_NUMBER);
+        }
+    }
+
     /**
-     * Get the row number, only makes since for a window operations.
+     * Get the row number, only makes sense for a window operations.
      */
-    public static Aggregation rowNumber() {
-        return new NoParamAggregation(Kind.ROW_NUMBER);
+    static RowNumberAggregation rowNumber() {
+        return new RowNumberAggregation();
+    }
+
+    static final class RankAggregation extends NoParamAggregation {
+        private RankAggregation() {
+            super(Kind.RANK);
+        }
+    }
+
+    /**
+     * Get the row's ranking.
+     */
+    static RankAggregation rank() {
+        return new RankAggregation();
+    }
+
+    static final class DenseRankAggregation extends NoParamAggregation {
+        private DenseRankAggregation() {
+            super(Kind.DENSE_RANK);
+        }
+    }
+
+    /**
+     * Get the row's dense ranking.
+     */
+    static DenseRankAggregation denseRank() {
+        return new DenseRankAggregation();
     }
 
     /**
      * Collect the values into a list. Nulls will be skipped.
-     * @deprecated please use collectList as instead.
      */
-    @Deprecated
-    public static Aggregation collect() {
-        return collectList();
-    }
-
-    /**
-     * Collect the values into a list.
-     * @deprecated please use collectList as instead.
-     *
-     * @param nullPolicy Indicates whether to include/exclude nulls during collection.
-     */
-    @Deprecated
-    public static Aggregation collect(NullPolicy nullPolicy) {
-        return collectList(nullPolicy);
-    }
-
-    /**
-     * Collect the values into a list. Nulls will be skipped.
-     */
-    public static Aggregation collectList() {
+    static CollectListAggregation collectList() {
         return collectList(NullPolicy.EXCLUDE);
     }
 
@@ -689,7 +764,7 @@ public abstract class Aggregation {
      *
      * @param nullPolicy Indicates whether to include/exclude nulls during collection.
      */
-    public static Aggregation collectList(NullPolicy nullPolicy) {
+    static CollectListAggregation collectList(NullPolicy nullPolicy) {
         return new CollectListAggregation(nullPolicy);
     }
 
@@ -697,8 +772,8 @@ public abstract class Aggregation {
      * Collect the values into a set. All null values will be excluded, and all nan values are regarded as
      * unique instances.
      */
-    public static Aggregation collectSet() {
-        return new CollectSetAggregation(NullPolicy.EXCLUDE, NullEquality.UNEQUAL, NaNEquality.UNEQUAL);
+    static CollectSetAggregation collectSet() {
+        return collectSet(NullPolicy.EXCLUDE, NullEquality.UNEQUAL, NaNEquality.UNEQUAL);
     }
 
     /**
@@ -708,16 +783,46 @@ public abstract class Aggregation {
      * @param nullEquality Flag to specify whether null entries within each list should be considered equal.
      * @param nanEquality  Flag to specify whether NaN values in floating point column should be considered equal.
      */
-    public static Aggregation collectSet(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
+    static CollectSetAggregation collectSet(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
         return new CollectSetAggregation(nullPolicy, nullEquality, nanEquality);
     }
 
+    static final class MergeListsAggregation extends NoParamAggregation {
+        private MergeListsAggregation() {
+            super(Kind.MERGE_LISTS);
+        }
+    }
+
     /**
-     * In a rolling window return the value offset entries ahead or null if it is outside of the
-     * window.
+     * Merge the partial lists produced by multiple CollectListAggregations.
+     * NOTICE: The partial lists to be merged should NOT include any null list element (but can include null list entries).
      */
-    public static Aggregation lead(int offset) {
-        return lead(offset, null);
+    static MergeListsAggregation mergeLists() {
+        return new MergeListsAggregation();
+    }
+
+    /**
+     * Merge the partial sets produced by multiple CollectSetAggregations. Each null/nan value will be regarded as
+     * a unique instance.
+     */
+    static MergeSetsAggregation mergeSets() {
+        return mergeSets(NullEquality.UNEQUAL, NaNEquality.UNEQUAL);
+    }
+
+    /**
+     * Merge the partial sets produced by multiple CollectSetAggregations.
+     *
+     * @param nullEquality Flag to specify whether null entries within each list should be considered equal.
+     * @param nanEquality  Flag to specify whether NaN values in floating point column should be considered equal.
+     */
+    static MergeSetsAggregation mergeSets(NullEquality nullEquality, NaNEquality nanEquality) {
+        return new MergeSetsAggregation(nullEquality, nanEquality);
+    }
+
+    static final class LeadAggregation extends LeadLagAggregation {
+        private LeadAggregation(int offset, ColumnVector defaultOutput) {
+            super(Kind.LEAD, offset, defaultOutput);
+        }
     }
 
     /**
@@ -726,16 +831,14 @@ public abstract class Aggregation {
      * defaultOutput and the caller mush ensure that defaultOutput remains valid during the life
      * time of this aggregation operation.
      */
-    public static Aggregation lead(int offset, ColumnVector defaultOutput) {
-        return new LeadLagAggregation(Kind.LEAD, offset, defaultOutput);
+    static LeadAggregation lead(int offset, ColumnVector defaultOutput) {
+        return new LeadAggregation(offset, defaultOutput);
     }
 
-    /**
-     * In a rolling window return the value offset entries behind or null if it is outside of the
-     * window.
-     */
-    public static Aggregation lag(int offset) {
-        return lag(offset, null);
+    static final class LagAggregation extends LeadLagAggregation {
+        private LagAggregation(int offset, ColumnVector defaultOutput) {
+            super(Kind.LAG, offset, defaultOutput);
+        }
     }
 
     /**
@@ -744,8 +847,21 @@ public abstract class Aggregation {
      * defaultOutput and the caller mush ensure that defaultOutput remains valid during the life
      * time of this aggregation operation.
      */
-    public static Aggregation lag(int offset, ColumnVector defaultOutput) {
-        return new LeadLagAggregation(Kind.LAG, offset, defaultOutput);
+    static LagAggregation lag(int offset, ColumnVector defaultOutput) {
+        return new LagAggregation(offset, defaultOutput);
+    }
+
+    public static final class MergeM2Aggregation extends NoParamAggregation {
+        private MergeM2Aggregation() {
+            super(Kind.MERGE_M2);
+        }
+    }
+
+    /**
+     * Merge the partial M2 values produced by multiple instances of M2Aggregation.
+     */
+    static MergeM2Aggregation mergeM2() {
+        return new MergeM2Aggregation();
     }
 
     /**
@@ -788,4 +904,9 @@ public abstract class Aggregation {
      * Create a collect set aggregation.
      */
     private static native long createCollectSetAgg(boolean includeNulls, boolean nullsEqual, boolean nansEqual);
+
+    /**
+     * Create a merge sets aggregation.
+     */
+    private static native long createMergeSetsAgg(boolean nullsEqual, boolean nansEqual);
 }

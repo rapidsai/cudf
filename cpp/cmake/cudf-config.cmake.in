@@ -71,11 +71,6 @@ find_dependency(CUDAToolkit)
 find_dependency(Threads)
 find_dependency(ZLIB)
 
-# Don't look for a Boost CMake configuration file because it adds the
-# `-DBOOST_ALL_NO_LIB` and `-DBOOST_FILESYSTEM_DYN_LINK` compile defs
-set(Boost_NO_BOOST_CMAKE ON)
-find_dependency(Boost @CUDF_MIN_VERSION_Boost@ COMPONENTS filesystem)
-
 find_dependency(Arrow @CUDF_VERSION_Arrow@)
 
 set(ArrowCUDA_DIR "${Arrow_DIR}")

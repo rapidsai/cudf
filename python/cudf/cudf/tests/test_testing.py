@@ -10,7 +10,7 @@ from cudf.testing import (
     assert_index_equal,
     assert_series_equal,
 )
-from cudf.tests.utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
 
 
 @pytest.mark.parametrize("rdata", [[1, 2, 5], [1, 2, 6], [1, 2, 5, 6]])

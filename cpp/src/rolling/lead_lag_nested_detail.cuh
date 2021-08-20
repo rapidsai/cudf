@@ -27,55 +27,6 @@
 
 namespace cudf::detail {
 namespace {
-/**
- * @brief Functor to calculate the gather map used for calculating LEAD/LAG.
- *
- * @tparam op Aggregation Kind (LEAD vs LAG)
- * @tparam PrecedingIterator Iterator to retrieve preceding window bounds
- * @tparam FollowingIterator Iterator to retrieve following window bounds
- */
-template <aggregation::Kind op, typename PrecedingIterator, typename FollowingIterator>
-class lead_lag_gather_map_builder {
- public:
-  lead_lag_gather_map_builder(size_type input_size,
-                              size_type row_offset,
-                              PrecedingIterator preceding,
-                              FollowingIterator following)
-    : _input_size{input_size},
-      _null_index{input_size},  // Out of input range. Gather returns null.
-      _row_offset{row_offset},
-      _preceding{preceding},
-      _following{following}
-  {
-  }
-
-  template <aggregation::Kind o = op, CUDF_ENABLE_IF(o == aggregation::LEAD)>
-  size_type __device__ operator()(size_type i)
-  {
-    // Note: grouped_*rolling_window() trims preceding/following to
-    // the beginning/end of the group. `rolling_window()` does not.
-    // Must trim _following[i] so as not to go past the column end.
-    auto following = min(_following[i], _input_size - i - 1);
-    return (_row_offset > following) ? _null_index : (i + _row_offset);
-  }
-
-  template <aggregation::Kind o = op, CUDF_ENABLE_IF(o == aggregation::LAG)>
-  size_type __device__ operator()(size_type i)
-  {
-    // Note: grouped_*rolling_window() trims preceding/following to
-    // the beginning/end of the group. `rolling_window()` does not.
-    // Must trim _preceding[i] so as not to go past the column start.
-    auto preceding = min(_preceding[i], i + 1);
-    return (_row_offset > (preceding - 1)) ? _null_index : (i - _row_offset);
-  }
-
- private:
-  size_type const _input_size;   // Number of rows in input to LEAD/LAG.
-  size_type const _null_index;   // Index value to use to output NULL for LEAD/LAG calculation.
-  size_type const _row_offset;   // LEAD/LAG offset. E.g. For LEAD(2), _row_offset == 2.
-  PrecedingIterator _preceding;  // Iterator to retrieve preceding window offset.
-  FollowingIterator _following;  // Iterator to retrieve following window offset.
-};
 
 /**
  * @brief Predicate to find indices at which LEAD/LAG evaluated to null.
@@ -110,33 +61,31 @@ is_null_index_predicate_impl<GatherMapIter> is_null_index_predicate(size_type in
 /**
  * @brief Helper function to calculate LEAD/LAG for nested-type input columns.
  *
- * @tparam op The sort of aggregation being done (LEAD vs LAG)
- * @tparam InputType The datatype of the input column being aggregated
  * @tparam PrecedingIterator Iterator-type that returns the preceding bounds
  * @tparam FollowingIterator Iterator-type that returns the following bounds
+ * @param[in] op Aggregation kind.
  * @param[in] input Nested-type input column for LEAD/LAG calculation
  * @param[in] default_outputs Default values to use as outputs, if LEAD/LAG
  *                            offset crosses column/group boundaries
  * @param[in] preceding Iterator to retrieve preceding window bounds
  * @param[in] following Iterator to retrieve following window bounds
- * @param[in] offset Lead/Lag offset, indicating which row after/before
- *                   the current row is to be returned
+ * @param[in] row_offset Lead/Lag offset, indicating which row after/before
+ *                       the current row is to be returned
  * @param[in] stream CUDA stream for device memory operations/allocations
  * @param[in] mr device_memory_resource for device memory allocations
  */
-template <aggregation::Kind op,
-          typename InputType,
-          typename PrecedingIter,
-          typename FollowingIter,
-          CUDF_ENABLE_IF(!cudf::is_fixed_width<InputType>())>
-std::unique_ptr<column> compute_lead_lag_for_nested(column_view const& input,
+template <typename PrecedingIter, typename FollowingIter>
+std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
+                                                    column_view const& input,
                                                     column_view const& default_outputs,
                                                     PrecedingIter preceding,
                                                     FollowingIter following,
-                                                    size_type offset,
+                                                    size_type row_offset,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(op == aggregation::LEAD || op == aggregation::LAG,
+               "Unexpected aggregation type in compute_lead_lag_for_nested");
   CUDF_EXPECTS(default_outputs.type().id() == input.type().id(),
                "Defaults column type must match input column.");  // Because LEAD/LAG.
 
@@ -145,7 +94,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(column_view const& input,
 
   // For LEAD(0)/LAG(0), no computation need be performed.
   // Return copy of input.
-  if (offset == 0) { return std::make_unique<column>(input, stream, mr); }
+  if (row_offset == 0) { return std::make_unique<column>(input, stream, mr); }
 
   // Algorithm:
   //
@@ -174,12 +123,33 @@ std::unique_ptr<column> compute_lead_lag_for_nested(column_view const& input,
     make_numeric_column(size_data_type, input.size(), mask_state::UNALLOCATED, stream);
   auto gather_map = gather_map_column->mutable_view();
 
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator(size_type{0}),
-                    thrust::make_counting_iterator(size_type{input.size()}),
-                    gather_map.begin<size_type>(),
-                    lead_lag_gather_map_builder<op, PrecedingIter, FollowingIter>{
-                      input.size(), offset, preceding, following});
+  auto const input_size = input.size();
+  auto const null_index = input.size();
+  if (op == aggregation::LEAD) {
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator(size_type{0}),
+                      thrust::make_counting_iterator(size_type{input.size()}),
+                      gather_map.begin<size_type>(),
+                      [following, input_size, null_index, row_offset] __device__(size_type i) {
+                        // Note: grouped_*rolling_window() trims preceding/following to
+                        // the beginning/end of the group. `rolling_window()` does not.
+                        // Must trim _following[i] so as not to go past the column end.
+                        auto _following = min(following[i], input_size - i - 1);
+                        return (row_offset > _following) ? null_index : (i + row_offset);
+                      });
+  } else {
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator(size_type{0}),
+                      thrust::make_counting_iterator(size_type{input.size()}),
+                      gather_map.begin<size_type>(),
+                      [preceding, input_size, null_index, row_offset] __device__(size_type i) {
+                        // Note: grouped_*rolling_window() trims preceding/following to
+                        // the beginning/end of the group. `rolling_window()` does not.
+                        // Must trim _preceding[i] so as not to go past the column start.
+                        auto _preceding = min(preceding[i], i + 1);
+                        return (row_offset > (_preceding - 1)) ? null_index : (i - row_offset);
+                      });
+  }
 
   auto output_with_nulls =
     cudf::detail::gather(table_view{std::vector<column_view>{input}},

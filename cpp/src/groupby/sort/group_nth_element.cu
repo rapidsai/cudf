@@ -27,25 +27,31 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/uninitialized_fill.h>
+
 namespace cudf {
 namespace groupby {
 namespace detail {
-std::unique_ptr<column> group_nth_element(column_view const &values,
-                                          column_view const &group_sizes,
+std::unique_ptr<column> group_nth_element(column_view const& values,
+                                          column_view const& group_sizes,
                                           cudf::device_span<size_type const> group_labels,
                                           cudf::device_span<size_type const> group_offsets,
                                           size_type num_groups,
                                           size_type n,
                                           null_policy null_handling,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource *mr)
+                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
 
   if (num_groups == 0) { return empty_like(values); }
 
-  auto nth_index = rmm::device_vector<size_type>(num_groups, values.size());
+  auto nth_index = rmm::device_uvector<size_type>(num_groups, stream);
+  // TODO: replace with async version
+  thrust::uninitialized_fill_n(
+    rmm::exec_policy(stream), nth_index.begin(), num_groups, values.size());
 
   // nulls_policy::INCLUDE (equivalent to pandas nth(dropna=None) but return nulls for n
   if (null_handling == null_policy::INCLUDE || !values.has_nulls()) {

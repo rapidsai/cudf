@@ -82,6 +82,36 @@ std::unique_ptr<table> gather(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Reverses the rows within a table.
+ * Creates a new table that is the reverse of @p source_table.
+ * Example:
+ * ```
+ * source = [[4,5,6], [7,8,9], [10,11,12]]
+ * return = [[6,5,4], [9,8,7], [12,11,10]]
+ * ```
+ *
+ * @param source_table Table that will be reversed
+ */
+std::unique_ptr<table> reverse(
+  table_view const& source_table,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Reverses the elements of a column
+ * Creates a new column that is the reverse of @p source_column.
+ * Example:
+ * ```
+ * source = [4,5,6]
+ * return = [6,5,4]
+ * ```
+ *
+ * @param source_column Column that will be reversed
+ */
+std::unique_ptr<column> reverse(
+  column_view const& source_column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Scatters the rows of the source table into a copy of the target table
  * according to a scatter map.
  *
@@ -181,6 +211,14 @@ enum class mask_allocation_policy {
  * @return std::unique_ptr<column> An empty column of same type as `input`
  */
 std::unique_ptr<column> empty_like(column_view const& input);
+
+/**
+ * @brief Initializes and returns an empty column of the same type as the `input`.
+ *
+ * @param[in] input Scalar to emulate
+ * @return std::unique_ptr<column> An empty column of same type as `input`
+ */
+std::unique_ptr<column> empty_like(scalar const& input);
 
 /**
  * @brief Creates an uninitialized new column of the same size and type as the `input`.
@@ -491,6 +529,7 @@ struct packed_columns {
    * @ingroup copy_split
    */
   struct metadata {
+    metadata() = default;
     metadata(std::vector<uint8_t>&& v) : data_(std::move(v)) {}
     uint8_t const* data() const { return data_.data(); }
     size_t size() const { return data_.size(); }
@@ -498,6 +537,15 @@ struct packed_columns {
    private:
     std::vector<uint8_t> data_;
   };
+
+  packed_columns()
+    : metadata_(std::make_unique<metadata>()), gpu_data(std::make_unique<rmm::device_buffer>())
+  {
+  }
+  packed_columns(std::unique_ptr<metadata>&& md, std::unique_ptr<rmm::device_buffer>&& gd)
+    : metadata_(std::move(md)), gpu_data(std::move(gd))
+  {
+  }
 
   std::unique_ptr<metadata> metadata_;
   std::unique_ptr<rmm::device_buffer> gpu_data;
@@ -591,7 +639,7 @@ packed_columns pack(cudf::table_view const& input,
  * guaranteeing that that all of the columns in the table point into `contiguous_buffer`.
  *
  * @param input View of the table to pack
- * @param contgiuous_buffer A contiguous buffer of device memory which contains the data referenced
+ * @param contiguous_buffer A contiguous buffer of device memory which contains the data referenced
  * by the columns in `table`
  * @param buffer_size The size of `contiguous_buffer`.
  * @return Vector of bytes representing the metadata used to `unpack` a packed_columns struct.

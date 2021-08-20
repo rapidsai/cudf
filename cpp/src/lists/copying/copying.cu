@@ -83,6 +83,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                            cudf::UNKNOWN_NULL_COUNT,
                            std::move(null_mask));
 }
+
 }  // namespace detail
 }  // namespace lists
 }  // namespace cudf

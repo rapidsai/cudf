@@ -7,6 +7,7 @@ import pandas as pd
 
 import cudf
 from cudf import _lib as libcudf
+from cudf.api.types import is_integer, is_number
 from cudf.core import column
 from cudf.core.column.column import as_column
 from cudf.utils import cudautils
@@ -214,7 +215,7 @@ class Rolling(GetAttrGetItemMixin):
                 self.center,
                 agg_name,
             )
-        return sr._copy_construct(data=result_col)
+        return sr._from_data({sr.name: result_col}, sr._index)
 
     def _apply_agg_dataframe(self, df, agg_name):
         result_df = cudf.DataFrame({})
@@ -257,12 +258,12 @@ class Rolling(GetAttrGetItemMixin):
 
         See also
         --------
-        cudf.core.series.Series.applymap : Apply an elementwise function to
+        cudf.Series.applymap : Apply an elementwise function to
             transform the values in the Column.
 
         Notes
         -----
-        See notes of the :meth:`cudf.core.series.Series.applymap`
+        See notes of the :meth:`cudf.Series.applymap`
 
         """
         has_nulls = False
@@ -295,9 +296,9 @@ class Rolling(GetAttrGetItemMixin):
           Only valid for datetime index.
         """
         window, min_periods = self.window, self.min_periods
-        if pd.api.types.is_number(window):
+        if is_number(window):
             # only allow integers
-            if not pd.api.types.is_integer(window):
+            if not is_integer(window):
                 raise ValueError("window must be an integer")
             if window <= 0:
                 raise ValueError("window cannot be zero or negative")
@@ -338,7 +339,7 @@ class Rolling(GetAttrGetItemMixin):
         For non-fixed width windows,
         convert the window argument into window sizes.
         """
-        if pd.api.types.is_integer(window):
+        if is_integer(window):
             return window
         else:
             return cudautils.window_sizes_from_offset(
@@ -352,14 +353,15 @@ class Rolling(GetAttrGetItemMixin):
 
 
 class RollingGroupby(Rolling):
-    def __init__(self, groupby, window, min_periods=None, center=False):
-        """
-        Grouped rolling window calculation.
+    """
+    Grouped rolling window calculation.
 
-        See also
-        --------
-        cudf.core.window.Rolling
-        """
+    See also
+    --------
+    cudf.core.window.Rolling
+    """
+
+    def __init__(self, groupby, window, min_periods=None, center=False):
         sort_order = groupby.grouping.keys.argsort()
 
         # TODO: there may be overlap between the columns
@@ -376,7 +378,7 @@ class RollingGroupby(Rolling):
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
     def _window_to_window_sizes(self, window):
-        if pd.api.types.is_integer(window):
+        if is_integer(window):
             return cudautils.grouped_window_sizes_from_offset(
                 column.arange(len(self.obj)).data_array_view,
                 self._group_starts,

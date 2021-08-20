@@ -41,7 +41,7 @@ namespace detail {
  * @param type The intended data type to populate
  * @param size The number of elements to be represented by the mask
  * @param state The desired state of the mask
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned device_buffer
  *
  * @return `rmm::device_buffer` Device buffer allocation
@@ -123,7 +123,38 @@ struct column_buffer {
   std::string name;
 };
 
+/**
+ * @brief Creates a column from an existing set of device memory buffers.
+ *
+ * @throws std::bad_alloc if device memory allocation fails
+ *
+ * @param buffer Column buffer descriptors
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @return `std::unique_ptr<cudf::column>` Column from the existing device data
+ */
 std::unique_ptr<column> make_column(
+  column_buffer& buffer,
+  column_name_info* schema_info       = nullptr,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Creates an equivalent empty column from an existing set of device memory buffers.
+ *
+ * This function preserves nested column type information by producing complete/identical
+ * column hierarchies.
+ *
+ * @throws std::bad_alloc if device memory allocation fails
+ *
+ * @param buffer Column buffer descriptors
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @return `std::unique_ptr<cudf::column>` Column from the existing device data
+ */
+std::unique_ptr<column> empty_like(
   column_buffer& buffer,
   column_name_info* schema_info       = nullptr,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,

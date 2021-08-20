@@ -80,6 +80,19 @@ def _to_flat_dict(d):
 
 
 class ColumnAccessor(MutableMapping):
+    """
+    Parameters
+    ----------
+    data : mapping
+        Mapping of keys to column values.
+    multiindex : bool, optional
+        Whether tuple keys represent a hierarchical
+        index with multiple "levels" (default=False).
+    level_names : tuple, optional
+        Tuple containing names for each of the levels.
+        For a non-hierarchical index, a tuple of size 1
+        may be passe.
+    """
 
     _data: "Dict[Any, ColumnBase]"
     multiindex: bool
@@ -91,19 +104,6 @@ class ColumnAccessor(MutableMapping):
         multiindex: bool = False,
         level_names=None,
     ):
-        """
-        Parameters
-        ----------
-        data : mapping
-            Mapping of keys to column values.
-        multiindex : bool, optional
-            Whether tuple keys represent a hierarchical
-            index with multiple "levels" (default=False).
-        level_names : tuple, optional
-            Tuple containing names for each of the levels.
-            For a non-hierarchical index, a tuple of size 1
-            may be passe.
-        """
         if data is None:
             data = {}
         # TODO: we should validate the keys of `data`
@@ -362,7 +362,7 @@ class ColumnAccessor(MutableMapping):
             start, stop, step = index.indices(len(self._data))
             keys = self.names[start:stop:step]
         elif pd.api.types.is_integer(index):
-            keys = self.names[index : index + 1]
+            keys = [self.names[index]]
         else:
             keys = (self.names[i] for i in index)
         data = {k: self._data[k] for k in keys}

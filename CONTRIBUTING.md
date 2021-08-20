@@ -87,7 +87,7 @@ and then check the syntax of your Python and Cython code by running:
 
 ```bash
 flake8 python
-flake8 --config=python/cudf/.flake8.cython
+flake8 --config=python/.flake8.cython
 ```
 
 Additionally, many editors have plugins that will apply `isort` and `Black` as
@@ -133,7 +133,7 @@ Compiler requirements:
 
 * `gcc`     version 9.3+
 * `nvcc`    version 11.0+
-* `cmake`   version 3.18.0+
+* `cmake`   version 3.20.1+
 
 CUDA/GPU requirements:
 
@@ -221,7 +221,8 @@ $ ./build.sh dask_cudf
 - To run Python tests (Optional):
 ```bash
 $ cd $CUDF_HOME/python
-$ py.test -v                           # run python tests on cudf and dask-cudf python bindings
+$ py.test -v cudf                           # run cudf test suite
+$ py.test -v dask_cudf                      # run dask_cudf test suite
 ```
 
 - Other `build.sh` options:
@@ -257,17 +258,31 @@ When you have a debug build of `libcudf` installed, debugging with the `cuda-gdb
 
 If you are debugging a Python script, simply run the following:
 
-#### `cuda-gdb`
-
 ```bash
 cuda-gdb -ex r --args python <program_name>.py <program_arguments>
 ```
 
-#### `cuda-memcheck`
-
 ```bash
 cuda-memcheck python <program_name>.py <program_arguments>
 ```
+
+### Device debug symbols
+
+The device debug symbols are not automatically added with the cmake `Debug`
+build type because it causes a runtime delay of several minutes when loading
+the libcudf.so library.
+
+Therefore, it is recommended to add device debug symbols only to specific files by
+setting the `-G` compile option locally in your `cpp/CMakeLists.txt` for that file.
+Here is an example of adding the `-G` option to the compile command for
+`src/copying/copy.cu` source file:
+
+```
+set_source_files_properties(src/copying/copy.cu PROPERTIES COMPILE_OPTIONS "-G")
+```
+
+This will add the device debug symbols for this object file in libcudf.so.
+You can then use `cuda-dbg` to debug into the kernels in that source file.
 
 ### Building and Testing on a gpuCI image locally
 
@@ -309,7 +324,7 @@ flag. Below is a list of the available arguments and their purpose:
 
 | Build Argument | Default Value | Other Value(s) | Purpose |
 | --- | --- | --- | --- |
-| `CUDA_VERSION` | 11.0 | 11.1, 11.2.2 | set CUDA version |
+| `CUDA_VERSION` | 11.0 | 11.2.2 | set CUDA version |
 | `LINUX_VERSION` | ubuntu18.04 | ubuntu20.04 | set Ubuntu version |
 | `CC` & `CXX` | 9 | 10 | set gcc/g++ version |
 | `CUDF_REPO` | This repo | Forks of cuDF | set git URL to use for `git clone` |

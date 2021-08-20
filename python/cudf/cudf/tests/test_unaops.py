@@ -9,8 +9,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import Series
-from cudf.tests import utils
+from cudf import Series
+from cudf.testing import _utils as utils
 
 _unaops = [operator.abs, operator.invert, operator.neg, np.ceil, np.floor]
 
@@ -35,7 +35,7 @@ def test_series_invert(dtype):
 def test_series_not(dtype):
     import pandas as pd
 
-    dtype = np.dtype(dtype).type
+    dtype = cudf.dtype(dtype).type
     arr = pd.Series(np.random.choice([True, False], 1000)).astype(dtype)
     if dtype is not np.bool_:
         arr = arr * (np.random.random(1000) * 100).astype(dtype)
@@ -134,7 +134,7 @@ def generate_valid_scalar_unaop_combos():
 
 @pytest.mark.parametrize("slr,dtype,op", generate_valid_scalar_unaop_combos())
 def test_scalar_unary_operations(slr, dtype, op):
-    slr_host = np.dtype(dtype).type(slr)
+    slr_host = cudf.dtype(dtype).type(slr)
     slr_device = cudf.Scalar(slr, dtype=dtype)
 
     expect = op(slr_host)

@@ -5,10 +5,10 @@ from pandas.testing import assert_series_equal
 
 from dask import dataframe as dd
 
-import dask_cudf as dgd
-
 from cudf import DataFrame, Series
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq, does_not_raise
+
+import dask_cudf as dgd
 
 #############################################################################
 #                        Datetime Accessor                                  #
@@ -290,3 +290,151 @@ def test_str_slice():
         pdf.a.str.split(",", expand=True, n=2),
         ddf.a.str.split(",", expand=True, n=2),
     )
+
+
+#############################################################################
+#                              List Accessor                                #
+#############################################################################
+
+
+def data_test_1():
+    return [list(range(100)) for _ in range(100)]
+
+
+def data_test_2():
+    return [list(i for _ in range(i)) for i in range(500)]
+
+
+def data_test_non_numeric():
+    return [list(chr(97 + i % 20) for _ in range(i)) for i in range(500)]
+
+
+def data_test_nested():
+    return [
+        list(list(y for y in range(x % 5)) for x in range(i))
+        for i in range(40)
+    ]
+
+
+def data_test_sort():
+    return [[1, 2, 3, 1, 2, 5] for _ in range(20)]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[]],
+        [[[]]],
+        [[0]],
+        [[0, 1]],
+        [[0, 1], [2, 3]],
+        [[[0, 1], [2]], [[3, 4]]],
+        [[None]],
+        [[[None]]],
+        [[None], None],
+        [[1, None], [1]],
+        [[1, None], None],
+        [[[1, None], None], None],
+    ],
+)
+def test_create_list_series(data):
+    expect = pd.Series(data)
+    ds_got = dgd.from_cudf(Series(data), 4)
+    assert_eq(expect, ds_got.compute())
+
+
+@pytest.mark.parametrize(
+    "data", [data_test_1(), data_test_2(), data_test_non_numeric()],
+)
+def test_unique(data):
+    expect = Series(data).list.unique()
+    ds = dgd.from_cudf(Series(data), 5)
+    assert_eq(expect, ds.list.unique().compute())
+
+
+@pytest.mark.parametrize(
+    "data", [data_test_2(), data_test_non_numeric()],
+)
+def test_len(data):
+    expect = Series(data).list.len()
+    ds = dgd.from_cudf(Series(data), 5)
+    assert_eq(expect, ds.list.len().compute())
+
+
+@pytest.mark.parametrize(
+    "data, search_key", [(data_test_2(), 1)],
+)
+def test_contains(data, search_key):
+    expect = Series(data).list.contains(search_key)
+    ds = dgd.from_cudf(Series(data), 5)
+    assert_eq(expect, ds.list.contains(search_key).compute())
+
+
+@pytest.mark.parametrize(
+    "data, index, expectation",
+    [
+        (data_test_1(), 1, does_not_raise()),
+        (data_test_2(), 2, pytest.raises(IndexError)),
+    ],
+)
+def test_get(data, index, expectation):
+    with expectation:
+        expect = Series(data).list.get(index)
+
+    if expectation == does_not_raise():
+        ds = dgd.from_cudf(Series(data), 5)
+        assert_eq(expect, ds.list.get(index).compute())
+
+
+@pytest.mark.parametrize(
+    "data", [data_test_1(), data_test_2(), data_test_nested()],
+)
+def test_leaves(data):
+    expect = Series(data).list.leaves
+    ds = dgd.from_cudf(Series(data), 5)
+    got = ds.list.leaves.compute().reset_index(drop=True)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data, list_indices, expectation",
+    [
+        (
+            data_test_1(),
+            [[0, 1] for _ in range(len(data_test_1()))],
+            does_not_raise(),
+        ),
+        (data_test_2(), [[0]], pytest.raises(ValueError)),
+    ],
+)
+def test_take(data, list_indices, expectation):
+    with expectation:
+        expect = Series(data).list.take(list_indices)
+
+    if expectation == does_not_raise():
+        ds = dgd.from_cudf(Series(data), 5)
+        assert_eq(expect, ds.list.take(list_indices).compute())
+
+
+@pytest.mark.parametrize(
+    "data, ascending, na_position, ignore_index",
+    [
+        (data_test_sort(), True, "first", False),
+        (data_test_sort(), False, "last", True),
+    ],
+)
+def test_sorting(data, ascending, na_position, ignore_index):
+    expect = Series(data).list.sort_values(
+        ascending=ascending, na_position=na_position, ignore_index=ignore_index
+    )
+    got = (
+        dgd.from_cudf(Series(data), 5)
+        .list.sort_values(
+            ascending=ascending,
+            na_position=na_position,
+            ignore_index=ignore_index,
+        )
+        .compute()
+        .reset_index(drop=True)
+    )
+    assert_eq(expect, got)

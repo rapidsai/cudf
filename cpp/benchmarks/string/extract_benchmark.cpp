@@ -48,7 +48,9 @@ static void BM_extract(benchmark::State& state, int groups)
   });
 
   std::string pattern;
-  while (static_cast<int>(pattern.size()) < groups) { pattern += "(\\d+) "; }
+  while (static_cast<int>(pattern.size()) < groups) {
+    pattern += "(\\d+) ";
+  }
 
   std::uniform_int_distribution<int> distribution(0, samples.size() - 1);
   auto elements = cudf::detail::make_counting_transform_iterator(

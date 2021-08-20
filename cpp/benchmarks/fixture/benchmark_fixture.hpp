@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <benchmark/benchmark.h>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/device/statistics_resource_adaptor.hpp>
 
 namespace cudf {
 
@@ -86,6 +89,24 @@ class benchmark : public ::benchmark::Fixture {
   }
 
   std::shared_ptr<rmm::mr::device_memory_resource> mr;
+};
+
+class memory_stats_logger {
+ public:
+  memory_stats_logger()
+    : existing_mr(rmm::mr::get_current_device_resource()),
+      statistics_mr(rmm::mr::make_statistics_adaptor(existing_mr))
+  {
+    rmm::mr::set_current_device_resource(&statistics_mr);
+  }
+
+  ~memory_stats_logger() { rmm::mr::set_current_device_resource(existing_mr); }
+
+  size_t peak_memory_usage() const noexcept { return statistics_mr.get_bytes_counter().peak; }
+
+ private:
+  rmm::mr::device_memory_resource* existing_mr;
+  rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> statistics_mr;
 };
 
 }  // namespace cudf

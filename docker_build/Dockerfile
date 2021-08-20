@@ -34,15 +34,11 @@ RUN apt update -y --fix-missing && \
 
 RUN apt install -y --no-install-recommends \
       git \
-      libboost-all-dev \
       python3.8-dev \
       build-essential \
       autoconf \
       bison \
       flex \
-      libboost-filesystem-dev \
-      libboost-system-dev \
-      libboost-regex-dev \
       libjemalloc-dev \
       wget \
       libssl-dev \

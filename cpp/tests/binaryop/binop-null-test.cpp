@@ -63,7 +63,7 @@ TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_Valid)
   using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
 
   auto lhs = make_random_wrapped_scalar<TypeLhs>();
-  lhs.set_valid(false);
+  lhs.set_valid_async(false);
   auto rhs = make_random_wrapped_column<TypeRhs>(100, mask_state::ALL_VALID);
 
   auto out =
@@ -98,7 +98,7 @@ TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_NonNullable)
   using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
 
   auto lhs = make_random_wrapped_scalar<TypeLhs>();
-  lhs.set_valid(false);
+  lhs.set_valid_async(false);
   auto rhs = make_random_wrapped_column<TypeRhs>(100, mask_state::UNALLOCATED);
 
   auto out =

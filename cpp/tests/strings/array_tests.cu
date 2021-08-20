@@ -14,10 +14,16 @@
  * limitations under the License.
  */
 
+#include <tests/strings/utilities.h>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/strings/detail/copying.hpp>
@@ -27,10 +33,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <tests/strings/utilities.h>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -192,9 +195,8 @@ TEST_F(StringsColumnTest, Scatter)
     thrust::make_transform_iterator(h_strings2.begin(), [](auto str) { return str != nullptr; }));
   auto source = cudf::strings_column_view(strings2);
 
-  rmm::device_vector<int32_t> scatter_map;
-  scatter_map.push_back(4);
-  scatter_map.push_back(1);
+  std::vector<int32_t> h_scatter_map({4, 1});
+  auto scatter_map = cudf::detail::make_device_uvector_sync(h_scatter_map);
 
   auto source_column = cudf::column_device_view::create(source.parent());
   auto begin =
@@ -220,9 +222,8 @@ TEST_F(StringsColumnTest, ScatterScalar)
     thrust::make_transform_iterator(h_strings1.begin(), [](auto str) { return str != nullptr; }));
   auto target = cudf::strings_column_view(strings1);
 
-  rmm::device_vector<int32_t> scatter_map;
-  scatter_map.push_back(0);
-  scatter_map.push_back(5);
+  std::vector<int32_t> h_scatter_map({0, 5});
+  auto scatter_map = cudf::detail::make_device_uvector_sync(h_scatter_map);
 
   cudf::string_scalar scalar("__");
   auto begin = thrust::make_constant_iterator(cudf::string_view(scalar.data(), scalar.size()));
@@ -246,7 +247,7 @@ TEST_F(StringsColumnTest, ScatterZeroSizeStringsColumn)
   cudf::column_view values(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto target = cudf::strings_column_view(values);
 
-  rmm::device_vector<int32_t> scatter_map;
+  rmm::device_uvector<int32_t> scatter_map(0, rmm::cuda_stream_default);
   cudf::string_scalar scalar("");
   auto begin = thrust::make_constant_iterator(cudf::string_view(scalar.data(), scalar.size()));
 

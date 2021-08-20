@@ -27,7 +27,9 @@ def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> ScalarLike:
             f"{type(other).__name__} to {col.dtype.name}"
         )
 
-    return cudf.Scalar(other, dtype=col.dtype if other is None else None)
+    return cudf.Scalar(
+        other, dtype=col.dtype if other in {None, cudf.NA} else None
+    )
 
 
 def _check_and_cast_columns_with_other(
@@ -65,7 +67,9 @@ def _check_and_cast_columns_with_other(
     else:
         if (
             cudf.utils.dtypes.is_scalar(other)
-            and cudf.utils.dtypes.is_numerical_dtype(source_col.dtype)
+            and cudf.utils.dtypes._is_non_decimal_numeric_dtype(
+                source_col.dtype
+            )
             and cudf.utils.dtypes._can_cast(other, source_col.dtype)
         ):
             common_dtype = source_col.dtype
@@ -149,19 +153,17 @@ def _normalize_columns_and_scalars_type(
             )
 
         elif isinstance(frame, DataFrame):
-            if cudf.utils.dtypes.is_scalar(other):
-                other = [other for i in range(len(frame._column_names))]
-
             source_df = frame.copy(deep=False)
             others = []
-            for col_name, other_sclr in zip(frame._column_names, other):
-
+            for i, col_name in enumerate(frame._column_names):
                 (
                     source_col,
                     other_scalar,
                 ) = _check_and_cast_columns_with_other(
                     source_col=source_df._data[col_name],
-                    other=other_sclr,
+                    other=other
+                    if cudf.utils.dtypes.is_scalar(other)
+                    else other[i],
                     inplace=inplace,
                 )
                 source_df._data[col_name] = source_col
@@ -234,9 +236,15 @@ def where(
 
     if isinstance(frame, DataFrame):
         if hasattr(cond, "__cuda_array_interface__"):
-            cond = DataFrame(
-                cond, columns=frame._column_names, index=frame.index
-            )
+            if isinstance(cond, Series):
+                cond = DataFrame(
+                    {name: cond for name in frame._column_names},
+                    index=frame.index,
+                )
+            else:
+                cond = DataFrame(
+                    cond, columns=frame._column_names, index=frame.index
+                )
         elif (
             hasattr(cond, "__array_interface__")
             and cond.__array_interface__["shape"] != frame.shape
@@ -265,7 +273,7 @@ def where(
         (source_df, others,) = _normalize_columns_and_scalars_type(
             frame, other
         )
-        if isinstance(other, Frame):
+        if isinstance(others, Frame):
             others = others._data.columns
 
         out_df = DataFrame(index=frame.index)
@@ -378,6 +386,6 @@ def where(
         if isinstance(frame, Index):
             result = Index(result, name=frame.name)
         else:
-            result = frame._copy_construct(data=result)
+            result = frame._from_data({frame.name: result}, frame._index)
 
         return frame._mimic_inplace(result, inplace=inplace)

@@ -20,7 +20,6 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/gather.cuh>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -63,7 +62,7 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
 {
   CUDF_FUNC_RANGE();
   size_type strings_count = thrust::distance(begin, end);
-  if (strings_count == 0) return strings::detail::make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   using string_index_pair = thrust::pair<const char*, size_type>;
 
@@ -112,10 +111,9 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
                           mr);
     } else {
       // this approach is 2-3x faster for a large number of smaller string lengths
-      auto chars_column =
-        strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
-      auto d_chars    = chars_column->mutable_view().template data<char>();
-      auto copy_chars = [d_chars] __device__(auto item) {
+      auto chars_column = create_chars_child_column(bytes, stream, mr);
+      auto d_chars      = chars_column->mutable_view().template data<char>();
+      auto copy_chars   = [d_chars] __device__(auto item) {
         string_index_pair const str = thrust::get<0>(item);
         size_type const offset      = thrust::get<1>(item);
         if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
@@ -167,7 +165,7 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
   CUDF_FUNC_RANGE();
   size_type strings_count = thrust::distance(offsets_begin, offsets_end) - 1;
   size_type bytes         = std::distance(chars_begin, chars_end) * sizeof(char);
-  if (strings_count == 0) return strings::detail::make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   CUDF_EXPECTS(null_count < strings_count, "null strings column not yet supported");
   CUDF_EXPECTS(bytes >= 0, "invalid offsets data");
@@ -183,7 +181,7 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
                     [] __device__(auto offset) { return static_cast<int32_t>(offset); });
 
   // build chars column
-  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
   auto chars_view   = chars_column->mutable_view();
   thrust::copy(rmm::exec_policy(stream), chars_begin, chars_end, chars_view.data<char>());
 

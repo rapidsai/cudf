@@ -20,8 +20,8 @@ from numba import cuda
 import cudf
 from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
 from cudf.core.column import column
-from cudf.tests import utils
-from cudf.tests.utils import (
+from cudf.testing import _utils as utils
+from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -734,6 +734,17 @@ def test_dataframe_astype(nelem):
     df["b"] = df["a"].astype(np.float32)
     assert df["b"].dtype is np.dtype(np.float32)
     np.testing.assert_equal(df["a"].to_array(), df["b"].to_array())
+
+
+def test_astype_dict():
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": ["1", "2", "3"]})
+    pdf = gdf.to_pandas()
+
+    assert_eq(pdf.astype({"a": "str"}), gdf.astype({"a": "str"}))
+    assert_eq(
+        pdf.astype({"a": "str", "b": np.int64}),
+        gdf.astype({"a": "str", "b": np.int64}),
+    )
 
 
 @pytest.mark.parametrize("nelem", [0, 100])
@@ -1817,42 +1828,79 @@ def gdf(pdf):
 @pytest.mark.parametrize(
     "data",
     [
-        {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
-        {"x": [1, 2, 3], "y": [4, 5, 6]},
-        {"x": [np.nan, np.nan, np.nan], "y": [np.nan, np.nan, np.nan]},
-        {"x": [], "y": []},
+        {
+            "x": [np.nan, 2, 3, 4, 100, np.nan],
+            "y": [4, 5, 6, 88, 99, np.nan],
+            "z": [7, 8, 9, 66, np.nan, 77],
+        },
+        {"x": [1, 2, 3], "y": [4, 5, 6], "z": [7, 8, 9]},
+        {
+            "x": [np.nan, np.nan, np.nan],
+            "y": [np.nan, np.nan, np.nan],
+            "z": [np.nan, np.nan, np.nan],
+        },
+        {"x": [], "y": [], "z": []},
         {"x": []},
     ],
 )
+@pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize(
     "func",
     [
-        lambda df, **kwargs: df.min(**kwargs),
-        lambda df, **kwargs: df.max(**kwargs),
-        lambda df, **kwargs: df.sum(**kwargs),
-        lambda df, **kwargs: df.product(**kwargs),
-        lambda df, **kwargs: df.cummin(**kwargs),
-        lambda df, **kwargs: df.cummax(**kwargs),
-        lambda df, **kwargs: df.cumsum(**kwargs),
-        lambda df, **kwargs: df.cumprod(**kwargs),
-        lambda df, **kwargs: df.mean(**kwargs),
-        lambda df, **kwargs: df.sum(**kwargs),
-        lambda df, **kwargs: df.max(**kwargs),
-        lambda df, **kwargs: df.std(ddof=1, **kwargs),
-        lambda df, **kwargs: df.var(ddof=1, **kwargs),
-        lambda df, **kwargs: df.std(ddof=2, **kwargs),
-        lambda df, **kwargs: df.var(ddof=2, **kwargs),
-        lambda df, **kwargs: df.kurt(**kwargs),
-        lambda df, **kwargs: df.skew(**kwargs),
-        lambda df, **kwargs: df.all(**kwargs),
-        lambda df, **kwargs: df.any(**kwargs),
+        "min",
+        "max",
+        "sum",
+        "prod",
+        "product",
+        "cummin",
+        "cummax",
+        "cumsum",
+        "cumprod",
+        "mean",
+        "median",
+        "sum",
+        "max",
+        "std",
+        "var",
+        "kurt",
+        "skew",
+        "all",
+        "any",
     ],
 )
 @pytest.mark.parametrize("skipna", [True, False, None])
-def test_dataframe_reductions(data, func, skipna):
+def test_dataframe_reductions(data, axis, func, skipna):
     pdf = pd.DataFrame(data=data)
     gdf = cudf.DataFrame.from_pandas(pdf)
-    assert_eq(func(pdf, skipna=skipna), func(gdf, skipna=skipna))
+
+    # Reductions can fail in numerous possible ways when attempting row-wise
+    # reductions, which are only partially supported. Catching the appropriate
+    # exception here allows us to detect API breakage in the form of changing
+    # exceptions.
+    expected_exception = None
+    if axis == 1:
+        if func in ("kurt", "skew"):
+            expected_exception = NotImplementedError
+        elif func not in cudf.core.dataframe._cupy_nan_methods_map:
+            if skipna is False:
+                expected_exception = NotImplementedError
+            elif any(col.nullable for name, col in gdf.iteritems()):
+                expected_exception = ValueError
+            elif func in ("cummin", "cummax"):
+                expected_exception = AttributeError
+
+    # Test different degrees of freedom for var and std.
+    all_kwargs = [{"ddof": 1}, {"ddof": 2}] if func in ("var", "std") else [{}]
+    for kwargs in all_kwargs:
+        if expected_exception is not None:
+            with pytest.raises(expected_exception):
+                getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),
+        else:
+            assert_eq(
+                getattr(pdf, func)(axis=axis, skipna=skipna, **kwargs),
+                getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),
+                check_dtype=False,
+            )
 
 
 @pytest.mark.parametrize(
@@ -3068,6 +3116,14 @@ def test_select_dtype():
         gdf.select_dtypes(include=["int"], exclude=["object"]),
     )
 
+    gdf = cudf.DataFrame(
+        {"int_col": [0, 1, 2], "list_col": [[1, 2], [3, 4], [5, 6]]}
+    )
+    pdf = gdf.to_pandas()
+    assert_eq(
+        pdf.select_dtypes("int64"), gdf.select_dtypes("int64"),
+    )
+
 
 def test_select_dtype_datetime():
     gdf = cudf.datasets.timeseries(
@@ -3405,8 +3461,6 @@ def test_all(data):
             assert_eq(got, expected)
         else:
             with pytest.raises(NotImplementedError):
-                gdata.all(bool_only=False)
-            with pytest.raises(NotImplementedError):
                 gdata.all(level="a")
 
     got = gdata.all()
@@ -3465,8 +3519,6 @@ def test_any(data, axis):
             expected = pdata.any(bool_only=True)
             assert_eq(got, expected)
         else:
-            with pytest.raises(NotImplementedError):
-                gdata.any(bool_only=False)
             with pytest.raises(NotImplementedError):
                 gdata.any(level="a")
 
@@ -3597,9 +3649,7 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     pds = pd.Series(pd.Index(["1", "18", "9"]), dtype="int")
-    gds = cudf.Series(
-        cudf.core.index.StringIndex(["1", "18", "9"]), dtype="int"
-    )
+    gds = cudf.Series(cudf.StringIndex(["1", "18", "9"]), dtype="int")
 
     assert_eq(pds, gds)
 
@@ -3612,6 +3662,23 @@ def test_one_row_head():
     head_pdf = pdf.head()
 
     assert_eq(head_pdf, head_gdf)
+
+
+@pytest.mark.parametrize("dtype", ALL_TYPES)
+@pytest.mark.parametrize(
+    "np_dtype,pd_dtype",
+    [
+        tuple(item)
+        for item in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes.items()
+    ],
+)
+def test_series_astype_pandas_nullable(dtype, np_dtype, pd_dtype):
+    source = cudf.Series([0, 1, None], dtype=dtype)
+
+    expect = source.astype(np_dtype)
+    got = source.astype(pd_dtype)
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
@@ -5018,6 +5085,18 @@ def test_insert(data):
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize(
+    "data", [{"A": [1, 2, 3], "B": ["a", "b", "c"]}],
+)
+def test_insert_NA(data):
+    pdf = pd.DataFrame.from_dict(data)
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    pdf["C"] = pd.NA
+    gdf["C"] = cudf.NA
+    assert_eq(pdf, gdf)
+
+
 def test_cov():
     gdf = cudf.datasets.randomdata(10)
     pdf = gdf.to_pandas()
@@ -5206,8 +5285,8 @@ def test_memory_usage_cat():
     gdf = cudf.from_pandas(df)
 
     expected = (
-        gdf.B._column.cat().categories.__sizeof__()
-        + gdf.B._column.cat().codes.__sizeof__()
+        gdf.B._column.categories.__sizeof__()
+        + gdf.B._column.codes.__sizeof__()
     )
 
     # Check cat column
@@ -5334,14 +5413,6 @@ def test_change_column_dtype_in_empty():
     pdf["b"] = pdf["b"].astype("int64")
     gdf["b"] = gdf["b"].astype("int64")
     assert_eq(pdf, gdf)
-
-
-def test_dataframe_from_table_empty_index():
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    odict = df._data
-    tbl = cudf._lib.table.Table(odict)
-
-    result = cudf.DataFrame._from_table(tbl)  # noqa: F841
 
 
 @pytest.mark.parametrize("dtype", ["int64", "str"])
@@ -8072,17 +8143,7 @@ def test_dataframe_pipe_error():
 
 
 @pytest.mark.parametrize(
-    "op",
-    [
-        "count",
-        "cummin",
-        "cummax",
-        "cummax",
-        "cumprod",
-        "kurt",
-        "kurtosis",
-        "skew",
-    ],
+    "op", ["count", "kurt", "kurtosis", "skew"],
 )
 def test_dataframe_axis1_unsupported_ops(op):
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [8, 9, 10]})
@@ -8144,13 +8205,23 @@ def test_dataframe_constructor_columns(df, columns, index):
 
     gdf = cudf.from_pandas(df)
     host_columns = (
-        columns.to_pandas() if isinstance(columns, cudf.Index) else columns
+        columns.to_pandas() if isinstance(columns, cudf.BaseIndex) else columns
     )
 
     expected = pd.DataFrame(df, columns=host_columns, index=index)
     actual = cudf.DataFrame(gdf, columns=columns, index=index)
 
     assert_local_eq(actual, df, expected, host_columns)
+
+
+def test_dataframe_constructor_column_index_only():
+    columns = ["a", "b", "c"]
+    index = ["r1", "r2", "r3"]
+
+    gdf = cudf.DataFrame(index=index, columns=columns)
+    assert not id(gdf["a"]._column) == id(gdf["b"]._column) and not id(
+        gdf["b"]._column
+    ) == id(gdf["c"]._column)
 
 
 @pytest.mark.parametrize(
@@ -8579,3 +8650,167 @@ def test_dataframe_init_from_series(data, columns, index):
         actual,
         check_index_type=False if len(expected) == 0 else True,
     )
+
+
+@pytest.mark.parametrize(
+    "data, expected",
+    [
+        ({"a": [1, 2, 3, 4], "b": [5, 6, 7, 8], "c": [1.2, 1, 2, 3]}, False),
+        ({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}, True),
+        ({"a": ["a", "b", "c"], "b": [4, 5, 6], "c": [7, 8, 9]}, False),
+        ({"a": [True, False, False], "b": [False, False, True]}, True),
+        ({"a": [True, False, False]}, True),
+        ({"a": [[1, 2], [3, 4]]}, True),
+        ({"a": [[1, 2], [3, 4]], "b": ["a", "b"]}, False),
+        ({"a": [{"c": 5}, {"e": 5}], "b": [{"c": 5}, {"g": 7}]}, True),
+        ({}, True),
+    ],
+)
+def test_is_homogeneous_dataframe(data, expected):
+    actual = cudf.DataFrame(data)._is_homogeneous
+
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "data, indexes, expected",
+    [
+        (
+            {"a": [1, 2, 3, 4], "b": [5, 6, 7, 8], "c": [1.2, 1, 2, 3]},
+            ["a", "b"],
+            True,
+        ),
+        (
+            {
+                "a": [1, 2, 3, 4],
+                "b": [5, 6, 7, 8],
+                "c": [1.2, 1, 2, 3],
+                "d": ["hello", "world", "cudf", "rapids"],
+            },
+            ["a", "b"],
+            False,
+        ),
+        (
+            {
+                "a": ["a", "b", "c"],
+                "b": [4, 5, 6],
+                "c": [7, 8, 9],
+                "d": [1, 2, 3],
+            },
+            ["a", "b"],
+            True,
+        ),
+    ],
+)
+def test_is_homogeneous_multiIndex_dataframe(data, indexes, expected):
+    test_dataframe = cudf.DataFrame(data).set_index(indexes)
+    actual = cudf.DataFrame(test_dataframe)._is_homogeneous
+
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "data, expected", [([1, 2, 3, 4], True), ([True, False], True)]
+)
+def test_is_homogeneous_series(data, expected):
+    actual = cudf.Series(data)._is_homogeneous
+
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "levels, codes, expected",
+    [
+        (
+            [["lama", "cow", "falcon"], ["speed", "weight", "length"]],
+            [[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2]],
+            True,
+        ),
+        (
+            [[1, 2, 3], [True, False, True]],
+            [[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2]],
+            False,
+        ),
+    ],
+)
+def test_is_homogeneous_multiIndex(levels, codes, expected):
+    actual = cudf.MultiIndex(levels=levels, codes=codes)._is_homogeneous
+
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "data, expected",
+    [([1, 2, 3], True), (["Hello", "World"], True), ([True, False], True)],
+)
+def test_is_homogeneous_index(data, expected):
+    actual = cudf.Index(data)._is_homogeneous
+
+    assert actual == expected
+
+
+def test_frame_series_where():
+    gdf = cudf.DataFrame(
+        {"a": [1.0, 2.0, None, 3.0, None], "b": [None, 10.0, 11.0, None, 23.0]}
+    )
+    pdf = gdf.to_pandas()
+    expected = gdf.where(gdf.notna(), gdf.mean())
+    actual = pdf.where(pdf.notna(), pdf.mean(), axis=1)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "array,is_error",
+    [
+        (cupy.arange(20, 40).reshape(-1, 2), False),
+        (cupy.arange(20, 50).reshape(-1, 3), True),
+        (np.arange(20, 40).reshape(-1, 2), False),
+        (np.arange(20, 30).reshape(-1, 1), False),
+        (cupy.arange(20, 30).reshape(-1, 1), False),
+    ],
+)
+def test_dataframe_indexing_setitem_np_cp_array(array, is_error):
+    gdf = cudf.DataFrame({"a": range(10), "b": range(10)})
+    pdf = gdf.to_pandas()
+    if not is_error:
+        gdf.loc[:, ["a", "b"]] = array
+        pdf.loc[:, ["a", "b"]] = cupy.asnumpy(array)
+
+        assert_eq(gdf, pdf)
+    else:
+        assert_exceptions_equal(
+            lfunc=pdf.loc.__setitem__,
+            rfunc=gdf.loc.__setitem__,
+            lfunc_args_and_kwargs=(
+                [(slice(None, None, None), ["a", "b"]), cupy.asnumpy(array)],
+                {},
+            ),
+            rfunc_args_and_kwargs=(
+                [(slice(None, None, None), ["a", "b"]), array],
+                {},
+            ),
+            compare_error_message=False,
+            expected_error_message="shape mismatch: value array of shape "
+            "(10, 3) could not be broadcast to indexing "
+            "result of shape (10, 2)",
+        )
+
+
+@pytest.mark.parametrize(
+    "data", [{"a": [1, 2, 3], "b": [1, 1, 0]}],
+)
+def test_frame_series_where_other(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = gdf.where(gdf["b"] == 1, cudf.NA)
+    actual = pdf.where(pdf["b"] == 1, pd.NA)
+    assert_eq(
+        actual.fillna(-1).values,
+        expected.fillna(-1).values,
+        check_dtype=False,
+    )
+
+    expected = gdf.where(gdf["b"] == 1, 0)
+    actual = pdf.where(pdf["b"] == 1, 0)
+    assert_eq(expected, actual)

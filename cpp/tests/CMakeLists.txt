@@ -1,4 +1,4 @@
-﻿#=============================================================================
+#=============================================================================
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -54,37 +54,44 @@ ConfigureTest(ERROR_TEST error/error_handling_test.cu)
 ###################################################################################################
 # - groupby tests ---------------------------------------------------------------------------------
 ConfigureTest(GROUPBY_TEST
-    groupby/collect_set_test.cpp
-    groupby/groupby_groups_test.cpp
-    groupby/group_argmin_test.cpp
-    groupby/group_argmax_test.cpp
-    groupby/groupby_keys_test.cpp
-    groupby/group_count_test.cpp
-    groupby/group_sum_test.cpp
-    groupby/group_min_test.cpp
-    groupby/group_max_test.cpp
-    groupby/group_product_test.cpp
-    groupby/group_sum_of_squares_test.cpp
-    groupby/group_mean_test.cpp
-    groupby/group_var_test.cpp
-    groupby/group_std_test.cpp
-    groupby/group_median_test.cpp
-    groupby/group_quantile_test.cpp
-    groupby/group_nunique_test.cpp
-    groupby/group_nth_element_test.cpp
-    groupby/group_collect_test.cpp
-    groupby/group_sum_scan_test.cpp
-    groupby/group_min_scan_test.cpp
-    groupby/group_max_scan_test.cpp
-    groupby/group_count_scan_test.cpp
-    groupby/group_shift_test.cpp)
+    groupby/argmin_tests.cpp
+    groupby/argmax_tests.cpp
+    groupby/collect_list_tests.cpp
+    groupby/collect_set_tests.cpp
+    groupby/count_scan_tests.cpp
+    groupby/count_tests.cpp
+    groupby/groups_tests.cpp
+    groupby/keys_tests.cpp
+    groupby/m2_tests.cpp
+    groupby/min_tests.cpp
+    groupby/max_scan_tests.cpp
+    groupby/max_tests.cpp
+    groupby/mean_tests.cpp
+    groupby/median_tests.cpp
+    groupby/merge_m2_tests.cpp
+    groupby/merge_lists_tests.cpp
+    groupby/merge_sets_tests.cpp
+    groupby/min_scan_tests.cpp
+    groupby/nth_element_tests.cpp
+    groupby/nunique_tests.cpp
+    groupby/product_tests.cpp
+    groupby/quantile_tests.cpp
+    groupby/rank_scan_tests.cpp
+    groupby/replace_nulls_tests.cpp
+    groupby/shift_tests.cpp
+    groupby/std_tests.cpp
+    groupby/sum_of_squares_tests.cpp
+    groupby/sum_scan_tests.cpp
+    groupby/sum_tests.cpp
+    groupby/var_tests.cpp)
 
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
 ConfigureTest(JOIN_TEST
     join/join_tests.cpp
+    join/conditional_join_tests.cu
     join/cross_join_tests.cpp
-    join/semi_join_tests.cpp)
+    join/semi_anti_join_tests.cpp)
 
 ###################################################################################################
 # - is_sorted tests -------------------------------------------------------------------------------
@@ -137,7 +144,9 @@ ConfigureTest(CLAMP_TEST replace/clamp_test.cpp)
 
 ###################################################################################################
 # - fixed_point tests -----------------------------------------------------------------------------
-ConfigureTest(FIXED_POINT_TEST fixed_point/fixed_point_tests.cu)
+ConfigureTest(FIXED_POINT_TEST
+    fixed_point/fixed_point_tests.cpp
+    fixed_point/fixed_point_tests.cu)
 
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
@@ -156,6 +165,8 @@ ConfigureTest(BINARY_TEST
     binaryop/binop-verify-input-test.cpp
     binaryop/binop-null-test.cpp
     binaryop/binop-integration-test.cpp
+    binaryop/binop-compiled-test.cpp
+    binaryop/binop-compiled-fixed_point-test.cpp
     binaryop/binop-generic-ptx-test.cpp
     )
 
@@ -177,12 +188,16 @@ ConfigureTest(INTEROP_TEST
 
 ###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
-ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cu)
+ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
 
 ConfigureTest(CSV_TEST io/csv_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
+ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
+if(CUDF_ENABLE_ARROW_S3)
+  target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
+endif()
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
@@ -195,24 +210,28 @@ ConfigureTest(SORT_TEST
 # - copying tests ---------------------------------------------------------------------------------
 ConfigureTest(COPYING_TEST
     copying/concatenate_tests.cu
+    copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
-    copying/copy_tests.cu    
+    copying/copy_tests.cu
     copying/detail_gather_tests.cu
-    copying/gather_struct_tests.cu        
-    copying/gather_tests.cu
-    copying/gather_str_tests.cu
-    copying/gather_list_tests.cu
+    copying/gather_list_tests.cpp
+    copying/gather_str_tests.cpp
+    copying/gather_struct_tests.cpp
+    copying/gather_tests.cpp
     copying/get_value_tests.cpp
-    copying/pack_tests.cu
+    copying/pack_tests.cpp
     copying/sample_tests.cpp
     copying/scatter_tests.cpp
     copying/scatter_list_tests.cpp
+    copying/scatter_list_scalar_tests.cpp
     copying/scatter_struct_tests.cpp
+    copying/scatter_struct_scalar_tests.cpp
     copying/segmented_gather_list_tests.cpp
     copying/shift_tests.cpp
     copying/slice_tests.cpp
     copying/split_tests.cpp
-    copying/utility_tests.cpp)
+    copying/utility_tests.cpp
+    copying/reverse_tests.cpp)
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
@@ -221,7 +240,8 @@ ConfigureTest(UTILITIES_TEST
     utilities_tests/column_utilities_tests.cpp
     utilities_tests/column_wrapper_tests.cpp
     utilities_tests/lists_column_wrapper_tests.cpp
-    utilities_tests/default_stream_tests.cpp)
+    utilities_tests/default_stream_tests.cpp
+    utilities_tests/type_check_tests.cpp)
 
 ###################################################################################################
 # - span tests -------------------------------------------------------------------------------
@@ -230,10 +250,16 @@ ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
 ###################################################################################################
 # - iterator tests --------------------------------------------------------------------------------
 ConfigureTest(ITERATOR_TEST
-    iterator/value_iterator_test.cu
-    iterator/pair_iterator_test.cu
+    iterator/value_iterator.cpp
+    iterator/value_iterator_test_chrono.cu
+    iterator/value_iterator_test_numeric.cu
+    iterator/value_iterator_test_strings.cu
+    iterator/value_iterator_test_transform.cu
+    iterator/pair_iterator_test_chrono.cu
+    iterator/pair_iterator_test_numeric.cu
     iterator/scalar_iterator_test.cu
-    iterator/optional_iterator_test.cu
+    iterator/optional_iterator_test_chrono.cu
+    iterator/optional_iterator_test_numeric.cu
     )
 
 ###################################################################################################
@@ -268,13 +294,14 @@ ConfigureTest(STREAM_COMPACTION_TEST
 
 ###################################################################################################
 # - rolling tests ---------------------------------------------------------------------------------
-ConfigureTest(ROLLING_TEST 
-    rolling/rolling_test.cpp 
+ConfigureTest(ROLLING_TEST
+    rolling/collect_ops_test.cpp
+    rolling/empty_input_test.cpp
     rolling/grouped_rolling_test.cpp
     rolling/lead_lag_test.cpp
-    rolling/range_window_bounds_test.cpp
     rolling/range_rolling_window_test.cpp
-    rolling/collect_list_test.cpp)
+    rolling/range_window_bounds_test.cpp
+    rolling/rolling_test.cpp)
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
@@ -319,9 +346,9 @@ ConfigureTest(STRINGS_TEST
     strings/booleans_tests.cpp
     strings/case_tests.cpp
     strings/chars_types_tests.cpp
-    strings/combine/concatenate_list_elements_tests.cpp
     strings/combine/concatenate_tests.cpp
-    strings/combine/join_strings_tests
+    strings/combine/join_list_elements_tests.cpp
+    strings/combine/join_strings_tests.cpp
     strings/concatenate_tests.cpp
     strings/contains_tests.cpp
     strings/datetime_tests.cpp
@@ -335,10 +362,11 @@ ConfigureTest(STRINGS_TEST
     strings/fixed_point_tests.cpp
     strings/floats_tests.cpp
     strings/hash_string.cu
-    strings/integers_tests.cu
+    strings/integers_tests.cpp
     strings/ipv4_tests.cpp
     strings/json_tests.cpp
     strings/pad_tests.cpp
+    strings/repeat_strings_tests.cpp
     strings/replace_regex_tests.cpp
     strings/replace_tests.cpp
     strings/split_tests.cpp
@@ -349,7 +377,9 @@ ConfigureTest(STRINGS_TEST
 
 ###################################################################################################
 # - structs test ----------------------------------------------------------------------------------
-ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cu)
+ConfigureTest(STRUCTS_TEST 
+    structs/structs_column_tests.cpp
+    )
 
 ###################################################################################################
 # - nvtext test -----------------------------------------------------------------------------------
@@ -368,7 +398,8 @@ ConfigureTest(TEXT_TEST
 ConfigureTest(BITMASK_TEST
     bitmask/valid_if_tests.cu
     bitmask/set_nullmask_tests.cu
-    bitmask/bitmask_tests.cu)
+    bitmask/bitmask_tests.cpp
+    bitmask/is_element_valid_tests.cpp)
 
 
 ###################################################################################################
@@ -397,7 +428,8 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 ###################################################################################################
 # - lists tests ----------------------------------------------------------------------------------
 ConfigureTest(LISTS_TEST
-    lists/concatenate_rows_tests.cpp
+    lists/combine/concatenate_list_elements_tests.cpp
+    lists/combine/concatenate_rows_tests.cpp
     lists/contains_tests.cpp
     lists/count_elements_tests.cpp
     lists/drop_list_duplicates_tests.cpp

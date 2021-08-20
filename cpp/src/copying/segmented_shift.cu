@@ -206,38 +206,6 @@ struct segmented_shift_functor<string_view> {
 };
 
 /**
- * @brief Segmented shift specialization for `list_view`.
- */
-template <>
-struct segmented_shift_functor<list_view> {
-  std::unique_ptr<column> operator()(column_view const& segmented_values,
-                                     device_span<size_type const> segment_offsets,
-                                     size_type offset,
-                                     scalar const& fill_value,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    CUDF_FAIL("segmented_shift does not support list_view yet");
-  }
-};
-
-/**
- * @brief Segmented shift specialization for `struct_view`.
- */
-template <>
-struct segmented_shift_functor<struct_view> {
-  std::unique_ptr<column> operator()(column_view const& segmented_values,
-                                     device_span<size_type const> segment_offsets,
-                                     size_type offset,
-                                     scalar const& fill_value,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    CUDF_FAIL("segmented_shift does not support struct_view yet");
-  }
-};
-
-/**
  * @brief Functor to instantiate the specializations for segmented shift and
  * forward arguments.
  */

@@ -68,7 +68,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
     }
     using ScalarType = cudf::scalar_type_t<T>;
     static_cast<ScalarType*>(p_val.get())->set_value(value);
-    static_cast<ScalarType*>(p_val.get())->set_valid(value_is_valid);
+    static_cast<ScalarType*>(p_val.get())->set_valid_async(value_is_valid);
 
     auto expected_elements =
       cudf::detail::make_counting_transform_iterator(0, [begin, end, value](auto i) {
@@ -189,7 +189,7 @@ class FillStringTestFixture : public cudf::test::BaseFixture {
 
     auto p_val       = cudf::make_string_scalar(value);
     using ScalarType = cudf::scalar_type_t<cudf::string_view>;
-    static_cast<ScalarType*>(p_val.get())->set_valid(value_is_valid);
+    static_cast<ScalarType*>(p_val.get())->set_valid_async(value_is_valid);
 
     auto p_chars   = value.c_str();
     auto num_chars = value.length();
@@ -285,7 +285,7 @@ TEST_F(FillErrorTestFixture, InvalidInplaceCall)
   using T_int      = cudf::id_to_type<cudf::type_id::INT32>;
   using ScalarType = cudf::scalar_type_t<T_int>;
   static_cast<ScalarType*>(p_val_int.get())->set_value(5);
-  static_cast<ScalarType*>(p_val_int.get())->set_valid(false);
+  static_cast<ScalarType*>(p_val_int.get())->set_valid_async(false);
 
   auto destination = cudf::test::fixed_width_column_wrapper<int32_t>(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + 100);

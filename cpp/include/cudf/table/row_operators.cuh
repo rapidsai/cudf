@@ -191,8 +191,8 @@ class element_equality_comparator {
    */
   template <typename Element,
             std::enable_if_t<cudf::is_equality_comparable<Element, Element>()>* = nullptr>
-  __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index) const
-    noexcept
+  __device__ bool operator()(size_type lhs_element_index,
+                             size_type rhs_element_index) const noexcept
   {
     if (has_nulls) {
       bool const lhs_is_null{lhs.is_null(lhs_element_index)};
@@ -475,17 +475,19 @@ class row_hasher {
     // Hash the first column w/ the seed
     auto const initial_hash =
       hash_combiner(hash_value_type{0},
-                    type_dispatcher(_table.column(0).type(),
-                                    element_hasher_with_seed<hash_function, has_nulls>{_seed},
-                                    _table.column(0),
-                                    row_index));
+                    type_dispatcher<dispatch_storage_type>(
+                      _table.column(0).type(),
+                      element_hasher_with_seed<hash_function, has_nulls>{_seed},
+                      _table.column(0),
+                      row_index));
 
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
-      return cudf::type_dispatcher(_table.column(column_index).type(),
-                                   element_hasher<hash_function, has_nulls>{},
-                                   _table.column(column_index),
-                                   row_index);
+      return cudf::type_dispatcher<dispatch_storage_type>(
+        _table.column(column_index).type(),
+        element_hasher<hash_function, has_nulls>{},
+        _table.column(column_index),
+        row_index);
     };
 
     // Hash each element and combine all the hash values together
@@ -528,10 +530,11 @@ class row_hasher_initial_values {
 
     // Hashes an element in a column and combines with an initial value
     auto hasher = [=](size_type column_index) {
-      auto hash_value = cudf::type_dispatcher(_table.column(column_index).type(),
-                                              element_hasher<hash_function, has_nulls>{},
-                                              _table.column(column_index),
-                                              row_index);
+      auto hash_value =
+        cudf::type_dispatcher<dispatch_storage_type>(_table.column(column_index).type(),
+                                                     element_hasher<hash_function, has_nulls>{},
+                                                     _table.column(column_index),
+                                                     row_index);
 
       return hash_combiner(_initial_hash[column_index], hash_value);
     };

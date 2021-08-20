@@ -40,8 +40,8 @@ std::unique_ptr<cudf::scalar> cudf::reduction::standard_deviation(
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
   return cudf::type_dispatcher(col_type, reducer(), col, output_dtype, ddof, stream, mr);
 #else
-  // workaround for bug 200529165 which causes compilation error only at device
-  // debug build the bug will be fixed at cuda 10.2
+  // workaround for bug 200529165 which causes compilation error only at device debug build
+  // hopefully the bug will be fixed in future cuda version (still failing in 11.2)
   CUDF_FAIL("var/std reductions are not supported at debug build.");
 #endif
 }

@@ -24,6 +24,7 @@
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -37,7 +38,7 @@
 
 /**
  * @file column_device_view.cuh
- * @brief Column device view class definitons
+ * @brief Column device view class definitions
  */
 
 namespace cudf {
@@ -54,14 +55,14 @@ namespace cudf {
  * - `DYNAMIC` defers the assumption of nullability to runtime with the users stating
  *    on construction of the iterator if column has nulls.
  */
-namespace contains_nulls {
-struct YES {
+struct contains_nulls {
+  struct YES {
+  };
+  struct NO {
+  };
+  struct DYNAMIC {
+  };
 };
-struct NO {
-};
-struct DYNAMIC {
-};
-}  // namespace contains_nulls
 
 namespace detail {
 /**
@@ -95,13 +96,13 @@ class alignas(16) column_device_view_base {
    *`data<T>()`.
    *
    * This function will only participate in overload resolution if `is_rep_layout_compatible<T>()`
-   * or `std::is_same<T,void>::value` are true.
+   * or `std::is_same_v<T,void>` are true.
    *
    * @tparam The type to cast to
    * @return T const* Typed pointer to underlying data
    */
   template <typename T = void,
-            CUDF_ENABLE_IF(std::is_same<T, void>::value or is_rep_layout_compatible<T>())>
+            CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   __host__ __device__ T const* head() const noexcept
   {
     return static_cast<T const*>(_data);
@@ -350,7 +351,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired string element
    * @return string_view instance representing this element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, string_view>::value)>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
   __device__ T element(size_type element_index) const noexcept
   {
     size_type index = element_index + offset();  // account for this view's _offset
@@ -411,7 +412,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired element
    * @return dictionary32 instance representing this element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, dictionary32>::value)>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, dictionary32>)>
   __device__ T element(size_type element_index) const noexcept
   {
     size_type index    = element_index + offset();  // account for this view's _offset
@@ -429,7 +430,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired element
    * @return numeric::decimal32 representing the element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, numeric::decimal32>::value)>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, numeric::decimal32>)>
   __device__ T element(size_type element_index) const noexcept
   {
     using namespace numeric;
@@ -447,7 +448,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired element
    * @return numeric::decimal64 representing the element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, numeric::decimal64>::value)>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, numeric::decimal64>)>
   __device__ T element(size_type element_index) const noexcept
   {
     using namespace numeric;
@@ -541,7 +542,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *
    * optional_begin with mode `DYNAMIC` defers the assumption of nullability to
    * runtime, with the user stating on construction of the iterator if column has nulls.
-   * `DYNAMIC` mode is nice when an algorithm is going to execute on mutliple
+   * `DYNAMIC` mode is nice when an algorithm is going to execute on multiple
    * iterators and you don't want to compile all the combinations of iterator types
    *
    * Example:
@@ -854,6 +855,14 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   }
 
   /**
+   * @brief Returns a span containing the children of this column
+   */
+  __device__ device_span<column_device_view const> children() const noexcept
+  {
+    return device_span<column_device_view const>(d_children, _num_children);
+  }
+
+  /**
    * @brief Returns the number of child columns
    *
    * @return The number of child columns
@@ -931,7 +940,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * the specified type.
    *
    * This function will only participate in overload resolution if `is_rep_layout_compatible<T>()`
-   * or `std::is_same<T,void>::value` are true.
+   * or `std::is_same_v<T,void>` are true.
    *
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
@@ -943,7 +952,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @return T* Typed pointer to underlying data
    */
   template <typename T = void,
-            CUDF_ENABLE_IF(std::is_same<T, void>::value or is_rep_layout_compatible<T>())>
+            CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   __host__ __device__ T* head() const noexcept
   {
     return const_cast<T*>(detail::column_device_view_base::head<T>());
@@ -1361,13 +1370,13 @@ struct pair_rep_accessor {
   }
 
  private:
-  template <typename R, std::enable_if_t<std::is_same<R, rep_type>::value, void>* = nullptr>
+  template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
   CUDA_DEVICE_CALLABLE auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i);
   }
 
-  template <typename R, std::enable_if_t<not std::is_same<R, rep_type>::value, void>* = nullptr>
+  template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
   CUDA_DEVICE_CALLABLE auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i).value();

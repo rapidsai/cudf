@@ -17,14 +17,14 @@ export PATH=/opt/conda/bin:/usr/local/cuda/bin:$PATH
 export PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
 
 # Set home to the job's workspace
-export HOME=$WORKSPACE
+export HOME="$WORKSPACE"
 
 # Switch to project root; also root of repo checkout
-cd $WORKSPACE
+cd "$WORKSPACE"
 
 # Determine CUDA release version
 export CUDA_REL=${CUDA_VERSION%.*}
-export CONDA_ARTIFACT_PATH=${WORKSPACE}/ci/artifacts/cudf/cpu/.conda-bld/
+export CONDA_ARTIFACT_PATH="$WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
 
 # Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
@@ -74,17 +74,17 @@ conda config --show-sources
 conda list --show-channel-urls
 
 gpuci_logger "Install dependencies"
-gpuci_conda_retry install -y \
+gpuci_mamba_retry install -y \
                   "cudatoolkit=$CUDA_REL" \
                   "rapids-build-env=$MINOR_VERSION.*" \
                   "rapids-notebook-env=$MINOR_VERSION.*" \
                   "dask-cuda=${MINOR_VERSION}" \
                   "rmm=$MINOR_VERSION.*" \
-                  "ucx-py=${MINOR_VERSION}"
+                  "ucx-py=0.21.*"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-# gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
-# gpuci_conda_retry install -y "your-pkg=1.0.0"
+# gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
+# gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
 
 gpuci_logger "Check compiler versions"
@@ -103,7 +103,9 @@ function install_dask {
     set -x
     pip install "git+https://github.com/dask/distributed.git@main" --upgrade --no-deps
     pip install "git+https://github.com/dask/dask.git@main" --upgrade --no-deps
-    pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
+    # Need to uninstall streamz that is already in the env.
+    pip uninstall -y streamz
+    pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade --no-deps
     set +x
 }
 
@@ -117,9 +119,9 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
 
     gpuci_logger "Build from source"
     if [[ ${BUILD_MODE} == "pull-request" ]]; then
-        $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
+        "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
     else
-        $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
+        "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
     fi
 
     ################################################################################
@@ -140,12 +142,12 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
 
         gpuci_logger "GoogleTests"
         set -x
-        cd $WORKSPACE/cpp/build
+        cd "$WORKSPACE/cpp/build"
 
-        for gt in ${WORKSPACE}/cpp/build/gtests/* ; do
+        for gt in "$WORKSPACE/cpp/build/gtests/"* ; do
             test_name=$(basename ${gt})
             echo "Running GoogleTest $test_name"
-            ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
+            ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
         done
     fi
 else
@@ -168,7 +170,7 @@ else
     for gt in gtests/* ; do
         test_name=$(basename ${gt})
         echo "Running GoogleTest $test_name"
-        ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
+        ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
     CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
@@ -185,10 +187,11 @@ else
 
     gpuci_logger "Build python libs from source"
     if [[ ${BUILD_MODE} == "pull-request" ]]; then
-        $WORKSPACE/build.sh cudf dask_cudf cudf_kafka --ptds
+        "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka --ptds
     else
-        $WORKSPACE/build.sh cudf dask_cudf cudf_kafka -l --ptds
+        "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka -l --ptds
     fi
+
 fi
 
 # Both regular and Project Flash proceed here
@@ -200,26 +203,25 @@ if [ "$np_ver" == "1.16" ];then
     export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
 fi
 
-
 ################################################################################
 # TEST - Run py.test, notebooks
 ################################################################################
 
-cd $WORKSPACE/python/cudf
+cd "$WORKSPACE/python/cudf"
 gpuci_logger "Python py.test for cuDF"
-py.test -n 6 --cache-clear --basetemp=${WORKSPACE}/cudf-cuda-tmp --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
+py.test -n 6 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term
 
-cd $WORKSPACE/python/dask_cudf
+cd "$WORKSPACE/python/dask_cudf"
 gpuci_logger "Python py.test for dask-cudf"
-py.test -n 6 --cache-clear --basetemp=${WORKSPACE}/dask-cudf-cuda-tmp --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term
+py.test -n 6 --cache-clear --basetemp="$WORKSPACE/dask-cudf-cuda-tmp" --junitxml="$WORKSPACE/junit-dask-cudf.xml" -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:"$WORKSPACE/python/dask_cudf/dask-cudf-coverage.xml" --cov-report term
 
-cd $WORKSPACE/python/custreamz
+cd "$WORKSPACE/python/custreamz"
 gpuci_logger "Python py.test for cuStreamz"
-py.test -n 6 --cache-clear --basetemp=${WORKSPACE}/custreamz-cuda-tmp --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
+py.test -n 6 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term
 
 gpuci_logger "Test notebooks"
-${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
-python ${WORKSPACE}/ci/utils/nbtestlog2junitxml.py nbtest.log
+"$WORKSPACE/ci/gpu/test-notebooks.sh" 2>&1 | tee nbtest.log
+python "$WORKSPACE/ci/utils/nbtestlog2junitxml.py" nbtest.log
 
 if [ -n "${CODECOV_TOKEN}" ]; then
     codecov -t $CODECOV_TOKEN

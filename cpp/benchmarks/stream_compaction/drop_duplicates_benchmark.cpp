@@ -50,7 +50,7 @@ void BM_compaction(benchmark::State& state, cudf::duplicate_keep_option keep)
 }
 
 #define concat(a, b, c) a##b##c
-#define get_keep(op) cudf::duplicate_keep_option::KEEP_##op
+#define get_keep(op)    cudf::duplicate_keep_option::KEEP_##op
 
 // TYPE, OP
 #define RBM_BENCHMARK_DEFINE(name, type, keep)                     \

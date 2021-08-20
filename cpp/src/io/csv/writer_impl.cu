@@ -28,6 +28,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -113,13 +114,13 @@ struct column_to_strings_fn {
   template <typename column_type>
   constexpr static bool is_not_handled(void)
   {
-    // Note: the case (not std::is_same<column_type, bool>::value)
+    // Note: the case (not std::is_same_v<column_type, bool>)
     // is already covered by is_integral)
     //
-    return not((std::is_same<column_type, cudf::string_view>::value) ||
-               (std::is_integral<column_type>::value) ||
-               (std::is_floating_point<column_type>::value) ||
-               (cudf::is_timestamp<column_type>()) || (cudf::is_duration<column_type>()));
+    return not(
+      (std::is_same_v<column_type, cudf::string_view>) || (std::is_integral<column_type>::value) ||
+      (std::is_floating_point<column_type>::value) || (cudf::is_fixed_point<column_type>()) ||
+      (cudf::is_timestamp<column_type>()) || (cudf::is_duration<column_type>()));
   }
 
   explicit column_to_strings_fn(
@@ -141,7 +142,7 @@ struct column_to_strings_fn {
   // bools:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_same<column_type, bool>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<std::is_same_v<column_type, bool>, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
     return cudf::strings::detail::from_booleans(
@@ -151,7 +152,7 @@ struct column_to_strings_fn {
   // strings:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_same<column_type, cudf::string_view>::value, std::unique_ptr<column>>
+  std::enable_if_t<std::is_same_v<column_type, cudf::string_view>, std::unique_ptr<column>>
   operator()(column_view const& column_v) const
   {
     // handle special characters: {delimiter, '\n', "} in row:
@@ -173,7 +174,7 @@ struct column_to_strings_fn {
   // ints:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_integral<column_type>::value && !std::is_same<column_type, bool>::value,
+  std::enable_if_t<std::is_integral<column_type>::value && !std::is_same_v<column_type, bool>,
                    std::unique_ptr<column>>
   operator()(column_view const& column) const
   {
@@ -189,6 +190,15 @@ struct column_to_strings_fn {
     return cudf::strings::detail::from_floats(column, stream_, mr_);
   }
 
+  // fixed point:
+  //
+  template <typename column_type>
+  std::enable_if_t<cudf::is_fixed_point<column_type>(), std::unique_ptr<column>> operator()(
+    column_view const& column) const
+  {
+    return cudf::strings::detail::from_fixed_point(column, stream_, mr_);
+  }
+
   // timestamps:
   //
   template <typename column_type>
@@ -196,13 +206,13 @@ struct column_to_strings_fn {
     column_view const& column) const
   {
     std::string format = [&]() {
-      if (std::is_same<cudf::timestamp_s, column_type>::value) {
+      if (std::is_same_v<cudf::timestamp_s, column_type>) {
         return std::string{"%Y-%m-%dT%H:%M:%SZ"};
-      } else if (std::is_same<cudf::timestamp_ms, column_type>::value) {
+      } else if (std::is_same_v<cudf::timestamp_ms, column_type>) {
         return std::string{"%Y-%m-%dT%H:%M:%S.%3fZ"};
-      } else if (std::is_same<cudf::timestamp_us, column_type>::value) {
+      } else if (std::is_same_v<cudf::timestamp_us, column_type>) {
         return std::string{"%Y-%m-%dT%H:%M:%S.%6fZ"};
-      } else if (std::is_same<cudf::timestamp_ns, column_type>::value) {
+      } else if (std::is_same_v<cudf::timestamp_ns, column_type>) {
         return std::string{"%Y-%m-%dT%H:%M:%S.%9fZ"};
       } else {
         return std::string{"%Y-%m-%d"};
@@ -235,7 +245,7 @@ struct column_to_strings_fn {
   //
   template <typename column_type>
   std::enable_if_t<is_not_handled<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const& column) const
+    column_view const&) const
   {
     CUDF_FAIL("Unsupported column type.");
   }
@@ -250,6 +260,7 @@ struct column_to_strings_fn {
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
                csv_writer_options const& options,
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mr))
 {
@@ -272,20 +283,54 @@ void writer::impl::write_chunked_begin(table_view const& table,
                                        rmm::cuda_stream_view stream)
 {
   if ((metadata != nullptr) && (options_.is_enabled_include_header())) {
-    CUDF_EXPECTS(metadata->column_names.size() == static_cast<size_t>(table.num_columns()),
+    auto const& column_names = metadata->column_names;
+    CUDF_EXPECTS(column_names.size() == static_cast<size_t>(table.num_columns()),
                  "Mismatch between number of column headers and table columns.");
 
-    std::string delimiter_str{options_.get_inter_column_delimiter()};
+    auto const delimiter  = options_.get_inter_column_delimiter();
+    auto const terminator = options_.get_line_terminator();
 
-    // avoid delimiter after last element:
-    //
+    // process header names:
+    // - if the header name includes the delimiter or terminator character,
+    //   it must be double-quoted
+    // - if the header name includes a double-quote, it must be escaped
+    //   with a 2nd double-quote
     std::stringstream ss;
-    std::copy(metadata->column_names.begin(),
-              metadata->column_names.end() - 1,
-              std::ostream_iterator<std::string>(ss, delimiter_str.c_str()));
-    ss << metadata->column_names.back() << options_.get_line_terminator();
+    std::transform(column_names.begin(),
+                   column_names.end(),
+                   std::ostream_iterator<std::string>(ss, std::string{delimiter}.c_str()),
+                   [delimiter, terminator](std::string name) {
+                     char const quote = '\"';
+                     if (name.empty() ||           // no header name
+                         name.front() == quote) {  // header already quoted
+                       return name;
+                     }
 
-    out_sink_->host_write(ss.str().data(), ss.str().size());
+                     // escape any quotes
+                     size_t pos = 0;
+                     while ((pos = name.find(quote, pos)) != name.npos) {
+                       name.insert(pos, 1, quote);
+                       pos += 2;
+                     }
+
+                     // check if overall quotes are required
+                     if (std::any_of(name.begin(), name.end(), [&](auto const chr) {
+                           return chr == quote || chr == delimiter || chr == terminator.front();
+                         })) {
+                       name.insert(name.begin(), quote);
+                       name.insert(name.end(), quote);
+                     }
+                     return name;
+                   });
+
+    // add line terminator
+    std::string header = ss.str();
+    if (!header.empty()) {
+      header.erase(header.end() - 1);  // remove extra final delimiter
+    }
+    header.append(terminator);
+
+    out_sink_->host_write(header.data(), header.size());
   }
 }
 
@@ -343,8 +388,6 @@ void writer::impl::write(table_view const& table,
                          const table_metadata* metadata,
                          rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(table.num_columns() > 0, "Empty table.");
-
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //
@@ -403,11 +446,19 @@ void writer::impl::write(table_view const& table,
       auto str_table_view = str_table_ptr->view();
 
       // concatenate columns in each row into one big string column
-      //(using null representation and delimiter):
+      // (using null representation and delimiter):
       //
       std::string delimiter_str{options_.get_inter_column_delimiter()};
-      auto str_concat_col = cudf::strings::detail::concatenate(
-        str_table_view, delimiter_str, options_.get_na_rep(), stream);
+      auto str_concat_col = [&] {
+        if (str_table_view.num_columns() > 1)
+          return cudf::strings::detail::concatenate(str_table_view,
+                                                    delimiter_str,
+                                                    options_.get_na_rep(),
+                                                    strings::separator_on_nulls::YES,
+                                                    stream);
+        cudf::string_scalar narep{options_.get_na_rep()};
+        return cudf::strings::detail::replace_nulls(str_table_view.column(0), narep, stream);
+      }();
 
       write_chunked(str_concat_col->view(), metadata, stream);
     }

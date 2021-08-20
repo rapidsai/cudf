@@ -34,7 +34,7 @@
 #pragma once
 
 template <typename T>
-std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same<T, bool>::value,
+std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>,
                  std::shared_ptr<arrow::Array>>
 get_arrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {})
 {
@@ -50,7 +50,7 @@ get_arrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {
 }
 
 template <typename T>
-std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same<T, bool>::value,
+std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>,
                  std::shared_ptr<arrow::Array>>
 get_arrow_array(std::initializer_list<T> elements, std::initializer_list<uint8_t> validity = {})
 {
@@ -61,7 +61,7 @@ get_arrow_array(std::initializer_list<T> elements, std::initializer_list<uint8_t
 }
 
 template <typename T>
-std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> get_arrow_array(
+std::enable_if_t<std::is_same_v<T, bool>, std::shared_ptr<arrow::Array>> get_arrow_array(
   std::vector<bool> const& data, std::vector<bool> const& mask = {})
 {
   std::shared_ptr<arrow::BooleanArray> boolean_array;
@@ -80,7 +80,7 @@ std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> ge
 }
 
 template <typename T>
-std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> get_arrow_array(
+std::enable_if_t<std::is_same_v<T, bool>, std::shared_ptr<arrow::Array>> get_arrow_array(
   std::initializer_list<bool> elements, std::initializer_list<bool> validity = {})
 {
   std::vector<bool> mask(validity);
@@ -90,7 +90,7 @@ std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> ge
 }
 
 template <typename T>
-std::enable_if_t<std::is_same<T, cudf::string_view>::value, std::shared_ptr<arrow::Array>>
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, std::shared_ptr<arrow::Array>>
 get_arrow_array(std::vector<std::string> const& data, std::vector<uint8_t> const& mask = {})
 {
   std::shared_ptr<arrow::StringArray> string_array;
@@ -104,7 +104,7 @@ get_arrow_array(std::vector<std::string> const& data, std::vector<uint8_t> const
 }
 
 template <typename T>
-std::enable_if_t<std::is_same<T, cudf::string_view>::value, std::shared_ptr<arrow::Array>>
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, std::shared_ptr<arrow::Array>>
 get_arrow_array(std::initializer_list<std::string> elements,
                 std::initializer_list<uint8_t> validity = {})
 {

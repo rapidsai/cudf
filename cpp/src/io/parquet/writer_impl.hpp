@@ -70,14 +70,14 @@ class writer::impl {
    * @param filepath Filepath if storing dataset to a file
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 parquet_writer_options const& options,
                 SingleWriteMode mode,
-                rmm::mr::device_memory_resource* mr,
-                rmm::cuda_stream_view stream);
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Constructor with chunked writer options.
@@ -91,8 +91,8 @@ class writer::impl {
   explicit impl(std::unique_ptr<data_sink> sink,
                 chunked_parquet_writer_options const& options,
                 SingleWriteMode mode,
-                rmm::mr::device_memory_resource* mr,
-                rmm::cuda_stream_view stream);
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Destructor to complete any incomplete write and release resources.
@@ -153,12 +153,11 @@ class writer::impl {
    * @param chunks column chunk array
    * @param col_desc column description array
    * @param num_columns Total number of columns
-   * @param num_dictionaries Total number of dictionaries
    */
-  void build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
-                                device_span<gpu::parquet_column_device_view const> col_desc,
-                                uint32_t num_columns,
-                                uint32_t num_dictionaries);
+  void init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
+                       device_span<gpu::parquet_column_device_view const> col_desc,
+                       uint32_t num_columns);
+
   /**
    * @brief Initialize encoder pages
    *
