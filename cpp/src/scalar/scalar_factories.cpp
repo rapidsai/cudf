@@ -177,6 +177,7 @@ std::unique_ptr<scalar> make_empty_scalar_like(column_view const& column,
       result->set_valid_async(false, stream);
       break;
     case type_id::STRUCT:
+      // The input column must have at least 1 row to extract a scalar (row) from it.
       result = detail::get_element(column, 0, stream, mr);
       result->set_valid_async(false, stream);
       break;
