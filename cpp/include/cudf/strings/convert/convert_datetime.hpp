@@ -159,12 +159,11 @@ std::unique_ptr<column> is_timestamp(
  * Any null input entry will result in a corresponding null entry in the output column.
  *
  * The time units of the input column do not influence the number of digits written by
- * the "%f" specifier.
- * The "%f" supports a precision value to write out numeric digits for the subsecond value.
- * Specify the precision with a single integer value (1-9) between the "%" and the "f" as follows:
- * use "%3f" for milliseconds, "%6f" for microseconds and "%9f" for nanoseconds.
- * If the precision is higher than the units, then zeroes are padded to the right of
- * the subsecond value.
+ * the "%f" specifier. The "%f" supports a precision value to write out numeric digits
+ * for the subsecond value. Specify the precision with a single integer value (1-9)
+ * between the "%" and the "f" as follows: use "%3f" for milliseconds,
+ * "%6f" for microseconds and "%9f" for nanoseconds. If the precision is higher than
+ * the units, then zeroes are padded to the right of the subsecond value.
  * If the precision is lower than the units, the subsecond value may be truncated.
  *
  * If the "%a", "%A", "%b", "%B" specifiers are included in the format, the caller
@@ -213,7 +212,7 @@ std::unique_ptr<column> is_timestamp(
  *
  * @throw cudf::logic_error if `timestamps` column parameter is not a timestamp type.
  * @throw cudf::logic_error if the `format` string is empty
- * @throw cudf::logic_error if `names.size()` is an invalid size: 0 or 40 strings
+ * @throw cudf::logic_error if `names.size()` is an invalid size. Must be 0 or 40 strings.
  *
  * @param timestamps Timestamp values to convert.
  * @param format The string specifying output format.
