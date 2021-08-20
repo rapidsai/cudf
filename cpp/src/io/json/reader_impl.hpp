@@ -49,7 +49,7 @@ using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_ma
 /**
  * @brief Class used to parse Json input and convert it into gdf columns.
  */
-class reader::impl {
+class reader_impl {
  public:
  private:
   const json_reader_options options_{};
@@ -187,9 +187,9 @@ class reader::impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    */
-  explicit impl(json_reader_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+  explicit reader_impl(json_reader_options const& options,
+                       rmm::cuda_stream_view stream,
+                       rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Read an entire set or a subset of data from the source
