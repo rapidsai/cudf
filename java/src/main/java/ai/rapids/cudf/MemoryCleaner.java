@@ -277,6 +277,10 @@ public final class MemoryCleaner {
     all.add(new CleanerWeakReference(expr, cleaner, collected, false));
   }
 
+  static void register(HashJoin hashJoin, Cleaner cleaner) {
+    all.add(new CleanerWeakReference(hashJoin, cleaner, collected, true));
+  }
+
   /**
    * This is not 100% perfect and we can still run into situations where RMM buffers were not
    * collected and this returns false because of thread race conditions. This is just a best effort.
