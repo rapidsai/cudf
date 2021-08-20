@@ -759,10 +759,32 @@ struct operator_functor<ast_operator::NOT, false> {
   }
 };
 
+/*
+ * The default specialization of nullable operators is to fall back to the non-nullable
+ * implementation
+ */
 template <ast_operator op>
 struct operator_functor<op, true> : operator_functor<op, false> {
   using operator_functor<op, false>::arity;
-  using operator_functor<op, false>::operator();
+  // using operator_functor<op, false>::operator();
+  template <typename LHS,
+            typename RHS,
+            std::size_t arity_placeholder             = arity,
+            std::enable_if_t<arity_placeholder == 2>* = nullptr>
+  CUDA_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
+    -> decltype(operator_functor<op, false>::operator()(lhs, rhs))
+  {
+    return operator_functor<op, false>::operator()(lhs, rhs);
+  }
+
+  template <typename Input,
+            std::size_t arity_placeholder             = arity,
+            std::enable_if_t<arity_placeholder == 1>* = nullptr>
+  CUDA_DEVICE_CALLABLE auto operator()(Input input)
+    -> decltype(operator_functor<op, false>::operator()(input))
+  {
+    return operator_functor<op, false>::operator()(input);
+  }
 };
 
 /**
@@ -774,7 +796,7 @@ struct operator_functor<op, true> : operator_functor<op, false> {
  *
  * @tparam OperatorFunctor Binary operator functor.
  */
-template <typename OperatorFunctor, bool has_nulls>
+template <typename OperatorFunctor>
 struct single_dispatch_binary_operator_types {
   template <typename LHS,
             typename F,
@@ -782,9 +804,7 @@ struct single_dispatch_binary_operator_types {
             std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, LHS>>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
   {
-    f.template operator()<OperatorFunctor,
-                          possibly_null_value_t<LHS, has_nulls>,
-                          possibly_null_value_t<LHS, has_nulls>>(std::forward<Ts>(args)...);
+    f.template operator()<OperatorFunctor, LHS, LHS>(std::forward<Ts>(args)...);
   }
 
   template <typename LHS,
@@ -829,7 +849,7 @@ struct type_dispatch_binary_op {
     // Single dispatch (assume lhs_type == rhs_type)
     type_dispatcher(
       lhs_type,
-      detail::single_dispatch_binary_operator_types<operator_functor<op, has_nulls>, has_nulls>{},
+      detail::single_dispatch_binary_operator_types<operator_functor<op, has_nulls>>{},
       std::forward<F>(f),
       std::forward<Ts>(args)...);
   }
