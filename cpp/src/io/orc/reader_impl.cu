@@ -460,7 +460,7 @@ class aggregate_orc_metadata {
           ProtobufReader(sf_data, sf_length)
             .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
           mapping.stripe_info[i].second = &per_file_metadata[mapping.source_idx].stripefooters[i];
-          if (stripe->indexLength == 0) row_grp_idx_present = false;
+          if (stripe->indexLength == 0) { row_grp_idx_present = false; }
         }
       }
     }
@@ -1412,7 +1412,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
         // Extract information to process nested child columns
         if (nested_col.size()) {
-          if (not is_stream_empty) scan_null_counts(chunks, null_count_prefix_sums[level], stream);
+          if (not is_stream_empty) {
+            scan_null_counts(chunks, null_count_prefix_sums[level], stream);
+          }
           row_groups.device_to_host(stream, true);
           aggregate_child_meta(chunks, row_groups, out_buffers[level], nested_col, level);
         }
