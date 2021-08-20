@@ -505,17 +505,47 @@ public final class Table implements AutoCloseable {
   private static native long[] leftJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
+  private static native long leftJoinRowCount(long leftTable, long rightHashJoin,
+                                              boolean nullsEqual) throws CudfException;
+
+  private static native long[] leftHashJoinGatherMaps(long leftTable, long rightHashJoin,
+                                                      boolean nullsEqual) throws CudfException;
+
+  private static native long[] leftHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
+                                                               boolean nullsEqual,
+                                                               long outputRowCount) throws CudfException;
+
   private static native long[] innerJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                          int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
   private static native long[] innerJoinGatherMaps(long leftKeys, long rightKeys,
                                                    boolean compareNullsEqual) throws CudfException;
 
+  private static native long innerJoinRowCount(long table, long hashJoin,
+                                               boolean nullsEqual) throws CudfException;
+
+  private static native long[] innerHashJoinGatherMaps(long table, long hashJoin,
+                                                       boolean nullsEqual) throws CudfException;
+
+  private static native long[] innerHashJoinGatherMapsWithCount(long table, long hashJoin,
+                                                                boolean nullsEqual,
+                                                                long outputRowCount) throws CudfException;
+
   private static native long[] fullJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                          int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
   private static native long[] fullJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
+
+  private static native long fullJoinRowCount(long leftTable, long rightHashJoin,
+                                              boolean nullsEqual) throws CudfException;
+
+  private static native long[] fullHashJoinGatherMaps(long leftTable, long rightHashJoin,
+                                                      boolean nullsEqual) throws CudfException;
+
+  private static native long[] fullHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
+                                                               boolean nullsEqual,
+                                                               long outputRowCount) throws CudfException;
 
   private static native long[] leftSemiJoin(long leftTable, int[] leftJoinCols, long rightTable,
       int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
@@ -2041,6 +2071,69 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes the number of rows resulting from a left equi-join between two tables.
+   * It is assumed this table instance holds the key columns from the left table, and the
+   * {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return row count of the join result
+   */
+  public long leftJoinRowCount(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    return leftJoinRowCount(getNativeView(), rightHash.getNativeView(),
+        rightHash.getCompareNulls());
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return left and right table gather maps
+   */
+  public GatherMap[] leftJoinGatherMaps(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftHashJoinGatherMaps(getNativeView(), rightHash.getNativeView(),
+            rightHash.getCompareNulls());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #leftJoinRowCount(HashJoin)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightHash hash table built from join key columns from the right table
+   * @param outputRowCount number of output rows in the join result
+   * @return left and right table gather maps
+   */
+  public GatherMap[] leftJoinGatherMaps(HashJoin rightHash, long outputRowCount) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftHashJoinGatherMapsWithCount(getNativeView(), rightHash.getNativeView(),
+            rightHash.getCompareNulls(), outputRowCount);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
    * Computes the number of rows from the result of a left join between two tables when a
    * conditional expression is true. It is assumed this table instance holds the columns from
    * the left table, and the table argument represents the columns from the right table.
@@ -2121,6 +2214,67 @@ public final class Table implements AutoCloseable {
     }
     long[] gatherMapData =
         innerJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the number of rows resulting from an inner equi-join between two tables.
+   * @param otherHash hash table built from join key columns from the other table
+   * @return row count of the join result
+   */
+  public long innerJoinRowCount(HashJoin otherHash) {
+    if (getNumberOfColumns() != otherHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "otherKeys: " + otherHash.getNumberOfColumns());
+    }
+    return innerJoinRowCount(getNativeView(), otherHash.getNativeView(),
+        otherHash.getCompareNulls());
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return left and right table gather maps
+   */
+  public GatherMap[] innerJoinGatherMaps(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        innerHashJoinGatherMaps(getNativeView(), rightHash.getNativeView(),
+            rightHash.getCompareNulls());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #innerJoinRowCount(HashJoin)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightHash hash table built from join key columns from the right table
+   * @param outputRowCount number of output rows in the join result
+   * @return left and right table gather maps
+   */
+  public GatherMap[] innerJoinGatherMaps(HashJoin rightHash, long outputRowCount) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        innerHashJoinGatherMapsWithCount(getNativeView(), rightHash.getNativeView(),
+            rightHash.getCompareNulls(), outputRowCount);
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2206,6 +2360,72 @@ public final class Table implements AutoCloseable {
     }
     long[] gatherMapData =
         fullJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the number of rows resulting from a full equi-join between two tables.
+   * It is assumed this table instance holds the key columns from the left table, and the
+   * {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Note that unlike {@link #leftJoinRowCount(HashJoin)} and {@link #innerJoinRowCount(HashJoin),
+   * this will perform some redundant calculations compared to
+   * {@link #fullJoinGatherMaps(HashJoin, long)}.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return row count of the join result
+   */
+  public long fullJoinRowCount(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    return fullJoinRowCount(getNativeView(), rightHash.getNativeView(),
+        rightHash.getCompareNulls());
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a full equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the full join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return left and right table gather maps
+   */
+  public GatherMap[] fullJoinGatherMaps(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        fullHashJoinGatherMaps(getNativeView(), rightHash.getNativeView(),
+            rightHash.getCompareNulls());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a full equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the full join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #fullJoinRowCount(HashJoin)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightHash hash table built from join key columns from the right table
+   * @param outputRowCount number of output rows in the join result
+   * @return left and right table gather maps
+   */
+  public GatherMap[] fullJoinGatherMaps(HashJoin rightHash, long outputRowCount) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        fullHashJoinGatherMapsWithCount(getNativeView(), rightHash.getNativeView(),
+            rightHash.getCompareNulls(), outputRowCount);
     return buildJoinGatherMaps(gatherMapData);
   }
 

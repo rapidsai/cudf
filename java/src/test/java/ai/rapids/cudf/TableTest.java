@@ -30,10 +30,6 @@ import ai.rapids.cudf.ast.BinaryOperator;
 import ai.rapids.cudf.ast.ColumnReference;
 import ai.rapids.cudf.ast.CompiledExpression;
 import ai.rapids.cudf.ast.TableReference;
-import org.apache.arrow.memory.RootAllocator;
-import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.ipc.ArrowFileReader;
-import org.apache.arrow.vector.ipc.SeekableReadChannel;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -1501,6 +1497,102 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testLeftHashJoinGatherMaps() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         HashJoin rightHash = new HashJoin(rightKeys, false);
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2,   3,   4,   5,   6, 7, 8, 9)
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 3)
+             .build()) {
+      GatherMap[] maps = leftKeys.leftJoinGatherMaps(rightHash);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testLeftHashJoinGatherMapsWithCount() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         HashJoin rightHash = new HashJoin(rightKeys, false);
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2,   3,   4,   5,   6, 7, 8, 9)
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 3)
+             .build()) {
+      long rowCount = leftKeys.leftJoinRowCount(rightHash);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = leftKeys.leftJoinGatherMaps(rightHash, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testLeftHashJoinGatherMapsNulls() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         HashJoin rightHash = new HashJoin(rightKeys, true);
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2,   3,   4,   5,   6, 7, 7, 8, 8, 9) // left
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.leftJoinGatherMaps(rightHash);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testLeftHashJoinGatherMapsNullsWithCount() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         HashJoin rightHash = new HashJoin(rightKeys,true);
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2,   3,   4,   5,   6, 7, 7, 8, 8, 9) // left
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
+             .build()) {
+      long rowCount = leftKeys.leftJoinRowCount(rightHash);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = leftKeys.leftJoinGatherMaps(rightHash, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
   void testConditionalLeftJoinGatherMaps() {
     final int inv = Integer.MIN_VALUE;
     BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
@@ -1655,6 +1747,98 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testInnerHashJoinGatherMaps() {
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         HashJoin rightHash = new HashJoin(rightKeys, false);
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8, 9) // left
+             .column(2, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.innerJoinGatherMaps(rightHash);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testInnerHashJoinGatherMapsWithCount() {
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         HashJoin rightHash = new HashJoin(rightKeys, false);
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8, 9) // left
+             .column(2, 0, 1, 3) // right
+             .build()) {
+      long rowCount = leftKeys.innerJoinRowCount(rightHash);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = leftKeys.innerJoinGatherMaps(rightHash, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testInnerHashJoinGatherMapsNulls() {
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         HashJoin rightHash = new HashJoin(rightKeys, true);
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 7, 8, 8, 9) // left
+             .column(2, 0, 1, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.innerJoinGatherMaps(rightHash);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testInnerHashJoinGatherMapsNullsWithCount() {
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         HashJoin rightHash = new HashJoin(rightKeys, true);
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 7, 8, 8, 9) // left
+             .column(2, 0, 1, 0, 1, 3) // right
+             .build()) {
+      long rowCount = leftKeys.innerJoinRowCount(rightHash);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = leftKeys.innerJoinGatherMaps(rightHash, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
   void testConditionalInnerJoinGatherMaps() {
     BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
@@ -1796,6 +1980,102 @@ public class TableTest extends CudfTestBase {
              .column(  4,   5, inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
              .build()) {
       GatherMap[] maps = leftKeys.fullJoinGatherMaps(rightKeys, true);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testFullHashJoinGatherMaps() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, null, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, null).build();
+         HashJoin rightHash = new HashJoin(rightKeys, false);
+         Table expected = new Table.TestBuilder()
+             .column(inv, inv,   0,   1, 2,   3,   4,   5,   6, 7, 8, 9) // left
+             .column(  4,   5, inv, inv, 2, inv, inv, inv, inv, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.fullJoinGatherMaps(rightHash);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testFullHashJoinGatherMapsWithCount() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, null, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, null).build();
+         HashJoin rightHash = new HashJoin(rightKeys, false);
+         Table expected = new Table.TestBuilder()
+             .column(inv, inv,   0,   1, 2,   3,   4,   5,   6, 7, 8, 9) // left
+             .column(  4,   5, inv, inv, 2, inv, inv, inv, inv, 0, 1, 3) // right
+             .build()) {
+      long rowCount = leftKeys.fullJoinRowCount(rightHash);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = leftKeys.fullJoinGatherMaps(rightHash, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testFullHashJoinGatherMapsNulls() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         HashJoin rightHash = new HashJoin(rightKeys, true);
+         Table expected = new Table.TestBuilder()
+             .column(inv, inv,   0,   1, 2,   3,   4,   5,   6, 7, 7, 8, 8, 9) // left
+             .column(  4,   5, inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.fullJoinGatherMaps(rightHash);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testFullHashJoinGatherMapsNullsWithCount() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         HashJoin rightHash = new HashJoin(rightKeys, true);
+         Table expected = new Table.TestBuilder()
+             .column(inv, inv,   0,   1, 2,   3,   4,   5,   6, 7, 7, 8, 8, 9) // left
+             .column(  4,   5, inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
+             .build()) {
+      long rowCount = leftKeys.fullJoinRowCount(rightHash);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = leftKeys.fullJoinGatherMaps(rightHash, rowCount);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
