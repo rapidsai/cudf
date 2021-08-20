@@ -19,12 +19,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-// TODO: Figure out why these are necessary; I think it's because the type
-// dispatcher combined with thrust::optional for list and struct views leads to
-// introspection that is not possible without the definitions of these classes
-// available, but that is unfortunate and should be avoidable.
-#include <cudf/lists/list_view.cuh>
-#include <cudf/structs/struct_view.hpp>
 
 #include <cuda/std/type_traits>
 
