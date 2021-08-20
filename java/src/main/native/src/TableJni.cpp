@@ -1162,7 +1162,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv *env, jclass
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
-    JNIEnv *env, jclass, jobjectArray col_names, jobjectArray data_types,
+    JNIEnv *env, jclass, jobjectArray col_names, jintArray j_types, jintArray j_scales,
     jobjectArray filter_col_names, jstring inputfilepath, jlong buffer, jlong buffer_length,
     jint header_row, jbyte delim, jbyte quote, jbyte comment, jobjectArray null_values,
     jobjectArray true_values, jobjectArray false_values) {
@@ -1183,7 +1183,23 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
   try {
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jstringArray n_col_names(env, col_names);
-    cudf::jni::native_jstringArray n_data_types(env, data_types);
+    cudf::jni::native_jintArray n_types(env, j_types);
+    cudf::jni::native_jintArray n_scales(env, j_scales);
+    if (n_types.is_null() != n_scales.is_null()) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "types and scales must match null",
+                    NULL);
+    }
+    std::vector<cudf::data_type> data_types;
+    if (!n_types.is_null()) {
+      if (n_types.size() != n_scales.size()) {
+        JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "types and scales must match size",
+                      NULL);
+      }
+      data_types.reserve(n_types.size());
+      for (int index = 0; index < n_types.size(); index++) {
+        data_types.emplace_back(cudf::jni::make_data_type(n_types[index], n_scales[index]));
+      }
+    }
 
     cudf::jni::native_jstring filename(env, inputfilepath);
     if (!read_buffer && filename.is_empty()) {
@@ -1207,7 +1223,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
                                             .delimiter(delim)
                                             .header(header_row)
                                             .names(n_col_names.as_cpp_vector())
-                                            .dtypes(n_data_types.as_cpp_vector())
+                                            .dtypes(data_types)
                                             .use_cols_names(n_filter_col_names.as_cpp_vector())
                                             .true_values(n_true_values.as_cpp_vector())
                                             .false_values(n_false_values.as_cpp_vector())
@@ -1217,6 +1233,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
                                             .quotechar(quote)
                                             .comment(comment)
                                             .build();
+
     cudf::io::table_with_metadata result = cudf::io::read_csv(opts);
     return cudf::jni::convert_table_for_return(env, result.tbl);
   }
@@ -2328,11 +2345,19 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
     for (int i = 0; i < n_values.size(); i++) {
       cudf::groupby::aggregation_request req;
       int col_index = n_values[i];
+
+      cudf::groupby_aggregation *agg =
+          dynamic_cast<cudf::groupby_aggregation *>(n_agg_instances[i]);
+      JNI_ARG_CHECK(env, agg != nullptr, "aggregation is not an instance of groupby_aggregation",
+                    nullptr);
+      std::unique_ptr<cudf::groupby_aggregation> cloned(
+          dynamic_cast<cudf::groupby_aggregation *>(agg->clone().release()));
+
       if (col_index == previous_index) {
-        requests.back().aggregations.push_back(n_agg_instances[i]->clone());
+        requests.back().aggregations.push_back(std::move(cloned));
       } else {
         req.values = n_input_table->column(col_index);
-        req.aggregations.push_back(n_agg_instances[i]->clone());
+        req.aggregations.push_back(std::move(cloned));
         requests.push_back(std::move(req));
       }
       previous_index = col_index;
@@ -2384,17 +2409,25 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByScan(
 
     // Aggregates are passed in already grouped by column, so we just need to fill it in
     // as we go.
-    std::vector<cudf::groupby::aggregation_request> requests;
+    std::vector<cudf::groupby::scan_request> requests;
 
     int previous_index = -1;
     for (int i = 0; i < n_values.size(); i++) {
-      cudf::groupby::aggregation_request req;
+      cudf::groupby::scan_request req;
       int col_index = n_values[i];
+
+      cudf::groupby_scan_aggregation *agg =
+          dynamic_cast<cudf::groupby_scan_aggregation *>(n_agg_instances[i]);
+      JNI_ARG_CHECK(env, agg != nullptr,
+                    "aggregation is not an instance of groupby_scan_aggregation", nullptr);
+      std::unique_ptr<cudf::groupby_scan_aggregation> cloned(
+          dynamic_cast<cudf::groupby_scan_aggregation *>(agg->clone().release()));
+
       if (col_index == previous_index) {
-        requests.back().aggregations.push_back(n_agg_instances[i]->clone());
+        requests.back().aggregations.push_back(std::move(cloned));
       } else {
         req.values = n_input_table->column(col_index);
-        req.aggregations.push_back(n_agg_instances[i]->clone());
+        req.aggregations.push_back(std::move(cloned));
         requests.push_back(std::move(req));
       }
       previous_index = col_index;

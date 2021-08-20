@@ -67,7 +67,7 @@ TYPED_TEST(groupby_mean_test, basic)
   fixed_width_column_wrapper<R, RT> expect_vals(expect_v.cbegin(), expect_v.cend());
   // clang-format on
 
-  auto agg = cudf::make_mean_aggregation();
+  auto agg = cudf::make_mean_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -82,7 +82,7 @@ TYPED_TEST(groupby_mean_test, empty_cols)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_mean_aggregation();
+  auto agg = cudf::make_mean_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -97,7 +97,7 @@ TYPED_TEST(groupby_mean_test, zero_valid_keys)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_mean_aggregation();
+  auto agg = cudf::make_mean_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -112,7 +112,7 @@ TYPED_TEST(groupby_mean_test, zero_valid_values)
   fixed_width_column_wrapper<K> expect_keys{1};
   fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
-  auto agg = cudf::make_mean_aggregation();
+  auto agg = cudf::make_mean_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -135,7 +135,7 @@ TYPED_TEST(groupby_mean_test, null_keys_and_values)
   fixed_width_column_wrapper<R, RT> expect_vals(expect_v.cbegin(), expect_v.cend(), {1, 1, 1, 0});
   // clang-format on
 
-  auto agg = cudf::make_mean_aggregation();
+  auto agg = cudf::make_mean_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 // clang-format on
@@ -156,7 +156,8 @@ TEST_F(groupby_dictionary_mean_test, basic)
   fixed_width_column_wrapper<R, double> expect_vals({9. / 3, 19. / 4, 17. / 3});
   // clang-format on
 
-  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_mean_aggregation());
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals, cudf::make_mean_aggregation<groupby_aggregation>());
 }
 
 }  // namespace test
