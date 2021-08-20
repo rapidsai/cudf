@@ -1444,6 +1444,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
   if (not out_columns.empty()) {
     printf("RGSL: null count is %d \n", out_columns[0]->null_count());
+    if (out_columns[0]->num_children() == 2) {
+      printf("RGSL: null count of child 0  %d \n", out_columns[0]->child(0).null_count());
+      printf("RGSL: null count of child 1  %d \n", out_columns[0]->child(1).null_count());
+    }
     auto col = out_columns[0]->view();
   }
   // Return column names (must match order of returned columns)
