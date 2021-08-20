@@ -43,7 +43,12 @@ def test_array_func_cudf_series(np_ar, func):
 )
 @pytest.mark.parametrize(
     "func",
-    [lambda x: np.mean(x), lambda x: np.sum(x), lambda x: np.var(x, ddof=1)],
+    [
+        lambda x: np.mean(x),
+        lambda x: np.sum(x),
+        lambda x: np.var(x, ddof=1),
+        lambda x: np.dot(x, x.transpose()),
+    ],
 )
 def test_array_func_cudf_dataframe(pd_df, func):
     cudf_df = cudf.from_pandas(pd_df)
@@ -73,7 +78,7 @@ def test_array_func_missing_cudf_dataframe(pd_df, func):
 # we only implement sum among all numpy non-ufuncs
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize("np_ar", [np.random.random(100)])
-@pytest.mark.parametrize("func", [lambda x: np.sum(x)])
+@pytest.mark.parametrize("func", [lambda x: np.sum(x), lambda x: np.dot(x, x)])
 def test_array_func_cudf_index(np_ar, func):
     cudf_index = cudf.core.index.as_index(cudf.Series(np_ar))
     expect = func(np_ar)
