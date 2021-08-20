@@ -605,17 +605,11 @@ struct expression_evaluator {
                                possibly_null_value_t<Input, has_nulls> const input,
                                detail::device_data_reference const output) const
     {
-      using OperatorFunctor = detail::operator_functor<op, has_nulls>;
-      using Out             = cuda::std::invoke_result_t<OperatorFunctor, Input>;
-      if constexpr (has_nulls) {
-        auto const result = input.has_value()
-                              ? possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*input))
-                              : possibly_null_value_t<Out, has_nulls>();
-        this->template resolve_output<Out>(output_object, output, output_row_index, result);
-      } else {
-        this->template resolve_output<Out>(
-          output_object, output, output_row_index, OperatorFunctor{}(input));
-      }
+      using OperatorFunctor        = detail::operator_functor<op, has_nulls>;
+      using OperatorFunctorNotNull = detail::operator_functor<op, false>;
+      using Out                    = cuda::std::invoke_result_t<OperatorFunctorNotNull, Input>;
+      this->template resolve_output<Out>(
+        output_object, output, output_row_index, OperatorFunctor{}(input));
     }
 
     template <ast_operator op,
@@ -667,33 +661,28 @@ struct expression_evaluator {
                                possibly_null_value_t<RHS, has_nulls> const rhs,
                                detail::device_data_reference const output) const
     {
-      using OperatorFunctor = detail::operator_functor<op, has_nulls>;
-      using Out             = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
-      if constexpr (has_nulls) {
-        if constexpr (op == ast_operator::EQUAL) {
-          // Special handling of the equality operator based on what kind
-          // of null handling was requested.
-          possibly_null_value_t<Out, has_nulls> result;
-          if (!lhs.has_value() && !rhs.has_value()) {
-            // Case 1: Both null, so the output is based on compare_nulls.
-            result = possibly_null_value_t<Out, has_nulls>(this->evaluator.compare_nulls ==
-                                                           null_equality::EQUAL);
-          } else if (lhs.has_value() && rhs.has_value()) {
-            // Case 2: Neither is null, so the output is given by the operation.
-            result = possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*lhs, *rhs));
-          } else {
-            // Case 3: One value is null, while the other is not, so we simply propagate nulls.
-            result = possibly_null_value_t<Out, has_nulls>();
-          }
-          this->template resolve_output<Out>(output_object, output, output_row_index, result);
+      if constexpr (has_nulls && (op == ast_operator::EQUAL)) {
+        using OperatorFunctor = detail::operator_functor<op, false>;
+        using Out             = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
+        // Special handling of the equality operator based on what kind
+        // of null handling was requested.
+        possibly_null_value_t<Out, has_nulls> result;
+        if (!lhs.has_value() && !rhs.has_value()) {
+          // Case 1: Both null, so the output is based on compare_nulls.
+          result = possibly_null_value_t<Out, has_nulls>(this->evaluator.compare_nulls ==
+                                                         null_equality::EQUAL);
+        } else if (lhs.has_value() && rhs.has_value()) {
+          // Case 2: Neither is null, so the output is given by the operation.
+          result = possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*lhs, *rhs));
         } else {
-          // Default behavior for all other operators is to propagate nulls.
-          auto result = (lhs.has_value() && rhs.has_value())
-                          ? possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*lhs, *rhs))
-                          : possibly_null_value_t<Out, has_nulls>();
-          this->template resolve_output<Out>(output_object, output, output_row_index, result);
+          // Case 3: One value is null, while the other is not, so we simply propagate nulls.
+          result = possibly_null_value_t<Out, has_nulls>();
         }
+        this->template resolve_output<Out>(output_object, output, output_row_index, result);
       } else {
+        using OperatorFunctor        = detail::operator_functor<op, has_nulls>;
+        using OperatorFunctorNotNull = detail::operator_functor<op, false>;
+        using Out                    = cuda::std::invoke_result_t<OperatorFunctorNotNull, LHS, RHS>;
         this->template resolve_output<Out>(
           output_object, output, output_row_index, OperatorFunctor{}(lhs, rhs));
       }

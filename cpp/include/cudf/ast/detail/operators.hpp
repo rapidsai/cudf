@@ -771,19 +771,25 @@ struct operator_functor<op, true> : operator_functor<op, false> {
             typename RHS,
             std::size_t arity_placeholder             = arity,
             std::enable_if_t<arity_placeholder == 2>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
-    -> decltype(operator_functor<op, false>::operator()(lhs, rhs))
+  CUDA_DEVICE_CALLABLE auto operator()(LHS const lhs, RHS const rhs)
+    -> possibly_null_value_t<decltype(operator_functor<op, false>::operator()(*lhs, *rhs)), true>
   {
-    return operator_functor<op, false>::operator()(lhs, rhs);
+    using Out =
+      possibly_null_value_t<decltype(operator_functor<op, false>::operator()(*lhs, *rhs)), true>;
+    return (lhs.has_value() && rhs.has_value())
+             ? Out(operator_functor<op, false>::operator()(*lhs, *rhs))
+             : Out();
   }
 
   template <typename Input,
             std::size_t arity_placeholder             = arity,
             std::enable_if_t<arity_placeholder == 1>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(Input input)
-    -> decltype(operator_functor<op, false>::operator()(input))
+  CUDA_DEVICE_CALLABLE auto operator()(Input const input)
+    -> possibly_null_value_t<decltype(operator_functor<op, false>::operator()(*input)), true>
   {
-    return operator_functor<op, false>::operator()(input);
+    using Out =
+      possibly_null_value_t<decltype(operator_functor<op, false>::operator()(*input)), true>;
+    return input.has_value() ? Out(operator_functor<op, false>::operator()(*input)) : Out();
   }
 };
 

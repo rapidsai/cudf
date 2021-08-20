@@ -298,6 +298,21 @@ TEST_F(TransformTest, UnaryNot)
   cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
+TEST_F(TransformTest, UnaryNotNulls)
+{
+  auto c_0   = column_wrapper<int32_t>{{3, 0, 0, 50}, {0, 0, 1, 1}};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref_0 = cudf::ast::column_reference(0);
+
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::NOT, col_ref_0);
+
+  auto result   = cudf::compute_column(table, expression);
+  auto expected = column_wrapper<bool>{{false, true, false, false}, {0, 0, 1, 1}};
+
+  // cudf::test::expect_columns_equal(expected, result->view(), verbosity);
+}
+
 TEST_F(TransformTest, UnaryTrigonometry)
 {
   auto c_0   = column_wrapper<double>{0.0, M_PI / 4, M_PI / 3};
