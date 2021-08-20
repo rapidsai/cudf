@@ -25,13 +25,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-// Forward declarations
-namespace arrow {
-namespace io {
-class RandomAccessFile;
-}
-}  // namespace arrow
-
 namespace cudf {
 namespace io {
 namespace detail {
