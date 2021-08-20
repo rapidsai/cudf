@@ -23,15 +23,9 @@ from distutils.sysconfig import get_python_lib
 
 import numpy as np
 import pyarrow as pa
-
 import setuptools.command.build_ext
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
-
-try:
-    from Cython.Distutils.build_ext import new_build_ext as build_ext
-except ImportError:
-    from setuptools.command.build_ext import build_ext
 
 import versioneer
 
@@ -123,8 +117,7 @@ CUDF_ROOT = os.environ.get(
 )
 
 
-class build_ext_and_proto_no_debug(build_ext):
-
+class build_ext_and_proto_no_debug(_build_ext):
     def build_extensions(self):
         def remove_flags(compiler, *flags):
             for flag in flags:
@@ -134,6 +127,7 @@ class build_ext_and_proto_no_debug(build_ext):
                     )
                 except Exception:
                     pass
+
         # Full optimization
         self.compiler.compiler_so.append("-O3")
         # Silence '-Wunknown-pragmas' warning
