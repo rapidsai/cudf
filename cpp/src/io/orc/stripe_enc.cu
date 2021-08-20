@@ -731,12 +731,13 @@ __global__ void __launch_bounds__(block_size)
         min(min(s->present_rows - s->cur_row, maxnumvals - max(s->numvals, s->numlengths)),
             encode_block_size);
       auto const row_in_group = s->cur_row + t;
-      auto const row = s->chunk.start_row + row_in_group;
-      auto const valid    = [&](){if (t >= nrows) return false;
+      auto const row          = s->chunk.start_row + row_in_group;
+      auto const valid        = [&]() {
+        if (t >= nrows) return false;
         if (s->chunk.leaf_column->null_mask() == nullptr) return true;
         return bit_is_set(s->chunk.leaf_column->null_mask(), row);
       }();
-      s->buf.u32[t]           = valid ? 1u : 0u;
+      s->buf.u32[t] = valid ? 1u : 0u;
 
       // TODO: Could use a faster reduction relying on _popc() for the initial phase
       lengths_to_positions(s->buf.u32, encode_block_size, t);

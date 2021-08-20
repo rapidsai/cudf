@@ -1181,6 +1181,7 @@ orc_table_view make_orc_table_view(table_view const& table,
 {
   std::vector<orc_column_view> orc_columns;
   std::vector<uint32_t> str_col_indexes;
+  std::vector<rmm::device_uvector<bitmask_type>> pushdown_null_masks;
 
   std::function<void(column_view const&, orc_column_view*, column_in_metadata const&)>
     append_orc_column =
@@ -1191,14 +1192,21 @@ orc_table_view make_orc_table_view(table_view const& table,
         auto const new_col_idx = orc_columns.size();
         orc_columns.emplace_back(new_col_idx, str_idx, parent_col, col, col_meta);
         if (orc_columns[new_col_idx].is_string()) { str_col_indexes.push_back(new_col_idx); }
-        if (col.type().id() == type_id::LIST)
+
+        if (col.type().id() == type_id::LIST) {
+          pushdown_null_masks.emplace_back(col.child(lists_column_view::child_column_index).size(),
+                                           stream);
           append_orc_column(col.child(lists_column_view::child_column_index),
                             &orc_columns[new_col_idx],
                             col_meta.child(lists_column_view::child_column_index));
-        if (col.type().id() == type_id::STRUCT)
+        } else if (col.type().id() == type_id::STRUCT) {
+          pushdown_null_masks.emplace_back(col.size(), stream);
           for (auto child_idx = 0; child_idx != col.num_children(); ++child_idx)
             append_orc_column(
               col.child(child_idx), &orc_columns[new_col_idx], col_meta.child(child_idx));
+        } else {
+          pushdown_null_masks.emplace_back(0, stream);  // empty mask, will be unused
+        }
       };
 
   for (auto col_idx = 0; col_idx < table.num_columns(); ++col_idx) {
