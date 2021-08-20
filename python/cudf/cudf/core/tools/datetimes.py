@@ -122,7 +122,8 @@ def to_datetime(
 
     if yearfirst:
         raise NotImplementedError("yearfirst support is not yet implemented")
-
+    if format is not None and '%f' in format:
+        format = format.replace('%f', '%9f')
     try:
         if isinstance(arg, cudf.DataFrame):
             # we require at least Ymd
