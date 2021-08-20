@@ -259,7 +259,6 @@ rmm::device_uvector<uint64_t> reader_impl::find_record_starts(rmm::cuda_stream_v
   // Currently, ignoring lineterminations within quotes is handled by recording the records of both,
   // and then filtering out the records that is a quotechar or a linetermination within a quotechar
   // pair.
-  if (allow_newlines_in_strings_) { chars_to_count.push_back('\"'); }
   // If not starting at an offset, add an extra row to account for the first row in the file
   cudf::size_type prefilter_count = ((byte_range_offset_ == 0) ? 1 : 0);
   if (load_whole_source_) {
@@ -278,7 +277,6 @@ rmm::device_uvector<uint64_t> reader_impl::find_record_starts(rmm::cuda_stream_v
   }
 
   std::vector<char> chars_to_find{'\n'};
-  if (allow_newlines_in_strings_) { chars_to_find.push_back('\"'); }
   // Passing offset = 1 to return positions AFTER the found character
   if (load_whole_source_) {
     find_all_from_set(data_, chars_to_find, 1, find_result_ptr, stream);
@@ -292,27 +290,6 @@ rmm::device_uvector<uint64_t> reader_impl::find_record_starts(rmm::cuda_stream_v
   thrust::sort(rmm::exec_policy(stream), rec_starts.begin(), rec_starts.end());
 
   auto filtered_count = prefilter_count;
-  if (allow_newlines_in_strings_) {
-    auto h_rec_starts = cudf::detail::make_std_vector_sync(rec_starts, stream);
-    bool quotation    = false;
-    for (cudf::size_type i = 1; i < prefilter_count; ++i) {
-      if (uncomp_data_[h_rec_starts[i] - 1] == '\"') {
-        quotation       = !quotation;
-        h_rec_starts[i] = uncomp_size_;
-        filtered_count--;
-      } else if (quotation) {
-        h_rec_starts[i] = uncomp_size_;
-        filtered_count--;
-      }
-    }
-    CUDA_TRY(cudaMemcpyAsync(rec_starts.data(),
-                             h_rec_starts.data(),
-                             h_rec_starts.size() * sizeof(uint64_t),
-                             cudaMemcpyDefault,
-                             stream.value()));
-    thrust::sort(rmm::exec_policy(stream), rec_starts.begin(), rec_starts.end());
-    stream.synchronize();
-  }
 
   // Exclude the ending newline as it does not precede a record start
   if (uncomp_data_[uncomp_size_ - 1] == '\n') { filtered_count--; }

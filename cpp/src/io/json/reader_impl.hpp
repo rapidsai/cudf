@@ -72,7 +72,6 @@ class reader_impl {
   std::unique_ptr<rmm::device_scalar<col_map_type>> d_key_col_map_;
 
   // parsing options
-  const bool allow_newlines_in_strings_ = false;
   parse_options opts_{',', '\n', '\"', '.'};
 
   /**
