@@ -352,9 +352,9 @@ void reader_impl::upload_data_to_device(json_reader_options const& reader_opts,
   data_ = rmm::device_buffer(uncomp_data_ + start_offset, bytes_to_upload, stream);
 }
 
-void reader_impl::set_column_names(parse_options_view const& parse_opts,
-                                   device_span<uint64_t const> rec_starts,
-                                   rmm::cuda_stream_view stream)
+std::vector<std::string> reader_impl::get_column_names(parse_options_view const& parse_opts,
+                                                       device_span<uint64_t const> rec_starts,
+                                                       rmm::cuda_stream_view stream)
 {
   // If file only contains one row, use the file size for the row size
   uint64_t first_row_len = data_.size() / sizeof(char);
@@ -385,12 +385,13 @@ void reader_impl::set_column_names(parse_options_view const& parse_opts,
   // If the first opening bracket is '{', assume object format
   if (first_curly_bracket < first_square_bracket) {
     // use keys as column names if input rows are objects
-    auto keys_desc         = get_json_object_keys_hashes(parse_opts, rec_starts, stream);
-    metadata_.column_names = keys_desc.first;
+    auto keys_desc = get_json_object_keys_hashes(parse_opts, rec_starts, stream);
     set_column_map(std::move(keys_desc.second), stream);
+    return keys_desc.first;
   } else {
-    int cols_found = 0;
-    bool quotation = false;
+    int cols_found    = 0;
+    bool quotation    = false;
+    auto column_names = std::vector<std::string>();
     for (size_t pos = 0; pos < first_row.size(); ++pos) {
       // Flip the quotation flag if current character is a quotechar
       if (first_row[pos] == parse_opts.quotechar) {
@@ -399,16 +400,17 @@ void reader_impl::set_column_names(parse_options_view const& parse_opts,
       // Check if end of a column/row
       else if (pos == first_row.size() - 1 ||
                (!quotation && first_row[pos] == parse_opts.delimiter)) {
-        metadata_.column_names.emplace_back(std::to_string(cols_found++));
+        column_names.emplace_back(std::to_string(cols_found++));
       }
     }
+    return column_names;
   }
 }
 
 std::vector<data_type> reader_impl::parse_data_types(
-  std::vector<std::string> const& types_as_strings)
+  std::vector<std::string> const& column_names, std::vector<std::string> const& types_as_strings)
 {
-  CUDF_EXPECTS(types_as_strings.size() == metadata_.column_names.size(),
+  CUDF_EXPECTS(types_as_strings.size() == column_names.size(),
                "Need to specify the type of each column.\n");
   std::vector<data_type> dtypes;
   // Assume that the dtype is in dictionary format only if all elements contain a colon
@@ -434,8 +436,8 @@ std::vector<data_type> reader_impl::parse_data_types(
       });
 
     // Using the map here allows O(n log n) complexity
-    std::transform(std::cbegin(metadata_.column_names),
-                   std::cend(metadata_.column_names),
+    std::transform(std::cbegin(column_names),
+                   std::cend(column_names),
                    std::back_inserter(dtypes),
                    [&](auto const& column_name) { return col_type_map[column_name]; });
   } else {
@@ -449,6 +451,7 @@ std::vector<data_type> reader_impl::parse_data_types(
 
 std::vector<data_type> reader_impl::get_data_types(json_reader_options const& reader_opts,
                                                    parse_options_view const& parse_opts,
+                                                   std::vector<std::string> const& column_names,
                                                    device_span<uint64_t const> rec_starts,
                                                    rmm::cuda_stream_view stream)
 {
@@ -456,26 +459,28 @@ std::vector<data_type> reader_impl::get_data_types(json_reader_options const& re
     std::visit([](const auto& dtypes) { return dtypes.empty(); }, reader_opts.get_dtypes());
 
   if (!has_to_infer_column_types) {
-    return std::visit(
-      cudf::detail::visitor_overload{
-        [&](const std::vector<data_type>& dtypes) { return dtypes; },
-        [&](const std::map<std::string, data_type>& dtypes) {
-          std::vector<data_type> sorted_dtypes;
-          std::transform(std::cbegin(metadata_.column_names),
-                         std::cend(metadata_.column_names),
-                         std::back_inserter(sorted_dtypes),
-                         [&](auto const& column_name) {
-                           auto const it = dtypes.find(column_name);
-                           CUDF_EXPECTS(it != dtypes.end(), "Must specify types for all columns");
-                           return it->second;
-                         });
-          return sorted_dtypes;
-        },
-        [&](std::vector<std::string> const& dtypes) { return parse_data_types(dtypes); }},
-      reader_opts.get_dtypes());
+    return std::visit(cudf::detail::visitor_overload{
+                        [&](const std::vector<data_type>& dtypes) { return dtypes; },
+                        [&](const std::map<std::string, data_type>& dtypes) {
+                          std::vector<data_type> sorted_dtypes;
+                          std::transform(std::cbegin(column_names),
+                                         std::cend(column_names),
+                                         std::back_inserter(sorted_dtypes),
+                                         [&](auto const& column_name) {
+                                           auto const it = dtypes.find(column_name);
+                                           CUDF_EXPECTS(it != dtypes.end(),
+                                                        "Must specify types for all columns");
+                                           return it->second;
+                                         });
+                          return sorted_dtypes;
+                        },
+                        [&](std::vector<std::string> const& dtypes) {
+                          return parse_data_types(column_names, dtypes);
+                        }},
+                      reader_opts.get_dtypes());
   } else {
     CUDF_EXPECTS(rec_starts.size() != 0, "No data available for data type inference.\n");
-    auto const num_columns       = metadata_.column_names.size();
+    auto const num_columns       = column_names.size();
     auto const do_set_null_count = key_to_col_idx_map_ != nullptr;
 
     auto const h_column_infos = cudf::io::json::gpu::detect_data_types(
@@ -525,6 +530,7 @@ std::vector<data_type> reader_impl::get_data_types(json_reader_options const& re
 
 table_with_metadata reader_impl::convert_data_to_table(parse_options_view const& parse_opts,
                                                        std::vector<data_type> const& dtypes,
+                                                       std::vector<std::string> const& column_names,
                                                        device_span<uint64_t const> rec_starts,
                                                        rmm::cuda_stream_view stream,
                                                        rmm::mr::device_memory_resource* mr)
@@ -606,7 +612,7 @@ table_with_metadata reader_impl::convert_data_to_table(parse_options_view const&
 
   CUDF_EXPECTS(!out_columns.empty(), "No columns created from json input");
 
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata_};
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {column_names}};
 }
 
 /**
@@ -654,14 +660,15 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
   upload_data_to_device(reader_opts, rec_starts, stream);
   CUDF_EXPECTS(data_.size() != 0, "Error uploading input data to the GPU.\n");
 
-  set_column_names(parse_opts.view(), rec_starts, stream);
-  CUDF_EXPECTS(!metadata_.column_names.empty(), "Error determining column names.\n");
+  auto column_names = get_column_names(parse_opts.view(), rec_starts, stream);
 
-  auto dtypes = get_data_types(reader_opts, parse_opts.view(), rec_starts, stream);
+  CUDF_EXPECTS(not column_names.empty(), "Error determining column names.\n");
+
+  auto dtypes = get_data_types(reader_opts, parse_opts.view(), column_names, rec_starts, stream);
 
   CUDF_EXPECTS(not dtypes.empty(), "Error in data type detection.\n");
 
-  return convert_data_to_table(parse_opts.view(), dtypes, rec_starts, stream, mr);
+  return convert_data_to_table(parse_opts.view(), dtypes, column_names, rec_starts, stream, mr);
 }
 
 table_with_metadata read_json(std::vector<std::unique_ptr<cudf::io::datasource>>& sources,
