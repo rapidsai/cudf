@@ -56,8 +56,6 @@ class reader::impl {
 
   rmm::mr::device_memory_resource* mr_ = nullptr;
 
-  std::vector<std::unique_ptr<datasource>> sources_;
-
   const char* uncomp_data_ = nullptr;
   size_t uncomp_size_      = 0;
 
@@ -111,7 +109,8 @@ class reader::impl {
    * @param[in] range_size Bytes to read; use `0` for all remaining data
    * @param[in] range_size_padded Bytes to read with padding; use `0` for all remaining data
    */
-  void ingest_raw_input(std::vector<uint8_t>& buffer,
+  void ingest_raw_input(std::vector<std::unique_ptr<datasource>> const& sources,
+                        std::vector<uint8_t>& buffer,
                         size_t range_offset,
                         size_t range_size,
                         size_t range_size_padded);
@@ -188,20 +187,22 @@ class reader::impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    */
-  explicit impl(std::vector<std::unique_ptr<datasource>>&& sources,
-                json_reader_options const& options,
+  explicit impl(json_reader_options const& options,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Read an entire set or a subset of data from the source
    *
+   * @param[in] sources Input `datasource` objects to read the dataset from
    * @param[in] options Settings for controlling reading behavior
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Table and its metadata
    */
-  table_with_metadata read(json_reader_options const& options, rmm::cuda_stream_view stream);
+  table_with_metadata read(std::vector<std::unique_ptr<datasource>>& sources,
+                           json_reader_options const& options,
+                           rmm::cuda_stream_view stream);
 };
 
 }  // namespace json

@@ -199,22 +199,22 @@ std::pair<std::vector<std::string>, col_map_ptr_type> reader::impl::get_json_obj
           create_col_names_hash_map(sorted_info->get_column(2).view(), stream)};
 }
 
-void reader::impl::ingest_raw_input(std::vector<uint8_t>& buffer,
+void reader::impl::ingest_raw_input(std::vector<std::unique_ptr<datasource>> const& sources,
+                                    std::vector<uint8_t>& buffer,
                                     size_t range_offset,
                                     size_t range_size,
                                     size_t range_size_padded)
 {
   // Iterate through the user defined sources and read the contents into the local buffer
-  CUDF_EXPECTS(!sources_.empty(), "No sources were defined");
   size_t total_source_size = 0;
-  for (const auto& source : sources_) {
+  for (const auto& source : sources) {
     total_source_size += source->size();
   }
-  total_source_size = total_source_size - range_offset;
+  total_source_size = total_source_size - (range_offset * sources.size());
 
   buffer.resize(total_source_size);
   size_t bytes_read = 0;
-  for (const auto& source : sources_) {
+  for (const auto& source : sources) {
     if (!source->is_empty()) {
       auto data_size = (range_size_padded != 0) ? range_size_padded : source->size();
       bytes_read += source->host_read(range_offset, data_size, &buffer[bytes_read]);
@@ -611,11 +611,10 @@ table_with_metadata reader::impl::convert_data_to_table(device_span<uint64_t con
   return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata_};
 }
 
-reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
-                   json_reader_options const& options,
+reader::impl::impl(json_reader_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
-  : options_(options), mr_(mr), sources_(std::move(sources))
+  : options_(options), mr_(mr)
 {
   CUDF_EXPECTS(options_.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
@@ -635,7 +634,8 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
  *
  * @return Table and its metadata
  */
-table_with_metadata reader::impl::read(json_reader_options const& options,
+table_with_metadata reader::impl::read(std::vector<std::unique_ptr<datasource>>& sources,
+                                       json_reader_options const& options,
                                        rmm::cuda_stream_view stream)
 {
   auto range_offset      = options.get_byte_range_offset();
@@ -644,7 +644,7 @@ table_with_metadata reader::impl::read(json_reader_options const& options,
 
   std::vector<uint8_t> buffer;
 
-  ingest_raw_input(buffer, range_offset, range_size, range_size_padded);
+  ingest_raw_input(sources, buffer, range_offset, range_size, range_size_padded);
 
   CUDF_EXPECTS(buffer.size() != 0, "Ingest failed: input data is null.\n");
 
@@ -669,21 +669,23 @@ table_with_metadata reader::impl::read(json_reader_options const& options,
 }
 
 // Forward to implementation
-reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
-               json_reader_options const& options,
+reader::reader(json_reader_options const& options,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
 {
-  _impl = std::make_unique<impl>(std::move(sources), options, stream, mr);
+  _impl = std::make_unique<impl>(options, stream, mr);
 }
 
 // Destructor within this translation unit
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read(json_reader_options const& options, rmm::cuda_stream_view stream)
+table_with_metadata reader::read(std::vector<std::unique_ptr<cudf::io::datasource>>& sources,
+                                 json_reader_options const& options,
+                                 rmm::cuda_stream_view stream)
 {
-  return table_with_metadata{_impl->read(options, stream)};
+  CUDF_EXPECTS(not sources.empty(), "No sources were defined");
+  return table_with_metadata{_impl->read(sources, options, stream)};
 }
 }  // namespace json
 }  // namespace detail

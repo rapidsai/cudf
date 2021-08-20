@@ -47,28 +47,13 @@ class reader {
 
  public:
   /**
-   * @brief Constructor from an array of file paths
-   *
-   * @param filepaths Paths to the files containing the input dataset
-   * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::string> const& filepaths,
-                  json_reader_options const& options,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
-
-  /**
    * @brief Constructor from an array of datasources
    *
-   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
-                  json_reader_options const& options,
+  explicit reader(json_reader_options const& options,
                   rmm::cuda_stream_view stream,
                   rmm::mr::device_memory_resource* mr);
 
@@ -77,13 +62,17 @@ class reader {
    */
   ~reader();
 
-  /*
+  /**
    * @brief Reads and returns the entire data set.
    *
+   * @param[in] sources Input `datasource` objects to read the dataset from
    * @param[in] options Settings for controlling reading behavior
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches
+   *
    * @return cudf::table object that contains the array of cudf::column.
    */
-  table_with_metadata read(json_reader_options const& options,
+  table_with_metadata read(std::vector<std::unique_ptr<cudf::io::datasource>>& sources,
+                           json_reader_options const& options,
                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 };
 

@@ -193,10 +193,9 @@ table_with_metadata read_json(json_reader_options options, rmm::mr::device_memor
                                       options.get_byte_range_offset(),
                                       options.get_byte_range_size_with_padding());
 
-  auto reader =
-    std::make_unique<json::reader>(std::move(datasources), options, rmm::cuda_stream_default, mr);
+  auto reader = std::make_unique<json::reader>(options, rmm::cuda_stream_default, mr);
 
-  return reader->read(options);
+  return reader->read(datasources, options);
 }
 
 table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr)
