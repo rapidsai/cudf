@@ -59,10 +59,6 @@ class reader_impl {
   std::vector<char> uncomp_data_owner_;
   rmm::device_buffer data_;
 
-  size_t byte_range_offset_ = 0;
-  size_t byte_range_size_   = 0;
-  bool load_whole_source_   = true;
-
   table_metadata metadata_;
   std::vector<data_type> dtypes_;
 
@@ -134,7 +130,8 @@ class reader_impl {
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    * @return Record starts in the device memory
    */
-  rmm::device_uvector<uint64_t> find_record_starts(rmm::cuda_stream_view stream);
+  rmm::device_uvector<uint64_t> find_record_starts(json_reader_options const& reader_opts,
+                                                   rmm::cuda_stream_view stream);
 
   /**
    * @brief Uploads the relevant segment of the input json data onto the GPU.
@@ -143,7 +140,8 @@ class reader_impl {
    * Only rows that need to be parsed are copied, based on the byte range
    * Also updates the array of record starts to match the device data offset.
    */
-  void upload_data_to_device(rmm::device_uvector<uint64_t>& rec_starts,
+  void upload_data_to_device(json_reader_options const& reader_opts,
+                             rmm::device_uvector<uint64_t>& rec_starts,
                              rmm::cuda_stream_view stream);
 
   /**

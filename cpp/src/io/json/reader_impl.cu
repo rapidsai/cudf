@@ -222,10 +222,12 @@ void reader_impl::ingest_raw_input(std::vector<std::unique_ptr<datasource>> cons
       bytes_read += source->host_read(range_offset, data_size, &buffer[bytes_read]);
     }
   }
+}
 
-  byte_range_offset_ = range_offset;
-  byte_range_size_   = range_size;
-  load_whole_source_ = byte_range_offset_ == 0 && byte_range_size_ == 0;
+bool should_load_whole_source(json_reader_options const& reader_opts)
+{
+  return reader_opts.get_byte_range_offset() == 0 and  //
+         reader_opts.get_byte_range_size() == 0;
 }
 
 /**
@@ -234,11 +236,11 @@ void reader_impl::ingest_raw_input(std::vector<std::unique_ptr<datasource>> cons
  * Sets the uncomp_data_ and uncomp_size_ data members
  * Loads the data into device memory if byte range parameters are not used
  */
-void reader_impl::decompress_input(json_reader_options const& read_opts,
+void reader_impl::decompress_input(json_reader_options const& reader_opts,
                                    std::vector<uint8_t> const& buffer,
                                    rmm::cuda_stream_view stream)
 {
-  if (read_opts.get_compression() == compression_type::NONE) {
+  if (reader_opts.get_compression() == compression_type::NONE) {
     // Do not use the owner vector here to avoid extra copy
     uncomp_data_ = reinterpret_cast<const char*>(buffer.data());
     uncomp_size_ = buffer.size();
@@ -247,23 +249,26 @@ void reader_impl::decompress_input(json_reader_options const& read_opts,
       host_span<char const>(                     //
         reinterpret_cast<const char*>(buffer.data()),
         buffer.size()),
-      read_opts.get_compression());
+      reader_opts.get_compression());
 
     uncomp_data_ = uncomp_data_owner_.data();
     uncomp_size_ = uncomp_data_owner_.size();
   }
-  if (load_whole_source_) data_ = rmm::device_buffer(uncomp_data_, uncomp_size_, stream);
+  if (should_load_whole_source(reader_opts)) {
+    data_ = rmm::device_buffer(uncomp_data_, uncomp_size_, stream);
+  }
 }
 
-rmm::device_uvector<uint64_t> reader_impl::find_record_starts(rmm::cuda_stream_view stream)
+rmm::device_uvector<uint64_t> reader_impl::find_record_starts(
+  json_reader_options const& reader_opts, rmm::cuda_stream_view stream)
 {
   std::vector<char> chars_to_count{'\n'};
   // Currently, ignoring lineterminations within quotes is handled by recording the records of both,
   // and then filtering out the records that is a quotechar or a linetermination within a quotechar
   // pair.
   // If not starting at an offset, add an extra row to account for the first row in the file
-  cudf::size_type prefilter_count = ((byte_range_offset_ == 0) ? 1 : 0);
-  if (load_whole_source_) {
+  cudf::size_type prefilter_count = ((reader_opts.get_byte_range_offset() == 0) ? 1 : 0);
+  if (should_load_whole_source(reader_opts)) {
     prefilter_count += count_all_from_set(data_, chars_to_count, stream);
   } else {
     prefilter_count += count_all_from_set(uncomp_data_, uncomp_size_, chars_to_count, stream);
@@ -273,14 +278,14 @@ rmm::device_uvector<uint64_t> reader_impl::find_record_starts(rmm::cuda_stream_v
 
   auto* find_result_ptr = rec_starts.data();
   // Manually adding an extra row to account for the first row in the file
-  if (byte_range_offset_ == 0) {
+  if (reader_opts.get_byte_range_offset() == 0) {
     find_result_ptr++;
     CUDA_TRY(cudaMemsetAsync(rec_starts.data(), 0ull, sizeof(uint64_t), stream.value()));
   }
 
   std::vector<char> chars_to_find{'\n'};
   // Passing offset = 1 to return positions AFTER the found character
-  if (load_whole_source_) {
+  if (should_load_whole_source(reader_opts)) {
     find_all_from_set(data_, chars_to_find, 1, find_result_ptr, stream);
   } else {
     find_all_from_set(uncomp_data_, uncomp_size_, chars_to_find, 1, find_result_ptr, stream);
@@ -307,19 +312,20 @@ rmm::device_uvector<uint64_t> reader_impl::find_record_starts(rmm::cuda_stream_v
  * Only rows that need to be parsed are copied, based on the byte range
  * Also updates the array of record starts to match the device data offset.
  */
-void reader_impl::upload_data_to_device(rmm::device_uvector<uint64_t>& rec_starts,
+void reader_impl::upload_data_to_device(json_reader_options const& reader_opts,
+                                        rmm::device_uvector<uint64_t>& rec_starts,
                                         rmm::cuda_stream_view stream)
 {
   size_t start_offset = 0;
   size_t end_offset   = uncomp_size_;
 
   // Trim lines that are outside range
-  if (byte_range_size_ != 0 || byte_range_offset_ != 0) {
+  if (reader_opts.get_byte_range_size() != 0 || reader_opts.get_byte_range_offset() != 0) {
     auto h_rec_starts = cudf::detail::make_std_vector_sync(rec_starts, stream);
 
-    if (byte_range_size_ != 0) {
+    if (reader_opts.get_byte_range_size() != 0) {
       auto it = h_rec_starts.end() - 1;
-      while (it >= h_rec_starts.begin() && *it > byte_range_size_) {
+      while (it >= h_rec_starts.begin() && *it > reader_opts.get_byte_range_size()) {
         end_offset = *it;
         --it;
       }
@@ -636,10 +642,10 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
   CUDF_EXPECTS(uncomp_data_ != nullptr, "Ingest failed: uncompressed input data is null.\n");
   CUDF_EXPECTS(uncomp_size_ != 0, "Ingest failed: uncompressed input data has zero size.\n");
 
-  auto rec_starts = find_record_starts(stream);
+  auto rec_starts = find_record_starts(reader_opts, stream);
   CUDF_EXPECTS(!rec_starts.is_empty(), "Error enumerating records.\n");
 
-  upload_data_to_device(rec_starts, stream);
+  upload_data_to_device(reader_opts, rec_starts, stream);
   CUDF_EXPECTS(data_.size() != 0, "Error uploading input data to the GPU.\n");
 
   set_column_names(parse_opts.view(), rec_starts, stream);
