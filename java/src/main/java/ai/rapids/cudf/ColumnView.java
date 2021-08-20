@@ -91,7 +91,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param validityBuffer an optional validity buffer. Must be provided if nullCount != 0.
    *                       The ownership doesn't change on this buffer
    */
-  @Deprecated
   public ColumnView(DType type, long rows, Optional<Long> nullCount,
                     BaseDeviceMemoryBuffer dataBuffer,
                     BaseDeviceMemoryBuffer validityBuffer) {
@@ -185,13 +184,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         views[i] = getChildColumnView(i);
       }
       return views;
-    } catch(Exception e) {
+    } catch(Throwable t) {
       for (ColumnView v: views) {
         if (v != null) {
           v.close();
         }
       }
-      throw e;
+      throw t;
     }
   }
 
