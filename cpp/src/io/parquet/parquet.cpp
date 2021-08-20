@@ -347,6 +347,7 @@ int CompactProtocolReader::WalkSchema(
     ++idx;
     if (e->num_children > 0) {
       for (int i = 0; i < e->num_children; i++) {
+        e->children_idx.push_back(idx);
         int idx_old = idx;
         idx         = WalkSchema(md, idx, parent_idx, max_def_level, max_rep_level);
         if (idx <= idx_old) break;  // Error
