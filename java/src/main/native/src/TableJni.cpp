@@ -952,9 +952,9 @@ cudf::column_view remove_validity_from_col(cudf::column_view column_view) {
     for (auto it = column_view.child_begin(); it != column_view.child_end(); it++) {
       children.push_back(remove_validity_from_col(*it));
     }
-    if (!column_view.nullable() || !column_view.null_count() == 0) {
+    if (!column_view.nullable() || column_view.null_count() != 0) {
       ret.reset(new cudf::column_view(column_view.type(), column_view.size(), nullptr,
-                                      column_view.null_mask(), 0, column_view.offset(), children));
+                                      column_view.null_mask(), column_view.null_count(), column_view.offset(), children));
     } else {
       ret.reset(new cudf::column_view(column_view.type(), column_view.size(), nullptr, nullptr, 0,
                                       column_view.offset(), children));
