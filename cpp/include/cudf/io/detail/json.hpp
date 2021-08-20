@@ -36,7 +36,7 @@ namespace json {
  * @param[in] sources Input `datasource` objects to read the dataset from
  * @param[in] options Settings for controlling reading behavior
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource to use for device memory allocation
+ * @param[in] mr Device memory resource to use for device memory allocation
  *
  * @return cudf::table object that contains the array of cudf::column.
  */

@@ -54,8 +54,6 @@ class reader_impl {
  private:
   const json_reader_options options_{};
 
-  rmm::mr::device_memory_resource* mr_ = nullptr;
-
   const char* uncomp_data_ = nullptr;
   size_t uncomp_size_      = 0;
 
@@ -177,19 +175,19 @@ class reader_impl {
    *
    * @param[in] rec_starts Record starts in device memory
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+   * @param[in] mr Device memory resource to use for device memory allocation
    *
    * @return Table and its metadata
    */
   table_with_metadata convert_data_to_table(device_span<uint64_t const> rec_starts,
-                                            rmm::cuda_stream_view stream);
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr);
 
  public:
   /**
    * @brief Constructor from a dataset source with reader options.
    */
-  explicit reader_impl(json_reader_options const& options,
-                       rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr);
+  explicit reader_impl(json_reader_options const& options, rmm::cuda_stream_view stream);
 
   /**
    * @brief Read an entire set or a subset of data from the source
@@ -197,12 +195,14 @@ class reader_impl {
    * @param[in] sources Input `datasource` objects to read the dataset from
    * @param[in] options Settings for controlling reading behavior
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+   * @param[in] mr Device memory resource to use for device memory allocation
    *
    * @return Table and its metadata
    */
   table_with_metadata read(std::vector<std::unique_ptr<datasource>>& sources,
                            json_reader_options const& options,
-                           rmm::cuda_stream_view stream);
+                           rmm::cuda_stream_view stream,
+                           rmm::mr::device_memory_resource* mr);
 };
 
 }  // namespace json

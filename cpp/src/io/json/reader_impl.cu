@@ -528,7 +528,8 @@ void reader_impl::set_data_types(device_span<uint64_t const> rec_starts,
 }
 
 table_with_metadata reader_impl::convert_data_to_table(device_span<uint64_t const> rec_starts,
-                                                       rmm::cuda_stream_view stream)
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::mr::device_memory_resource* mr)
 {
   const auto num_columns = dtypes_.size();
   const auto num_records = rec_starts.size();
@@ -536,7 +537,7 @@ table_with_metadata reader_impl::convert_data_to_table(device_span<uint64_t cons
   // alloc output buffers.
   std::vector<column_buffer> out_buffers;
   for (size_t col = 0; col < num_columns; ++col) {
-    out_buffers.emplace_back(dtypes_[col], num_records, true, stream, mr_);
+    out_buffers.emplace_back(dtypes_[col], num_records, true, stream, mr);
   }
 
   thrust::host_vector<data_type> h_dtypes(num_columns);
@@ -591,11 +592,11 @@ table_with_metadata reader_impl::convert_data_to_table(device_span<uint64_t cons
   for (size_t i = 0; i < num_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
 
-    auto out_column = make_column(out_buffers[i], nullptr, stream, mr_);
+    auto out_column = make_column(out_buffers[i], nullptr, stream, mr);
     if (out_column->type().id() == type_id::STRING) {
       // Need to remove escape character in case of '\"' and '\\'
       out_columns.emplace_back(cudf::strings::detail::replace(
-        out_column->view(), target->view(), repl->view(), stream, mr_));
+        out_column->view(), target->view(), repl->view(), stream, mr));
     } else {
       out_columns.emplace_back(std::move(out_column));
     }
@@ -610,10 +611,8 @@ table_with_metadata reader_impl::convert_data_to_table(device_span<uint64_t cons
   return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata_};
 }
 
-reader_impl::reader_impl(json_reader_options const& options,
-                         rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource* mr)
-  : options_(options), mr_(mr)
+reader_impl::reader_impl(json_reader_options const& options, rmm::cuda_stream_view stream)
+  : options_(options)
 {
   CUDF_EXPECTS(options_.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
@@ -635,7 +634,8 @@ reader_impl::reader_impl(json_reader_options const& options,
  */
 table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& sources,
                                       json_reader_options const& options,
-                                      rmm::cuda_stream_view stream)
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   auto range_offset      = options.get_byte_range_offset();
   auto range_size        = options.get_byte_range_size();
@@ -664,7 +664,7 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
   set_data_types(rec_starts, stream);
   CUDF_EXPECTS(!dtypes_.empty(), "Error in data type detection.\n");
 
-  return convert_data_to_table(rec_starts, stream);
+  return convert_data_to_table(rec_starts, stream, mr);
 }
 
 table_with_metadata read_json(std::vector<std::unique_ptr<cudf::io::datasource>>& sources,
@@ -674,9 +674,9 @@ table_with_metadata read_json(std::vector<std::unique_ptr<cudf::io::datasource>>
 {
   CUDF_EXPECTS(not sources.empty(), "No sources were defined");
 
-  auto impl = std::make_unique<reader_impl>(options, stream, mr);
+  auto impl = std::make_unique<reader_impl>(options, stream);
 
-  return table_with_metadata{impl->read(sources, options, stream)};
+  return table_with_metadata{impl->read(sources, options, stream, mr)};
 }
 }  // namespace json
 }  // namespace detail
