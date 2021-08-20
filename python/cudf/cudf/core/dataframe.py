@@ -860,10 +860,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 )
 
                 result._copy_type_metadata(self, include_index=keep_index)
-                # Adding index of type RangeIndex back to
-                # result
-                if keep_index is False and self.index is not None:
-                    result.index = self.index[start:stop]
+                if self.index is not None:
+                    if keep_index:
+                        result._index.names = self.index.names
+                    else:
+                        # Adding index of type RangeIndex back to
+                        # result
+                        result.index = self.index[start:stop]
                 result.columns = self.columns
                 return result
 

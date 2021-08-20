@@ -25,7 +25,7 @@ import ai.rapids.cudf.HostColumnVector.ListType;
 import ai.rapids.cudf.HostColumnVector.StructData;
 import ai.rapids.cudf.HostColumnVector.StructType;
 
-import ai.rapids.cudf.ast.BinaryExpression;
+import ai.rapids.cudf.ast.BinaryOperation;
 import ai.rapids.cudf.ast.BinaryOperator;
 import ai.rapids.cudf.ast.ColumnReference;
 import ai.rapids.cudf.ast.CompiledExpression;
@@ -1500,7 +1500,7 @@ public class TableTest extends CudfTestBase {
   @Test
   void testConditionalLeftJoinGatherMaps() {
     final int inv = Integer.MIN_VALUE;
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -1526,7 +1526,7 @@ public class TableTest extends CudfTestBase {
   @Test
   void testConditionalLeftJoinGatherMapsNulls() {
     final int inv = Integer.MIN_VALUE;
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.EQUAL,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder()
@@ -1554,7 +1554,7 @@ public class TableTest extends CudfTestBase {
   @Test
   void testConditionalLeftJoinGatherMapsWithCount() {
     final int inv = Integer.MIN_VALUE;
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -1582,7 +1582,7 @@ public class TableTest extends CudfTestBase {
   @Test
   void testConditionalLeftJoinGatherMapsNullsWithCount() {
     final int inv = Integer.MIN_VALUE;
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.EQUAL,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder()
@@ -1653,7 +1653,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalInnerJoinGatherMaps() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -1678,7 +1678,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalInnerJoinGatherMapsNulls() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.EQUAL,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder()
@@ -1705,7 +1705,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalInnerJoinGatherMapsWithCount() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -1732,7 +1732,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalInnerJoinGatherMapsNullsWithCount() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.EQUAL,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder()
@@ -1806,7 +1806,7 @@ public class TableTest extends CudfTestBase {
   @Test
   void testConditionalFullJoinGatherMaps() {
     final int inv = Integer.MIN_VALUE;
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -1832,7 +1832,7 @@ public class TableTest extends CudfTestBase {
   @Test
   void testConditionalFullJoinGatherMapsNulls() {
     final int inv = Integer.MIN_VALUE;
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.EQUAL,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder()
@@ -1887,7 +1887,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalLeftSemiJoinGatherMap() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -1905,7 +1905,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalLeftSemiJoinGatherMapNulls() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.EQUAL,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder()
@@ -1925,7 +1925,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalLeftSemiJoinGatherMapWithCount() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -1947,7 +1947,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalLeftSemiJoinGatherMapNullsWithCount() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.EQUAL,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder()
@@ -1999,7 +1999,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalLeftAntiJoinGatherMap() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -2017,7 +2017,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalAntiSemiJoinGatherMapNulls() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.EQUAL,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder()
@@ -2037,7 +2037,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalLeftAntiJoinGatherMapWithCount() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -2059,7 +2059,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalAntiSemiJoinGatherMapNullsWithCount() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.EQUAL,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder()
