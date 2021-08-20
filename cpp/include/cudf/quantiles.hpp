@@ -95,16 +95,16 @@ std::unique_ptr<table> quantiles(
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Calculate approximate percentiles on a provided tdigest column.
+ * @brief Calculate approximate percentiles on an input tdigest column.
  *
  * tdigest (https://arxiv.org/pdf/1902.04023.pdf) columns are produced specifically
  * by the TDIGEST and MERGE_TDIGEST groupby aggregations.  These columns represent
- * highly "compressed" representations of a very large input data set that can be
+ * compressed representations of a very large input data set that can be
  * queried for quantile information.
  *
  * Produces a LIST column where each row N represents output from querying the
- * corresponding tdigest of from row N in `input`. The length of each output list
- * is the number of percentages specified in `percentages`
+ * corresponding tdigest from `input` row N. The length of each output list
+ * is the number of percentages specified in `percentages`.
  *
  * @param input           tdigest input data. One tdigest per row.
  * @param percentages     Desired percentiles in range [0, 1].

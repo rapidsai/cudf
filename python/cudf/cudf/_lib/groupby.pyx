@@ -288,28 +288,6 @@ cdef class GroupBy:
 
         return self.aggregate_internal(values, aggregations)
 
-    def aggregate(self, Table values, aggregations):
-        """
-        Parameters
-        ----------
-        values : Table
-        aggregations
-            A dict mapping column names in `Table` to a list of aggregations
-            to perform on that column
-
-            Each aggregation may be specified as:
-            - a string (e.g., "max")
-            - a lambda/function
-
-        Returns
-        -------
-        Table of aggregated values
-        """
-        if _is_all_scan_aggregate(aggregations):
-            return self.scan_internal(values, aggregations)
-
-        return self.aggregate_internal(values, aggregations)
-
     def shift(self, Table values, int periods, list fill_values):
         cdef table_view view = values.view()
         cdef size_type num_col = view.num_columns()

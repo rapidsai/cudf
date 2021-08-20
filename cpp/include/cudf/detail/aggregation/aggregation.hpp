@@ -897,6 +897,8 @@ class tdigest_aggregation final : public groupby_aggregation {
  public:
   explicit tdigest_aggregation(int delta_) : aggregation{TDIGEST}, delta{delta_} {}
 
+  int delta;
+
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<tdigest_aggregation>(*this);
@@ -907,8 +909,6 @@ class tdigest_aggregation final : public groupby_aggregation {
     return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
-
-  int delta;
 };
 
 /**
@@ -917,6 +917,8 @@ class tdigest_aggregation final : public groupby_aggregation {
 class merge_tdigest_aggregation final : public groupby_aggregation {
  public:
   explicit merge_tdigest_aggregation(int delta_) : aggregation{MERGE_TDIGEST}, delta{delta_} {}
+
+  int delta;
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -928,8 +930,6 @@ class merge_tdigest_aggregation final : public groupby_aggregation {
     return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
-
-  int delta;
 };
 
 /**
@@ -1174,7 +1174,9 @@ struct target_type_impl<Source,
   using type = list_view;
 };
 
-// TDIGEST_MERGE
+// TDIGEST_MERGE. The root column type for a tdigest column is a list_view. Strictly
+// speaking, this check is not sufficient to guarantee we are actually being given a
+// real tdigest column, but we will do further verification inside the aggregation code.
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<
   Source,

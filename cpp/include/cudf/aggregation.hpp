@@ -495,15 +495,31 @@ std::unique_ptr<Base> make_merge_m2_aggregation();
  *
  * Produces a tdigest (https://arxiv.org/pdf/1902.04023.pdf) column from input values.
  * The input aggregation values are expected to be fixed-width numeric types.
+ *
+ * @param delta Parameter controlling compression level and accuracy on subsequent
+ * queries on the output tdigest data.  Delta places an upper bound on the size of
+ * the computed tdigests: A delta of 1000 will result in a tdigest containing no
+ * more than 1000 centroids (32 bytes each). Higher values of delta result in more
+ * accurate tdigest information.
+ *
+ * @returns A TDIGEST aggregation object.
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_tdigest_aggregation(int delta = 1000);
 
 /**
- * @brief Factory to create a MERGE_TDIGEST aggregation by merging multiple tdigests together.
+ * @brief Factory to create a MERGE_TDIGEST aggregation
  *
  * Produces a tdigest (https://arxiv.org/pdf/1902.04023.pdf) column from input values.
  * The input aggregation values are be tdigests produced by the TDIGEST aggregation.
+ *
+ * @param delta Parameter controlling compression level and accuracy on subsequent
+ * queries on the output tdigest data.  Delta places an upper bound on the size of
+ * the computed tdigests: A delta of 1000 will result in a tdigest containing no
+ * more than 1000 centroids (32 bytes each). Higher values of delta result in more
+ * accurate tdigest information.
+ *
+ * @returns A MERGE_TDIGEST aggregation object.
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_tdigest_aggregation(int delta = 1000);

@@ -519,9 +519,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
 };
 
 /**
- * @brief Generate a tdigest column from a grouped set of scalar input values.
- *
- * The input values are expected to be numeric types.
+ * @brief Generate a tdigest column from a grouped set of numeric input values.
  *
  * The tdigest column produced is of the following structure:
  *
@@ -532,7 +530,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
  *   }
  * }
  *
- * Where each output row is a single tdigest.  The length of the row is the "size" of the
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
  * tdigest, each element of which represents a weighted centroid (mean, weight).
  */
 template <>
@@ -554,8 +552,6 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
 /**
  * @brief Generate a merged tdigest column from a grouped set of input tdigest columns.
  *
- * The input values are expected to be tdigests.
- *
  * The tdigest column produced is of the following structure:
  *
  * list {
@@ -565,7 +561,7 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
  *   }
  * }
  *
- * Where each output row is a single tdigest.  The length of the row is the "size" of the
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
  * tdigest, each element of which represents a weighted centroid (mean, weight).
  */
 template <>

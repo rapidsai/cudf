@@ -443,9 +443,7 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
                                        rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief Generate a tdigest column from a grouped set of scalar input values.
- *
- * The input values are expected to be numeric types.
+ * @brief Generate a tdigest column from a grouped set of numeric input values.
  *
  * The tdigest column produced is of the following structure:
  *
@@ -456,7 +454,7 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
  *   }
  * }
  *
- * where each output row is a single tdigest.  The length of the row is the "size" of the
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
  * tdigest, each element of which represents a weighted centroid (mean, weight).
  *
  * @param values Grouped values to merge.
@@ -479,8 +477,6 @@ std::unique_ptr<column> group_tdigest(column_view const& values,
 /**
  * @brief Generate a merged tdigest column from a grouped set of input tdigest columns.
  *
- * The input values are expected to be tdigests.
- *
  * The tdigest column produced is of the following structure:
  *
  * list {
@@ -490,7 +486,7 @@ std::unique_ptr<column> group_tdigest(column_view const& values,
  *   }
  * }
  *
- * where each output row is a single tdigest.  The length of the row is the "size" of the
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
  * tdigest, each element of which represents a weighted centroid (mean, weight).
  *
  * @param values Grouped tdigests to merge.
