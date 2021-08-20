@@ -57,7 +57,6 @@ class reader_impl {
 
   // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
   std::vector<char> uncomp_data_owner_;
-  rmm::device_buffer data_;
 
   // the map is only used for files with rows in object format; initialize to a dummy value so the
   // map object can be passed to the kernel in any case
@@ -108,6 +107,7 @@ class reader_impl {
   std::pair<std::vector<std::string>, col_map_ptr_type> get_json_object_keys_hashes(
     parse_options_view const& parse_opts,
     device_span<uint64_t const> rec_starts,
+    device_span<char const> data,
     rmm::cuda_stream_view stream);
 
   /**
@@ -115,9 +115,9 @@ class reader_impl {
    *
    * Sets the uncomp_data_ and uncomp_size_ data members
    */
-  void decompress_input(json_reader_options const& options,
-                        std::vector<uint8_t> const& buffer,
-                        rmm::cuda_stream_view stream);
+  rmm::device_buffer decompress_input(json_reader_options const& options,
+                                      std::vector<uint8_t> const& buffer,
+                                      rmm::cuda_stream_view stream);
 
   /**
    * @brief Finds all record starts in the file.
@@ -128,6 +128,7 @@ class reader_impl {
    * @return Record starts in the device memory
    */
   rmm::device_uvector<uint64_t> find_record_starts(json_reader_options const& reader_opts,
+                                                   device_span<char const> data,
                                                    rmm::cuda_stream_view stream);
 
   /**
@@ -137,9 +138,9 @@ class reader_impl {
    * Only rows that need to be parsed are copied, based on the byte range
    * Also updates the array of record starts to match the device data offset.
    */
-  void upload_data_to_device(json_reader_options const& reader_opts,
-                             rmm::device_uvector<uint64_t>& rec_starts,
-                             rmm::cuda_stream_view stream);
+  rmm::device_buffer upload_data_to_device(json_reader_options const& reader_opts,
+                                           rmm::device_uvector<uint64_t>& rec_starts,
+                                           rmm::cuda_stream_view stream);
 
   /**
    * @brief Parse the first row to set the column name
@@ -151,6 +152,7 @@ class reader_impl {
    */
   std::vector<std::string> get_column_names(parse_options_view const& parse_opts,
                                             device_span<uint64_t const> rec_starts,
+                                            device_span<char const> data,
                                             rmm::cuda_stream_view stream);
 
   std::vector<data_type> parse_data_types(std::vector<std::string> const& column_names,
@@ -169,6 +171,7 @@ class reader_impl {
                                         parse_options_view const& parse_opts,
                                         std::vector<std::string> const& column_names,
                                         device_span<uint64_t const> rec_starts,
+                                        device_span<char const> data,
                                         rmm::cuda_stream_view stream);
 
   /**
@@ -184,6 +187,7 @@ class reader_impl {
                                             std::vector<data_type> const& dtypes,
                                             std::vector<std::string> const& column_names,
                                             device_span<uint64_t const> rec_starts,
+                                            device_span<char const> data,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr);
 

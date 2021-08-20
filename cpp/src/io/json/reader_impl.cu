@@ -186,13 +186,10 @@ auto sort_keys_info_by_offset(std::unique_ptr<table> info)
 std::pair<std::vector<std::string>, col_map_ptr_type> reader_impl::get_json_object_keys_hashes(
   parse_options_view const& parse_opts,
   device_span<uint64_t const> rec_starts,
+  device_span<char const> data,
   rmm::cuda_stream_view stream)
 {
-  auto info = create_json_keys_info_table(
-    parse_opts,
-    device_span<char const>(static_cast<char const*>(data_.data()), data_.size()),
-    rec_starts,
-    stream);
+  auto info = create_json_keys_info_table(parse_opts, data, rec_starts, stream);
 
   auto aggregated_info = aggregate_keys_info(std::move(info));
   auto sorted_info     = sort_keys_info_by_offset(std::move(aggregated_info));
@@ -236,9 +233,9 @@ bool should_load_whole_source(json_reader_options const& reader_opts)
  * Sets the uncomp_data_ and uncomp_size_ data members
  * Loads the data into device memory if byte range parameters are not used
  */
-void reader_impl::decompress_input(json_reader_options const& reader_opts,
-                                   std::vector<uint8_t> const& buffer,
-                                   rmm::cuda_stream_view stream)
+rmm::device_buffer reader_impl::decompress_input(json_reader_options const& reader_opts,
+                                                 std::vector<uint8_t> const& buffer,
+                                                 rmm::cuda_stream_view stream)
 {
   if (reader_opts.get_compression() == compression_type::NONE) {
     // Do not use the owner vector here to avoid extra copy
@@ -255,12 +252,16 @@ void reader_impl::decompress_input(json_reader_options const& reader_opts,
     uncomp_size_ = uncomp_data_owner_.size();
   }
   if (should_load_whole_source(reader_opts)) {
-    data_ = rmm::device_buffer(uncomp_data_, uncomp_size_, stream);
+    return rmm::device_buffer(uncomp_data_, uncomp_size_, stream);
+  } else {
+    return {};
   }
 }
 
 rmm::device_uvector<uint64_t> reader_impl::find_record_starts(
-  json_reader_options const& reader_opts, rmm::cuda_stream_view stream)
+  json_reader_options const& reader_opts,
+  device_span<char const> data,
+  rmm::cuda_stream_view stream)
 {
   std::vector<char> chars_to_count{'\n'};
   // Currently, ignoring lineterminations within quotes is handled by recording the records of both,
@@ -269,9 +270,10 @@ rmm::device_uvector<uint64_t> reader_impl::find_record_starts(
   // If not starting at an offset, add an extra row to account for the first row in the file
   cudf::size_type prefilter_count = ((reader_opts.get_byte_range_offset() == 0) ? 1 : 0);
   if (should_load_whole_source(reader_opts)) {
-    prefilter_count += count_all_from_set(data_, chars_to_count, stream);
+    prefilter_count += count_all_from_set(data, chars_to_count, stream);
   } else {
-    prefilter_count += count_all_from_set(uncomp_data_, uncomp_size_, chars_to_count, stream);
+    prefilter_count +=
+      count_all_from_set(host_span<char const>(uncomp_data_, uncomp_size_), chars_to_count, stream);
   }
 
   rmm::device_uvector<uint64_t> rec_starts(prefilter_count, stream);
@@ -286,9 +288,14 @@ rmm::device_uvector<uint64_t> reader_impl::find_record_starts(
   std::vector<char> chars_to_find{'\n'};
   // Passing offset = 1 to return positions AFTER the found character
   if (should_load_whole_source(reader_opts)) {
-    find_all_from_set(data_, chars_to_find, 1, find_result_ptr, stream);
+    find_all_from_set(data, chars_to_find, 1, find_result_ptr, stream);
   } else {
-    find_all_from_set(uncomp_data_, uncomp_size_, chars_to_find, 1, find_result_ptr, stream);
+    find_all_from_set(  //
+      host_span<char const>(uncomp_data_, uncomp_size_),
+      chars_to_find,
+      1,
+      find_result_ptr,
+      stream);
   }
 
   // Previous call stores the record pinput_file.typeositions as encountered by all threads
@@ -312,9 +319,9 @@ rmm::device_uvector<uint64_t> reader_impl::find_record_starts(
  * Only rows that need to be parsed are copied, based on the byte range
  * Also updates the array of record starts to match the device data offset.
  */
-void reader_impl::upload_data_to_device(json_reader_options const& reader_opts,
-                                        rmm::device_uvector<uint64_t>& rec_starts,
-                                        rmm::cuda_stream_view stream)
+rmm::device_buffer reader_impl::upload_data_to_device(json_reader_options const& reader_opts,
+                                                      rmm::device_uvector<uint64_t>& rec_starts,
+                                                      rmm::cuda_stream_view stream)
 {
   size_t start_offset = 0;
   size_t end_offset   = uncomp_size_;
@@ -349,15 +356,16 @@ void reader_impl::upload_data_to_device(json_reader_options const& reader_opts,
                "Error finding the record within the specified byte range.\n");
 
   // Upload the raw data that is within the rows of interest
-  data_ = rmm::device_buffer(uncomp_data_ + start_offset, bytes_to_upload, stream);
+  return rmm::device_buffer(uncomp_data_ + start_offset, bytes_to_upload, stream);
 }
 
 std::vector<std::string> reader_impl::get_column_names(parse_options_view const& parse_opts,
                                                        device_span<uint64_t const> rec_starts,
+                                                       device_span<char const> data,
                                                        rmm::cuda_stream_view stream)
 {
   // If file only contains one row, use the file size for the row size
-  uint64_t first_row_len = data_.size() / sizeof(char);
+  uint64_t first_row_len = data.size() / sizeof(char);
   if (rec_starts.size() > 1) {
     // Set first_row_len to the offset of the second row, if it exists
     CUDA_TRY(cudaMemcpyAsync(&first_row_len,
@@ -368,7 +376,7 @@ std::vector<std::string> reader_impl::get_column_names(parse_options_view const&
   }
   std::vector<char> first_row(first_row_len);
   CUDA_TRY(cudaMemcpyAsync(first_row.data(),
-                           data_.data(),
+                           data.data(),
                            first_row_len * sizeof(char),
                            cudaMemcpyDeviceToHost,
                            stream.value()));
@@ -385,7 +393,7 @@ std::vector<std::string> reader_impl::get_column_names(parse_options_view const&
   // If the first opening bracket is '{', assume object format
   if (first_curly_bracket < first_square_bracket) {
     // use keys as column names if input rows are objects
-    auto keys_desc = get_json_object_keys_hashes(parse_opts, rec_starts, stream);
+    auto keys_desc = get_json_object_keys_hashes(parse_opts, rec_starts, data, stream);
     set_column_map(std::move(keys_desc.second), stream);
     return keys_desc.first;
   } else {
@@ -453,6 +461,7 @@ std::vector<data_type> reader_impl::get_data_types(json_reader_options const& re
                                                    parse_options_view const& parse_opts,
                                                    std::vector<std::string> const& column_names,
                                                    device_span<uint64_t const> rec_starts,
+                                                   device_span<char const> data,
                                                    rmm::cuda_stream_view stream)
 {
   bool has_to_infer_column_types =
@@ -483,14 +492,13 @@ std::vector<data_type> reader_impl::get_data_types(json_reader_options const& re
     auto const num_columns       = column_names.size();
     auto const do_set_null_count = key_to_col_idx_map_ != nullptr;
 
-    auto const h_column_infos = cudf::io::json::gpu::detect_data_types(
-      parse_opts,
-      device_span<char const>(static_cast<char const*>(data_.data()), data_.size()),
-      rec_starts,
-      do_set_null_count,
-      num_columns,
-      get_column_map_device_ptr(),
-      stream);
+    auto const h_column_infos = cudf::io::json::gpu::detect_data_types(parse_opts,
+                                                                       data,
+                                                                       rec_starts,
+                                                                       do_set_null_count,
+                                                                       num_columns,
+                                                                       get_column_map_device_ptr(),
+                                                                       stream);
 
     auto get_type_id = [&](auto const& cinfo) {
       auto int_count_total =
@@ -532,6 +540,7 @@ table_with_metadata reader_impl::convert_data_to_table(parse_options_view const&
                                                        std::vector<data_type> const& dtypes,
                                                        std::vector<std::string> const& column_names,
                                                        device_span<uint64_t const> rec_starts,
+                                                       device_span<char const> data,
                                                        rmm::cuda_stream_view stream,
                                                        rmm::mr::device_memory_resource* mr)
 {
@@ -560,16 +569,15 @@ table_with_metadata reader_impl::convert_data_to_table(parse_options_view const&
   auto d_valid_counts =
     cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(num_columns, stream);
 
-  cudf::io::json::gpu::convert_json_to_columns(
-    parse_opts,
-    device_span<char const>(static_cast<char const*>(data_.data()), data_.size()),
-    rec_starts,
-    d_dtypes,
-    get_column_map_device_ptr(),
-    d_data,
-    d_valid,
-    d_valid_counts,
-    stream);
+  cudf::io::json::gpu::convert_json_to_columns(parse_opts,
+                                               data,
+                                               rec_starts,
+                                               d_dtypes,
+                                               get_column_map_device_ptr(),
+                                               d_data,
+                                               d_valid,
+                                               d_valid_counts,
+                                               stream);
 
   stream.synchronize();
 
@@ -649,26 +657,32 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
 
   CUDF_EXPECTS(buffer.size() != 0, "Ingest failed: input data is null.\n");
 
-  decompress_input(reader_opts, buffer, stream);
+  auto data      = decompress_input(reader_opts, buffer, stream);
+  auto data_span = device_span<char>(static_cast<char*>(data.data()), data.size());
 
   CUDF_EXPECTS(uncomp_data_ != nullptr, "Ingest failed: uncompressed input data is null.\n");
   CUDF_EXPECTS(uncomp_size_ != 0, "Ingest failed: uncompressed input data has zero size.\n");
 
-  auto rec_starts = find_record_starts(reader_opts, stream);
+  auto rec_starts = find_record_starts(reader_opts, data_span, stream);
+
   CUDF_EXPECTS(!rec_starts.is_empty(), "Error enumerating records.\n");
 
-  upload_data_to_device(reader_opts, rec_starts, stream);
-  CUDF_EXPECTS(data_.size() != 0, "Error uploading input data to the GPU.\n");
+  data      = upload_data_to_device(reader_opts, rec_starts, stream);
+  data_span = device_span<char>(static_cast<char*>(data.data()), data.size());
 
-  auto column_names = get_column_names(parse_opts.view(), rec_starts, stream);
+  CUDF_EXPECTS(data_span.size() != 0, "Error uploading input data to the GPU.\n");
+
+  auto column_names = get_column_names(parse_opts.view(), rec_starts, data_span, stream);
 
   CUDF_EXPECTS(not column_names.empty(), "Error determining column names.\n");
 
-  auto dtypes = get_data_types(reader_opts, parse_opts.view(), column_names, rec_starts, stream);
+  auto dtypes =
+    get_data_types(reader_opts, parse_opts.view(), column_names, rec_starts, data_span, stream);
 
   CUDF_EXPECTS(not dtypes.empty(), "Error in data type detection.\n");
 
-  return convert_data_to_table(parse_opts.view(), dtypes, column_names, rec_starts, stream, mr);
+  return convert_data_to_table(
+    parse_opts.view(), dtypes, column_names, rec_starts, data_span, stream, mr);
 }
 
 table_with_metadata read_json(std::vector<std::unique_ptr<cudf::io::datasource>>& sources,
