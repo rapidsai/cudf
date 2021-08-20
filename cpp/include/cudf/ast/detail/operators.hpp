@@ -19,6 +19,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+// TODO: Figure out why these are necessary; I think it's because the type
+// dispatcher combined with thrust::optional for list and struct views leads to
+// introspection that is not possible without the definitions of these classes
+// available, but that is unfortunate and should be avoidable.
+#include <cudf/lists/list_view.cuh>
+#include <cudf/structs/struct_view.hpp>
 
 #include <cuda/std/type_traits>
 
@@ -768,21 +774,27 @@ struct operator_functor<op, true> : operator_functor<op, false> {
  *
  * @tparam OperatorFunctor Binary operator functor.
  */
-template <typename OperatorFunctor>
+template <typename OperatorFunctor, bool has_nulls>
 struct single_dispatch_binary_operator_types {
   template <typename LHS,
             typename F,
             typename... Ts,
-            std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, LHS>>* = nullptr>
+            std::enable_if_t<is_valid_binary_op<OperatorFunctor,
+                                                possibly_null_value_t<LHS, has_nulls>,
+                                                possibly_null_value_t<LHS, has_nulls>>>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
   {
-    f.template operator()<OperatorFunctor, LHS, LHS>(std::forward<Ts>(args)...);
+    f.template operator()<OperatorFunctor,
+                          possibly_null_value_t<LHS, has_nulls>,
+                          possibly_null_value_t<LHS, has_nulls>>(std::forward<Ts>(args)...);
   }
 
   template <typename LHS,
             typename F,
             typename... Ts,
-            std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, LHS>>* = nullptr>
+            std::enable_if_t<!is_valid_binary_op<OperatorFunctor,
+                                                 possibly_null_value_t<LHS, has_nulls>,
+                                                 possibly_null_value_t<LHS, has_nulls>>>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
   {
 #ifndef __CUDA_ARCH__
@@ -821,7 +833,7 @@ struct type_dispatch_binary_op {
     // Single dispatch (assume lhs_type == rhs_type)
     type_dispatcher(
       lhs_type,
-      detail::single_dispatch_binary_operator_types<operator_functor<op, has_nulls>>{},
+      detail::single_dispatch_binary_operator_types<operator_functor<op, has_nulls>, has_nulls>{},
       std::forward<F>(f),
       std::forward<Ts>(args)...);
   }
