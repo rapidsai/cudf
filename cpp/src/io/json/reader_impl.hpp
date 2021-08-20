@@ -71,9 +71,6 @@ class reader_impl {
   col_map_ptr_type key_to_col_idx_map_;
   std::unique_ptr<rmm::device_scalar<col_map_type>> d_key_col_map_;
 
-  // parsing options
-  parse_options opts_{',', '\n', '\"', '.'};
-
   /**
    * @brief Sets the column map data member and makes a device copy to be used as a kernel
    * parameter.
@@ -116,7 +113,9 @@ class reader_impl {
    * @return Array of keys and a map that maps their hash values to column indices
    */
   std::pair<std::vector<std::string>, col_map_ptr_type> get_json_object_keys_hashes(
-    device_span<uint64_t const> rec_starts, rmm::cuda_stream_view stream);
+    parse_options_view const& parse_opts,
+    device_span<uint64_t const> rec_starts,
+    rmm::cuda_stream_view stream);
 
   /**
    * @brief Decompress the input data, if needed
@@ -155,7 +154,9 @@ class reader_impl {
    * @param[in] rec_starts Record starts in device memory
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    */
-  void set_column_names(device_span<uint64_t const> rec_starts, rmm::cuda_stream_view stream);
+  void set_column_names(parse_options_view const& parse_opts,
+                        device_span<uint64_t const> rec_starts,
+                        rmm::cuda_stream_view stream);
 
   std::vector<data_type> parse_data_types(std::vector<std::string> const& types_as_strings);
 
@@ -169,6 +170,7 @@ class reader_impl {
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    */
   void set_data_types(json_reader_options const& reader_opts,
+                      parse_options_view const& parse_opts,
                       device_span<uint64_t const> rec_starts,
                       rmm::cuda_stream_view stream);
 
@@ -181,7 +183,8 @@ class reader_impl {
    *
    * @return Table and its metadata
    */
-  table_with_metadata convert_data_to_table(device_span<uint64_t const> rec_starts,
+  table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
+                                            device_span<uint64_t const> rec_starts,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr);
 

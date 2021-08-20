@@ -184,10 +184,12 @@ auto sort_keys_info_by_offset(std::unique_ptr<table> info)
  * @return Names of JSON object keys in the file
  */
 std::pair<std::vector<std::string>, col_map_ptr_type> reader_impl::get_json_object_keys_hashes(
-  device_span<uint64_t const> rec_starts, rmm::cuda_stream_view stream)
+  parse_options_view const& parse_opts,
+  device_span<uint64_t const> rec_starts,
+  rmm::cuda_stream_view stream)
 {
   auto info = create_json_keys_info_table(
-    opts_.view(),
+    parse_opts,
     device_span<char const>(static_cast<char const*>(data_.data()), data_.size()),
     rec_starts,
     stream);
@@ -344,7 +346,8 @@ void reader_impl::upload_data_to_device(rmm::device_uvector<uint64_t>& rec_start
   data_ = rmm::device_buffer(uncomp_data_ + start_offset, bytes_to_upload, stream);
 }
 
-void reader_impl::set_column_names(device_span<uint64_t const> rec_starts,
+void reader_impl::set_column_names(parse_options_view const& parse_opts,
+                                   device_span<uint64_t const> rec_starts,
                                    rmm::cuda_stream_view stream)
 {
   // If file only contains one row, use the file size for the row size
@@ -376,7 +379,7 @@ void reader_impl::set_column_names(device_span<uint64_t const> rec_starts,
   // If the first opening bracket is '{', assume object format
   if (first_curly_bracket < first_square_bracket) {
     // use keys as column names if input rows are objects
-    auto keys_desc         = get_json_object_keys_hashes(rec_starts, stream);
+    auto keys_desc         = get_json_object_keys_hashes(parse_opts, rec_starts, stream);
     metadata_.column_names = keys_desc.first;
     set_column_map(std::move(keys_desc.second), stream);
   } else {
@@ -384,11 +387,12 @@ void reader_impl::set_column_names(device_span<uint64_t const> rec_starts,
     bool quotation = false;
     for (size_t pos = 0; pos < first_row.size(); ++pos) {
       // Flip the quotation flag if current character is a quotechar
-      if (first_row[pos] == opts_.quotechar) {
+      if (first_row[pos] == parse_opts.quotechar) {
         quotation = !quotation;
       }
       // Check if end of a column/row
-      else if (pos == first_row.size() - 1 || (!quotation && first_row[pos] == opts_.delimiter)) {
+      else if (pos == first_row.size() - 1 ||
+               (!quotation && first_row[pos] == parse_opts.delimiter)) {
         metadata_.column_names.emplace_back(std::to_string(cols_found++));
       }
     }
@@ -438,6 +442,7 @@ std::vector<data_type> reader_impl::parse_data_types(
 }
 
 void reader_impl::set_data_types(json_reader_options const& reader_opts,
+                                 parse_options_view const& parse_opts,
                                  device_span<uint64_t const> rec_starts,
                                  rmm::cuda_stream_view stream)
 {
@@ -467,7 +472,7 @@ void reader_impl::set_data_types(json_reader_options const& reader_opts,
     auto const do_set_null_count = key_to_col_idx_map_ != nullptr;
 
     auto const h_column_infos = cudf::io::json::gpu::detect_data_types(
-      opts_.view(),
+      parse_opts,
       device_span<char const>(static_cast<char const*>(data_.data()), data_.size()),
       rec_starts,
       do_set_null_count,
@@ -507,7 +512,8 @@ void reader_impl::set_data_types(json_reader_options const& reader_opts,
   }
 }
 
-table_with_metadata reader_impl::convert_data_to_table(device_span<uint64_t const> rec_starts,
+table_with_metadata reader_impl::convert_data_to_table(parse_options_view const& parse_opts,
+                                                       device_span<uint64_t const> rec_starts,
                                                        rmm::cuda_stream_view stream,
                                                        rmm::mr::device_memory_resource* mr)
 {
@@ -537,7 +543,7 @@ table_with_metadata reader_impl::convert_data_to_table(device_span<uint64_t cons
     cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(num_columns, stream);
 
   cudf::io::json::gpu::convert_json_to_columns(
-    opts_.view(),
+    parse_opts,
     device_span<char const>(static_cast<char const*>(data_.data()), data_.size()),
     rec_starts,
     d_dtypes,
@@ -607,11 +613,13 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
 {
   CUDF_EXPECTS(reader_opts.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
-  opts_.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
-  opts_.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
-  opts_.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
+  auto parse_opts = parse_options{',', '\n', '\"', '.'};
 
-  opts_.dayfirst = reader_opts.is_enabled_dayfirst();
+  parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
+  parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
+  parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
+
+  parse_opts.dayfirst = reader_opts.is_enabled_dayfirst();
 
   auto range_offset      = reader_opts.get_byte_range_offset();
   auto range_size        = reader_opts.get_byte_range_size();
@@ -634,13 +642,13 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
   upload_data_to_device(rec_starts, stream);
   CUDF_EXPECTS(data_.size() != 0, "Error uploading input data to the GPU.\n");
 
-  set_column_names(rec_starts, stream);
+  set_column_names(parse_opts.view(), rec_starts, stream);
   CUDF_EXPECTS(!metadata_.column_names.empty(), "Error determining column names.\n");
 
-  set_data_types(reader_opts, rec_starts, stream);
+  set_data_types(reader_opts, parse_opts.view(), rec_starts, stream);
   CUDF_EXPECTS(!dtypes_.empty(), "Error in data type detection.\n");
 
-  return convert_data_to_table(rec_starts, stream, mr);
+  return convert_data_to_table(parse_opts.view(), rec_starts, stream, mr);
 }
 
 table_with_metadata read_json(std::vector<std::unique_ptr<cudf::io::datasource>>& sources,
