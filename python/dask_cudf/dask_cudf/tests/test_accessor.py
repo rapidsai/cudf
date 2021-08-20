@@ -438,3 +438,18 @@ def test_sorting(data, ascending, na_position, ignore_index):
         .reset_index(drop=True)
     )
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{}, {}, {}],
+        [{"a": 100, "b": "abc"}, {"a": 42, "b": "def"}, {"a": -87, "b": ""}],
+        [{"a": [1, 2, 3], "b": {"c": 101}}, {"a": [4, 5], "b": {"c": 102}}],
+    ],
+)
+def test_struct_explode(data):
+    expect = pd.DataFrame(data)
+    got = dgd.from_cudf(Series(data), 2).struct.explode().compute()
+
+    assert_eq(expect, got)

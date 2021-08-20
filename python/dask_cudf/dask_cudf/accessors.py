@@ -1,6 +1,37 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 
+class StructMethods:
+    def __init__(self, d_series):
+        self.d_series = d_series
+
+    def explode(self):
+        """
+        Creates a dataframe view of the struct column, one column per field.
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        --------
+        >>> import cudf, dask_cudf as dgd
+        >>> ds = dgd.from_cudf(cudf.Series(
+        ...     [{'a': 42, 'b': 'str1', 'c': [-1]},
+        ...      {'a': 0,  'b': 'str2', 'c': [400, 500]},
+        ...      {'a': 7,  'b': '',     'c': []}]), npartitions=2)
+        >>> ds.struct.explode().compute()
+            a     b           c
+        0  42  str1        [-1]
+        1   0  str2  [400, 500]
+        2   7                []
+        """
+        return self.d_series.map_partitions(
+            lambda s: s.struct.explode(),
+            meta=self.d_series._meta.struct.explode(),
+        )
+
+
 class ListMethods:
     def __init__(self, d_series):
         self.d_series = d_series
