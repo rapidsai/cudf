@@ -857,16 +857,13 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
   chunks.device_to_host(stream, true);
 
   std::for_each(col_idx_it + 0, col_idx_it + num_columns, [&](auto col_idx) {
-    out_buffers[col_idx].null_count() = std::accumulate(
-      stripe_idx_it + 0,
-      stripe_idx_it + num_stripes,
-      0,
-      [&](auto null_count, auto const stripe_idx) {
-        printf("RGSL : chunks[stripe_idx][col_idx].null_count is %d for col id %d\n",
-               chunks[stripe_idx][col_idx].null_count,
-               static_cast<int32_t>(out_buffers[col_idx].type.id()));
-        return null_count + chunks[stripe_idx][col_idx].null_count;
-      });
+    out_buffers[col_idx].null_count() =
+      std::accumulate(stripe_idx_it + 0,
+                      stripe_idx_it + num_stripes,
+                      0,
+                      [&](auto null_count, auto const stripe_idx) {
+                        return null_count + chunks[stripe_idx][col_idx].null_count;
+                      });
   });
 }
 
@@ -1445,18 +1442,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     create_columns(std::move(out_buffers), out_columns, schema_info, stream);
   }
 
-  if (not out_columns.empty()) {
-    printf("RGSL: null count is %d \n", out_columns[0]->null_count());
-    if (out_columns[0]->num_children() == 2) {
-      printf("RGSL: null count of child 0  %d \n", out_columns[0]->child(0).null_count());
-      printf("RGSL: null count of child 1  %d \n", out_columns[0]->child(1).null_count());
-      // printf("RGSL : number of children in string column is %d\n",
-      // out_columns[0]->child(1).num_children()); printf("RGSL: null count of child 1-0  %d \n",
-      // out_columns[0]->child(1).child(0).null_count()); printf("RGSL: null count of child 1-1  %d
-      // \n", out_columns[0]->child(1).child(1).null_count());
-    }
-    auto col = out_columns[0]->view();
-  }
   // Return column names (must match order of returned columns)
   out_metadata.column_names.reserve(schema_info.size());
   std::transform(schema_info.cbegin(),
