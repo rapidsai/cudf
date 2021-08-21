@@ -198,11 +198,11 @@ std::pair<std::vector<std::string>, col_map_ptr_type> reader_impl::get_json_obje
           create_col_names_hash_map(sorted_info->get_column(2).view(), stream)};
 }
 
-void reader_impl::ingest_raw_input(std::vector<std::unique_ptr<datasource>> const& sources,
-                                   std::vector<char>& buffer,
-                                   size_t range_offset,
-                                   size_t range_size,
-                                   size_t range_size_padded)
+std::vector<char> reader_impl::ingest_raw_input(
+  std::vector<std::unique_ptr<datasource>> const& sources,
+  size_t range_offset,
+  size_t range_size,
+  size_t range_size_padded)
 {
   // Iterate through the user defined sources and read the contents into the local buffer
   size_t total_source_size = 0;
@@ -211,7 +211,8 @@ void reader_impl::ingest_raw_input(std::vector<std::unique_ptr<datasource>> cons
   }
   total_source_size = total_source_size - (range_offset * sources.size());
 
-  buffer.resize(total_source_size);
+  auto buffer = std::vector<char>(total_source_size);
+
   size_t bytes_read = 0;
   for (const auto& source : sources) {
     if (!source->is_empty()) {
@@ -220,36 +221,14 @@ void reader_impl::ingest_raw_input(std::vector<std::unique_ptr<datasource>> cons
       bytes_read += source->host_read(range_offset, data_size, destination);
     }
   }
+
+  return buffer;
 }
 
 bool should_load_whole_source(json_reader_options const& reader_opts)
 {
   return reader_opts.get_byte_range_offset() == 0 and  //
          reader_opts.get_byte_range_size() == 0;
-}
-
-/**
- * @brief Decompress the input data, if needed
- *
- * Sets the uncomp_data_ and uncomp_size_ data members
- * Loads the data into device memory if byte range parameters are not used
- */
-void reader_impl::decompress_input(json_reader_options const& reader_opts,
-                                   std::vector<char> const& buffer,
-                                   rmm::cuda_stream_view stream)
-{
-  if (reader_opts.get_compression() == compression_type::NONE) {
-    // Do not use the owner vector here to avoid extra copy
-    uncomp_data_ = host_span<char const>(static_cast<char const*>(buffer.data()), buffer.size());
-  } else {
-    uncomp_data_owner_ = get_uncompressed_data(  //
-      host_span<char const>(                     //
-        buffer.data(),
-        buffer.size()),
-      reader_opts.get_compression());
-
-    uncomp_data_ = host_span<char const>(uncomp_data_owner_.data(), uncomp_data_owner_.size());
-  }
 }
 
 rmm::device_uvector<uint64_t> reader_impl::find_record_starts(
@@ -632,13 +611,17 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
   auto range_size        = reader_opts.get_byte_range_size();
   auto range_size_padded = reader_opts.get_byte_range_size_with_padding();
 
-  std::vector<char> buffer;
-
-  ingest_raw_input(sources, buffer, range_offset, range_size, range_size_padded);
+  auto buffer = ingest_raw_input(sources, range_offset, range_size, range_size_padded);
 
   CUDF_EXPECTS(buffer.size() != 0, "Ingest failed: input data is null.\n");
 
-  decompress_input(reader_opts, buffer, stream);
+  if (reader_opts.get_compression() != compression_type::NONE) {
+    buffer = get_uncompressed_data(  //
+      host_span<char const>(buffer.data(), buffer.size()),
+      reader_opts.get_compression());
+  }
+
+  uncomp_data_ = host_span<char const>(static_cast<char const*>(buffer.data()), buffer.size());
 
   CUDF_EXPECTS(uncomp_data_.data() != nullptr, "Ingest failed: uncompressed input data is null.\n");
   CUDF_EXPECTS(uncomp_data_.size() != 0, "Ingest failed: uncompressed input data has zero size.\n");

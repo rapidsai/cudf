@@ -54,9 +54,6 @@ class reader_impl {
  private:
   host_span<char const> uncomp_data_;
 
-  // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
-  std::vector<char> uncomp_data_owner_;
-
   /**
    * @brief Ingest input JSON file/buffer, without decompression
    *
@@ -67,11 +64,10 @@ class reader_impl {
    * @param[in] range_size Bytes to read; use `0` for all remaining data
    * @param[in] range_size_padded Bytes to read with padding; use `0` for all remaining data
    */
-  void ingest_raw_input(std::vector<std::unique_ptr<datasource>> const& sources,
-                        std::vector<char>& buffer,
-                        size_t range_offset,
-                        size_t range_size,
-                        size_t range_size_padded);
+  std::vector<char> ingest_raw_input(std::vector<std::unique_ptr<datasource>> const& sources,
+                                     size_t range_offset,
+                                     size_t range_size,
+                                     size_t range_size_padded);
 
   /**
    * @brief Extract the JSON objects keys from the input file with object rows.
@@ -83,15 +79,6 @@ class reader_impl {
     device_span<uint64_t const> rec_starts,
     device_span<char const> data,
     rmm::cuda_stream_view stream);
-
-  /**
-   * @brief Decompress the input data, if needed
-   *
-   * Sets the uncomp_data_ and uncomp_size_ data members
-   */
-  void decompress_input(json_reader_options const& options,
-                        std::vector<char> const& buffer,
-                        rmm::cuda_stream_view stream);
 
   /**
    * @brief Finds all record starts in the file.
