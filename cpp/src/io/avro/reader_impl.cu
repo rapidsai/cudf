@@ -22,6 +22,7 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
 #include <cudf/table/table.hpp>
@@ -399,7 +400,9 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
 
       size_t total_dictionary_entries = 0;
       size_t dictionary_data_size     = 0;
-      std::vector<std::pair<uint32_t, uint32_t>> dict(column_types.size());
+
+      auto dict = std::vector<std::pair<uint32_t, uint32_t>>(column_types.size());
+
       for (size_t i = 0; i < column_types.size(); ++i) {
         auto col_idx     = selected_columns[i].first;
         auto& col_schema = meta->schema[meta->columns[col_idx].schema_data_idx];
@@ -411,12 +414,14 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
         }
       }
 
-      rmm::device_uvector<string_index_pair> d_global_dict(total_dictionary_entries, stream);
-      rmm::device_uvector<char> d_global_dict_data(dictionary_data_size, stream);
+      auto d_global_dict      = rmm::device_uvector<string_index_pair>(0, stream);
+      auto d_global_dict_data = rmm::device_uvector<char>(0, stream);
+
       if (total_dictionary_entries > 0) {
-        std::vector<string_index_pair> h_global_dict(total_dictionary_entries);
-        std::vector<char> h_global_dict_data(dictionary_data_size);
-        size_t dict_pos = 0;
+        auto h_global_dict      = std::vector<string_index_pair>(total_dictionary_entries);
+        auto h_global_dict_data = std::vector<char>(dictionary_data_size);
+        size_t dict_pos         = 0;
+
         for (size_t i = 0; i < column_types.size(); ++i) {
           auto const col_idx          = selected_columns[i].first;
           auto const& col_schema      = meta->schema[meta->columns[col_idx].schema_data_idx];
@@ -434,16 +439,9 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
           }
         }
 
-        CUDA_TRY(cudaMemcpyAsync(d_global_dict.data(),
-                                 h_global_dict.data(),
-                                 h_global_dict.size() * sizeof(string_index_pair),
-                                 cudaMemcpyDefault,
-                                 stream.value()));
-        CUDA_TRY(cudaMemcpyAsync(d_global_dict_data.data(),
-                                 h_global_dict_data.data(),
-                                 h_global_dict_data.size() * sizeof(char),
-                                 cudaMemcpyDefault,
-                                 stream.value()));
+        d_global_dict      = cudf::detail::make_device_uvector_async(h_global_dict, stream);
+        d_global_dict_data = cudf::detail::make_device_uvector_async(h_global_dict_data, stream);
+
         stream.synchronize();
       }
 
