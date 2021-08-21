@@ -38,30 +38,37 @@ The following table lists all of cudf types. For methods requiring dtype argumen
     +------------------------+------------------------------+-------------------------------------------------------------------------------------+---------------------------------------------+
     | Decimal                | Decimal64Dtype               | (none)                                                                              | (none)                                      |
     +------------------------+------------------------------+-------------------------------------------------------------------------------------+---------------------------------------------+
-    | List                   | ListDtype:sub:``1.1``        | list_                                                                               | (none):sub:``1.2``                          |
+    | List                   | ListDtype₁.₁                 | np.list_                                                                            | (none):sub:``1.2``                          |
     +------------------------+------------------------------+-------------------------------------------------------------------------------------+---------------------------------------------+
-    | Struct                 | StructDtype:sub:``1.1``      | dict_                                                                               | (none):sub:``1.2``                          |
+    | Struct                 | StructDtype₁.₁               | np.struct_                                                                          | (none):sub:``1.2``                          |
     +------------------------+------------------------------+-------------------------------------------------------------------------------------+---------------------------------------------+
 
 **Note: All dtypes above are Nullable**
-**1.1 The complete datatypes for both lists and structs are inferred from the data that it is composed upon. For example, the data type for the value** ``[[1, 2], [3, 4]]`` **is inferred as ListDtype(int64)**
+
+**1.1 The complete datatypes for both lists and structs are inferred from the data that it is composed upon. For example, the data type for the value** ``[[1, 2], [3, 4]]`` **is inferred as** ``ListDtype(int64)``.
 
 **1.2 cuDF does not support string aliases where dtype would equal** ``'list'`` **or** ``'struct'`` **list's and structs are inferred by the datatype explicitly or through a determination based on the data that the list or struct is composed upon**
 
-**cuDF supports arbitrarily deep nested lists. Such as list(list(int)), even list of structs or structs of lists**
+**cuDF supports arbitrarily deep nested lists. Such as** ``list(list(int))``, **even list of structs or structs of lists**
 
 **cuDF also supports arbitrary fields for structs - that is, it is possible to have a struct with any number of fields and any number of types that cuDF supports, even a struct of structs. Structs should be made up by same type of datatype or cuDF will produce an error - Example below**
 
-``Test_struct_dtype = [{'a':'dog ', 'b':'cat', 'c':'astronomy'},{'a':'fish', 'b':'gerbil', 'c':7}]``
-``df = cudf.DataFrame({'Example':Test_struct_dtype})``
+
+.. code-block:: python
+
+    >>> Test_struct_dtype = [{'a':'dog', 'b':'cat', 'c':'astronomy'}, {'a':'fish', 'b':'gerbil', 'c':7}]
+    >>> df = cudf.DataFrame({'Example':Test_struct_dtype})
 
 **Structs should also made up by with the same number of elements in each row or cuDF will default to creating empty values to rows - Example below**
 
-``Test_struct_dtype = [{'a':'dog ','b':'cat', 'c':'astronomy'},{'a':'fish','b':'gerbil'}]``
-``df = cudf.DataFrame({'Example':Test_struct_dtype})``
-``Example``
-``0 {'a': 'dog ', 'b': 'cat', 'c': 'astronomy'}``
-``1 {'a': 'fish', 'b': 'gerbil', 'c': None}``
+.. code-block:: python
+
+    >>> Test_struct_dtype = [{'a':'dog ','b':'cat', 'c':'astronomy'},{'a':'fish','b':'gerbil'}]
+    >>> df = cudf.DataFrame({'Example':Test_struct_dtype})
+    >>> df
+                                           Example
+    0  {'a': 'dog ', 'b': 'cat', 'c': 'astronomy'}
+    1      {'a': 'fish', 'b': 'gerbil', 'c': None}
 
 .. _np.int8: 
 .. _np.int16: 
