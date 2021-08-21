@@ -334,17 +334,16 @@ void reader_impl::decode_data(const rmm::device_buffer& block_data,
   }
 }
 
-reader_impl::reader_impl(std::unique_ptr<datasource> source,
-                         avro_reader_options const& options,
-                         rmm::mr::device_memory_resource* mr)
-  : _mr(mr), _source(std::move(source)), _columns(options.get_columns())
+reader_impl::reader_impl(std::unique_ptr<datasource> source, avro_reader_options const& options)
+  : _source(std::move(source)), _columns(options.get_columns())
 {
   // Open the source Avro dataset metadata
   _metadata = std::make_unique<metadata>(_source.get());
 }
 
 table_with_metadata reader_impl::read(avro_reader_options const& options,
-                                      rmm::cuda_stream_view stream)
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   auto skip_rows = options.get_skip_rows();
   auto num_rows  = options.get_num_rows();
@@ -447,13 +446,13 @@ table_with_metadata reader_impl::read(avro_reader_options const& options,
       for (size_t i = 0; i < column_types.size(); ++i) {
         auto col_idx     = selected_columns[i].first;
         bool is_nullable = (_metadata->columns[col_idx].schema_null_idx >= 0);
-        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
+        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, mr);
       }
 
       decode_data(block_data, dict, d_global_dict, num_rows, selected_columns, out_buffers, stream);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, _mr));
+        out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, mr));
       }
     } else {
       // Create empty columns
@@ -480,7 +479,7 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  return reader_impl(std::move(source), options, mr).read(options, stream);
+  return reader_impl(std::move(source), options).read(options, stream, mr);
 }
 
 }  // namespace avro

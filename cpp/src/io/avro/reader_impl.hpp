@@ -58,21 +58,21 @@ class reader_impl {
    *
    * @param source Dataset source
    * @param options Settings for controlling reading behavior
-   * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader_impl(std::unique_ptr<datasource> source,
-                       avro_reader_options const& options,
-                       rmm::mr::device_memory_resource* mr);
+  explicit reader_impl(std::unique_ptr<datasource> source, avro_reader_options const& options);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns
    *
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource to use for device memory allocation
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(avro_reader_options const& options, rmm::cuda_stream_view stream);
+  table_with_metadata read(avro_reader_options const& options,
+                           rmm::cuda_stream_view stream,
+                           rmm::mr::device_memory_resource* mr);
 
  private:
   /**
@@ -104,7 +104,6 @@ class reader_impl {
                    rmm::cuda_stream_view stream);
 
  private:
-  rmm::mr::device_memory_resource* _mr = nullptr;
   std::unique_ptr<datasource> _source;
   std::unique_ptr<metadata> _metadata;
 
