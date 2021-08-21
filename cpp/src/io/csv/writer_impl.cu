@@ -257,17 +257,14 @@ struct column_to_strings_fn {
 };
 }  // unnamed namespace
 
-writer_impl::writer_impl(csv_writer_options const& options, rmm::mr::device_memory_resource* mr)
-  : mr_(mr), options_(options)
-{
-}
-
 // write the header: column names:
 //
 void writer_impl::write_chunked_begin(data_sink* out_sink,
                                       table_view const& table,
-                                      const table_metadata* metadata,
-                                      rmm::cuda_stream_view stream)
+                                      table_metadata const* metadata,
+                                      csv_writer_options const& options_,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr_)
 {
   if ((metadata != nullptr) && (options_.is_enabled_include_header())) {
     auto const& column_names = metadata->column_names;
@@ -323,8 +320,10 @@ void writer_impl::write_chunked_begin(data_sink* out_sink,
 
 void writer_impl::write_chunked(data_sink* out_sink,
                                 strings_column_view const& str_column_view,
-                                const table_metadata* metadata,
-                                rmm::cuda_stream_view stream)
+                                table_metadata const* metadata,
+                                csv_writer_options const& options_,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr)
 {
   // algorithm outline:
   //
@@ -374,13 +373,15 @@ void writer_impl::write_chunked(data_sink* out_sink,
 
 void writer_impl::write(data_sink* out_sink,
                         table_view const& table,
-                        const table_metadata* metadata,
-                        rmm::cuda_stream_view stream)
+                        table_metadata const* metadata,
+                        csv_writer_options const& options_,
+                        rmm::cuda_stream_view stream,
+                        rmm::mr::device_memory_resource* mr_)
 {
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //
-  write_chunked_begin(out_sink, table, metadata, stream);
+  write_chunked_begin(out_sink, table, metadata, options_, stream, mr_);
 
   if (table.num_rows() > 0) {
     // no need to check same-size columns constraint; auto-enforced by table_view
@@ -449,7 +450,7 @@ void writer_impl::write(data_sink* out_sink,
         return cudf::strings::detail::replace_nulls(str_table_view.column(0), narep, stream);
       }();
 
-      write_chunked(out_sink, str_concat_col->view(), metadata, stream);
+      write_chunked(out_sink, str_concat_col->view(), metadata, options_, stream, mr_);
     }
   }
 }
@@ -459,8 +460,8 @@ void write_csv(std::unique_ptr<cudf::io::data_sink>&& sink,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
 {
-  return writer_impl(options, mr)
-    .write(sink.get(), options.get_table(), options.get_metadata(), stream);
+  return writer_impl().write(
+    sink.get(), options.get_table(), options.get_metadata(), options, stream, mr);
 }
 
 }  // namespace csv
