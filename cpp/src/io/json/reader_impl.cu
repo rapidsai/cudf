@@ -185,16 +185,17 @@ auto sort_keys_info_by_offset(std::unique_ptr<table> info)
  */
 std::pair<std::vector<std::string>, col_map_ptr_type> reader_impl::get_json_object_keys_hashes(
   parse_options_view const& parse_opts,
+  host_span<char const> h_data,
   device_span<uint64_t const> rec_starts,
-  device_span<char const> data,
+  device_span<char const> d_data,
   rmm::cuda_stream_view stream)
 {
-  auto info = create_json_keys_info_table(parse_opts, data, rec_starts, stream);
+  auto info = create_json_keys_info_table(parse_opts, d_data, rec_starts, stream);
 
   auto aggregated_info = aggregate_keys_info(std::move(info));
   auto sorted_info     = sort_keys_info_by_offset(std::move(aggregated_info));
 
-  return {create_key_strings(uncomp_data_.data(), sorted_info->view(), stream),
+  return {create_key_strings(h_data.data(), sorted_info->view(), stream),
           create_col_names_hash_map(sorted_info->get_column(2).view(), stream)};
 }
 
@@ -233,7 +234,8 @@ bool should_load_whole_source(json_reader_options const& reader_opts)
 
 rmm::device_uvector<uint64_t> reader_impl::find_record_starts(
   json_reader_options const& reader_opts,
-  device_span<char const> data,
+  host_span<char const> h_data,
+  device_span<char const> d_data,
   rmm::cuda_stream_view stream)
 {
   std::vector<char> chars_to_count{'\n'};
@@ -243,9 +245,9 @@ rmm::device_uvector<uint64_t> reader_impl::find_record_starts(
   // If not starting at an offset, add an extra row to account for the first row in the file
   cudf::size_type prefilter_count = ((reader_opts.get_byte_range_offset() == 0) ? 1 : 0);
   if (should_load_whole_source(reader_opts)) {
-    prefilter_count += count_all_from_set(data, chars_to_count, stream);
+    prefilter_count += count_all_from_set(d_data, chars_to_count, stream);
   } else {
-    prefilter_count += count_all_from_set(uncomp_data_, chars_to_count, stream);
+    prefilter_count += count_all_from_set(h_data, chars_to_count, stream);
   }
 
   rmm::device_uvector<uint64_t> rec_starts(prefilter_count, stream);
@@ -260,14 +262,9 @@ rmm::device_uvector<uint64_t> reader_impl::find_record_starts(
   std::vector<char> chars_to_find{'\n'};
   // Passing offset = 1 to return positions AFTER the found character
   if (should_load_whole_source(reader_opts)) {
-    find_all_from_set(data, chars_to_find, 1, find_result_ptr, stream);
+    find_all_from_set(d_data, chars_to_find, 1, find_result_ptr, stream);
   } else {
-    find_all_from_set(  //
-      uncomp_data_,
-      chars_to_find,
-      1,
-      find_result_ptr,
-      stream);
+    find_all_from_set(h_data, chars_to_find, 1, find_result_ptr, stream);
   }
 
   // Previous call stores the record pinput_file.typeositions as encountered by all threads
@@ -278,7 +275,7 @@ rmm::device_uvector<uint64_t> reader_impl::find_record_starts(
   auto filtered_count = prefilter_count;
 
   // Exclude the ending newline as it does not precede a record start
-  if (uncomp_data_.back() == '\n') { filtered_count--; }
+  if (h_data.back() == '\n') { filtered_count--; }
   rec_starts.resize(filtered_count, stream);
 
   return rec_starts;
@@ -293,10 +290,11 @@ rmm::device_uvector<uint64_t> reader_impl::find_record_starts(
  */
 rmm::device_uvector<char> reader_impl::upload_data_to_device(
   json_reader_options const& reader_opts,
+  host_span<char const> h_data,
   rmm::device_uvector<uint64_t>& rec_starts,
   rmm::cuda_stream_view stream)
 {
-  size_t end_offset = uncomp_data_.size();
+  size_t end_offset = h_data.size();
 
   // Trim lines that are outside range
   auto h_rec_starts = cudf::detail::make_std_vector_sync(rec_starts, stream);
@@ -322,22 +320,23 @@ rmm::device_uvector<char> reader_impl::upload_data_to_device(
                     thrust::minus<uint64_t>());
 
   const size_t bytes_to_upload = end_offset - start_offset;
-  CUDF_EXPECTS(bytes_to_upload <= uncomp_data_.size(),
+  CUDF_EXPECTS(bytes_to_upload <= h_data.size(),
                "Error finding the record within the specified byte range.\n");
 
   // Upload the raw data that is within the rows of interest
-  return cudf::detail::make_device_uvector_async(
-    uncomp_data_.subspan(start_offset, bytes_to_upload), stream);
+  return cudf::detail::make_device_uvector_async(h_data.subspan(start_offset, bytes_to_upload),
+                                                 stream);
 }
 
 std::pair<std::vector<std::string>, col_map_ptr_type> reader_impl::get_column_names_and_map(
   parse_options_view const& parse_opts,
+  host_span<char const> h_data,
   device_span<uint64_t const> rec_starts,
-  device_span<char const> data,
+  device_span<char const> d_data,
   rmm::cuda_stream_view stream)
 {
   // If file only contains one row, use the file size for the row size
-  uint64_t first_row_len = data.size() / sizeof(char);
+  uint64_t first_row_len = d_data.size() / sizeof(char);
   if (rec_starts.size() > 1) {
     // Set first_row_len to the offset of the second row, if it exists
     CUDA_TRY(cudaMemcpyAsync(&first_row_len,
@@ -348,7 +347,7 @@ std::pair<std::vector<std::string>, col_map_ptr_type> reader_impl::get_column_na
   }
   std::vector<char> first_row(first_row_len);
   CUDA_TRY(cudaMemcpyAsync(first_row.data(),
-                           data.data(),
+                           d_data.data(),
                            first_row_len * sizeof(char),
                            cudaMemcpyDeviceToHost,
                            stream.value()));
@@ -365,7 +364,7 @@ std::pair<std::vector<std::string>, col_map_ptr_type> reader_impl::get_column_na
   // If the first opening bracket is '{', assume object format
   if (first_curly_bracket < first_square_bracket) {
     // use keys as column names if input rows are objects
-    return get_json_object_keys_hashes(parse_opts, rec_starts, data, stream);
+    return get_json_object_keys_hashes(parse_opts, h_data, rec_starts, d_data, stream);
   } else {
     int cols_found    = 0;
     bool quotation    = false;
@@ -611,38 +610,37 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
   auto range_size        = reader_opts.get_byte_range_size();
   auto range_size_padded = reader_opts.get_byte_range_size_with_padding();
 
-  auto buffer = ingest_raw_input(sources, range_offset, range_size, range_size_padded);
+  auto h_data = ingest_raw_input(sources, range_offset, range_size, range_size_padded);
 
-  CUDF_EXPECTS(buffer.size() != 0, "Ingest failed: input data is null.\n");
+  CUDF_EXPECTS(h_data.size() != 0, "Ingest failed: input data is null.\n");
 
   if (reader_opts.get_compression() != compression_type::NONE) {
-    buffer = get_uncompressed_data(  //
-      host_span<char const>(buffer.data(), buffer.size()),
+    h_data = get_uncompressed_data(  //
+      host_span<char const>(h_data.data(), h_data.size()),
       reader_opts.get_compression());
   }
 
-  uncomp_data_ = host_span<char const>(static_cast<char const*>(buffer.data()), buffer.size());
+  CUDF_EXPECTS(h_data.data() != nullptr, "Ingest failed: uncompressed input data is null.\n");
+  CUDF_EXPECTS(h_data.size() != 0, "Ingest failed: uncompressed input data has zero size.\n");
 
-  CUDF_EXPECTS(uncomp_data_.data() != nullptr, "Ingest failed: uncompressed input data is null.\n");
-  CUDF_EXPECTS(uncomp_data_.size() != 0, "Ingest failed: uncompressed input data has zero size.\n");
-
-  auto data = rmm::device_uvector<char>(0, stream);
+  auto d_data = rmm::device_uvector<char>(0, stream);
 
   if (should_load_whole_source(reader_opts)) {
-    data = cudf::detail::make_device_uvector_async(uncomp_data_, stream);
+    d_data = cudf::detail::make_device_uvector_async(h_data, stream);
   }
 
-  auto rec_starts = find_record_starts(reader_opts, data, stream);
+  auto rec_starts = find_record_starts(reader_opts, h_data, d_data, stream);
 
   CUDF_EXPECTS(rec_starts.size() > 0, "Error enumerating records.\n");
 
   if (not should_load_whole_source(reader_opts)) {
-    data = upload_data_to_device(reader_opts, rec_starts, stream);
+    d_data = upload_data_to_device(reader_opts, h_data, rec_starts, stream);
   }
 
-  CUDF_EXPECTS(data.size() != 0, "Error uploading input data to the GPU.\n");
+  CUDF_EXPECTS(d_data.size() != 0, "Error uploading input data to the GPU.\n");
 
-  auto column_names_and_map = get_column_names_and_map(parse_opts.view(), rec_starts, data, stream);
+  auto column_names_and_map =
+    get_column_names_and_map(parse_opts.view(), h_data, rec_starts, d_data, stream);
 
   auto column_names = std::get<0>(column_names_and_map);
   auto column_map   = std::move(std::get<1>(column_names_and_map));
@@ -650,12 +648,12 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
   CUDF_EXPECTS(not column_names.empty(), "Error determining column names.\n");
 
   auto dtypes = get_data_types(
-    reader_opts, parse_opts.view(), column_names, column_map.get(), rec_starts, data, stream);
+    reader_opts, parse_opts.view(), column_names, column_map.get(), rec_starts, d_data, stream);
 
   CUDF_EXPECTS(not dtypes.empty(), "Error in data type detection.\n");
 
   return convert_data_to_table(
-    parse_opts.view(), dtypes, column_names, column_map.get(), rec_starts, data, stream, mr);
+    parse_opts.view(), dtypes, column_names, column_map.get(), rec_starts, d_data, stream, mr);
 }
 
 table_with_metadata read_json(std::vector<std::unique_ptr<cudf::io::datasource>>& sources,

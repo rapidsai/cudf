@@ -50,10 +50,7 @@ using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_ma
  * @brief Class used to parse Json input and convert it into gdf columns.
  */
 class reader_impl {
- public:
  private:
-  host_span<char const> uncomp_data_;
-
   /**
    * @brief Ingest input JSON file/buffer, without decompression
    *
@@ -76,8 +73,9 @@ class reader_impl {
    */
   std::pair<std::vector<std::string>, col_map_ptr_type> get_json_object_keys_hashes(
     parse_options_view const& parse_opts,
+    host_span<char const> h_data,
     device_span<uint64_t const> rec_starts,
-    device_span<char const> data,
+    device_span<char const> d_data,
     rmm::cuda_stream_view stream);
 
   /**
@@ -89,7 +87,8 @@ class reader_impl {
    * @return Record starts in the device memory
    */
   rmm::device_uvector<uint64_t> find_record_starts(json_reader_options const& reader_opts,
-                                                   device_span<char const> data,
+                                                   host_span<char const> h_data,
+                                                   device_span<char const> d_data,
                                                    rmm::cuda_stream_view stream);
 
   /**
@@ -100,6 +99,7 @@ class reader_impl {
    * Also updates the array of record starts to match the device data offset.
    */
   rmm::device_uvector<char> upload_data_to_device(json_reader_options const& reader_opts,
+                                                  host_span<char const> h_data,
                                                   rmm::device_uvector<uint64_t>& rec_starts,
                                                   rmm::cuda_stream_view stream);
 
@@ -113,8 +113,9 @@ class reader_impl {
    */
   std::pair<std::vector<std::string>, col_map_ptr_type> get_column_names_and_map(
     parse_options_view const& parse_opts,
+    host_span<char const> h_data,
     device_span<uint64_t const> rec_starts,
-    device_span<char const> data,
+    device_span<char const> d_data,
     rmm::cuda_stream_view stream);
 
   std::vector<data_type> parse_data_types(std::vector<std::string> const& column_names,
