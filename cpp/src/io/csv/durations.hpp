@@ -16,31 +16,17 @@
 
 #pragma once
 
-#include "csv_common.h"
-#include "csv_gpu.h"
-
-#include <cudf/strings/strings_column_view.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
-
-#include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/io/data_sink.hpp>
-#include <cudf/io/detail/csv.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/utilities/error.hpp>
+#include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <memory>
-#include <string>
-#include <vector>
 
 namespace cudf {
 namespace io {
 namespace detail {
 namespace csv {
-
-using namespace cudf::io::csv;
-using namespace cudf::io;
 
 std::unique_ptr<column> pandas_format_durations(
   column_view const& durations,

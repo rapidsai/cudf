@@ -19,17 +19,25 @@
  * @brief cuDF-IO CSV writer class implementation
  */
 
-#include "writer_impl.hpp"
+#include "durations.hpp"
+
+#include "csv_common.h"
+#include "csv_gpu.h"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/io/data_sink.hpp>
+#include <cudf/io/detail/csv.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -40,12 +48,18 @@
 #include <thrust/scan.h>
 
 #include <algorithm>
+#include <memory>
 #include <sstream>
+#include <string>
+#include <vector>
 
 namespace cudf {
 namespace io {
 namespace detail {
 namespace csv {
+
+using namespace cudf::io::csv;
+using namespace cudf::io;
 
 namespace {
 
