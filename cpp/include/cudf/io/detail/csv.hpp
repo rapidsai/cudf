@@ -83,7 +83,7 @@ class reader {
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource to use for device memory allocation
  */
-void write_csv(std::unique_ptr<cudf::io::data_sink> sinkp,
+void write_csv(std::unique_ptr<cudf::io::data_sink>&& sinkp,
                csv_writer_options const& options,
                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

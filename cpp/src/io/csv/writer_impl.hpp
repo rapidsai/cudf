@@ -50,63 +50,51 @@ class writer_impl {
   /**
    * @brief Constructor with writer options.
    *
-   * @param sink Output sink
    * @param options Settings for controlling behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  writer_impl(std::unique_ptr<data_sink> sink,
-              csv_writer_options const& options,
-              rmm::mr::device_memory_resource* mr);
+  writer_impl(csv_writer_options const& options, rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Write an entire dataset to CSV format.
    *
+   * @param sink Output sink
    * @param table The set of columns
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void write(table_view const& table,
+  void write(data_sink* sink,
+             table_view const& table,
              const table_metadata* metadata = nullptr,
              rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 
   /**
    * @brief Write the header of a CSV format.
    *
+   * @param sink Output sink
    * @param table The set of columns
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void write_chunked_begin(table_view const& table,
+  void write_chunked_begin(data_sink* sink,
+                           table_view const& table,
                            const table_metadata* metadata = nullptr,
                            rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 
   /**
    * @brief Write dataset to CSV format without header.
    *
+   * @param sink Output sink
    * @param strings_column Subset of columns converted to string to be written.
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void write_chunked(strings_column_view const& strings_column,
+  void write_chunked(data_sink* sink,
+                     strings_column_view const& strings_column,
                      const table_metadata* metadata = nullptr,
                      rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 
-  /**
-   * @brief Write footer of CSV format (typically, empty).
-   *
-   * @param table The set of columns
-   * @param metadata The metadata associated with the table
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   */
-  void write_chunked_end(table_view const& table,
-                         const table_metadata* metadata = nullptr,
-                         rmm::cuda_stream_view stream   = rmm::cuda_stream_default)
-  {
-    // purposely no-op (for now);
-  }
-
  private:
-  std::unique_ptr<data_sink> out_sink_;
   rmm::mr::device_memory_resource* mr_ = nullptr;
   csv_writer_options const options_;
 };
