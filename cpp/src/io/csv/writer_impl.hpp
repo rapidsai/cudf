@@ -45,7 +45,7 @@ using namespace cudf::io;
 /**
  * @brief Implementation for CSV writer
  */
-class writer::impl {
+class writer_impl {
  public:
   /**
    * @brief Constructor with writer options.
@@ -54,9 +54,9 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  impl(std::unique_ptr<data_sink> sink,
-       csv_writer_options const& options,
-       rmm::mr::device_memory_resource* mr);
+  writer_impl(std::unique_ptr<data_sink> sink,
+              csv_writer_options const& options,
+              rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Write an entire dataset to CSV format.

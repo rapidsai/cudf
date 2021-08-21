@@ -74,45 +74,20 @@ class reader {
   table_with_metadata read(rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 };
 
-class writer {
- public:
-  class impl;
+/**
+ * @brief Writes the entire dataset.
+ *
+ * @param table Set of columns to output
+ * @param metadata Table metadata and column names
+ * @param sinkp The data sink to write the data to
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource to use for device memory allocation
+ */
+void write_csv(std::unique_ptr<cudf::io::data_sink> sinkp,
+               csv_writer_options const& options,
+               rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
- private:
-  std::unique_ptr<impl> _impl;
-
- public:
-  /**
-   * @brief Constructor for output to a file.
-   *
-   * @param sinkp The data sink to write the data to
-   * @param options Settings for controlling writing behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  writer(std::unique_ptr<cudf::io::data_sink> sinkp,
-         csv_writer_options const& options,
-         rmm::cuda_stream_view stream,
-         rmm::mr::device_memory_resource* mr);  // cannot provide definition here (because
-                                                // _impl is incomplete hence unique_ptr has
-                                                // not enough sizeof() info)
-
-  /**
-   * @brief Destructor explicitly-declared to avoid inlined in header
-   */
-  ~writer();
-
-  /**
-   * @brief Writes the entire dataset.
-   *
-   * @param table Set of columns to output
-   * @param metadata Table metadata and column names
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   */
-  void write(table_view const& table,
-             const table_metadata* metadata = nullptr,
-             rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
-};
 }  // namespace csv
 }  // namespace detail
 }  // namespace io
