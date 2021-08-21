@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "json_common.h"
 #include "json_gpu.h"
 
 #include <hash/concurrent_unordered_map.cuh>
@@ -35,6 +34,7 @@
 #include <cudf/sorting.hpp>
 #include <cudf/strings/detail/replace.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 

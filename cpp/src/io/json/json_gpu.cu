@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include "json_common.h"
 #include "json_gpu.h"
 
 #include <io/csv/datetime.cuh>
+#include <io/utilities/column_type_histogram.hpp>
 #include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/hash_functions.cuh>
@@ -25,6 +25,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -510,6 +511,8 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
     auto const value_len = static_cast<size_t>(std::max(desc.value_end - desc.value_begin, 0L));
 
     current = desc.value_end + 1;
+
+    using string_index_pair = thrust::pair<const char*, size_type>;
 
     // Empty fields are not legal values
     if (!serialized_trie_contains(opts.trie_na, {desc.value_begin, value_len})) {
