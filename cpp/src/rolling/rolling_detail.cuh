@@ -320,8 +320,9 @@ struct DeviceRollingVariance {
                                    [&input](auto i) { return input.is_valid_nocheck(i); })
                 : end_index - start_index;
 
-    // Variance/Std is non-negative, thus ddof should be strictly less than valid counts.
-    bool output_is_valid = (count >= min_periods) and (ddof < count);
+    // The denominator of the variance is `count - ddof`, it is strictly positive
+    // to gaurantee that variance is non-negative.
+    bool output_is_valid = count > 0 and (count >= min_periods) and (ddof < count);
 
     if (output_is_valid) {
       // Welford algorithm

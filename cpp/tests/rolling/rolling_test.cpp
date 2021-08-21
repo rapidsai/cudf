@@ -623,22 +623,103 @@ TYPED_TEST(RollingVarStdTest, SimpleStaticVarianceStd)
 
   using ResultType = double;
 
-  size_type const ddof = 1, min_periods = 1, preceding_window = 2, following_window = 1;
+  size_type const ddof = 1, min_periods = 0, preceding_window = 2, following_window = 1;
 
   auto const col_data =
-    cudf::test::make_type_param_vector<TypeParam>({XXX, XXX, 9, 5, XXX, XXX, 0, 8, 5, 8});
-  const std::vector<bool> col_mask = {0, 0, 1, 1, 0, 0, 1, 1, 1, 1};
+    cudf::test::make_type_param_vector<TypeParam>({XXX, XXX, 9, 5, XXX, XXX, XXX, 0, 8, 5, 8});
+  const std::vector<bool> col_mask = {0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1};
 
   auto const expected_var =
     cudf::is_boolean<TypeParam>()
-      ? std::vector<ResultType>{XXX, XXX, 0, 0, XXX, XXX, 0.5, 0.3333333333333333, 0, 0}
-      : std::vector<ResultType>{XXX, XXX, 8, 8, XXX, XXX, 32, 16.33333333333333, 3, 4.5};
+      ? std::vector<ResultType>{XXX, XXX, 0, 0, XXX, XXX, XXX, 0.5, 0.3333333333333333, 0, 0}
+      : std::vector<ResultType>{XXX, XXX, 8, 8, XXX, XXX, XXX, 32, 16.33333333333333, 3, 4.5};
   std::vector<ResultType> expected_std(expected_var.size());
   std::transform(expected_var.begin(), expected_var.end(), expected_std.begin(), [](auto const& x) {
     return std::sqrt(x);
   });
 
-  const std::vector<bool> expected_mask = {0, 0, 1, 1, 0, 0, 1, 1, 1, 1};
+  const std::vector<bool> expected_mask = {0, /* all null window */
+                                           0, /* count == ddof */
+                                           1,
+                                           1,
+                                           0, /* count == ddof */
+                                           0, /* all null window */
+                                           0, /* count == ddof */
+                                           1,
+                                           1,
+                                           1,
+                                           1};
+
+  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  fixed_width_column_wrapper<ResultType> var_expect(
+    expected_var.begin(), expected_var.end(), expected_mask.begin());
+  fixed_width_column_wrapper<ResultType> std_expect(
+    expected_std.begin(), expected_std.end(), expected_mask.begin());
+
+  std::unique_ptr<cudf::column> var_result, std_result;
+  // static sizes
+  EXPECT_NO_THROW(var_result = cudf::rolling_window(input,
+                                                    preceding_window,
+                                                    following_window,
+                                                    min_periods,
+                                                    dynamic_cast<cudf::rolling_aggregation const&>(
+                                                      *cudf::make_variance_aggregation(ddof))););
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*var_result, var_expect);
+
+  EXPECT_NO_THROW(std_result = cudf::rolling_window(input,
+                                                    preceding_window,
+                                                    following_window,
+                                                    min_periods,
+                                                    dynamic_cast<cudf::rolling_aggregation const&>(
+                                                      *cudf::make_std_aggregation(ddof))););
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*std_result, std_expect);
+
+#undef XXX
+}
+
+TYPED_TEST(RollingVarStdTest, SimpleStaticVarianceStdNegativeDDOF)
+{
+#define XXX 0  // NULL stub
+
+  using ResultType = double;
+
+  size_type const ddof = -1, min_periods = 0, preceding_window = 2, following_window = 1;
+
+  auto const col_data =
+    cudf::test::make_type_param_vector<TypeParam>({XXX, XXX, 9, 5, XXX, XXX, XXX, 0, 8, 5, 8});
+  const std::vector<bool> col_mask = {0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1};
+
+  auto const expected_var =
+    cudf::is_boolean<TypeParam>()
+      ? std::vector<
+          ResultType>{XXX, 0, 0, 0, 0, XXX, 0, 0.16666666666666667, 0.1666666666666667, 0, 0}
+      : std::vector<ResultType>{XXX,
+                                0,
+                                2.666666666666667,
+                                2.666666666666667,
+                                0,
+                                XXX,
+                                0,
+                                10.666666666666667,
+                                8.166666666666667,
+                                1.5,
+                                1.5};
+  std::vector<ResultType> expected_std(expected_var.size());
+  std::transform(expected_var.begin(), expected_var.end(), expected_std.begin(), [](auto const& x) {
+    return std::sqrt(x);
+  });
+
+  const std::vector<bool> expected_mask = {0, /* all null window */
+                                           1,
+                                           1,
+                                           1,
+                                           1,
+                                           0, /* all null window */
+                                           1,
+                                           1,
+                                           1,
+                                           1,
+                                           1};
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
   fixed_width_column_wrapper<ResultType> var_expect(
