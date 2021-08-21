@@ -138,7 +138,8 @@ class metadata : public file_metadata {
   datasource* const source;
 };
 
-rmm::device_buffer reader_impl::decompress_data(const rmm::device_buffer& comp_block_data,
+rmm::device_buffer reader_impl::decompress_data(datasource* source,
+                                                rmm::device_buffer const& comp_block_data,
                                                 rmm::cuda_stream_view stream)
 {
   size_t uncompressed_data_size = 0;
@@ -155,7 +156,7 @@ rmm::device_buffer reader_impl::decompress_data(const rmm::device_buffer& comp_b
   } else if (_metadata->codec == "snappy") {
     // Extract the uncompressed length from the snappy stream
     for (size_t i = 0; i < _metadata->block_list.size(); i++) {
-      const auto buffer  = _source->host_read(_metadata->block_list[i].offset, 4);
+      const auto buffer  = source->host_read(_metadata->block_list[i].offset, 4);
       const uint8_t* blk = buffer->data();
       uint32_t blk_len   = blk[0];
       if (blk_len > 0x7f) {
@@ -334,14 +335,10 @@ void reader_impl::decode_data(const rmm::device_buffer& block_data,
   }
 }
 
-reader_impl::reader_impl(std::unique_ptr<datasource> source, avro_reader_options const& options)
-  : _source(std::move(source)), _columns(options.get_columns())
-{
-  // Open the source Avro dataset metadata
-  _metadata = std::make_unique<metadata>(_source.get());
-}
+reader_impl::reader_impl(avro_reader_options const& options) : _columns(options.get_columns()) {}
 
-table_with_metadata reader_impl::read(avro_reader_options const& options,
+table_with_metadata reader_impl::read(datasource* source,
+                                      avro_reader_options const& options,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
@@ -350,6 +347,9 @@ table_with_metadata reader_impl::read(avro_reader_options const& options,
   num_rows       = (num_rows != 0) ? num_rows : -1;
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata metadata_out;
+
+  // Open the source Avro dataset metadata
+  _metadata = std::make_unique<metadata>(source);
 
   // Select and read partial metadata / schema within the subset of rows
   _metadata->init_and_select_rows(skip_rows, num_rows);
@@ -369,21 +369,21 @@ table_with_metadata reader_impl::read(avro_reader_options const& options,
 
     if (_metadata->total_data_size > 0) {
       rmm::device_buffer block_data;
-      if (_source->is_device_read_preferred(_metadata->total_data_size)) {
+      if (source->is_device_read_preferred(_metadata->total_data_size)) {
         block_data      = rmm::device_buffer{_metadata->total_data_size, stream};
-        auto read_bytes = _source->device_read(_metadata->block_list[0].offset,
-                                               _metadata->total_data_size,
-                                               static_cast<uint8_t*>(block_data.data()),
-                                               stream);
+        auto read_bytes = source->device_read(_metadata->block_list[0].offset,
+                                              _metadata->total_data_size,
+                                              static_cast<uint8_t*>(block_data.data()),
+                                              stream);
         block_data.resize(read_bytes, stream);
       } else {
         const auto buffer =
-          _source->host_read(_metadata->block_list[0].offset, _metadata->total_data_size);
+          source->host_read(_metadata->block_list[0].offset, _metadata->total_data_size);
         block_data = rmm::device_buffer{buffer->data(), buffer->size(), stream};
       }
 
       if (_metadata->codec != "" && _metadata->codec != "null") {
-        auto decomp_block_data = decompress_data(block_data, stream);
+        auto decomp_block_data = decompress_data(source, block_data, stream);
         block_data             = std::move(decomp_block_data);
       } else {
         auto dst_ofs = _metadata->block_list[0].offset;
@@ -479,7 +479,7 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  return reader_impl(std::move(source), options).read(options, stream, mr);
+  return reader_impl(options).read(source.get(), options, stream, mr);
 }
 
 }  // namespace avro
