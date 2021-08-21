@@ -54,13 +54,6 @@ class metadata;
 class reader_impl {
  public:
   /**
-   * @brief Constructor from a dataset source with reader options.
-   *
-   * @param options Settings for controlling reading behavior
-   */
-  explicit reader_impl(avro_reader_options const& options);
-
-  /**
    * @brief Read an entire set or a subset of data and returns a set of columns
    *
    * @param source Dataset source
@@ -108,8 +101,6 @@ class reader_impl {
 
  private:
   std::unique_ptr<metadata> _metadata;
-
-  std::vector<std::string> _columns;
 };
 
 }  // namespace avro

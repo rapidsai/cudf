@@ -335,8 +335,6 @@ void reader_impl::decode_data(const rmm::device_buffer& block_data,
   }
 }
 
-reader_impl::reader_impl(avro_reader_options const& options) : _columns(options.get_columns()) {}
-
 table_with_metadata reader_impl::read(datasource* source,
                                       avro_reader_options const& options,
                                       rmm::cuda_stream_view stream,
@@ -355,7 +353,7 @@ table_with_metadata reader_impl::read(datasource* source,
   _metadata->init_and_select_rows(skip_rows, num_rows);
 
   // Select only columns required by the options
-  auto selected_columns = _metadata->select_columns(_columns);
+  auto selected_columns = _metadata->select_columns(options.get_columns());
   if (selected_columns.size() != 0) {
     // Get a list of column data types
     std::vector<data_type> column_types;
@@ -479,7 +477,7 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  return reader_impl(options).read(source.get(), options, stream, mr);
+  return reader_impl().read(source.get(), options, stream, mr);
 }
 
 }  // namespace avro
