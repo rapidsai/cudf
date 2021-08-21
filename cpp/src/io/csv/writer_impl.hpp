@@ -42,63 +42,6 @@ namespace csv {
 using namespace cudf::io::csv;
 using namespace cudf::io;
 
-/**
- * @brief Implementation for CSV writer
- */
-class writer_impl {
- public:
-  /**
-   * @brief Write an entire dataset to CSV format.
-   *
-   * @param sink Output sink
-   * @param table The set of columns
-   * @param metadata The metadata associated with the table
-   * @param options Settings for controlling behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  void write(data_sink* sink,
-             table_view const& table,
-             const table_metadata* metadata,
-             csv_writer_options const& options,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr);
-
-  /**
-   * @brief Write the header of a CSV format.
-   *
-   * @param sink Output sink
-   * @param table The set of columns
-   * @param metadata The metadata associated with the table
-   * @param options Settings for controlling behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  void write_chunked_begin(data_sink* sink,
-                           table_view const& table,
-                           table_metadata const* metadata,
-                           csv_writer_options const& options,
-                           rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr);
-
-  /**
-   * @brief Write dataset to CSV format without header.
-   *
-   * @param sink Output sink
-   * @param strings_column Subset of columns converted to string to be written.
-   * @param metadata The metadata associated with the table
-   * @param options Settings for controlling behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  void write_chunked(data_sink* sink,
-                     strings_column_view const& strings_column,
-                     const table_metadata* metadata,
-                     csv_writer_options const& options,
-                     rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr);
-};
-
 std::unique_ptr<column> pandas_format_durations(
   column_view const& durations,
   rmm::cuda_stream_view stream,

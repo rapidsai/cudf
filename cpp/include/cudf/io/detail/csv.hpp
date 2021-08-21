@@ -75,15 +75,18 @@ class reader {
 };
 
 /**
- * @brief Writes the entire dataset.
+ * @brief Write an entire dataset to CSV format.
  *
- * @param table Set of columns to output
- * @param metadata Table metadata and column names
- * @param sinkp The data sink to write the data to
+ * @param sink Output sink
+ * @param table The set of columns
+ * @param metadata The metadata associated with the table
+ * @param options Settings for controlling behavior
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource to use for device memory allocation
  */
-void write_csv(std::unique_ptr<cudf::io::data_sink>&& sinkp,
+void write_csv(data_sink* sink,
+               table_view const& table,
+               const table_metadata* metadata,
                csv_writer_options const& options,
                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
