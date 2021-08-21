@@ -52,8 +52,7 @@ using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_ma
 class reader_impl {
  public:
  private:
-  const char* uncomp_data_ = nullptr;
-  size_t uncomp_size_      = 0;
+  host_span<char const> uncomp_data_;
 
   // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
   std::vector<char> uncomp_data_owner_;
@@ -90,9 +89,9 @@ class reader_impl {
    *
    * Sets the uncomp_data_ and uncomp_size_ data members
    */
-  rmm::device_buffer decompress_input(json_reader_options const& options,
-                                      std::vector<char> const& buffer,
-                                      rmm::cuda_stream_view stream);
+  rmm::device_uvector<char> decompress_input(json_reader_options const& options,
+                                             std::vector<char> const& buffer,
+                                             rmm::cuda_stream_view stream);
 
   /**
    * @brief Finds all record starts in the file.
@@ -113,9 +112,9 @@ class reader_impl {
    * Only rows that need to be parsed are copied, based on the byte range
    * Also updates the array of record starts to match the device data offset.
    */
-  rmm::device_buffer upload_data_to_device(json_reader_options const& reader_opts,
-                                           rmm::device_uvector<uint64_t>& rec_starts,
-                                           rmm::cuda_stream_view stream);
+  rmm::device_uvector<char> upload_data_to_device(json_reader_options const& reader_opts,
+                                                  rmm::device_uvector<uint64_t>& rec_starts,
+                                                  rmm::cuda_stream_view stream);
 
   /**
    * @brief Parse the first row to set the column name
