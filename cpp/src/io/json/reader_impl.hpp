@@ -89,9 +89,9 @@ class reader_impl {
    *
    * Sets the uncomp_data_ and uncomp_size_ data members
    */
-  rmm::device_uvector<char> decompress_input(json_reader_options const& options,
-                                             std::vector<char> const& buffer,
-                                             rmm::cuda_stream_view stream);
+  void decompress_input(json_reader_options const& options,
+                        std::vector<char> const& buffer,
+                        rmm::cuda_stream_view stream);
 
   /**
    * @brief Finds all record starts in the file.

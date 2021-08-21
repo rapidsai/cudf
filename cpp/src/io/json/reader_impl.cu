@@ -234,9 +234,9 @@ bool should_load_whole_source(json_reader_options const& reader_opts)
  * Sets the uncomp_data_ and uncomp_size_ data members
  * Loads the data into device memory if byte range parameters are not used
  */
-rmm::device_uvector<char> reader_impl::decompress_input(json_reader_options const& reader_opts,
-                                                        std::vector<char> const& buffer,
-                                                        rmm::cuda_stream_view stream)
+void reader_impl::decompress_input(json_reader_options const& reader_opts,
+                                   std::vector<char> const& buffer,
+                                   rmm::cuda_stream_view stream)
 {
   if (reader_opts.get_compression() == compression_type::NONE) {
     // Do not use the owner vector here to avoid extra copy
@@ -249,11 +249,6 @@ rmm::device_uvector<char> reader_impl::decompress_input(json_reader_options cons
       reader_opts.get_compression());
 
     uncomp_data_ = host_span<char const>(uncomp_data_owner_.data(), uncomp_data_owner_.size());
-  }
-  if (should_load_whole_source(reader_opts)) {
-    return cudf::detail::make_device_uvector_async(uncomp_data_, stream);
-  } else {
-    return rmm::device_uvector<char>(0, stream);
   }
 }
 
@@ -322,33 +317,30 @@ rmm::device_uvector<char> reader_impl::upload_data_to_device(
   rmm::device_uvector<uint64_t>& rec_starts,
   rmm::cuda_stream_view stream)
 {
-  size_t start_offset = 0;
-  size_t end_offset   = uncomp_data_.size();
+  size_t end_offset = uncomp_data_.size();
 
   // Trim lines that are outside range
-  if (reader_opts.get_byte_range_size() != 0 || reader_opts.get_byte_range_offset() != 0) {
-    auto h_rec_starts = cudf::detail::make_std_vector_sync(rec_starts, stream);
+  auto h_rec_starts = cudf::detail::make_std_vector_sync(rec_starts, stream);
 
-    if (reader_opts.get_byte_range_size() != 0) {
-      auto it = h_rec_starts.end() - 1;
-      while (it >= h_rec_starts.begin() && *it > reader_opts.get_byte_range_size()) {
-        end_offset = *it;
-        --it;
-      }
-      h_rec_starts.erase(it + 1, h_rec_starts.end());
+  if (reader_opts.get_byte_range_size() != 0) {
+    auto it = h_rec_starts.end() - 1;
+    while (it >= h_rec_starts.begin() && *it > reader_opts.get_byte_range_size()) {
+      end_offset = *it;
+      --it;
     }
-
-    // Resize to exclude rows outside of the range
-    // Adjust row start positions to account for the data subcopy
-    start_offset = h_rec_starts.front();
-    rec_starts.resize(h_rec_starts.size(), stream);
-    thrust::transform(rmm::exec_policy(stream),
-                      rec_starts.begin(),
-                      rec_starts.end(),
-                      thrust::make_constant_iterator(start_offset),
-                      rec_starts.begin(),
-                      thrust::minus<uint64_t>());
+    h_rec_starts.erase(it + 1, h_rec_starts.end());
   }
+
+  // Resize to exclude rows outside of the range
+  // Adjust row start positions to account for the data subcopy
+  size_t start_offset = h_rec_starts.front();
+  rec_starts.resize(h_rec_starts.size(), stream);
+  thrust::transform(rmm::exec_policy(stream),
+                    rec_starts.begin(),
+                    rec_starts.end(),
+                    thrust::make_constant_iterator(start_offset),
+                    rec_starts.begin(),
+                    thrust::minus<uint64_t>());
 
   const size_t bytes_to_upload = end_offset - start_offset;
   CUDF_EXPECTS(bytes_to_upload <= uncomp_data_.size(),
@@ -646,16 +638,24 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
 
   CUDF_EXPECTS(buffer.size() != 0, "Ingest failed: input data is null.\n");
 
-  auto data = decompress_input(reader_opts, buffer, stream);
+  decompress_input(reader_opts, buffer, stream);
 
   CUDF_EXPECTS(uncomp_data_.data() != nullptr, "Ingest failed: uncompressed input data is null.\n");
   CUDF_EXPECTS(uncomp_data_.size() != 0, "Ingest failed: uncompressed input data has zero size.\n");
 
+  auto data = rmm::device_uvector<char>(0, stream);
+
+  if (should_load_whole_source(reader_opts)) {
+    data = cudf::detail::make_device_uvector_async(uncomp_data_, stream);
+  }
+
   auto rec_starts = find_record_starts(reader_opts, data, stream);
 
-  CUDF_EXPECTS(!rec_starts.is_empty(), "Error enumerating records.\n");
+  CUDF_EXPECTS(rec_starts.size() > 0, "Error enumerating records.\n");
 
-  data = upload_data_to_device(reader_opts, rec_starts, stream);
+  if (not should_load_whole_source(reader_opts)) {
+    data = upload_data_to_device(reader_opts, rec_starts, stream);
+  }
 
   CUDF_EXPECTS(data.size() != 0, "Error uploading input data to the GPU.\n");
 
