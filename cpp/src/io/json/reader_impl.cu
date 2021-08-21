@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file reader_impl.cu
- * @brief cuDF-IO JSON reader class implementation
- */
-
 #include "json_common.h"
 #include "json_gpu.h"
 
