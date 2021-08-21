@@ -147,7 +147,7 @@ class orc_column_view {
     : cudf_column{col},
       _index{index},
       _str_idx{str_idx},
-      _nesting_level{parent == nullptr ? 0 : (parent->nesting_level() + 1)},
+      _is_child{parent != nullptr},
       _type_width{cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : 0},
       _scale{(to_orc_type(col.type().id()) == TypeKind::DECIMAL) ? -col.type().scale()
                                                                  : to_clockscale(col.type().id())},
@@ -205,8 +205,7 @@ class orc_column_view {
   // Id in the ORC file
   auto id() const noexcept { return _index + 1; }
 
-  auto is_child() const noexcept { return nesting_level() > 0; }
-  int nesting_level() const noexcept {return _nesting_level;}
+  auto is_child() const noexcept { return _is_child; }
   auto child_begin() const noexcept { return children.cbegin(); }
   auto child_end() const noexcept { return children.cend(); }
 
@@ -233,7 +232,7 @@ class orc_column_view {
   uint32_t _index = 0;
   // Identifier within the set of string columns
   int _str_idx;
-  int _nesting_level;
+  bool _is_child = false;
 
   size_t _type_width = 0;
   int32_t _scale     = 0;
@@ -1151,6 +1150,24 @@ void writer::impl::init_state()
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
+struct pushdown_null_masks {
+  // owning vector
+  std::vector<rmm::device_uvector<bitmask_type>> data;
+  // vector of pointers, pre-order
+  std::vector<device_span<bitmask_type>> masks;
+};
+
+pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
+                                             rmm::cuda_stream_view stream)
+{
+  // go over columns to create null masks
+
+  // attach null masks to device column views (async  )
+
+  // calc masks (async)
+  return {};
+}
+
 template <typename T>
 struct device_stack {
   __device__ device_stack(T* stack_storage, int capacity)
@@ -1182,7 +1199,6 @@ orc_table_view make_orc_table_view(table_view const& table,
 {
   std::vector<orc_column_view> orc_columns;
   std::vector<uint32_t> str_col_indexes;
-  std::vector<rmm::device_uvector<bitmask_type>> pushdown_null_masks;
 
   std::function<void(column_view const&, orc_column_view*, column_in_metadata const&)>
     append_orc_column =
@@ -1195,18 +1211,13 @@ orc_table_view make_orc_table_view(table_view const& table,
         if (orc_columns[new_col_idx].is_string()) { str_col_indexes.push_back(new_col_idx); }
 
         if (col.type().id() == type_id::LIST) {
-          pushdown_null_masks.emplace_back(col.child(lists_column_view::child_column_index).size(),
-                                           stream);
           append_orc_column(col.child(lists_column_view::child_column_index),
                             &orc_columns[new_col_idx],
                             col_meta.child(lists_column_view::child_column_index));
         } else if (col.type().id() == type_id::STRUCT) {
-          pushdown_null_masks.emplace_back(col.size(), stream);
           for (auto child_idx = 0; child_idx != col.num_children(); ++child_idx)
             append_orc_column(
               col.child(child_idx), &orc_columns[new_col_idx], col_meta.child(child_idx));
-        } else {
-          pushdown_null_masks.emplace_back(0, stream);  // empty mask, will be unused
         }
       };
 
@@ -1218,19 +1229,9 @@ orc_table_view make_orc_table_view(table_view const& table,
   using stack_value_type = thrust::pair<column_device_view const*, thrust::optional<uint32_t>>;
   rmm::device_uvector<stack_value_type> stack_storage(orc_columns.size(), stream);
 
-  std::vector<bitmask_type*> pushdown_null_mask_ptrs;
-  pushdown_null_mask_ptrs.reserve(pushdown_null_masks.size());
-  std::transform(pushdown_null_masks.begin(), 
-  pushdown_null_masks.end(), 
-  std::back_inserter(pushdown_null_mask_ptrs), 
-  [](auto& mask){return mask.data();});
-  auto d_pushdown_null_mask_ptrs = cudf::detail::make_device_uvector_async<bitmask_type*>(pushdown_null_mask_ptrs, stream);
-
-
   // pre-order append ORC device columns
   cudf::detail::device_single_thread(
     [d_orc_cols         = device_span<orc_column_device_view>{d_orc_columns},
-    d_pd_masks         = device_span<bitmask_type* const>{d_pushdown_null_mask_ptrs},
      d_table            = d_table,
      stack_storage      = stack_storage.data(),
      stack_storage_size = stack_storage.size()] __device__() {
@@ -1246,7 +1247,7 @@ orc_table_view make_orc_table_view(table_view const& table,
       uint32_t idx = 0;
       while (not stack.empty()) {
         auto [col, parent] = stack.pop();
-        d_orc_cols[idx]    = orc_column_device_view{*col, parent, d_pd_masks[idx]};
+        d_orc_cols[idx]    = orc_column_device_view{*col, parent};
 
         if (col->type().id() == type_id::LIST) {
           stack.push({&col->children()[lists_column_view::child_column_index], idx});
@@ -1469,6 +1470,8 @@ void writer::impl::write(table_view const& table)
   auto const d_table = table_device_view::create(table, stream);
 
   auto orc_table = make_orc_table_view(table, *d_table, *table_meta, stream);
+
+  auto const pd_masks = init_pushdown_null_masks(orc_table, stream);
 
   auto rowgroup_bounds = calculate_rowgroup_bounds(orc_table, row_index_stride_, stream);
 

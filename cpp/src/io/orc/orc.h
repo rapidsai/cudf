@@ -619,7 +619,7 @@ struct orc_column_device_view {
   column_device_view cudf_column;
   thrust::optional<uint32_t> parent_index;
   bitmask_type* pushdown_null_mask = nullptr;
-};    
+};
 
 /**
  * @brief Range of rows within a single rowgroup.
