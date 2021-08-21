@@ -58,31 +58,6 @@ class reader_impl {
   // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
   std::vector<char> uncomp_data_owner_;
 
-  // the map is only used for files with rows in object format; initialize to a dummy value so the
-  // map object can be passed to the kernel in any case
-  col_map_ptr_type key_to_col_idx_map_;
-  std::unique_ptr<rmm::device_scalar<col_map_type>> d_key_col_map_;
-
-  /**
-   * @brief Sets the column map data member and makes a device copy to be used as a kernel
-   * parameter.
-   */
-  void set_column_map(col_map_ptr_type&& map, rmm::cuda_stream_view stream)
-  {
-    key_to_col_idx_map_ = std::move(map);
-    d_key_col_map_ =
-      std::make_unique<rmm::device_scalar<col_map_type>>(*key_to_col_idx_map_, stream);
-  }
-  /**
-   * @brief Gets the pointer to the column hash map in the device memory.
-   *
-   * Returns `nullptr` if the map is not created.
-   */
-  auto get_column_map_device_ptr()
-  {
-    return key_to_col_idx_map_ ? d_key_col_map_->data() : nullptr;
-  }
-
   /**
    * @brief Ingest input JSON file/buffer, without decompression
    *
@@ -150,10 +125,11 @@ class reader_impl {
    * @param[in] rec_starts Record starts in device memory
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    */
-  std::vector<std::string> get_column_names(parse_options_view const& parse_opts,
-                                            device_span<uint64_t const> rec_starts,
-                                            device_span<char const> data,
-                                            rmm::cuda_stream_view stream);
+  std::pair<std::vector<std::string>, col_map_ptr_type> get_column_names_and_map(
+    parse_options_view const& parse_opts,
+    device_span<uint64_t const> rec_starts,
+    device_span<char const> data,
+    rmm::cuda_stream_view stream);
 
   std::vector<data_type> parse_data_types(std::vector<std::string> const& column_names,
                                           std::vector<std::string> const& types_as_strings);
@@ -170,6 +146,7 @@ class reader_impl {
   std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
                                         parse_options_view const& parse_opts,
                                         std::vector<std::string> const& column_names,
+                                        col_map_type* column_map,
                                         device_span<uint64_t const> rec_starts,
                                         device_span<char const> data,
                                         rmm::cuda_stream_view stream);
@@ -186,6 +163,7 @@ class reader_impl {
   table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
                                             std::vector<data_type> const& dtypes,
                                             std::vector<std::string> const& column_names,
+                                            col_map_type* column_map,
                                             device_span<uint64_t const> rec_starts,
                                             device_span<char const> data,
                                             rmm::cuda_stream_view stream,

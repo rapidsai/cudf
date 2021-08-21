@@ -424,19 +424,19 @@ __device__ field_descriptor next_field_descriptor(const char* begin,
                                                   const char* end,
                                                   parse_options_view const& opts,
                                                   cudf::size_type field_idx,
-                                                  col_map_type* col_map)
+                                                  col_map_type col_map)
 {
   auto const desc_pre_trim =
-    col_map == nullptr
+    col_map.capacity() == 0
       // No key - column and begin are trivial
       ? field_descriptor{field_idx, begin, cudf::io::gpu::seek_field_end(begin, end, opts, true)}
       : [&]() {
           auto const key_range = get_next_key(begin, end, opts.quotechar);
           auto const key_hash  = MurmurHash3_32<cudf::string_view>{}(
             cudf::string_view(key_range.first, key_range.second - key_range.first));
-          auto const hash_col = col_map->find(key_hash);
+          auto const hash_col = col_map.find(key_hash);
           // Fall back to field index if not found (parsing error)
-          auto const column = (hash_col != col_map->end()) ? (*hash_col).second : field_idx;
+          auto const column = (hash_col != col_map.end()) ? (*hash_col).second : field_idx;
 
           // Skip the colon between the key and the value
           auto const value_begin = thrust::find(thrust::seq, key_range.second, end, ':') + 1;
@@ -491,7 +491,7 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
                                                device_span<char const> const data,
                                                device_span<uint64_t const> const row_offsets,
                                                device_span<data_type const> const column_types,
-                                               col_map_type* col_map,
+                                               col_map_type col_map,
                                                device_span<void* const> const output_columns,
                                                device_span<bitmask_type* const> const valid_fields,
                                                device_span<cudf::size_type> const num_valid_fields)
@@ -562,14 +562,14 @@ __global__ void detect_data_types_kernel(
   parse_options_view const opts,
   device_span<char const> const data,
   device_span<uint64_t const> const row_offsets,
-  col_map_type* col_map,
+  col_map_type col_map,
   int num_columns,
   device_span<cudf::io::column_type_histogram> const column_infos)
 {
   auto const rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= row_offsets.size()) return;
 
-  auto const are_rows_objects = col_map != nullptr;
+  auto const are_rows_objects = col_map.capacity() != 0;
   auto const row_data_range   = get_row_data_range(data, row_offsets, rec_id);
 
   size_type input_field_index = 0;
@@ -768,8 +768,14 @@ void convert_json_to_columns(parse_options_view const& opts,
 
   const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
 
-  convert_data_to_columns_kernel<<<grid_size, block_size, 0, stream.value()>>>(
-    opts, data, row_offsets, column_types, col_map, output_columns, valid_fields, num_valid_fields);
+  convert_data_to_columns_kernel<<<grid_size, block_size, 0, stream.value()>>>(opts,
+                                                                               data,
+                                                                               row_offsets,
+                                                                               column_types,
+                                                                               *col_map,
+                                                                               output_columns,
+                                                                               valid_fields,
+                                                                               num_valid_fields);
 
   CUDA_TRY(cudaGetLastError());
 }
@@ -814,7 +820,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
   const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
 
   detect_data_types_kernel<<<grid_size, block_size, 0, stream.value()>>>(
-    options, data, row_offsets, col_map, num_columns, d_column_infos);
+    options, data, row_offsets, *col_map, num_columns, d_column_infos);
 
   return cudf::detail::make_std_vector_sync(d_column_infos, stream);
 }

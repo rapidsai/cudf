@@ -88,7 +88,7 @@ std::unique_ptr<table> aggregate_keys_info(std::unique_ptr<table> info)
 col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes,
                                            rmm::cuda_stream_view stream)
 {
-  auto key_col_map{col_map_type::create(column_name_hashes.size(), stream)};
+  auto key_col_map       = col_map_type::create(column_name_hashes.size(), stream);
   auto const column_data = column_name_hashes.data<uint32_t>();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
@@ -359,10 +359,11 @@ rmm::device_buffer reader_impl::upload_data_to_device(json_reader_options const&
   return rmm::device_buffer(uncomp_data_ + start_offset, bytes_to_upload, stream);
 }
 
-std::vector<std::string> reader_impl::get_column_names(parse_options_view const& parse_opts,
-                                                       device_span<uint64_t const> rec_starts,
-                                                       device_span<char const> data,
-                                                       rmm::cuda_stream_view stream)
+std::pair<std::vector<std::string>, col_map_ptr_type> reader_impl::get_column_names_and_map(
+  parse_options_view const& parse_opts,
+  device_span<uint64_t const> rec_starts,
+  device_span<char const> data,
+  rmm::cuda_stream_view stream)
 {
   // If file only contains one row, use the file size for the row size
   uint64_t first_row_len = data.size() / sizeof(char);
@@ -393,9 +394,7 @@ std::vector<std::string> reader_impl::get_column_names(parse_options_view const&
   // If the first opening bracket is '{', assume object format
   if (first_curly_bracket < first_square_bracket) {
     // use keys as column names if input rows are objects
-    auto keys_desc = get_json_object_keys_hashes(parse_opts, rec_starts, data, stream);
-    set_column_map(std::move(keys_desc.second), stream);
-    return keys_desc.first;
+    return get_json_object_keys_hashes(parse_opts, rec_starts, data, stream);
   } else {
     int cols_found    = 0;
     bool quotation    = false;
@@ -411,7 +410,7 @@ std::vector<std::string> reader_impl::get_column_names(parse_options_view const&
         column_names.emplace_back(std::to_string(cols_found++));
       }
     }
-    return column_names;
+    return {column_names, col_map_type::create(0, stream)};
   }
 }
 
@@ -460,6 +459,7 @@ std::vector<data_type> reader_impl::parse_data_types(
 std::vector<data_type> reader_impl::get_data_types(json_reader_options const& reader_opts,
                                                    parse_options_view const& parse_opts,
                                                    std::vector<std::string> const& column_names,
+                                                   col_map_type* column_map,
                                                    device_span<uint64_t const> rec_starts,
                                                    device_span<char const> data,
                                                    rmm::cuda_stream_view stream)
@@ -490,15 +490,10 @@ std::vector<data_type> reader_impl::get_data_types(json_reader_options const& re
   } else {
     CUDF_EXPECTS(rec_starts.size() != 0, "No data available for data type inference.\n");
     auto const num_columns       = column_names.size();
-    auto const do_set_null_count = key_to_col_idx_map_ != nullptr;
+    auto const do_set_null_count = column_map->capacity() > 0;
 
-    auto const h_column_infos = cudf::io::json::gpu::detect_data_types(parse_opts,
-                                                                       data,
-                                                                       rec_starts,
-                                                                       do_set_null_count,
-                                                                       num_columns,
-                                                                       get_column_map_device_ptr(),
-                                                                       stream);
+    auto const h_column_infos = cudf::io::json::gpu::detect_data_types(
+      parse_opts, data, rec_starts, do_set_null_count, num_columns, column_map, stream);
 
     auto get_type_id = [&](auto const& cinfo) {
       auto int_count_total =
@@ -539,6 +534,7 @@ std::vector<data_type> reader_impl::get_data_types(json_reader_options const& re
 table_with_metadata reader_impl::convert_data_to_table(parse_options_view const& parse_opts,
                                                        std::vector<data_type> const& dtypes,
                                                        std::vector<std::string> const& column_names,
+                                                       col_map_type* column_map,
                                                        device_span<uint64_t const> rec_starts,
                                                        device_span<char const> data,
                                                        rmm::cuda_stream_view stream,
@@ -569,15 +565,8 @@ table_with_metadata reader_impl::convert_data_to_table(parse_options_view const&
   auto d_valid_counts =
     cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(num_columns, stream);
 
-  cudf::io::json::gpu::convert_json_to_columns(parse_opts,
-                                               data,
-                                               rec_starts,
-                                               d_dtypes,
-                                               get_column_map_device_ptr(),
-                                               d_data,
-                                               d_valid,
-                                               d_valid_counts,
-                                               stream);
+  cudf::io::json::gpu::convert_json_to_columns(
+    parse_opts, data, rec_starts, d_dtypes, column_map, d_data, d_valid, d_valid_counts, stream);
 
   stream.synchronize();
 
@@ -672,17 +661,21 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
 
   CUDF_EXPECTS(data_span.size() != 0, "Error uploading input data to the GPU.\n");
 
-  auto column_names = get_column_names(parse_opts.view(), rec_starts, data_span, stream);
+  auto column_names_and_map =
+    get_column_names_and_map(parse_opts.view(), rec_starts, data_span, stream);
+
+  auto column_names = std::get<0>(column_names_and_map);
+  auto column_map   = std::move(std::get<1>(column_names_and_map));
 
   CUDF_EXPECTS(not column_names.empty(), "Error determining column names.\n");
 
-  auto dtypes =
-    get_data_types(reader_opts, parse_opts.view(), column_names, rec_starts, data_span, stream);
+  auto dtypes = get_data_types(
+    reader_opts, parse_opts.view(), column_names, column_map.get(), rec_starts, data_span, stream);
 
   CUDF_EXPECTS(not dtypes.empty(), "Error in data type detection.\n");
 
   return convert_data_to_table(
-    parse_opts.view(), dtypes, column_names, rec_starts, data_span, stream, mr);
+    parse_opts.view(), dtypes, column_names, column_map.get(), rec_starts, data_span, stream, mr);
 }
 
 table_with_metadata read_json(std::vector<std::unique_ptr<cudf::io::datasource>>& sources,
