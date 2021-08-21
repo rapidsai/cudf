@@ -69,7 +69,7 @@ class reader_impl {
    * @param[in] range_size_padded Bytes to read with padding; use `0` for all remaining data
    */
   void ingest_raw_input(std::vector<std::unique_ptr<datasource>> const& sources,
-                        std::vector<uint8_t>& buffer,
+                        std::vector<char>& buffer,
                         size_t range_offset,
                         size_t range_size,
                         size_t range_size_padded);
@@ -91,7 +91,7 @@ class reader_impl {
    * Sets the uncomp_data_ and uncomp_size_ data members
    */
   rmm::device_buffer decompress_input(json_reader_options const& options,
-                                      std::vector<uint8_t> const& buffer,
+                                      std::vector<char> const& buffer,
                                       rmm::cuda_stream_view stream);
 
   /**

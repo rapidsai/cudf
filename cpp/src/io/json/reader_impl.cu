@@ -199,7 +199,7 @@ std::pair<std::vector<std::string>, col_map_ptr_type> reader_impl::get_json_obje
 }
 
 void reader_impl::ingest_raw_input(std::vector<std::unique_ptr<datasource>> const& sources,
-                                   std::vector<uint8_t>& buffer,
+                                   std::vector<char>& buffer,
                                    size_t range_offset,
                                    size_t range_size,
                                    size_t range_size_padded)
@@ -215,8 +215,9 @@ void reader_impl::ingest_raw_input(std::vector<std::unique_ptr<datasource>> cons
   size_t bytes_read = 0;
   for (const auto& source : sources) {
     if (!source->is_empty()) {
-      auto data_size = (range_size_padded != 0) ? range_size_padded : source->size();
-      bytes_read += source->host_read(range_offset, data_size, &buffer[bytes_read]);
+      auto data_size   = (range_size_padded != 0) ? range_size_padded : source->size();
+      auto destination = reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read;
+      bytes_read += source->host_read(range_offset, data_size, destination);
     }
   }
 }
@@ -234,17 +235,17 @@ bool should_load_whole_source(json_reader_options const& reader_opts)
  * Loads the data into device memory if byte range parameters are not used
  */
 rmm::device_buffer reader_impl::decompress_input(json_reader_options const& reader_opts,
-                                                 std::vector<uint8_t> const& buffer,
+                                                 std::vector<char> const& buffer,
                                                  rmm::cuda_stream_view stream)
 {
   if (reader_opts.get_compression() == compression_type::NONE) {
     // Do not use the owner vector here to avoid extra copy
-    uncomp_data_ = reinterpret_cast<const char*>(buffer.data());
+    uncomp_data_ = buffer.data();
     uncomp_size_ = buffer.size();
   } else {
     uncomp_data_owner_ = get_uncompressed_data(  //
       host_span<char const>(                     //
-        reinterpret_cast<const char*>(buffer.data()),
+        buffer.data(),
         buffer.size()),
       reader_opts.get_compression());
 
@@ -640,7 +641,7 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
   auto range_size        = reader_opts.get_byte_range_size();
   auto range_size_padded = reader_opts.get_byte_range_size_with_padding();
 
-  std::vector<uint8_t> buffer;
+  std::vector<char> buffer;
 
   ingest_raw_input(sources, buffer, range_offset, range_size, range_size_padded);
 
