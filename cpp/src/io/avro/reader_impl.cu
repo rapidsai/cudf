@@ -14,23 +14,29 @@
  * limitations under the License.
  */
 
-/**
- * @file reader_impl.cu
- * @brief cuDF-IO Avro reader class implementation
- */
-
-#include "reader_impl.hpp"
+#include "avro.h"
+#include "avro_gpu.h"
 
 #include <io/comp/gpuinflate.h>
+#include <io/utilities/column_buffer.hpp>
+#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/io/datasource.hpp>
+#include <cudf/io/detail/avro.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 using cudf::device_span;
 
@@ -38,6 +44,7 @@ namespace cudf {
 namespace io {
 namespace detail {
 namespace avro {
+
 // Import functionality that's independent of legacy code
 using namespace cudf::io::avro;
 using namespace cudf::io;
@@ -138,10 +145,10 @@ class metadata : public file_metadata {
   datasource* const source;
 };
 
-rmm::device_buffer reader_impl::decompress_data(datasource* source,
-                                                metadata* meta,
-                                                rmm::device_buffer const& comp_block_data,
-                                                rmm::cuda_stream_view stream)
+rmm::device_buffer decompress_data(datasource* source,
+                                   metadata* meta,
+                                   rmm::device_buffer const& comp_block_data,
+                                   rmm::cuda_stream_view stream)
 {
   size_t uncompressed_data_size = 0;
   hostdevice_vector<gpu_inflate_input_s> inflate_in(meta->block_list.size());
@@ -237,15 +244,14 @@ rmm::device_buffer reader_impl::decompress_data(datasource* source,
   return decomp_block_data;
 }
 
-void reader_impl::decode_data(metadata* meta,
-                              const rmm::device_buffer& block_data,
-
-                              const std::vector<std::pair<uint32_t, uint32_t>>& dict,
-                              device_span<string_index_pair> global_dictionary,
-                              size_t num_rows,
-                              std::vector<std::pair<int, std::string>> selection,
-                              std::vector<column_buffer>& out_buffers,
-                              rmm::cuda_stream_view stream)
+void decode_data(metadata* meta,
+                 const rmm::device_buffer& block_data,
+                 const std::vector<std::pair<uint32_t, uint32_t>>& dict,
+                 device_span<string_index_pair> global_dictionary,
+                 size_t num_rows,
+                 std::vector<std::pair<int, std::string>> selection,
+                 std::vector<column_buffer>& out_buffers,
+                 rmm::cuda_stream_view stream)
 {
   // Build gpu schema
   hostdevice_vector<gpu::schemadesc_s> schema_desc(meta->schema.size());
@@ -337,10 +343,10 @@ void reader_impl::decode_data(metadata* meta,
   }
 }
 
-table_with_metadata reader_impl::read(datasource* source,
-                                      avro_reader_options const& options,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
+                              avro_reader_options const& options,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   auto skip_rows = options.get_skip_rows();
   auto num_rows  = options.get_num_rows();
@@ -349,7 +355,7 @@ table_with_metadata reader_impl::read(datasource* source,
   table_metadata metadata_out;
 
   // Open the source Avro dataset metadata
-  auto meta = std::make_unique<metadata>(source);
+  auto meta = std::make_unique<metadata>(source.get());
 
   // Select and read partial metadata / schema within the subset of rows
   meta->init_and_select_rows(skip_rows, num_rows);
@@ -382,7 +388,7 @@ table_with_metadata reader_impl::read(datasource* source,
       }
 
       if (meta->codec != "" && meta->codec != "null") {
-        auto decomp_block_data = decompress_data(source, meta.get(), block_data, stream);
+        auto decomp_block_data = decompress_data(source.get(), meta.get(), block_data, stream);
         block_data             = std::move(decomp_block_data);
       } else {
         auto dst_ofs = meta->block_list[0].offset;
@@ -477,15 +483,6 @@ table_with_metadata reader_impl::read(datasource* source,
   metadata_out.user_data = meta->user_data;
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata_out)};
-}
-
-// Forward to implementation
-table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
-                              avro_reader_options const& options,
-                              rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
-{
-  return reader_impl().read(source.get(), options, stream, mr);
 }
 
 }  // namespace avro
