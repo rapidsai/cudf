@@ -138,8 +138,8 @@ class metadata : public file_metadata {
   datasource* const source;
 };
 
-rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer& comp_block_data,
-                                                 rmm::cuda_stream_view stream)
+rmm::device_buffer reader_impl::decompress_data(const rmm::device_buffer& comp_block_data,
+                                                rmm::cuda_stream_view stream)
 {
   size_t uncompressed_data_size = 0;
   hostdevice_vector<gpu_inflate_input_s> inflate_in(_metadata->block_list.size());
@@ -235,13 +235,13 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer& comp_
   return decomp_block_data;
 }
 
-void reader::impl::decode_data(const rmm::device_buffer& block_data,
-                               const std::vector<std::pair<uint32_t, uint32_t>>& dict,
-                               device_span<string_index_pair> global_dictionary,
-                               size_t num_rows,
-                               std::vector<std::pair<int, std::string>> selection,
-                               std::vector<column_buffer>& out_buffers,
-                               rmm::cuda_stream_view stream)
+void reader_impl::decode_data(const rmm::device_buffer& block_data,
+                              const std::vector<std::pair<uint32_t, uint32_t>>& dict,
+                              device_span<string_index_pair> global_dictionary,
+                              size_t num_rows,
+                              std::vector<std::pair<int, std::string>> selection,
+                              std::vector<column_buffer>& out_buffers,
+                              rmm::cuda_stream_view stream)
 {
   // Build gpu schema
   hostdevice_vector<gpu::schemadesc_s> schema_desc(_metadata->schema.size());
@@ -334,17 +334,17 @@ void reader::impl::decode_data(const rmm::device_buffer& block_data,
   }
 }
 
-reader::impl::impl(std::unique_ptr<datasource> source,
-                   avro_reader_options const& options,
-                   rmm::mr::device_memory_resource* mr)
+reader_impl::reader_impl(std::unique_ptr<datasource> source,
+                         avro_reader_options const& options,
+                         rmm::mr::device_memory_resource* mr)
   : _mr(mr), _source(std::move(source)), _columns(options.get_columns())
 {
   // Open the source Avro dataset metadata
   _metadata = std::make_unique<metadata>(_source.get());
 }
 
-table_with_metadata reader::impl::read(avro_reader_options const& options,
-                                       rmm::cuda_stream_view stream)
+table_with_metadata reader_impl::read(avro_reader_options const& options,
+                                      rmm::cuda_stream_view stream)
 {
   auto skip_rows = options.get_skip_rows();
   auto num_rows  = options.get_num_rows();
@@ -475,23 +475,14 @@ table_with_metadata reader::impl::read(avro_reader_options const& options,
 }
 
 // Forward to implementation
-reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
-               avro_reader_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
+table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
+                              avro_reader_options const& options,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
-  _impl = std::make_unique<impl>(std::move(sources[0]), options, mr);
+  return reader_impl(std::move(source), options, mr).read(options, stream);
 }
 
-// Destructor within this translation unit
-reader::~reader() = default;
-
-// Forward to implementation
-table_with_metadata reader::read(avro_reader_options const& options, rmm::cuda_stream_view stream)
-{
-  return _impl->read(options, stream);
-}
 }  // namespace avro
 }  // namespace detail
 }  // namespace io

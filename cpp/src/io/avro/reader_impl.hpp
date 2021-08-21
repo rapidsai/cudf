@@ -51,7 +51,7 @@ class metadata;
 /**
  * @brief Implementation for Avro reader
  */
-class reader::impl {
+class reader_impl {
  public:
   /**
    * @brief Constructor from a dataset source with reader options.
@@ -60,9 +60,9 @@ class reader::impl {
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<datasource> source,
-                avro_reader_options const& options,
-                rmm::mr::device_memory_resource* mr);
+  explicit reader_impl(std::unique_ptr<datasource> source,
+                       avro_reader_options const& options,
+                       rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns

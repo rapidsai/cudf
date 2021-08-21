@@ -29,44 +29,23 @@ namespace cudf {
 namespace io {
 namespace detail {
 namespace avro {
+
 /**
- * @brief Class to read Avro dataset data into columns.
+ * @brief Reads the entire dataset.
+ *
+ * @param source Input `datasource` object to read the dataset from
+ * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource to use for device memory allocation
+ *
+ * @return The set of columns along with table metadata
  */
-class reader {
- private:
-  class impl;
-  std::unique_ptr<impl> _impl;
+table_with_metadata read_avro(
+  std::unique_ptr<cudf::io::datasource>&& source,
+  avro_reader_options const& options,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
- public:
-  /**
-   * @brief Constructor from an array of datasources
-   *
-   * @param sources Input `datasource` objects to read the dataset from
-   * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
-                  avro_reader_options const& options,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
-
-  /**
-   * @brief Destructor explicitly-declared to avoid inlined in header
-   */
-  ~reader();
-
-  /**
-   * @brief Reads the entire dataset.
-   *
-   * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
-   */
-  table_with_metadata read(avro_reader_options const& options,
-                           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
-};
 }  // namespace avro
 }  // namespace detail
 }  // namespace io
