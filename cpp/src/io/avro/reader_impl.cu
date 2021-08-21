@@ -139,24 +139,25 @@ class metadata : public file_metadata {
 };
 
 rmm::device_buffer reader_impl::decompress_data(datasource* source,
+                                                metadata* meta,
                                                 rmm::device_buffer const& comp_block_data,
                                                 rmm::cuda_stream_view stream)
 {
   size_t uncompressed_data_size = 0;
-  hostdevice_vector<gpu_inflate_input_s> inflate_in(_metadata->block_list.size());
-  hostdevice_vector<gpu_inflate_status_s> inflate_out(_metadata->block_list.size());
+  hostdevice_vector<gpu_inflate_input_s> inflate_in(meta->block_list.size());
+  hostdevice_vector<gpu_inflate_status_s> inflate_out(meta->block_list.size());
 
-  if (_metadata->codec == "deflate") {
+  if (meta->codec == "deflate") {
     // Guess an initial maximum uncompressed block size
-    uint32_t initial_blk_len = (_metadata->max_block_size * 2 + 0xfff) & ~0xfff;
-    uncompressed_data_size   = initial_blk_len * _metadata->block_list.size();
+    uint32_t initial_blk_len = (meta->max_block_size * 2 + 0xfff) & ~0xfff;
+    uncompressed_data_size   = initial_blk_len * meta->block_list.size();
     for (size_t i = 0; i < inflate_in.size(); ++i) {
       inflate_in[i].dstSize = initial_blk_len;
     }
-  } else if (_metadata->codec == "snappy") {
+  } else if (meta->codec == "snappy") {
     // Extract the uncompressed length from the snappy stream
-    for (size_t i = 0; i < _metadata->block_list.size(); i++) {
-      const auto buffer  = source->host_read(_metadata->block_list[i].offset, 4);
+    for (size_t i = 0; i < meta->block_list.size(); i++) {
+      const auto buffer  = source->host_read(meta->block_list[i].offset, 4);
       const uint8_t* blk = buffer->data();
       uint32_t blk_len   = blk[0];
       if (blk_len > 0x7f) {
@@ -175,28 +176,28 @@ rmm::device_buffer reader_impl::decompress_data(datasource* source,
 
   rmm::device_buffer decomp_block_data(uncompressed_data_size, stream);
 
-  const auto base_offset = _metadata->block_list[0].offset;
-  for (size_t i = 0, dst_pos = 0; i < _metadata->block_list.size(); i++) {
-    const auto src_pos = _metadata->block_list[i].offset - base_offset;
+  const auto base_offset = meta->block_list[0].offset;
+  for (size_t i = 0, dst_pos = 0; i < meta->block_list.size(); i++) {
+    const auto src_pos = meta->block_list[i].offset - base_offset;
 
     inflate_in[i].srcDevice = static_cast<const uint8_t*>(comp_block_data.data()) + src_pos;
-    inflate_in[i].srcSize   = _metadata->block_list[i].size;
+    inflate_in[i].srcSize   = meta->block_list[i].size;
     inflate_in[i].dstDevice = static_cast<uint8_t*>(decomp_block_data.data()) + dst_pos;
 
     // Update blocks offsets & sizes to refer to uncompressed data
-    _metadata->block_list[i].offset = dst_pos;
-    _metadata->block_list[i].size   = static_cast<uint32_t>(inflate_in[i].dstSize);
-    dst_pos += _metadata->block_list[i].size;
+    meta->block_list[i].offset = dst_pos;
+    meta->block_list[i].size   = static_cast<uint32_t>(inflate_in[i].dstSize);
+    dst_pos += meta->block_list[i].size;
   }
 
   for (int loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
     inflate_in.host_to_device(stream);
     CUDA_TRY(
       cudaMemsetAsync(inflate_out.device_ptr(), 0, inflate_out.memory_size(), stream.value()));
-    if (_metadata->codec == "deflate") {
+    if (meta->codec == "deflate") {
       CUDA_TRY(gpuinflate(
         inflate_in.device_ptr(), inflate_out.device_ptr(), inflate_in.size(), 0, stream));
-    } else if (_metadata->codec == "snappy") {
+    } else if (meta->codec == "snappy") {
       CUDA_TRY(
         gpu_unsnap(inflate_in.device_ptr(), inflate_out.device_ptr(), inflate_in.size(), stream));
     } else {
@@ -205,9 +206,9 @@ rmm::device_buffer reader_impl::decompress_data(datasource* source,
     inflate_out.device_to_host(stream, true);
 
     // Check if larger output is required, as it's not known ahead of time
-    if (_metadata->codec == "deflate" && !loop_cnt) {
+    if (meta->codec == "deflate" && !loop_cnt) {
       size_t actual_uncompressed_size = 0;
-      for (size_t i = 0; i < _metadata->block_list.size(); i++) {
+      for (size_t i = 0; i < meta->block_list.size(); i++) {
         // If error status is 1 (buffer too small), the `bytes_written` field
         // is actually contains the uncompressed data size
         if (inflate_out[i].status == 1 && inflate_out[i].bytes_written > inflate_in[i].dstSize) {
@@ -217,13 +218,13 @@ rmm::device_buffer reader_impl::decompress_data(datasource* source,
       }
       if (actual_uncompressed_size > uncompressed_data_size) {
         decomp_block_data.resize(actual_uncompressed_size, stream);
-        for (size_t i = 0, dst_pos = 0; i < _metadata->block_list.size(); i++) {
+        for (size_t i = 0, dst_pos = 0; i < meta->block_list.size(); i++) {
           auto dst_base           = static_cast<uint8_t*>(decomp_block_data.data());
           inflate_in[i].dstDevice = dst_base + dst_pos;
 
-          _metadata->block_list[i].offset = dst_pos;
-          _metadata->block_list[i].size   = static_cast<uint32_t>(inflate_in[i].dstSize);
-          dst_pos += _metadata->block_list[i].size;
+          meta->block_list[i].offset = dst_pos;
+          meta->block_list[i].size   = static_cast<uint32_t>(inflate_in[i].dstSize);
+          dst_pos += meta->block_list[i].size;
         }
       } else {
         break;
@@ -236,7 +237,9 @@ rmm::device_buffer reader_impl::decompress_data(datasource* source,
   return decomp_block_data;
 }
 
-void reader_impl::decode_data(const rmm::device_buffer& block_data,
+void reader_impl::decode_data(metadata* meta,
+                              const rmm::device_buffer& block_data,
+
                               const std::vector<std::pair<uint32_t, uint32_t>>& dict,
                               device_span<string_index_pair> global_dictionary,
                               size_t num_rows,
@@ -245,19 +248,19 @@ void reader_impl::decode_data(const rmm::device_buffer& block_data,
                               rmm::cuda_stream_view stream)
 {
   // Build gpu schema
-  hostdevice_vector<gpu::schemadesc_s> schema_desc(_metadata->schema.size());
+  hostdevice_vector<gpu::schemadesc_s> schema_desc(meta->schema.size());
   uint32_t min_row_data_size = 0;
   int skip_field_cnt         = 0;
-  for (size_t i = 0; i < _metadata->schema.size(); i++) {
-    type_kind_e kind = _metadata->schema[i].kind;
+  for (size_t i = 0; i < meta->schema.size(); i++) {
+    type_kind_e kind = meta->schema[i].kind;
     if (skip_field_cnt != 0) {
       // Exclude union and array members from min_row_data_size
-      skip_field_cnt += _metadata->schema[i].num_children - 1;
+      skip_field_cnt += meta->schema[i].num_children - 1;
     } else {
       switch (kind) {
         case type_union:
         case type_array:
-          skip_field_cnt = _metadata->schema[i].num_children;
+          skip_field_cnt = meta->schema[i].num_children;
           // fall through
         case type_boolean:
         case type_int:
@@ -270,21 +273,20 @@ void reader_impl::decode_data(const rmm::device_buffer& block_data,
         default: break;
       }
     }
-    if (kind == type_enum && !_metadata->schema[i].symbols.size()) { kind = type_int; }
+    if (kind == type_enum && !meta->schema[i].symbols.size()) { kind = type_int; }
     schema_desc[i].kind    = kind;
-    schema_desc[i].count   = (kind == type_enum) ? 0 : (uint32_t)_metadata->schema[i].num_children;
+    schema_desc[i].count   = (kind == type_enum) ? 0 : (uint32_t)meta->schema[i].num_children;
     schema_desc[i].dataptr = nullptr;
-    CUDF_EXPECTS(
-      kind != type_union || _metadata->schema[i].num_children < 2 ||
-        (_metadata->schema[i].num_children == 2 && (_metadata->schema[i + 1].kind == type_null ||
-                                                    _metadata->schema[i + 2].kind == type_null)),
-      "Union with non-null type not currently supported");
+    CUDF_EXPECTS(kind != type_union || meta->schema[i].num_children < 2 ||
+                   (meta->schema[i].num_children == 2 && (meta->schema[i + 1].kind == type_null ||
+                                                          meta->schema[i + 2].kind == type_null)),
+                 "Union with non-null type not currently supported");
   }
   std::vector<void*> valid_alias(out_buffers.size(), nullptr);
   for (size_t i = 0; i < out_buffers.size(); i++) {
     const auto col_idx  = selection[i].first;
-    int schema_data_idx = _metadata->columns[col_idx].schema_data_idx;
-    int schema_null_idx = _metadata->columns[col_idx].schema_null_idx;
+    int schema_data_idx = meta->columns[col_idx].schema_data_idx;
+    int schema_null_idx = meta->columns[col_idx].schema_null_idx;
 
     schema_desc[schema_data_idx].dataptr = out_buffers[i].data();
     if (schema_null_idx >= 0) {
@@ -294,7 +296,7 @@ void reader_impl::decode_data(const rmm::device_buffer& block_data,
         valid_alias[i] = schema_desc[schema_null_idx].dataptr;
       }
     }
-    if (_metadata->schema[schema_data_idx].kind == type_enum) {
+    if (meta->schema[schema_data_idx].kind == type_enum) {
       schema_desc[schema_data_idx].count = dict[i].first;
     }
     if (out_buffers[i].null_mask_size()) {
@@ -302,17 +304,17 @@ void reader_impl::decode_data(const rmm::device_buffer& block_data,
     }
   }
   rmm::device_buffer block_list(
-    _metadata->block_list.data(), _metadata->block_list.size() * sizeof(block_desc_s), stream);
+    meta->block_list.data(), meta->block_list.size() * sizeof(block_desc_s), stream);
   schema_desc.host_to_device(stream);
 
   gpu::DecodeAvroColumnData(static_cast<block_desc_s*>(block_list.data()),
                             schema_desc.device_ptr(),
                             global_dictionary,
                             static_cast<const uint8_t*>(block_data.data()),
-                            static_cast<uint32_t>(_metadata->block_list.size()),
+                            static_cast<uint32_t>(meta->block_list.size()),
                             static_cast<uint32_t>(schema_desc.size()),
-                            _metadata->num_rows,
-                            _metadata->skip_rows,
+                            meta->num_rows,
+                            meta->skip_rows,
                             min_row_data_size,
                             stream);
 
@@ -330,7 +332,7 @@ void reader_impl::decode_data(const rmm::device_buffer& block_data,
 
   for (size_t i = 0; i < out_buffers.size(); i++) {
     const auto col_idx          = selection[i].first;
-    const auto schema_null_idx  = _metadata->columns[col_idx].schema_null_idx;
+    const auto schema_null_idx  = meta->columns[col_idx].schema_null_idx;
     out_buffers[i].null_count() = (schema_null_idx >= 0) ? schema_desc[schema_null_idx].count : 0;
   }
 }
@@ -347,46 +349,45 @@ table_with_metadata reader_impl::read(datasource* source,
   table_metadata metadata_out;
 
   // Open the source Avro dataset metadata
-  _metadata = std::make_unique<metadata>(source);
+  auto meta = std::make_unique<metadata>(source);
 
   // Select and read partial metadata / schema within the subset of rows
-  _metadata->init_and_select_rows(skip_rows, num_rows);
+  meta->init_and_select_rows(skip_rows, num_rows);
 
   // Select only columns required by the options
-  auto selected_columns = _metadata->select_columns(options.get_columns());
+  auto selected_columns = meta->select_columns(options.get_columns());
   if (selected_columns.size() != 0) {
     // Get a list of column data types
     std::vector<data_type> column_types;
     for (const auto& col : selected_columns) {
-      auto& col_schema = _metadata->schema[_metadata->columns[col.first].schema_data_idx];
+      auto& col_schema = meta->schema[meta->columns[col.first].schema_data_idx];
 
       auto col_type = to_type_id(&col_schema);
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
       column_types.emplace_back(col_type);
     }
 
-    if (_metadata->total_data_size > 0) {
+    if (meta->total_data_size > 0) {
       rmm::device_buffer block_data;
-      if (source->is_device_read_preferred(_metadata->total_data_size)) {
-        block_data      = rmm::device_buffer{_metadata->total_data_size, stream};
-        auto read_bytes = source->device_read(_metadata->block_list[0].offset,
-                                              _metadata->total_data_size,
+      if (source->is_device_read_preferred(meta->total_data_size)) {
+        block_data      = rmm::device_buffer{meta->total_data_size, stream};
+        auto read_bytes = source->device_read(meta->block_list[0].offset,
+                                              meta->total_data_size,
                                               static_cast<uint8_t*>(block_data.data()),
                                               stream);
         block_data.resize(read_bytes, stream);
       } else {
-        const auto buffer =
-          source->host_read(_metadata->block_list[0].offset, _metadata->total_data_size);
-        block_data = rmm::device_buffer{buffer->data(), buffer->size(), stream};
+        const auto buffer = source->host_read(meta->block_list[0].offset, meta->total_data_size);
+        block_data        = rmm::device_buffer{buffer->data(), buffer->size(), stream};
       }
 
-      if (_metadata->codec != "" && _metadata->codec != "null") {
-        auto decomp_block_data = decompress_data(source, block_data, stream);
+      if (meta->codec != "" && meta->codec != "null") {
+        auto decomp_block_data = decompress_data(source, meta.get(), block_data, stream);
         block_data             = std::move(decomp_block_data);
       } else {
-        auto dst_ofs = _metadata->block_list[0].offset;
-        for (size_t i = 0; i < _metadata->block_list.size(); i++) {
-          _metadata->block_list[i].offset -= dst_ofs;
+        auto dst_ofs = meta->block_list[0].offset;
+        for (size_t i = 0; i < meta->block_list.size(); i++) {
+          meta->block_list[i].offset -= dst_ofs;
         }
       }
 
@@ -395,7 +396,7 @@ table_with_metadata reader_impl::read(datasource* source,
       std::vector<std::pair<uint32_t, uint32_t>> dict(column_types.size());
       for (size_t i = 0; i < column_types.size(); ++i) {
         auto col_idx     = selected_columns[i].first;
-        auto& col_schema = _metadata->schema[_metadata->columns[col_idx].schema_data_idx];
+        auto& col_schema = meta->schema[meta->columns[col_idx].schema_data_idx];
         dict[i].first    = static_cast<uint32_t>(total_dictionary_entries);
         dict[i].second   = static_cast<uint32_t>(col_schema.symbols.size());
         total_dictionary_entries += dict[i].second;
@@ -411,8 +412,8 @@ table_with_metadata reader_impl::read(datasource* source,
         std::vector<char> h_global_dict_data(dictionary_data_size);
         size_t dict_pos = 0;
         for (size_t i = 0; i < column_types.size(); ++i) {
-          auto const col_idx     = selected_columns[i].first;
-          auto const& col_schema = _metadata->schema[_metadata->columns[col_idx].schema_data_idx];
+          auto const col_idx          = selected_columns[i].first;
+          auto const& col_schema      = meta->schema[meta->columns[col_idx].schema_data_idx];
           auto const col_dict_entries = &(h_global_dict[dict[i].first]);
           for (size_t j = 0; j < dict[i].second; j++) {
             auto const& symbols = col_schema.symbols[j];
@@ -443,11 +444,18 @@ table_with_metadata reader_impl::read(datasource* source,
       std::vector<column_buffer> out_buffers;
       for (size_t i = 0; i < column_types.size(); ++i) {
         auto col_idx     = selected_columns[i].first;
-        bool is_nullable = (_metadata->columns[col_idx].schema_null_idx >= 0);
+        bool is_nullable = (meta->columns[col_idx].schema_null_idx >= 0);
         out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, mr);
       }
 
-      decode_data(block_data, dict, d_global_dict, num_rows, selected_columns, out_buffers, stream);
+      decode_data(meta.get(),
+                  block_data,
+                  dict,
+                  d_global_dict,
+                  num_rows,
+                  selected_columns,
+                  out_buffers,
+                  stream);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
         out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, mr));
@@ -466,7 +474,7 @@ table_with_metadata reader_impl::read(datasource* source,
     metadata_out.column_names[i] = selected_columns[i].second;
   }
   // Return user metadata
-  metadata_out.user_data = _metadata->user_data;
+  metadata_out.user_data = meta->user_data;
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata_out)};
 }

@@ -79,6 +79,7 @@ class reader_impl {
    * @return Device buffer to decompressed block data
    */
   rmm::device_buffer decompress_data(datasource* source,
+                                     metadata* metadata,
                                      rmm::device_buffer const& comp_block_data,
                                      rmm::cuda_stream_view stream);
 
@@ -91,16 +92,14 @@ class reader_impl {
    * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void decode_data(const rmm::device_buffer& block_data,
+  void decode_data(metadata* metadata,
+                   const rmm::device_buffer& block_data,
                    const std::vector<std::pair<uint32_t, uint32_t>>& dict,
                    cudf::device_span<string_index_pair> global_dictionary,
                    size_t num_rows,
                    std::vector<std::pair<int, std::string>> columns,
                    std::vector<column_buffer>& out_buffers,
                    rmm::cuda_stream_view stream);
-
- private:
-  std::unique_ptr<metadata> _metadata;
 };
 
 }  // namespace avro
