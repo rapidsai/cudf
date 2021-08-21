@@ -62,6 +62,7 @@ class reader_impl {
    * @param[in] range_size_padded Bytes to read with padding; use `0` for all remaining data
    */
   std::vector<char> ingest_raw_input(std::vector<std::unique_ptr<datasource>> const& sources,
+                                     compression_type compression,
                                      size_t range_offset,
                                      size_t range_size,
                                      size_t range_size_padded);

@@ -201,6 +201,7 @@ std::pair<std::vector<std::string>, col_map_ptr_type> reader_impl::get_json_obje
 
 std::vector<char> reader_impl::ingest_raw_input(
   std::vector<std::unique_ptr<datasource>> const& sources,
+  compression_type compression,
   size_t range_offset,
   size_t range_size,
   size_t range_size_padded)
@@ -223,7 +224,11 @@ std::vector<char> reader_impl::ingest_raw_input(
     }
   }
 
-  return buffer;
+  if (compression == compression_type::NONE) {
+    return buffer;
+  } else {
+    return get_uncompressed_data(buffer, compression);
+  }
 }
 
 bool should_load_whole_source(json_reader_options const& reader_opts)
@@ -610,17 +615,9 @@ table_with_metadata reader_impl::read(std::vector<std::unique_ptr<datasource>>& 
   auto range_size        = reader_opts.get_byte_range_size();
   auto range_size_padded = reader_opts.get_byte_range_size_with_padding();
 
-  auto h_data = ingest_raw_input(sources, range_offset, range_size, range_size_padded);
+  auto h_data = ingest_raw_input(
+    sources, reader_opts.get_compression(), range_offset, range_size, range_size_padded);
 
-  CUDF_EXPECTS(h_data.size() != 0, "Ingest failed: input data is null.\n");
-
-  if (reader_opts.get_compression() != compression_type::NONE) {
-    h_data = get_uncompressed_data(  //
-      host_span<char const>(h_data.data(), h_data.size()),
-      reader_opts.get_compression());
-  }
-
-  CUDF_EXPECTS(h_data.data() != nullptr, "Ingest failed: uncompressed input data is null.\n");
   CUDF_EXPECTS(h_data.size() != 0, "Ingest failed: uncompressed input data has zero size.\n");
 
   auto d_data = rmm::device_uvector<char>(0, stream);
