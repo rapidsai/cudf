@@ -606,11 +606,11 @@ struct expression_evaluator {
                                possibly_null_value_t<Input, has_nulls> const input,
                                detail::device_data_reference const output) const
     {
-      using OperatorFunctor        = detail::operator_functor<op, has_nulls>;
-      using OperatorFunctorNotNull = detail::operator_functor<op, false>;
-      using Out                    = cuda::std::invoke_result_t<OperatorFunctorNotNull, Input>;
+      // The output data type is the same whether or not nulls are present, so
+      // pull from the non-nullable operator.
+      using Out = cuda::std::invoke_result_t<detail::operator_functor<op, false>, Input>;
       this->template resolve_output<Out>(
-        output_object, output, output_row_index, OperatorFunctor{}(input));
+        output_object, output, output_row_index, detail::operator_functor<op, has_nulls>{}(input));
     }
 
     template <ast_operator op,
@@ -683,11 +683,13 @@ struct expression_evaluator {
         }
         this->template resolve_output<Out>(output_object, output, output_row_index, result);
       } else {
-        using OperatorFunctor        = detail::operator_functor<op, has_nulls>;
-        using OperatorFunctorNotNull = detail::operator_functor<op, false>;
-        using Out                    = cuda::std::invoke_result_t<OperatorFunctorNotNull, LHS, RHS>;
-        this->template resolve_output<Out>(
-          output_object, output, output_row_index, OperatorFunctor{}(lhs, rhs));
+        // The output data type is the same whether or not nulls are present, so
+        // pull from the non-nullable operator.
+        using Out = cuda::std::invoke_result_t<detail::operator_functor<op, false>, LHS, RHS>;
+        this->template resolve_output<Out>(output_object,
+                                           output,
+                                           output_row_index,
+                                           detail::operator_functor<op, has_nulls>{}(lhs, rhs));
       }
     }
 
