@@ -386,16 +386,10 @@ struct operator_functor<ast_operator::EQUAL, false> {
   }
 };
 
-// TODO: Try to alias this if possible.
+// Alias NULL_EQUAL = EQUAL in the non-nullable case.
 template <>
-struct operator_functor<ast_operator::NULL_EQUAL, false> {
-  static constexpr auto arity{2};
-
-  template <typename LHS, typename RHS>
-  CUDA_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs == rhs)
-  {
-    return lhs == rhs;
-  }
+struct operator_functor<ast_operator::NULL_EQUAL, false>
+  : public operator_functor<ast_operator::EQUAL, false> {
 };
 
 template <>

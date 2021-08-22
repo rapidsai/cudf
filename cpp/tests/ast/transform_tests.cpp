@@ -459,6 +459,22 @@ TEST_F(TransformTest, PyMod)
   cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
+TEST_F(TransformTest, BasicEqualityNullEqualNoNulls)
+{
+  auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
+  auto c_1   = column_wrapper<int32_t>{3, 7, 1, 0};
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col_ref_0, col_ref_1);
+
+  auto expected = column_wrapper<bool>{true, false, true, false};
+  auto result   = cudf::compute_column(table, expression);
+
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
+}
+
 TEST_F(TransformTest, BasicEqualityNulls)
 {
   auto c_0   = column_wrapper<int32_t>{{3, 20, 1, 50}, {1, 1, 1, 0}};
