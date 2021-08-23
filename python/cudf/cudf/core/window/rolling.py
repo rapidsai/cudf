@@ -210,7 +210,7 @@ class Rolling(GetAttrGetItemMixin):
                 num_values=len(obj),
                 min_periods=self.min_periods,
                 center=self.center,
-                # closed=self.closed,
+                closed="right",
             )
         # From get_window_bounds, those two should be equal in length of array
         assert len(start) == len(end)
@@ -362,7 +362,7 @@ class Rolling(GetAttrGetItemMixin):
                 if not isinstance(window, pd.Timedelta):
                     raise ValueError
                 window = window.to_timedelta64()
-            except ValueError as e:
+            except ValueError:
                 # raise ValueError(
                 #     "window must be integer or " "convertible to a timedelta"
                 # ) from e

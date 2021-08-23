@@ -369,3 +369,33 @@ def test_rolling_groupby_offset(agg, window_size):
     )
     got = getattr(gdf.groupby("group").rolling(window_size), agg)().fillna(-1)
     assert_eq(expect, got, check_dtype=False)
+
+
+def test_rolling_index_support():
+    from pandas.api.indexers import BaseIndexer
+
+    class CustomIndexer(BaseIndexer):
+        def get_window_bounds(self, num_values, min_periods, center, closed):
+            start = np.empty(num_values, dtype=np.int64)
+            end = np.empty(num_values, dtype=np.int64)
+
+            for i in range(num_values):
+                if self.use_expanding[i]:
+                    start[i] = 0
+                    end[i] = i + 1
+                else:
+                    start[i] = i
+                    end[i] = i + self.window_size
+
+            return start, end
+
+    use_expanding = [True, False, True, False, True]
+    indexer = CustomIndexer(window_size=1, use_expanding=use_expanding)
+
+    df = pd.DataFrame({"values": range(5)})
+    gdf = cudf.from_pandas(df)
+
+    expected = df.rolling(window=indexer).sum()
+    actual = gdf.rolling(window=indexer).sum()
+
+    assert_eq(expected, actual, check_dtype=False)
