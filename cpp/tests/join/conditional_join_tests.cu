@@ -51,6 +51,62 @@ const auto col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_ref
 // Common expressions.
 auto left_zero_eq_right_zero =
   cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
+
+// Generate a single pair of left/right non-nullable columns of random data
+// suitable for testing a join against a reference join implementation.
+template <typename T>
+std::pair<std::vector<T>, std::vector<T>> gen_random_repeated_columns(unsigned int N = 10000,
+                                                                      unsigned int num_repeats = 10)
+{
+  // Generate columns of num_repeats repeats of the integer range [0, num_unique),
+  // then merge a shuffled version and compare to hash join.
+  unsigned int num_unique = N / num_repeats;
+
+  std::vector<T> left(N);
+  std::vector<T> right(N);
+
+  for (unsigned int i = 0; i < num_repeats; ++i) {
+    std::iota(
+      std::next(left.begin(), num_unique * i), std::next(left.begin(), num_unique * (i + 1)), 0);
+    std::iota(
+      std::next(right.begin(), num_unique * i), std::next(right.begin(), num_unique * (i + 1)), 0);
+  }
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::shuffle(left.begin(), left.end(), gen);
+  std::shuffle(right.begin(), right.end(), gen);
+  return std::make_pair(std::move(left), std::move(right));
+}
+
+// Generate a single pair of left/right nullable columns of random data
+// suitable for testing a join against a reference join implementation.
+template <typename T>
+std::pair<std::pair<std::vector<T>, std::vector<bool>>,
+          std::pair<std::vector<T>, std::vector<bool>>>
+gen_random_nullable_repeated_columns(unsigned int N = 10000, unsigned int num_repeats = 10)
+{
+  auto [left, right] = gen_random_repeated_columns<T>(N, num_repeats);
+
+  std::vector<bool> left_nulls(N);
+  std::vector<bool> right_nulls(N);
+
+  // Seed with a real random value, if available
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_real_distribution<> uniform_dist(0, 1);
+
+  std::generate(left_nulls.begin(), left_nulls.end(), [&uniform_dist, &gen]() {
+    return uniform_dist(gen) > 0.5;
+  });
+  std::generate(right_nulls.begin(), right_nulls.end(), [&uniform_dist, &gen]() {
+    return uniform_dist(gen) > 0.5;
+  });
+
+  return std::make_pair(std::make_pair(std::move(left), std::move(left_nulls)),
+                        std::make_pair(std::move(right), std::move(right_nulls)));
+}
+
 }  // namespace
 
 /**
@@ -217,8 +273,6 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     // resulting column views will be referencing potentially invalid memory.
     auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
       this->parse_input(left_data, right_data);
-    // TODO: Generalize this to support multiple columns by automatically
-    // constructing the appropriate expression.
     auto result    = this->join(left, right, left_zero_eq_right_zero);
     auto reference = this->reference_join(left, right);
     this->_compare_to_hash_join(result, reference);
@@ -233,12 +287,16 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
       this->parse_input(left_data, right_data);
 
+    // Test comparing nulls as equal (the default for ref joins, uses NULL_EQUAL for AST
+    // expression).
     auto predicate =
       cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col_ref_left_0, col_ref_right_0);
     auto result    = this->join(left, right, predicate);
     auto reference = this->reference_join(left, right);
     this->_compare_to_hash_join(result, reference);
 
+    // Test comparing nulls as equal (null_equality::UNEQUAL for ref joins, uses EQUAL for AST
+    // expression).
     result    = this->join(left, right, left_zero_eq_right_zero);
     reference = this->reference_join(left, right, cudf::null_equality::UNEQUAL);
     this->_compare_to_hash_join(result, reference);
@@ -423,72 +481,14 @@ TYPED_TEST(ConditionalInnerJoinTest, TestSymmetry)
 
 TYPED_TEST(ConditionalInnerJoinTest, TestCompareRandomToHash)
 {
-  // Generate columns of 10 repeats of the integer range [0, 10), then merge
-  // a shuffled version and compare to hash join.
-  unsigned int N           = 10000;
-  unsigned int num_repeats = 10;
-  unsigned int num_unique  = N / num_repeats;
-
-  std::vector<TypeParam> left(N);
-  std::vector<TypeParam> right(N);
-
-  for (unsigned int i = 0; i < num_repeats; ++i) {
-    std::iota(
-      std::next(left.begin(), num_unique * i), std::next(left.begin(), num_unique * (i + 1)), 0);
-    std::iota(
-      std::next(right.begin(), num_unique * i), std::next(right.begin(), num_unique * (i + 1)), 0);
-  }
-
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::shuffle(left.begin(), left.end(), gen);
-  std::shuffle(right.begin(), right.end(), gen);
-
+  auto [left, right] = gen_random_repeated_columns<TypeParam>();
   this->compare_to_hash_join({left}, {right});
 };
 
 TYPED_TEST(ConditionalInnerJoinTest, TestCompareRandomToHashNulls)
 {
-  // Generate columns of 10 repeats of the integer range [0, 10), then merge
-  // a shuffled version and compare to hash join.
-  unsigned int N           = 10000;
-  unsigned int num_repeats = 10;
-  unsigned int num_unique  = N / num_repeats;
-
-  std::vector<TypeParam> left(N);
-  std::vector<TypeParam> right(N);
-
-  for (unsigned int i = 0; i < num_repeats; ++i) {
-    std::iota(
-      std::next(left.begin(), num_unique * i), std::next(left.begin(), num_unique * (i + 1)), 0);
-    std::iota(
-      std::next(right.begin(), num_unique * i), std::next(right.begin(), num_unique * (i + 1)), 0);
-  }
-
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::shuffle(left.begin(), left.end(), gen);
-  std::shuffle(right.begin(), right.end(), gen);
-
-  std::vector<bool> left_nulls(N);
-  std::vector<bool> right_nulls(N);
-
-  // Seed with a real random value, if available
-  std::uniform_real_distribution<> uniform_dist(0, 1);
-
-  std::generate(left_nulls.begin(), left_nulls.end(), [&uniform_dist, &gen]() {
-    return uniform_dist(gen) > 0.5;
-  });
-  std::generate(right_nulls.begin(), right_nulls.end(), [&uniform_dist, &gen]() {
-    return uniform_dist(gen) > 0.5;
-  });
-
-  std::pair<std::vector<TypeParam>, std::vector<bool>> nullable_left =
-    std::make_pair(left, left_nulls);
-  std::pair<std::vector<TypeParam>, std::vector<bool>> nullable_right =
-    std::make_pair(right, right_nulls);
-
-  this->compare_to_hash_join_nulls({nullable_left}, {nullable_right});
+  auto [left, right] = gen_random_nullable_repeated_columns<TypeParam>();
+  this->compare_to_hash_join_nulls({left}, {right});
 };
 
 TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoNullsRowAllEqual)
@@ -543,27 +543,13 @@ TYPED_TEST(ConditionalLeftJoinTest, TestTwoColumnThreeRowSomeEqual)
 
 TYPED_TEST(ConditionalLeftJoinTest, TestCompareRandomToHash)
 {
-  // Generate columns of 10 repeats of the integer range [0, 10), then merge
-  // a shuffled version and compare to hash join.
-  unsigned int N           = 10000;
-  unsigned int num_repeats = 10;
-  unsigned int num_unique  = N / num_repeats;
+  auto [left, right] = gen_random_repeated_columns<TypeParam>();
+  this->compare_to_hash_join({left}, {right});
+};
 
-  std::vector<TypeParam> left(N);
-  std::vector<TypeParam> right(N);
-
-  for (unsigned int i = 0; i < num_repeats; ++i) {
-    std::iota(
-      std::next(left.begin(), num_unique * i), std::next(left.begin(), num_unique * (i + 1)), 0);
-    std::iota(
-      std::next(right.begin(), num_unique * i), std::next(right.begin(), num_unique * (i + 1)), 0);
-  }
-
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::shuffle(left.begin(), left.end(), gen);
-  std::shuffle(right.begin(), right.end(), gen);
-
+TYPED_TEST(ConditionalLeftJoinTest, TestCompareRandomToHashNulls)
+{
+  auto [left, right] = gen_random_repeated_columns<TypeParam>();
   this->compare_to_hash_join({left}, {right});
 };
 
@@ -624,27 +610,13 @@ TYPED_TEST(ConditionalFullJoinTest, TestTwoColumnThreeRowSomeEqual)
 
 TYPED_TEST(ConditionalFullJoinTest, TestCompareRandomToHash)
 {
-  // Generate columns of 10 repeats of the integer range [0, 10), then merge
-  // a shuffled version and compare to hash join.
-  unsigned int N           = 10000;
-  unsigned int num_repeats = 10;
-  unsigned int num_unique  = N / num_repeats;
+  auto [left, right] = gen_random_repeated_columns<TypeParam>();
+  this->compare_to_hash_join({left}, {right});
+};
 
-  std::vector<TypeParam> left(N);
-  std::vector<TypeParam> right(N);
-
-  for (unsigned int i = 0; i < num_repeats; ++i) {
-    std::iota(
-      std::next(left.begin(), num_unique * i), std::next(left.begin(), num_unique * (i + 1)), 0);
-    std::iota(
-      std::next(right.begin(), num_unique * i), std::next(right.begin(), num_unique * (i + 1)), 0);
-  }
-
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::shuffle(left.begin(), left.end(), gen);
-  std::shuffle(right.begin(), right.end(), gen);
-
+TYPED_TEST(ConditionalFullJoinTest, TestCompareRandomToHashNulls)
+{
+  auto [left, right] = gen_random_repeated_columns<TypeParam>();
   this->compare_to_hash_join({left}, {right});
 };
 
@@ -683,6 +655,14 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
       std::equal(resulting_indices.begin(), resulting_indices.end(), expected_outputs.begin()));
   }
 
+  void _compare_to_hash_join(std::unique_ptr<rmm::device_uvector<cudf::size_type>> const& result,
+                             std::unique_ptr<rmm::device_uvector<cudf::size_type>> const& reference)
+  {
+    thrust::sort(thrust::device, result->begin(), result->end());
+    thrust::sort(thrust::device, reference->begin(), reference->end());
+    EXPECT_TRUE(thrust::equal(thrust::device, result->begin(), result->end(), reference->begin()));
+  }
+
   /*
    * Perform a join of tables constructed from two input data sets according to
    * an equality predicate on all corresponding columns and verify that the outputs match the
@@ -695,15 +675,28 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
     // resulting column views will be referencing potentially invalid memory.
     auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
       this->parse_input(left_data, right_data);
-    // TODO: Generalize this to support multiple columns by automatically
-    // constructing the appropriate expression.
     auto result    = this->join(left, right, left_zero_eq_right_zero);
     auto reference = this->reference_join(left, right);
+    this->_compare_to_hash_join(result, reference);
+  }
 
-    thrust::sort(thrust::device, result->begin(), result->end());
-    thrust::sort(thrust::device, reference->begin(), reference->end());
+  void compare_to_hash_join_nulls(
+    std::vector<std::pair<std::vector<T>, std::vector<bool>>> left_data,
+    std::vector<std::pair<std::vector<T>, std::vector<bool>>> right_data)
+  {
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
+      this->parse_input(left_data, right_data);
+    auto predicate =
+      cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col_ref_left_0, col_ref_right_0);
+    auto result    = this->join(left, right, predicate);
+    auto reference = this->reference_join(left, right);
+    this->_compare_to_hash_join(result, reference);
 
-    EXPECT_TRUE(thrust::equal(thrust::device, result->begin(), result->end(), reference->begin()));
+    result    = this->join(left, right, left_zero_eq_right_zero);
+    reference = this->reference_join(left, right, cudf::null_equality::UNEQUAL);
+    this->_compare_to_hash_join(result, reference);
   }
 
   /**
@@ -770,28 +763,14 @@ TYPED_TEST(ConditionalLeftSemiJoinTest, TestTwoColumnThreeRowSomeEqual)
 
 TYPED_TEST(ConditionalLeftSemiJoinTest, TestCompareRandomToHash)
 {
-  // Generate columns of 10 repeats of the integer range [0, 10), then merge
-  // a shuffled version and compare to hash join.
-  unsigned int N           = 10000;
-  unsigned int num_repeats = 10;
-  unsigned int num_unique  = N / num_repeats;
-
-  std::vector<TypeParam> left(N);
-  std::vector<TypeParam> right(N);
-
-  for (unsigned int i = 0; i < num_repeats; ++i) {
-    std::iota(
-      std::next(left.begin(), num_unique * i), std::next(left.begin(), num_unique * (i + 1)), 0);
-    std::iota(
-      std::next(right.begin(), num_unique * i), std::next(right.begin(), num_unique * (i + 1)), 0);
-  }
-
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::shuffle(left.begin(), left.end(), gen);
-  std::shuffle(right.begin(), right.end(), gen);
-
+  auto [left, right] = gen_random_repeated_columns<TypeParam>();
   this->compare_to_hash_join({left}, {right});
+};
+
+TYPED_TEST(ConditionalLeftSemiJoinTest, TestCompareRandomToHashNulls)
+{
+  auto [left, right] = gen_random_nullable_repeated_columns<TypeParam>();
+  this->compare_to_hash_join_nulls({left}, {right});
 };
 
 /**
@@ -830,26 +809,12 @@ TYPED_TEST(ConditionalLeftAntiJoinTest, TestTwoColumnThreeRowSomeEqual)
 
 TYPED_TEST(ConditionalLeftAntiJoinTest, TestCompareRandomToHash)
 {
-  // Generate columns of 10 repeats of the integer range [0, 10), then merge
-  // a shuffled version and compare to hash join.
-  unsigned int N           = 10000;
-  unsigned int num_repeats = 10;
-  unsigned int num_unique  = N / num_repeats;
-
-  std::vector<TypeParam> left(N);
-  std::vector<TypeParam> right(N);
-
-  for (unsigned int i = 0; i < num_repeats; ++i) {
-    std::iota(
-      std::next(left.begin(), num_unique * i), std::next(left.begin(), num_unique * (i + 1)), 0);
-    std::iota(
-      std::next(right.begin(), num_unique * i), std::next(right.begin(), num_unique * (i + 1)), 0);
-  }
-
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::shuffle(left.begin(), left.end(), gen);
-  std::shuffle(right.begin(), right.end(), gen);
-
+  auto [left, right] = gen_random_repeated_columns<TypeParam>();
   this->compare_to_hash_join({left}, {right});
+};
+
+TYPED_TEST(ConditionalLeftAntiJoinTest, TestCompareRandomToHashNulls)
+{
+  auto [left, right] = gen_random_nullable_repeated_columns<TypeParam>();
+  this->compare_to_hash_join_nulls({left}, {right});
 };
