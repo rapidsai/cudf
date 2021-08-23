@@ -133,18 +133,15 @@ def test_rolling_with_offset(agg):
 
 @pytest.mark.parametrize("agg", ["std", "var"])
 @pytest.mark.parametrize("center", [True, False])
-@pytest.mark.parametrize("seed", [100, 1000, 20000])
+@pytest.mark.parametrize("seed", [100, 1000, 10000])
 @pytest.mark.parametrize("window_size", [2, 10, 100, 1000])
-@pytest.mark.parametrize(
-    "min_periods", [1]
-)  # min_periods is tested with previous tests
-def test_rolling_var_std_dynamic(agg, center, seed, window_size, min_periods):
+def test_rolling_var_std_large(agg, center, seed, window_size):
     if PANDAS_GE_110:
         kwargs = {"check_freq": False}
     else:
         kwargs = {}
 
-    n_rows = 10_000
+    n_rows = 1_000
     data = dataset_generator.rand_dataframe(
         dtypes_meta=[
             {"dtype": "i4", "null_frequency": 0.4, "cardinality": 100},
@@ -158,26 +155,26 @@ def test_rolling_var_std_dynamic(agg, center, seed, window_size, min_periods):
     )
 
     pdf = data.to_pandas()
-    # pdf["1"][
-    #     [np.random.randint(0, n_rows - 1) for _ in range(int(n_rows * 0.2))]
-    # ] = float("inf")
-
     gdf = cudf.from_pandas(pdf)
 
-    expect = getattr(
-        pdf.rolling(window_size, min_periods, center), agg
-    )().fillna(-1)
-    got = getattr(gdf.rolling(window_size, min_periods, center), agg)().fillna(
-        -1
-    )
+    expect = getattr(pdf.rolling(window_size, 1, center), agg)().fillna(-1)
+    got = getattr(gdf.rolling(window_size, 1, center), agg)().fillna(-1)
 
-    # Pandas adopts Kahan summation, where there's a running compensation term
-    # from a previous window rolled into the next. This makes the variation of
-    # a uniform window non-zero. In cudf, each window is computed independently
-    # of the previous window. Thus, here we skip comparing the rows where cudf
-    # computes a 0-variance for the window.
-    for col in expect:
-        expect[col][got[col][got[col] == 0.0].index.to_pandas()] = 0.0
+    # Pandas adopts an online variance calculation algorithm. Each window has a
+    # numeric error from the previous window. This makes the variance of a
+    # uniform window has a small residue. Taking the square root of a very
+    # small number may result in a non-trival number.
+    #
+    # In cudf, each window is computed independently from the previous window,
+    # this gives better numeric precision.
+    #
+    # For quantitative analysis:
+    # https://gist.github.com/isVoid/4984552da6ef5545348399c22d72cffb
+    #
+    # To make up this difference, we skip comparing uniform windows by coercing
+    # pandas result of these windows to 0.
+    for col in ["1", "2", "3"]:
+        expect[col][(got[col] == 0.0).to_pandas()] = 0.0
 
     assert_eq(expect, got, **kwargs)
 
