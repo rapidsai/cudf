@@ -56,8 +56,9 @@ static cudf::string_scalar create_random_input(int32_t num_chars,
   auto const num_delim_chars = num_delims * delim.size();
   auto const num_value_chars = num_chars - num_delim_chars;
   auto const num_rows        = num_delims;
-  auto const value_size_max  = static_cast<int32_t>(num_value_chars / num_rows);
-  auto const value_size_min  = static_cast<int32_t>(value_size_max * (1 - deviation));
+  auto const value_size_avg  = static_cast<int32_t>(num_value_chars / num_rows);
+  auto const value_size_min  = static_cast<int32_t>(value_size_avg * (1 - deviation));
+  auto const value_size_max  = static_cast<int32_t>(value_size_avg * (1 + deviation));
 
   data_profile table_profile;
 
@@ -100,7 +101,7 @@ static void BM_multibyte_split(benchmark::State& state)
   auto delim = std::string(":", delim_size);
 
   auto delim_factor = static_cast<double>(delim_percent) / 100;
-  auto device_input = create_random_input(file_size_approx, delim_factor, 0.1, delim);
+  auto device_input = create_random_input(file_size_approx, delim_factor, 0.05, delim);
   auto host_input   = thrust::host_vector<char>(device_input.size());
   auto host_string  = std::string(host_input.data(), host_input.size());
 
