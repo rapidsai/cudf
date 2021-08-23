@@ -1369,6 +1369,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
   }
 
+  public final ColumnVector approxPercentile(double[] percentiles) {
+    try (ColumnVector cv = ColumnVector.fromDoubles(percentiles)) {
+      return new ColumnVector(approxPercentile(getNativeView(), cv.getNativeView()));
+    }
+  }
+
   /**
    * Calculate various quantiles of this ColumnVector.  It is assumed that this is already sorted
    * in the desired order.
@@ -3483,6 +3489,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         by the upper method.
    */
   private static native long upperStrings(long cudfViewHandle);
+
+  /**
+   * Native method to compute approx percentiles.
+   * @param cudfColumnHandle T-Digest column
+   * @param percentilesHandle Percentiles
+   * @return native handle of the resulting cudf column, used to construct the Java column
+   *         by the approxPercentile method.
+   */
+  private static native long approxPercentile(long cudfColumnHandle, long percentilesHandle) throws CudfException;
 
   private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 

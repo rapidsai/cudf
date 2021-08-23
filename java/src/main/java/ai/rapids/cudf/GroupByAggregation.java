@@ -293,4 +293,12 @@ public final class GroupByAggregation {
   public static GroupByAggregation mergeM2() {
     return new GroupByAggregation(Aggregation.mergeM2());
   }
+
+  public static GroupByAggregation createTDigest(int delta) {
+    return new GroupByAggregation(Aggregation.createTDigest(delta));
+  }
+
+  public static GroupByAggregation mergeTDigest(int delta) {
+    return new GroupByAggregation(Aggregation.mergeTDigest(delta));
+  }
 }

@@ -288,6 +288,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_scan(JNIEnv *env, jclass,
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_approxPercentile(
+    JNIEnv *env, jclass clazz, jlong input_column, jlong percentiles_column) {
+  JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *n_input_column = reinterpret_cast<cudf::column_view *>(input_column);
+    cudf::column_view *n_percentiles_column = reinterpret_cast<cudf::column_view *>(percentiles_column);
+    std::unique_ptr<cudf::column> result =
+        cudf::percentile_approx(*n_input_column, *n_percentiles_column);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_quantile(JNIEnv *env, jclass clazz,
                                                                 jlong input_column,
                                                                 jint quantile_method,
