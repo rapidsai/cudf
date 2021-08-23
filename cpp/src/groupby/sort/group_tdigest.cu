@@ -22,6 +22,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/merge.cuh>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/utilities/span.hpp>
 
@@ -70,10 +71,6 @@ struct merge_centroid_tuple {
     return {(lhs_mean * lhs_weight + rhs_mean * rhs_weight) / new_weight, new_weight};
   }
 };
-
-// mean and weight column indices within tdigest struct columns
-constexpr size_type tdigest_mean_column_index   = 0;
-constexpr size_type tdigest_weight_column_index = 1;
 
 /**
  * @brief A functor which returns the nearest weight in the input stream prior to the specified
@@ -338,8 +335,8 @@ std::pair<rmm::device_uvector<double>, std::unique_ptr<column>> generate_group_c
  */
 template <typename CentroidIter, typename CumulativeWeight>
 std::unique_ptr<column> compute_tdigests(int delta,
-                                         CentroidIter values_begin,
-                                         CentroidIter values_end,
+                                         CentroidIter centroids_begin,
+                                         CentroidIter centroids_end,
                                          CumulativeWeight group_cumulative_weight,
                                          rmm::device_uvector<double> const& group_cluster_wl,
                                          cudf::column_view const& group_num_clusters,
@@ -348,7 +345,8 @@ std::unique_ptr<column> compute_tdigests(int delta,
 {
   // the output for each group is column of data that represents the tdigest. since we want 1 row
   // per group, each row will be a list the length of the tdigest for that group. so our output
-  // column is of the form: list {
+  // column is of the form:
+  // list {
   //  struct {
   //    double    // mean
   //    double    // weight
@@ -412,16 +410,17 @@ std::unique_ptr<column> compute_tdigests(int delta,
     });
 
   // reduce the centroids down by key.
-  cudf::mutable_column_view mean_col = tdigests->child(tdigest_mean_column_index).mutable_view();
+  cudf::mutable_column_view mean_col =
+    tdigests->child(cudf::detail::tdigest_mean_column_index).mutable_view();
   cudf::mutable_column_view weight_col =
-    tdigests->child(tdigest_weight_column_index).mutable_view();
+    tdigests->child(cudf::detail::tdigest_weight_column_index).mutable_view();
   auto output = thrust::make_zip_iterator(
     thrust::make_tuple(mean_col.begin<double>(), weight_col.begin<double>()));
-  auto const num_values = std::distance(values_begin, values_end);
+  auto const num_values = std::distance(centroids_begin, centroids_end);
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         keys,
                         keys + num_values,                // keys
-                        values_begin,                     // values
+                        centroids_begin,                  // values
                         thrust::make_discard_iterator(),  // key output
                         output,                           // output
                         thrust::equal_to<size_type>{},    // key equality check
@@ -430,6 +429,56 @@ std::unique_ptr<column> compute_tdigests(int delta,
   // wrap in the final list column.
   return cudf::make_lists_column(num_groups, std::move(offsets), std::move(tdigests), 0, {});
 }
+
+struct weight_from_offsets {
+  cudf::device_span<size_type const> group_offsets;
+  double operator()(size_type group_index)
+  {
+    return group_offsets[group_index + 1] - group_offsets[group_index];
+  }
+};
+
+struct typed_group_tdigest {
+  template <typename T, typename std::enable_if_t<cudf::is_numeric<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& col,
+                                     cudf::device_span<size_type const> group_offsets,
+                                     size_type num_groups,
+                                     int delta,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    // first, generate cluster weight information for each input group
+    auto total_group_weight =
+      cudf::detail::make_counting_transform_iterator(0, weight_from_offsets{group_offsets});
+    auto [group_cluster_wl, group_num_clusters] = generate_group_cluster_limits(
+      delta, num_groups, nearest_value_scalar_weights{}, total_group_weight, stream);
+
+    // for simple input values, the "centroids" all have a weight of 1.
+    auto sorted_centroids = thrust::make_transform_iterator(col.begin<T>(), make_centroid_tuple{});
+
+    // generate the final tdigest
+    return compute_tdigests(
+      delta,
+      sorted_centroids,
+      sorted_centroids + col.size(),
+      cumulative_scalar_weight{group_offsets.begin(), static_cast<size_type>(group_offsets.size())},
+      group_cluster_wl,
+      *group_num_clusters,
+      stream,
+      mr);
+  }
+
+  template <typename T, typename std::enable_if_t<!cudf::is_numeric<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& col,
+                                     cudf::device_span<size_type const> group_offsets,
+                                     size_type num_groups,
+                                     int delta,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    CUDF_FAIL("Non-numeric type in group_tdigest");
+  }
+};
 
 }  // anonymous namespace
 
@@ -440,30 +489,8 @@ std::unique_ptr<column> group_tdigest(column_view const& col,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  // first, cluster weight information for each input group
-  auto total_group_weight = cudf::detail::make_counting_transform_iterator(
-    0, [group_offsets = group_offsets.begin()] __device__(size_type group_index) {
-      return group_offsets[group_index + 1] - group_offsets[group_index];
-    });
-  auto [group_cluster_wl, group_num_clusters] = generate_group_cluster_limits(
-    delta, num_groups, nearest_value_scalar_weights{}, total_group_weight, stream);
-
-  // we have to sort the input values.
-  table_view t({col});
-  auto sorted = cudf::detail::sort(t, {}, {}, stream, rmm::mr::get_current_device_resource());
-  // for simple input values, the "centroids" all have a weight of 1.
-  auto sorted_values = thrust::make_transform_iterator(sorted->get_column(0).view().begin<float>(),
-                                                       make_centroid_tuple{});
-  // generate the final tdigest
-  return compute_tdigests(
-    delta,
-    sorted_values,
-    sorted_values + col.size(),
-    cumulative_scalar_weight{group_offsets.begin(), static_cast<size_type>(group_offsets.size())},
-    group_cluster_wl,
-    *group_num_clusters,
-    stream,
-    mr);
+  return cudf::type_dispatcher(
+    col.type(), typed_group_tdigest{}, col, group_offsets, num_groups, delta, stream, mr);
 }
 
 std::unique_ptr<column> group_merge_tdigest(column_view const& input,
@@ -473,21 +500,13 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(input.offset() == 0, "Encountered a sliced tdigest column");
+  cudf::detail::check_is_valid_tdigest_column(input);
 
-  // sanity check that this is actually tdigest data
-  CUDF_EXPECTS(input.type().id() == type_id::LIST, "Encountered invalid tdigest column");
-  CUDF_EXPECTS(input.offset() == 0, "Encountered a sliced tdigest column");
-  CUDF_EXPECTS(input.nullable() == false, "Encountered nullable tdigest column");
   lists_column_view lcv(input);
   auto data = lcv.get_sliced_child(stream);
-  CUDF_EXPECTS(data.type().id() == type_id::STRUCT, "Encountered invalid tdigest column");
-  CUDF_EXPECTS(data.num_children() == 2, "Encountered invalid tdigest column");
   structs_column_view scv(data);
-  auto mean = scv.get_sliced_child(tdigest_mean_column_index);
-  CUDF_EXPECTS(mean.type().id() == type_id::FLOAT64, "Encountered invalid tdigest column");
-  auto weight = scv.get_sliced_child(tdigest_weight_column_index);
-  CUDF_EXPECTS(weight.type().id() == type_id::FLOAT64, "Encountered invalid tdigest column");
+  auto mean   = scv.get_sliced_child(cudf::detail::tdigest_mean_column_index);
+  auto weight = scv.get_sliced_child(cudf::detail::tdigest_weight_column_index);
 
   // first step is to merge all the tdigests in each group. at the moment the only way to
   // make this work is to retrieve the group sizes (via group_offsets) and the individual digest
@@ -561,7 +580,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
 
   // generate cumulative weights
   auto cumulative_weights =
-    std::make_unique<column>(merged->get_column(tdigest_weight_column_index),
+    std::make_unique<column>(merged->get_column(cudf::detail::tdigest_weight_column_index),
                              stream,
                              rmm::mr::get_current_device_resource());
   auto keys = cudf::detail::make_counting_transform_iterator(
@@ -614,14 +633,14 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
     stream);
 
   // compute the tdigest
-  auto values = cudf::detail::make_counting_transform_iterator(
+  auto centroids = cudf::detail::make_counting_transform_iterator(
     0,
     make_weighted_centroid_tuple{
-      merged->get_column(tdigest_mean_column_index).view().begin<double>(),
-      merged->get_column(tdigest_weight_column_index).view().begin<double>()});
+      merged->get_column(cudf::detail::tdigest_mean_column_index).view().begin<double>(),
+      merged->get_column(cudf::detail::tdigest_weight_column_index).view().begin<double>()});
   return compute_tdigests(delta,
-                          values,
-                          values + merged->num_rows(),
+                          centroids,
+                          centroids + merged->num_rows(),
                           cumulative_centroid_weight{cumulative_weights->view().begin<double>(),
                                                      group_offsets.data(),
                                                      static_cast<size_type>(group_offsets.size()),

@@ -457,7 +457,7 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
  * Each output row is a single tdigest.  The length of the row is the "size" of the
  * tdigest, each element of which represents a weighted centroid (mean, weight).
  *
- * @param values Grouped values to merge.
+ * @param values Grouped (and sorted) values to merge.
  * @param group_offsets Offsets of groups' starting points within @p values.
  * @param num_groups Number of groups.
  * @param delta Parameter controlling the level of compression of the tdigest. Higher
