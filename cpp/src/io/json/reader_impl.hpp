@@ -158,8 +158,6 @@ class reader::impl {
    */
   void set_column_names(device_span<uint64_t const> rec_starts, rmm::cuda_stream_view stream);
 
-  std::vector<data_type> parse_data_types(std::vector<std::string> const& types_as_strings);
-
   /**
    * @brief Set the data type array data member
    *

@@ -133,7 +133,9 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
 /**
  * @brief Derived class for specifying a sum aggregation
  */
-class sum_aggregation final : public rolling_aggregation {
+class sum_aggregation final : public rolling_aggregation,
+                              public groupby_aggregation,
+                              public groupby_scan_aggregation {
  public:
   sum_aggregation() : aggregation(SUM) {}
 
@@ -152,7 +154,7 @@ class sum_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a product aggregation
  */
-class product_aggregation final : public aggregation {
+class product_aggregation final : public groupby_aggregation {
  public:
   product_aggregation() : aggregation(PRODUCT) {}
 
@@ -171,7 +173,9 @@ class product_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying a min aggregation
  */
-class min_aggregation final : public rolling_aggregation {
+class min_aggregation final : public rolling_aggregation,
+                              public groupby_aggregation,
+                              public groupby_scan_aggregation {
  public:
   min_aggregation() : aggregation(MIN) {}
 
@@ -190,7 +194,9 @@ class min_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a max aggregation
  */
-class max_aggregation final : public rolling_aggregation {
+class max_aggregation final : public rolling_aggregation,
+                              public groupby_aggregation,
+                              public groupby_scan_aggregation {
  public:
   max_aggregation() : aggregation(MAX) {}
 
@@ -209,7 +215,9 @@ class max_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a count aggregation
  */
-class count_aggregation final : public rolling_aggregation {
+class count_aggregation final : public rolling_aggregation,
+                                public groupby_aggregation,
+                                public groupby_scan_aggregation {
  public:
   count_aggregation(aggregation::Kind kind) : aggregation(kind) {}
 
@@ -266,7 +274,7 @@ class all_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying a sum_of_squares aggregation
  */
-class sum_of_squares_aggregation final : public aggregation {
+class sum_of_squares_aggregation final : public groupby_aggregation {
  public:
   sum_of_squares_aggregation() : aggregation(SUM_OF_SQUARES) {}
 
@@ -285,7 +293,7 @@ class sum_of_squares_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying a mean aggregation
  */
-class mean_aggregation final : public rolling_aggregation {
+class mean_aggregation final : public rolling_aggregation, public groupby_aggregation {
  public:
   mean_aggregation() : aggregation(MEAN) {}
 
@@ -304,7 +312,7 @@ class mean_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a m2 aggregation
  */
-class m2_aggregation : public aggregation {
+class m2_aggregation : public groupby_aggregation {
  public:
   m2_aggregation() : aggregation{M2} {}
 
@@ -323,7 +331,7 @@ class m2_aggregation : public aggregation {
 /**
  * @brief Derived class for specifying a standard deviation/variance aggregation
  */
-class std_var_aggregation : public aggregation {
+class std_var_aggregation : public groupby_aggregation {
  public:
   size_type _ddof;  ///< Delta degrees of freedom
 
@@ -342,7 +350,6 @@ class std_var_aggregation : public aggregation {
     CUDF_EXPECTS(k == aggregation::STD or k == aggregation::VARIANCE,
                  "std_var_aggregation can accept only STD, VARIANCE");
   }
-
   size_type hash_impl() const { return std::hash<size_type>{}(_ddof); }
 };
 
@@ -351,7 +358,10 @@ class std_var_aggregation : public aggregation {
  */
 class var_aggregation final : public std_var_aggregation {
  public:
-  var_aggregation(size_type ddof) : std_var_aggregation{aggregation::VARIANCE, ddof} {}
+  var_aggregation(size_type ddof)
+    : aggregation{aggregation::VARIANCE}, std_var_aggregation{aggregation::VARIANCE, ddof}
+  {
+  }
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -370,7 +380,10 @@ class var_aggregation final : public std_var_aggregation {
  */
 class std_aggregation final : public std_var_aggregation {
  public:
-  std_aggregation(size_type ddof) : std_var_aggregation{aggregation::STD, ddof} {}
+  std_aggregation(size_type ddof)
+    : aggregation{aggregation::STD}, std_var_aggregation{aggregation::STD, ddof}
+  {
+  }
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -387,7 +400,7 @@ class std_aggregation final : public std_var_aggregation {
 /**
  * @brief Derived class for specifying a median aggregation
  */
-class median_aggregation final : public aggregation {
+class median_aggregation final : public groupby_aggregation {
  public:
   median_aggregation() : aggregation(MEDIAN) {}
 
@@ -406,7 +419,7 @@ class median_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying a quantile aggregation
  */
-class quantile_aggregation final : public aggregation {
+class quantile_aggregation final : public groupby_aggregation {
  public:
   quantile_aggregation(std::vector<double> const& q, interpolation i)
     : aggregation{QUANTILE}, _quantiles{q}, _interpolation{i}
@@ -452,7 +465,7 @@ class quantile_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying an argmax aggregation
  */
-class argmax_aggregation final : public rolling_aggregation {
+class argmax_aggregation final : public rolling_aggregation, public groupby_aggregation {
  public:
   argmax_aggregation() : aggregation(ARGMAX) {}
 
@@ -471,7 +484,7 @@ class argmax_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying an argmin aggregation
  */
-class argmin_aggregation final : public rolling_aggregation {
+class argmin_aggregation final : public rolling_aggregation, public groupby_aggregation {
  public:
   argmin_aggregation() : aggregation(ARGMIN) {}
 
@@ -490,7 +503,7 @@ class argmin_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a nunique aggregation
  */
-class nunique_aggregation final : public aggregation {
+class nunique_aggregation final : public groupby_aggregation {
  public:
   nunique_aggregation(null_policy null_handling)
     : aggregation{NUNIQUE}, _null_handling{null_handling}
@@ -526,7 +539,7 @@ class nunique_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying a nth element aggregation
  */
-class nth_element_aggregation final : public aggregation {
+class nth_element_aggregation final : public groupby_aggregation {
  public:
   nth_element_aggregation(size_type n, null_policy null_handling)
     : aggregation{NTH_ELEMENT}, _n{n}, _null_handling{null_handling}
@@ -607,7 +620,7 @@ class ewma_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a rank aggregation
  */
-class rank_aggregation final : public rolling_aggregation {
+class rank_aggregation final : public rolling_aggregation, public groupby_scan_aggregation {
  public:
   rank_aggregation() : aggregation{RANK} {}
 
@@ -626,7 +639,7 @@ class rank_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a dense rank aggregation
  */
-class dense_rank_aggregation final : public rolling_aggregation {
+class dense_rank_aggregation final : public rolling_aggregation, public groupby_scan_aggregation {
  public:
   dense_rank_aggregation() : aggregation{DENSE_RANK} {}
 
@@ -645,7 +658,7 @@ class dense_rank_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived aggregation class for specifying COLLECT_LIST aggregation
  */
-class collect_list_aggregation final : public rolling_aggregation {
+class collect_list_aggregation final : public rolling_aggregation, public groupby_aggregation {
  public:
   explicit collect_list_aggregation(null_policy null_handling = null_policy::INCLUDE)
     : aggregation{COLLECT_LIST}, _null_handling{null_handling}
@@ -681,7 +694,7 @@ class collect_list_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived aggregation class for specifying COLLECT_SET aggregation
  */
-class collect_set_aggregation final : public rolling_aggregation {
+class collect_set_aggregation final : public rolling_aggregation, public groupby_aggregation {
  public:
   explicit collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
                                    null_equality nulls_equal = null_equality::EQUAL,
@@ -820,7 +833,7 @@ class udf_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived aggregation class for specifying MERGE_LISTS aggregation
  */
-class merge_lists_aggregation final : public aggregation {
+class merge_lists_aggregation final : public groupby_aggregation {
  public:
   explicit merge_lists_aggregation() : aggregation{MERGE_LISTS} {}
 
@@ -839,7 +852,7 @@ class merge_lists_aggregation final : public aggregation {
 /**
  * @brief Derived aggregation class for specifying MERGE_SETS aggregation
  */
-class merge_sets_aggregation final : public aggregation {
+class merge_sets_aggregation final : public groupby_aggregation {
  public:
   explicit merge_sets_aggregation(null_equality nulls_equal, nan_equality nans_equal)
     : aggregation{MERGE_SETS}, _nulls_equal(nulls_equal), _nans_equal(nans_equal)
@@ -880,7 +893,7 @@ class merge_sets_aggregation final : public aggregation {
 /**
  * @brief Derived aggregation class for specifying MERGE_M2 aggregation
  */
-class merge_m2_aggregation final : public aggregation {
+class merge_m2_aggregation final : public groupby_aggregation {
  public:
   explicit merge_m2_aggregation() : aggregation{MERGE_M2} {}
 

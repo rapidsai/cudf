@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/transform.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -43,7 +43,7 @@ std::unique_ptr<column> transform(
  */
 std::unique_ptr<column> compute_column(
   table_view const table,
-  ast::expression const& expr,
+  ast::operation const& expr,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

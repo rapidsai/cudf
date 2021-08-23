@@ -58,7 +58,7 @@ void BM_basic_sum(benchmark::State& state)
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = vals;
-  requests[0].aggregations.push_back(cudf::make_sum_aggregation());
+  requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
@@ -97,7 +97,7 @@ void BM_pre_sorted_sum(benchmark::State& state)
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = vals;
-  requests[0].aggregations.push_back(cudf::make_sum_aggregation());
+  requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
