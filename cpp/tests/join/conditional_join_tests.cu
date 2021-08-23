@@ -39,6 +39,17 @@
 // Defining expressions for AST evaluation is currently a bit tedious, so we
 // define some standard nodes here that can be easily reused elsewhere.
 namespace {
+using PairJoinReturn   = std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+                                 std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
+using SingleJoinReturn = std::unique_ptr<rmm::device_uvector<cudf::size_type>>;
+using NullMaskVector   = std::vector<bool>;
+
+template <typename T>
+using ColumnVector = std::vector<std::vector<T>>;
+
+template <typename T>
+using NullableColumnVector = std::vector<std::pair<std::vector<T>, NullMaskVector>>;
+
 constexpr cudf::size_type JoinNoneValue =
   std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
 
@@ -202,8 +213,8 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
    * the provided predicate and verify that the outputs match the expected
    * outputs (up to order).
    */
-  void test(std::vector<std::vector<T>> left_data,
-            std::vector<std::vector<T>> right_data,
+  void test(ColumnVector<T> left_data,
+            ColumnVector<T> right_data,
             cudf::ast::operation predicate,
             std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
   {
@@ -214,8 +225,8 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     this->_test(left, right, predicate, expected_outputs);
   }
 
-  void test_nulls(std::vector<std::pair<std::vector<T>, std::vector<bool>>> left_data,
-                  std::vector<std::pair<std::vector<T>, std::vector<bool>>> right_data,
+  void test_nulls(NullableColumnVector<T> left_data,
+                  NullableColumnVector<T> right_data,
                   cudf::ast::operation predicate,
                   std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
   {
@@ -231,11 +242,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
    * an equality predicate on all corresponding columns and verify that the outputs match the
    * expected outputs (up to order).
    */
-  void _compare_to_hash_join(
-    std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-              std::unique_ptr<rmm::device_uvector<cudf::size_type>>> const& result,
-    std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-              std::unique_ptr<rmm::device_uvector<cudf::size_type>>> const& reference)
+  void _compare_to_hash_join(PairJoinReturn const& result, PairJoinReturn const& reference)
   {
     thrust::device_vector<thrust::pair<cudf::size_type, cudf::size_type>> result_pairs(
       result.first->size());
@@ -266,8 +273,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
       thrust::device, reference_pairs.begin(), reference_pairs.end(), result_pairs.begin()));
   }
 
-  void compare_to_hash_join(std::vector<std::vector<T>> left_data,
-                            std::vector<std::vector<T>> right_data)
+  void compare_to_hash_join(ColumnVector<T> left_data, ColumnVector<T> right_data)
   {
     // Note that we need to maintain the column wrappers otherwise the
     // resulting column views will be referencing potentially invalid memory.
@@ -278,9 +284,8 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     this->_compare_to_hash_join(result, reference);
   }
 
-  void compare_to_hash_join_nulls(
-    std::vector<std::pair<std::vector<T>, std::vector<bool>>> left_data,
-    std::vector<std::pair<std::vector<T>, std::vector<bool>>> right_data)
+  void compare_to_hash_join_nulls(NullableColumnVector<T> left_data,
+                                  NullableColumnVector<T> right_data)
   {
     // Note that we need to maintain the column wrappers otherwise the
     // resulting column views will be referencing potentially invalid memory.
@@ -307,9 +312,9 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
    * It should be a simply forwarding of arguments to the appropriate cudf
    * conditional join API.
    */
-  virtual std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-                    std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-  join(cudf::table_view left, cudf::table_view right, cudf::ast::operation predicate) = 0;
+  virtual PairJoinReturn join(cudf::table_view left,
+                              cudf::table_view right,
+                              cudf::ast::operation predicate) = 0;
 
   /**
    * This method must be implemented by subclasses for specific types of joins.
@@ -325,11 +330,10 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
    * It should be a simply forwarding of arguments to the appropriate cudf
    * hash join API for comparison with conditional joins.
    */
-  virtual std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-                    std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-  reference_join(cudf::table_view left,
-                 cudf::table_view right,
-                 cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) = 0;
+  virtual PairJoinReturn reference_join(
+    cudf::table_view left,
+    cudf::table_view right,
+    cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) = 0;
 };
 
 /**
@@ -337,9 +341,9 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
  */
 template <typename T>
 struct ConditionalInnerJoinTest : public ConditionalJoinPairReturnTest<T> {
-  std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-            std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-  join(cudf::table_view left, cudf::table_view right, cudf::ast::operation predicate) override
+  PairJoinReturn join(cudf::table_view left,
+                      cudf::table_view right,
+                      cudf::ast::operation predicate) override
   {
     return cudf::conditional_inner_join(left, right, predicate);
   }
@@ -351,11 +355,10 @@ struct ConditionalInnerJoinTest : public ConditionalJoinPairReturnTest<T> {
     return cudf::conditional_inner_join_size(left, right, predicate);
   }
 
-  std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-            std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-  reference_join(cudf::table_view left,
-                 cudf::table_view right,
-                 cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
+  PairJoinReturn reference_join(
+    cudf::table_view left,
+    cudf::table_view right,
+    cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
     return cudf::inner_join(left, right, compare_nulls);
   }
@@ -507,9 +510,9 @@ TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoNullsNoOutputRowAllEqual)
  */
 template <typename T>
 struct ConditionalLeftJoinTest : public ConditionalJoinPairReturnTest<T> {
-  std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-            std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-  join(cudf::table_view left, cudf::table_view right, cudf::ast::operation predicate) override
+  PairJoinReturn join(cudf::table_view left,
+                      cudf::table_view right,
+                      cudf::ast::operation predicate) override
   {
     return cudf::conditional_left_join(left, right, predicate);
   }
@@ -521,11 +524,10 @@ struct ConditionalLeftJoinTest : public ConditionalJoinPairReturnTest<T> {
     return cudf::conditional_left_join_size(left, right, predicate);
   }
 
-  std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-            std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-  reference_join(cudf::table_view left,
-                 cudf::table_view right,
-                 cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
+  PairJoinReturn reference_join(
+    cudf::table_view left,
+    cudf::table_view right,
+    cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
     return cudf::left_join(left, right, compare_nulls);
   }
@@ -558,9 +560,9 @@ TYPED_TEST(ConditionalLeftJoinTest, TestCompareRandomToHashNulls)
  */
 template <typename T>
 struct ConditionalFullJoinTest : public ConditionalJoinPairReturnTest<T> {
-  std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-            std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-  join(cudf::table_view left, cudf::table_view right, cudf::ast::operation predicate) override
+  PairJoinReturn join(cudf::table_view left,
+                      cudf::table_view right,
+                      cudf::ast::operation predicate) override
   {
     return cudf::conditional_full_join(left, right, predicate);
   }
@@ -575,11 +577,10 @@ struct ConditionalFullJoinTest : public ConditionalJoinPairReturnTest<T> {
     return cudf::conditional_full_join(left, right, predicate).first->size();
   }
 
-  std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-            std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-  reference_join(cudf::table_view left,
-                 cudf::table_view right,
-                 cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
+  PairJoinReturn reference_join(
+    cudf::table_view left,
+    cudf::table_view right,
+    cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
     return cudf::full_join(left, right, compare_nulls);
   }
@@ -631,8 +632,8 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
    * the provided predicate and verify that the outputs match the expected
    * outputs (up to order).
    */
-  void test(std::vector<std::vector<T>> left_data,
-            std::vector<std::vector<T>> right_data,
+  void test(ColumnVector<T> left_data,
+            ColumnVector<T> right_data,
             cudf::ast::operation predicate,
             std::vector<cudf::size_type> expected_outputs)
   {
@@ -668,8 +669,7 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
    * an equality predicate on all corresponding columns and verify that the outputs match the
    * expected outputs (up to order).
    */
-  void compare_to_hash_join(std::vector<std::vector<T>> left_data,
-                            std::vector<std::vector<T>> right_data)
+  void compare_to_hash_join(ColumnVector<T> left_data, ColumnVector<T> right_data)
   {
     // Note that we need to maintain the column wrappers otherwise the
     // resulting column views will be referencing potentially invalid memory.
@@ -680,9 +680,8 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
     this->_compare_to_hash_join(result, reference);
   }
 
-  void compare_to_hash_join_nulls(
-    std::vector<std::pair<std::vector<T>, std::vector<bool>>> left_data,
-    std::vector<std::pair<std::vector<T>, std::vector<bool>>> right_data)
+  void compare_to_hash_join_nulls(NullableColumnVector<T> left_data,
+                                  NullableColumnVector<T> right_data)
   {
     // Note that we need to maintain the column wrappers otherwise the
     // resulting column views will be referencing potentially invalid memory.
@@ -704,8 +703,9 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
    * It should be a simply forwarding of arguments to the appropriate cudf
    * conditional join API.
    */
-  virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> join(
-    cudf::table_view left, cudf::table_view right, cudf::ast::operation predicate) = 0;
+  virtual SingleJoinReturn join(cudf::table_view left,
+                                cudf::table_view right,
+                                cudf::ast::operation predicate) = 0;
 
   /**
    * This method must be implemented by subclasses for specific types of joins.
@@ -721,7 +721,7 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
    * It should be a simply forwarding of arguments to the appropriate cudf
    * hash join API for comparison with conditional joins.
    */
-  virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> reference_join(
+  virtual SingleJoinReturn reference_join(
     cudf::table_view left,
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) = 0;
@@ -732,8 +732,9 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
  */
 template <typename T>
 struct ConditionalLeftSemiJoinTest : public ConditionalJoinSingleReturnTest<T> {
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> join(
-    cudf::table_view left, cudf::table_view right, cudf::ast::operation predicate) override
+  SingleJoinReturn join(cudf::table_view left,
+                        cudf::table_view right,
+                        cudf::ast::operation predicate) override
   {
     return cudf::conditional_left_semi_join(left, right, predicate);
   }
@@ -745,7 +746,7 @@ struct ConditionalLeftSemiJoinTest : public ConditionalJoinSingleReturnTest<T> {
     return cudf::conditional_left_semi_join_size(left, right, predicate);
   }
 
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> reference_join(
+  SingleJoinReturn reference_join(
     cudf::table_view left,
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
@@ -778,8 +779,9 @@ TYPED_TEST(ConditionalLeftSemiJoinTest, TestCompareRandomToHashNulls)
  */
 template <typename T>
 struct ConditionalLeftAntiJoinTest : public ConditionalJoinSingleReturnTest<T> {
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> join(
-    cudf::table_view left, cudf::table_view right, cudf::ast::operation predicate) override
+  SingleJoinReturn join(cudf::table_view left,
+                        cudf::table_view right,
+                        cudf::ast::operation predicate) override
   {
     return cudf::conditional_left_anti_join(left, right, predicate);
   }
@@ -791,7 +793,7 @@ struct ConditionalLeftAntiJoinTest : public ConditionalJoinSingleReturnTest<T> {
     return cudf::conditional_left_anti_join_size(left, right, predicate);
   }
 
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> reference_join(
+  SingleJoinReturn reference_join(
     cudf::table_view left,
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
