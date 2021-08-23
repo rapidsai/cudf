@@ -16,13 +16,15 @@ from cudf.testing._utils import assert_eq
     {'alpha': 0.1},
     {'alpha': 0.5},
 ])
-def test_ewm_basic_mean(data, params):
+@pytest.mark.parametrize('adjust', [True, False])
+def test_ewm_basic_mean(data, params, adjust):
     """
     the most basic test asserts that we obtain
     the same numerical values as pandas for various
     sets of keyword arguemnts that effect the raw 
     coefficients of the formula
     """
+    params["adjust"] = adjust
 
     gsr = cudf.Series(data, dtype='float64')
     psr = gsr.to_pandas()
