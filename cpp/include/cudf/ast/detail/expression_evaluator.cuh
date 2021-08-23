@@ -655,32 +655,13 @@ struct expression_evaluator {
                                possibly_null_value_t<RHS, has_nulls> const rhs,
                                detail::device_data_reference const output) const
     {
-      if constexpr (has_nulls && (op == ast_operator::EQUAL)) {
-        using OperatorFunctor = detail::operator_functor<op, false>;
-        using Out             = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
-        // Special handling of the equality operator based on what kind
-        // of null handling was requested.
-        possibly_null_value_t<Out, has_nulls> result;
-        if (!lhs.has_value() && !rhs.has_value()) {
-          // Case 1: Both null, so the output is based on compare_nulls.
-          result = possibly_null_value_t<Out, has_nulls>(false);
-        } else if (lhs.has_value() && rhs.has_value()) {
-          // Case 2: Neither is null, so the output is given by the operation.
-          result = possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*lhs, *rhs));
-        } else {
-          // Case 3: One value is null, while the other is not, so we simply propagate nulls.
-          result = possibly_null_value_t<Out, has_nulls>();
-        }
-        this->template resolve_output<Out>(output_object, output, output_row_index, result);
-      } else {
-        // The output data type is the same whether or not nulls are present, so
-        // pull from the non-nullable operator.
-        using Out = cuda::std::invoke_result_t<detail::operator_functor<op, false>, LHS, RHS>;
-        this->template resolve_output<Out>(output_object,
-                                           output,
-                                           output_row_index,
-                                           detail::operator_functor<op, has_nulls>{}(lhs, rhs));
-      }
+      // The output data type is the same whether or not nulls are present, so
+      // pull from the non-nullable operator.
+      using Out = cuda::std::invoke_result_t<detail::operator_functor<op, false>, LHS, RHS>;
+      this->template resolve_output<Out>(output_object,
+                                         output,
+                                         output_row_index,
+                                         detail::operator_functor<op, has_nulls>{}(lhs, rhs));
     }
 
     template <ast_operator op,
