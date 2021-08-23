@@ -71,38 +71,31 @@ struct ConditionalJoinTest : public cudf::test::BaseFixture {
              cudf::table_view>
   parse_input(std::vector<U> left_data, std::vector<U> right_data)
   {
+    auto wrapper_generator = [](U& v) {
+      if constexpr (std::is_same_v<U, std::vector<T>>) {
+        return cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end());
+      } else if constexpr (std::is_same_v<U, std::pair<std::vector<T>, std::vector<bool>>>) {
+        return cudf::test::fixed_width_column_wrapper<T>(
+          v.first.begin(), v.first.end(), v.second.begin());
+      }
+      throw std::runtime_error("Invalid input to parse_input.");
+      return cudf::test::fixed_width_column_wrapper<T>();
+    };
+
     // Note that we need to maintain the column wrappers otherwise the
     // resulting column views will be referencing potentially invalid memory.
     std::vector<cudf::test::fixed_width_column_wrapper<T>> left_wrappers;
-    std::vector<cudf::test::fixed_width_column_wrapper<T>> right_wrappers;
-
     std::vector<cudf::column_view> left_columns;
+    for (auto v : left_data) {
+      left_wrappers.push_back(wrapper_generator(v));
+      left_columns.push_back(left_wrappers.back());
+    }
+
+    std::vector<cudf::test::fixed_width_column_wrapper<T>> right_wrappers;
     std::vector<cudf::column_view> right_columns;
-
-    if constexpr (std::is_same_v<U, std::vector<T>>) {
-      for (auto v : left_data) {
-        left_wrappers.push_back(cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end()));
-        left_columns.push_back(left_wrappers.back());
-      }
-
-      for (auto v : right_data) {
-        right_wrappers.push_back(cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end()));
-        right_columns.push_back(right_wrappers.back());
-      }
-    } else if constexpr (std::is_same_v<U, std::pair<std::vector<T>, std::vector<bool>>>) {
-      for (auto v : left_data) {
-        left_wrappers.push_back(cudf::test::fixed_width_column_wrapper<T>(
-          v.first.begin(), v.first.end(), v.second.begin()));
-        left_columns.push_back(left_wrappers.back());
-      }
-
-      for (auto v : right_data) {
-        right_wrappers.push_back(cudf::test::fixed_width_column_wrapper<T>(
-          v.first.begin(), v.first.end(), v.second.begin()));
-        right_columns.push_back(right_wrappers.back());
-      }
-    } else {
-      throw std::runtime_error("Invalid input to parse_input.");
+    for (auto v : right_data) {
+      right_wrappers.push_back(wrapper_generator(v));
+      right_columns.push_back(right_wrappers.back());
     }
 
     return std::make_tuple(std::move(left_wrappers),
