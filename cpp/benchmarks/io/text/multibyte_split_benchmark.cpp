@@ -112,11 +112,9 @@ static void BM_multibyte_split(benchmark::State& state)
 
   auto temp_file_name = random_file_in_dir(temp_dir.path());
 
-  close(mkstemp(const_cast<char*>(temp_file_name.data())));
   {
     auto temp_fostream = std::ofstream(temp_file_name, std::ofstream::out);
     temp_fostream.write(host_input.data(), host_input.size());
-    temp_fostream.close();
   }
 
   cudaDeviceSynchronize();

@@ -43,6 +43,9 @@ struct trie_node {
 struct trie_device_view {
   device_span<trie_node const> _nodes;
 
+  /**
+   * @brief create a multistate which contains all partial path matches for the given token.
+   */
   constexpr multistate transition_init(char c)
   {
     auto result = multistate();
@@ -55,6 +58,13 @@ struct trie_device_view {
     return result;
   }
 
+  /**
+   * @brief create a new multistate by transitioning all states in the multistate by the given token
+   *
+   * Eliminates any partial matches that cannot transition using the given token.
+   *
+   * @note always enqueues (0, 0] as the first state of the returned multistate.
+   */
   constexpr multistate transition(char c, multistate const& states)
   {
     auto result = multistate();
@@ -68,6 +78,32 @@ struct trie_device_view {
     return result;
   }
 
+  /**
+   * @brief returns true if the given index is associated with a matching state.
+   */
+  constexpr bool is_match(uint16_t idx) { return static_cast<bool>(get_match_length(idx)); }
+
+  /**
+   * @brief returns the match length if the given index is associated with a matching state,
+   * otherwise zero.
+   */
+  constexpr uint8_t get_match_length(uint16_t idx) { return _nodes[idx].match_length; }
+
+  /**
+   * @brief returns the longest matching state of any state in the multistate.
+   */
+  template <uint32_t N>
+  constexpr uint8_t get_match_length(multistate const& states)
+  {
+    int8_t val = 0;
+    for (uint8_t i = 0; i < states.size(); i++) {
+      auto match_length = get_match_length(states.get_tail(i));
+      if (match_length > val) { val = match_length; }
+    }
+    return val;
+  }
+
+ private:
   constexpr void transition_enqueue_all(  //
     char c,
     multistate& states,
@@ -79,20 +115,6 @@ struct trie_device_view {
         states.enqueue(head, tail);
       }
     }
-  }
-
-  constexpr bool is_match(uint16_t idx) { return static_cast<bool>(get_match_length(idx)); }
-  constexpr uint8_t get_match_length(uint16_t idx) { return _nodes[idx].match_length; }
-
-  template <uint32_t N>
-  constexpr uint8_t get_match_length(multistate const& states)
-  {
-    int8_t val = 0;
-    for (uint8_t i = 0; i < states.size(); i++) {
-      auto match_length = get_match_length(states.get_tail(i));
-      if (match_length > val) { val = match_length; }
-    }
-    return val;
   }
 };
 

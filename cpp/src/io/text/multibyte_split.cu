@@ -190,7 +190,7 @@ __global__ void multibyte_split_kernel(
 
   if (abs_output_delimiter_offsets.size() > 0) {
     for (int32_t i = 0; i < ITEMS_PER_THREAD and i < thread_input_size; i++) {
-      if (trie.get_match_length(thread_states[i]) > 0) {
+      if (trie.is_match(thread_states[i])) {
         auto const match_end = base_tile_idx * ITEMS_PER_TILE + thread_input_offset + i + 1;
         abs_output_delimiter_offsets[thread_offsets[i]] = match_end;
       }
@@ -258,6 +258,9 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
   auto multistate_seed = multistate();
   multistate_seed.enqueue(0, 0);  // this represents the first state in the pattern.
 
+  // Seeding the tile state with an identity value allows the 0th tile to follow the same logic as
+  // the Nth tile, assuming it can look up an inclusive prefix. Without this seed, the 0th block
+  // would have to follow seperate logic.
   multibyte_split_seed_kernel<<<1, 1, 0, stream.value()>>>(  //
     tile_multistates,
     tile_offsets,
@@ -321,11 +324,11 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   CUDF_FUNC_RANGE();
   auto const trie = cudf::io::text::detail::trie::create({delimiter}, stream);
 
-  CUDF_EXPECTS(trie.max_duplicate_tokens() <= multistate::max_segment_count,
-               "delimiters must be representable by a trie with no more than 7 duplicate tokens");
+  CUDF_EXPECTS(trie.max_duplicate_tokens() < multistate::max_segment_count,
+               "delimiter contains too many duplicate tokens to produce a deterministic result.");
 
-  CUDF_EXPECTS(trie.size() <= multistate::max_segment_value,
-               "delimiters must be representable by a trie with no more than 16 unique states");
+  CUDF_EXPECTS(trie.size() < multistate::max_segment_value,
+               "delimiter contains too many total tokens to produce a deterministic result.");
 
   auto concurrency = 2;
   // must be at least 32 when using warp-reduce on partials
