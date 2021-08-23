@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,27 +57,27 @@ static constexpr auto null = -1;  // Signifies null value.
 // with STRUCT keys.
 auto sum_agg() { return cudf::make_sum_aggregation<groupby_aggregation>(); }
 
-#ifndef NDEBUG
+// Set this to true to enable printing, for debugging.
+auto constexpr print_enabled = false;
+
 void print_agg_results(column_view const& keys, column_view const& vals)
 {
-  auto requests = std::vector<groupby::aggregation_request>{};
-  requests.push_back(groupby::aggregation_request{});
-  requests.back().values = vals;
-  requests.back().aggregations.push_back(sum_agg());
-  requests.back().aggregations.push_back(
-    cudf::make_nth_element_aggregation<groupby_aggregation>(0));
+  if constexpr (print_enabled) {
+    auto requests = std::vector<groupby::aggregation_request>{};
+    requests.push_back(groupby::aggregation_request{});
+    requests.back().values = vals;
+    requests.back().aggregations.push_back(sum_agg());
+    requests.back().aggregations.push_back(
+      cudf::make_nth_element_aggregation<groupby_aggregation>(0));
 
-  auto gby    = groupby::groupby{table_view({keys}), null_policy::INCLUDE, sorted::NO, {}, {}};
-  auto result = gby.aggregate(requests);
-  std::cout << "Results: Keys: " << std::endl;
-  print(result.first->get_column(0).view());
-  std::cout << "Results: Values: " << std::endl;
-  print(result.second.front().results[0]->view());
+    auto gby    = groupby::groupby{table_view({keys}), null_policy::INCLUDE, sorted::NO, {}, {}};
+    auto result = gby.aggregate(requests);
+    std::cout << "Results: Keys: " << std::endl;
+    print(result.first->get_column(0).view());
+    std::cout << "Results: Values: " << std::endl;
+    print(result.second.front().results[0]->view());
+  }
 }
-#define PRINT_AGG_RESULTS(K, V) print_agg_results((K), (V))
-#else
-#define PRINT_AGG_RESULTS(K, V)
-#endif
 
 void test_sum_agg(column_view const& keys,
                   column_view const& values,
@@ -135,7 +135,7 @@ TYPED_TEST(groupby_structs_test, structs_with_nulls_in_members)
   auto keys     = structs{{member_0, member_1, member_2}};
   // clang-format on
 
-  PRINT_AGG_RESULTS(keys, values);
+  print_agg_results(keys, values);
 
   // clang-format off
   auto expected_values   = fwcw<R> {    9,   18,    10,     7,     1  };
@@ -166,7 +166,7 @@ TYPED_TEST(groupby_structs_test, structs_with_null_rows)
   auto expected_keys     = structs{{expected_member_0, expected_member_1, expected_member_2}, null_at(3)};
   // clang-format on
 
-  PRINT_AGG_RESULTS(keys, values);
+  print_agg_results(keys, values);
 
   test_sum_agg(keys, values, expected_keys, expected_values);
 }
@@ -183,7 +183,7 @@ TYPED_TEST(groupby_structs_test, structs_with_nulls_in_rows_and_members)
   auto keys     = structs{{member_0, member_1, member_2}, null_at(4)};
   // clang-format on
 
-  PRINT_AGG_RESULTS(keys, values);
+  print_agg_results(keys, values);
 
   // clang-format off
   auto expected_values   = fwcw<R> {    9,   14,    10,     7,     1,      4  };
@@ -193,7 +193,7 @@ TYPED_TEST(groupby_structs_test, structs_with_nulls_in_rows_and_members)
   auto expected_keys     = structs{{expected_member_0, expected_member_1, expected_member_2}, null_at(5)};
   // clang-format on
 
-  PRINT_AGG_RESULTS(keys, values);
+  print_agg_results(keys, values);
   test_sum_agg(keys, values, expected_keys, expected_values);
 }
 
@@ -212,7 +212,7 @@ TYPED_TEST(groupby_structs_test, null_members_differ_from_null_structs)
   auto keys     = structs{{member_0, member_1, member_2}, null_at(4)};
   // clang-format on
 
-  PRINT_AGG_RESULTS(keys, values);
+  print_agg_results(keys, values);
 
   // Index-3 => Non-null Struct row, with nulls for all members.
   // Index-4 => Null Struct row.
@@ -244,7 +244,7 @@ TYPED_TEST(groupby_structs_test, structs_of_structs)
 
   auto keys = structs{{struct_0, struct_1_member_1}};  // Struct of structs.
 
-  PRINT_AGG_RESULTS(keys, values);
+  print_agg_results(keys, values);
 
   // clang-format off
   auto expected_values            = fwcw<R> {    9,   14,    17,      1,      4  };
