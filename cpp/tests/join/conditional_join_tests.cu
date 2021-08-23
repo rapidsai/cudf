@@ -118,15 +118,11 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
    * the provided predicate and verify that the outputs match the expected
    * outputs (up to order).
    */
-  void test(std::vector<std::vector<T>> left_data,
-            std::vector<std::vector<T>> right_data,
-            cudf::ast::operation predicate,
-            std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
+  void run_test(cudf::table_view left,
+                cudf::table_view right,
+                cudf::ast::operation predicate,
+                std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
   {
-    // Note that we need to maintain the column wrappers otherwise the
-    // resulting column views will be referencing potentially invalid memory.
-    auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
-      this->parse_input(left_data, right_data);
     auto result_size = this->join_size(left, right, predicate);
     EXPECT_TRUE(result_size == expected_outputs.size());
 
@@ -145,6 +141,23 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
   }
 
+  /*
+   * Perform a join of tables constructed from two input data sets according to
+   * the provided predicate and verify that the outputs match the expected
+   * outputs (up to order).
+   */
+  void test(std::vector<std::vector<T>> left_data,
+            std::vector<std::vector<T>> right_data,
+            cudf::ast::operation predicate,
+            std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
+  {
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
+      this->parse_input(left_data, right_data);
+    this->run_test(left, right, predicate, expected_outputs);
+  }
+
   void test_nulls(std::vector<std::pair<std::vector<T>, std::vector<bool>>> left_data,
                   std::vector<std::pair<std::vector<T>, std::vector<bool>>> right_data,
                   cudf::ast::operation predicate,
@@ -154,22 +167,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     // resulting column views will be referencing potentially invalid memory.
     auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
       this->parse_input(left_data, right_data);
-    auto result_size = this->join_size(left, right, predicate);
-    EXPECT_TRUE(result_size == expected_outputs.size());
-
-    auto result = this->join(left, right, predicate);
-    std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
-    for (size_t i = 0; i < result.first->size(); ++i) {
-      // Note: Not trying to be terribly efficient here since these tests are
-      // small, otherwise a batch copy to host before constructing the tuples
-      // would be important.
-      result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
-                              result.second->element(i, rmm::cuda_stream_default)});
-    }
-    std::sort(result_pairs.begin(), result_pairs.end());
-    std::sort(expected_outputs.begin(), expected_outputs.end());
-
-    EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
+    this->run_test(left, right, predicate, expected_outputs);
   }
 
   /*
