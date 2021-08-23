@@ -524,8 +524,8 @@ TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType32)
   auto const expected2 = fp_wrapper{{50000000}, scale_type{6}};
 
   auto const type    = cudf::data_type{cudf::type_id::DECIMAL32, 6};
-  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, type);
-  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, type);
+  auto const result1 = cudf::jit::binary_operation(a, b, cudf::binary_operator::ADD, type);
+  auto const result2 = cudf::jit::binary_operation(a, c, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
@@ -547,8 +547,8 @@ TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType64)
   auto const expected2 = fp_wrapper{{50000000}, scale_type{100}};
 
   auto const type    = cudf::data_type{cudf::type_id::DECIMAL64, 100};
-  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, type);
-  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, type);
+  auto const result1 = cudf::jit::binary_operation(a, b, cudf::binary_operator::ADD, type);
+  auto const result2 = cudf::jit::binary_operation(a, c, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
@@ -570,10 +570,10 @@ TYPED_TEST(FixedPointTestBothReps, ExtremelyLargeNegativeScale)
   auto const expected2 = fp_wrapper{{5}, scale_type{-201}};
 
   auto const type1   = cudf::data_type{cudf::type_to_id<decimalXX>(), -202};
-  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, type1);
+  auto const result1 = cudf::jit::binary_operation(a, b, cudf::binary_operator::ADD, type1);
 
   auto const type2   = cudf::data_type{cudf::type_to_id<decimalXX>(), -201};
-  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, type2);
+  auto const result2 = cudf::jit::binary_operation(a, c, cudf::binary_operator::DIV, type2);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
