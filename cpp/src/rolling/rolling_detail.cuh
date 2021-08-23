@@ -161,7 +161,7 @@ struct DeviceRollingArgMinMax {
     // strictly speaking, I think it would be ok to make this work
     // for comparable types as well.  but right now the only use case is
     // for MIN/MAX on strings.
-    return std::is_same<T, cudf::string_view>::value;
+    return std::is_same_v<T, cudf::string_view>;
   }
 
   DeviceRollingArgMinMax(size_type _min_periods) : min_periods(_min_periods) {}
@@ -312,47 +312,35 @@ struct DeviceRollingVariance {
   {
     using DeviceInputType = device_storage_type_t<InputType>;
 
-    cudf::size_type count{0};  // valid counts in the window
+    // valid counts in the window
+    cudf::size_type const count =
+      has_nulls ? thrust::count_if(thrust::seq,
+                                   thrust::make_counting_iterator(start_index),
+                                   thrust::make_counting_iterator(end_index),
+                                   [&input](auto i) { return input.is_valid_nocheck(i); })
+                : end_index - start_index;
 
-    // Count valid observations in window
-    if (has_nulls) {
-      count = thrust::count_if(thrust::seq,
-                               thrust::make_counting_iterator(start_index),
-                               thrust::make_counting_iterator(end_index),
-                               [&input](auto i) { return input.is_valid_nocheck(i); });
-    } else {
-      count = end_index - start_index;
-    }
-
-    // Variance/Std is non-negative, thus ddof should be strictly less than valid counts.
-    bool output_is_valid = (count >= min_periods) and not(count <= ddof);
+    // The denominator of the variance is `count - ddof`, it is strictly positive
+    // to gaurantee that variance is non-negative.
+    bool output_is_valid = count > 0 and (count >= min_periods) and (ddof < count);
 
     if (output_is_valid) {
-      // Welford algorithm, a numerically stable, single pass algorithm
+      // Welford algorithm
       // See https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
-      OutputType m, m2;
-      size_type running_count;
+      OutputType m{0}, m2{0};
+      size_type running_count{0};
 
-      thrust::tie(running_count, m, m2) =
-        thrust::reduce(thrust::seq,
-                       thrust::make_counting_iterator(start_index),
-                       thrust::make_counting_iterator(end_index),
-                       thrust::make_tuple(size_type{0}, OutputType{0}, OutputType{0}),
-                       [&](auto acc, auto i) {
-                         if (has_nulls and input.is_null_nocheck(i)) { return acc; }
+      for (size_type i = start_index; i < end_index; i++) {
+        if (has_nulls and input.is_null_nocheck(i)) { continue; }
 
-                         OutputType m_acc, m2_acc, tmp1, tmp2;
-                         size_type r_count_acc;
-                         thrust::tie(r_count_acc, m_acc, m2_acc) = acc;
-                         OutputType x = static_cast<OutputType>(input.element<DeviceInputType>(i));
+        OutputType const x = static_cast<OutputType>(input.element<DeviceInputType>(i));
 
-                         r_count_acc++;
-                         tmp1 = x - m_acc;
-                         m_acc += tmp1 / r_count_acc;
-                         tmp2 = x - m_acc;
-                         m2_acc += tmp1 * tmp2;
-                         return thrust::make_tuple(r_count_acc, m_acc, m2_acc);
-                       });
+        running_count++;
+        OutputType const tmp1 = x - m;
+        m += tmp1 / running_count;
+        OutputType const tmp2 = x - m;
+        m2 += tmp1 * tmp2;
+      }
       if constexpr (is_fixed_point<InputType>()) {
         // For fixed_point types, the previous computed value used unscaled rep-value,
         // the final result should be multiplied by the square of decimal `scale`.
@@ -1169,7 +1157,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
 
   min_periods = std::max(min_periods, 0);
 
-  auto udf_agg = dynamic_cast<udf_aggregation const&>(agg);
+  auto& udf_agg = dynamic_cast<udf_aggregation const&>(agg);
 
   std::string hash = "prog_rolling." + std::to_string(std::hash<std::string>{}(udf_agg._source));
 

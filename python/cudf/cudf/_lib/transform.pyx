@@ -27,6 +27,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.types cimport underlying_type_t_type_id
+from cudf._lib.utils cimport data_from_unique_ptr
 
 from numba.np import numpy_support
 
@@ -57,8 +58,9 @@ def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     Given a mask buffer, returns a boolean column representng bit 0 -> False
     and 1 -> True within range of [begin_bit, end_bit),
     """
-    if not isinstance(mask_buffer, cudf.core.Buffer):
-        raise TypeError("mask_buffer is not an instance of cudf.core.Buffer")
+    if not isinstance(mask_buffer, cudf.core.buffer.Buffer):
+        raise TypeError("mask_buffer is not an instance of "
+                        "cudf.core.buffer.Buffer")
     cdef bitmask_type* bit_mask = <bitmask_type*><uintptr_t>(mask_buffer.ptr)
 
     cdef unique_ptr[column] result
@@ -97,7 +99,7 @@ def transform(Column input, op):
     nb_signature = (nb_type,)
     compiled_op = cudautils.compile_udf(op, nb_signature)
     c_str = compiled_op[0].encode('UTF-8')
-    np_dtype = np.dtype(compiled_op[1])
+    np_dtype = cudf.dtype(compiled_op[1])
 
     try:
         c_tid = <type_id> (
@@ -151,7 +153,7 @@ def table_encode(Table input):
         c_result = move(libcudf_transform.encode(c_input))
 
     return (
-        Table.from_unique_ptr(
+        *data_from_unique_ptr(
             move(c_result.first),
             column_names=input._column_names,
         ),

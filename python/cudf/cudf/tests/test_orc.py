@@ -844,7 +844,7 @@ def test_orc_string_stream_offset_issue():
 
 
 # Data is generated using pyorc module
-def generate_list_struct_buff(size=28000):
+def generate_list_struct_buff(size=100_000):
     rd = random.Random(1)
     np.random.seed(seed=1)
 
@@ -963,7 +963,7 @@ list_struct_buff = generate_list_struct_buff()
         ["lvl2_struct", "lvl1_struct"],
     ],
 )
-@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 28000])
+@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100_000])
 @pytest.mark.parametrize("use_index", [True, False])
 def test_lists_struct_nests(
     columns, num_rows, use_index,
@@ -1151,4 +1151,23 @@ def test_chunked_orc_writer_lists():
     writer.close()
 
     got = pa.orc.ORCFile(buffer).read().to_pandas()
+    assert_eq(expect, got)
+
+
+def test_writer_timestamp_stream_size(datadir, tmpdir):
+    pdf_fname = datadir / "TestOrcFile.largeTimestamps.orc"
+    gdf_fname = tmpdir.join("gdf.orc")
+
+    try:
+        orcfile = pa.orc.ORCFile(pdf_fname)
+    except Exception as excpr:
+        if type(excpr).__name__ == "ArrowIOError":
+            pytest.skip(".orc file is not found")
+        else:
+            print(type(excpr).__name__)
+
+    expect = orcfile.read().to_pandas()
+    cudf.from_pandas(expect).to_orc(gdf_fname.strpath)
+    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+
     assert_eq(expect, got)
