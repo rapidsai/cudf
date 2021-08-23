@@ -17,8 +17,8 @@ class ExponentialMovingWindow(_RollingBase):
         ignore_na=False,
         axis=0,
     ):
-
         self.obj = obj
+        self.adjust = adjust
         self.com = get_center_of_mass(com, span, halflife, alpha)
 
     def mean(self):
@@ -37,5 +37,5 @@ class ExponentialMovingWindow(_RollingBase):
         return self._apply_agg("cov")
 
     def _apply_agg_series(self, sr, agg_name):
-        result = scan('ewma', sr._column, True, com=self.com)
+        result = scan('ewma', sr._column, True, com=self.com, adjust=self.adjust)
         return result

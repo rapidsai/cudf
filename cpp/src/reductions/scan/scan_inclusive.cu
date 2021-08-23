@@ -384,9 +384,21 @@ rmm::device_vector<double> ewm_denominator(column_view const& input, double beta
   return result;
 }
 
+rmm::device_vector<double> ewma_noadjust(column_view const& input, double beta) {
+  rmm::device_vector<thrust::pair<double, double>> pairs(input.size());
+
+  thrust::transform(input.begin<double>(), input.end<double>(), pairs.begin(),  [=] __host__ __device__ (double input) -> thrust::pair<double, double> {
+    return thrust::pair<double, double>(beta, (1.0 - beta) * input);
+
+  });
+
+  rmm::device_vector<double> result = compute_recurrence(pairs);
+  return result;
+}
 
 std::unique_ptr<column> ewm(column_view const& input,
                             double com,
+                            bool adjust,
                             rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr)
 {
@@ -394,15 +406,18 @@ std::unique_ptr<column> ewm(column_view const& input,
                "Column must be float64 type");
 
   double beta = 1.0 - (1.0 / (com + 1.0));
-    
+
   auto output = make_fixed_width_column(cudf::data_type{cudf::type_id::FLOAT64}, input.size());
   auto output_mutable_view = output->mutable_view();
 
   auto begin = output_mutable_view.begin<double>();
   auto end   = output_mutable_view.end<double>();
 
+  if (adjust) {
+
   rmm::device_vector<double> denominator = ewm_denominator(input, beta);
   rmm::device_vector<double> numerator   = ewm_numerator(input, beta);
+
 
   thrust::transform(rmm::exec_policy(stream),
                     numerator.begin(),
@@ -412,16 +427,23 @@ std::unique_ptr<column> ewm(column_view const& input,
                     thrust::divides<double>());
 
   return output;
+  } else {
+    rmm::device_vector<double> output_noadjust = ewma_noadjust(input, beta);
+    thrust::copy(output_noadjust.begin(), output_noadjust.end(), output_mutable_view.begin<double>());
+    return output;
+  }
+
 }
 
 
 std::unique_ptr<column> ewma(
   column_view const& input, 
   double com,
+  bool adjust,
   rmm::cuda_stream_view stream, 
   rmm::mr::device_memory_resource* mr) 
 {
-  std::unique_ptr<column> result = ewm(input, com, stream, mr);
+  std::unique_ptr<column> result = ewm(input, com, adjust, stream, mr);
   return result;
 }
 

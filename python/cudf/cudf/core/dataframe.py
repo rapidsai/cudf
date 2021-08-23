@@ -4537,7 +4537,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             halflife=halflife,
             alpha=alpha,
             min_periods=min_periods,
-            adjust=True,
+            adjust=adjust,
             ignore_na=False,
             axis=0,
         )
