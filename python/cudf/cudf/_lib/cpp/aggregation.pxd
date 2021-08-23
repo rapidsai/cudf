@@ -107,4 +107,4 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         string user_defined_aggregator,
         data_type output_type) except +
 
-    cdef unique_ptr[T] make_ewma_aggregation[T](double com) except +
+    cdef unique_ptr[T] make_ewma_aggregation[T](double com, bint adjust) except +

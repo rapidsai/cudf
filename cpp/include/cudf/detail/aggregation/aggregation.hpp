@@ -602,7 +602,8 @@ class ewma_aggregation final : public rolling_aggregation {
 
  public:
   double com;
-  ewma_aggregation(double com) : aggregation{EWMA} {this->com=com;}
+  bool adjust;
+  ewma_aggregation(double com, bool adjust) : aggregation{EWMA} {this->com=com; this->adjust=adjust;}
 
   std::unique_ptr<aggregation> clone() const override
   {
