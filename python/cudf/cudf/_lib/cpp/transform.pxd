@@ -40,11 +40,6 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         data_type output_type,
     ) except +
 
-    #cdef unique_ptr[column] ewm(
-    #    const column_view& input,
-    #    double com
-    #) except +
-
     cdef pair[unique_ptr[table], unique_ptr[column]] encode(
         table_view input
     ) except +

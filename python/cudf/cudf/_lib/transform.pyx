@@ -144,16 +144,6 @@ def masked_udf(Table incols, op, output_type):
 
     return Column.from_unique_ptr(move(c_output))
 
-#def ewm(Column incol, object com):
-#    cdef column_view input_col = incol.view()
-#    cdef double com_ = com
-
-#    with nogil:
-#        c_output = move(libcudf_transform.ewm(
-#            input_col, 
-#            com_,
-#        ))
-#    return Column.from_unique_ptr(move(c_output))
 
 def table_encode(Table input):
     cdef table_view c_input = input.data_view()
