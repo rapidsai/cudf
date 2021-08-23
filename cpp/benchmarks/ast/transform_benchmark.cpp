@@ -95,22 +95,22 @@ static void BM_ast_transform(benchmark::State& state)
   // Note that a std::list is required here because of its guarantees against reference invalidation
   // when items are added or removed. References to items in a std::vector are not safe if the
   // vector must re-allocate.
-  auto expressions = std::list<cudf::ast::expression>();
+  auto expressions = std::list<cudf::ast::operation>();
 
   // Construct tree that chains additions like (((a + b) + c) + d)
   auto const op = cudf::ast::ast_operator::ADD;
   if (reuse_columns) {
-    expressions.push_back(cudf::ast::expression(op, column_refs.at(0), column_refs.at(0)));
+    expressions.push_back(cudf::ast::operation(op, column_refs.at(0), column_refs.at(0)));
     for (cudf::size_type i = 0; i < tree_levels - 1; i++) {
-      expressions.push_back(cudf::ast::expression(op, expressions.back(), column_refs.at(0)));
+      expressions.push_back(cudf::ast::operation(op, expressions.back(), column_refs.at(0)));
     }
   } else {
-    expressions.push_back(cudf::ast::expression(op, column_refs.at(0), column_refs.at(1)));
+    expressions.push_back(cudf::ast::operation(op, column_refs.at(0), column_refs.at(1)));
     std::transform(std::next(column_refs.cbegin(), 2),
                    column_refs.cend(),
                    std::back_inserter(expressions),
                    [&](auto const& column_ref) {
-                     return cudf::ast::expression(op, expressions.back(), column_ref);
+                     return cudf::ast::operation(op, expressions.back(), column_ref);
                    });
   }
 

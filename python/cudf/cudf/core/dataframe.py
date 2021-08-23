@@ -71,6 +71,7 @@ _cupy_nan_methods_map = {
     "max": "nanmax",
     "sum": "nansum",
     "prod": "nanprod",
+    "product": "nanprod",
     "mean": "nanmean",
     "std": "nanstd",
     "var": "nanvar",
@@ -868,10 +869,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 )
 
                 result._copy_type_metadata(self, include_index=keep_index)
-                # Adding index of type RangeIndex back to
-                # result
-                if keep_index is False and self.index is not None:
-                    result.index = self.index[start:stop]
+                if self.index is not None:
+                    if keep_index:
+                        result._index.names = self.index.names
+                    else:
+                        # Adding index of type RangeIndex back to
+                        # result
+                        result.index = self.index[start:stop]
                 result.columns = self.columns
                 return result
 
@@ -6064,7 +6068,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             )
 
         if data.ndim == 2:
-            num_cols = len(data[0])
+            num_cols = data.shape[1]
         else:
             # Since we validate ndim to be either 1 or 2 above,
             # this case can be assumed to be ndim == 1.
@@ -6438,7 +6442,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             col.nullable for col in self._columns
         ):
             msg = (
-                f"Row-wise operations to calculate '{method}' is not "
+                f"Row-wise operations to calculate '{method}' do not "
                 f"currently support columns with null values. "
                 f"Consider removing them with .dropna() "
                 f"or using .fillna()."
@@ -6513,12 +6517,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if axis != 0:
             raise NotImplementedError("Only axis=0 is currently supported.")
 
-        return self._apply_support_method(
-            "count",
-            axis=axis,
-            level=level,
-            numeric_only=numeric_only,
-            **kwargs,
+        return Series._from_data(
+            {None: [self._data[col].valid_count for col in self._data.names]},
+            as_index(self._data.names),
         )
 
     _SUPPORT_AXIS_LOOKUP = {
@@ -6551,156 +6552,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 {None: result}, as_index(self._data.names)
             )
         elif axis == 1:
-            return self._apply_support_method_axis_1(op, **kwargs)
+            return self._apply_cupy_method_axis_1(op, **kwargs)
 
-    def cummin(self, axis=None, skipna=True, *args, **kwargs):
-        """
-        Return cumulative minimum of the DataFrame.
+    def _scan(
+        self, op, axis=None, *args, **kwargs,
+    ):
+        axis = self._get_axis_from_axis_arg(axis)
 
-        Parameters
-        ----------
-
-        skipna: bool, default True
-            Exclude NA/null values. If an entire row/column is NA,
-            the result will be NA.
-
-        Returns
-        -------
-        DataFrame
-
-        Notes
-        -----
-        Parameters currently not supported is `axis`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
-        >>> df.cummin()
-           a  b
-        0  1  7
-        1  1  7
-        2  1  7
-        3  1  7
-        """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
-        return self._apply_support_method(
-            "cummin", axis=axis, skipna=skipna, *args, **kwargs
-        )
-
-    def cummax(self, axis=None, skipna=True, *args, **kwargs):
-        """
-        Return cumulative maximum of the DataFrame.
-
-        Parameters
-        ----------
-
-        skipna: bool, default True
-            Exclude NA/null values. If an entire row/column is NA,
-            the result will be NA.
-
-        Returns
-        -------
-        DataFrame
-
-        Notes
-        -----
-        Parameters currently not supported is `axis`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
-        >>> df.cummax()
-           a   b
-        0  1   7
-        1  2   8
-        2  3   9
-        3  4  10
-        """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
-        return self._apply_support_method(
-            "cummax", axis=axis, skipna=skipna, *args, **kwargs
-        )
-
-    def cumsum(self, axis=None, skipna=True, *args, **kwargs):
-        """
-        Return cumulative sum of the DataFrame.
-
-        Parameters
-        ----------
-
-        skipna: bool, default True
-            Exclude NA/null values. If an entire row/column is NA,
-            the result will be NA.
-
-
-        Returns
-        -------
-        DataFrame
-
-        Notes
-        -----
-        Parameters currently not supported is `axis`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
-        >>> s.cumsum()
-            a   b
-        0   1   7
-        1   3  15
-        2   6  24
-        3  10  34
-        """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
-        return self._apply_support_method(
-            "cumsum", axis=axis, skipna=skipna, *args, **kwargs
-        )
-
-    def cumprod(self, axis=None, skipna=True, *args, **kwargs):
-        """
-        Return cumulative product of the DataFrame.
-
-        Parameters
-        ----------
-
-        skipna: bool, default True
-            Exclude NA/null values. If an entire row/column is NA,
-            the result will be NA.
-
-        Returns
-        -------
-        DataFrame
-
-        Notes
-        -----
-        Parameters currently not supported is `axis`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
-        >>> s.cumprod()
-            a     b
-        0   1     7
-        1   2    56
-        2   6   504
-        3  24  5040
-        """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
-        return self._apply_support_method(
-            "cumprod", axis=axis, skipna=skipna, *args, **kwargs
-        )
+        if axis == 0:
+            return super()._scan(op, axis=axis, *args, **kwargs)
+        elif axis == 1:
+            return self._apply_cupy_method_axis_1(f"cum{op}", **kwargs)
 
     def mode(self, axis=0, numeric_only=False, dropna=True):
         """
@@ -6805,100 +6667,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     def kurtosis(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
     ):
-        """
-        Return Fisher's unbiased kurtosis of a sample.
-
-        Kurtosis obtained using Fisher’s definition of
-        kurtosis (kurtosis of normal == 0.0). Normalized by N-1.
-
-        Parameters
-        ----------
-
-        skipna: bool, default True
-            Exclude NA/null values when computing the result.
-
-        Returns
-        -------
-        Series
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level` and
-        `numeric_only`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
-        >>> df.kurt()
-        a   -1.2
-        b   -1.2
-        dtype: float64
-        """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
-        if numeric_only not in (None, True):
-            msg = "Kurtosis only supports int, float, and bool dtypes."
-            raise NotImplementedError(msg)
-
-        filtered = self.select_dtypes(include=[np.number, np.bool_])
-        return filtered._apply_support_method(
-            "kurtosis",
-            axis=axis,
-            skipna=skipna,
-            level=level,
-            numeric_only=numeric_only,
-            **kwargs,
+        obj = self.select_dtypes(include=[np.number, np.bool_])
+        return super(DataFrame, obj).kurtosis(
+            axis, skipna, level, numeric_only, **kwargs
         )
-
-    # Alias for kurtosis.
-    kurt = kurtosis
 
     def skew(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
     ):
-        """
-        Return unbiased Fisher-Pearson skew of a sample.
-
-        Parameters
-        ----------
-        skipna: bool, default True
-            Exclude NA/null values when computing the result.
-
-        Returns
-        -------
-        Series
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level` and
-        `numeric_only`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 8, 10, 10]})
-        >>> df.skew()
-        a    0.00000
-        b   -0.37037
-        dtype: float64
-        """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
-        if numeric_only not in (None, True):
-            msg = "Skew only supports int, float, and bool dtypes."
-            raise NotImplementedError(msg)
-
-        filtered = self.select_dtypes(include=[np.number, np.bool_])
-        return filtered._apply_support_method(
-            "skew",
-            axis=axis,
-            skipna=skipna,
-            level=level,
-            numeric_only=numeric_only,
-            **kwargs,
+        obj = self.select_dtypes(include=[np.number, np.bool_])
+        return super(DataFrame, obj).skew(
+            axis, skipna, level, numeric_only, **kwargs
         )
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
@@ -6909,32 +6688,21 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         obj = self.select_dtypes(include="bool") if bool_only else self
         return super(DataFrame, obj).any(axis, skipna, level, **kwargs)
 
-    def _apply_support_method_axis_0(self, method, *args, **kwargs):
-        result = [
-            getattr(self[col], method)(*args, **kwargs)
-            for col in self._data.names
-        ]
+    def _apply_cupy_method_axis_1(self, method, *args, **kwargs):
+        # This method uses cupy to perform scans and reductions along rows of a
+        # DataFrame. Since cuDF is designed around columnar storage and
+        # operations, we convert DataFrames to 2D cupy arrays for these ops.
 
-        if isinstance(result[0], Series):
-            support_result = result
-            result = DataFrame(index=support_result[0].index)
-            for idx, col in enumerate(self._data.names):
-                result[col] = support_result[idx]
-        else:
-            result = Series(result)
-            result = result.set_index(self._data.names)
-        return result
-
-    def _apply_support_method_axis_1(self, method, *args, **kwargs):
         # for dask metadata compatibility
         skipna = kwargs.pop("skipna", None)
+        skipna = True if skipna is None else skipna
         if method not in _cupy_nan_methods_map and skipna not in (
             None,
             True,
             1,
         ):
             raise NotImplementedError(
-                f"Row-wise operation to calculate '{method}'"
+                f"Row-wise operations to calculate '{method}'"
                 f" currently do not support `skipna=False`."
             )
 
@@ -6954,14 +6722,19 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         min_count = kwargs.pop("min_count", None)
         if min_count not in (None, 0):
             raise NotImplementedError(
-                "Row-wise operations currently do not " "support `min_count`."
+                "Row-wise operations currently do not support `min_count`."
             )
 
         bool_only = kwargs.pop("bool_only", None)
         if bool_only not in (None, True):
             raise NotImplementedError(
-                "Row-wise operations currently do not " "support `bool_only`."
+                "Row-wise operations currently do not support `bool_only`."
             )
+
+        # This parameter is only necessary for axis 0 reductions that cuDF
+        # performs internally. cupy already upcasts smaller integer/bool types
+        # to int64 when accumulating.
+        kwargs.pop("cast_to_int", None)
 
         prepared, mask, common_dtype = self._prepare_for_rowwise_op(
             method, skipna
@@ -7014,14 +6787,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             result_df = DataFrame(result).set_index(self.index)
             result_df.columns = prepared.columns
             return result_df
-
-    def _apply_support_method(self, method, axis=0, *args, **kwargs):
-        axis = self._get_axis_from_axis_arg(axis)
-
-        if axis == 0:
-            return self._apply_support_method_axis_0(method, *args, **kwargs)
-        elif axis == 1:
-            return self._apply_support_method_axis_1(method, *args, **kwargs)
 
     def _columns_view(self, columns):
         """

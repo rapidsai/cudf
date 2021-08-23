@@ -170,10 +170,19 @@ public final class Table implements AutoCloseable {
     return total;
   }
 
+  /**
+   * This method is internal and exposed purely for testing purpopses
+   */
+  static Table removeNullMasksIfNeeded(Table table) {
+    return new Table(removeNullMasksIfNeeded(table.nativeHandle));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // NATIVE APIs
   /////////////////////////////////////////////////////////////////////////////
-  
+
+  private static native long[] removeNullMasksIfNeeded(long tableView) throws CudfException;
+
   private static native ContiguousTable[] contiguousSplit(long inputTable, int[] indices);
 
   private static native long[] partition(long inputTable, long partitionView,
@@ -200,7 +209,8 @@ public final class Table implements AutoCloseable {
    * into a java
    * object to try and pull out all of the options.  If this becomes unwieldy we can change it.
    * @param columnNames       names of all of the columns, even the ones filtered out
-   * @param dTypes            types of all of the columns as strings.  Why strings? who knows.
+   * @param dTypeIds          native types IDs of all of the columns.
+   * @param dTypeScales       scale of the type for all of the columns.
    * @param filterColumnNames name of the columns to read, or an empty array if we want to read
    *                          all of them
    * @param filePath          the path of the file to read, or null if no path should be read.
@@ -214,7 +224,8 @@ public final class Table implements AutoCloseable {
    * @param trueValues        values that should be treated as boolean true
    * @param falseValues       values that should be treated as boolean false
    */
-  private static native long[] readCSV(String[] columnNames, String[] dTypes,
+  private static native long[] readCSV(String[] columnNames,
+                                       int[] dTypeIds, int[] dTypeScales,
                                        String[] filterColumnNames,
                                        String filePath, long address, long length,
                                        int headerRow, byte delim, byte quote,
@@ -503,17 +514,47 @@ public final class Table implements AutoCloseable {
   private static native long[] leftJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
+  private static native long leftJoinRowCount(long leftTable, long rightHashJoin,
+                                              boolean nullsEqual) throws CudfException;
+
+  private static native long[] leftHashJoinGatherMaps(long leftTable, long rightHashJoin,
+                                                      boolean nullsEqual) throws CudfException;
+
+  private static native long[] leftHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
+                                                               boolean nullsEqual,
+                                                               long outputRowCount) throws CudfException;
+
   private static native long[] innerJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                          int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
   private static native long[] innerJoinGatherMaps(long leftKeys, long rightKeys,
                                                    boolean compareNullsEqual) throws CudfException;
 
+  private static native long innerJoinRowCount(long table, long hashJoin,
+                                               boolean nullsEqual) throws CudfException;
+
+  private static native long[] innerHashJoinGatherMaps(long table, long hashJoin,
+                                                       boolean nullsEqual) throws CudfException;
+
+  private static native long[] innerHashJoinGatherMapsWithCount(long table, long hashJoin,
+                                                                boolean nullsEqual,
+                                                                long outputRowCount) throws CudfException;
+
   private static native long[] fullJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                          int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
   private static native long[] fullJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
+
+  private static native long fullJoinRowCount(long leftTable, long rightHashJoin,
+                                              boolean nullsEqual) throws CudfException;
+
+  private static native long[] fullHashJoinGatherMaps(long leftTable, long rightHashJoin,
+                                                      boolean nullsEqual) throws CudfException;
+
+  private static native long[] fullHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
+                                                               boolean nullsEqual,
+                                                               long outputRowCount) throws CudfException;
 
   private static native long[] leftSemiJoin(long leftTable, int[] leftJoinCols, long rightTable,
       int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
@@ -527,15 +568,42 @@ public final class Table implements AutoCloseable {
   private static native long[] leftAntiJoinGatherMap(long leftKeys, long rightKeys,
                                                      boolean compareNullsEqual) throws CudfException;
 
+  private static native long conditionalLeftJoinRowCount(long leftTable, long rightTable,
+                                                         long condition,
+                                                         boolean compareNullsEqual) throws CudfException;
+
   private static native long[] conditionalLeftJoinGatherMaps(long leftTable, long rightTable,
                                                              long condition,
                                                              boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] conditionalLeftJoinGatherMapsWithCount(long leftTable, long rightTable,
+                                                                      long condition,
+                                                                      boolean compareNullsEqual,
+                                                                      long rowCount) throws CudfException;
+
+  private static native long conditionalInnerJoinRowCount(long leftTable, long rightTable,
+                                                          long condition,
+                                                          boolean compareNullsEqual) throws CudfException;
 
   private static native long[] conditionalInnerJoinGatherMaps(long leftTable, long rightTable,
                                                               long condition,
                                                               boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] conditionalInnerJoinGatherMapsWithCount(long leftTable, long rightTable,
+                                                                       long condition,
+                                                                       boolean compareNullsEqual,
+                                                                       long rowCount) throws CudfException;
+
   private static native long[] conditionalFullJoinGatherMaps(long leftTable, long rightTable,
+                                                             long condition,
+                                                             boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] conditionalFullJoinGatherMapsWithCount(long leftTable, long rightTable,
+                                                                      long condition,
+                                                                      boolean compareNullsEqual,
+                                                                      long rowCount) throws CudfException;
+
+  private static native long conditionalLeftSemiJoinRowCount(long leftTable, long rightTable,
                                                              long condition,
                                                              boolean compareNullsEqual) throws CudfException;
 
@@ -543,9 +611,23 @@ public final class Table implements AutoCloseable {
                                                                 long condition,
                                                                 boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] conditionalLeftSemiJoinGatherMapWithCount(long leftTable, long rightTable,
+                                                                         long condition,
+                                                                         boolean compareNullsEqual,
+                                                                         long rowCount) throws CudfException;
+
+  private static native long conditionalLeftAntiJoinRowCount(long leftTable, long rightTable,
+                                                             long condition,
+                                                             boolean compareNullsEqual) throws CudfException;
+
   private static native long[] conditionalLeftAntiJoinGatherMap(long leftTable, long rightTable,
                                                                 long condition,
                                                                 boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] conditionalLeftAntiJoinGatherMapWithCount(long leftTable, long rightTable,
+                                                                         long condition,
+                                                                         boolean compareNullsEqual,
+                                                                         long rowCount) throws CudfException;
 
   private static native long[] crossJoin(long leftTable, long rightTable) throws CudfException;
 
@@ -611,7 +693,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readCSV(Schema schema, CSVOptions opts, File path) {
     return new Table(
-        readCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
+        readCSV(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
             opts.getIncludeColumnNames(), path.getAbsolutePath(),
             0, 0,
             opts.getHeaderRow(),
@@ -684,7 +766,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    return new Table(readCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
+    return new Table(readCSV(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
         opts.getIncludeColumnNames(), null,
         buffer.getAddress() + offset, len,
         opts.getHeaderRow(),
@@ -1998,6 +2080,84 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes the number of rows resulting from a left equi-join between two tables.
+   * It is assumed this table instance holds the key columns from the left table, and the
+   * {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return row count of the join result
+   */
+  public long leftJoinRowCount(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    return leftJoinRowCount(getNativeView(), rightHash.getNativeView(),
+        rightHash.getCompareNulls());
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return left and right table gather maps
+   */
+  public GatherMap[] leftJoinGatherMaps(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftHashJoinGatherMaps(getNativeView(), rightHash.getNativeView(),
+            rightHash.getCompareNulls());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #leftJoinRowCount(HashJoin)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightHash hash table built from join key columns from the right table
+   * @param outputRowCount number of output rows in the join result
+   * @return left and right table gather maps
+   */
+  public GatherMap[] leftJoinGatherMaps(HashJoin rightHash, long outputRowCount) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftHashJoinGatherMapsWithCount(getNativeView(), rightHash.getNativeView(),
+            rightHash.getCompareNulls(), outputRowCount);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the number of rows from the result of a left join between two tables when a
+   * conditional expression is true. It is assumed this table instance holds the columns from
+   * the left table, and the table argument represents the columns from the right table.
+   * @param rightTable the right side table of the join in the join
+   * @param condition conditional expression to evaluate during the join
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return row count for the join result
+   */
+  public long conditionalLeftJoinRowCount(Table rightTable, CompiledExpression condition,
+                                          boolean compareNullsEqual) {
+    return conditionalLeftJoinRowCount(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle(), compareNullsEqual);
+  }
+
+  /**
    * Computes the gather maps that can be used to manifest the result of a left join between
    * two tables when a conditional expression is true. It is assumed this table instance holds
    * the columns from the left table, and the table argument represents the columns from the
@@ -2009,11 +2169,39 @@ public final class Table implements AutoCloseable {
    * @param compareNullsEqual true if null key values should match otherwise false
    * @return left and right table gather maps
    */
-  public GatherMap[] leftJoinGatherMaps(Table rightTable, CompiledExpression condition,
-                                        boolean compareNullsEqual) {
+  public GatherMap[] conditionalLeftJoinGatherMaps(Table rightTable,
+                                                   CompiledExpression condition,
+                                                   boolean compareNullsEqual) {
     long[] gatherMapData =
         conditionalLeftJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #conditionalLeftJoinRowCount(Table, CompiledExpression, boolean)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightTable the right side table of the join in the join
+   * @param condition conditional expression to evaluate during the join
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @param outputRowCount number of output rows in the join result
+   * @return left and right table gather maps
+   */
+  public GatherMap[] conditionalLeftJoinGatherMaps(Table rightTable,
+                                                   CompiledExpression condition,
+                                                   boolean compareNullsEqual,
+                                                   long outputRowCount) {
+    long[] gatherMapData =
+        conditionalLeftJoinGatherMapsWithCount(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle(), compareNullsEqual, outputRowCount);
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2039,6 +2227,83 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes the number of rows resulting from an inner equi-join between two tables.
+   * @param otherHash hash table built from join key columns from the other table
+   * @return row count of the join result
+   */
+  public long innerJoinRowCount(HashJoin otherHash) {
+    if (getNumberOfColumns() != otherHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "otherKeys: " + otherHash.getNumberOfColumns());
+    }
+    return innerJoinRowCount(getNativeView(), otherHash.getNativeView(),
+        otherHash.getCompareNulls());
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return left and right table gather maps
+   */
+  public GatherMap[] innerJoinGatherMaps(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        innerHashJoinGatherMaps(getNativeView(), rightHash.getNativeView(),
+            rightHash.getCompareNulls());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #innerJoinRowCount(HashJoin)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightHash hash table built from join key columns from the right table
+   * @param outputRowCount number of output rows in the join result
+   * @return left and right table gather maps
+   */
+  public GatherMap[] innerJoinGatherMaps(HashJoin rightHash, long outputRowCount) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        innerHashJoinGatherMapsWithCount(getNativeView(), rightHash.getNativeView(),
+            rightHash.getCompareNulls(), outputRowCount);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the number of rows from the result of an inner join between two tables when a
+   * conditional expression is true. It is assumed this table instance holds the columns from
+   * the left table, and the table argument represents the columns from the right table.
+   * @param rightTable the right side table of the join in the join
+   * @param condition conditional expression to evaluate during the join
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return row count for the join result
+   */
+  public long conditionalInnerJoinRowCount(Table rightTable,
+                                           CompiledExpression condition,
+                                           boolean compareNullsEqual) {
+    return conditionalInnerJoinRowCount(getNativeView(), rightTable.getNativeView(),
+        condition.getNativeHandle(), compareNullsEqual);
+  }
+
+  /**
    * Computes the gather maps that can be used to manifest the result of an inner join between
    * two tables when a conditional expression is true. It is assumed this table instance holds
    * the columns from the left table, and the table argument represents the columns from the
@@ -2050,11 +2315,39 @@ public final class Table implements AutoCloseable {
    * @param compareNullsEqual true if null key values should match otherwise false
    * @return left and right table gather maps
    */
-  public GatherMap[] innerJoinGatherMaps(Table rightTable, CompiledExpression condition,
-                                         boolean compareNullsEqual) {
+  public GatherMap[] conditionalInnerJoinGatherMaps(Table rightTable,
+                                                    CompiledExpression condition,
+                                                    boolean compareNullsEqual) {
     long[] gatherMapData =
         conditionalInnerJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #conditionalInnerJoinRowCount(Table, CompiledExpression, boolean)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightTable the right side table of the join in the join
+   * @param condition conditional expression to evaluate during the join
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @param outputRowCount number of output rows in the join result
+   * @return left and right table gather maps
+   */
+  public GatherMap[] conditionalInnerJoinGatherMaps(Table rightTable,
+                                                    CompiledExpression condition,
+                                                    boolean compareNullsEqual,
+                                                    long outputRowCount) {
+    long[] gatherMapData =
+        conditionalInnerJoinGatherMapsWithCount(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle(), compareNullsEqual, outputRowCount);
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2080,6 +2373,72 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes the number of rows resulting from a full equi-join between two tables.
+   * It is assumed this table instance holds the key columns from the left table, and the
+   * {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Note that unlike {@link #leftJoinRowCount(HashJoin)} and {@link #innerJoinRowCount(HashJoin),
+   * this will perform some redundant calculations compared to
+   * {@link #fullJoinGatherMaps(HashJoin, long)}.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return row count of the join result
+   */
+  public long fullJoinRowCount(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    return fullJoinRowCount(getNativeView(), rightHash.getNativeView(),
+        rightHash.getCompareNulls());
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a full equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the full join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return left and right table gather maps
+   */
+  public GatherMap[] fullJoinGatherMaps(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        fullHashJoinGatherMaps(getNativeView(), rightHash.getNativeView(),
+            rightHash.getCompareNulls());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a full equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the full join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #fullJoinRowCount(HashJoin)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightHash hash table built from join key columns from the right table
+   * @param outputRowCount number of output rows in the join result
+   * @return left and right table gather maps
+   */
+  public GatherMap[] fullJoinGatherMaps(HashJoin rightHash, long outputRowCount) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        fullHashJoinGatherMapsWithCount(getNativeView(), rightHash.getNativeView(),
+            rightHash.getCompareNulls(), outputRowCount);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
    * Computes the gather maps that can be used to manifest the result of a full join between
    * two tables when a conditional expression is true. It is assumed this table instance holds
    * the columns from the left table, and the table argument represents the columns from the
@@ -2091,8 +2450,9 @@ public final class Table implements AutoCloseable {
    * @param compareNullsEqual true if null key values should match otherwise false
    * @return left and right table gather maps
    */
-  public GatherMap[] fullJoinGatherMaps(Table rightTable, CompiledExpression condition,
-                                         boolean compareNullsEqual) {
+  public GatherMap[] conditionalFullJoinGatherMaps(Table rightTable,
+                                                   CompiledExpression condition,
+                                                   boolean compareNullsEqual) {
     long[] gatherMapData =
         conditionalFullJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
@@ -2128,6 +2488,22 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes the number of rows from the result of a left semi join between two tables when a
+   * conditional expression is true. It is assumed this table instance holds the columns from
+   * the left table, and the table argument represents the columns from the right table.
+   * @param rightTable the right side table of the join in the join
+   * @param condition conditional expression to evaluate during the join
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return row count for the join result
+   */
+  public long conditionalLeftSemiJoinRowCount(Table rightTable,
+                                              CompiledExpression condition,
+                                              boolean compareNullsEqual) {
+    return conditionalLeftSemiJoinRowCount(getNativeView(), rightTable.getNativeView(),
+        condition.getNativeHandle(), compareNullsEqual);
+  }
+
+  /**
    * Computes the gather map that can be used to manifest the result of a left semi join between
    * two tables when a conditional expression is true. It is assumed this table instance holds
    * the columns from the left table, and the table argument represents the columns from the
@@ -2139,11 +2515,39 @@ public final class Table implements AutoCloseable {
    * @param compareNullsEqual true if null key values should match otherwise false
    * @return left table gather map
    */
-  public GatherMap leftSemiJoinGatherMap(Table rightTable, CompiledExpression condition,
-                                         boolean compareNullsEqual) {
+  public GatherMap conditionalLeftSemiJoinGatherMap(Table rightTable,
+                                                    CompiledExpression condition,
+                                                    boolean compareNullsEqual) {
     long[] gatherMapData =
         conditionalLeftSemiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left semi join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. The {@link GatherMap} instance returned can be used to gather the left table
+   * to produce the result of the left semi join.
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #conditionalLeftSemiJoinRowCount(Table, CompiledExpression, boolean)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightTable the right side table of the join
+   * @param condition conditional expression to evaluate during the join
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @param outputRowCount number of output rows in the join result
+   * @return left table gather map
+   */
+  public GatherMap conditionalLeftSemiJoinGatherMap(Table rightTable,
+                                                    CompiledExpression condition,
+                                                    boolean compareNullsEqual,
+                                                    long outputRowCount) {
+    long[] gatherMapData =
+        conditionalLeftSemiJoinGatherMapWithCount(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle(), compareNullsEqual, outputRowCount);
     return buildSemiJoinGatherMap(gatherMapData);
   }
 
@@ -2169,6 +2573,22 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes the number of rows from the result of a left anti join between two tables when a
+   * conditional expression is true. It is assumed this table instance holds the columns from
+   * the left table, and the table argument represents the columns from the right table.
+   * @param rightTable the right side table of the join in the join
+   * @param condition conditional expression to evaluate during the join
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return row count for the join result
+   */
+  public long conditionalLeftAntiJoinRowCount(Table rightTable,
+                                              CompiledExpression condition,
+                                              boolean compareNullsEqual) {
+    return conditionalLeftAntiJoinRowCount(getNativeView(), rightTable.getNativeView(),
+        condition.getNativeHandle(), compareNullsEqual);
+  }
+
+  /**
    * Computes the gather map that can be used to manifest the result of a left anti join between
    * two tables when a conditional expression is true. It is assumed this table instance holds
    * the columns from the left table, and the table argument represents the columns from the
@@ -2180,11 +2600,39 @@ public final class Table implements AutoCloseable {
    * @param compareNullsEqual true if null key values should match otherwise false
    * @return left table gather map
    */
-  public GatherMap leftAntiJoinGatherMap(Table rightTable, CompiledExpression condition,
-                                         boolean compareNullsEqual) {
+  public GatherMap conditionalLeftAntiJoinGatherMap(Table rightTable,
+                                                    CompiledExpression condition,
+                                                    boolean compareNullsEqual) {
     long[] gatherMapData =
         conditionalLeftAntiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), compareNullsEqual);
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left anti join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. The {@link GatherMap} instance returned can be used to gather the left table
+   * to produce the result of the left anti join.
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #conditionalLeftAntiJoinRowCount(Table, CompiledExpression, boolean)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightTable the right side table of the join
+   * @param condition conditional expression to evaluate during the join
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @param outputRowCount number of output rows in the join result
+   * @return left table gather map
+   */
+  public GatherMap conditionalLeftAntiJoinGatherMap(Table rightTable,
+                                                    CompiledExpression condition,
+                                                    boolean compareNullsEqual,
+                                                    long outputRowCount) {
+    long[] gatherMapData =
+        conditionalLeftAntiJoinGatherMapWithCount(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle(), compareNullsEqual, outputRowCount);
     return buildSemiJoinGatherMap(gatherMapData);
   }
 
