@@ -118,10 +118,10 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
    * the provided predicate and verify that the outputs match the expected
    * outputs (up to order).
    */
-  void run_test(cudf::table_view left,
-                cudf::table_view right,
-                cudf::ast::operation predicate,
-                std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
+  void _test(cudf::table_view left,
+             cudf::table_view right,
+             cudf::ast::operation predicate,
+             std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
   {
     auto result_size = this->join_size(left, right, predicate);
     EXPECT_TRUE(result_size == expected_outputs.size());
@@ -155,7 +155,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     // resulting column views will be referencing potentially invalid memory.
     auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
       this->parse_input(left_data, right_data);
-    this->run_test(left, right, predicate, expected_outputs);
+    this->_test(left, right, predicate, expected_outputs);
   }
 
   void test_nulls(std::vector<std::pair<std::vector<T>, std::vector<bool>>> left_data,
@@ -167,7 +167,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     // resulting column views will be referencing potentially invalid memory.
     auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
       this->parse_input(left_data, right_data);
-    this->run_test(left, right, predicate, expected_outputs);
+    this->_test(left, right, predicate, expected_outputs);
   }
 
   /*
@@ -175,16 +175,15 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
    * an equality predicate on all corresponding columns and verify that the outputs match the
    * expected outputs (up to order).
    */
-  void compare_to_hash_join(std::vector<std::vector<T>> left_data,
-                            std::vector<std::vector<T>> right_data)
+  void _compare_to_hash_join(cudf::table_view left, cudf::table_view right, bool has_nulls)
   {
-    // Note that we need to maintain the column wrappers otherwise the
-    // resulting column views will be referencing potentially invalid memory.
-    auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
-      this->parse_input(left_data, right_data);
     // TODO: Generalize this to support multiple columns by automatically
     // constructing the appropriate expression.
-    auto result    = this->join(left, right, left_zero_eq_right_zero);
+    auto predicate =
+      has_nulls
+        ? cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col_ref_left_0, col_ref_right_0)
+        : left_zero_eq_right_zero;
+    auto result    = this->join(left, right, predicate);
     auto reference = this->reference_join(left, right);
 
     thrust::device_vector<thrust::pair<cudf::size_type, cudf::size_type>> result_pairs(
@@ -214,6 +213,27 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
 
     EXPECT_TRUE(thrust::equal(
       thrust::device, reference_pairs.begin(), reference_pairs.end(), result_pairs.begin()));
+  }
+
+  void compare_to_hash_join(std::vector<std::vector<T>> left_data,
+                            std::vector<std::vector<T>> right_data)
+  {
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
+      this->parse_input(left_data, right_data);
+    this->_compare_to_hash_join(left, right, false);
+  }
+
+  void compare_to_hash_join_nulls(
+    std::vector<std::pair<std::vector<T>, std::vector<bool>>> left_data,
+    std::vector<std::pair<std::vector<T>, std::vector<bool>>> right_data)
+  {
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
+      this->parse_input(left_data, right_data);
+    this->_compare_to_hash_join(left, right, true);
   }
 
   /**
@@ -413,6 +433,50 @@ TYPED_TEST(ConditionalInnerJoinTest, TestCompareRandomToHash)
   std::shuffle(right.begin(), right.end(), gen);
 
   this->compare_to_hash_join({left}, {right});
+};
+
+TYPED_TEST(ConditionalInnerJoinTest, TestCompareRandomToHashNulls)
+{
+  // Generate columns of 10 repeats of the integer range [0, 10), then merge
+  // a shuffled version and compare to hash join.
+  unsigned int N           = 10000;
+  unsigned int num_repeats = 10;
+  unsigned int num_unique  = N / num_repeats;
+
+  std::vector<TypeParam> left(N);
+  std::vector<TypeParam> right(N);
+
+  for (unsigned int i = 0; i < num_repeats; ++i) {
+    std::iota(
+      std::next(left.begin(), num_unique * i), std::next(left.begin(), num_unique * (i + 1)), 0);
+    std::iota(
+      std::next(right.begin(), num_unique * i), std::next(right.begin(), num_unique * (i + 1)), 0);
+  }
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::shuffle(left.begin(), left.end(), gen);
+  std::shuffle(right.begin(), right.end(), gen);
+
+  std::vector<bool> left_nulls(N);
+  std::vector<bool> right_nulls(N);
+
+  // Seed with a real random value, if available
+  std::uniform_real_distribution<> uniform_dist(0, 1);
+
+  std::generate(left_nulls.begin(), left_nulls.end(), [&uniform_dist, &gen]() {
+    return uniform_dist(gen) > 0.5;
+  });
+  std::generate(right_nulls.begin(), right_nulls.end(), [&uniform_dist, &gen]() {
+    return uniform_dist(gen) > 0.5;
+  });
+
+  std::pair<std::vector<TypeParam>, std::vector<bool>> nullable_left =
+    std::make_pair(left, left_nulls);
+  std::pair<std::vector<TypeParam>, std::vector<bool>> nullable_right =
+    std::make_pair(right, right_nulls);
+
+  this->compare_to_hash_join_nulls({nullable_left}, {nullable_right});
 };
 
 TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoNullsRowAllEqual)
