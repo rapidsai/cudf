@@ -14,15 +14,11 @@ from dask.dataframe.core import new_dd_object
 from dask.dataframe.io.orc.core import ORCFunctionWrapper
 from dask.dataframe.io.parquet.core import apply_filters
 from dask.dataframe.io.parquet.utils import _flatten_filters
-from dask.dataframe.io.utils import (
-    _get_pyarrow_dtypes,
-    _meta_from_dtypes,
-    natural_sort_key,
-)
+from dask.dataframe.io.utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameIOLayer
-from dask.utils import apply
+from dask.utils import apply, natural_sort_key
 
 import cudf
 from cudf.core.column import as_column, build_categorical_column
@@ -1056,23 +1052,7 @@ def write_orc_partition(df, path, fs, filename, compression=None):
 #
 
 
-def to_orc(df, *args, partition_on=None, **kwargs):
-
-    try:
-        # Try using upstream to_orc
-        from dask.dataframe.io.orc import to_orc as dd_to_orc
-
-        return dd_to_orc(df, *args, engine=CudfORCEngine, **kwargs)
-    except ImportError:
-        # Fall back on legacy implementation
-        if partition_on:
-            raise ValueError(
-                "`partition_on` not supported for this Dask version."
-            )
-        return to_orc_legacy(df, *args, **kwargs)
-
-
-def to_orc_legacy(
+def to_orc(
     df,
     path,
     write_index=True,
