@@ -3457,7 +3457,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testGroupByApproxPercentile() {
-    double[] percentiles = {25.0, 50.0, 75.0};
+    double[] percentiles = {0.25, 0.50, 0.75};
     try (Table t1 = new Table.TestBuilder()
             .column("a", "a", "a", "b", "b", "b")
             .column(100, 150, 160, 70, 110, 160)
@@ -3469,8 +3469,8 @@ public class TableTest extends CudfTestBase {
       ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
       ColumnVector expected = ColumnVector.fromLists(
         new ListType(false, new BasicType(false, DType.FLOAT64)),
-        Arrays.asList(100d, 150d, 160d),
-        Arrays.asList(70d, 110d, 160d)
+          Arrays.asList(100d, 150d, 160d),
+          Arrays.asList(70d, 110d, 160d)
       )) {
         assertColumnsAreEqual(expected, actual);
     }
