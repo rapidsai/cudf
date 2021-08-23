@@ -83,7 +83,7 @@ struct string_to_decimal_check_fn {
   int32_t const scale;
 
   string_to_decimal_check_fn(column_device_view const& d_strings, int32_t scale)
-    : d_strings(d_strings), scale(scale)
+    : d_strings{d_strings}, scale{scale}
   {
   }
 
@@ -112,11 +112,16 @@ struct string_to_decimal_check_fn {
     exp_ten += exp_offset;
 
     // finally, check for overflow based on the exp_ten and scale values
-    return (exp_ten < scale)
-             ? true
-             : value <= static_cast<uint64_t>(
-                          cuda::std::numeric_limits<DecimalType>::max() /
-                          static_cast<DecimalType>(exp10(static_cast<double>(exp_ten - scale))));
+    if (exp_ten < scale) {
+      // temporary bug fix
+      // TODO: fix once David's refactor/comprehensive bug fix is done
+      return (value / static_cast<__uint128_t>(exp10(static_cast<double>(scale - exp_ten)))) <=
+             static_cast<__uint128_t>(cuda::std::numeric_limits<DecimalType>::max());
+    } else {
+      return value <= static_cast<__uint128_t>(
+                        cuda::std::numeric_limits<DecimalType>::max() /
+                        static_cast<DecimalType>(exp10(static_cast<double>(exp_ten - scale))));
+    }
   }
 };
 

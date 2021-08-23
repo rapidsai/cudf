@@ -24,22 +24,22 @@ namespace detail {
 /**
  * @brief Return the integer component of a decimal string.
  *
- * This is reads everything up to the exponent 'e' notation.
+ * This reads everything up to the exponent 'e' notation.
  * The return includes the integer digits and any exponent offset.
  *
  * @param[in,out] iter Start of characters to parse
  * @param[in] end End of characters to parse
  * @return Integer component and exponent offset.
  */
-__device__ inline thrust::pair<uint64_t, int32_t> parse_integer(char const*& iter,
-                                                                char const* iter_end,
-                                                                const char decimal_pt_char = '.')
+__device__ inline thrust::pair<__uint128_t, int32_t> parse_integer(char const*& iter,
+                                                                   char const* iter_end,
+                                                                   const char decimal_pt_char = '.')
 {
   // highest value where another decimal digit cannot be appended without an overflow;
   // this preserves the most digits when scaling the final result
-  constexpr uint64_t decimal_max = (std::numeric_limits<uint64_t>::max() - 9L) / 10L;
+  constexpr auto decimal_max = (cuda::std::numeric_limits<__uint128_t>::max() - 9L) / 10L;
 
-  uint64_t value     = 0;  // for checking overflow
+  __uint128_t value  = 0;  // for checking overflow
   int32_t exp_offset = 0;
   bool decimal_found = false;
 
