@@ -275,10 +275,10 @@ inline auto random_values(size_t size)
 TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
 {
   auto sequence =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i % 400); });
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
-  constexpr auto num_rows = 100;
+  constexpr auto num_rows = 800;
   column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
 
   std::vector<std::unique_ptr<column>> cols;
@@ -816,7 +816,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
   expected_metadata.column_metadata[3].set_name("floats");
   expected_metadata.column_metadata[4].set_name("doubles");
   expected_metadata.user_data.insert(
-    {"pandas", "\"index_columns\": [\"floats\", \"doubles\"], \"column1\": [\"int8s\"]"});
+    {"pandas", "\"index_columns\": [\"int8s\", \"int16s\"], \"column1\": [\"int32s\"]"});
 
   auto filepath = temp_env->get_temp_filepath("MultiIndex.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -827,7 +827,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
   cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
       .use_pandas_metadata(true)
-      .columns({"int8s", "int16s", "int32s"});
+      .columns({"int32s", "floats", "doubles"});
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
@@ -966,8 +966,6 @@ TEST_F(ParquetWriterTest, StructOfList)
 
   auto struct_2 =
     cudf::test::structs_column_wrapper{{is_human_col, struct_1}, {0, 1, 1, 1, 1, 1}}.release();
-
-  // cudf::test::print(struct_2->child(1).child(2));
 
   auto expected = table_view({*struct_2});
 
@@ -2494,6 +2492,131 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
     cudf::test::expect_columns_equal(result.tbl->view().column(1), c);
     cudf::test::expect_columns_equal(result.tbl->view().column(2), b);
     cudf::test::expect_columns_equal(result.tbl->view().column(3), a);
+  }
+}
+
+TEST_F(ParquetReaderTest, SelectNestedColumn)
+{
+  // Struct<is_human:bool,
+  //        Struct<weight:float,
+  //               ages:int,
+  //               land_unit:List<int>>,
+  //               flats:List<List<int>>
+  //              >
+  //       >
+
+  auto weights_col = cudf::test::fixed_width_column_wrapper<float>{1.1, 2.4, 5.3, 8.0, 9.6, 6.9};
+
+  auto ages_col =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{48, 27, 25, 31, 351, 351}, {1, 1, 1, 1, 1, 0}};
+
+  auto struct_1 = cudf::test::structs_column_wrapper{{weights_col, ages_col}, {1, 1, 1, 1, 0, 1}};
+
+  auto is_human_col = cudf::test::fixed_width_column_wrapper<bool>{
+    {true, true, false, false, false, false}, {1, 1, 0, 1, 1, 0}};
+
+  auto struct_2 =
+    cudf::test::structs_column_wrapper{{is_human_col, struct_1}, {0, 1, 1, 1, 1, 1}}.release();
+
+  auto input = table_view({*struct_2});
+
+  cudf_io::table_input_metadata input_metadata(input);
+  input_metadata.column_metadata[0].set_name("being");
+  input_metadata.column_metadata[0].child(0).set_name("human?");
+  input_metadata.column_metadata[0].child(1).set_name("particulars");
+  input_metadata.column_metadata[0].child(1).child(0).set_name("weight");
+  input_metadata.column_metadata[0].child(1).child(1).set_name("age");
+
+  auto filepath = temp_env->get_temp_filepath("SelectNestedColumn.parquet");
+  cudf_io::parquet_writer_options args =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, input)
+      .metadata(&input_metadata);
+  cudf_io::write_parquet(args);
+
+  {  // Test selecting a single leaf from the table
+    cudf_io::parquet_reader_options read_args =
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath))
+        .columns({"being.particulars.age"});
+    const auto result = cudf_io::read_parquet(read_args);
+
+    auto expect_ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
+      {48, 27, 25, 31, 351, 351}, {1, 1, 1, 1, 1, 0}};
+    auto expect_s_1 = cudf::test::structs_column_wrapper{{expect_ages_col}, {1, 1, 1, 1, 0, 1}};
+    auto expect_s_2 =
+      cudf::test::structs_column_wrapper{{expect_s_1}, {0, 1, 1, 1, 1, 1}}.release();
+    auto expected = table_view({*expect_s_2});
+
+    cudf_io::table_input_metadata expected_metadata(expected);
+    expected_metadata.column_metadata[0].set_name("being");
+    expected_metadata.column_metadata[0].child(0).set_name("particulars");
+    expected_metadata.column_metadata[0].child(0).child(0).set_name("age");
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+    compare_metadata_equality(expected_metadata, result.metadata);
+  }
+
+  {  // Test selecting a non-leaf and expecting all hierarchy from that node onwards
+    cudf_io::parquet_reader_options read_args =
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath))
+        .columns({"being.particulars"});
+    const auto result = cudf_io::read_parquet(read_args);
+
+    auto expected_weights_col =
+      cudf::test::fixed_width_column_wrapper<float>{1.1, 2.4, 5.3, 8.0, 9.6, 6.9};
+
+    auto expected_ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
+      {48, 27, 25, 31, 351, 351}, {1, 1, 1, 1, 1, 0}};
+
+    auto expected_s_1 = cudf::test::structs_column_wrapper{
+      {expected_weights_col, expected_ages_col}, {1, 1, 1, 1, 0, 1}};
+
+    auto expect_s_2 =
+      cudf::test::structs_column_wrapper{{expected_s_1}, {0, 1, 1, 1, 1, 1}}.release();
+    auto expected = table_view({*expect_s_2});
+
+    cudf_io::table_input_metadata expected_metadata(expected);
+    expected_metadata.column_metadata[0].set_name("being");
+    expected_metadata.column_metadata[0].child(0).set_name("particulars");
+    expected_metadata.column_metadata[0].child(0).child(0).set_name("weight");
+    expected_metadata.column_metadata[0].child(0).child(1).set_name("age");
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+    compare_metadata_equality(expected_metadata, result.metadata);
+  }
+
+  {  // Test selecting struct children out of order
+    cudf_io::parquet_reader_options read_args =
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath))
+        .columns({"being.particulars.age", "being.particulars.weight", "being.human?"});
+    const auto result = cudf_io::read_parquet(read_args);
+
+    auto expected_weights_col =
+      cudf::test::fixed_width_column_wrapper<float>{1.1, 2.4, 5.3, 8.0, 9.6, 6.9};
+
+    auto expected_ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
+      {48, 27, 25, 31, 351, 351}, {1, 1, 1, 1, 1, 0}};
+
+    auto expected_is_human_col = cudf::test::fixed_width_column_wrapper<bool>{
+      {true, true, false, false, false, false}, {1, 1, 0, 1, 1, 0}};
+
+    auto expect_s_1 = cudf::test::structs_column_wrapper{{expected_ages_col, expected_weights_col},
+                                                         {1, 1, 1, 1, 0, 1}};
+
+    auto expect_s_2 =
+      cudf::test::structs_column_wrapper{{expect_s_1, expected_is_human_col}, {0, 1, 1, 1, 1, 1}}
+        .release();
+
+    auto expected = table_view({*expect_s_2});
+
+    cudf_io::table_input_metadata expected_metadata(expected);
+    expected_metadata.column_metadata[0].set_name("being");
+    expected_metadata.column_metadata[0].child(0).set_name("particulars");
+    expected_metadata.column_metadata[0].child(0).child(0).set_name("age");
+    expected_metadata.column_metadata[0].child(0).child(1).set_name("weight");
+    expected_metadata.column_metadata[0].child(1).set_name("human?");
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+    compare_metadata_equality(expected_metadata, result.metadata);
   }
 }
 

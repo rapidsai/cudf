@@ -43,6 +43,12 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
     cdef cppclass rolling_aggregation:
         aggregation.Kind kind
 
+    cdef cppclass groupby_aggregation:
+        aggregation.Kind kind
+
+    cdef cppclass groupby_scan_aggregation:
+        aggregation.Kind kind
+
     ctypedef enum udf_type:
         CUDA 'cudf::udf_type::CUDA'
         PTX 'cudf::udf_type::PTX'
@@ -85,6 +91,11 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[T] make_nth_element_aggregation[T](
         size_type n
+    ) except +
+
+    cdef unique_ptr[T] make_nth_element_aggregation[T](
+        size_type n,
+        null_policy null_handling
     ) except +
 
     cdef unique_ptr[T] make_collect_list_aggregation[T]() except +

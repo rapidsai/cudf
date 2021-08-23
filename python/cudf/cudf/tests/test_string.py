@@ -852,6 +852,32 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
         assert_eq(expect, got)
 
 
+@pytest.mark.parametrize(
+    "data", [["hello", "world", None, "", "!"]],
+)
+@pytest.mark.parametrize(
+    "repeats",
+    [
+        2,
+        0,
+        -3,
+        [5, 4, 3, 2, 6],
+        [5, None, 3, 2, 6],
+        [0, 0, 0, 0, 0],
+        [-1, -2, -3, -4, -5],
+        [None, None, None, None, None],
+    ],
+)
+def test_string_repeat(data, repeats):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.str.repeat(repeats)
+    got = gs.str.repeat(repeats)
+
+    assert_eq(expect, got)
+
+
 # Pandas isn't respect the `n` parameter so ignoring it in test parameters
 @pytest.mark.parametrize(
     "pat,regex",
