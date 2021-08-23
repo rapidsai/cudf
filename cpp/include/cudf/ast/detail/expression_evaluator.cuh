@@ -235,19 +235,13 @@ struct expression_evaluator {
    * @param plan The collection of device references representing the expression to evaluate.
    * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
    * storing intermediates.
-   * @param compare_nulls Whether the equality operator returns true or false for two nulls.
 
    */
   __device__ expression_evaluator(table_device_view const& left,
                                   table_device_view const& right,
                                   expression_device_view const& plan,
-                                  IntermediateDataType<has_nulls>* thread_intermediate_storage,
-                                  null_equality compare_nulls = null_equality::EQUAL)
-    : left(left),
-      right(right),
-      plan(plan),
-      thread_intermediate_storage(thread_intermediate_storage),
-      compare_nulls(compare_nulls)
+                                  IntermediateDataType<has_nulls>* thread_intermediate_storage)
+    : left(left), right(right), plan(plan), thread_intermediate_storage(thread_intermediate_storage)
   {
   }
 
@@ -258,17 +252,14 @@ struct expression_evaluator {
    * @param plan The collection of device references representing the expression to evaluate.
    * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
    * storing intermediates.
-   * @param compare_nulls Whether the equality operator returns true or false for two nulls.
    */
   __device__ expression_evaluator(table_device_view const& table,
                                   expression_device_view const& plan,
-                                  IntermediateDataType<has_nulls>* thread_intermediate_storage,
-                                  null_equality compare_nulls = null_equality::EQUAL)
+                                  IntermediateDataType<has_nulls>* thread_intermediate_storage)
     : left(table),
       right(table),
       plan(plan),
-      thread_intermediate_storage(thread_intermediate_storage),
-      compare_nulls(compare_nulls)
+      thread_intermediate_storage(thread_intermediate_storage)
   {
   }
 
@@ -672,8 +663,7 @@ struct expression_evaluator {
         possibly_null_value_t<Out, has_nulls> result;
         if (!lhs.has_value() && !rhs.has_value()) {
           // Case 1: Both null, so the output is based on compare_nulls.
-          result = possibly_null_value_t<Out, has_nulls>(this->evaluator.compare_nulls ==
-                                                         null_equality::EQUAL);
+          result = possibly_null_value_t<Out, has_nulls>(false);
         } else if (lhs.has_value() && rhs.has_value()) {
           // Case 2: Neither is null, so the output is given by the operation.
           result = possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*lhs, *rhs));
@@ -716,8 +706,6 @@ struct expression_evaluator {
   IntermediateDataType<has_nulls>*
     thread_intermediate_storage;  ///< The shared memory store of intermediates produced during
                                   ///< evaluation.
-  null_equality
-    compare_nulls;  ///< Whether the equality operator returns true or false for two nulls.
 };
 
 }  // namespace detail
