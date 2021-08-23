@@ -1,264 +1,941 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
-import warnings
+from collections import defaultdict
 from contextlib import ExitStack
 from io import BufferedWriter, IOBase
 
+import pandas as pd
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 from pyarrow import orc as orc
 
 from dask import dataframe as dd
 from dask.base import tokenize
+from dask.dataframe.core import new_dd_object
+from dask.dataframe.io.orc.core import ORCFunctionWrapper
 from dask.dataframe.io.parquet.core import apply_filters
-from dask.dataframe.io.utils import _get_pyarrow_dtypes
+from dask.dataframe.io.parquet.utils import _flatten_filters
+from dask.dataframe.io.utils import (
+    _get_pyarrow_dtypes,
+    _meta_from_dtypes,
+    natural_sort_key,
+)
+from dask.delayed import Delayed
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import DataFrameIOLayer
+from dask.utils import apply
 
 import cudf
 from cudf.core.column import as_column, build_categorical_column
 
-try:
+#
+#  CudfORCEngine
+#  (Used by the Experimental read_orc Implementation)
+#
 
-    from dask.dataframe.io.orc.arrow import ArrowORCEngine
 
-    class CudfORCEngine(ArrowORCEngine):
-        @classmethod
-        def construct_output_meta(
-            cls,
-            dataset_info,
-            index=None,
-            columns=None,
-            sample_data=True,
-            read_kwargs=None,
-        ):
+class CudfORCEngine:
+    @classmethod
+    def get_dataset_info(
+        cls,
+        path,
+        columns=None,
+        index=None,
+        filters=None,
+        gather_statistics=True,
+        dataset_kwargs=None,
+        storage_options=None,
+    ):
 
-            # Start with pandas metadata
-            pd_meta = ArrowORCEngine.construct_output_meta(
+        # Process file path(s)
+        fs, _, paths = get_fs_token_paths(
+            path, mode="rb", storage_options=storage_options or {}
+        )
+
+        # Generate a full list of files and
+        # directory partitions. We would like to use
+        # something like the pyarrow.dataset API to
+        # do this, but we will need to do it manually
+        # until ORC is supported upstream.
+        directory_partitions = []
+        directory_partition_keys = {}
+        if len(paths) == 1 and not fs.isfile(paths[0]):
+            root_dir = paths[0]
+            paths = collect_files(root_dir, fs)
+            (
+                paths,
+                directory_partitions,
+                directory_partition_keys,
+            ) = collect_partitions(paths, root_dir, fs)
+
+        # Sample the 0th file to geth the schema
+        with fs.open(paths[0], "rb") as f:
+            o = orc.ORCFile(f)
+            schema = o.schema
+
+        # Save a list of directory-partition columns and a list
+        # of file columns that we will need statistics for
+        dir_columns_need_stats = {
+            col
+            for col in _flatten_filters(filters)
+            if col in directory_partition_keys
+        } | ({index} if index in directory_partition_keys else set())
+        file_columns_need_stats = {
+            col for col in _flatten_filters(filters) if col in schema.names
+        }
+        # Before including the index column, raise an error
+        # if the user is trying to filter with gather_statistics=False
+        if file_columns_need_stats and gather_statistics is False:
+            raise ValueError(
+                "Cannot filter ORC stripes when `gather_statistics=False`."
+            )
+        file_columns_need_stats |= {index} if index in schema.names else set()
+
+        # Convert the orc schema to a pyarrow schema
+        # and check that the columns agree with the schema
+        pa_schema = _get_pyarrow_dtypes(schema, categories=None)
+        if columns is not None:
+            ex = set(columns) - (
+                set(pa_schema) | set(directory_partition_keys)
+            )
+            if ex:
+                raise ValueError(
+                    "Requested columns (%s) not in schema (%s)"
+                    % (ex, set(schema))
+                )
+
+        # Return a final `dataset_info` dictionary.
+        # We use a dictionary here to make the `ORCEngine`
+        # API as flexible as possible.
+        return {
+            "fs": fs,
+            "paths": paths,
+            "orc_schema": schema,
+            "pa_schema": pa_schema,
+            "dir_columns_need_stats": dir_columns_need_stats,
+            "file_columns_need_stats": file_columns_need_stats,
+            "directory_partitions": directory_partitions,
+            "directory_partition_keys": directory_partition_keys,
+        }
+
+    @classmethod
+    def construct_output_meta(
+        cls,
+        dataset_info,
+        index=None,
+        columns=None,
+        sample_data=True,
+        read_kwargs=None,
+    ):
+
+        # Use dataset_info to define `columns`
+        schema = dataset_info["pa_schema"]
+        directory_partition_keys = dataset_info["directory_partition_keys"]
+        columns = list(schema) if columns is None else columns
+
+        # Construct initial meta
+        pd_meta = _meta_from_dtypes(columns, schema, None, [])
+
+        # Deal with hive-partitioned data
+        for column, uniques in (directory_partition_keys or {}).items():
+            if column not in pd_meta.columns:
+                pd_meta[column] = pd.Series(
+                    pd.Categorical(categories=uniques, values=[]),
+                    index=pd_meta.index,
+                )
+
+        # Set index if one was specified
+        if index:
+            pd_meta.set_index(index, inplace=True)
+
+        # Return direct conversion if sample_data=False
+        if sample_data is False:
+            return cudf.from_pandas(pd_meta)
+
+        # Read 0th stripe to get cudf metadata
+        fs = dataset_info["fs"]
+        path = dataset_info["paths"][0]
+        with fs.open(path, "rb") as f:
+            o = orc.ORCFile(f)
+            stripes = [0] if o.nstripes else None
+            f.seek(0)
+            cudf_meta = cudf.read_orc(
+                f, stripes=stripes, columns=columns, **(read_kwargs or {}),
+            )
+
+        # Use pandas metadata to update missing
+        # columns in cudf_meta (directory partitions)
+        for col in pd_meta.columns:
+            if col not in cudf_meta.columns:
+                cudf_meta[col] = as_column(pd_meta[col])
+
+        return cudf_meta
+
+    @classmethod
+    def construct_partition_plan(
+        cls,
+        meta,
+        dataset_info,
+        filters=None,
+        split_stripes=True,
+        aggregate_files=False,
+        gather_statistics=True,
+        allow_worker_gather=None,
+    ):
+
+        # Extract column and index from meta
+        columns = list(meta.columns)
+        index = meta.index.name
+
+        # Extract necessary dataset_info values
+        directory_partition_keys = dataset_info["directory_partition_keys"]
+
+        # Set the file-aggregation depth if the data has
+        # directory partitions, and one of these partition
+        # columns was specified by `aggregate_files`
+        dir_agg_depth = 0
+        if isinstance(aggregate_files, str):
+            try:
+                dir_agg_depth = (
+                    list(directory_partition_keys).index(aggregate_files) + 1
+                )
+            except ValueError:
+                raise ValueError(
+                    f"{aggregate_files} is not a recognized partition column. "
+                    f"Please check the aggregate_files argument."
+                )
+
+        # Gather a list of partitions and corresponding
+        # statistics.  Each element in this initial partition
+        # list will only correspond to a single path. The
+        # following `aggregate_files` method is required
+        # to coalesce multiple paths into a single
+        # `read_partition` task. Note that `_gather_parts`
+        # will use `cls.filter_file_stripes` to apply filters
+        # on each path (and collect statistics) independently.
+        # Therefore, this call can be parallelized over the paths.
+        npaths = len(dataset_info["paths"])
+        worker_gather = (allow_worker_gather is True) or (
+            npaths > 1
+            and (split_stripes or filters or index)
+            and allow_worker_gather is not False
+            and not aggregate_files  # Worker-gather can change file agg
+        )
+        if worker_gather:
+            # Collect partition plan on workers (in parallel)
+            gather_parts_dsk = {}
+            name = "gather-orc-parts-" + tokenize(
+                meta,
+                dataset_info,
+                filters,
+                split_stripes,
+                aggregate_files,
+                gather_statistics,
+            )
+            finalize_list = []
+            for i in range(npaths):
+                finalize_list.append((name, i))
+                gather_parts_dsk[finalize_list[-1]] = (
+                    apply,
+                    cls._gather_parts,
+                    [dataset_info],
+                    {
+                        "path_indices": [i],
+                        "index": index,
+                        "columns": columns,
+                        "filters": filters,
+                        "split_stripes": split_stripes,
+                        "aggregate_files": aggregate_files,
+                        "gather_statistics": gather_statistics,
+                        "dir_agg_depth": dir_agg_depth,
+                    },
+                )
+
+            def _combine_parts(parts_and_stats):
+                parts, stats = [], []
+                for part, stat in parts_and_stats:
+                    parts += part
+                    stats += stat
+                return parts, stats
+
+            gather_parts_dsk["final-" + name] = (_combine_parts, finalize_list)
+            parts, statistics = Delayed(
+                "final-" + name, gather_parts_dsk
+            ).compute()
+        else:
+            # Collect partition plan on client (serial)
+            parts, statistics = cls._gather_parts(
                 dataset_info,
                 index=index,
                 columns=columns,
-                sample_data=False,
-                read_kwargs=read_kwargs,
+                filters=filters,
+                split_stripes=split_stripes,
+                aggregate_files=aggregate_files,
+                gather_statistics=gather_statistics,
+                dir_agg_depth=dir_agg_depth,
             )
 
-            # Return direct conversion if sample_data=False
-            if sample_data is False:
-                return cudf.from_pandas(pd_meta)
+        # Use avilable statistics to calculate divisions
+        divisions = None
+        if index and statistics:
+            divisions = cls._calculate_divisions(index, statistics)
 
-            # Read 0th stripe to get cudf metadata
-            fs = dataset_info["fs"]
-            path = dataset_info["paths"][0]
-            with fs.open(path, "rb") as f:
-                o = orc.ORCFile(f)
-                stripes = [0] if o.nstripes else None
-                f.seek(0)
-                cudf_meta = cudf.read_orc(
-                    f, stripes=stripes, columns=columns, **(read_kwargs or {}),
+        # Aggregate adjacent partitions together
+        # (when possible/desired)
+        if aggregate_files:
+            parts, divisions = cls._aggregate_files(
+                parts,
+                dir_agg_depth=dir_agg_depth,
+                split_stripes=split_stripes,
+                statistics=statistics,
+                divisions=divisions,
+            )
+
+        # Define common kwargs
+        common_kwargs = {
+            "fs": dataset_info["fs"],
+            "schema": dataset_info["pa_schema"],
+            "partition_uniques": dataset_info["directory_partition_keys"],
+            "filters": filters,
+        }
+
+        return parts, divisions, common_kwargs
+
+    @classmethod
+    def _gather_parts(
+        cls,
+        dataset_info,
+        path_indices=None,
+        index=None,
+        columns=None,
+        filters=None,
+        split_stripes=True,
+        aggregate_files=False,
+        gather_statistics=True,
+        dir_agg_depth=0,
+    ):
+        """Gather partitioning plan for every path in the dataset"""
+
+        # Extract necessary info from dataset_info
+        fs = dataset_info["fs"]
+        paths = dataset_info["paths"]
+        schema = dataset_info["orc_schema"]
+        directory_partitions = dataset_info["directory_partitions"]
+        dir_columns_need_stats = dataset_info["dir_columns_need_stats"]
+        file_columns_need_stats = dataset_info["file_columns_need_stats"]
+
+        # Assume we are processing all paths if paths=None
+        if path_indices is None:
+            path_indices = range(len(paths))
+
+        # Main loop(s) to gather stripes/statistics for
+        # each file. After this, each element of `parts` will
+        # correspond to a group of stripes for a single file/path.
+        parts = []
+        statistics = []
+        offset = 0
+        for i in path_indices:
+            path = paths[i]
+            hive_part = directory_partitions[i] if directory_partitions else []
+            hive_part_need_stats = [
+                (k, v) for k, v in hive_part if k in dir_columns_need_stats
+            ]
+            if split_stripes:
+                with fs.open(path, "rb") as f:
+                    o = orc.ORCFile(f)
+                    nstripes = o.nstripes
+                    if schema != o.schema:
+                        raise ValueError(
+                            "Incompatible schemas while parsing ORC files"
+                        )
+                    stripes, stats = cls.filter_file_stripes(
+                        fs=fs,
+                        orc_file=o,
+                        filters=filters,
+                        stat_columns=file_columns_need_stats,
+                        stat_hive_part=hive_part_need_stats,
+                        file_handle=f,
+                        file_path=path,
+                        gather_statistics=gather_statistics,
+                    )
+                    if stripes == []:
+                        continue
+                    if offset:
+                        new_part_stripes = stripes[0:offset]
+                        if new_part_stripes:
+                            parts.append([(path, new_part_stripes, hive_part)])
+                            if gather_statistics:
+                                statistics += cls._aggregate_stats(
+                                    stats[0:offset]
+                                )
+                    while offset < nstripes:
+                        new_part_stripes = stripes[
+                            offset : offset + int(split_stripes)
+                        ]
+                        if new_part_stripes:
+                            parts.append([(path, new_part_stripes, hive_part)])
+                            if gather_statistics:
+                                statistics += cls._aggregate_stats(
+                                    stats[offset : offset + int(split_stripes)]
+                                )
+                        offset += int(split_stripes)
+                    if (
+                        aggregate_files
+                        and int(split_stripes) > 1
+                        and dir_agg_depth < 1
+                    ):
+                        offset -= nstripes
+                    else:
+                        offset = 0
+            else:
+                stripes, stats = cls.filter_file_stripes(
+                    fs=fs,
+                    orc_file=None,
+                    filters=filters,
+                    stat_columns=file_columns_need_stats,
+                    stat_hive_part=hive_part_need_stats,
+                    file_path=path,
+                    file_handle=None,
+                    gather_statistics=gather_statistics,
                 )
+                if stripes == []:
+                    continue
+                parts.append([(path, stripes, hive_part)])
+                if gather_statistics:
+                    statistics += cls._aggregate_stats(stats)
 
-            # Use pandas metadata to update missing
-            # columns in cudf_meta (directory partitions)
-            for col in pd_meta.columns:
-                if col not in cudf_meta.columns:
-                    cudf_meta[col] = as_column(pd_meta[col])
+        return parts, statistics
 
-            return cudf_meta
+    @classmethod
+    def filter_file_stripes(
+        cls,
+        orc_file=None,
+        filters=None,
+        stat_hive_part=None,
+        file_path=None,
+        fs=None,
+        stat_columns=None,
+        file_handle=None,
+        gather_statistics=True,
+    ):
 
-        @classmethod
-        def filter_file_stripes(
-            cls,
-            orc_file=None,
-            filters=None,
-            stat_hive_part=None,
-            file_path=None,
-            fs=None,
-            stat_columns=None,
-            file_handle=None,
-            gather_statistics=True,
-            **kwargs,
-        ):
-
-            if kwargs:
-                # We want to allow Dask to add to this function
-                # signature without an error, but we do want to
-                # be aware of any changes.
-                warnings.warn(
-                    f"Unexpected kwargs ({kwargs}) were passed to "
-                    f"`CudfORCEngine.filter_file_stripes`. This version "
-                    f"of Dask-cuDF may be out of sync with upstream Dask."
-                )
-
-            # Use cudf to gather stripe statistics
-            cudf_statistics = []
-            if gather_statistics:
-                if file_handle is None:
-                    with fs.open(file_path, "rb") as f:
-                        f.seek(0)
-                        cudf_statistics = cudf.io.orc.read_orc_statistics(
-                            [f], columns=stat_columns,
-                        )[1]
-                else:
-                    file_handle.seek(0)
+        # Use cudf to gather stripe statistics
+        cudf_statistics = []
+        if gather_statistics:
+            if file_handle is None:
+                with fs.open(file_path, "rb") as f:
+                    f.seek(0)
                     cudf_statistics = cudf.io.orc.read_orc_statistics(
-                        [file_handle], columns=stat_columns,
+                        [f], columns=stat_columns,
                     )[1]
-                stripes = list(range(len(cudf_statistics)))
+            else:
+                file_handle.seek(0)
+                cudf_statistics = cudf.io.orc.read_orc_statistics(
+                    [file_handle], columns=stat_columns,
+                )[1]
+            stripes = list(range(len(cudf_statistics)))
 
-            # Populate statistics with stripe statistics from cudf
-            # and "known" statistics from the directory partitioning
-            statistics = []
-            for i, stripe in enumerate(stripes):
-                stats = {"file-path": file_path}
-                column_stats = []
-                columns_populated = []
-                if cudf_statistics:
-                    for k, v in cudf_statistics[i].items():
-                        if k == "col0":
-                            stats["num-rows"] = v.get("number_of_values", None)
-                        elif k in stat_columns:
-                            columns_populated.append(k)
-                            column_stats.append(
-                                {
-                                    "name": k,
-                                    "count": v.get("number_of_values", None),
-                                    "min": v.get("minimum", None),
-                                    "max": v.get("maximum", None),
-                                }
-                            )
-                for (k, v) in stat_hive_part:
-                    if k not in columns_populated:
+        # Populate statistics with stripe statistics from cudf
+        # and "known" statistics from the directory partitioning
+        statistics = []
+        for i, stripe in enumerate(stripes):
+            stats = {"file-path": file_path}
+            column_stats = []
+            columns_populated = []
+            if cudf_statistics:
+                for k, v in cudf_statistics[i].items():
+                    if k == "col0":
+                        stats["num-rows"] = v.get("number_of_values", None)
+                    elif k in stat_columns:
+                        columns_populated.append(k)
                         column_stats.append(
                             {
                                 "name": k,
-                                "count": stats["num-rows"],
-                                "min": v,
-                                "max": v,
+                                "count": v.get("number_of_values", None),
+                                "min": v.get("minimum", None),
+                                "max": v.get("maximum", None),
                             }
                         )
-                stats["columns"] = column_stats
-                statistics.append(stats)
-
-            # Apply filters (if necessary)
-            if filters:
-                stripes, statistics = apply_filters(
-                    stripes, statistics, filters
-                )
-
-            return stripes, statistics
-
-        @classmethod
-        def read_partition(
-            cls,
-            parts,
-            columns,
-            fs=None,
-            filters=None,
-            schema=None,
-            partition_uniques=None,
-            **kwargs,
-        ):
-            # Create a seperate dataframe for each directory partition.
-            # We are only creating a single cudf dataframe if there
-            # are no partition columns.
-            partitions = []
-            partition_uniques = partition_uniques or {}
-            if columns:
-                # Separate file columns and partition columns
-                file_columns = [c for c in columns if c in set(schema)]
-                partition_columns = [
-                    c for c in columns if c not in set(schema)
-                ]
-            else:
-                file_columns, partition_columns = None, list(partition_uniques)
-
-            dfs = []
-            path, stripes, hive_parts = parts[0]
-            path_list = [path]
-            stripe_list = [stripes]
-            for path, stripes, next_hive_parts in parts[1:]:
-                if hive_parts == next_hive_parts:
-                    path_list.append(path)
-                    stripe_list.append(stripes)
-                else:
-                    dfs.append(
-                        cls._read_partition(
-                            fs, path_list, file_columns, stripe_list, **kwargs,
-                        )
+            for (k, v) in stat_hive_part:
+                if k not in columns_populated:
+                    column_stats.append(
+                        {
+                            "name": k,
+                            "count": stats["num-rows"],
+                            "min": v,
+                            "max": v,
+                        }
                     )
-                    partitions.append(hive_parts)
-                    path_list = [path]
-                    stripe_list = [stripes]
-                    hive_parts = next_hive_parts
-            dfs.append(
-                cls._read_partition(
-                    fs, path_list, file_columns, stripe_list, **kwargs,
-                )
-            )
-            partitions.append(hive_parts)
+            stats["columns"] = column_stats
+            statistics.append(stats)
 
-            # Add partition columns to each partition dataframe
-            for i, hive_parts in enumerate(partitions):
-                for (part_name, cat) in hive_parts:
-                    if part_name in partition_columns:
-                        # We read from file paths, so the partition
-                        # columns are NOT in our table yet.
-                        categories = partition_uniques[part_name]
+        # Apply filters (if necessary)
+        if filters:
+            stripes, statistics = apply_filters(stripes, statistics, filters)
 
-                        col = (
-                            as_column(categories.index(cat))
-                            .as_frame()
-                            .repeat(len(dfs[i]))
-                            ._data[None]
-                        )
-                        dfs[i][part_name] = build_categorical_column(
-                            categories=categories,
-                            codes=as_column(col.base_data, dtype=col.dtype),
-                            size=col.size,
-                            offset=col.offset,
-                            ordered=False,
-                        )
-            return cudf.concat(dfs)
+        return stripes, statistics
 
-        @classmethod
-        def _read_partition(
-            cls, fs, path_list, columns, stripe_list, **kwargs
-        ):
-
-            with ExitStack() as stack:
-                if cudf.utils.ioutils._is_local_filesystem(fs):
-                    # Let cudf open the files if this is
-                    # a local file system
-                    _source_list = path_list
-                else:
-                    # Use fs.open to pass file handles to cudf
-                    _source_list = [
-                        stack.enter_context(fs.open(path, "rb"))
-                        for path in path_list
+    @classmethod
+    def _calculate_divisions(cls, index, statistics):
+        """Use statistics to calculate divisions"""
+        if statistics:
+            divisions = []
+            for icol, column_stats in enumerate(
+                statistics[0].get("columns", [])
+            ):
+                if column_stats.get("name", None) == index:
+                    divisions = [
+                        column_stats.get("min", None),
+                        column_stats.get("max", None),
                     ]
-                df = cudf.io.read_orc(
-                    _source_list,
-                    columns=columns,
-                    stripes=stripe_list,
-                    **kwargs,
+                    break
+            if divisions and None not in divisions:
+                for stat in statistics[1:]:
+                    next_division = stat["columns"][icol].get("max", None)
+                    if next_division is None or next_division < divisions[-1]:
+                        return None
+                    divisions.append(next_division)
+            return divisions
+        return None
+
+    @classmethod
+    def _aggregate_stats(cls, statistics):
+        """Aggregate a list of statistics"""
+
+        if statistics:
+
+            # Check if we are already "aggregated"
+            nstats = len(statistics)
+            if nstats == 1:
+                return statistics
+
+            # Populate statistic lists
+            counts = []
+            column_counts = defaultdict(list)
+            column_mins = defaultdict(list)
+            column_maxs = defaultdict(list)
+            use_count = statistics[0].get("num-rows", None) is not None
+            for stat in statistics:
+                if use_count:
+                    counts.append(stat.get("num-rows"))
+                for col_stats in stat["columns"]:
+                    name = col_stats["name"]
+                    if use_count:
+                        column_counts[name].append(col_stats.get("count"))
+                    column_mins[name].append(col_stats.get("min", None))
+                    column_maxs[name].append(col_stats.get("max", None))
+
+            # Perform aggregation
+            output = {}
+            output["file-path"] = statistics[0].get("file-path", None)
+            if use_count:
+                output["row-count"] = sum(counts)
+            column_stats = []
+            for k in column_counts.keys():
+                column_stat = {"name": k}
+                if use_count:
+                    column_stat["count"] = sum(column_counts[k])
+                try:
+                    column_stat["min"] = min(column_mins[k])
+                    column_stat["max"] = max(column_maxs[k])
+                except TypeError:
+                    column_stat["min"] = None
+                    column_stat["max"] = None
+                column_stats.append(column_stat)
+            output["columns"] = column_stats
+            return output
+        else:
+            return {}
+
+    @classmethod
+    def _aggregate_files(
+        cls,
+        parts,
+        dir_agg_depth=0,
+        split_stripes=1,
+        divisions=None,
+        statistics=None,  # Not used (yet)
+    ):
+        if int(split_stripes) > 1 and len(parts) > 1:
+            new_parts = []
+            new_divisions = [divisions[0]] if divisions else None
+            new_max = divisions[1] if divisions else None
+            new_part = parts[0]
+            nstripes = len(new_part[0][1])
+            hive_parts = new_part[0][2]
+            for i, part in enumerate(parts[1:]):
+                next_nstripes = len(part[0][1])
+                new_hive_parts = part[0][2]
+                # For partitioned data, we do not allow file
+                # aggregation between different hive partitions
+                if (next_nstripes + nstripes <= split_stripes) and (
+                    hive_parts[:dir_agg_depth]
+                    == new_hive_parts[:dir_agg_depth]
+                ):
+                    new_part.append(part[0])
+                    new_max = divisions[i] if divisions else None
+                    nstripes += next_nstripes
+                else:
+                    new_parts.append(new_part)
+                    if divisions:
+                        new_divisions.append(new_max)
+                    new_part = part
+                    new_max = divisions[i] if divisions else None
+                    nstripes = next_nstripes
+                    hive_parts = new_hive_parts
+            new_parts.append(new_part)
+            if divisions:
+                new_divisions.append(new_max)
+            return new_parts, new_divisions
+        else:
+            return parts, divisions
+
+    @classmethod
+    def read_partition(
+        cls,
+        parts,
+        columns,
+        fs=None,
+        filters=None,
+        schema=None,
+        partition_uniques=None,
+        **kwargs,
+    ):
+        # Create a seperate dataframe for each directory partition.
+        # We are only creating a single cudf dataframe if there
+        # are no partition columns.
+        partitions = []
+        partition_uniques = partition_uniques or {}
+        if columns:
+            # Separate file columns and partition columns
+            file_columns = [c for c in columns if c in set(schema)]
+            partition_columns = [c for c in columns if c not in set(schema)]
+        else:
+            file_columns, partition_columns = None, list(partition_uniques)
+
+        dfs = []
+        path, stripes, hive_parts = parts[0]
+        path_list = [path]
+        stripe_list = [stripes]
+        for path, stripes, next_hive_parts in parts[1:]:
+            if hive_parts == next_hive_parts:
+                path_list.append(path)
+                stripe_list.append(stripes)
+            else:
+                dfs.append(
+                    cls._read_partition(
+                        fs, path_list, file_columns, stripe_list, **kwargs,
+                    )
                 )
-            return df
+                partitions.append(hive_parts)
+                path_list = [path]
+                stripe_list = [stripes]
+                hive_parts = next_hive_parts
+        dfs.append(
+            cls._read_partition(
+                fs, path_list, file_columns, stripe_list, **kwargs,
+            )
+        )
+        partitions.append(hive_parts)
+
+        # Add partition columns to each partition dataframe
+        for i, hive_parts in enumerate(partitions):
+            for (part_name, cat) in hive_parts:
+                if part_name in partition_columns:
+                    # We read from file paths, so the partition
+                    # columns are NOT in our table yet.
+                    categories = partition_uniques[part_name]
+
+                    col = (
+                        as_column(categories.index(cat))
+                        .as_frame()
+                        .repeat(len(dfs[i]))
+                        ._data[None]
+                    )
+                    dfs[i][part_name] = build_categorical_column(
+                        categories=categories,
+                        codes=as_column(col.base_data, dtype=col.dtype),
+                        size=col.size,
+                        offset=col.offset,
+                        ordered=False,
+                    )
+        return cudf.concat(dfs)
+
+    @classmethod
+    def _read_partition(cls, fs, path_list, columns, stripe_list, **kwargs):
+
+        with ExitStack() as stack:
+            if cudf.utils.ioutils._is_local_filesystem(fs):
+                # Let cudf open the files if this is
+                # a local file system
+                _source_list = path_list
+            else:
+                # Use fs.open to pass file handles to cudf
+                _source_list = [
+                    stack.enter_context(fs.open(path, "rb"))
+                    for path in path_list
+                ]
+            df = cudf.io.read_orc(
+                _source_list, columns=columns, stripes=stripe_list, **kwargs,
+            )
+        return df
 
 
-except ImportError:
-    CudfORCEngine = None
+#
+#  EXPERIMENTAL read_orc Implementation
+#
 
 
-def read_orc(*args, legacy=False, **kwargs):
-    if CudfORCEngine is None or legacy is True:
-        return read_orc_legacy(*args, **kwargs)
+def read_orc(
+    path,
+    engine="cudf",
+    legacy=False,
+    columns=None,
+    index=None,
+    filters=None,
+    split_stripes=1,
+    aggregate_files=None,
+    storage_options=None,
+    gather_statistics=True,
+    allow_worker_gather=None,
+    sample_data=None,
+    read_kwargs=None,
+):
+    """Read dataframe from ORC file(s)
 
-    # Move `engine` argument to `read_kwargs` to
-    # align with legacy read_orc API
-    read_kwargs = kwargs.pop("read_kwargs", {})
-    if "engine" not in read_kwargs:
-        read_kwargs["engine"] = kwargs.pop("engine", None)
+    Parameters
+    ----------
+    path: str or list(str)
+        Location of file(s), which can be a full URL with protocol
+        specifier, and may include glob character if a single string.
+    engine: str, default "cudf"
+        IO engine label to pass to cudf backend.
+    legacy: bool, default False
+        Whether to use the legacy ``dask_cudf.read_orc`` implementation.
+    columns: None or list(str)
+        Columns to load. If None, loads all.
+    index: str
+        Column name to set as index.
+    filters : None or list of tuple or list of lists of tuples
+        Specifies a filter predicate used to filter out row groups using
+        statistics stored for each row group as Parquet metadata. Row
+        groups that do not match the given filter predicate are not read. The
+        predicate is expressed in disjunctive normal form (DNF) like
+        `[[('x', '=', 0), ...], ...]`. DNF allows arbitrary boolean logical
+        combinations of single column predicates. The innermost tuples each
+        describe a single column predicate. The list of inner predicates is
+        interpreted as a conjunction (AND), forming a more selective and
+        multiple column predicate. Finally, the outermost list combines
+        these filters as a disjunction (OR). Predicates may also be passed
+        as a list of tuples. This form is interpreted as a single conjunction.
+        To express OR in predicates, one must use the (preferred) notation of
+        list of lists of tuples.
+    split_stripes: int or False
+        Maximum number of ORC stripes to include in each output-DataFrame
+        partition. Use False to specify a 1-to-1 mapping between files
+        and partitions. Default is 1.
+    aggregate_files : bool or str, default False
+        Whether distinct file paths may be aggregated into the same output
+        partition. A setting of True means that any two file paths may be
+        aggregated into the same output partition, while False means that
+        inter-file aggregation is prohibited. If the name of a partition
+        column is specified, any file within the same partition directory
+        (e.g. ``"/<aggregate_files>=*/"``) may be aggregated.
+    storage_options: None or dict
+        Further parameters to pass to the bytes backend.
+    gather_statistics : bool, default True
+        Whether to gather file and stripe statistics from the orc metadata.
+    allow_worker_gather : bool, optional
+        Whether to parallelize the gathering and processing of orc metadata.
+    sample_data : bool, optional
+        Whether to sample data to construct output collection metadata.
+    read_kwargs : dict, optional
+        Dictionary of key-word arguments to pass to the partition-level
+        IO function.
 
-    return dd.read_orc(
-        *args, engine=CudfORCEngine, read_kwargs=read_kwargs, **kwargs,
+    Returns
+    -------
+    dask_cudf.DataFrame (even if there is only one column)
+    """
+
+    # Check if we are using the legacy engine
+    if legacy:
+        return read_orc_legacy(
+            path,
+            engine=engine,
+            columns=columns,
+            filters=filters,
+            storage_options=storage_options,
+            **(read_kwargs or {}),
+        )
+
+    # Add `engine` to `read_kwargs`
+    read_kwargs = read_kwargs or {}
+    read_kwargs["engine"] = engine
+
+    # Check that `index` is legal
+    if isinstance(index, list):
+        if len(index) > 1:
+            raise ValueError(
+                f"index={index} not supported. "
+                f"Please use a single column name."
+            )
+        index = index[0]
+
+    # Set engine to CudfORCEngine
+    engine = CudfORCEngine
+
+    # Let engine convert the paths into a dictionary
+    # of engine-specific datset information
+    dataset_info = engine.get_dataset_info(
+        path,
+        columns=columns,
+        index=index,
+        filters=filters,
+        gather_statistics=gather_statistics,
+        storage_options=storage_options,
     )
+
+    # Construct the `_meta` for the output collection.
+    # Note that we do this before actually generating
+    # the "plan" for output partitions.
+    meta = engine.construct_output_meta(
+        dataset_info,
+        index=index,
+        columns=columns,
+        sample_data=sample_data,
+        read_kwargs=read_kwargs,
+    )
+
+    # Construct the output-partition "plan"
+    parts, divisions, common_kwargs = engine.construct_partition_plan(
+        meta,
+        dataset_info,
+        filters=filters,
+        split_stripes=split_stripes,
+        aggregate_files=aggregate_files,
+        gather_statistics=gather_statistics,
+        allow_worker_gather=allow_worker_gather,
+    )
+
+    # Add read_kwargs to common_kwargs
+    common_kwargs.update(read_kwargs or {})
+
+    # Construct and return a Blockwise layer
+    label = "read-orc-"
+    output_name = label + tokenize(
+        dataset_info,
+        columns,
+        index,
+        split_stripes,
+        aggregate_files,
+        filters,
+        read_kwargs,
+    )
+    layer = DataFrameIOLayer(
+        output_name,
+        columns,
+        parts,
+        ORCFunctionWrapper(
+            columns, engine, index, common_kwargs=common_kwargs
+        ),
+        label=label,
+    )
+    graph = HighLevelGraph({output_name: layer}, {output_name: set()})
+    divisions = divisions or ([None] * (len(parts) + 1))
+    return new_dd_object(graph, output_name, meta, divisions)
+
+
+#
+#  EXPERIMENTAL read_orc Helper Utilities
+#
+
+
+def _is_data_file_path(path, fs, ignore_prefix=None, require_suffix=None):
+    # Private utility to check if a path is a data file
+
+    # Check that we are not ignoring this path/dir
+    if ignore_prefix and path.startswith(ignore_prefix):
+        return False
+    # If file, check that we are allowing this suffix
+    if fs.isfile(path) and require_suffix and path.endswith(require_suffix):
+        return False
+    return True
+
+
+def collect_files(root, fs, ignore_prefix="_", require_suffix=None):
+    # Utility to recursively collect all files within
+    # a root directory.
+
+    # First, check if we are dealing with a file
+    if fs.isfile(root):
+        if _is_data_file_path(
+            root,
+            fs,
+            ignore_prefix=ignore_prefix,
+            require_suffix=require_suffix,
+        ):
+            return [root]
+        return []
+
+    # Otherwise, recursively handle each item in
+    # the current `root` directory
+    all_paths = []
+    for sub in fs.ls(root):
+        all_paths += collect_files(
+            sub,
+            fs,
+            ignore_prefix=ignore_prefix,
+            require_suffix=require_suffix,
+        )
+
+    return all_paths
+
+
+def collect_partitions(file_list, root, fs, partition_sep="=", dtypes=None):
+    # Utility to manually collect hive-style
+    # directory-partitioning information from a dataset.
+
+    # Always sort files by `natural_sort_key` to ensure
+    # files within the same directory partition are together
+    files = sorted(file_list, key=natural_sort_key)
+
+    # Construct partitions
+    parts = []
+    root_len = len(root.split(fs.sep))
+    dtypes = dtypes or {}
+    unique_parts = defaultdict(set)
+    for path in files:
+        # Strip root and file name
+        _path = path.split(fs.sep)[root_len:-1]
+        partition = []
+        for d in _path:
+            _split = d.split(partition_sep)
+            if len(_split) == 2:
+                col = _split[0]
+                # Interpret partition key as int, float, or str
+                raw_parition_key = (
+                    dtypes[col](_split[1]) if col in dtypes else _split[1]
+                )
+                try:
+                    parition_key = int(raw_parition_key)
+                except ValueError:
+                    try:
+                        parition_key = float(raw_parition_key)
+                    except ValueError:
+                        parition_key = raw_parition_key
+                # Append partition name-key tuple to `partition` list
+                partition.append((_split[0], parition_key,))
+        if partition:
+            for (k, v) in partition:
+                unique_parts[k].add(v)
+            parts.append(partition)
+
+    return files, parts, {k: list(v) for k, v in unique_parts.items()}
+
+
+#
+#  LEGACY read_orc Implementation
+#
 
 
 def _read_orc_stripe(fs, path, stripe, columns, kwargs=None):
@@ -374,7 +1051,28 @@ def write_orc_partition(df, path, fs, filename, compression=None):
     return full_path
 
 
-def to_orc(
+#
+#  to_orc Implementation
+#
+
+
+def to_orc(df, *args, partition_on=None, **kwargs):
+
+    try:
+        # Try using upstream to_orc
+        from dask.dataframe.io.orc import to_orc as dd_to_orc
+
+        return dd_to_orc(df, *args, engine=CudfORCEngine, **kwargs)
+    except ImportError:
+        # Fall back on legacy implementation
+        if partition_on:
+            raise ValueError(
+                "`partition_on` not supported for this Dask version."
+            )
+        return to_orc_legacy(df, *args, **kwargs)
+
+
+def to_orc_legacy(
     df,
     path,
     write_index=True,
