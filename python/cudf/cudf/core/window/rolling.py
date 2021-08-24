@@ -21,7 +21,7 @@ class Rolling(GetAttrGetItemMixin):
 
     Parameters
     ----------
-    window : int or offset
+    window : int, offset or a BaseIndexer subclass
         Size of the window, i.e., the number of observations used
         to calculate the statistic.
         For datetime indexes, an offset can be provided instead
@@ -29,6 +29,8 @@ class Rolling(GetAttrGetItemMixin):
         As opposed to a fixed window size, each window will be
         sized to accommodate observations within the time period
         specified by the offset.
+        If a BaseIndexer subclass is passed, calculates the window
+        boundaries based on the defined ``get_window_bounds`` method.
     min_periods : int, optional
         The minimum number of observations in the window that are
         required to be non-null, so that the result is non-null.
