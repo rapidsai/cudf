@@ -112,6 +112,7 @@ struct ColumnDesc {
   int32_t decimal_scale;  // number of fractional decimal digits for decimal type
   int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
   column_validity_info parent_validity_info;  // consists of parent column valid_map and null count
+  uint32_t* parent_null_count_prefix_sums;  // per-stripe prefix sums of parent column's null count
 };
 
 /**
@@ -138,7 +139,7 @@ struct EncChunk {
   int32_t scale;                     // scale for decimals or timestamps
 
   uint32_t* dict_index;  // dictionary index from row index
-  device_span<uint32_t> decimal_offsets;
+  uint32_t* decimal_offsets;
   column_device_view const* leaf_column;
 };
 

@@ -48,8 +48,6 @@ using Table       = cudf::table;
 
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
-  static std::size_t data_size() { return 1000; }
-  static std::size_t mask_size() { return 100; }
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
@@ -58,14 +56,14 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   {
     auto typed_data = static_cast<char*>(data.data());
     auto typed_mask = static_cast<char*>(mask.data());
-    std::vector<char> h_data(data_size());
+    std::vector<char> h_data(data.size());
     std::iota(h_data.begin(), h_data.end(), char{0});
-    std::vector<char> h_mask(mask_size());
+    std::vector<char> h_mask(mask.size());
     std::iota(h_mask.begin(), h_mask.end(), char{0});
     CUDA_TRY(cudaMemcpyAsync(
-      typed_data, h_data.data(), data_size(), cudaMemcpyHostToDevice, stream.value()));
+      typed_data, h_data.data(), data.size(), cudaMemcpyHostToDevice, stream.value()));
     CUDA_TRY(cudaMemcpyAsync(
-      typed_mask, h_mask.data(), mask_size(), cudaMemcpyHostToDevice, stream.value()));
+      typed_mask, h_mask.data(), mask.size(), cudaMemcpyHostToDevice, stream.value()));
     stream.synchronize();
   }
 
@@ -484,7 +482,7 @@ TEST_F(OverflowTest, Presliced)
     auto offset_gen = cudf::detail::make_counting_transform_iterator(
       0, [string_size](size_type index) { return index * string_size; });
     cudf::test::fixed_width_column_wrapper<int> offsets(offset_gen, offset_gen + num_rows + 1);
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, num_rows);
+    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, total_chars_size);
     auto col        = cudf::make_strings_column(
              num_rows, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{});
 
@@ -515,7 +513,7 @@ TEST_F(OverflowTest, Presliced)
                            offsets->view().begin<offset_type>(),
                            offsets->view().end<offset_type>(),
                            offsets->mutable_view().begin<offset_type>());
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, num_rows);
+    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, total_chars_size);
     auto col        = cudf::make_strings_column(
              num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
 
@@ -823,6 +821,22 @@ TEST_F(StructsColumnTest, ConcatenateStructs)
 
   // concatenate
   auto result = cudf::concatenate(std::vector<column_view>({src[0], src[1], src[2], src[3]}));
+  cudf::test::expect_columns_equivalent(*result, *expected);
+}
+
+TEST_F(StructsColumnTest, ConcatenateEmptyStructs)
+{
+  using namespace cudf::test;
+
+  auto expected = cudf::make_structs_column(10, {}, 0, rmm::device_buffer());
+  auto first    = cudf::make_structs_column(5, {}, 0, rmm::device_buffer());
+  auto second   = cudf::make_structs_column(2, {}, 0, rmm::device_buffer());
+  auto third    = cudf::make_structs_column(0, {}, 0, rmm::device_buffer());
+  auto fourth   = cudf::make_structs_column(3, {}, 0, rmm::device_buffer());
+
+  // concatenate
+  auto result = cudf::concatenate(std::vector<column_view>({*first, *second, *third, *fourth}));
+  CUDF_EXPECTS(result->size() == expected->size(), "column size changed after concat");
   cudf::test::expect_columns_equivalent(*result, *expected);
 }
 

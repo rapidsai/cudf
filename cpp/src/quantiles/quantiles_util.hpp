@@ -160,6 +160,8 @@ template <typename Result,
 CUDA_HOST_DEVICE_CALLABLE Result
 select_quantile_data(Iterator begin, size_type size, double q, interpolation interp)
 {
+  if (size == 0) return static_cast<Result>(*begin);
+
   quantile_index idx(size, q);
 
   switch (interp) {

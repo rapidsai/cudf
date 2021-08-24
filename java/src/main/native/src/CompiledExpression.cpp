@@ -18,67 +18,14 @@
 #include <stdexcept>
 #include <vector>
 
-#include <cudf/ast/nodes.hpp>
-#include <cudf/ast/operators.hpp>
-#include <cudf/ast/transform.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
 #include "cudf_jni_apis.hpp"
-
-namespace cudf {
-namespace jni {
-namespace ast {
-
-/**
- * A class to capture all of the resources associated with a compiled AST expression.
- * AST nodes do not own their child nodes, so every node in the expression tree
- * must be explicitly tracked in order to free the underlying resources for each node.
- *
- * This should be cleaned up a bit after the libcudf AST refactoring in
- * https://github.com/rapidsai/cudf/pull/8815 when a virtual destructor is added to the
- * base AST node type. Then we do not have to track every AST node type separately.
- */
-class compiled_expr {
-  /** All literal nodes within the expression tree */
-  std::vector<std::unique_ptr<cudf::ast::literal>> literals;
-
-  /** All column reference nodes within the expression tree */
-  std::vector<std::unique_ptr<cudf::ast::column_reference>> column_refs;
-
-  /** All expression nodes within the expression tree */
-  std::vector<std::unique_ptr<cudf::ast::expression>> expressions;
-
-  /** GPU scalar instances that correspond to literal nodes */
-  std::vector<std::unique_ptr<cudf::scalar>> scalars;
-
-public:
-  cudf::ast::literal &add_literal(std::unique_ptr<cudf::ast::literal> literal_ptr,
-                                  std::unique_ptr<cudf::scalar> scalar_ptr) {
-    literals.push_back(std::move(literal_ptr));
-    scalars.push_back(std::move(scalar_ptr));
-    return *literals.back();
-  }
-
-  cudf::ast::column_reference &
-  add_column_ref(std::unique_ptr<cudf::ast::column_reference> ref_ptr) {
-    column_refs.push_back(std::move(ref_ptr));
-    return *column_refs.back();
-  }
-
-  cudf::ast::expression &add_expression(std::unique_ptr<cudf::ast::expression> expr_ptr) {
-    expressions.push_back(std::move(expr_ptr));
-    return *expressions.back();
-  }
-
-  /** Return the expression node at the top of the tree */
-  cudf::ast::expression &get_top_expression() const { return *expressions.back(); }
-};
-
-} // namespace ast
-} // namespace jni
-} // namespace cudf
+#include "jni_compiled_expr.hpp"
 
 namespace {
 
@@ -156,15 +103,15 @@ public:
 };
 
 /**
- * Enumeration of the AST node types that can appear in the serialized data.
+ * Enumeration of the AST expression types that can appear in the serialized data.
  * NOTE: This must be kept in sync with the NodeType enumeration in AstNode.java!
  */
-enum class jni_serialized_node_type : int8_t {
+enum class jni_serialized_expression_type : int8_t {
   VALID_LITERAL = 0,
   NULL_LITERAL = 1,
   COLUMN_REFERENCE = 2,
-  UNARY_EXPRESSION = 3,
-  BINARY_EXPRESSION = 4
+  UNARY_OPERATION = 3,
+  BINARY_OPERATION = 4
 };
 
 /**
@@ -328,41 +275,42 @@ cudf::ast::column_reference &compile_column_reference(cudf::jni::ast::compiled_e
 }
 
 // forward declaration
-cudf::ast::detail::node &compile_node(cudf::jni::ast::compiled_expr &compiled_expr,
-                                      jni_serialized_ast &jni_ast);
+cudf::ast::expression &compile_expression(cudf::jni::ast::compiled_expr &compiled_expr,
+                                          jni_serialized_ast &jni_ast);
 
 /** Decode a serialized AST unary expression */
-cudf::ast::expression &compile_unary_expression(cudf::jni::ast::compiled_expr &compiled_expr,
-                                                jni_serialized_ast &jni_ast) {
+cudf::ast::operation &compile_unary_expression(cudf::jni::ast::compiled_expr &compiled_expr,
+                                               jni_serialized_ast &jni_ast) {
   auto const ast_op = jni_to_unary_operator(jni_ast.read_byte());
-  cudf::ast::detail::node &child_node = compile_node(compiled_expr, jni_ast);
-  return compiled_expr.add_expression(std::make_unique<cudf::ast::expression>(ast_op, child_node));
+  cudf::ast::expression &child_expression = compile_expression(compiled_expr, jni_ast);
+  return compiled_expr.add_operation(
+      std::make_unique<cudf::ast::operation>(ast_op, child_expression));
 }
 
 /** Decode a serialized AST binary expression */
-cudf::ast::expression &compile_binary_expression(cudf::jni::ast::compiled_expr &compiled_expr,
-                                                 jni_serialized_ast &jni_ast) {
+cudf::ast::operation &compile_binary_expression(cudf::jni::ast::compiled_expr &compiled_expr,
+                                                jni_serialized_ast &jni_ast) {
   auto const ast_op = jni_to_binary_operator(jni_ast.read_byte());
-  cudf::ast::detail::node &left_child = compile_node(compiled_expr, jni_ast);
-  cudf::ast::detail::node &right_child = compile_node(compiled_expr, jni_ast);
-  return compiled_expr.add_expression(
-      std::make_unique<cudf::ast::expression>(ast_op, left_child, right_child));
+  cudf::ast::expression &left_child = compile_expression(compiled_expr, jni_ast);
+  cudf::ast::expression &right_child = compile_expression(compiled_expr, jni_ast);
+  return compiled_expr.add_operation(
+      std::make_unique<cudf::ast::operation>(ast_op, left_child, right_child));
 }
 
-/** Decode a serialized AST node by reading the node type and dispatching */
-cudf::ast::detail::node &compile_node(cudf::jni::ast::compiled_expr &compiled_expr,
-                                      jni_serialized_ast &jni_ast) {
-  auto const node_type = static_cast<jni_serialized_node_type>(jni_ast.read_byte());
-  switch (node_type) {
-    case jni_serialized_node_type::VALID_LITERAL:
+/** Decode a serialized AST expression by reading the expression type and dispatching */
+cudf::ast::expression &compile_expression(cudf::jni::ast::compiled_expr &compiled_expr,
+                                          jni_serialized_ast &jni_ast) {
+  auto const expression_type = static_cast<jni_serialized_expression_type>(jni_ast.read_byte());
+  switch (expression_type) {
+    case jni_serialized_expression_type::VALID_LITERAL:
       return compile_literal(true, compiled_expr, jni_ast);
-    case jni_serialized_node_type::NULL_LITERAL:
+    case jni_serialized_expression_type::NULL_LITERAL:
       return compile_literal(false, compiled_expr, jni_ast);
-    case jni_serialized_node_type::COLUMN_REFERENCE:
+    case jni_serialized_expression_type::COLUMN_REFERENCE:
       return compile_column_reference(compiled_expr, jni_ast);
-    case jni_serialized_node_type::UNARY_EXPRESSION:
+    case jni_serialized_expression_type::UNARY_OPERATION:
       return compile_unary_expression(compiled_expr, jni_ast);
-    case jni_serialized_node_type::BINARY_EXPRESSION:
+    case jni_serialized_expression_type::BINARY_OPERATION:
       return compile_binary_expression(compiled_expr, jni_ast);
     default: throw std::invalid_argument("data is not a serialized AST expression");
   }
@@ -371,16 +319,7 @@ cudf::ast::detail::node &compile_node(cudf::jni::ast::compiled_expr &compiled_ex
 /** Decode a serialized AST into a native libcudf AST and associated resources */
 std::unique_ptr<cudf::jni::ast::compiled_expr> compile_serialized_ast(jni_serialized_ast &jni_ast) {
   auto jni_expr_ptr = std::make_unique<cudf::jni::ast::compiled_expr>();
-  auto const node_type = static_cast<jni_serialized_node_type>(jni_ast.read_byte());
-  switch (node_type) {
-    case jni_serialized_node_type::UNARY_EXPRESSION:
-      (void)compile_unary_expression(*jni_expr_ptr, jni_ast);
-      break;
-    case jni_serialized_node_type::BINARY_EXPRESSION:
-      (void)compile_binary_expression(*jni_expr_ptr, jni_ast);
-      break;
-    default: throw std::invalid_argument("data is not a serialized AST expression");
-  }
+  (void)compile_expression(*jni_expr_ptr, jni_ast);
 
   if (!jni_ast.at_eof()) {
     throw std::invalid_argument("Extra bytes at end of serialized AST");
@@ -418,7 +357,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ast_CompiledExpression_computeColumn
     auto compiled_expr_ptr = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_ast);
     auto tview_ptr = reinterpret_cast<cudf::table_view const *>(j_table);
     std::unique_ptr<cudf::column> result =
-        cudf::ast::compute_column(*tview_ptr, compiled_expr_ptr->get_top_expression());
+        cudf::compute_column(*tview_ptr, compiled_expr_ptr->get_top_expression());
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

@@ -46,10 +46,10 @@ TYPED_TEST(groupby_min_test, basic)
   fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
   fixed_width_column_wrapper<R> expect_vals({0, 1, 2});
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_min_aggregation();
+  auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -64,10 +64,10 @@ TYPED_TEST(groupby_min_test, empty_cols)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_min_aggregation();
+  auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -82,10 +82,10 @@ TYPED_TEST(groupby_min_test, zero_valid_keys)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_min_aggregation();
+  auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -100,10 +100,10 @@ TYPED_TEST(groupby_min_test, zero_valid_values)
   fixed_width_column_wrapper<K> expect_keys{1};
   fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_min_aggregation();
+  auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -122,10 +122,10 @@ TYPED_TEST(groupby_min_test, null_keys_and_values)
   //  { 3, 6,     1, 4, 9,   2, 8,    -}
   fixed_width_column_wrapper<R> expect_vals({3, 1, 2, 0}, {1, 1, 1, 0});
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_min_aggregation();
+  auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -140,10 +140,10 @@ TEST_F(groupby_min_string_test, basic)
   fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
   strings_column_wrapper expect_vals({"aaa", "bat", "$1"});
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_min_aggregation();
+  auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -155,10 +155,10 @@ TEST_F(groupby_min_string_test, zero_valid_values)
   fixed_width_column_wrapper<K> expect_keys{1};
   strings_column_wrapper expect_vals({""}, all_nulls());
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_min_aggregation();
+  auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -187,7 +187,7 @@ TEST_F(groupby_min_string_test, min_sorted_strings)
   // fixed_width_column_wrapper<size_type> expect_argmin(
   // {6, 10, 14, 18, 22, 26, 30, 34, 38, 42, -1},
   // {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys,
                   vals,
                   expect_keys,
@@ -214,12 +214,16 @@ TEST_F(groupby_dictionary_min_test, basic)
 
   auto expect_vals = cudf::dictionary::set_keys(expect_vals_w, vals.keys());
 
-  test_single_agg(keys, vals, expect_keys, expect_vals->view(), cudf::make_min_aggregation());
   test_single_agg(keys,
                   vals,
                   expect_keys,
                   expect_vals->view(),
-                  cudf::make_min_aggregation(),
+                  cudf::make_min_aggregation<cudf::groupby_aggregation>());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals->view(),
+                  cudf::make_min_aggregation<cudf::groupby_aggregation>(),
                   force_use_sort_impl::YES);
 }
 
@@ -247,7 +251,7 @@ TYPED_TEST(FixedPointTest_32_64_Reps, GroupBySortMinDecimalAsValue)
     auto const expect_keys     = fixed_width_column_wrapper<K>{1, 2, 3};
     auto const expect_vals_min = fp_wrapper{{0, 1, 2}, scale};
 
-    auto agg2 = cudf::make_min_aggregation();
+    auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
     test_single_agg(
       keys, vals, expect_keys, expect_vals_min, std::move(agg2), force_use_sort_impl::YES);
   }
@@ -271,7 +275,7 @@ TYPED_TEST(FixedPointTest_32_64_Reps, GroupByHashMinDecimalAsValue)
     auto const expect_keys     = fixed_width_column_wrapper<K>{1, 2, 3};
     auto const expect_vals_min = fp_wrapper{{0, 1, 2}, scale};
 
-    auto agg6 = cudf::make_min_aggregation();
+    auto agg6 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
     test_single_agg(keys, vals, expect_keys, expect_vals_min, std::move(agg6));
   }
 }

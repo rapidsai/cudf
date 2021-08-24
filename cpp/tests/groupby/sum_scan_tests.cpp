@@ -57,7 +57,7 @@ TYPED_TEST(groupby_sum_scan_test, basic)
   //                        {0, 3, 6, 1, 4, 5, 9, 2, 7, 8}
   result_wrapper expect_vals{0, 3, 9, 1, 5, 10, 19, 2, 9, 17};
   // clang-format on
-  auto agg = cudf::make_sum_aggregation();
+  auto agg = cudf::make_sum_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -74,7 +74,7 @@ TYPED_TEST(groupby_sum_scan_test, empty_cols)
   result_wrapper expect_vals{};
   // clang-format on
 
-  auto agg = cudf::make_sum_aggregation();
+  auto agg = cudf::make_sum_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -91,7 +91,7 @@ TYPED_TEST(groupby_sum_scan_test, zero_valid_keys)
   result_wrapper expect_vals{};
   // clang-format on
 
-  auto agg = cudf::make_sum_aggregation();
+  auto agg = cudf::make_sum_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -108,7 +108,7 @@ TYPED_TEST(groupby_sum_scan_test, zero_valid_values)
   result_wrapper expect_vals({3, 4, 5}, all_nulls());
   // clang-format on
 
-  auto agg = cudf::make_sum_aggregation();
+  auto agg = cudf::make_sum_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -128,7 +128,7 @@ TYPED_TEST(groupby_sum_scan_test, null_keys_and_values)
                              { 0, 1, 1, 1, 1,  0,  1, 1,    1, 0});
   // clang-format on
 
-  auto agg = cudf::make_sum_aggregation();
+  auto agg = cudf::make_sum_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -157,7 +157,7 @@ TYPED_TEST(FixedPointTest_32_64_Reps, GroupBySortSumScanDecimalAsValue)
     auto const expect_vals_sum = out_fp_wrapper{{0, 3, 9, 1, 5, 10, 19, 2, 9, 17}, scale};
     // clang-format on
 
-    auto agg2 = cudf::make_sum_aggregation();
+    auto agg2 = cudf::make_sum_aggregation<groupby_scan_aggregation>();
     test_single_scan(keys, vals, expect_keys, expect_vals_sum, std::move(agg2));
   }
 }

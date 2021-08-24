@@ -53,8 +53,8 @@ TEST_F(BinaryOperationIntegrationTest, Add_Scalar_Vector_SI32_FP32_SI64)
   auto lhs = make_random_wrapped_scalar<TypeLhs>();
   auto rhs = make_random_wrapped_column<TypeRhs>(10000);
 
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -70,8 +70,8 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_SI32_FP32_FP32)
   auto lhs = make_random_wrapped_column<TypeLhs>(10000);
   auto rhs = make_random_wrapped_column<TypeRhs>(10000);
 
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -87,8 +87,8 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Scalar_Vector_SI32_FP32_FP32)
   auto lhs = make_random_wrapped_scalar<TypeLhs>();
   auto rhs = make_random_wrapped_column<TypeRhs>(10000);
 
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
 }
@@ -103,8 +103,8 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Scalar_SI08_SI16_SI32)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_scalar<TypeRhs>();
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -119,8 +119,8 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_SI32_FP64_SI08)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -135,8 +135,8 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Vector_SI64)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
 }
@@ -152,8 +152,8 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Scalar_SI64_FP64_SI32)
   auto lhs = make_random_wrapped_column<TypeLhs>(10000);
   auto rhs = make_random_wrapped_scalar<TypeRhs>();
 
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
 }
@@ -168,8 +168,8 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Vector_TimepointD_DurationS_Ti
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
 }
@@ -184,8 +184,8 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Scalar_TimepointD_TimepointS_D
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = cudf::scalar_type_t<TypeRhs>(typename TypeRhs::duration{34}, true);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
 }
@@ -200,8 +200,8 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Scalar_Vector_DurationS_DurationD_Dur
 
   auto lhs = cudf::scalar_type_t<TypeLhs>(TypeLhs{-9});
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
 }
@@ -216,8 +216,8 @@ TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_SI64)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MUL, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::MUL, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MUL());
 }
@@ -232,8 +232,8 @@ TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_SI64_FP32_FP32)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MUL, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::MUL, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MUL());
 }
@@ -249,8 +249,8 @@ TEST_F(BinaryOperationIntegrationTest, Mul_Scalar_Vector_SI32_DurationD_Duration
 
   auto lhs = cudf::scalar_type_t<TypeLhs>(2);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MUL, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::MUL, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MUL());
 }
@@ -266,8 +266,8 @@ TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_DurationS_SI32_Duration
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MUL, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::MUL, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MUL());
 }
@@ -282,8 +282,8 @@ TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_SI64)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::DIV, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, DIV());
 }
@@ -298,8 +298,8 @@ TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_SI64_FP32_FP32)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::DIV, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, DIV());
 }
@@ -315,8 +315,8 @@ TEST_F(BinaryOperationIntegrationTest, Div_Scalar_Vector_DurationD_SI32_Duration
   // Divide 2 days by an integer and convert the ticks to seconds
   auto lhs = cudf::scalar_type_t<TypeLhs>(TypeLhs{2});
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::DIV, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, DIV());
 }
@@ -331,8 +331,8 @@ TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_DurationD_DurationS_Dur
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::DIV, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, DIV());
 }
@@ -347,7 +347,7 @@ TEST_F(BinaryOperationIntegrationTest, TrueDiv_Vector_Vector_SI64)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::TRUE_DIV, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, TRUEDIV());
@@ -363,7 +363,7 @@ TEST_F(BinaryOperationIntegrationTest, FloorDiv_Vector_Vector_SI64)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::FLOOR_DIV, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, FLOORDIV());
@@ -379,7 +379,7 @@ TEST_F(BinaryOperationIntegrationTest, FloorDiv_Vector_Vector_SI64_FP32_FP32)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::FLOOR_DIV, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, FLOORDIV());
@@ -395,8 +395,8 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_SI64)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
 }
@@ -411,8 +411,8 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP32)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
 }
@@ -427,8 +427,8 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_SI64_FP32_FP32)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
 }
@@ -443,8 +443,8 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP64)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
 }
@@ -460,8 +460,8 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Scalar_DurationD_SI32_Duration
   // Half the number of days and convert the remainder ticks to microseconds
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = cudf::scalar_type_t<TypeRhs>(2);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
 }
@@ -476,8 +476,8 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Scalar_DurationS_DurationMS_Du
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
 }
@@ -492,8 +492,8 @@ TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_FP64_SI64_SI64)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::POW, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::POW, data_type(type_to_id<TypeOut>()));
 
   /**
    * According to CUDA Programming Guide, 'E.1. Standard Functions', 'Table 7 - Double-Precision
@@ -513,8 +513,8 @@ TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_FP32)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::POW, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::POW, data_type(type_to_id<TypeOut>()));
   /**
    * According to CUDA Programming Guide, 'E.1. Standard Functions', 'Table 7 - Double-Precision
    * Mathematical Standard Library Functions with Maximum ULP Error'
@@ -533,7 +533,7 @@ TEST_F(BinaryOperationIntegrationTest, And_Vector_Vector_SI16_SI64_SI32)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::BITWISE_AND, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, AND());
@@ -549,7 +549,7 @@ TEST_F(BinaryOperationIntegrationTest, Or_Vector_Vector_SI64_SI16_SI32)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::BITWISE_OR, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, OR());
@@ -565,7 +565,7 @@ TEST_F(BinaryOperationIntegrationTest, Xor_Vector_Vector_SI32_SI16_SI64)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::BITWISE_XOR, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, XOR());
@@ -581,7 +581,7 @@ TEST_F(BinaryOperationIntegrationTest, Logical_And_Vector_Vector_SI16_FP64_SI8)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::LOGICAL_AND, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, AND());
@@ -597,7 +597,7 @@ TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_SI64)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::LOGICAL_OR, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, OR());
@@ -613,8 +613,8 @@ TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_TSS_TSS)
 
   auto lhs = make_random_wrapped_scalar<TypeLhs>();
   auto rhs = make_random_wrapped_column<TypeRhs>(10);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::LESS, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::LESS, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
 }
@@ -629,7 +629,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Scalar_Vector_B8_TSMS_TSS)
 
   auto lhs = make_random_wrapped_scalar<TypeLhs>();
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::GREATER, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER());
@@ -645,8 +645,8 @@ TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_TSS_TSS)
 
   auto lhs = make_random_wrapped_column<TypeLhs>(10);
   auto rhs = make_random_wrapped_column<TypeRhs>(10);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::LESS, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::LESS, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
 }
@@ -667,7 +667,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_TSMS_TSS)
     itr, itr + 100, make_validity_iter());
 
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::GREATER, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER());
@@ -683,8 +683,8 @@ TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_STR_STR)
 
   auto lhs = cudf::string_scalar("eee");
   auto rhs = cudf::test::strings_column_wrapper({"ééé", "bbb", "aa", "", "<null>", "bb", "eee"});
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::LESS, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::LESS, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
 }
@@ -699,8 +699,8 @@ TEST_F(BinaryOperationIntegrationTest, Less_Vector_Scalar_B8_STR_STR)
 
   auto lhs = cudf::test::strings_column_wrapper({"ééé", "bbb", "aa", "", "<null>", "bb", "eee"});
   auto rhs = cudf::string_scalar("eee");
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::LESS, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::LESS, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
 }
@@ -715,8 +715,8 @@ TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_STR_STR)
 
   auto lhs = cudf::test::strings_column_wrapper({"eee", "bb", "<null>", "", "aa", "bbb", "ééé"});
   auto rhs = cudf::test::strings_column_wrapper({"ééé", "bbb", "aa", "", "<null>", "bb", "eee"});
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::LESS, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::LESS, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
 }
@@ -731,7 +731,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_STR_STR)
 
   auto lhs = cudf::test::strings_column_wrapper({"eee", "bb", "<null>", "", "aa", "bbb", "ééé"});
   auto rhs = cudf::test::strings_column_wrapper({"ééé", "bbb", "aa", "", "<null>", "bb", "eee"});
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::GREATER, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER());
@@ -747,7 +747,7 @@ TEST_F(BinaryOperationIntegrationTest, Equal_Vector_Vector_B8_STR_STR)
 
   auto lhs = cudf::test::strings_column_wrapper({"eee", "bb", "<null>", "", "aa", "bbb", "ééé"});
   auto rhs = cudf::test::strings_column_wrapper({"ééé", "bbb", "aa", "", "<null>", "bb", "eee"});
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::EQUAL, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, EQUAL());
@@ -763,7 +763,7 @@ TEST_F(BinaryOperationIntegrationTest, Equal_Vector_Scalar_B8_STR_STR)
 
   auto rhs = cudf::test::strings_column_wrapper({"eee", "bb", "<null>", "", "aa", "bbb", "ééé"});
   auto lhs = cudf::string_scalar("");
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::EQUAL, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, EQUAL());
@@ -779,7 +779,7 @@ TEST_F(BinaryOperationIntegrationTest, LessEqual_Vector_Vector_B8_STR_STR)
 
   auto lhs = cudf::test::strings_column_wrapper({"eee", "bb", "<null>", "", "aa", "bbb", "ééé"});
   auto rhs = cudf::test::strings_column_wrapper({"ééé", "bbb", "aa", "", "<null>", "bb", "eee"});
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::LESS_EQUAL, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS_EQUAL());
@@ -795,7 +795,7 @@ TEST_F(BinaryOperationIntegrationTest, GreaterEqual_Vector_Vector_B8_STR_STR)
 
   auto lhs = cudf::test::strings_column_wrapper({"eee", "bb", "<null>", "", "aa", "bbb", "ééé"});
   auto rhs = cudf::test::strings_column_wrapper({"ééé", "bbb", "aa", "", "<null>", "bb", "eee"});
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::GREATER_EQUAL, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER_EQUAL());
@@ -812,7 +812,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftLeft_Vector_Vector_SI32)
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   // this generates values in the range 1-10 which should be reasonable for the shift
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::SHIFT_LEFT, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_LEFT());
@@ -829,7 +829,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftLeft_Vector_Vector_SI32_SI16_SI64)
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   // this generates values in the range 1-10 which should be reasonable for the shift
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::SHIFT_LEFT, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_LEFT());
@@ -846,7 +846,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftLeft_Scalar_Vector_SI32)
   auto lhs = make_random_wrapped_scalar<TypeLhs>();
   // this generates values in the range 1-10 which should be reasonable for the shift
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::SHIFT_LEFT, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_LEFT());
@@ -863,7 +863,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftLeft_Vector_Scalar_SI32)
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   // this generates values in the range 1-10 which should be reasonable for the shift
   auto rhs = make_random_wrapped_scalar<TypeRhs>();
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::SHIFT_LEFT, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_LEFT());
@@ -880,7 +880,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRight_Vector_Vector_SI32)
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   // this generates values in the range 1-10 which should be reasonable for the shift
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::SHIFT_RIGHT, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT());
@@ -897,7 +897,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRight_Vector_Vector_SI32_SI16_SI64)
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   // this generates values in the range 1-10 which should be reasonable for the shift
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::SHIFT_RIGHT, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT());
@@ -914,7 +914,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRight_Scalar_Vector_SI32)
   auto lhs = make_random_wrapped_scalar<TypeLhs>();
   // this generates values in the range 1-10 which should be reasonable for the shift
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::SHIFT_RIGHT, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT());
@@ -931,7 +931,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRight_Vector_Scalar_SI32)
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   // this generates values in the range 1-10 which should be reasonable for the shift
   auto rhs = make_random_wrapped_scalar<TypeRhs>();
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::SHIFT_RIGHT, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT());
@@ -954,7 +954,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Vector_Vector_SI32)
   TypeOut expected[] = {2147483644, 39, 536870900, 0, 32768};
   cudf::test::fixed_width_column_wrapper<TypeOut> expected_w(expected, expected + num_els);
 
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs_w, shift_w, cudf::binary_operator::SHIFT_RIGHT_UNSIGNED, data_type(type_to_id<TypeOut>()));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*out, expected_w);
@@ -972,7 +972,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Vector_Vector_SI32_SI1
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   // this generates values in the range 1-10 which should be reasonable for the shift
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::SHIFT_RIGHT_UNSIGNED, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
@@ -990,7 +990,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Scalar_Vector_SI32)
   auto lhs = make_random_wrapped_scalar<TypeLhs>();
   // this generates values in the range 1-10 which should be reasonable for the shift
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::SHIFT_RIGHT_UNSIGNED, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
@@ -1008,7 +1008,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Vector_Scalar_SI32)
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   // this generates values in the range 1-10 which should be reasonable for the shift
   auto rhs = make_random_wrapped_scalar<TypeRhs>();
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::SHIFT_RIGHT_UNSIGNED, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
@@ -1027,7 +1027,7 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Vector_Scalar_SI32_SI32_float)
   fixed_width_column_wrapper<TypeLhs> lhs(elements, elements + 100);
   // Find log to the base 10
   auto rhs = numeric_scalar<TypeRhs>(10);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::LOG_BASE, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOG_BASE());
@@ -1046,7 +1046,7 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Scalar_Vector_float_SI32)
   fixed_width_column_wrapper<TypeRhs> rhs(elements, elements + 100);
   // Find log to the base 2
   auto lhs = numeric_scalar<TypeLhs>(2);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::LOG_BASE, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOG_BASE());
@@ -1068,7 +1068,7 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Vector_Vector_double_SI64_SI32)
   // Find log to the base 7
   auto rhs_elements = cudf::detail::make_counting_transform_iterator(0, [](auto) { return 7; });
   fixed_width_column_wrapper<TypeRhs> rhs(rhs_elements, rhs_elements + 50);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::LOG_BASE, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOG_BASE());
@@ -1084,7 +1084,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_SI32_SI32
     fixed_width_column_wrapper<TypeLhs>{{999, -37, 0, INT32_MAX}, {true, true, true, false}};
   auto int_scalar = cudf::scalar_type_t<TypeRhs>(999);
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     int_col, int_scalar, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1105,7 +1105,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_ScalarInvalid_B8_SI
   auto int_scalar = cudf::scalar_type_t<TypeRhs>(999);
   int_scalar.set_valid_async(false);
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     int_col, int_scalar, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1137,7 +1137,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_tsD_tsD)
     {false, true, true, true, false, true, true, false}};
   auto ts_scalar = cudf::scalar_type_t<TypeRhs>(typename TypeRhs::duration{44376}, true);
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     ts_scalar, ts_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1158,7 +1158,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
   // Empty string
   cudf::string_scalar str_scalar("");
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     str_col, str_scalar, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1178,7 +1178,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
   // Match a valid string
   cudf::string_scalar str_scalar("<null>");
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     str_scalar, str_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1199,7 +1199,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
   // Matching a string that isn't present
   cudf::string_scalar str_scalar("foo");
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     str_col, str_scalar, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1221,7 +1221,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
   cudf::string_scalar str_scalar("foo");
   str_scalar.set_valid_async(false);
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     str_scalar, str_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1243,7 +1243,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
   // Matching a scalar that is valid
   cudf::string_scalar str_scalar("foo");
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     str_scalar, str_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1266,7 +1266,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
   cudf::string_scalar str_scalar("foo");
   str_scalar.set_valid_async(false);
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     str_scalar, str_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1286,7 +1286,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
   // Matching an invalid string
   cudf::string_scalar str_scalar("bb");
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     str_scalar, str_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1307,7 +1307,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_InvalidScalar_B8_st
   cudf::string_scalar str_scalar("bb");
   str_scalar.set_valid_async(false);
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     str_col, str_scalar, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1340,7 +1340,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_tsD_tsD_N
     22270,  // 2030-12-22 00:00:00 GMT
   };
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1364,7 +1364,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     cudf::test::strings_column_wrapper({"foo", "valid", "<null>", "", "invalid", "inv", "ééé"},
                                        {true, true, true, true, false, false, true});
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1385,7 +1385,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
   auto rhs_col =
     cudf::test::strings_column_wrapper({"eee", "invalid", "<null>", "", "aa", "invalid", "ééé"});
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1407,7 +1407,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     cudf::test::strings_column_wrapper({"eee", "invalid", "<null>", "", "aa", "invalid", "ééé"},
                                        {false, false, false, false, false, false, false});
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1427,7 +1427,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
   auto rhs_col =
     cudf::test::strings_column_wrapper({"eee", "invalid", "<null>", "", "aa", "invalid", "ééé"});
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1448,7 +1448,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     cudf::test::strings_column_wrapper({"eee", "invalid", "<null>", "", "aa", "invalid", "ééé"},
                                        {false, false, false, false, false, false, false});
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1470,7 +1470,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     cudf::test::strings_column_wrapper({"eee", "invalid", "<null>", "", "aa", "invalid", "ééé"},
                                        {false, false, false, false, false, false, false});
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1491,7 +1491,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_VectorAllInvalid_B8
   auto rhs_col = fixed_width_column_wrapper<TypeLhs>{{-47, 37, 12, 99, 4, -INT32_MAX},
                                                      {false, false, false, false, false, false}};
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1514,7 +1514,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_SI64_SI32_SI8)
   };
   auto int_scalar = cudf::scalar_type_t<TypeRhs>(77);
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     int_col, int_scalar, cudf::binary_operator::NULL_MIN, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1535,7 +1535,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_FP64_SI32_SI64
                                         {false, true, false, true, false, true, false}};
   auto int_scalar = cudf::scalar_type_t<TypeRhs>(INT32_MAX);
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     int_scalar, int_col, cudf::binary_operator::NULL_MAX, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1559,7 +1559,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_SI64_SI32_FP32
   auto float_scalar = cudf::scalar_type_t<TypeRhs>(-3.14f);
   float_scalar.set_valid_async(false);
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     int_col, float_scalar, cudf::binary_operator::NULL_MIN, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1581,7 +1581,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_SI8_SI8_FP32)
   auto float_scalar = cudf::scalar_type_t<TypeRhs>(-3.14f);
   float_scalar.set_valid_async(false);
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     float_scalar, int_col, cudf::binary_operator::NULL_MAX, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1603,7 +1603,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_SI64_SI32_SI8)
   auto another_int_col = fixed_width_column_wrapper<TypeLhs>{
     {9, -37, 0, 32, -47, -4, 55}, {false, false, false, false, false, false, false}};
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     int_col, another_int_col, cudf::binary_operator::NULL_MIN, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1624,7 +1624,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI64_SI32_SI8)
   auto another_int_col = fixed_width_column_wrapper<TypeLhs>{
     {9, -37, 0, 32, -47, -4, 55}, {false, false, false, false, false, false, false}};
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     int_col, another_int_col, cudf::binary_operator::NULL_MAX, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1656,7 +1656,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_tsD_tsD_tsD)
     },
     {false, true, true, true, false}};
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     lhs_col, rhs_col, cudf::binary_operator::NULL_MIN, data_type(type_to_id<cudf::timestamp_D>()));
 
   // Every row has a value
@@ -1678,7 +1678,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI32_SI64_SI8)
   auto another_int_col = fixed_width_column_wrapper<TypeLhs>{
     {9, -37, 0, 32, -47, -4, 55}, {true, false, true, false, true, false, true}};
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     int_col, another_int_col, cudf::binary_operator::NULL_MAX, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
@@ -1698,7 +1698,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_string_string_
     {"eee", "goo", "<null>", "", "", "", "ééé", "bar", "foo", "def", "abc"},
     {false, true, true, true, false, true, true, false, false, true, true});
 
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     lhs_col, rhs_col, cudf::binary_operator::NULL_MAX, data_type{type_id::STRING});
 
   auto exp_col = cudf::test::strings_column_wrapper(
@@ -1717,7 +1717,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_string_string_
 
   // Returns a non-nullable column as all elements are valid - it will have the scalar
   // value at the very least
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     lhs_col, str_scalar, cudf::binary_operator::NULL_MIN, data_type{type_id::STRING});
 
   auto exp_col = cudf::test::strings_column_wrapper(
@@ -1735,7 +1735,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_string_string_
   str_scalar.set_valid_async(false);
 
   // Returns the lhs_col
-  auto op_col = cudf::binary_operation(
+  auto op_col = cudf::jit::binary_operation(
     str_scalar, lhs_col, cudf::binary_operator::NULL_MAX, data_type{type_id::STRING});
 
   auto exp_col = cudf::test::strings_column_wrapper(
@@ -1757,8 +1757,8 @@ TEST_F(BinaryOperationIntegrationTest, CastAdd_Vector_Vector_SI32_float_float)
   auto rhs      = cudf::test::fixed_width_column_wrapper<float>{1.3f, 1.6f};
   auto expected = cudf::test::fixed_width_column_wrapper<int>{2, 3};
 
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -1773,8 +1773,8 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_TimepointD_DurationS_Ti
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -1789,8 +1789,8 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Scalar_DurationD_TimepointS_Ti
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
   auto rhs = cudf::scalar_type_t<TypeRhs>(typename TypeRhs::duration{34}, true);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -1805,8 +1805,8 @@ TEST_F(BinaryOperationIntegrationTest, Add_Scalar_Vector_DurationS_DurationD_Dur
 
   auto lhs = cudf::scalar_type_t<TypeLhs>(TypeLhs{-9});
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -1823,7 +1823,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Scalar_Vector_SI64_SI6
   auto lhs = cudf::scalar_type_t<TypeLhs>(-12);
   // this generates values in the range 1-10 which should be reasonable for the shift
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::SHIFT_RIGHT_UNSIGNED, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
@@ -1838,8 +1838,8 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Scalar_Vector_FP32)
   auto lhs = cudf::scalar_type_t<TypeLhs>(-86099.68377);
   auto rhs = fixed_width_column_wrapper<TypeRhs>{{90770.74881, -15456.4335, 32213.22119}};
 
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::PMOD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::PMOD, data_type(type_to_id<TypeOut>()));
 
   auto expected_result =
     fixed_width_column_wrapper<TypeOut>{{4671.0625, -8817.51953125, 10539.974609375}};
@@ -1855,8 +1855,8 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Scalar_FP64)
   auto lhs = fixed_width_column_wrapper<TypeLhs>{{90770.74881, -15456.4335, 32213.22119}};
   auto rhs = cudf::scalar_type_t<TypeRhs>(-86099.68377);
 
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::PMOD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::PMOD, data_type(type_to_id<TypeOut>()));
 
   auto expected_result = fixed_width_column_wrapper<TypeOut>{
     {4671.0650400000013178, -15456.433499999999185, 32213.221190000000206}};
@@ -1880,8 +1880,8 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_FP32_FP64)
                                                   2.1336193413893147E307,
                                                   -2.1336193413893147E307}};
 
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::PMOD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::PMOD, data_type(type_to_id<TypeOut>()));
 
   auto expected_result = fixed_width_column_wrapper<TypeOut>{{24854.55859375,
                                                               2664.7075000000040745,
@@ -1905,8 +1905,8 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_SI32_SI64)
   auto lhs = make_random_wrapped_column<TypeLhs>(1000);
   auto rhs = make_random_wrapped_column<TypeRhs>(1000);
 
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::PMOD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::PMOD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
 }
@@ -1922,8 +1922,8 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_SI64_SI32_SI64)
   auto lhs = make_random_wrapped_column<TypeLhs>(1000);
   auto rhs = make_random_wrapped_column<TypeRhs>(1000);
 
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::PMOD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::PMOD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
 }
@@ -1939,8 +1939,8 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_SI64_FP64_FP64)
   auto lhs = make_random_wrapped_column<TypeLhs>(1000);
   auto rhs = make_random_wrapped_column<TypeRhs>(1000);
 
-  auto out =
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::PMOD, data_type(type_to_id<TypeOut>()));
+  auto out = cudf::jit::binary_operation(
+    lhs, rhs, cudf::binary_operator::PMOD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
 }
@@ -1956,7 +1956,7 @@ TEST_F(BinaryOperationIntegrationTest, ATan2_Scalar_Vector_FP32)
   auto lhs = make_random_wrapped_scalar<TypeLhs>();
   auto rhs = make_random_wrapped_column<TypeRhs>(10000);
 
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::ATAN2, data_type(type_to_id<TypeOut>()));
 
   // atan2 has a max ULP error of 2 per CUDA programming guide
@@ -1974,7 +1974,7 @@ TEST_F(BinaryOperationIntegrationTest, ATan2_Vector_Scalar_FP64)
   auto lhs = make_random_wrapped_column<TypeLhs>(10000);
   auto rhs = make_random_wrapped_scalar<TypeRhs>();
 
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::ATAN2, data_type(type_to_id<TypeOut>()));
 
   // atan2 has a max ULP error of 2 per CUDA programming guide
@@ -1992,7 +1992,7 @@ TEST_F(BinaryOperationIntegrationTest, ATan2_Vector_Vector_FP64_FP32_FP64)
   auto lhs = make_random_wrapped_column<TypeLhs>(10000);
   auto rhs = make_random_wrapped_column<TypeRhs>(10000);
 
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::ATAN2, data_type(type_to_id<TypeOut>()));
 
   // atan2 has a max ULP error of 2 per CUDA programming guide
@@ -2010,7 +2010,7 @@ TEST_F(BinaryOperationIntegrationTest, ATan2_Vector_Vector_FP64_SI32_SI64)
   auto lhs = make_random_wrapped_column<TypeLhs>(10000);
   auto rhs = make_random_wrapped_column<TypeRhs>(10000);
 
-  auto out = cudf::binary_operation(
+  auto out = cudf::jit::binary_operation(
     lhs, rhs, cudf::binary_operator::ATAN2, data_type(type_to_id<TypeOut>()));
 
   // atan2 has a max ULP error of 2 per CUDA programming guide
@@ -2053,7 +2053,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpAdd)
     cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::ADD,
                                                    static_cast<cudf::column_view>(lhs).type(),
                                                    static_cast<cudf::column_view>(rhs).type());
-  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, type);
+  auto const result = cudf::jit::binary_operation(lhs, rhs, cudf::binary_operator::ADD, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col, result->view());
 }
@@ -2086,7 +2086,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpMultiply)
     cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::MUL,
                                                    static_cast<cudf::column_view>(lhs).type(),
                                                    static_cast<cudf::column_view>(rhs).type());
-  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::MUL, type);
+  auto const result = cudf::jit::binary_operation(lhs, rhs, cudf::binary_operator::MUL, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col, result->view());
 }
@@ -2108,7 +2108,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpMultiply2)
     cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::MUL,
                                                    static_cast<cudf::column_view>(lhs).type(),
                                                    static_cast<cudf::column_view>(rhs).type());
-  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::MUL, type);
+  auto const result = cudf::jit::binary_operation(lhs, rhs, cudf::binary_operator::MUL, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2127,7 +2127,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpDiv)
     cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::DIV,
                                                    static_cast<cudf::column_view>(lhs).type(),
                                                    static_cast<cudf::column_view>(rhs).type());
-  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, type);
+  auto const result = cudf::jit::binary_operation(lhs, rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2146,7 +2146,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpDiv2)
     cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::DIV,
                                                    static_cast<cudf::column_view>(lhs).type(),
                                                    static_cast<cudf::column_view>(rhs).type());
-  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, type);
+  auto const result = cudf::jit::binary_operation(lhs, rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2163,7 +2163,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpDiv3)
 
   auto const type = cudf::binary_operation_fixed_point_output_type(
     cudf::binary_operator::DIV, static_cast<cudf::column_view>(lhs).type(), rhs->type());
-  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, type);
+  auto const result = cudf::jit::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2183,7 +2183,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpDiv4)
 
   auto const type = cudf::binary_operation_fixed_point_output_type(
     cudf::binary_operator::DIV, static_cast<cudf::column_view>(lhs).type(), rhs->type());
-  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, type);
+  auto const result = cudf::jit::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2202,7 +2202,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpAdd2)
     cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::ADD,
                                                    static_cast<cudf::column_view>(lhs).type(),
                                                    static_cast<cudf::column_view>(rhs).type());
-  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, type);
+  auto const result = cudf::jit::binary_operation(lhs, rhs, cudf::binary_operator::ADD, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2221,7 +2221,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpAdd3)
     cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::ADD,
                                                    static_cast<cudf::column_view>(lhs).type(),
                                                    static_cast<cudf::column_view>(rhs).type());
-  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, type);
+  auto const result = cudf::jit::binary_operation(lhs, rhs, cudf::binary_operator::ADD, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2238,7 +2238,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpAdd4)
 
   auto const type = cudf::binary_operation_fixed_point_output_type(
     cudf::binary_operator::ADD, static_cast<cudf::column_view>(lhs).type(), rhs->type());
-  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::ADD, type);
+  auto const result = cudf::jit::binary_operation(lhs, *rhs, cudf::binary_operator::ADD, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2255,7 +2255,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpAdd5)
 
   auto const type = cudf::binary_operation_fixed_point_output_type(
     cudf::binary_operator::ADD, lhs->type(), static_cast<cudf::column_view>(rhs).type());
-  auto const result = cudf::binary_operation(*lhs, rhs, cudf::binary_operator::ADD, type);
+  auto const result = cudf::jit::binary_operation(*lhs, rhs, cudf::binary_operator::ADD, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2272,8 +2272,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpAdd6)
   auto const expected2 = fp_wrapper<RepType>{{0, 0, 1, 1, 1, 1}, scale_type{1}};
   auto const type1     = cudf::data_type{cudf::type_to_id<decimalXX>(), 0};
   auto const type2     = cudf::data_type{cudf::type_to_id<decimalXX>(), 1};
-  auto const result1   = cudf::binary_operation(col, col, cudf::binary_operator::ADD, type1);
-  auto const result2   = cudf::binary_operation(col, col, cudf::binary_operator::ADD, type2);
+  auto const result1   = cudf::jit::binary_operation(col, col, cudf::binary_operator::ADD, type1);
+  auto const result2   = cudf::jit::binary_operation(col, col, cudf::binary_operator::ADD, type2);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
@@ -2305,7 +2305,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpMultiplyScalar)
 
   auto const type = cudf::binary_operation_fixed_point_output_type(
     cudf::binary_operator::MUL, static_cast<cudf::column_view>(lhs).type(), rhs->type());
-  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::MUL, type);
+  auto const result = cudf::jit::binary_operation(lhs, *rhs, cudf::binary_operator::MUL, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2324,7 +2324,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpSimplePlus)
     cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::ADD,
                                                    static_cast<cudf::column_view>(lhs).type(),
                                                    static_cast<cudf::column_view>(rhs).type());
-  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, type);
+  auto const result = cudf::jit::binary_operation(lhs, rhs, cudf::binary_operator::ADD, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2340,8 +2340,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpEqualSimple)
   auto const col2     = fp_wrapper<RepType>{{100, 200, 300, 400}, scale_type{-2}};
   auto const expected = wrapper<bool>(trues.begin(), trues.end());
 
-  auto const result =
-    cudf::binary_operation(col1, col2, binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
+  auto const result = cudf::jit::binary_operation(
+    col1, col2, binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2357,7 +2357,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpEqualSimpleScale0)
   auto const expected = wrapper<bool>(trues.begin(), trues.end());
 
   auto const result =
-    cudf::binary_operation(col, col, binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
+    cudf::jit::binary_operation(col, col, binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2372,8 +2372,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpEqualSimpleScale0Null)
   auto const col2     = fp_wrapper<RepType>{{1, 2, 3, 4}, {0, 0, 0, 0}, scale_type{0}};
   auto const expected = wrapper<bool>{{0, 1, 0, 1}, {0, 0, 0, 0}};
 
-  auto const result =
-    cudf::binary_operation(col1, col2, binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
+  auto const result = cudf::jit::binary_operation(
+    col1, col2, binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2388,8 +2388,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpEqualSimpleScale2Null)
   auto const col2     = fp_wrapper<RepType>{{1, 2, 3, 4}, {0, 0, 0, 0}, scale_type{0}};
   auto const expected = wrapper<bool>{{0, 1, 0, 1}, {0, 0, 0, 0}};
 
-  auto const result =
-    cudf::binary_operation(col1, col2, binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
+  auto const result = cudf::jit::binary_operation(
+    col1, col2, binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2415,7 +2415,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpEqualLessGreater)
     cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::ADD,
                                                    static_cast<cudf::column_view>(iota_3).type(),
                                                    static_cast<cudf::column_view>(zeros_3).type());
-  auto const iota_3_after_add = cudf::binary_operation(zeros_3, iota_3, binary_operator::ADD, type);
+  auto const iota_3_after_add =
+    cudf::jit::binary_operation(zeros_3, iota_3, binary_operator::ADD, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(iota_3, iota_3_after_add->view());
 
@@ -2426,15 +2427,15 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpEqualLessGreater)
 
   auto const btype = cudf::data_type{type_id::BOOL8};
   auto const equal_result =
-    cudf::binary_operation(iota_3, iota_3_after_add->view(), binary_operator::EQUAL, btype);
+    cudf::jit::binary_operation(iota_3, iota_3_after_add->view(), binary_operator::EQUAL, btype);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, equal_result->view());
 
   auto const less_result =
-    cudf::binary_operation(zeros_3, iota_3_after_add->view(), binary_operator::LESS, btype);
+    cudf::jit::binary_operation(zeros_3, iota_3_after_add->view(), binary_operator::LESS, btype);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, less_result->view());
 
   auto const greater_result =
-    cudf::binary_operation(iota_3_after_add->view(), zeros_3, binary_operator::GREATER, btype);
+    cudf::jit::binary_operation(iota_3_after_add->view(), zeros_3, binary_operator::GREATER, btype);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, greater_result->view());
 }
 
@@ -2453,7 +2454,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpNullMaxSimple)
     cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::NULL_MAX,
                                                    static_cast<cudf::column_view>(col1).type(),
                                                    static_cast<cudf::column_view>(col2).type());
-  auto const result = cudf::binary_operation(col1, col2, binary_operator::NULL_MAX, type);
+  auto const result = cudf::jit::binary_operation(col1, col2, binary_operator::NULL_MAX, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2473,7 +2474,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpNullMinSimple)
     cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::NULL_MIN,
                                                    static_cast<cudf::column_view>(col1).type(),
                                                    static_cast<cudf::column_view>(col2).type());
-  auto const result = cudf::binary_operation(col1, col2, binary_operator::NULL_MIN, type);
+  auto const result = cudf::jit::binary_operation(col1, col2, binary_operator::NULL_MIN, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2489,7 +2490,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpNullEqualsSimple)
   auto const col2     = fp_wrapper<RepType>{{40, 200, 20, 400}, {1, 0, 1, 0}, scale_type{-1}};
   auto const expected = wrapper<bool>{{1, 0, 0, 1}, {1, 1, 1, 1}};
 
-  auto const result = cudf::binary_operation(
+  auto const result = cudf::jit::binary_operation(
     col1, col2, binary_operator::NULL_EQUALS, cudf::data_type{type_id::BOOL8});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -2506,7 +2507,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOp_Div)
   auto const expected = fp_wrapper<RepType>{{25, 75, 125, 175}, scale_type{-2}};
 
   auto const type   = data_type{type_to_id<decimalXX>(), -2};
-  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, type);
+  auto const result = cudf::jit::binary_operation(lhs, rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2522,7 +2523,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOp_Div2)
   auto const expected = fp_wrapper<RepType>{{5000, 15000, 25000, 35000}, scale_type{-2}};
 
   auto const type   = data_type{type_to_id<decimalXX>(), -2};
-  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, type);
+  auto const result = cudf::jit::binary_operation(lhs, rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2538,7 +2539,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOp_Div3)
   auto const expected = fp_wrapper<RepType>{{3333, 3333, 16666, 23333}, scale_type{-2}};
 
   auto const type   = data_type{type_to_id<decimalXX>(), -2};
-  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, type);
+  auto const result = cudf::jit::binary_operation(lhs, rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2554,7 +2555,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOp_Div4)
   auto const expected = fp_wrapper<RepType>{{3, 10, 16, 23}, scale_type{1}};
 
   auto const type   = data_type{type_to_id<decimalXX>(), 1};
-  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, type);
+  auto const result = cudf::jit::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2571,7 +2572,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOp_Div6)
   auto const expected = fp_wrapper<RepType>{{300, 100, 60, 42}, scale_type{-2}};
 
   auto const type   = data_type{type_to_id<decimalXX>(), -2};
-  auto const result = cudf::binary_operation(*lhs, rhs, cudf::binary_operator::DIV, type);
+  auto const result = cudf::jit::binary_operation(*lhs, rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2588,7 +2589,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOp_Div7)
   auto const expected = fp_wrapper<RepType>{{12, 6, 4, 2, 2, 1, 1, 0}, scale_type{2}};
 
   auto const type   = data_type{type_to_id<decimalXX>(), 2};
-  auto const result = cudf::binary_operation(*lhs, rhs, cudf::binary_operator::DIV, type);
+  auto const result = cudf::jit::binary_operation(*lhs, rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2604,7 +2605,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOp_Div8)
   auto const expected = fp_wrapper<RepType>{{0, 1, 16}, scale_type{2}};
 
   auto const type   = data_type{type_to_id<decimalXX>(), 2};
-  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, type);
+  auto const result = cudf::jit::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2620,7 +2621,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOp_Div9)
   auto const expected = fp_wrapper<RepType>{{1, 2, 4}, scale_type{1}};
 
   auto const type   = data_type{type_to_id<decimalXX>(), 1};
-  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, type);
+  auto const result = cudf::jit::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2636,7 +2637,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOp_Div10)
   auto const expected = fp_wrapper<RepType>{{14, 28, 42}, scale_type{1}};
 
   auto const type   = data_type{type_to_id<decimalXX>(), 1};
-  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, type);
+  auto const result = cudf::jit::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2652,7 +2653,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOp_Div11)
   auto const expected = fp_wrapper<RepType>{{142, 285, 428}, scale_type{1}};
 
   auto const type   = data_type{type_to_id<decimalXX>(), 1};
-  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, type);
+  auto const result = cudf::jit::binary_operation(lhs, rhs, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2666,9 +2667,9 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpThrows)
   auto const col           = fp_wrapper<RepType>{{100, 300, 500, 700}, scale_type{-2}};
   auto const non_bool_type = data_type{type_to_id<decimalXX>(), -2};
   auto const float_type    = data_type{type_id::FLOAT32};
-  EXPECT_THROW(cudf::binary_operation(col, col, cudf::binary_operator::LESS, non_bool_type),
+  EXPECT_THROW(cudf::jit::binary_operation(col, col, cudf::binary_operator::LESS, non_bool_type),
                cudf::logic_error);
-  EXPECT_THROW(cudf::binary_operation(col, col, cudf::binary_operator::MUL, float_type),
+  EXPECT_THROW(cudf::jit::binary_operation(col, col, cudf::binary_operator::MUL, float_type),
                cudf::logic_error);
 }
 

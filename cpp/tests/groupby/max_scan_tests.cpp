@@ -55,7 +55,7 @@ TYPED_TEST(groupby_max_scan_test, basic)
   result_wrapper expect_vals({5, 8, 8, 6, 9, 9, 9, 7, 7, 7});
   // clang-format on
 
-  auto agg = cudf::make_max_aggregation();
+  auto agg = cudf::make_max_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -70,7 +70,7 @@ TYPED_TEST(groupby_max_scan_test, empty_cols)
   key_wrapper expect_keys{};
   result_wrapper expect_vals{};
 
-  auto agg = cudf::make_max_aggregation();
+  auto agg = cudf::make_max_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -87,7 +87,7 @@ TYPED_TEST(groupby_max_scan_test, zero_valid_keys)
   result_wrapper expect_vals{};
   // clang-format on
 
-  auto agg = cudf::make_max_aggregation();
+  auto agg = cudf::make_max_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -104,7 +104,7 @@ TYPED_TEST(groupby_max_scan_test, zero_valid_values)
   result_wrapper expect_vals({-1, -1, -1}, all_nulls());
   // clang-format on
 
-  auto agg = cudf::make_max_aggregation();
+  auto agg = cudf::make_max_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -124,7 +124,7 @@ TYPED_TEST(groupby_max_scan_test, null_keys_and_values)
                              { 0, 1, 1, 1, 1,  0, 1, 1,    1, 0});
   // clang-format on
 
-  auto agg = cudf::make_max_aggregation();
+  auto agg = cudf::make_max_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -152,7 +152,7 @@ TYPED_TEST(FixedPointTestAllReps, GroupBySortMaxScanDecimalAsValue)
     auto const expect_vals_max = fp_wrapper{{5, 8, 8, 6, 9, 9, 9, 7, 7, 7}, scale};
     // clang-format on
 
-    auto agg = cudf::make_max_aggregation();
+    auto agg = cudf::make_max_aggregation<groupby_scan_aggregation>();
     test_single_scan(keys, vals, expect_keys, expect_vals_max, std::move(agg));
   }
 }

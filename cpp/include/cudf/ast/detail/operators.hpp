@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/ast/operators.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -784,14 +784,6 @@ struct single_dispatch_binary_operator_types {
 #else
     cudf_assert(false && "Invalid binary operation.");
 #endif
-  }
-};
-
-struct single_dispatch_binary_operator {
-  template <typename LHS, typename F, typename... Ts>
-  CUDA_DEVICE_CALLABLE auto operator()(F&& f, Ts&&... args)
-  {
-    f.template operator()<LHS, LHS>(std::forward<Ts>(args)...);
   }
 };
 
