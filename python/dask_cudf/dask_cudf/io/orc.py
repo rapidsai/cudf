@@ -9,8 +9,8 @@ from fsspec.utils import stringify_path
 from pyarrow import orc as orc
 
 from dask import dataframe as dd
-from dask.base import tokenize
-from dask.dataframe.core import new_dd_object
+from dask.base import compute_as_if_collection, tokenize
+from dask.dataframe.core import DataFrame, Scalar, new_dd_object
 from dask.dataframe.io.orc.core import ORCFunctionWrapper
 from dask.dataframe.io.parquet.core import apply_filters
 from dask.dataframe.io.parquet.utils import _flatten_filters
@@ -25,7 +25,7 @@ from cudf.core.column import as_column, build_categorical_column
 
 #
 #  CudfORCEngine
-#  (Used by the Experimental read_orc Implementation)
+#  (Used by the EXPERIMENTAL read_orc Implementation)
 #
 
 
@@ -842,7 +842,7 @@ def read_orc(
 
 
 #
-#  EXPERIMENTAL read_orc Helper Utilities
+#  EXPERIMENTAL read_orc Utilities
 #
 
 
@@ -932,17 +932,6 @@ def collect_partitions(file_list, root, fs, partition_sep="=", dtypes=None):
 #
 #  LEGACY read_orc Implementation
 #
-
-
-def _read_orc_stripe(fs, path, stripe, columns, kwargs=None):
-    """Pull out specific columns from specific stripe"""
-    if kwargs is None:
-        kwargs = {}
-    with fs.open(path, "rb") as f:
-        df_stripe = cudf.read_orc(
-            f, stripes=[stripe], columns=columns, **kwargs
-        )
-    return df_stripe
 
 
 def read_orc_legacy(
@@ -1038,13 +1027,15 @@ def read_orc_legacy(
     return dd.core.new_dd_object(dsk, name, meta, divisions)
 
 
-def write_orc_partition(df, path, fs, filename, compression=None):
-    full_path = fs.sep.join([path, filename])
-    with fs.open(full_path, mode="wb") as out_file:
-        if not isinstance(out_file, IOBase):
-            out_file = BufferedWriter(out_file)
-        cudf.io.to_orc(df, out_file, compression=compression)
-    return full_path
+def _read_orc_stripe(fs, path, stripe, columns, kwargs=None):
+    """Pull out specific columns from specific stripe"""
+    if kwargs is None:
+        kwargs = {}
+    with fs.open(path, "rb") as f:
+        df_stripe = cudf.read_orc(
+            f, stripes=[stripe], columns=columns, **kwargs
+        )
+    return df_stripe
 
 
 #
@@ -1056,12 +1047,16 @@ def to_orc(
     df,
     path,
     write_index=True,
+    append=False,
+    partition_on=None,
     storage_options=None,
-    compression=None,
     compute=True,
+    compute_kwargs=None,
     **kwargs,
 ):
-    """Write a dask_cudf dataframe to ORC file(s) (one file per partition).
+    """Write a dask_cudf dataframe to ORC file(s). There will be one output
+    file per partition, unless `partition_on` is specified (in which case
+    each partition may be split into multiple files).
 
     Parameters
     ----------
@@ -1071,15 +1066,23 @@ def to_orc(
         or ``hdfs://`` for remote data.
     write_index : boolean, optional
         Whether or not to write the index. Defaults to True.
+    append : boolean, default False
+        If False (default), construct data-set from scratch. If True, add new
+        file(s) to an existing data-set (if one exists).
+    partition_on : list, default None
+        Construct directory-based partitioning by splitting on these fields'
+        values. Each dask partition will result in one or more datafiles,
+        there will be no global groupby.
     storage_options: None or dict
         Further parameters to pass to the bytes backend.
-    compression : string or dict, optional
     compute : bool, optional
         If True (default) then the result is computed immediately. If False
         then a ``dask.delayed`` object is returned for future computation.
+    compute_kwargs : dict, default True
+        Options to be passed in to the compute method
+    **kwargs :
+        Key-word arguments to be passed on to ``cudf.to_orc``.
     """
-
-    from dask import compute as dask_compute, delayed
 
     # TODO: Use upstream dask implementation once available
     #       (see: Dask Issue#5596)
@@ -1092,25 +1095,69 @@ def to_orc(
     # Trim any protocol information from the path before forwarding
     path = fs._strip_protocol(path)
 
-    if write_index:
-        df = df.reset_index()
-    else:
-        # Not writing index - might as well drop it
-        df = df.reset_index(drop=True)
+    # Reset index if we are writing it, otherwise
+    # we might as well drop it
+    df = df.reset_index(drop=not write_index)
 
+    # Use i_offset and df.npartitions to define file-name list.
+    # For `append=True`, we use the total number of existing files
+    # to define `i_offset`
     fs.mkdirs(path, exist_ok=True)
+    i_offset = len(collect_files(path, fs)) if append else 0
+    filenames = [f"part.{i+i_offset}.orc" for i in range(df.npartitions)]
 
-    # Use i_offset and df.npartitions to define file-name list
-    filenames = ["part.%i.orc" % i for i in range(df.npartitions)]
+    # Construct IO graph
+    dsk = {}
+    name = "to-orc-" + tokenize(
+        df,
+        fs,
+        path,
+        write_index,
+        partition_on,
+        i_offset,
+        storage_options,
+        kwargs,
+    )
+    final_name = name + "-final"
+    common_kwargs = kwargs.copy()
+    common_kwargs["partition_on"] = partition_on
+    for d, filename in enumerate(filenames):
+        dsk[(name, d)] = (
+            apply,
+            write_orc_partition,
+            [(df._name, d), path, fs, filename, common_kwargs],
+        )
+    part_tasks = list(dsk.keys())
+    dsk[(final_name, 0)] = (lambda x: None, part_tasks)
+    graph = HighLevelGraph.from_collections(
+        (final_name, 0), dsk, dependencies=[df]
+    )
 
-    # write parts
-    dwrite = delayed(write_orc_partition)
-    parts = [
-        dwrite(d, path, fs, filename, compression=compression)
-        for d, filename in zip(df.to_delayed(), filenames)
-    ]
-
+    # Compute or return future
     if compute:
-        return dask_compute(*parts)
+        if compute_kwargs is None:
+            compute_kwargs = dict()
+        return compute_as_if_collection(
+            DataFrame, graph, part_tasks, **compute_kwargs
+        )
+    return Scalar(graph, final_name, "")
 
-    return delayed(list)(parts)
+
+def write_orc_partition(df, path, fs, filename, kwargs):
+    partition_on = kwargs.pop("partition_on", None)
+    if partition_on:
+        cudf.io.to_orc(
+            df,
+            path,
+            fs=fs,
+            partition_on=partition_on,
+            partition_filename=filename,
+            **kwargs,
+        )
+    else:
+        full_path = fs.sep.join([path, filename])
+        with fs.open(full_path, mode="wb") as out_file:
+            if not isinstance(out_file, IOBase):
+                out_file = BufferedWriter(out_file)
+            cudf.io.to_orc(df, out_file, **kwargs)
+        return full_path

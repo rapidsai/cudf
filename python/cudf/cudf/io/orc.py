@@ -9,6 +9,7 @@ from pyarrow import orc as orc
 
 import cudf
 from cudf._lib import orc as liborc
+from cudf.io.utils import write_to_dataset
 from cudf.utils import ioutils
 from cudf.utils.dtypes import is_list_like
 from cudf.utils.metadata import (  # type: ignore
@@ -333,8 +334,27 @@ def read_orc(
 
 
 @ioutils.doc_to_orc()
-def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
+def to_orc(
+    df,
+    fname,
+    compression=None,
+    enable_statistics=True,
+    partition_cols=None,
+    **kwargs,
+):
     """{docstring}"""
+
+    if partition_cols:
+        partition_file_name = kwargs.pop("partition_file_name", None)
+        write_to_dataset(
+            df,
+            filename=partition_file_name,
+            partition_cols=partition_cols,
+            root_path=fname,
+            file_format="orc",
+            **kwargs,
+        )
+        return
 
     for col in df._data.columns:
         if isinstance(col, cudf.core.column.StructColumn):
