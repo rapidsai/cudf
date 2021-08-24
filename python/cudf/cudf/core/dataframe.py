@@ -549,7 +549,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         columns = column.deserialize_columns(header["columns"], column_frames)
 
         return cls._from_data(
-            {name: col for name, col in zip(column_names, columns)},
+            dict(zip(column_names, columns)),
             index=index,
         )
 
