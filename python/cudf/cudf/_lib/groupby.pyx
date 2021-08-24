@@ -188,7 +188,8 @@ cdef class GroupBy:
                     Column.from_unique_ptr(move(c_result.second[i].results[j]))
                 )
 
-        return result_data, cudf.Index._from_data(grouped_keys)
+        return result_data, cudf.core.index._index_from_data(
+            grouped_keys)
 
     def scan_internal(self, Table values, aggregations):
         from cudf.core.column_accessor import ColumnAccessor
