@@ -114,8 +114,14 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op
     case ast_operator::LOGICAL_AND:
       f.template operator()<ast_operator::LOGICAL_AND>(std::forward<Ts>(args)...);
       break;
+    case ast_operator::NULL_LOGICAL_AND:
+      f.template operator()<ast_operator::NULL_LOGICAL_AND>(std::forward<Ts>(args)...);
+      break;
     case ast_operator::LOGICAL_OR:
       f.template operator()<ast_operator::LOGICAL_OR>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::NULL_LOGICAL_OR:
+      f.template operator()<ast_operator::NULL_LOGICAL_OR>(std::forward<Ts>(args)...);
       break;
     case ast_operator::IDENTITY:
       f.template operator()<ast_operator::IDENTITY>(std::forward<Ts>(args)...);
@@ -491,6 +497,12 @@ struct operator_functor<ast_operator::LOGICAL_AND, false> {
   }
 };
 
+// Alias NULL_LOGICAL_AND = LOGICAL_AND in the non-nullable case.
+template <>
+struct operator_functor<ast_operator::NULL_LOGICAL_AND, false>
+  : public operator_functor<ast_operator::LOGICAL_AND, false> {
+};
+
 template <>
 struct operator_functor<ast_operator::LOGICAL_OR, false> {
   static constexpr auto arity{2};
@@ -500,6 +512,12 @@ struct operator_functor<ast_operator::LOGICAL_OR, false> {
   {
     return lhs || rhs;
   }
+};
+
+// Alias NULL_LOGICAL_OR = LOGICAL_OR in the non-nullable case.
+template <>
+struct operator_functor<ast_operator::NULL_LOGICAL_OR, false>
+  : public operator_functor<ast_operator::LOGICAL_OR, false> {
 };
 
 template <>
@@ -793,7 +811,8 @@ struct operator_functor<op, true> {
   }
 };
 
-// NULL_EQUAL must compare two nulls as equal.
+// NULL_EQUAL(null, null) is true, NULL_EQUAL(null, valid) is false, and NULL_EQUAL(valid, valid) ==
+// EQUAL(valid, valid)
 template <>
 struct operator_functor<ast_operator::NULL_EQUAL, true> {
   using NonNullOperator       = operator_functor<ast_operator::NULL_EQUAL, false>;
@@ -809,6 +828,53 @@ struct operator_functor<ast_operator::NULL_EQUAL, true> {
     if (lhs.has_value() && rhs.has_value()) { return {NonNullOperator{}(*lhs, *rhs)}; }
     // Case 3: One value is null, while the other is not, so we return false.
     return {false};
+  }
+};
+
+///< NULL_LOGICAL_AND(null, null) is null, NULL_LOGICAL_AND(null, true) is null,
+///< NULL_LOGICAL_AND(null, false) is false, and NULL_LOGICAL_AND(valid, valid) ==
+///< LOGICAL_AND(valid, valid)
+template <>
+struct operator_functor<ast_operator::NULL_LOGICAL_AND, true> {
+  using NonNullOperator       = operator_functor<ast_operator::NULL_LOGICAL_AND, false>;
+  static constexpr auto arity = NonNullOperator::arity;
+
+  template <typename LHS, typename RHS>
+  CUDA_DEVICE_CALLABLE auto operator()(LHS const lhs, RHS const rhs)
+    -> possibly_null_value_t<decltype(NonNullOperator{}(*lhs, *rhs)), true>
+  {
+    // Case 1: Two nulls return null.
+    if (!lhs.has_value() && !rhs.has_value()) { return {}; }
+    // Case 2: Neither is null, so the output is given by the operation.
+    if (lhs.has_value() && rhs.has_value()) { return {NonNullOperator{}(*lhs, *rhs)}; }
+    // Case 3: One value is null, while the other is not. If it's true we return null, otherwise we
+    // return false.
+    auto const& valid_element = lhs.has_value() ? lhs : rhs;
+    if (*valid_element) { return {}; }
+    return {false};
+  }
+};
+
+///< NULL_LOGICAL_OR(null, null) is null, NULL_LOGICAL_OR(null, true) is true, NULL_LOGICAL_OR(null,
+///< false) is null, and NULL_LOGICAL_OR(valid, valid) == LOGICAL_OR(valid, valid)
+template <>
+struct operator_functor<ast_operator::NULL_LOGICAL_OR, true> {
+  using NonNullOperator       = operator_functor<ast_operator::NULL_LOGICAL_OR, false>;
+  static constexpr auto arity = NonNullOperator::arity;
+
+  template <typename LHS, typename RHS>
+  CUDA_DEVICE_CALLABLE auto operator()(LHS const lhs, RHS const rhs)
+    -> possibly_null_value_t<decltype(NonNullOperator{}(*lhs, *rhs)), true>
+  {
+    // Case 1: Two nulls return null.
+    if (!lhs.has_value() && !rhs.has_value()) { return {}; }
+    // Case 2: Neither is null, so the output is given by the operation.
+    if (lhs.has_value() && rhs.has_value()) { return {NonNullOperator{}(*lhs, *rhs)}; }
+    // Case 3: One value is null, while the other is not. If it's true we return true, otherwise we
+    // return null.
+    auto const& valid_element = lhs.has_value() ? lhs : rhs;
+    if (*valid_element) { return {true}; }
+    return {};
   }
 };
 

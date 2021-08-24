@@ -46,28 +46,35 @@ struct expression {
  */
 enum class ast_operator {
   // Binary operators
-  ADD,            ///< operator +
-  SUB,            ///< operator -
-  MUL,            ///< operator *
-  DIV,            ///< operator / using common type of lhs and rhs
-  TRUE_DIV,       ///< operator / after promoting type to floating point
-  FLOOR_DIV,      ///< operator / after promoting to 64 bit floating point and then
-                  ///< flooring the result
-  MOD,            ///< operator %
-  PYMOD,          ///< operator % but following python's sign rules for negatives
-  POW,            ///< lhs ^ rhs
-  EQUAL,          ///< operator ==
-  NULL_EQUAL,     ///< operator ==, but nulls compare equal
-  NOT_EQUAL,      ///< operator !=
-  LESS,           ///< operator <
-  GREATER,        ///< operator >
-  LESS_EQUAL,     ///< operator <=
-  GREATER_EQUAL,  ///< operator >=
-  BITWISE_AND,    ///< operator &
-  BITWISE_OR,     ///< operator |
-  BITWISE_XOR,    ///< operator ^
-  LOGICAL_AND,    ///< operator &&
-  LOGICAL_OR,     ///< operator ||
+  ADD,               ///< operator +
+  SUB,               ///< operator -
+  MUL,               ///< operator *
+  DIV,               ///< operator / using common type of lhs and rhs
+  TRUE_DIV,          ///< operator / after promoting type to floating point
+  FLOOR_DIV,         ///< operator / after promoting to 64 bit floating point and then
+                     ///< flooring the result
+  MOD,               ///< operator %
+  PYMOD,             ///< operator % but following python's sign rules for negatives
+  POW,               ///< lhs ^ rhs
+  EQUAL,             ///< operator ==
+  NULL_EQUAL,        ///< NULL_EQUAL(null, null) is true, NULL_EQUAL(null, valid) is false, and
+                     ///< NULL_EQUAL(valid, valid) == EQUAL(valid, valid)
+  NOT_EQUAL,         ///< operator !=
+  LESS,              ///< operator <
+  GREATER,           ///< operator >
+  LESS_EQUAL,        ///< operator <=
+  GREATER_EQUAL,     ///< operator >=
+  BITWISE_AND,       ///< operator &
+  BITWISE_OR,        ///< operator |
+  BITWISE_XOR,       ///< operator ^
+  LOGICAL_AND,       ///< operator &&
+  NULL_LOGICAL_AND,  ///< NULL_LOGICAL_AND(null, null) is null, NULL_LOGICAL_AND(null, true) is
+                     ///< null, NULL_LOGICAL_AND(null, false) is false, and NULL_LOGICAL_AND(valid,
+                     ///< valid) == LOGICAL_AND(valid, valid)
+  LOGICAL_OR,        ///< operator ||
+  NULL_LOGICAL_OR,   ///< NULL_LOGICAL_OR(null, null) is null, NULL_LOGICAL_OR(null, true) is true,
+                     ///< NULL_LOGICAL_OR(null, false) is null, and NULL_LOGICAL_OR(valid, valid) ==
+                     ///< LOGICAL_OR(valid, valid)
   // Unary operators
   IDENTITY,    ///< Identity function
   SIN,         ///< Trigonometric sine
