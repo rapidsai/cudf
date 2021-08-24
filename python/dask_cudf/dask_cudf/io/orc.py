@@ -30,6 +30,13 @@ from cudf.core.column import as_column, build_categorical_column
 
 
 class CudfORCEngine:
+
+    # NOTE: All logic in this `CudfORCEngine` implementation
+    # is experimental, and likely to change after ORC support
+    # is added to `pyarrow.dataset`.  Once that happens, hive
+    # partitioning and filtering features will be added to
+    # upstream Dask, and this code will be replaced.
+
     @classmethod
     def get_dataset_info(
         cls,
@@ -789,6 +796,12 @@ def read_orc(
     -------
     dask_cudf.DataFrame (even if there is only one column)
     """
+
+    # NOTE: This read_orc implementation is experimental, and
+    # likely to change after ORC support is added to
+    # `pyarrow.dataset`.  Once that happens, hive partitioning
+    # and filtering features will be added to upstream Dask,
+    # and this code will be replaced.
 
     # Check if we are using the legacy engine
     if legacy:
