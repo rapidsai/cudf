@@ -57,31 +57,6 @@ using namespace cudf::io::csv;
 using namespace cudf::io;
 
 /**
- * @brief Estimates the maximum expected length or a row, based on the number
- * of columns
- *
- * If the number of columns is not available, it will return a value large
- * enough for most use cases
- *
- * @param[in] num_columns Number of columns in the CSV file (optional)
- *
- * @return Estimated maximum size of a row, in bytes
- */
-constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
-{
-  constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
-  constexpr size_t column_bytes  = 64;
-  constexpr size_t base_padding  = 1024;  // 1KB
-  if (num_columns == 0) {
-    // Use flat size if the number of columns is not known
-    return max_row_bytes;
-  } else {
-    // Expand the size based on the number of columns, if available
-    return base_padding + num_columns * column_bytes;
-  }
-}
-
-/**
  * @brief Translates a dtype string and returns its dtype enumeration and any
  * extended dtype flags that are supported by cuIO. Often, this is a column
  * with the same underlying dtype the basic types, but with different parsing
@@ -198,35 +173,22 @@ void erase_except_last(C& container, rmm::cuda_stream_view stream)
 std::pair<rmm::device_uvector<char>, reader::impl::selected_rows_offsets>
 reader::impl::select_data_and_row_offsets(rmm::cuda_stream_view stream)
 {
-  auto range_offset  = opts_.get_byte_range_offset();
-  auto range_size    = opts_.get_byte_range_size();
-  auto skip_rows     = opts_.get_skiprows();
-  auto skip_end_rows = opts_.get_skipfooter();
-  auto num_rows      = opts_.get_nrows();
+  auto range_offset      = opts_.get_byte_range_offset();
+  auto range_size        = opts_.get_byte_range_size();
+  auto range_size_padded = opts_.get_byte_range_size_with_padding();
+  auto skip_rows         = opts_.get_skiprows();
+  auto skip_end_rows     = opts_.get_skipfooter();
+  auto num_rows          = opts_.get_nrows();
 
   if (range_offset > 0 || range_size > 0) {
-    CUDF_EXPECTS(compression_type_ == "none",
+    CUDF_EXPECTS(opts_.get_compression() == compression_type::NONE,
                  "Reading compressed data using `byte range` is unsupported");
-  }
-  size_t map_range_size = 0;
-  if (range_size != 0) {
-    auto num_given_dtypes =
-      std::visit([](const auto& dtypes) { return dtypes.size(); }, opts_.get_dtypes());
-    const auto num_columns = std::max(opts_.get_names().size(), num_given_dtypes);
-    map_range_size         = range_size + calculateMaxRowSize(num_columns);
-  }
-
-  // Support delayed opening of the file if using memory mapping datasource
-  // This allows only mapping of a subset of the file if using byte range
-  if (source_ == nullptr) {
-    assert(!filepath_.empty());
-    source_ = datasource::create(filepath_, range_offset, map_range_size);
   }
 
   // Transfer source data to GPU
   if (!source_->is_empty()) {
-    auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
-    auto buffer    = source_->host_read(range_offset, data_size);
+    auto const data_size = (range_size_padded != 0) ? range_size_padded : source_->size();
+    auto const buffer    = source_->host_read(range_offset, data_size);
 
     auto h_data = host_span<char const>(  //
       reinterpret_cast<const char*>(buffer->data()),
@@ -234,10 +196,11 @@ reader::impl::select_data_and_row_offsets(rmm::cuda_stream_view stream)
 
     std::vector<char> h_uncomp_data_owner;
 
-    if (compression_type_ != "none") {
-      h_uncomp_data_owner = get_uncompressed_data(h_data, compression_type_);
+    if (opts_.get_compression() != compression_type::NONE) {
+      h_uncomp_data_owner = get_uncompressed_data(h_data, opts_.get_compression());
       h_data              = h_uncomp_data_owner;
     }
+
     // None of the parameters for row selection is used, we are parsing the entire file
     const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
                                  skip_end_rows <= 0 && num_rows == -1;
@@ -845,33 +808,15 @@ parse_options make_parse_options(csv_reader_options const& reader_opts,
 }
 
 reader::impl::impl(std::unique_ptr<datasource> source,
-                   std::string filepath,
                    csv_reader_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
-  : mr_(mr), source_(std::move(source)), filepath_(filepath), opts_(options)
+  : mr_(mr), source_(std::move(source)), opts_(options)
 {
   num_actual_cols_ = opts_.get_names().size();
   num_active_cols_ = num_actual_cols_;
 
-  compression_type_ =
-    infer_compression_type(opts_.get_compression(),
-                           filepath,
-                           {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
-
   opts = make_parse_options(options, stream);
-}
-
-// Forward to implementation
-reader::reader(std::vector<std::string> const& filepaths,
-               csv_reader_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
-{
-  CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
-  // Delay actual instantiation of data source until read to allow for
-  // partial memory mapping of file using byte ranges
-  _impl = std::make_unique<impl>(nullptr, filepaths[0], options, stream, mr);
 }
 
 // Forward to implementation
@@ -881,7 +826,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
-  _impl = std::make_unique<impl>(std::move(sources[0]), "", options, stream, mr);
+  _impl = std::make_unique<impl>(std::move(sources[0]), options, stream, mr);
 }
 
 // Destructor within this translation unit
