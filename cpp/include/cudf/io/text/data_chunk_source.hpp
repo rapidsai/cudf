@@ -45,11 +45,14 @@ class data_chunk_reader {
    * memory, allocate temporary memory, perform iterative decompression, or even launch device
    * kernels.
    *
-   * @param size desired number of bytes
+   * @param size number of bytes to read.
    * @param stream stream to associate allocations or perform work required to obtain chunk
-   * @return a chunk of data up to @param size bytes, or less if no more data is avaialable
+   * @return a chunk of data up to @param size bytes. May return less than @param size bytes if
+   * reader reaches end of underlying data source. Returned data must be accessed in stream order
+   * relative to the specified @param stream.
    */
-  virtual device_span<char const> get_next_chunk(std::size_t size, rmm::cuda_stream_view stream) = 0;
+  virtual device_span<char const> get_next_chunk(std::size_t size,
+                                                 rmm::cuda_stream_view stream) = 0;
 };
 
 /**
