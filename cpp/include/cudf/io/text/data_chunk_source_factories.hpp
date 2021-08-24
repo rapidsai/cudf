@@ -76,7 +76,8 @@ class istream_data_chunk_reader : public data_chunk_reader {
     return device_span<char>(static_cast<char*>(_buffers[stream.value()].data()), size);
   }
 
-  device_span<char const> get_next_chunk(std::size_t read_size, rmm::cuda_stream_view stream) override
+  device_span<char const> get_next_chunk(std::size_t read_size,
+                                         rmm::cuda_stream_view stream) override
   {
     CUDF_FUNC_RANGE();
 
@@ -130,7 +131,8 @@ class device_span_data_chunk_reader : public data_chunk_reader {
  public:
   device_span_data_chunk_reader(device_span<char const> data) : _data(data) {}
 
-  device_span<char const> get_next_chunk(std::size_t read_size, rmm::cuda_stream_view stream) override
+  device_span<char const> get_next_chunk(std::size_t read_size,
+                                         rmm::cuda_stream_view stream) override
   {
     // limit the read size to the number of bytes remaining in the device_span.
     if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
