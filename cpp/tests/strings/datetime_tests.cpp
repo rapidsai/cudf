@@ -392,6 +392,41 @@ TEST_F(StringsDatetimeTest, FromTimestampWeekdayMonthYear)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(StringsDatetimeTest, FromTimestampAllSpecifiers)
+{
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input{
+    1645059720000000001L,
+    1647167880000001000L,
+    1649276040001000000L,
+    1588734621123456789L,
+    1560948892987654321L,
+    -265880250010203040L,
+    1628194442090807060L,
+    1632410760500400300L,
+    1633464842000000000L,
+    1636100042999999999L};
+
+  auto results = cudf::strings::from_timestamps(
+    input,
+    "[%d/%m/%y/%Y %H:%I:%M:%S.%f %z:%Z %j %u %U %W %V %G %p %a %A %b %B]",
+    cudf::strings_column_view(format_names));
+
+  // clang-format off
+  cudf::test::strings_column_wrapper expected({
+  "[17/02/22/2022 01:01:02:00.000000 +0000:UTC 048 4 07 07 07 2022 AM Thu Thursday Feb February]",
+  "[13/03/22/2022 10:10:38:00.000001 +0000:UTC 072 7 11 10 10 2022 AM Sun Sunday Mar March]",
+  "[06/04/22/2022 20:08:14:00.001000 +0000:UTC 096 3 14 14 14 2022 PM Wed Wednesday Apr April]",
+  "[06/05/20/2020 03:03:10:21.123456 +0000:UTC 127 3 18 18 19 2020 AM Wed Wednesday May May]",
+  "[19/06/19/2019 12:12:54:52.987654 +0000:UTC 170 3 24 24 25 2019 PM Wed Wednesday Jun June]",
+  "[29/07/61/1961 16:04:22:29.989796 +0000:UTC 210 6 30 30 30 1961 PM Sat Saturday Jul July]",
+  "[05/08/21/2021 20:08:14:02.090807 +0000:UTC 217 4 31 31 31 2021 PM Thu Thursday Aug August]",
+  "[23/09/21/2021 15:03:26:00.500400 +0000:UTC 266 4 38 38 38 2021 PM Thu Thursday Sep September]",
+  "[05/10/21/2021 20:08:14:02.000000 +0000:UTC 278 2 40 40 40 2021 PM Tue Tuesday Oct October]",
+  "[05/11/21/2021 08:08:14:02.999999 +0000:UTC 309 5 44 44 44 2021 AM Fri Friday Nov November]"});
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsDatetimeTest, ZeroSizeStringsColumn)
 {
   cudf::column_view zero_size_column(
