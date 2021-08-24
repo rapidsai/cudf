@@ -371,7 +371,7 @@ def test_rolling_groupby_offset(agg, window_size):
     assert_eq(expect, got, check_dtype=False)
 
 
-def test_rolling_index_support():
+def test_rolling_custom_index_support():
     from pandas.api.indexers import BaseIndexer
 
     class CustomIndexer(BaseIndexer):
@@ -399,3 +399,21 @@ def test_rolling_index_support():
     actual = gdf.rolling(window=indexer).sum()
 
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "indexer",
+    [
+        pd.api.indexers.FixedForwardWindowIndexer(window_size=2),
+        pd.core.window.indexers.ExpandingIndexer(),
+        pd.core.window.indexers.FixedWindowIndexer(window_size=3),
+    ],
+)
+def test_rolling_indexer_support(indexer):
+    df = pd.DataFrame({"B": [0, 1, 2, np.nan, 4]})
+    gdf = cudf.from_pandas(df)
+
+    expected = df.rolling(window=indexer, min_periods=2).sum()
+    actual = gdf.rolling(window=indexer, min_periods=2).sum()
+
+    assert_eq(expected, actual)

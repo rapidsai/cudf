@@ -3,7 +3,6 @@
 import itertools
 
 import numba
-import numpy as np
 import pandas as pd
 from pandas.api.indexers import BaseIndexer
 
@@ -196,30 +195,6 @@ class Rolling(GetAttrGetItemMixin):
             center=self.center,
         )
 
-    def __iter__(self):
-        obj = self.obj
-
-        window = self.window
-        if is_integer(window):
-            start = pd.Series(np.arange(len(self.obj))).shift(
-                window - 1, fill_value=0
-            )
-            end = np.arange(1, len(self.obj) + 1)
-        else:
-            start, end = window.get_window_bounds(
-                num_values=len(obj),
-                min_periods=self.min_periods,
-                center=self.center,
-                closed="right",
-            )
-        # From get_window_bounds, those two should be equal in length of array
-        assert len(start) == len(end)
-
-        # import pdb;pdb.set_trace()
-        for s, e in zip(start, end):
-            result = obj.iloc[slice(s, e)]
-            yield result
-
     def _apply_agg_series(self, sr, agg_name):
         if isinstance(self.window, int):
             result_col = libcudf.rolling.rolling(
@@ -228,6 +203,33 @@ class Rolling(GetAttrGetItemMixin):
                 None,
                 self.window,
                 self.min_periods,
+                self.center,
+                agg_name,
+            )
+        elif isinstance(self.window, BaseIndexer):
+            start, end = self.window.get_window_bounds(
+                num_values=len(self.obj),
+                min_periods=self.min_periods,
+                center=self.center,
+                closed=None,
+            )
+            start = as_column(start, dtype="int32")
+            end = as_column(end, dtype="int32")
+
+            idx = cudf.core.column.arange(len(start))
+            preceding_window = (idx - start + cudf.Scalar(1, "int32")).astype(
+                "int32"
+            )
+            following_window = (end - idx - cudf.Scalar(1, "int32")).astype(
+                "int32"
+            )
+
+            result_col = libcudf.rolling.rolling(
+                sr._column,
+                preceding_window,
+                following_window,
+                None,
+                self.min_periods or 1,
                 self.center,
                 agg_name,
             )
@@ -245,21 +247,9 @@ class Rolling(GetAttrGetItemMixin):
 
     def _apply_agg_dataframe(self, df, agg_name):
         result_df = cudf.DataFrame({})
-
-        if isinstance(self.window, BaseIndexer):
-            df_list = []
-            for df in self:
-                res = df.agg(agg_name)
-                df_list.append(res)
-
-            result_df = cudf.concat(df_list, axis=1)
-            if isinstance(result_df, cudf.Series):
-                result_df = result_df.to_frame()
-            result_df = result_df.T
-        else:
-            for i, col_name in enumerate(df.columns):
-                result_col = self._apply_agg_series(df[col_name], agg_name)
-                result_df.insert(i, col_name, result_col)
+        for i, col_name in enumerate(df.columns):
+            result_col = self._apply_agg_series(df[col_name], agg_name)
+            result_df.insert(i, col_name, result_col)
         result_df.index = df.index
         return result_df
 
@@ -348,11 +338,15 @@ class Rolling(GetAttrGetItemMixin):
                 self.window = window
                 self.min_periods = min_periods
                 return
+            elif isinstance(window, BaseIndexer):
+                self.window = window
+                self.min_periods = min_periods
+                return
 
-            # if not isinstance(self.obj.index, cudf.core.index.DatetimeIndex):
-            #     raise ValueError(
-            #         "window must be an integer for " "non datetime index"
-            #     )
+            if not isinstance(self.obj.index, cudf.core.index.DatetimeIndex):
+                raise ValueError(
+                    "window must be an integer for non datetime index"
+                )
 
             self._time_window = True
 
@@ -362,13 +356,10 @@ class Rolling(GetAttrGetItemMixin):
                 if not isinstance(window, pd.Timedelta):
                     raise ValueError
                 window = window.to_timedelta64()
-            except ValueError:
-                # raise ValueError(
-                #     "window must be integer or " "convertible to a timedelta"
-                # ) from e
-                self.window = window
-                self.min_periods = min_periods
-                return
+            except ValueError as e:
+                raise ValueError(
+                    "window must be integer or convertible to a timedelta"
+                ) from e
             if self.min_periods is None:
                 min_periods = 1
 
