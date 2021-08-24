@@ -188,8 +188,8 @@ reader::impl::select_data_and_row_offsets(rmm::cuda_stream_view stream)
 
   // Transfer source data to GPU
   if (!source_->is_empty()) {
-    auto data_size = (range_size_padded != 0) ? range_size_padded : source_->size();
-    auto buffer    = source_->host_read(range_offset, data_size);
+    auto const data_size = (range_size_padded != 0) ? range_size_padded : source_->size();
+    auto const buffer    = source_->host_read(range_offset, data_size);
 
     auto h_data = host_span<char const>(  //
       reinterpret_cast<const char*>(buffer->data()),
