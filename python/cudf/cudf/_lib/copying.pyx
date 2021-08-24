@@ -192,7 +192,7 @@ def gather(
     )
 
 
-def scatter(object source, Column scatter_map, Table target_table,
+def scatter(object source, Column scatter_map, Column target_column,
             bool bounds_check=True):
     """
     Scattering input into target as per the scatter map,
@@ -200,8 +200,7 @@ def scatter(object source, Column scatter_map, Table target_table,
     """
 
     cdef column_view scatter_map_view = scatter_map.view()
-    # cdef table_view target_table_view = target_column.table_view()
-    cdef table_view target_table_view = target_table.data_view()
+    cdef table_view target_table_view = make_table_view((target_column,))
     cdef bool c_bounds_check = bounds_check
     cdef unique_ptr[table] c_result
 
@@ -225,7 +224,6 @@ def scatter(object source, Column scatter_map, Table target_table,
                 )
             )
     else:
-        target_column = next(iter(target_table._columns))
         slr = as_device_scalar(source, target_column.dtype)
         source_scalars.push_back(reference_wrapper[constscalar](
             slr.get_raw_ptr()[0]))
@@ -242,7 +240,7 @@ def scatter(object source, Column scatter_map, Table target_table,
 
     data, _ = data_from_unique_ptr(
         move(c_result),
-        column_names=target_table._column_names,
+        column_names=(None,),
         index_names=None
     )
 
