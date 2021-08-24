@@ -501,6 +501,7 @@ def test_dask_struct_field_Int_Error(data):
     with pytest.raises(IndexError):
         got.struct.field(1000).compute()
 
+
 @pytest.mark.parametrize(
     "data",
     [

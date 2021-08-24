@@ -36,7 +36,7 @@ class StructMethods:
             lambda s: s.struct.field(key),
             meta=self.d_series._meta._constructor([], dtype=typ),
         )
-    
+
     def explode(self):
         """
         Creates a dataframe view of the struct column, one column per field.
