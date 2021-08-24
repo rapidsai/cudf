@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+import copy
 from collections import defaultdict
 from contextlib import ExitStack
 from io import BufferedWriter, IOBase
@@ -11,7 +12,6 @@ from pyarrow import orc as orc
 from dask import dataframe as dd
 from dask.base import compute_as_if_collection, tokenize
 from dask.dataframe.core import DataFrame, Scalar, new_dd_object
-from dask.dataframe.io.orc.core import ORCFunctionWrapper
 from dask.dataframe.io.parquet.core import apply_filters
 from dask.dataframe.io.parquet.utils import _flatten_filters
 from dask.dataframe.io.utils import _get_pyarrow_dtypes, _meta_from_dtypes
@@ -844,6 +844,37 @@ def read_orc(
 #
 #  EXPERIMENTAL read_orc Utilities
 #
+
+
+class ORCFunctionWrapper:
+    """
+    ORC Function-Wrapper Class
+    Reads ORC data from disk to produce a partition.
+    """
+
+    def __init__(self, columns, engine, index, common_kwargs=None):
+        self.columns = columns
+        self.engine = engine
+        self.index = index
+        self.common_kwargs = common_kwargs or {}
+
+    def project_columns(self, columns):
+        """Return a new ORCFunctionWrapper object with
+        a sub-column projection.
+        """
+        if columns == self.columns:
+            return self
+        func = copy.deepcopy(self)
+        func.columns = columns
+        return func
+
+    def __call__(self, parts):
+        _df = self.engine.read_partition(
+            parts, self.columns, **self.common_kwargs,
+        )
+        if self.index:
+            _df.set_index(self.index, inplace=True)
+        return _df
 
 
 def _is_data_file_path(path, fs, ignore_prefix=None, require_suffix=None):
