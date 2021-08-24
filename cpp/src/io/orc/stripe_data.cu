@@ -1167,8 +1167,17 @@ __global__ void __launch_bounds__(block_size)
       // No present stream: all rows are valid
       s->vals.u32[t] = ~0;
     }
-    while (s->top.nulls_desc_row < s->chunk.num_rows) {
-      uint32_t nrows_max = min(s->chunk.num_rows - s->top.nulls_desc_row, blockDim.x * 32);
+    auto const prev_parent_null_count =
+      (s->chunk.parent_null_count_prefix_sums != nullptr && stripe > 0)
+        ? s->chunk.parent_null_count_prefix_sums[stripe - 1]
+        : 0;
+    auto const parent_null_count =
+      (s->chunk.parent_null_count_prefix_sums != nullptr)
+        ? s->chunk.parent_null_count_prefix_sums[stripe] - prev_parent_null_count
+        : 0;
+    auto const num_elems = s->chunk.num_rows - parent_null_count;
+    while (s->top.nulls_desc_row < num_elems) {
+      uint32_t nrows_max = min(num_elems - s->top.nulls_desc_row, blockDim.x * 32);
       uint32_t nrows;
       size_t row_in;
 
@@ -1187,7 +1196,7 @@ __global__ void __launch_bounds__(block_size)
       }
       __syncthreads();
 
-      row_in = s->chunk.start_row + s->top.nulls_desc_row;
+      row_in = s->chunk.start_row + s->top.nulls_desc_row - prev_parent_null_count;
       if (row_in + nrows > first_row && row_in < first_row + max_num_rows &&
           s->chunk.valid_map_base != NULL) {
         int64_t dst_row   = row_in - first_row;
@@ -1251,7 +1260,7 @@ __global__ void __launch_bounds__(block_size)
     // Sum up the valid counts and infer null_count
     null_count = block_reduce(temp_storage.bk_storage).Sum(null_count);
     if (t == 0) {
-      chunks[chunk_id].null_count = null_count;
+      chunks[chunk_id].null_count = parent_null_count + null_count;
       chunks[chunk_id].skip_count = s->chunk.skip_count;
     }
   } else {

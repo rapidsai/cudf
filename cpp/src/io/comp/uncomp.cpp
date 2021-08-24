@@ -425,15 +425,15 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
 std::vector<char> get_uncompressed_data(host_span<char const> const data,
                                         compression_type compression)
 {
-  int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
-
-  switch (compression) {
-    case compression_type::GZIP: comp_type = IO_UNCOMP_STREAM_TYPE_GZIP; break;
-    case compression_type::ZIP: comp_type = IO_UNCOMP_STREAM_TYPE_ZIP; break;
-    case compression_type::BZIP2: comp_type = IO_UNCOMP_STREAM_TYPE_BZIP2; break;
-    case compression_type::XZ: comp_type = IO_UNCOMP_STREAM_TYPE_XZ; break;
-    default: break;
-  }
+  auto const comp_type = [compression]() {
+    switch (compression) {
+      case compression_type::GZIP: return IO_UNCOMP_STREAM_TYPE_GZIP;
+      case compression_type::ZIP: return IO_UNCOMP_STREAM_TYPE_ZIP;
+      case compression_type::BZIP2: return IO_UNCOMP_STREAM_TYPE_BZIP2;
+      case compression_type::XZ: return IO_UNCOMP_STREAM_TYPE_XZ;
+      default: return IO_UNCOMP_STREAM_TYPE_INFER;
+    }
+  }();
 
   return io_uncompress_single_h2d(data.data(), data.size(), comp_type);
 }
