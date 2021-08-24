@@ -844,7 +844,7 @@ def test_orc_string_stream_offset_issue():
 
 
 # Data is generated using pyorc module
-def generate_list_struct_buff(size=28000):
+def generate_list_struct_buff(size=100_000):
     rd = random.Random(1)
     np.random.seed(seed=1)
 
@@ -963,7 +963,7 @@ list_struct_buff = generate_list_struct_buff()
         ["lvl2_struct", "lvl1_struct"],
     ],
 )
-@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 28000])
+@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100_000])
 @pytest.mark.parametrize("use_index", [True, False])
 def test_lists_struct_nests(
     columns, num_rows, use_index,
@@ -1171,3 +1171,21 @@ def test_writer_timestamp_stream_size(datadir, tmpdir):
     got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "fname",
+    [
+        "TestOrcFile.NoIndStrm.StructWithNoNulls.orc",
+        "TestOrcFile.NoIndStrm.StructAndIntWithNulls.orc",
+        "TestOrcFile.NoIndStrm.StructAndIntWithNulls.TwoStripes.orc",
+        "TestOrcFile.NoIndStrm.IntWithNulls.orc",
+    ],
+)
+def test_no_row_group_index_orc_read(datadir, fname):
+    fpath = datadir / fname
+
+    got = pa.orc.ORCFile(fpath).read()
+    expect = cudf.read_orc(fpath)
+
+    assert got.equals(expect.to_arrow())
