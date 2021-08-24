@@ -17,36 +17,43 @@ cur_dir = os.path.dirname(__file__)
 sample_orc = os.path.join(cur_dir, "sample.orc")
 
 
-def test_read_orc_defaults():
+@pytest.mark.parametrize("legacy", [True, False])
+def test_read_orc_defaults(legacy):
     df1 = cudf.read_orc(sample_orc)
-    df2 = dask_cudf.read_orc(sample_orc)
+    df2 = dask_cudf.read_orc(sample_orc, legacy=legacy)
     dd.assert_eq(df1, df2, check_index=False)
 
 
-def test_filepath_read_orc_defaults():
+@pytest.mark.parametrize("legacy", [True, False])
+def test_filepath_read_orc_defaults(legacy):
     path = "file://%s" % sample_orc
     df1 = cudf.read_orc(path)
-    df2 = dask_cudf.read_orc(path)
+    df2 = dask_cudf.read_orc(path, legacy=legacy)
     dd.assert_eq(df1, df2, check_index=False)
 
 
-def test_filelist_read_orc_defaults():
+@pytest.mark.parametrize("legacy", [True, False])
+def test_filelist_read_orc_defaults(legacy):
     path = [sample_orc]
     df1 = cudf.read_orc(path[0])
-    df2 = dask_cudf.read_orc(path)
+    df2 = dask_cudf.read_orc(path, legacy=legacy)
     dd.assert_eq(df1, df2, check_index=False)
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 @pytest.mark.parametrize("columns", [["time", "date"], ["time"]])
-def test_read_orc_cols(engine, columns):
+@pytest.mark.parametrize("legacy", [True, False])
+def test_read_orc_cols(engine, columns, legacy):
     df1 = cudf.read_orc(sample_orc, engine=engine, columns=columns)
 
-    df2 = dask_cudf.read_orc(sample_orc, engine=engine, columns=columns)
+    df2 = dask_cudf.read_orc(
+        sample_orc, engine=engine, columns=columns, legacy=legacy
+    )
 
     dd.assert_eq(df1, df2, check_index=False)
 
 
+@pytest.mark.parametrize("legacy", [True, False])
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 @pytest.mark.parametrize(
     "predicate,expected_len",
@@ -69,13 +76,16 @@ def test_read_orc_cols(engine, columns):
         ),
     ],
 )
-def test_read_orc_filtered(tmpdir, engine, predicate, expected_len):
-    df = dask_cudf.read_orc(sample_orc, engine=engine, filters=predicate)
+def test_read_orc_filtered(tmpdir, legacy, engine, predicate, expected_len):
+    df = dask_cudf.read_orc(
+        sample_orc, engine=engine, filters=predicate, legacy=legacy
+    )
     df.compute(scheduler="synchronous")
     dd.assert_eq(len(df), expected_len)
 
 
-def test_read_orc_first_file_empty(tmpdir):
+@pytest.mark.parametrize("legacy", [True, False])
+def test_read_orc_first_file_empty(tmpdir, legacy):
 
     # Write a 3-file dataset where the first file is empty
     # See: https://github.com/rapidsai/cudf/issues/8011
@@ -88,7 +98,7 @@ def test_read_orc_first_file_empty(tmpdir):
 
     # Read back the files with dask_cudf,
     # and check the result.
-    df2 = dask_cudf.read_orc(os.path.join(path, "*"))
+    df2 = dask_cudf.read_orc(os.path.join(path, "*"), legacy=legacy)
     dd.assert_eq(df1, df2, check_index=False)
 
 
