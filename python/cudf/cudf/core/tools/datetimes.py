@@ -690,7 +690,7 @@ def date_range(
         Frequencis to generate the datetime series. Mixed fixed-frequency and
         non-fixed frequency offset is unsupported. See notes for detail.
     
-    tzstr or tzinfo, optional
+    tz : str or tzinfo, optional
         Not Supported
 
     normalize : bool, default False
@@ -738,6 +738,15 @@ def date_range(
                 dtype='datetime64[ns]')
 
     """
+    if tz is not None:
+        raise NotImplementedError("tz is currently unsupported.")
+
+    if normalize is not None:
+        raise NotImplementedError("normalize is currently unsupported.")
+
+    if closed is not None:
+        raise NotImplementedError("closed is currently unsupported.")
+
     if [start, end, periods, freq].count(None) > 1:
         raise ValueError(
             "Of the four parameters: start, end, periods, and freq, exactly "
@@ -774,7 +783,7 @@ def date_range(
         elif periods is None:
             start = cudf.Scalar(start, dtype=dtype)
             end = cudf.Scalar(end, dtype=dtype)
-            periods = math.ceil(int(end - start) / _min_offset(offset))
+            periods = math.ceil(int(end - start) / _offset_to_nanoseconds_lower_bound(offset))
             _periods_not_specified = True
 
             if periods < 0:
@@ -836,8 +845,19 @@ def _check_mixed_freqeuency(freq: DateOffset) -> bool:
     )
 
 
-def _min_offset(offset):
-    # TODO: rename this function
+def _offset_to_nanoseconds_lower_bound(offset):
+    """Given a DateOffset, which can consist of either fixed frequency or
+    non-fixed frequency offset, convert to the smallest possible fixed frequency
+    offset based in nanoseconds.
+    
+    Specifically, the smallest fixed frequency conversion for {months=1}
+    is 28 * nano_seconds_per_day, because 1 month contains at least 28 days.
+    Similarly, the smallest fixed frequency conversion for {year=1} is
+    365 * nano_seconds_per_day.
+
+    This utility is used to compute the upper bound of the count of timestamps
+    given a range of datetime and an offset.
+    """
     nanoseconds_per_day = 24 * 60 * 60 * 1e9
     kwds = offset.kwds
     return (
