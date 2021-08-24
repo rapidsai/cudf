@@ -1040,9 +1040,6 @@ table_with_metadata read_csv(std::unique_ptr<cudf::io::datasource>&& source,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
-  // get the string name of the compression type.
-  // auto compression_type = infer_compression_type(options.get_compression(), "");
-
   auto parse_options = make_parse_options(options, stream);
 
   return read_csv(source.get(), options, parse_options, stream, mr);

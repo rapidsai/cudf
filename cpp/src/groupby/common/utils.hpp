@@ -24,8 +24,10 @@
 namespace cudf {
 namespace groupby {
 namespace detail {
-inline std::vector<aggregation_result> extract_results(
-  host_span<aggregation_request const> requests, cudf::detail::result_cache& cache)
+
+template <typename RequestType>
+inline std::vector<aggregation_result> extract_results(host_span<RequestType const> requests,
+                                                       cudf::detail::result_cache& cache)
 {
   std::vector<aggregation_result> results(requests.size());
 

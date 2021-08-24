@@ -47,10 +47,10 @@ TYPED_TEST(groupby_argmax_test, basic)
   fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
   fixed_width_column_wrapper<R> expect_vals{0, 1, 2};
 
-  auto agg = cudf::make_argmax_aggregation();
+  auto agg = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_argmax_aggregation();
+  auto agg2 = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -67,10 +67,10 @@ TYPED_TEST(groupby_argmax_test, zero_valid_keys)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_argmax_aggregation();
+  auto agg = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_argmax_aggregation();
+  auto agg2 = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -87,10 +87,10 @@ TYPED_TEST(groupby_argmax_test, zero_valid_values)
   fixed_width_column_wrapper<K> expect_keys{1};
   fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
-  auto agg = cudf::make_argmax_aggregation();
+  auto agg = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_argmax_aggregation();
+  auto agg2 = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -111,10 +111,10 @@ TYPED_TEST(groupby_argmax_test, null_keys_and_values)
   //  {6, 3,     5, 4, 0,   2, 1,    -}
   fixed_width_column_wrapper<R> expect_vals({3, 4, 7, 0}, {1, 1, 1, 0});
 
-  auto agg = cudf::make_argmax_aggregation();
+  auto agg = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_argmax_aggregation();
+  auto agg2 = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -132,10 +132,10 @@ TEST_F(groupby_argmax_string_test, basic)
   fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
   fixed_width_column_wrapper<R> expect_vals({0, 4, 2});
 
-  auto agg = cudf::make_argmax_aggregation();
+  auto agg = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_argmax_aggregation();
+  auto agg2 = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -150,10 +150,10 @@ TEST_F(groupby_argmax_string_test, zero_valid_values)
   fixed_width_column_wrapper<K> expect_keys{1};
   fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
-  auto agg = cudf::make_argmax_aggregation();
+  auto agg = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_argmax_aggregation();
+  auto agg2 = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -172,12 +172,13 @@ TEST_F(groupby_dictionary_argmax_test, basic)
   fixed_width_column_wrapper<R> expect_vals({ 0, 4, 2 });
   // clang-format on
 
-  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_argmax_aggregation());
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals, cudf::make_argmax_aggregation<groupby_aggregation>());
   test_single_agg(keys,
                   vals,
                   expect_keys,
                   expect_vals,
-                  cudf::make_argmax_aggregation(),
+                  cudf::make_argmax_aggregation<groupby_aggregation>(),
                   force_use_sort_impl::YES);
 }
 

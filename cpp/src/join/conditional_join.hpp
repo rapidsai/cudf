@@ -17,7 +17,7 @@
 
 #include "join_common_utils.hpp"
 
-#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -45,7 +45,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 conditional_join(table_view const& left,
                  table_view const& right,
-                 ast::expression binary_predicate,
+                 ast::expression const& binary_predicate,
                  null_equality compare_nulls,
                  join_kind JoinKind,
                  std::optional<std::size_t> output_size = {},
@@ -68,7 +68,7 @@ conditional_join(table_view const& left,
 std::size_t compute_conditional_join_output_size(
   table_view const& left,
   table_view const& right,
-  ast::expression binary_predicate,
+  ast::expression const& binary_predicate,
   null_equality compare_nulls,
   join_kind JoinKind,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,

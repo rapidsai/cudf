@@ -68,8 +68,7 @@ class json_reader_options {
   source_info _source;
 
   // Data types of the column; empty to infer dtypes
-  std::variant<std::vector<std::string>, std::vector<data_type>, std::map<std::string, data_type>>
-    _dtypes;
+  std::variant<std::vector<data_type>, std::map<std::string, data_type>> _dtypes;
   // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
 
@@ -117,10 +116,7 @@ class json_reader_options {
   /**
    * @brief Returns data types of the columns.
    */
-  std::variant<std::vector<std::string>,
-               std::vector<data_type>,
-               std::map<std::string, data_type>> const&
-  get_dtypes() const
+  std::variant<std::vector<data_type>, std::map<std::string, data_type>> const& get_dtypes() const
   {
     return _dtypes;
   }
@@ -181,20 +177,6 @@ class json_reader_options {
    * @brief Whether to parse dates as DD/MM versus MM/DD.
    */
   bool is_enabled_dayfirst() const { return _dayfirst; }
-
-  /**
-   * @brief Set data types for columns to be read.
-   *
-   * @param types Vector of dtypes in string format.
-   */
-  [[deprecated(
-    "The string-based interface will be deprecated."
-    "Use dtypes(std::vector<data_type>) or "
-    "dtypes(std::map<std::string, data_type>) instead.")]] void
-  set_dtypes(std::vector<std::string> types)
-  {
-    _dtypes = std::move(types);
-  }
 
   /**
    * @brief Set data types for columns to be read.
@@ -263,22 +245,6 @@ class json_reader_options_builder {
    * @param src The source information used to read avro file.
    */
   explicit json_reader_options_builder(source_info const& src) : options(src) {}
-
-  /**
-   * @brief Set data types for columns to be read.
-   *
-   * @param types Vector of dtypes in string format
-   * @return this for chaining
-   */
-  [[deprecated(
-    "The string-based interface will be deprecated."
-    "Use dtypes(std::vector<data_type>) or "
-    "dtypes(std::map<std::string, data_type>) instead.")]] json_reader_options_builder&
-  dtypes(std::vector<std::string> types)
-  {
-    options._dtypes = std::move(types);
-    return *this;
-  }
 
   /**
    * @brief Set data types for columns to be read.
@@ -382,11 +348,9 @@ class json_reader_options_builder {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  ...
- *  std::string filepath = "dataset.json";
- *  cudf::read_json_options options = cudf::read_json_options::builder(cudf::source_info(filepath));
- *  ...
- *  auto result = cudf::read_json(options);
+ *  auto source  = cudf::io::source_info("dataset.json");
+ *  auto options = cudf::io::read_json_options::builder(source);
+ *  auto result  = cudf::io::read_json(options);
  * @endcode
  *
  * @param options Settings for controlling reading behavior.
