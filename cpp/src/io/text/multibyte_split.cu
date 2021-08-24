@@ -44,8 +44,8 @@ int32_t constexpr TILES_PER_CHUNK  = 1024;
 int32_t constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 
 struct PatternScan {
-  typedef cub::BlockScan<multistate, THREADS_PER_TILE> BlockScan;
-  typedef cudf::io::text::detail::scan_tile_state_callback<multistate> BlockScanCallback;
+  using BlockScan         = cub::BlockScan<multistate, THREADS_PER_TILE>;
+  using BlockScanCallback = cudf::io::text::detail::scan_tile_state_callback<multistate>;
 
   struct _TempStorage {
     typename BlockScan::TempStorage scan;

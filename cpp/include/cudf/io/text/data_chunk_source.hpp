@@ -49,7 +49,7 @@ class data_chunk_reader {
    * @param stream stream to associate allocations or perform work required to obtain chunk
    * @return a chunk of data up to @param size bytes, or less if no more data is avaialable
    */
-  virtual device_span<char const> get_next_chunk(uint32_t size, rmm::cuda_stream_view stream) = 0;
+  virtual device_span<char const> get_next_chunk(std::size_t size, rmm::cuda_stream_view stream) = 0;
 };
 
 /**

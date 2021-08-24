@@ -53,19 +53,19 @@ class istream_data_chunk_reader : public data_chunk_reader {
     : _datastream(std::move(datastream)), _buffers(), _tickets(2)
   {
     // create an event to track the completion of the last device-to-host copy.
-    for (uint32_t i = 0; i < _tickets.size(); i++) {
+    for (std::size_t i = 0; i < _tickets.size(); i++) {
       CUDA_TRY(cudaEventCreate(&(_tickets[i].event)));
     }
   }
 
   ~istream_data_chunk_reader()
   {
-    for (uint32_t i = 0; i < _tickets.size(); i++) {
+    for (std::size_t i = 0; i < _tickets.size(); i++) {
       CUDA_TRY(cudaEventDestroy(_tickets[i].event));
     }
   }
 
-  device_span<char> find_or_create_data(uint32_t size, rmm::cuda_stream_view stream)
+  device_span<char> find_or_create_data(std::size_t size, rmm::cuda_stream_view stream)
   {
     auto search = _buffers.find(stream.value());
 
@@ -76,7 +76,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
     return device_span<char>(static_cast<char*>(_buffers[stream.value()].data()), size);
   }
 
-  device_span<char const> get_next_chunk(uint32_t read_size, rmm::cuda_stream_view stream) override
+  device_span<char const> get_next_chunk(std::size_t read_size, rmm::cuda_stream_view stream) override
   {
     CUDF_FUNC_RANGE();
 
@@ -115,7 +115,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
   }
 
  private:
-  uint32_t _next_ticket_idx = 0;
+  std::size_t _next_ticket_idx = 0;
   std::unique_ptr<std::istream> _datastream;
   std::unordered_map<cudaStream_t, rmm::device_buffer> _buffers;
   std::vector<host_ticket> _tickets;
@@ -130,7 +130,7 @@ class device_span_data_chunk_reader : public data_chunk_reader {
  public:
   device_span_data_chunk_reader(device_span<char const> data) : _data(data) {}
 
-  device_span<char const> get_next_chunk(uint32_t read_size, rmm::cuda_stream_view stream) override
+  device_span<char const> get_next_chunk(std::size_t read_size, rmm::cuda_stream_view stream) override
   {
     // limit the read size to the number of bytes remaining in the device_span.
     if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
