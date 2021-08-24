@@ -192,8 +192,14 @@ def gather(
     )
 
 
-def _scatter_table(object source, Column scatter_map,
-                   Table target_table, bool bounds_check=True):
+def scatter(object source, Column scatter_map, Table target_table,
+            bool bounds_check=True):
+    """
+    Scattering input into target as per the scatter map,
+    input can be a list of scalars or can be a table
+    """
+
+    from cudf.core.column.column import as_column
 
     cdef column_view scatter_map_view = scatter_map.view()
     # cdef table_view target_table_view = target_column.table_view()
@@ -246,21 +252,6 @@ def _scatter_table(object source, Column scatter_map,
         None if target_table._index is None else target_table._index.copy(
             deep=False)
     )
-
-
-def scatter(object input, object scatter_map, Table target,
-            bool bounds_check=True):
-    """
-    Scattering input into target as per the scatter map,
-    input can be a list of scalars or can be a table
-    """
-
-    from cudf.core.column.column import as_column
-
-    if not isinstance(scatter_map, Column):
-        scatter_map = as_column(scatter_map)
-
-    return _scatter_table(input, scatter_map, target, bounds_check)
 
 
 def _reverse_column(Column source_column):
