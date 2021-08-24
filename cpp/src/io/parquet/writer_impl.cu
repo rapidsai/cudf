@@ -898,9 +898,9 @@ void snappy_compress(device_span<gpu_inflate_input_s> comp_in,
   size_t num_comp_pages = comp_in.size();
   do {
     size_t temp_size;
-    nvcompError_t nvcomp_error =
-      nvcompBatchedSnappyCompressGetTempSize(num_comp_pages, max_page_uncomp_data_size, &temp_size);
-    if (nvcomp_error != nvcompError_t::nvcompSuccess) { break; }
+    nvcompStatus_t nvcomp_status = nvcompBatchedSnappyCompressGetTempSize(
+      num_comp_pages, max_page_uncomp_data_size, nvcompBatchedSnappyDefaultOpts, &temp_size);
+    if (nvcomp_status != nvcompStatus_t::nvcompSuccess) { break; }
 
     // Not needed now but nvcomp API makes no promises about future
     rmm::device_buffer scratch(temp_size, stream);
@@ -926,16 +926,18 @@ void snappy_compress(device_span<gpu_inflate_input_s> comp_in,
                       [] __device__(gpu_inflate_input_s in) {
                         return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice);
                       });
-    nvcomp_error = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
-                                                    uncompressed_data_sizes.data(),
-                                                    num_comp_pages,
-                                                    scratch.data(),  // Not needed rn but future
-                                                    scratch.size(),
-                                                    compressed_data_ptrs.data(),
-                                                    compressed_bytes_written.data(),
-                                                    stream.value());
+    nvcomp_status = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
+                                                     uncompressed_data_sizes.data(),
+                                                     max_page_uncomp_data_size,
+                                                     num_comp_pages,
+                                                     scratch.data(),  // Not needed rn but future
+                                                     scratch.size(),
+                                                     compressed_data_ptrs.data(),
+                                                     compressed_bytes_written.data(),
+                                                     nvcompBatchedSnappyDefaultOpts,
+                                                     stream.value());
 
-    if (nvcomp_error != nvcompError_t::nvcompSuccess) { break; }
+    if (nvcomp_status != nvcompStatus_t::nvcompSuccess) { break; }
 
     // nvcomp also doesn't use comp_out.status . It guarantees that given enough output space,
     // compression will succeed.
@@ -1257,8 +1259,9 @@ void writer::impl::write(table_view const& table)
   size_t max_page_comp_data_size = 0;
   if (compression_ != parquet::Compression::UNCOMPRESSED) {
     CUDF_EXPECTS(
-      nvcompError_t::nvcompSuccess == nvcompBatchedSnappyCompressGetOutputSize(
-                                        max_page_uncomp_data_size, &max_page_comp_data_size),
+      nvcompStatus_t::nvcompSuccess ==
+        nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
+          max_page_uncomp_data_size, nvcompBatchedSnappyDefaultOpts, &max_page_comp_data_size),
       "Error in getting compressed size from nvcomp");
   }
 
