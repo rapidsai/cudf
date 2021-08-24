@@ -24,18 +24,25 @@ class ExponentialMovingWindow(_RollingBase):
     def mean(self):
         return self._apply_agg("mean")
 
-    def var(self):
+    def var(self, bias):
+        self.bias = bias
         return self._apply_agg("var")
 
-    def std(self):
+    def std(self, bias):
+        self.bias = bias
         return self._apply_agg("std")
 
-    def corr(self):
-        return self._apply_agg("corr")
+    def corr(self, other):
+        raise NotImplementedError("corr not yet supported.")
 
-    def cov(self):
-        return self._apply_agg("cov")
+    def cov(self, other):
+        raise NotImplementedError("cov not yet supported.")
 
     def _apply_agg_series(self, sr, agg_name):
-        result = scan('ewma', sr._column, True, com=self.com, adjust=self.adjust)
+        if agg_name == 'mean':
+            result = scan('ewma', sr._column, True, com=self.com, adjust=self.adjust)
+        elif agg_name == 'var':
+            result = None
+        else:
+            result = None
         return result
