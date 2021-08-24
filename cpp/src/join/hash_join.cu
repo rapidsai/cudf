@@ -353,11 +353,11 @@ std::size_t hash_join::hash_join_impl::inner_join_size(cudf::table_view const& p
     probe, {}, {}, structs::detail::column_nullability::FORCE);
   auto const flattened_probe_table = std::get<0>(flattened_probe);
 
-  auto build_table             = cudf::table_device_view::create(_build, stream);
-  auto d_flattened_probe_table = cudf::table_device_view::create(flattened_probe_table, stream);
+  auto build_table_ptr           = cudf::table_device_view::create(_build, stream);
+  auto flattened_probe_table_ptr = cudf::table_device_view::create(flattened_probe_table, stream);
 
   return cudf::detail::compute_join_output_size<cudf::detail::join_kind::INNER_JOIN>(
-    *build_table, *d_flattened_probe_table, *_hash_table, compare_nulls, stream);
+    *build_table_ptr, *flattened_probe_table_ptr, *_hash_table, compare_nulls, stream);
 }
 
 std::size_t hash_join::hash_join_impl::left_join_size(cudf::table_view const& probe,
@@ -373,11 +373,11 @@ std::size_t hash_join::hash_join_impl::left_join_size(cudf::table_view const& pr
     probe, {}, {}, structs::detail::column_nullability::FORCE);
   auto const flattened_probe_table = std::get<0>(flattened_probe);
 
-  auto build_table             = cudf::table_device_view::create(_build, stream);
-  auto d_flattened_probe_table = cudf::table_device_view::create(flattened_probe_table, stream);
+  auto build_table_ptr           = cudf::table_device_view::create(_build, stream);
+  auto flattened_probe_table_ptr = cudf::table_device_view::create(flattened_probe_table, stream);
 
   return cudf::detail::compute_join_output_size<cudf::detail::join_kind::LEFT_JOIN>(
-    *build_table, *d_flattened_probe_table, *_hash_table, compare_nulls, stream);
+    *build_table_ptr, *flattened_probe_table_ptr, *_hash_table, compare_nulls, stream);
 }
 
 std::size_t hash_join::hash_join_impl::full_join_size(cudf::table_view const& probe,

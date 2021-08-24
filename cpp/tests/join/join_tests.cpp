@@ -44,9 +44,9 @@ constexpr cudf::size_type NoneValue =
   std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
 
 struct JoinTest : public cudf::test::BaseFixture {
-  void check_gather_maps(
-    cudf::column_view const& left_map,
-    cudf::column_view const& right_map,
+  std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> gather_maps_as_tables(
+    cudf::column_view const& expected_left_map,
+    cudf::column_view const& expected_right_map,
     std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
               std::unique_ptr<rmm::device_uvector<cudf::size_type>>> const& result)
   {
@@ -60,11 +60,11 @@ struct JoinTest : public cudf::test::BaseFixture {
     auto result_sort_order = cudf::sorted_order(result_table);
     auto sorted_result     = cudf::gather(result_table, *result_sort_order);
 
-    cudf::table_view gold({left_map, right_map});
+    cudf::table_view gold({expected_left_map, expected_right_map});
     auto gold_sort_order = cudf::sorted_order(gold);
     auto sorted_gold     = cudf::gather(gold, *gold_sort_order);
 
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+    return std::make_pair(std::move(sorted_gold), std::move(sorted_result));
   }
 };
 
@@ -1256,7 +1256,9 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     auto result = hash_join.full_join(t0, cudf::null_equality::EQUAL, optional_size);
     column_wrapper<int32_t> col_gold_0{{NoneValue, NoneValue, NoneValue, NoneValue, 4, 0, 1, 2, 3}};
     column_wrapper<int32_t> col_gold_1{{0, 1, 2, 3, 4, NoneValue, NoneValue, NoneValue, NoneValue}};
-    check_gather_maps(col_gold_0, col_gold_1, result);
+
+    auto table_ptrs = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*table_ptrs.first, *table_ptrs.second);
   }
 
   {
@@ -1275,7 +1277,8 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     auto result = hash_join.left_join(t0, cudf::null_equality::EQUAL, optional_size);
     column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{NoneValue, NoneValue, NoneValue, NoneValue, 4}};
-    check_gather_maps(col_gold_0, col_gold_1, result);
+    auto table_ptrs = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*table_ptrs.first, *table_ptrs.second);
   }
 
   {
@@ -1294,7 +1297,8 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     auto result = hash_join.inner_join(t0, cudf::null_equality::EQUAL, optional_size);
     column_wrapper<int32_t> col_gold_0{{2, 4, 0}};
     column_wrapper<int32_t> col_gold_1{{1, 1, 4}};
-    check_gather_maps(col_gold_0, col_gold_1, result);
+    auto table_ptrs = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*table_ptrs.first, *table_ptrs.second);
   }
 }
 
@@ -1333,7 +1337,8 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
     auto result = hash_join.left_join(t0, cudf::null_equality::EQUAL, output_size);
     column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{0, NoneValue, 2, NoneValue, NoneValue}};
-    check_gather_maps(col_gold_0, col_gold_1, result);
+    auto table_ptrs = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*table_ptrs.first, *table_ptrs.second);
   }
 
   {
@@ -1342,7 +1347,8 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
     auto result = hash_join.inner_join(t0, cudf::null_equality::EQUAL, output_size);
     column_wrapper<int32_t> col_gold_0{{0, 2}};
     column_wrapper<int32_t> col_gold_1{{0, 2}};
-    check_gather_maps(col_gold_0, col_gold_1, result);
+    auto table_ptrs = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*table_ptrs.first, *table_ptrs.second);
   }
 
   {
@@ -1351,7 +1357,8 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
     auto result = hash_join.full_join(t0, cudf::null_equality::EQUAL, output_size);
     column_wrapper<int32_t> col_gold_0{{NoneValue, NoneValue, NoneValue, 0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{1, 3, 4, 0, NoneValue, 2, NoneValue, NoneValue}};
-    check_gather_maps(col_gold_0, col_gold_1, result);
+    auto table_ptrs = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*table_ptrs.first, *table_ptrs.second);
   }
 }
 
