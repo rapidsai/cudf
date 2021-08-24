@@ -199,8 +199,6 @@ def scatter(object source, Column scatter_map, Table target_table,
     input can be a list of scalars or can be a table
     """
 
-    from cudf.core.column.column import as_column
-
     cdef column_view scatter_map_view = scatter_map.view()
     # cdef table_view target_table_view = target_column.table_view()
     cdef table_view target_table_view = target_table.data_view()
@@ -248,10 +246,7 @@ def scatter(object source, Column scatter_map, Table target_table,
         index_names=None
     )
 
-    return data, (
-        None if target_table._index is None else target_table._index.copy(
-            deep=False)
-    )
+    return next(iter(data.values()))
 
 
 def _reverse_column(Column source_column):
