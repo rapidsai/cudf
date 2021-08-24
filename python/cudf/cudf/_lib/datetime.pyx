@@ -90,6 +90,20 @@ def date_range(DeviceScalar start, size_type n, offset):
     return Column.from_unique_ptr(move(c_result))
 
 
+def extract_quarter(Column col):
+    """
+    Returns a column which contains the corresponding quarter of the year
+    for every timestamp inside the input column.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        c_result = move(libcudf_datetime.extract_quarter(col_view))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
 def days_in_month(Column col):
     """Extracts the number of days in the month of the date
     """
@@ -98,5 +112,15 @@ def days_in_month(Column col):
 
     with nogil:
         c_result = move(libcudf_datetime.days_in_month(col_view))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def last_day_of_month(Column col):
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        c_result = move(libcudf_datetime.last_day_of_month(col_view))
 
     return Column.from_unique_ptr(move(c_result))

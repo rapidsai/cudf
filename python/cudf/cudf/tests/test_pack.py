@@ -18,8 +18,8 @@ import sys
 import numpy as np
 import pandas as pd
 
+from cudf import DataFrame, GenericIndex, Series
 from cudf._lib.copying import pack, unpack
-from cudf.core import DataFrame, GenericIndex, Series
 from cudf.testing._utils import assert_eq
 
 

@@ -126,6 +126,9 @@ def to_datetime(
     if yearfirst:
         raise NotImplementedError("yearfirst support is not yet implemented")
 
+    if format is not None and "%f" in format:
+        format = format.replace("%f", "%9f")
+
     try:
         if isinstance(arg, cudf.DataFrame):
             # we require at least Ymd
@@ -498,7 +501,7 @@ class DateOffset:
                     dtype = "int16"
                 else:
                     unit = self._UNITS_TO_CODES[k]
-                    dtype = np.dtype(f"timedelta64[{unit}]")
+                    dtype = cudf.dtype(f"timedelta64[{unit}]")
                 scalars[k] = cudf.Scalar(v, dtype=dtype)
 
         self._scalars = scalars
@@ -669,8 +672,8 @@ def date_range(
 ):
     """Return a fixed frequency DatetimeIndex.
 
-    Returns the range of equally spaced time points (where the difference 
-    between any two adjacent points is specified by the given frequency) 
+    Returns the range of equally spaced time points (where the difference
+    between any two adjacent points is specified by the given frequency)
     such that they all satisfy `start` <[=] x <[=] `end`, where the first one
     and the last one are, resp., the first and last time points in that range
     that are valid for `freq`.
@@ -689,7 +692,7 @@ def date_range(
     freq : DateOffset
         Frequencis to generate the datetime series. Mixed fixed-frequency and
         non-fixed frequency offset is unsupported. See notes for detail.
-    
+
     tz : str or tzinfo, optional
         Not Supported
 
@@ -713,7 +716,7 @@ def date_range(
     have periods linearly spaced elements between start and end (closed on both
     sides).
 
-    cudf supports `freq` specified with either fixed-frequency offset 
+    cudf supports `freq` specified with either fixed-frequency offset
     (such as weeks, days, hours, minutes...) or non-fixed frequency offset
     (such as years and months). Specifying `freq` with a mixed fixed and
     non-fixed frequency is currently unsupported. For example:
@@ -783,7 +786,9 @@ def date_range(
         elif periods is None:
             start = cudf.Scalar(start, dtype=dtype)
             end = cudf.Scalar(end, dtype=dtype)
-            periods = math.ceil(int(end - start) / _offset_to_nanoseconds_lower_bound(offset))
+            periods = math.ceil(
+                int(end - start) / _offset_to_nanoseconds_lower_bound(offset)
+            )
             _periods_not_specified = True
 
             if periods < 0:
@@ -845,11 +850,11 @@ def _check_mixed_freqeuency(freq: DateOffset) -> bool:
     )
 
 
-def _offset_to_nanoseconds_lower_bound(offset):
+def _offset_to_nanoseconds_lower_bound(offset: DateOffset) -> int:
     """Given a DateOffset, which can consist of either fixed frequency or
-    non-fixed frequency offset, convert to the smallest possible fixed frequency
-    offset based in nanoseconds.
-    
+    non-fixed frequency offset, convert to the smallest possible fixed
+    frequency offset based in nanoseconds.
+
     Specifically, the smallest fixed frequency conversion for {months=1}
     is 28 * nano_seconds_per_day, because 1 month contains at least 28 days.
     Similarly, the smallest fixed frequency conversion for {year=1} is

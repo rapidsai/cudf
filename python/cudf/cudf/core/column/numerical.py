@@ -56,7 +56,8 @@ class NumericalColumn(NumericalBaseColumn):
         offset: int = 0,
         null_count: int = None,
     ):
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
+
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
@@ -124,14 +125,14 @@ class NumericalColumn(NumericalBaseColumn):
         self, binop: str, rhs: BinaryOperand, reflect: bool = False,
     ) -> ColumnBase:
         int_dtypes = [
-            np.dtype("int8"),
-            np.dtype("int16"),
-            np.dtype("int32"),
-            np.dtype("int64"),
-            np.dtype("uint8"),
-            np.dtype("uint16"),
-            np.dtype("uint32"),
-            np.dtype("uint64"),
+            cudf.dtype("int8"),
+            cudf.dtype("int16"),
+            cudf.dtype("int32"),
+            cudf.dtype("int64"),
+            cudf.dtype("uint8"),
+            cudf.dtype("uint16"),
+            cudf.dtype("uint32"),
+            cudf.dtype("uint64"),
         ]
         if rhs is None:
             out_dtype = self.dtype
@@ -161,9 +162,19 @@ class NumericalColumn(NumericalBaseColumn):
                     (np.isscalar(tmp) and (0 == tmp))
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ):
-                    out_dtype = np.dtype("float64")
+                    out_dtype = cudf.dtype("float64")
 
-        if binop in {"lt", "gt", "le", "ge", "eq", "ne", "NULL_EQUALS"}:
+        if binop in {
+            "l_and",
+            "l_or",
+            "lt",
+            "gt",
+            "le",
+            "ge",
+            "eq",
+            "ne",
+            "NULL_EQUALS",
+        }:
             out_dtype = "bool"
         lhs, rhs = (self, rhs) if not reflect else (rhs, self)
         return libcudf.binaryop.binaryop(lhs, rhs, binop, out_dtype)
@@ -186,13 +197,13 @@ class NumericalColumn(NumericalBaseColumn):
             if isinstance(other, cudf.Scalar):
                 return other
             other_dtype = np.promote_types(self.dtype, other_dtype)
-            if other_dtype == np.dtype("float16"):
-                other_dtype = np.dtype("float32")
+            if other_dtype == cudf.dtype("float16"):
+                other_dtype = cudf.dtype("float32")
                 other = other_dtype.type(other)
             if self.dtype.kind == "b":
                 other_dtype = min_signed_type(other)
             if np.isscalar(other):
-                other = np.dtype(other_dtype).type(other)
+                other = cudf.dtype(other_dtype).type(other)
                 return other
             else:
                 ary = utils.scalar_broadcast_to(
@@ -205,7 +216,7 @@ class NumericalColumn(NumericalBaseColumn):
             raise TypeError(f"cannot broadcast {type(other)}")
 
     def int2ip(self) -> "cudf.core.column.StringColumn":
-        if self.dtype != np.dtype("int64"):
+        if self.dtype != cudf.dtype("int64"):
             raise TypeError("Only int64 type can be converted to ip")
 
         return libcudf.string_casting.int2ip(self)
@@ -215,7 +226,7 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
-                np.dtype(self.dtype)
+                cudf.dtype(self.dtype)
             ](self)
         else:
             return cast(
@@ -256,7 +267,7 @@ class NumericalColumn(NumericalBaseColumn):
         return libcudf.unary.cast(self, dtype)
 
     def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
@@ -611,7 +622,7 @@ def _safe_cast_to_int(col: ColumnBase, dtype: DtypeObj) -> ColumnBase:
     else:
         raise TypeError(
             f"Cannot safely cast non-equivalent "
-            f"{col.dtype.type.__name__} to {np.dtype(dtype).type.__name__}"
+            f"{col.dtype.type.__name__} to {cudf.dtype(dtype).type.__name__}"
         )
 
 
