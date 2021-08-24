@@ -4594,7 +4594,7 @@ class Frame(libcudf.table.Table):
 
         Returns
         -------
-        same type as caller
+        DataFrame or Series
             The first `n` rows of the caller object.
 
         See Also
@@ -4603,6 +4603,9 @@ class Frame(libcudf.table.Table):
 
         Examples
         --------
+
+        **Series**
+
         >>> ser = cudf.Series(['alligator', 'bee', 'falcon',
         ... 'lion', 'monkey', 'parrot', 'shark', 'whale', 'zebra'])
         >>> ser
@@ -4646,7 +4649,7 @@ class Frame(libcudf.table.Table):
         5       parrot
         dtype: object
 
-        For Dataframe
+        **DataFrame**
 
         >>> df = cudf.DataFrame()
         >>> df['key'] = [0, 1, 2, 3, 4]
@@ -4664,6 +4667,9 @@ class Frame(libcudf.table.Table):
 
         Examples
         --------
+
+        **DataFrame**
+
         >>> import cudf
         >>> df = cudf.DataFrame()
         >>> df['key'] = [0, 1, 2, 3, 4]
@@ -4672,6 +4678,8 @@ class Frame(libcudf.table.Table):
            key   val
         3    3  13.0
         4    4  14.0
+
+        **Series**
 
         >>> import cudf
         >>> ser = cudf.Series([4, 3, 2, 1, 0])
@@ -4707,8 +4715,10 @@ class Frame(libcudf.table.Table):
 
         Examples
         --------
-        >>> import cudf
-        >>> import numpy as np
+
+        **Series**
+
+        >>> import cudf, numpy as np
         >>> series = cudf.Series([1, 2, np.nan, None, 10], nan_as_null=False)
         >>> series
         0     1.0
@@ -4724,6 +4734,22 @@ class Frame(libcudf.table.Table):
         3    <NA>
         4    10.0
         dtype: float64
+
+        **DataFrame**
+
+        >>> df = cudf.DataFrame()
+        >>> df['a'] = cudf.Series([1, None, np.nan], nan_as_null=False)
+        >>> df['b'] = cudf.Series([None, 3.14, np.nan], nan_as_null=False)
+        >>> df
+            a     b
+        0   1.0  <NA>
+        1  <NA>  3.14
+        2   NaN   NaN
+        >>> df.nans_to_nulls()
+            a     b
+        0   1.0  <NA>
+        1  <NA>  3.14
+        2  <NA>  <NA>
         """
         return self._from_data(
             {
