@@ -4036,103 +4036,6 @@ class Series(SingleColumnFrame, Serializable):
             dtype=self.dtype,
         )
 
-    def kurtosis(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
-    ):
-        """
-        Return Fisher's unbiased kurtosis of a sample.
-
-        Kurtosis obtained using Fisher’s definition of
-        kurtosis (kurtosis of normal == 0.0). Normalized by N-1.
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values when computing the result.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level` and
-        `numeric_only`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([1, 2, 3, 4])
-        >>> series.kurtosis()
-        -1.1999999999999904
-        """
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.kurtosis(skipna=skipna)
-
-    # Alias for kurtosis.
-    kurt = kurtosis
-
-    def skew(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
-    ):
-        """
-        Return unbiased Fisher-Pearson skew of a sample.
-
-        Parameters
-        ----------
-        skipna : bool, default True
-            Exclude NA/null values when computing the result.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level` and
-        `numeric_only`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([1, 2, 3, 4, 5, 6, 6])
-        >>> series
-        0    1
-        1    2
-        2    3
-        3    4
-        4    5
-        5    6
-        6    6
-        dtype: int64
-        >>> series.skew()
-        -0.288195490292614
-        """
-
-        if axis not in (None, 0):
-            raise NotImplementedError("axis parameter is not implemented yet")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
-
-        return self._column.skew(skipna=skipna)
-
     def cov(self, other, min_periods=None):
         """
         Compute covariance with Series, excluding missing values.
@@ -6384,7 +6287,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     for sr in series_list[1:]:
         if not sr.index.names == head.names:
             all_names_equal = False
-    new_index_names = [None]
+    new_index_names = [None] * head.nlevels
     if all_names_equal:
         new_index_names = head.names
 

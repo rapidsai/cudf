@@ -63,7 +63,7 @@ inline void test_single_agg(column_view const& keys,
                             column_view const& values,
                             column_view const& expect_keys,
                             column_view const& expect_vals,
-                            std::unique_ptr<aggregation>&& agg,
+                            std::unique_ptr<groupby_aggregation>&& agg,
                             force_use_sort_impl use_sort           = force_use_sort_impl::NO,
                             null_policy include_null_keys          = null_policy::EXCLUDE,
                             sorted keys_are_sorted                 = sorted::NO,
@@ -78,7 +78,7 @@ inline void test_single_agg(column_view const& keys,
 
   if (use_sort == force_use_sort_impl::YES) {
     // WAR to force groupby to use sort implementation
-    requests[0].aggregations.push_back(make_nth_element_aggregation(0));
+    requests[0].aggregations.push_back(make_nth_element_aggregation<groupby_aggregation>(0));
   }
 
   groupby::groupby gb_obj(
@@ -105,14 +105,14 @@ inline void test_single_scan(column_view const& keys,
                              column_view const& values,
                              column_view const& expect_keys,
                              column_view const& expect_vals,
-                             std::unique_ptr<aggregation>&& agg,
+                             std::unique_ptr<groupby_scan_aggregation>&& agg,
                              null_policy include_null_keys                  = null_policy::EXCLUDE,
                              sorted keys_are_sorted                         = sorted::NO,
                              std::vector<order> const& column_order         = {},
                              std::vector<null_order> const& null_precedence = {})
 {
-  std::vector<groupby::aggregation_request> requests;
-  requests.emplace_back(groupby::aggregation_request());
+  std::vector<groupby::scan_request> requests;
+  requests.emplace_back(groupby::scan_request());
   requests[0].values = values;
 
   requests[0].aggregations.push_back(std::move(agg));

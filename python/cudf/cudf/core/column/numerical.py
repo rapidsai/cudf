@@ -164,7 +164,17 @@ class NumericalColumn(NumericalBaseColumn):
                 ):
                     out_dtype = cudf.dtype("float64")
 
-        if binop in {"lt", "gt", "le", "ge", "eq", "ne", "NULL_EQUALS"}:
+        if binop in {
+            "l_and",
+            "l_or",
+            "lt",
+            "gt",
+            "le",
+            "ge",
+            "eq",
+            "ne",
+            "NULL_EQUALS",
+        }:
             out_dtype = "bool"
         lhs, rhs = (self, rhs) if not reflect else (rhs, self)
         return libcudf.binaryop.binaryop(lhs, rhs, binop, out_dtype)
