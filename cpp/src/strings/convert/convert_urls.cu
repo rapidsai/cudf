@@ -213,16 +213,12 @@ __forceinline__ __device__ char escaped_sequence_to_byte(char const* const ptr)
  * @tparam char_block_size Number of characters which will be loaded into the shared memory at a
  * time.
  *
- * @param[in] in_chars Character buffer for the input string column.
- * @param[in] in_offsets Offset value of each string associated with `in_chars`.
+ * @param[in] in_strings Input string column.
  * @param[out] out_counts Number of characters in each decode URL.
- * @param[in] num_strings Number of strings to count the number of decoded characters.
  */
 template <int num_warps_per_threadblock, int char_block_size>
-__global__ void url_decode_char_counter(char const* const in_chars,
-                                        offset_type const* const in_offsets,
-                                        offset_type* const out_counts,
-                                        size_type const num_strings)
+__global__ void url_decode_char_counter(column_device_view const in_strings,
+                                        offset_type* const out_counts)
 {
   constexpr int halo_size = 2;
   __shared__ char temporary_buffer[num_warps_per_threadblock][char_block_size + halo_size];
@@ -236,10 +232,16 @@ __global__ void url_decode_char_counter(char const* const in_chars,
   char* in_chars_shared      = temporary_buffer[local_warp_id];
 
   // Loop through strings, and assign each string to a warp.
-  for (size_type row_idx = global_warp_id; row_idx < num_strings; row_idx += nwarps) {
-    auto in_chars_string = in_chars + in_offsets[row_idx];
-    auto string_length   = in_offsets[row_idx + 1] - in_offsets[row_idx];
-    int const nblocks    = cudf::util::div_rounding_up_unsafe(string_length, char_block_size);
+  for (size_type row_idx = global_warp_id; row_idx < in_strings.size(); row_idx += nwarps) {
+    if (in_strings.is_null(row_idx)) {
+      out_counts[row_idx] = 0;
+      continue;
+    }
+
+    auto const in_string     = in_strings.element<string_view>(row_idx);
+    auto const in_chars      = in_string.data();
+    auto const string_length = in_string.size_bytes();
+    int const nblocks        = cudf::util::div_rounding_up_unsafe(string_length, char_block_size);
     offset_type escape_char_count = 0;
 
     for (int block_idx = 0; block_idx < nblocks; block_idx++) {
@@ -255,7 +257,7 @@ __global__ void url_decode_char_counter(char const* const in_chars,
       for (int char_idx = warp_lane; char_idx < string_length_block + halo_size;
            char_idx += cudf::detail::warp_size) {
         int const in_idx          = block_idx * char_block_size + char_idx;
-        in_chars_shared[char_idx] = in_idx < string_length ? in_chars_string[in_idx] : 0;
+        in_chars_shared[char_idx] = in_idx < string_length ? in_chars[in_idx] : 0;
       }
 
       __syncwarp();
@@ -284,7 +286,7 @@ __global__ void url_decode_char_counter(char const* const in_chars,
 }
 
 /**
- * @brief Decode and copy from the input char column to the output char column.
+ * @brief Decode and copy from the input string column to the output char buffer.
  *
  * @tparam num_warps_per_threadblock Number of warps in a threadblock. This template argument must
  * match the launch configuration, i.e. the kernel must be launched with
@@ -292,18 +294,14 @@ __global__ void url_decode_char_counter(char const* const in_chars,
  * @tparam char_block_size Number of characters which will be loaded into the shared memory at a
  * time.
  *
- * @param[in] in_chars Character buffer for the input string column.
- * @param[in] in_offsets Offset value of each string associated with `in_chars`.
+ * @param[in] in_strings Input string column.
  * @param[out] out_chars Character buffer for the output string column.
  * @param[in] out_offsets Offset value of each string associated with `out_chars`.
- * @param[in] num_strings Number of strings to decode and copy.
  */
 template <int num_warps_per_threadblock, int char_block_size>
-__global__ void url_decode_char_replacer(char const* const in_chars,
-                                         offset_type const* const in_offsets,
+__global__ void url_decode_char_replacer(column_device_view const in_strings,
                                          char* const out_chars,
-                                         offset_type const* const out_offsets,
-                                         size_type const num_strings)
+                                         offset_type const* const out_offsets)
 {
   constexpr int halo_size = 2;
   __shared__ char temporary_buffer[num_warps_per_threadblock][char_block_size + halo_size * 2];
@@ -318,11 +316,14 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
   char* in_chars_shared      = temporary_buffer[local_warp_id];
 
   // Loop through strings, and assign each string to a warp
-  for (size_type row_idx = global_warp_id; row_idx < num_strings; row_idx += nwarps) {
-    auto in_chars_string  = in_chars + in_offsets[row_idx];
-    auto out_chars_string = out_chars + out_offsets[row_idx];
-    auto string_length    = in_offsets[row_idx + 1] - in_offsets[row_idx];
-    int const nblocks     = cudf::util::div_rounding_up_unsafe(string_length, char_block_size);
+  for (size_type row_idx = global_warp_id; row_idx < in_strings.size(); row_idx += nwarps) {
+    if (in_strings.is_null(row_idx)) continue;
+
+    auto const in_string     = in_strings.element<string_view>(row_idx);
+    auto const in_chars      = in_string.data();
+    auto const string_length = in_string.size_bytes();
+    auto out_chars_string    = out_chars + out_offsets[row_idx];
+    int const nblocks        = cudf::util::div_rounding_up_unsafe(string_length, char_block_size);
 
     // Use the last thread of the warp to initialize `out_idx` to 0.
     if (warp_lane == cudf::detail::warp_size - 1) { out_idx[local_warp_id] = 0; }
@@ -337,9 +338,8 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
       // without branches.
       for (int char_idx = warp_lane; char_idx < string_length_block + halo_size * 2;
            char_idx += cudf::detail::warp_size) {
-        int const in_idx = block_idx * char_block_size + char_idx - halo_size;
-        in_chars_shared[char_idx] =
-          in_idx >= 0 && in_idx < string_length ? in_chars_string[in_idx] : 0;
+        int const in_idx          = block_idx * char_block_size + char_idx - halo_size;
+        in_chars_shared[char_idx] = in_idx >= 0 && in_idx < string_length ? in_chars[in_idx] : 0;
       }
 
       __syncwarp();
@@ -403,9 +403,8 @@ std::unique_ptr<column> url_decode(
   const int num_threadblocks =
     std::min(65536, cudf::util::div_rounding_up_unsafe(strings_count, num_warps_per_threadblock));
 
-  auto offset_count = strings_count + 1;
-  auto d_in_offsets = strings.offsets().data<offset_type>() + strings.offset();
-  auto d_in_chars   = strings.chars().data<char>();
+  auto offset_count    = strings_count + 1;
+  auto const d_strings = column_device_view::create(strings.parent(), stream);
 
   // build offsets column
   auto offsets_column = make_numeric_column(
@@ -416,7 +415,7 @@ std::unique_ptr<column> url_decode(
   auto offsets_mutable_view = offsets_column->mutable_view();
   url_decode_char_counter<num_warps_per_threadblock, char_block_size>
     <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(
-      d_in_chars, d_in_offsets, offsets_mutable_view.begin<offset_type>(), strings_count);
+      *d_strings, offsets_mutable_view.begin<offset_type>());
 
   // use scan to transform number of bytes into offsets
   thrust::exclusive_scan(rmm::exec_policy(stream),
@@ -436,11 +435,7 @@ std::unique_ptr<column> url_decode(
   // decode and copy the characters from the input column to the output column
   url_decode_char_replacer<num_warps_per_threadblock, char_block_size>
     <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(
-      d_in_chars,
-      d_in_offsets,
-      d_out_chars,
-      offsets_column->view().begin<offset_type>(),
-      strings_count);
+      *d_strings, d_out_chars, offsets_column->view().begin<offset_type>());
 
   // copy null mask
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
