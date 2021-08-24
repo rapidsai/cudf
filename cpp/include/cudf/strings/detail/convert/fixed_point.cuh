@@ -26,7 +26,7 @@ namespace detail {
 /**
  * @brief Return the integer component of a decimal string.
  *
- * This is reads everything up to the exponent 'e' notation.
+ * This reads everything up to the exponent 'e' notation.
  * The return includes the integer digits and any exponent offset.
  *
  * @tparam UnsignedDecimalType The unsigned version of the desired decimal type.
