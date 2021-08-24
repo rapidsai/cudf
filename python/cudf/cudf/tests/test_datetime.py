@@ -1368,8 +1368,8 @@ def test_is_month_start(data, dtype):
 )
 @pytest.mark.parametrize("periods", [1, 10, 100])
 def test_date_range_start_end_periods(start, end, periods):
-    expect = pd.date_range(start=start, end=end, periods=periods)
-    got = cudf.date_range(start=start, end=end, periods=periods)
+    expect = pd.date_range(start=start, end=end, periods=periods, name="a")
+    got = cudf.date_range(start=start, end=end, periods=periods, name="a")
 
     np.testing.assert_allclose(
         expect.to_numpy().astype("int64"),
@@ -1403,8 +1403,8 @@ def test_date_range_start_end_freq(start, end, freq):
     _gfreq = cudf.DateOffset(**freq)
     _pfreq = pd.DateOffset(**freq)
 
-    expect = pd.date_range(start=start, end=end, freq=_pfreq)
-    got = cudf.date_range(start=start, end=end, freq=_gfreq)
+    expect = pd.date_range(start=start, end=end, freq=_pfreq, name="a")
+    got = cudf.date_range(start=start, end=end, freq=_gfreq, name="a")
 
     np.testing.assert_allclose(
         expect.to_numpy().astype("int64"),
@@ -1430,8 +1430,8 @@ def test_date_range_start_freq_periods(start, freq, periods):
     _gfreq = cudf.DateOffset(**freq)
     _pfreq = pd.DateOffset(**freq)
 
-    expect = pd.date_range(start=start, periods=periods, freq=_pfreq)
-    got = cudf.date_range(start=start, periods=periods, freq=_gfreq)
+    expect = pd.date_range(start=start, periods=periods, freq=_pfreq, name="a")
+    got = cudf.date_range(start=start, periods=periods, freq=_gfreq, name="a")
 
     np.testing.assert_allclose(
         expect.to_numpy().astype("int64"),
@@ -1457,8 +1457,8 @@ def test_date_range_end_freq_periods(end, freq, periods):
     _gfreq = cudf.DateOffset(**freq)
     _pfreq = pd.DateOffset(**freq)
 
-    expect = pd.date_range(end=end, periods=periods, freq=_pfreq)
-    got = cudf.date_range(end=end, periods=periods, freq=_gfreq)
+    expect = pd.date_range(end=end, periods=periods, freq=_pfreq, name="a")
+    got = cudf.date_range(end=end, periods=periods, freq=_gfreq, name="a")
 
     np.testing.assert_allclose(
         expect.to_numpy().astype("int64"),

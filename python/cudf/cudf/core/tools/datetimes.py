@@ -666,9 +666,77 @@ def date_range(
     normalize=False,
     name=None,
     closed=None,
-    **kwargs,
 ):
-    """TBA
+    """Return a fixed frequency DatetimeIndex.
+
+    Returns the range of equally spaced time points (where the difference 
+    between any two adjacent points is specified by the given frequency) 
+    such that they all satisfy `start` <[=] x <[=] `end`, where the first one
+    and the last one are, resp., the first and last time points in that range
+    that are valid for `freq`.
+
+    Parameters
+    ----------
+    start : str or datetime-like, optional
+        Left bound for generating dates.
+
+    end : str or datetime-like, optional
+        Right bound for generating dates.
+
+    periods : int, optional
+        Number of periods to generate.
+
+    freq : DateOffset
+        Frequencis to generate the datetime series. Mixed fixed-frequency and
+        non-fixed frequency offset is unsupported. See notes for detail.
+    
+    tzstr or tzinfo, optional
+        Not Supported
+
+    normalize : bool, default False
+        Not Supported
+
+    name : str, default None
+        Name of the resulting DatetimeIndex
+
+    closed : {None, 'left', 'right'}, optional
+        Not Supported
+
+    Returns
+    -------
+    DatetimeIndex
+
+    Notes
+    -----
+    Of the four parameters `start`, `end`, `periods`, and `freq`, exactly three
+    must be specified. If `freq` is omitted, the resulting DatetimeIndex will
+    have periods linearly spaced elements between start and end (closed on both
+    sides).
+
+    cudf supports `freq` specified with either fixed-frequency offset 
+    (such as weeks, days, hours, minutes...) or non-fixed frequency offset
+    (such as years and months). Specifying `freq` with a mixed fixed and
+    non-fixed frequency is currently unsupported. For example:
+
+    >>> cudf.date_range(
+    ...     start='2021-08-23 08:00:00',
+    ...     freq=cudf.DateOffset(months=2, days=5),
+    ...     periods=5)
+    ...
+    NotImplementedError: Mixing fixed and non-fixed frequency offset is
+    unsupported.
+
+    Examples
+    --------
+    >>> cudf.date_range(
+    ...     start='2021-08-23 08:00:00',
+    ...     freq=cudf.DateOffset(years=1, months=2),
+    ...     periods=5)
+    DatetimeIndex(['2021-08-23 08:00:00', '2022-10-23 08:00:00',
+                '2023-12-23 08:00:00', '2025-02-23 08:00:00',
+                '2026-04-23 08:00:00'],
+                dtype='datetime64[ns]')
+
     """
     if [start, end, periods, freq].count(None) > 1:
         raise ValueError(
@@ -690,6 +758,10 @@ def date_range(
                 "`freq` must be a str or a cudf.DateOffset object."
             )
 
+        if _check_mixed_freqeuency(offset):
+            raise NotImplementedError(
+                "Mixing fixed and non-fixed frequency offset is unsupported."
+            )
         offset = offset.to_pandas()
 
         if start is None:
@@ -702,7 +774,6 @@ def date_range(
         elif periods is None:
             start = cudf.Scalar(start, dtype=dtype)
             end = cudf.Scalar(end, dtype=dtype)
-            # TODO: support below
             periods = math.ceil(int(end - start) / _min_offset(offset))
             _periods_not_specified = True
 
@@ -739,7 +810,30 @@ def date_range(
     if _periods_not_specified:
         res = res[res <= end]
 
-    return cudf.DatetimeIndex._from_data({None: res})
+    return cudf.DatetimeIndex._from_data({name: res})
+
+
+def _check_mixed_freqeuency(freq: DateOffset) -> bool:
+    """Utility to determine if `freq` contains mixed fixed and non-fixed
+    frequency offset. e.g. {months=1, days=5}
+    """
+
+    fixed_frequencies = {
+        "weeks",
+        "days",
+        "hours",
+        "minutes",
+        "seconds",
+        "milliseconds",
+        "microseconds",
+        "nanoseconds",
+    }
+    non_fixed_frequencies = {"years", "months"}
+
+    return (
+        len(freq.kwds.keys() & fixed_frequencies) > 0
+        and len(freq.kwds.keys() & non_fixed_frequencies) > 0
+    )
 
 
 def _min_offset(offset):
