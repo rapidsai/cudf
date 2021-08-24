@@ -275,29 +275,16 @@ struct parse_datetime {
 
     if constexpr (std::is_same_v<T, cudf::timestamp_D>) { return days; }
 
-    auto const tz_adjust = timeparts.tz_minutes;
-
-    auto const hour   = timeparts.hour;
-    auto const minute = timeparts.minute;
-    auto const second = timeparts.second;
-
-    int64_t timestamp =
-      (days * 24L * 3600L) + (hour * 3600L) + (minute * 60L) + second + (tz_adjust * 60L);
+    int64_t timestamp = (days * 24L * 3600L) + (timeparts.hour * 3600L) + (timeparts.minute * 60L) +
+                        timeparts.second + (timeparts.tz_minutes * 60L);
 
     if constexpr (std::is_same_v<T, cudf::timestamp_s>) { return timestamp; }
 
-    int64_t subsecond =
-      timeparts.subsecond * power_of_ten(9 - subsecond_precision);  // normalize to nanoseconds
+    int64_t const subsecond =
+      (timeparts.subsecond * power_of_ten(9 - subsecond_precision)) /  // normalize to nanoseconds
+      (1000000000L / T::period::type::den);                            // and rescale to T
 
-    if constexpr (std::is_same_v<T, cudf::timestamp_ms>) {
-      timestamp *= 1000L;
-      subsecond = subsecond / 1000000L;
-    } else if constexpr (std::is_same_v<T, cudf::timestamp_us>) {
-      timestamp *= 1000000L;
-      subsecond = subsecond / 1000L;
-    } else if constexpr (std::is_same_v<T, cudf::timestamp_ns>) {
-      timestamp *= 1000000000L;
-    }
+    timestamp *= T::period::type::den;
     timestamp += subsecond;
 
     return timestamp;
