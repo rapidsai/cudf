@@ -62,6 +62,7 @@ test:
     - test -f $PREFIX/include/cudf/column/column_view.hpp
     - test -f $PREFIX/include/cudf/concatenate.hpp
     - test -f $PREFIX/include/cudf/copying.hpp
+    - test -f $PREFIX/include/cudf/date_sequence.cuh
     - test -f $PREFIX/include/cudf/datetime.hpp
     - test -f $PREFIX/include/cudf/detail/aggregation/aggregation.hpp
     - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp

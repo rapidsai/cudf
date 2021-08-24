@@ -10,27 +10,25 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include "cudf/utilities/error.hpp"
 
 namespace cudf {
-namespace datetime {
 namespace detail {
 
 template <typename Timestamp>
 CUDA_DEVICE_CALLABLE Timestamp add_dateoffset(
   cudf::timestamp_scalar_device_view<Timestamp> const initial, std::size_t n, std::size_t months)
 {
-  add_calendrical_months_functor_impl f{};
+  datetime::detail::add_calendrical_months_functor_impl f{};
   // just add `n` days:
   return f(initial.value(), n * months);
 }
 
-struct date_range_functor {
+struct date_sequence_functor {
   template <typename T>
   typename std::enable_if_t<cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>>
-  operator()(cudf::scalar const& input,
-             std::size_t n,
-             std::size_t months,
+  operator()(size_type n,
+             scalar const& input,
+             size_type months,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
@@ -54,9 +52,9 @@ struct date_range_functor {
 
   template <typename T>
   typename std::enable_if_t<!cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>>
-  operator()(cudf::scalar const& input,
-             std::size_t n,
-             std::size_t months,
+  operator()(size_type n,
+             scalar const& input,
+             size_type months,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
@@ -65,5 +63,4 @@ struct date_range_functor {
 };
 
 }  // namespace detail
-}  // namespace datetime
 }  // namespace cudf

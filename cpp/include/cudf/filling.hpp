@@ -203,5 +203,23 @@ std::unique_ptr<column> sequence(
   scalar const& init,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Generate a sequence of timestamps of `n` rows
+ *
+ * output[i] = initial + i * months
+ *
+ * @param init The initial timestamp
+ * @param n Number of timestamps to generate
+ * @param months Months to increment
+ *
+ * @returns cudf::column
+ * @throw cudf::logic_error if input datatype is not a TIMESTAMP
+ */
+std::unique_ptr<cudf::column> date_sequence(
+  size_type size,
+  scalar const& init,
+  size_type months,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 }  // namespace cudf

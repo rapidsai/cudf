@@ -208,23 +208,6 @@ std::unique_ptr<cudf::column> is_leap_year(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Generate a sequence of timestamps
- *
- * `output[i] = start[i] + n*freq
- *
- * @param initial The initial timestamp
- * @param n Number of timestamps to generate
- *
- * @returns cudf::column
- * @throw cudf::logic_error if input datatype is not a TIMESTAMP
- */
-std::unique_ptr<cudf::column> date_range_month(
-  cudf::scalar const& initial,
-  std::size_t n,
-  std::size_t months,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
  * @brief Extract the number of days in the month
  *
  * output[i] contains the number of days in the month of date `column[i]`
