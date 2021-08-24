@@ -650,7 +650,7 @@ __global__ void __launch_bounds__(block_size)
   __syncthreads();
   if (!t) {
     s->cur_row      = 0;
-    s->present_rows = 0;
+    s->present_rows = 0;  
     s->present_out  = 0;
     s->numvals      = 0;
     s->numlengths   = 0;
@@ -671,11 +671,10 @@ __global__ void __launch_bounds__(block_size)
   while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
     // Encode valid map
     if (s->present_rows < s->chunk.num_rows) {
-      uint32_t present_rows = s->present_rows;
-      uint32_t nrows =
+      uint32_t present_rows = s->present_rows; // number of rows read so far
+      uint32_t nrows        =  // number of rows read in this iteration
         min(s->chunk.num_rows - present_rows,
             encode_block_size * 8 - (present_rows - (min(s->cur_row, s->present_out) & ~7)));
-      uint32_t nrows_out;
       if (t * 8 < nrows) {
         auto const row_in_group = present_rows + t * 8;
         auto const row          = s->chunk.start_row + row_in_group;
@@ -696,21 +695,23 @@ __global__ void __launch_bounds__(block_size)
             valid = valid & ((1 << (s->chunk.leaf_column->size() - row)) - 1);
           }
         }
+        // not guaranteed to write to a byte anymore
         validity_byte(row_in_group) = valid;
       }
       __syncthreads();
       present_rows += nrows;
       if (!t) { s->present_rows = present_rows; }
+
       // RLE encode the present stream
-      nrows_out = present_rows - s->present_out;  // Should always be a multiple of 8 except at
-                                                  // the end of the last row group
+      auto nrows_out = present_rows - s->present_out; // number of values to encode
       if (nrows_out > ((present_rows < s->chunk.num_rows) ? 130 * 8 : 0)) {
         uint32_t present_out = s->present_out;
         if (s->stream.ids[CI_PRESENT] >= 0) {
-          uint32_t flush = (present_rows < s->chunk.num_rows) ? 0 : 7;
-          nrows_out      = (nrows_out + flush) >> 3;
+          auto const flush      = (present_rows < s->chunk.num_rows) ? 0 : 7;
+          if (t ==0){ printf("Group_id: %d\n", s->chunk.num_rows);}
+          auto const nbytes_out = (nrows_out + flush) / 8; // should be fine 
           nrows_out =
-            ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, present_out >> 3, nrows_out, flush, t) * 8;
+            ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, present_out / 8, nbytes_out, flush, t) * 8;
         }
         __syncthreads();
         if (!t) { s->present_out = min(present_out + nrows_out, present_rows); }
@@ -732,7 +733,8 @@ __global__ void __launch_bounds__(block_size)
             encode_block_size);
       auto const row_in_group = s->cur_row + t;
       auto const row          = s->chunk.start_row + row_in_group;
-      auto const valid        = [&]() {
+      // TODO also check parent pushdown mask
+      auto const valid = [&]() {
         if (t >= nrows) return false;
         if (s->chunk.leaf_column->null_mask() == nullptr) return true;
         return bit_is_set(s->chunk.leaf_column->null_mask(), row);

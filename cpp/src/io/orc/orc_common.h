@@ -23,7 +23,7 @@ namespace io {
 namespace orc {
 
 // ORC rows are divided into groups and assigned indexes for faster seeking
-static constexpr uint32_t default_row_index_stride = 5;
+static constexpr uint32_t default_row_index_stride = 10000;
 
 enum CompressionKind : uint8_t {
   NONE   = 0,

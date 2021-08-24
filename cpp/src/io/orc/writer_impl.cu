@@ -156,7 +156,10 @@ class orc_column_view {
       name{metadata.get_name()}
   {
     if (metadata.is_nullability_defined()) { metadata_nullable = metadata.nullable(); }
-    if (parent != nullptr) parent->add_child(_index);
+    if (parent != nullptr) {
+      parent->add_child(_index);
+      _parent_index = parent->index();
+    }
   }
 
   void add_child(uint32_t child_idx) { children.emplace_back(child_idx); }
@@ -201,7 +204,8 @@ class orc_column_view {
   auto device_stripe_dict() const noexcept { return d_stripe_dict; }
 
   // Index in the table
-  auto index() const noexcept { return _index; }
+  uint32_t index() const noexcept { return _index; }
+  auto parent_index() const noexcept { return _parent_index; }
   // Id in the ORC file
   auto id() const noexcept { return _index + 1; }
 
@@ -256,6 +260,7 @@ class orc_column_view {
 
   std::optional<bool> metadata_nullable;
   std::vector<uint32_t> children;
+  std::optional<uint32_t> _parent_index;
 };
 
 size_type orc_table_view::num_rows() const noexcept
@@ -1150,6 +1155,19 @@ void writer::impl::init_state()
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
+void splatter_null_mask(device_span<orc_column_device_view> d_columns,
+                        uint32_t col_idx,
+                        bitmask_type const* null_mask,
+                        bitmask_type const* parent_null_mask,
+                        device_span<bitmask_type> out_mask,
+                        rmm::cuda_stream_view stream)
+{
+  CUDA_TRY(cudaMemsetAsync(static_cast<void*>(out_mask.data()),
+                           255,
+                           out_mask.size() * sizeof(bitmask_type),
+                           stream.value()));                   
+}
+
 struct pushdown_null_masks {
   // owning vector
   std::vector<rmm::device_uvector<bitmask_type>> data;
@@ -1160,11 +1178,55 @@ struct pushdown_null_masks {
 pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
                                              rmm::cuda_stream_view stream)
 {
-  // go over columns to create null masks
+  std::vector<bitmask_type const*> mask_ptrs;
+  mask_ptrs.reserve(orc_table.num_columns());
+  std::vector<rmm::device_uvector<bitmask_type>> pd_masks;
+  for (auto const& col : orc_table.columns) {
+    if (col.orc_kind() != LIST && col.orc_kind() != STRUCT) {
+      mask_ptrs.emplace_back(nullptr);
+      continue;
+    }
+    auto const parent_col =
+      col.parent_index().has_value() ? &orc_table.column(col.parent_index().value()) : nullptr;
+    auto const parent_null_mask = parent_col != nullptr ? mask_ptrs[parent_col->index()] : nullptr;
+    auto const null_mask        = col.null_mask();
 
-  // attach null masks to device column views (async  )
+    if (null_mask == nullptr and parent_null_mask == nullptr) {
+      mask_ptrs.emplace_back(nullptr);
+      continue;
+    }
+    if (col.orc_kind() == STRUCT) {
+      if (null_mask != nullptr and parent_null_mask == nullptr) {
+        // reuse own null mask
+        mask_ptrs.emplace_back(null_mask);
+      } else if (null_mask == nullptr and parent_null_mask != nullptr) {
+        // reuse parent's pushdown mask
+        mask_ptrs.emplace_back(parent_null_mask);
+      } else {
+        // both are nullable, allocate pushdown mask
+        pd_masks.emplace_back(num_bitmask_words(col.size()), stream);
+        mask_ptrs.emplace_back(pd_masks.back().data());
 
-  // calc masks (async)
+        // calc mask (async)
+        thrust::transform(rmm::exec_policy(stream),
+                          null_mask,
+                          null_mask + pd_masks.back().size(),
+                          parent_null_mask,
+                          pd_masks.back().data(),
+                          [] __device__(auto& l, auto& r) { return l & r; });
+      }
+    }
+    if (col.orc_kind() == LIST) {
+      auto const child_col = orc_table.column(col.child_begin()[0]);
+      pd_masks.emplace_back(num_bitmask_words(child_col.size()), stream);
+      mask_ptrs.emplace_back(pd_masks.back().data());
+      splatter_null_mask(
+        orc_table.d_columns, col.index(), null_mask, parent_null_mask, pd_masks.back(), stream);
+    }
+  }
+
+  // attach null masks to device column views (async)
+
   return {};
 }
 
