@@ -156,7 +156,7 @@ class CudfORCEngine:
             f.seek(0)
             cudf_meta = cudf.read_orc(
                 f, stripes=stripes, columns=columns, **(read_kwargs or {}),
-            )
+            ).iloc[:0]
 
         # Use pandas metadata to update missing
         # columns in cudf_meta (directory partitions)
@@ -421,12 +421,12 @@ class CudfORCEngine:
                 with fs.open(file_path, "rb") as f:
                     f.seek(0)
                     cudf_statistics = cudf.io.orc.read_orc_statistics(
-                        [f], columns=stat_columns,
+                        [f], columns=set(stat_columns) | {"col0"},
                     )[1]
             else:
                 file_handle.seek(0)
                 cudf_statistics = cudf.io.orc.read_orc_statistics(
-                    [file_handle], columns=stat_columns,
+                    [file_handle], columns=set(stat_columns) | {"col0"},
                 )[1]
             stripes = list(range(len(cudf_statistics)))
 
@@ -1150,13 +1150,11 @@ def to_orc(
         kwargs,
     )
     final_name = name + "-final"
-    common_kwargs = kwargs.copy()
-    common_kwargs["partition_on"] = partition_on
     for d, filename in enumerate(filenames):
         dsk[(name, d)] = (
             apply,
             write_orc_partition,
-            [(df._name, d), path, fs, filename, common_kwargs],
+            [(df._name, d), path, fs, filename, partition_on, kwargs],
         )
     part_tasks = list(dsk.keys())
     dsk[(final_name, 0)] = (lambda x: None, part_tasks)
@@ -1174,15 +1172,14 @@ def to_orc(
     return Scalar(graph, final_name, "")
 
 
-def write_orc_partition(df, path, fs, filename, kwargs):
-    partition_on = kwargs.pop("partition_on", None)
+def write_orc_partition(df, path, fs, filename, partition_on, kwargs):
     if partition_on:
         cudf.io.to_orc(
             df,
             path,
             fs=fs,
-            partition_on=partition_on,
-            partition_filename=filename,
+            partition_cols=partition_on,
+            partition_file_name=filename,
             **kwargs,
         )
     else:

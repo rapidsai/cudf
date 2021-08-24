@@ -340,12 +340,12 @@ def to_orc(
     compression=None,
     enable_statistics=True,
     partition_cols=None,
+    partition_file_name=None,
     **kwargs,
 ):
     """{docstring}"""
 
     if partition_cols:
-        partition_file_name = kwargs.pop("partition_file_name", None)
         write_to_dataset(
             df,
             filename=partition_file_name,
