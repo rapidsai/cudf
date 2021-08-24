@@ -528,7 +528,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         header["columns"], column_frames = column.serialize_columns(
             self._columns
         )
-        header["column_frame_count"] = len(column_frames)
         frames.extend(column_frames)
 
         header["column_names"] = pickle.dumps(tuple(self._data.names))
