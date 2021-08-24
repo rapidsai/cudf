@@ -532,7 +532,7 @@ target_link_libraries(cudf
            PUBLIC ZLIB::ZLIB
                   ${ARROW_LIBRARIES}
                   cudf::Thrust
-                  nvCOMP::nvcomp
+                  nvcomp::nvcomp
                   rmm::rmm
            PRIVATE cuco::cuco)
 
@@ -651,10 +651,6 @@ install(TARGETS cudf
         DESTINATION lib
         EXPORT cudf-targets)
 
-install(TARGETS nvcomp
-        DESTINATION lib
-        EXPORT cudf-nvcomp-target)
-    
 install(DIRECTORY
             ${CUDF_SOURCE_DIR}/include/cudf
             ${CUDF_SOURCE_DIR}/include/cudf_test
@@ -688,11 +684,6 @@ install(EXPORT  cudf-testing-targets
     NAMESPACE   cudf::
     DESTINATION "${INSTALL_CONFIGDIR}")
 
-install(EXPORT  cudf-nvcomp-target
-    FILE        cudf-nvcomp-target.cmake
-    NAMESPACE   nvCOMP::
-    DESTINATION "${INSTALL_CONFIGDIR}")
-
 ################################################################################################
 # - build export -------------------------------------------------------------------------------
 configure_package_config_file(cmake/cudf-build-config.cmake.in ${CUDF_BINARY_DIR}/cudf-config.cmake
@@ -707,15 +698,6 @@ if(TARGET gtest)
         export(TARGETS gtest gmock gtest_main gmock_main
             FILE ${CUDF_BINARY_DIR}/cudf-gtesting-targets.cmake
             NAMESPACE   GTest::)
-    endif()
-endif()
-
-if(TARGET nvcomp)
-    get_target_property(nvcomp_is_imported nvcomp IMPORTED)
-    if(NOT nvcomp_is_imported)
-        export(TARGETS nvcomp
-            FILE ${CUDF_BINARY_DIR}/cudf-nvcomp-target.cmake
-            NAMESPACE   nvCOMP::)
     endif()
 endif()
 

@@ -81,13 +81,6 @@ else()
   include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetGTest.cmake)
 endif()
 
-# find nvCOMP
-if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-nvcomp-target.cmake")
-  include("${CMAKE_CURRENT_LIST_DIR}/cudf-nvcomp-target.cmake")
-else()
-  include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetnvCOMP.cmake)
-endif()
-
 list(POP_FRONT CMAKE_MODULE_PATH)
 
 

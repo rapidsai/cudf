@@ -16,25 +16,29 @@
 
 function(find_and_configure_nvcomp VERSION)
 
-    if(TARGET nvCOMP::nvcomp)
+    if(TARGET nvcomp::nvcomp)
         return()
     endif()
 
-    # Find or install nvCOMP
-    CPMFindPackage(NAME nvCOMP
-        VERSION         ${VERSION}
-        GIT_REPOSITORY  https://github.com/NVIDIA/nvcomp.git
-        GIT_TAG         v${VERSION}
-        GIT_SHALLOW     TRUE)
+    # Find or install nvcomp
+    CPMFindPackage(NAME nvcomp
+        VERSION            ${VERSION}
+        GITHUB_REPOSITORY  NVIDIA/nvcomp
+        GIT_TAG            f5b8dee714bd2970d8230efa95f337c91f080257
+        GIT_SHALLOW        TRUE
+        OPTIONS            "BUILD_TESTS OFF"
+                           "BUILD_BENCHMARKS OFF"
+                           "BUILD_EXAMPLES OFF"
+    )
 
-    if(NOT TARGET nvCOMP::nvcomp)
-        add_library(nvCOMP::nvcomp ALIAS nvcomp)
+    if(NOT TARGET nvcomp::nvcomp)
+        add_library(nvcomp::nvcomp ALIAS nvcomp)
     endif()
 
-    # Make sure consumers of cudf can also see nvCOMP::nvcomp target
-    fix_cmake_global_defaults(nvCOMP::nvcomp)
+    # Make sure consumers of cudf can also see nvcomp::nvcomp target
+    fix_cmake_global_defaults(nvcomp::nvcomp)
 endfunction()
 
-set(CUDF_MIN_VERSION_nvCOMP 2.0.0)
+set(CUDF_MIN_VERSION_nvCOMP 2.1.0)
 
 find_and_configure_nvcomp(${CUDF_MIN_VERSION_nvCOMP})
