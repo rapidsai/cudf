@@ -139,13 +139,17 @@ class CudfORCEngine:
                     index=pd_meta.index,
                 )
 
-        # Set index if one was specified
-        if index:
-            pd_meta.set_index(index, inplace=True)
-
         # Return direct conversion if sample_data=False
         if sample_data is False:
+            # Set index if one was specified
+            if index:
+                pd_meta.set_index(index, inplace=True)
             return cudf.from_pandas(pd_meta)
+
+        #
+        # The rest of the logic deals with direct
+        # sampling of the first dataset stripe...
+        #
 
         # Read 0th stripe to get cudf metadata
         fs = dataset_info["fs"]
@@ -155,7 +159,12 @@ class CudfORCEngine:
             stripes = [0] if o.nstripes else None
             f.seek(0)
             cudf_meta = cudf.read_orc(
-                f, stripes=stripes, columns=columns, **(read_kwargs or {}),
+                f,
+                stripes=stripes,
+                columns=[
+                    c for c in columns if c not in directory_partition_keys
+                ],
+                **(read_kwargs or {}),
             ).iloc[:0]
 
         # Use pandas metadata to update missing
@@ -164,6 +173,9 @@ class CudfORCEngine:
             if col not in cudf_meta.columns:
                 cudf_meta[col] = as_column(pd_meta[col])
 
+        # Set index (if one was specified), and return
+        if index:
+            return cudf_meta.set_index(index)
         return cudf_meta
 
     @classmethod
@@ -175,7 +187,7 @@ class CudfORCEngine:
         split_stripes=True,
         aggregate_files=False,
         gather_statistics=True,
-        allow_worker_gather=None,
+        files_per_metadata_tasks=None,
     ):
 
         # Extract column and index from meta
@@ -210,32 +222,47 @@ class CudfORCEngine:
         # on each path (and collect statistics) independently.
         # Therefore, this call can be parallelized over the paths.
         npaths = len(dataset_info["paths"])
-        worker_gather = (allow_worker_gather is True) or (
-            npaths > 1
-            and (split_stripes or filters or index)
-            and allow_worker_gather is not False
-            and not aggregate_files  # Worker-gather can change file agg
-        )
-        if worker_gather:
+        if files_per_metadata_tasks is None:
+            files_per_metadata_tasks = 32
+
+        # Extract necessary info from dataset_info
+        all_paths = dataset_info["paths"]
+        fs = dataset_info["fs"]
+        orc_schema = dataset_info["orc_schema"]
+        directory_partitions = dataset_info["directory_partitions"]
+        dir_columns_need_stats = dataset_info["dir_columns_need_stats"]
+        file_columns_need_stats = dataset_info["file_columns_need_stats"]
+
+        if files_per_metadata_tasks and (npaths >= files_per_metadata_tasks):
             # Collect partition plan on workers (in parallel)
             gather_parts_dsk = {}
             name = "gather-orc-parts-" + tokenize(
                 meta,
-                dataset_info,
+                all_paths,
+                fs,
                 filters,
                 split_stripes,
                 aggregate_files,
                 gather_statistics,
+                files_per_metadata_tasks,
             )
-            finalize_list = []
-            for i in range(npaths):
-                finalize_list.append((name, i))
-                gather_parts_dsk[finalize_list[-1]] = (
+            for i_task, i_path in enumerate(
+                range(0, npaths, files_per_metadata_tasks)
+            ):
+                gather_parts_dsk[(name, i_task)] = (
                     apply,
                     cls._gather_parts,
-                    [dataset_info],
+                    [
+                        all_paths[i_path : i_path + files_per_metadata_tasks],
+                        directory_partitions[
+                            i_path : i_path + files_per_metadata_tasks
+                        ]
+                        if directory_partitions
+                        else [],
+                        fs,
+                        orc_schema,
+                    ],
                     {
-                        "path_indices": [i],
                         "index": index,
                         "columns": columns,
                         "filters": filters,
@@ -243,8 +270,11 @@ class CudfORCEngine:
                         "aggregate_files": aggregate_files,
                         "gather_statistics": gather_statistics,
                         "dir_agg_depth": dir_agg_depth,
+                        "dir_columns_need_stats": dir_columns_need_stats,
+                        "file_columns_need_stats": file_columns_need_stats,
                     },
                 )
+            finalize_list = list(gather_parts_dsk.keys())
 
             def _combine_parts(parts_and_stats):
                 parts, stats = [], []
@@ -260,7 +290,10 @@ class CudfORCEngine:
         else:
             # Collect partition plan on client (serial)
             parts, statistics = cls._gather_parts(
-                dataset_info,
+                all_paths,
+                directory_partitions,
+                fs,
+                orc_schema,
                 index=index,
                 columns=columns,
                 filters=filters,
@@ -268,6 +301,8 @@ class CudfORCEngine:
                 aggregate_files=aggregate_files,
                 gather_statistics=gather_statistics,
                 dir_agg_depth=dir_agg_depth,
+                dir_columns_need_stats=dir_columns_need_stats,
+                file_columns_need_stats=file_columns_need_stats,
             )
 
         # Use avilable statistics to calculate divisions
@@ -288,7 +323,7 @@ class CudfORCEngine:
 
         # Define common kwargs
         common_kwargs = {
-            "fs": dataset_info["fs"],
+            "fs": fs,
             "schema": dataset_info["pa_schema"],
             "partition_uniques": dataset_info["directory_partition_keys"],
             "filters": filters,
@@ -299,7 +334,12 @@ class CudfORCEngine:
     @classmethod
     def _gather_parts(
         cls,
-        dataset_info,
+        paths,
+        hive_parts,
+        fs,
+        orc_schema,
+        dir_columns_need_stats=None,
+        file_columns_need_stats=None,
         path_indices=None,
         index=None,
         columns=None,
@@ -312,12 +352,8 @@ class CudfORCEngine:
         """Gather partitioning plan for every path in the dataset"""
 
         # Extract necessary info from dataset_info
-        fs = dataset_info["fs"]
-        paths = dataset_info["paths"]
-        schema = dataset_info["orc_schema"]
-        directory_partitions = dataset_info["directory_partitions"]
-        dir_columns_need_stats = dataset_info["dir_columns_need_stats"]
-        file_columns_need_stats = dataset_info["file_columns_need_stats"]
+        dir_columns_need_stats = dir_columns_need_stats or []
+        file_columns_need_stats = file_columns_need_stats or []
 
         # Assume we are processing all paths if paths=None
         if path_indices is None:
@@ -329,9 +365,8 @@ class CudfORCEngine:
         parts = []
         statistics = []
         offset = 0
-        for i in path_indices:
-            path = paths[i]
-            hive_part = directory_partitions[i] if directory_partitions else []
+        for i, path in enumerate(paths):
+            hive_part = hive_parts[i] if hive_parts else []
             hive_part_need_stats = [
                 (k, v) for k, v in hive_part if k in dir_columns_need_stats
             ]
@@ -339,7 +374,7 @@ class CudfORCEngine:
                 with fs.open(path, "rb") as f:
                     o = orc.ORCFile(f)
                     nstripes = o.nstripes
-                    if schema != o.schema:
+                    if orc_schema != o.schema:
                         raise ValueError(
                             "Incompatible schemas while parsing ORC files"
                         )
@@ -692,7 +727,7 @@ def read_orc(
     aggregate_files=None,
     storage_options=None,
     gather_statistics=True,
-    allow_worker_gather=None,
+    files_per_metadata_tasks=None,
     sample_data=None,
     read_kwargs=None,
 ):
@@ -740,8 +775,10 @@ def read_orc(
         Further parameters to pass to the bytes backend.
     gather_statistics : bool, default True
         Whether to gather file and stripe statistics from the orc metadata.
-    allow_worker_gather : bool, optional
-        Whether to parallelize the gathering and processing of orc metadata.
+    files_per_metadata_tasks : int, optional
+        Number of files to process within each metadata-processing task.
+        Default is ``32``. If set to ``0``, metadata-processing will be
+        performed in serial (on the client).
     sample_data : bool, optional
         Whether to sample data to construct output collection metadata.
     read_kwargs : dict, optional
@@ -810,7 +847,7 @@ def read_orc(
         split_stripes=split_stripes,
         aggregate_files=aggregate_files,
         gather_statistics=gather_statistics,
-        allow_worker_gather=allow_worker_gather,
+        files_per_metadata_tasks=files_per_metadata_tasks,
     )
 
     # Add read_kwargs to common_kwargs
