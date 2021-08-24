@@ -21,6 +21,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -137,7 +138,7 @@ static void BM_join(state_type& state, Join JoinFunc)
     const auto col_ref_left_0  = cudf::ast::column_reference(0);
     const auto col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
     auto left_zero_eq_right_zero =
-      cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
 
     for (auto _ : state) {
       cuda_event_timer raii(state, true, rmm::cuda_stream_default);

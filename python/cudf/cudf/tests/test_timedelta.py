@@ -1386,3 +1386,12 @@ def test_timedelta_reductions(data, op, dtype):
         assert True
     else:
         assert_eq(expected.to_numpy(), actual)
+
+
+def test_error_values():
+    s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
+    with pytest.raises(
+        NotImplementedError,
+        match="TimeDelta Arrays is not yet implemented in cudf",
+    ):
+        s.values
