@@ -604,10 +604,8 @@ class ColumnBase(Column, Serializable):
                 if not isinstance(key, Column):
                     key = as_column(key)
 
-                if not is_scalar(value):
-                    if not isinstance(value, Column):
-                        value = as_column(value)
-                    value = value.as_frame()
+                if not is_scalar(value) and not isinstance(value, Column):
+                    value = as_column(value)
                 result = tmp.__class__._from_data(
                     *libcudf.copying.scatter(value, key, tmp)
                 )

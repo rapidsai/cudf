@@ -19,7 +19,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, make_table_view
 
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
@@ -214,8 +214,8 @@ def scatter(object source, Column scatter_map, Table target_table,
     cdef vector[reference_wrapper[constscalar]] source_scalars
     cdef DeviceScalar slr
 
-    if isinstance(source, Table):
-        source_table_view = (<Table> source).data_view()
+    if isinstance(source, Column):
+        source_table_view = make_table_view((<Column> source,))
 
         with nogil:
             c_result = move(
