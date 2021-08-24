@@ -3,11 +3,12 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
+from rmm._lib.device_buffer cimport device_buffer
+
 from cudf._lib.cpp.column.column cimport column, column_view
 from cudf._lib.cpp.table.table cimport table, table_view
 from cudf._lib.cpp.utilities.host_span cimport host_span
 
-from rmm._lib.device_buffer cimport device_buffer
 
 cdef extern from "cudf/concatenate.hpp" namespace "cudf" nogil:
     # The versions of concatenate taking vectors don't exist in libcudf

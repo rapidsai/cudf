@@ -63,6 +63,9 @@ class orc_reader_options {
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
+  // Columns that should be converted from Decimal to Float64
+  std::vector<std::string> _decimal_cols_as_float;
+
   friend orc_reader_options_builder;
 
   /**
@@ -128,6 +131,14 @@ class orc_reader_options {
    */
   data_type get_timestamp_type() const { return _timestamp_type; }
 
+  /**
+   * @brief Columns that should be converted from Decimal to Float64.
+   */
+  std::vector<std::string> const& get_decimal_cols_as_float() const
+  {
+    return _decimal_cols_as_float;
+  }
+
   // Setters
 
   /**
@@ -191,6 +202,16 @@ class orc_reader_options {
    * @param type Type of timestamp.
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
+
+  /**
+   * @brief Set columns that should be converted from Decimal to Float64
+   *
+   * @param val Vector of column names.
+   */
+  void set_decimal_cols_as_float(std::vector<std::string> val)
+  {
+    _decimal_cols_as_float = std::move(val);
+  }
 };
 
 class orc_reader_options_builder {
@@ -296,9 +317,21 @@ class orc_reader_options_builder {
   }
 
   /**
+   * @brief Columns that should be converted from decimals to float64.
+   *
+   * @param val Vector of column names.
+   * @return this for chaining.
+   */
+  orc_reader_options_builder& decimal_cols_as_float(std::vector<std::string> val)
+  {
+    options._decimal_cols_as_float = std::move(val);
+    return *this;
+  }
+
+  /**
    * @brief move orc_reader_options member once it's built.
    */
-  operator orc_reader_options &&() { return std::move(options); }
+  operator orc_reader_options&&() { return std::move(options); }
 
   /**
    * @brief move orc_reader_options member once it's built.
@@ -313,13 +346,13 @@ class orc_reader_options_builder {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  ...
- *  std::string filepath = "dataset.orc";
- *  cudf::orc_reader_options options =
- * cudf::orc_reader_options::builder(cudf::source_info(filepath));
- *  ...
- *  auto result = cudf::read_orc(options);
+ *  auto source  = cudf::io::source_info("dataset.orc");
+ *  auto options = cudf::io::orc_reader_options::builder(source);
+ *  auto result  = cudf::io::read_orc(options);
  * @endcode
+ *
+ * Note: Support for reading files with struct columns is currently experimental, the output may not
+ * be as reliable as reading for other datatypes.
  *
  * @param options Settings for controlling reading behavior.
  * @param mr Device memory resource used to allocate device memory of the table in the returned
@@ -517,7 +550,7 @@ class orc_writer_options_builder {
   /**
    * @brief move orc_writer_options member once it's built.
    */
-  operator orc_writer_options &&() { return std::move(options); }
+  operator orc_writer_options&&() { return std::move(options); }
 
   /**
    * @brief move orc_writer_options member once it's built.
@@ -532,12 +565,9 @@ class orc_writer_options_builder {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  ...
- *  std::string filepath = "dataset.orc";
- *  cudf::orc_writer_options options = cudf::orc_writer_options::builder(cudf::sink_info(filepath),
- * table->view());
- *  ...
- *  cudf::write_orc(options);
+ *  auto destination = cudf::io::sink_info("dataset.orc");
+ *  auto options     = cudf::io::orc_writer_options::builder(destination, table->view());
+ *  cudf::io::write_orc(options);
  * @endcode
  *
  * @param options Settings for controlling reading behavior.
@@ -691,7 +721,7 @@ class chunked_orc_writer_options_builder {
   /**
    * @brief move chunked_orc_writer_options member once it's built.
    */
-  operator chunked_orc_writer_options &&() { return std::move(options); }
+  operator chunked_orc_writer_options&&() { return std::move(options); }
 
   /**
    * @brief move chunked_orc_writer_options member once it's built.

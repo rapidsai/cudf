@@ -6,7 +6,7 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_100
-from cudf.tests.utils import NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, assert_eq
 from cudf.utils.dtypes import cudf_dtypes_to_pandas_dtypes
 
 
@@ -390,7 +390,7 @@ def test_to_numeric_error(data, errors):
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])
 def test_series_construction_with_nulls(dtype, input_obj):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     # numpy case
 
     expect = pd.Series(input_obj, dtype=cudf_dtypes_to_pandas_dtypes[dtype])

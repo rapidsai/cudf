@@ -49,7 +49,7 @@ class kafka_consumer : public cudf::io::datasource {
    * @param configs key/value pairs of librdkafka configurations that will be
    *                passed to the librdkafka client
    */
-  kafka_consumer(std::map<std::string, std::string> const &configs);
+  kafka_consumer(std::map<std::string, std::string> const& configs);
 
   /**
    * @brief Instantiate a Kafka consumer object. Documentation for librdkafka configurations can be
@@ -66,13 +66,13 @@ class kafka_consumer : public cudf::io::datasource {
    * before batch_timeout, a smaller subset will be returned
    * @param delimiter optional delimiter to insert into the output between kafka messages, Ex: "\n"
    */
-  kafka_consumer(std::map<std::string, std::string> const &configs,
-                 std::string const &topic_name,
+  kafka_consumer(std::map<std::string, std::string> const& configs,
+                 std::string const& topic_name,
                  int partition,
                  int64_t start_offset,
                  int64_t end_offset,
                  int batch_timeout,
-                 std::string const &delimiter);
+                 std::string const& delimiter);
 
   /**
    * @brief Returns a buffer with a subset of data from Kafka Topic
@@ -100,7 +100,7 @@ class kafka_consumer : public cudf::io::datasource {
    *
    * @return The number of bytes read (can be smaller than size)
    */
-  size_t host_read(size_t offset, size_t size, uint8_t *dst) override;
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override;
 
   /**
    * @brief Commits an offset to a specified Kafka Topic/Partition instance
@@ -112,7 +112,7 @@ class kafka_consumer : public cudf::io::datasource {
    * @param[in] offset Offset that should be set for the topic/partition pair
    *
    */
-  void commit_offset(std::string const &topic, int partition, int64_t offset);
+  void commit_offset(std::string const& topic, int partition, int64_t offset);
 
   /**
    * @brief Retrieve the watermark offset values for a topic/partition
@@ -124,7 +124,7 @@ class kafka_consumer : public cudf::io::datasource {
    *            the latest value will be retrieved from the Kafka broker by making a network
    *            request.
    */
-  std::map<std::string, int64_t> get_watermark_offset(std::string const &topic,
+  std::map<std::string, int64_t> get_watermark_offset(std::string const& topic,
                                                       int partition,
                                                       int timeout,
                                                       bool cached);
@@ -144,7 +144,7 @@ class kafka_consumer : public cudf::io::datasource {
    *
    * @return Latest offset for the specified topic/partition pair
    */
-  int64_t get_committed_offset(std::string const &topic, int partition);
+  int64_t get_committed_offset(std::string const& topic, int partition);
 
   /**
    * @brief Query the Kafka broker for the list of Topic partitions for a Topic. If no topic is
@@ -189,7 +189,7 @@ class kafka_consumer : public cudf::io::datasource {
   std::string buffer;
 
  private:
-  RdKafka::ErrorCode update_consumer_topic_partition_assignment(std::string const &topic,
+  RdKafka::ErrorCode update_consumer_topic_partition_assignment(std::string const& topic,
                                                                 int partition,
                                                                 int64_t offset);
 

@@ -49,7 +49,7 @@ __device__ void dissect_duration(T duration, duration_component* timeparts)
   timeparts->is_negative = (duration < T{0});
   timeparts->day         = cuda::std::chrono::floor<duration_D>(duration).count();
 
-  if (cuda::std::is_same<T, duration_D>::value) return;
+  if (cuda::std::is_same_v<T, duration_D>) return;
 
   // adjust for pandas format
   if (timeparts->is_negative) {
@@ -63,7 +63,7 @@ __device__ void dissect_duration(T duration, duration_component* timeparts)
                        cuda::std::chrono::hours(1))
                         .count();
   timeparts->second = (seconds % cuda::std::chrono::minutes(1)).count();
-  if (not cuda::std::is_same<T, duration_s>::value) {
+  if (not cuda::std::is_same_v<T, duration_s>) {
     timeparts->nanosecond =
       (cuda::std::chrono::duration_cast<duration_ns>(duration) % duration_s(1)).count();
   }

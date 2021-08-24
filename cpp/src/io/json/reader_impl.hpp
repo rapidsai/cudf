@@ -44,7 +44,7 @@ using namespace cudf::io::json;
 using namespace cudf::io;
 
 using col_map_type     = cudf::io::json::gpu::col_map_type;
-using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_map_type *)>>;
+using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_map_type*)>>;
 
 /**
  * @brief Class used to parse Json input and convert it into gdf columns.
@@ -54,13 +54,13 @@ class reader::impl {
  private:
   const json_reader_options options_{};
 
-  rmm::mr::device_memory_resource *mr_ = nullptr;
+  rmm::mr::device_memory_resource* mr_ = nullptr;
 
   std::vector<std::unique_ptr<datasource>> sources_;
   std::vector<std::string> filepaths_;
   std::vector<uint8_t> buffer_;
 
-  const char *uncomp_data_ = nullptr;
+  const char* uncomp_data_ = nullptr;
   size_t uncomp_size_      = 0;
 
   // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
@@ -87,7 +87,7 @@ class reader::impl {
    * @brief Sets the column map data member and makes a device copy to be used as a kernel
    * parameter.
    */
-  void set_column_map(col_map_ptr_type &&map, rmm::cuda_stream_view stream)
+  void set_column_map(col_map_ptr_type&& map, rmm::cuda_stream_view stream)
   {
     key_to_col_idx_map_ = std::move(map);
     d_key_col_map_ =
@@ -145,7 +145,7 @@ class reader::impl {
    * Only rows that need to be parsed are copied, based on the byte range
    * Also updates the array of record starts to match the device data offset.
    */
-  void upload_data_to_device(rmm::device_uvector<uint64_t> &rec_starts,
+  void upload_data_to_device(rmm::device_uvector<uint64_t>& rec_starts,
                              rmm::cuda_stream_view stream);
 
   /**
@@ -183,11 +183,11 @@ class reader::impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    */
-  explicit impl(std::vector<std::unique_ptr<datasource>> &&sources,
-                std::vector<std::string> const &filepaths,
-                json_reader_options const &options,
+  explicit impl(std::vector<std::unique_ptr<datasource>>&& sources,
+                std::vector<std::string> const& filepaths,
+                json_reader_options const& options,
                 rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource *mr);
+                rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Read an entire set or a subset of data from the source
@@ -197,7 +197,7 @@ class reader::impl {
    *
    * @return Table and its metadata
    */
-  table_with_metadata read(json_reader_options const &options, rmm::cuda_stream_view stream);
+  table_with_metadata read(json_reader_options const& options, rmm::cuda_stream_view stream);
 };
 
 }  // namespace json

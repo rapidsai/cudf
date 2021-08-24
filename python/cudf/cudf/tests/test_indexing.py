@@ -9,8 +9,12 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
-from cudf.tests import utils
-from cudf.tests.utils import INTEGER_TYPES, assert_eq, assert_exceptions_equal
+from cudf.testing import _utils as utils
+from cudf.testing._utils import (
+    INTEGER_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 index_dtypes = INTEGER_TYPES
 

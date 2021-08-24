@@ -231,6 +231,7 @@ def read_orc(
     skiprows=None,
     num_rows=None,
     use_index=True,
+    decimal_cols_as_float=None,
     timestamp_type=None,
     **kwargs,
 ):
@@ -289,14 +290,15 @@ def read_orc(
             stripes = selected_stripes
 
     if engine == "cudf":
-        df = DataFrame._from_table(
-            liborc.read_orc(
+        return DataFrame._from_data(
+            *liborc.read_orc(
                 filepaths_or_buffers,
                 columns,
                 stripes,
                 skiprows,
                 num_rows,
                 use_index,
+                decimal_cols_as_float,
                 timestamp_type,
             )
         )
@@ -335,12 +337,7 @@ def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
     """{docstring}"""
 
     for col in df._data.columns:
-        if isinstance(col, cudf.core.column.ListColumn):
-            raise NotImplementedError(
-                "Writing to ORC format is not yet supported with "
-                "list columns."
-            )
-        elif isinstance(col, cudf.core.column.StructColumn):
+        if isinstance(col, cudf.core.column.StructColumn):
             raise NotImplementedError(
                 "Writing to ORC format is not yet supported with "
                 "Struct columns."

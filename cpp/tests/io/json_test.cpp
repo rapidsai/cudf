@@ -42,9 +42,19 @@ using int64_wrapper        = wrapper<int64_t>;
 using timestamp_ms_wrapper = wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>;
 using bool_wrapper         = wrapper<bool>;
 
+using cudf::data_type;
+using cudf::type_id;
+using cudf::type_to_id;
+
+template <typename T>
+auto dtype()
+{
+  return data_type{type_to_id<T>()};
+}
+
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
-  typename std::conditional<std::is_same<T, cudf::string_view>::value,
+  typename std::conditional<std::is_same_v<T, cudf::string_view>,
                             cudf::test::strings_column_wrapper,
                             cudf::test::fixed_width_column_wrapper<T, SourceElementT>>::type;
 
@@ -106,7 +116,7 @@ inline auto random_values(size_t size)
 
   using T1 = T;
   using uniform_distribution =
-    typename std::conditional_t<std::is_same<T1, bool>::value,
+    typename std::conditional_t<std::is_same_v<T1, bool>,
                                 std::bernoulli_distribution,
                                 std::conditional_t<std::is_floating_point<T1>::value,
                                                    std::uniform_real_distribution<T1>,
@@ -145,14 +155,13 @@ void check_float_column(cudf::column_view const& col,
 struct JsonReaderTest : public cudf::test::BaseFixture {
 };
 
-/*
 TEST_F(JsonReaderTest, BasicJsonLines)
 {
   std::string data = "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n";
 
   cudf_io::json_reader_options in_options =
     cudf_io::json_reader_options::builder(cudf_io::source_info{data.data(), data.size()})
-      .dtypes({"int", "float64"})
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<double>()})
       .lines(true);
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
 
@@ -183,7 +192,7 @@ TEST_F(JsonReaderTest, FloatingPoint)
 
   cudf_io::json_reader_options in_options =
     cudf_io::json_reader_options::builder(cudf_io::source_info{filepath})
-      .dtypes({"float32"})
+      .dtypes({dtype<float>()})
       .lines(true);
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
 
@@ -207,7 +216,7 @@ TEST_F(JsonReaderTest, JsonLinesStrings)
 
   cudf_io::json_reader_options in_options =
     cudf_io::json_reader_options::builder(cudf_io::source_info{data.data(), data.size()})
-      .dtypes({"2:str", "0:int", "1:float64"})
+      .dtypes({{"2", dtype<cudf::string_view>()}, {"0", dtype<int32_t>()}, {"1", dtype<double>()}})
       .lines(true);
 
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
@@ -246,9 +255,8 @@ TEST_F(JsonReaderTest, MultiColumn)
     std::ostringstream line;
     for (int i = 0; i < num_rows; ++i) {
       line << "[" << std::to_string(int8_values[i]) << "," << int16_values[i] << ","
-           << int16_values[i] << "," << int32_values[i] << "," << int32_values[i] << ","
-           << int64_values[i] << "," << int64_values[i] << "," << float32_values[i] << ","
-           << float32_values[i] << "," << float64_values[i] << "," << float64_values[i] << "]\n";
+           << int32_values[i] << "," << int64_values[i] << "," << float32_values[i] << ","
+           << float64_values[i] << "]\n";
     }
     std::ofstream outfile(filepath, std::ofstream::out);
     outfile << line.str();
@@ -256,17 +264,12 @@ TEST_F(JsonReaderTest, MultiColumn)
 
   cudf_io::json_reader_options in_options =
     cudf_io::json_reader_options::builder(cudf_io::source_info{filepath})
-      .dtypes({"int8",
-               "short",
-               "int16",
-               "int",
-               "int32",
-               "long",
-               "int64",
-               "float",
-               "float32",
-               "double",
-               "float64"})
+      .dtypes({dtype<int8_t>(),
+               dtype<int16_t>(),
+               dtype<int32_t>(),
+               dtype<int64_t>(),
+               dtype<float>(),
+               dtype<double>()})
       .lines(true);
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
 
@@ -276,34 +279,21 @@ TEST_F(JsonReaderTest, MultiColumn)
 
   EXPECT_EQ(view.column(0).type().id(), cudf::type_id::INT8);
   EXPECT_EQ(view.column(1).type().id(), cudf::type_id::INT16);
-  EXPECT_EQ(view.column(2).type().id(), cudf::type_id::INT16);
-  EXPECT_EQ(view.column(3).type().id(), cudf::type_id::INT32);
-  EXPECT_EQ(view.column(4).type().id(), cudf::type_id::INT32);
-  EXPECT_EQ(view.column(5).type().id(), cudf::type_id::INT64);
-  EXPECT_EQ(view.column(6).type().id(), cudf::type_id::INT64);
-  EXPECT_EQ(view.column(7).type().id(), cudf::type_id::FLOAT32);
-  EXPECT_EQ(view.column(8).type().id(), cudf::type_id::FLOAT32);
-  EXPECT_EQ(view.column(9).type().id(), cudf::type_id::FLOAT64);
-  EXPECT_EQ(view.column(10).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(view.column(2).type().id(), cudf::type_id::INT32);
+  EXPECT_EQ(view.column(3).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(view.column(4).type().id(), cudf::type_id::FLOAT32);
+  EXPECT_EQ(view.column(5).type().id(), cudf::type_id::FLOAT64);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(0),
                                  int8_wrapper{int8_values.begin(), int8_values.end(), validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(1),
                                  int16_wrapper{int16_values.begin(), int16_values.end(), validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(2),
-                                 int16_wrapper{int16_values.begin(), int16_values.end(), validity});
+                                 int_wrapper{int32_values.begin(), int32_values.end(), validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(3),
-                                 int_wrapper{int32_values.begin(), int32_values.end(), validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(4),
-                                 int_wrapper{int32_values.begin(), int32_values.end(), validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(5),
                                  int64_wrapper{int64_values.begin(), int64_values.end(), validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(6),
-                                 int64_wrapper{int64_values.begin(), int64_values.end(), validity});
-  check_float_column(view.column(7), float32_values, validity);
-  check_float_column(view.column(8), float32_values, validity);
-  check_float_column(view.column(9), float64_values, validity);
-  check_float_column(view.column(10), float64_values, validity);
+  check_float_column(view.column(4), float32_values, validity);
+  check_float_column(view.column(5), float64_values, validity);
 }
 
 TEST_F(JsonReaderTest, Booleans)
@@ -316,7 +306,7 @@ TEST_F(JsonReaderTest, Booleans)
 
   cudf_io::json_reader_options in_options =
     cudf_io::json_reader_options::builder(cudf_io::source_info{filepath})
-      .dtypes({"bool"})
+      .dtypes({dtype<bool>()})
       .lines(true);
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
 
@@ -343,7 +333,7 @@ TEST_F(JsonReaderTest, Dates)
 
   cudf_io::json_reader_options in_options =
     cudf_io::json_reader_options::builder(cudf_io::source_info{filepath})
-      .dtypes({"date"})
+      .dtypes({data_type{type_id::TIMESTAMP_MILLISECONDS}})
       .lines(true)
       .dayfirst(true);
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
@@ -380,7 +370,7 @@ TEST_F(JsonReaderTest, Durations)
 
   cudf_io::json_reader_options in_options =
     cudf_io::json_reader_options::builder(cudf_io::source_info{filepath})
-      .dtypes({"timedelta64[ns]"})
+      .dtypes({data_type{type_id::DURATION_NANOSECONDS}})
       .lines(true);
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
 
@@ -615,10 +605,11 @@ TEST_F(JsonReaderTest, JsonLinesObjectsOutOfOrder)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                  cudf::test::strings_column_wrapper({"aaa", "bbb"}));
 }
-*/
+
 /*
 // currently, the json reader is strict about having non-empty input.
-TEST_F(JsonReaderTest, EmptyFile) {
+TEST_F(JsonReaderTest, EmptyFile)
+{
   auto filepath = temp_env->get_temp_dir() + "EmptyFile.csv";
   {
     std::ofstream outfile{filepath, std::ofstream::out};
@@ -634,7 +625,8 @@ TEST_F(JsonReaderTest, EmptyFile) {
 }
 
 // currently, the json reader is strict about having non-empty input.
-TEST_F(JsonReaderTest, NoDataFile) {
+TEST_F(JsonReaderTest, NoDataFile)
+{
   auto filepath = temp_env->get_temp_dir() + "NoDataFile.csv";
   {
     std::ofstream outfile{filepath, std::ofstream::out};
@@ -649,7 +641,7 @@ TEST_F(JsonReaderTest, NoDataFile) {
   EXPECT_EQ(0, view.num_columns());
 }
 */
-/*
+
 TEST_F(JsonReaderTest, ArrowFileSource)
 {
   const std::string fname = temp_env->get_temp_dir() + "ArrowFileSource.csv";
@@ -664,13 +656,12 @@ TEST_F(JsonReaderTest, ArrowFileSource)
   auto arrow_source = cudf_io::arrow_io_source{infile};
   cudf_io::json_reader_options in_options =
     cudf_io::json_reader_options::builder(cudf_io::source_info{&arrow_source})
-      .dtypes({"int8"})
+      .dtypes({dtype<int8_t>()})
       .lines(true);
   ;
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
 
-  EXPECT_EQ(result.tbl->num_columns(),
-            static_cast<cudf::size_type>(in_options.get_dtypes().size()));
+  EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT8);
 
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
@@ -689,7 +680,7 @@ TEST_F(JsonReaderTest, InvalidFloatingPoint)
 
   cudf_io::json_reader_options in_options =
     cudf_io::json_reader_options::builder(cudf_io::source_info{filepath})
-      .dtypes({"float32"})
+      .dtypes({dtype<float>()})
       .lines(true);
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
 
@@ -698,7 +689,8 @@ TEST_F(JsonReaderTest, InvalidFloatingPoint)
 
   const auto col_data = cudf::test::to_host<float>(result.tbl->view().column(0));
   // col_data.first contains the column data
-  for (const auto& elem : col_data.first) ASSERT_TRUE(std::isnan(elem));
+  for (const auto& elem : col_data.first)
+    ASSERT_TRUE(std::isnan(elem));
   // col_data.second contains the bitmasks
   ASSERT_EQ(0u, col_data.second[0]);
 }
@@ -861,7 +853,7 @@ TEST_F(JsonReaderTest, ParseOutOfRangeIntegers)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_less_int64_min_append, view.column(8));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_mixed_range_append, view.column(9));
 }
-*/
+
 TEST_F(JsonReaderTest, JsonLinesMultipleFileInputs)
 {
   const std::string file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
@@ -894,6 +886,29 @@ TEST_F(JsonReaderTest, JsonLinesMultipleFileInputs)
                                  int64_wrapper{{11, 22, 33, 44}, validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
                                  float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
+}
+
+TEST_F(JsonReaderTest, BadDtypeParams)
+{
+  std::string buffer = "[1,2,3,4]";
+
+  cudf_io::json_reader_options options_vec =
+    cudf_io::json_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+      .lines(true)
+      .dtypes({dtype<int8_t>()});
+
+  // should throw because there are four columns and only one dtype
+  EXPECT_THROW(cudf_io::read_json(options_vec), cudf::logic_error);
+
+  cudf_io::json_reader_options options_map =
+    cudf_io::json_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+      .lines(true)
+      .dtypes(std::map<std::string, cudf::data_type>{{"0", dtype<int8_t>()},
+                                                     {"1", dtype<int8_t>()},
+                                                     {"2", dtype<int8_t>()},
+                                                     {"wrong_name", dtype<int8_t>()}});
+  // should throw because one of the columns is not in the dtype map
+  EXPECT_THROW(cudf_io::read_json(options_map), cudf::logic_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

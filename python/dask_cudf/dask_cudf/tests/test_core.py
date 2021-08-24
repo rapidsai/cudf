@@ -59,7 +59,7 @@ def test_from_cudf_with_generic_idx():
 
     ddf = dgd.from_cudf(cdf, npartitions=2)
 
-    assert isinstance(ddf.index.compute(), cudf.core.index.GenericIndex)
+    assert isinstance(ddf.index.compute(), cudf.RangeIndex)
     dd.assert_eq(ddf.loc[1:2, ["a"]], cdf.loc[1:2, ["a"]])
 
 
@@ -706,7 +706,7 @@ def test_dataframe_set_index():
 
     pddf = dd.from_pandas(pdf, npartitions=4)
     pddf = pddf.set_index("str")
-    from cudf.tests.utils import assert_eq
+    from cudf.testing._utils import assert_eq
 
     assert_eq(ddf.compute(), pddf.compute())
 

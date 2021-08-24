@@ -24,6 +24,8 @@
 
 using namespace cudf::test::iterators;
 
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::FIRST_ERROR};
+
 template <typename T>
 struct InterleaveColumnsTest : public cudf::test::BaseFixture {
 };
@@ -163,7 +165,7 @@ TYPED_TEST(InterleaveColumnsTest, MismatchedDtypes)
 {
   using T = TypeParam;
 
-  if (not std::is_same<int, T>::value and not cudf::is_fixed_point<T>()) {
+  if (not std::is_same_v<int, T> and not cudf::is_fixed_point<T>()) {
     cudf::test::fixed_width_column_wrapper<int32_t> input_a({1, 4, 7}, {1, 0, 1});
     cudf::test::fixed_width_column_wrapper<T, int32_t> input_b({2, 5, 8}, {0, 1, 0});
 
@@ -189,7 +191,7 @@ TEST_F(InterleaveStringsColumnsTest, SingleColumn)
   auto col0 = cudf::test::strings_column_wrapper({"", "", "", ""}, {false, true, true, false});
 
   auto results = cudf::interleave_columns(cudf::table_view{{col0}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, col0, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, col0, verbosity);
 }
 
 TEST_F(InterleaveStringsColumnsTest, MultiColumnNullAndEmpty)
@@ -201,7 +203,7 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnNullAndEmpty)
     {"", "", "", "", "", "", "", ""}, {false, true, true, false, true, true, false, false});
 
   auto results = cudf::interleave_columns(cudf::table_view{{col0, col1}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
 }
 
 TEST_F(InterleaveStringsColumnsTest, MultiColumnEmptyNonNullable)
@@ -212,7 +214,7 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnEmptyNonNullable)
   auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", "", "", "", ""});
 
   auto results = cudf::interleave_columns(cudf::table_view{{col0, col1}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
 }
 
 TEST_F(InterleaveStringsColumnsTest, MultiColumnStringMix)
@@ -262,7 +264,7 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnStringMix)
                                                          false});
 
   auto results = cudf::interleave_columns(cudf::table_view{{col0, col1, col2}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
 }
 
 TEST_F(InterleaveStringsColumnsTest, MultiColumnStringMixNonNullable)
@@ -291,7 +293,7 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnStringMixNonNullable)
                                                          "c25"});
 
   auto results = cudf::interleave_columns(cudf::table_view{{col0, col1, col2}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
 }
 
 TEST_F(InterleaveStringsColumnsTest, MultiColumnStringMixNullableMix)
@@ -339,7 +341,7 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnStringMixNullableMix)
                                                          true});
 
   auto results = cudf::interleave_columns(cudf::table_view{{col0, col1, col2}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
 }
 
 template <typename T>
@@ -376,8 +378,7 @@ using IntListsCol = cudf::test::lists_column_wrapper<int32_t>;
 using IntCol      = cudf::test::fixed_width_column_wrapper<int32_t>;
 using TView       = cudf::table_view;
 
-constexpr bool print_all{false};  // For debugging
-constexpr int32_t null{0};
+constexpr int32_t null{0};  // mark for null elements
 }  // namespace
 
 struct ListsColumnsInterleaveTest : public cudf::test::BaseFixture {
@@ -421,7 +422,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, InterleaveEmptyColumns)
 
   auto const col     = ListsCol{}.release();
   auto const results = cudf::interleave_columns(TView{{col->view(), col->view()}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *results, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *results, verbosity);
 }
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, InterleaveOneColumnNotNull)
@@ -430,7 +431,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, InterleaveOneColumnNotNull)
 
   auto const col     = ListsCol{{1, 2}, {3, 4}, {5, 6}}.release();
   auto const results = cudf::interleave_columns(TView{{col->view()}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *results, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *results, verbosity);
 }
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, InterleaveOneColumnWithNulls)
@@ -444,7 +445,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, InterleaveOneColumnWithNulls)
                             null_at(1)}
                      .release();
   auto const results = cudf::interleave_columns(TView{{col->view()}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *results, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *results, verbosity);
 }
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputNoNull)
@@ -455,7 +456,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputNoNull)
   auto const col2     = ListsCol{{7, 8}, {9, 10}, {11, 12}}.release();
   auto const expected = ListsCol{{1, 2}, {7, 8}, {3, 4}, {9, 10}, {5, 6}, {11, 12}}.release();
   auto const results  = cudf::interleave_columns(TView{{col1->view(), col2->view()}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
 
 TEST_F(ListsColumnsInterleaveTest, SimpleInputStringsColumnsNoNull)
@@ -475,7 +476,7 @@ TEST_F(ListsColumnsInterleaveTest, SimpleInputStringsColumnsNoNull)
     StrListsCol{"Coconut"},
     StrListsCol{}}.release();
   auto const results = cudf::interleave_columns(TView{{col1->view(), col2->view()}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputWithNulls)
@@ -527,7 +528,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputWithNulls)
                                  nulls_at({2, 7, 9})}
                           .release();
   auto const results = cudf::interleave_columns(TView{{col1->view(), col2->view(), col3->view()}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputWithNullableChild)
@@ -540,7 +541,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputWithNullableChild)
   auto const expected =
     ListsCol{{1, 2}, {5, 6}, {9, 10}, {3, 4}, {7, 8}, ListsCol{{null, 12}, null_at(0)}}.release();
   auto const results = cudf::interleave_columns(TView{{col1->view(), col2->view(), col3->view()}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
 
 TEST_F(ListsColumnsInterleaveTest, SimpleInputStringsColumnsWithNulls)
@@ -570,7 +571,7 @@ TEST_F(ListsColumnsInterleaveTest, SimpleInputStringsColumnsWithNulls)
       null_at(5)}
       .release();
   auto const results = cudf::interleave_columns(TView{{col1->view(), col2->view()}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
 
 TEST_F(ListsColumnsInterleaveTest, SimpleInputStringsColumnsWithNullableChild)
@@ -597,7 +598,7 @@ TEST_F(ListsColumnsInterleaveTest, SimpleInputStringsColumnsWithNullableChild)
       {"Deer" /*NULL*/, "Snake" /*NULL*/, "Horse" /*NULL*/},
       all_nulls()}}.release();
   auto const results = cudf::interleave_columns(TView{{col1->view(), col2->view()}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputNoNull)
@@ -623,7 +624,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputNoNull)
     ListsCol{},
     ListsCol{7}}.release();
   auto const results = cudf::interleave_columns(TView{{col1, col2, col3, col4}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputWithNulls)
@@ -662,7 +663,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputWithNulls)
                                  nulls_at({1, 3, 4, 5, 7, 8, 11, 12})}
                           .release();
   auto const results = cudf::interleave_columns(TView{{col1, col2, col3, col4, col5}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputNullableChild)
@@ -689,7 +690,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputNullableChild)
     ListsCol{},
     ListsCol{7}}.release();
   auto const results = cudf::interleave_columns(TView{{col1, col2, col3, col4}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
 
 TEST_F(ListsColumnsInterleaveTest, SlicedStringsColumnsInputWithNulls)
@@ -727,7 +728,344 @@ TEST_F(ListsColumnsInterleaveTest, SlicedStringsColumnsInputWithNulls)
       null_at(11)}
       .release();
   auto const results = cudf::interleave_columns(TView{{col1, col2, col3, col4}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
+}
+
+namespace {
+using StructsCol = cudf::test::structs_column_wrapper;
+using StringsCol = cudf::test::strings_column_wrapper;
+}  // namespace
+
+struct StructsColumnsInterleaveTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(StructsColumnsInterleaveTest, InvalidInput)
+{
+  // Input table contains non-structs column
+  {
+    auto const col1 = IntCol{};
+    auto const col2 = StructsCol{};
+    EXPECT_THROW(cudf::interleave_columns(TView{{col1, col2}}), cudf::logic_error);
+  }
+
+  // Types mismatch
+  {
+    auto const structs1 = [] {
+      auto child1 = IntCol{1, 2, 3};
+      auto child2 = IntCol{4, 5, 6};
+      return StructsCol{{child1, child2}};
+    }();
+
+    auto const structs2 = [] {
+      auto child1 = IntCol{7, 8, 9};
+      auto child2 = StringsCol{"", "abc", "123"};
+      return StructsCol{{child1, child2}};
+    }();
+
+    EXPECT_THROW(cudf::interleave_columns(TView{{structs1, structs2}}), cudf::logic_error);
+  }
+
+  // Numbers of children mismatch
+  {
+    auto const structs1 = [] {
+      auto child1 = IntCol{1, 2, 3};
+      auto child2 = IntCol{4, 5, 6};
+      return StructsCol{{child1, child2}};
+    }();
+
+    auto const structs2 = [] {
+      auto child1 = IntCol{7, 8, 9};
+      auto child2 = IntCol{10, 11, 12};
+      auto child3 = IntCol{13, 14, 15};
+      return StructsCol{{child1, child2, child3}};
+    }();
+
+    EXPECT_THROW(cudf::interleave_columns(TView{{structs1, structs2}}), cudf::logic_error);
+  }
+}
+
+TEST_F(StructsColumnsInterleaveTest, InterleaveEmptyColumns)
+{
+  auto const structs = StructsCol{};
+  auto const results = cudf::interleave_columns(TView{{structs, structs}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(structs, *results, verbosity);
+}
+
+template <typename T>
+struct StructsColumnsInterleaveTypedTest : public cudf::test::BaseFixture {
+};
+
+using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
+                                        cudf::test::FloatingPointTypes,
+                                        cudf::test::FixedPointTypes>;
+TYPED_TEST_SUITE(StructsColumnsInterleaveTypedTest, TypesForTest);
+
+TYPED_TEST(StructsColumnsInterleaveTypedTest, InterleaveOneColumnNotNull)
+{
+  using ColWrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  auto const structs = [] {
+    auto child1 = ColWrapper{1, 2, 3};
+    auto child2 = ColWrapper{4, 5, 6};
+    auto child3 = StringsCol{"Banana", "Mango", "Apple"};
+    return StructsCol{{child1, child2, child3}};
+  }();
+  auto const results = cudf::interleave_columns(TView{{structs}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(structs, *results, verbosity);
+}
+
+TYPED_TEST(StructsColumnsInterleaveTypedTest, InterleaveOneColumnWithNulls)
+{
+  using ColWrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  auto const structs = [] {
+    auto child1 = ColWrapper{{1, 2, null, 3}, null_at(2)};
+    auto child2 = ColWrapper{{4, null, 5, 6}, null_at(1)};
+    auto child3 = StringsCol{{"" /*NULL*/, "Banana", "Mango", "Apple"}, null_at(0)};
+    return StructsCol{{child1, child2, child3}, null_at(3)};
+  }();
+  auto const results = cudf::interleave_columns(TView{{structs}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(structs, *results, verbosity);
+}
+
+TYPED_TEST(StructsColumnsInterleaveTypedTest, SimpleInputNoNull)
+{
+  using ColWrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  auto const structs1 = [] {
+    auto child1 = ColWrapper{1, 2, 3};
+    auto child2 = ColWrapper{4, 5, 6};
+    auto child3 = StringsCol{"Banana", "Mango", "Apple"};
+    return StructsCol{{child1, child2, child3}};
+  }();
+
+  auto const structs2 = [] {
+    auto child1 = ColWrapper{7, 8, 9};
+    auto child2 = ColWrapper{10, 11, 12};
+    auto child3 = StringsCol{"Bear", "Duck", "Cat"};
+    return StructsCol{{child1, child2, child3}};
+  }();
+
+  auto const expected = [] {
+    auto child1 = ColWrapper{1, 7, 2, 8, 3, 9};
+    auto child2 = ColWrapper{4, 10, 5, 11, 6, 12};
+    auto child3 = StringsCol{"Banana", "Bear", "Mango", "Duck", "Apple", "Cat"};
+    return StructsCol{{child1, child2, child3}};
+  }();
+
+  auto const results = cudf::interleave_columns(TView{{structs1, structs2}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results, verbosity);
+}
+
+TYPED_TEST(StructsColumnsInterleaveTypedTest, SimpleInputWithNulls)
+{
+  using ColWrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  auto const structs1 = [] {
+    auto child1 = ColWrapper{{1, 2, null, 3, 4}, null_at(2)};
+    auto child2 = ColWrapper{{4, null, 5, 6, 7}, null_at(1)};
+    auto child3 = StringsCol{{"" /*NULL*/, "Banana", "Mango", "Apple", "Cherry"}, null_at(0)};
+    return StructsCol{{child1, child2, child3}, null_at(0)};
+  }();
+
+  auto const structs2 = [] {
+    auto child1 = ColWrapper{{7, null, null, 8, 9}, nulls_at({1, 2})};
+    auto child2 = ColWrapper{{10, 11, 12, null, 14}, null_at(3)};
+    auto child3 = StringsCol{"Bear", "Duck", "Cat", "Dog", "Panda"};
+    return StructsCol{{child1, child2, child3}, null_at(4)};
+  }();
+
+  auto const structs3 = [] {
+    auto child1 = ColWrapper{{-1, -2, -3, 0, null}, null_at(4)};
+    auto child2 = ColWrapper{{-5, 0, null, -1, -10}, null_at(2)};
+    auto child3 = StringsCol{"111", "Bànànà", "abcxyz", "é á í", "zzz"};
+    return StructsCol{{child1, child2, child3}, null_at(1)};
+  }();
+
+  auto const expected = [] {
+    auto child1 = ColWrapper{{1, 7, -1, 2, null, -2, null, null, -3, 3, 8, 0, 4, 9, null},
+                             nulls_at({4, 6, 7, 14})};
+    auto child2 = ColWrapper{{4, 10, -5, null, 11, 0, 5, 12, null, 6, null, -1, 7, 14, -10},
+                             nulls_at({3, 8, 10})};
+    auto child3 = StringsCol{{"" /*NULL*/,
+                              "Bear",
+                              "111",
+                              "Banana",
+                              "Duck",
+                              "Bànànà",
+                              "Mango",
+                              "Cat",
+                              "abcxyz",
+                              "Apple",
+                              "Dog",
+                              "é á í",
+                              "Cherry",
+                              "Panda",
+                              "zzz"},
+                             null_at(0)};
+    return StructsCol{{child1, child2, child3}, nulls_at({0, 5, 13})};
+  }();
+
+  auto const results = cudf::interleave_columns(TView{{structs1, structs2, structs3}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results, verbosity);
+}
+
+TYPED_TEST(StructsColumnsInterleaveTypedTest, NestedInputStructsColumns)
+{
+  using ColWrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  auto const structs1 = [] {
+    auto child_structs1 = [] {
+      auto child1 = ColWrapper{{null, 2, 3, 4, 5}, null_at(0)};
+      auto child2 = ColWrapper{{6, 7, 8, null, 10}, null_at(3)};
+      return StructsCol{{child1, child2}, null_at(0)};
+    }();
+
+    auto child_structs2 = [] {
+      auto child1 = ColWrapper{{11, null, 13, 14, 15}, null_at(1)};
+      auto child2 = ColWrapper{{null, 17, 18, 19, 20}, null_at(0)};
+      return StructsCol{{child1, child2}, nulls_at({0, 1})};
+    }();
+
+    auto child_strings = [] { return StringsCol{"Banana", "Mango", "Apple", "Cherry", "Kiwi"}; }();
+
+    return StructsCol{{child_structs1, child_structs2, child_strings}, null_at(0)};
+  }();
+
+  auto const structs2 = [] {
+    auto child_structs1 = [] {
+      auto child1 = ColWrapper{{-1, null, -3, -4, -5}, null_at(1)};
+      auto child2 = ColWrapper{{-6, -7, -8, null, -10}, null_at(3)};
+      return StructsCol{{child1, child2}};
+    }();
+
+    auto child_structs2 = [] {
+      auto child1 = ColWrapper{{-11, -12, null, -14, -15}, null_at(2)};
+      auto child2 = ColWrapper{{-16, -17, -18, -19, null}, null_at(4)};
+      return StructsCol{{child1, child2}, null_at(2)};
+    }();
+
+    auto child_strings = [] { return StringsCol{"Bear", "Duck", "Cat", "Dog", "Rabbit"}; }();
+
+    return StructsCol{{child_structs1, child_structs2, child_strings}, null_at(2)};
+  }();
+
+  auto const expected = [] {
+    auto child_structs1 = [] {
+      auto child1 = ColWrapper{{null, -1, 2, null, 3, -3, 4, -4, 5, -5}, nulls_at({0, 3})};
+      auto child2 = ColWrapper{{6, -6, 7, -7, 8, -8, null, null, 10, -10}, nulls_at({6, 7})};
+      return StructsCol{{child1, child2}, null_at(0)};
+    }();
+
+    auto child_structs2 = [] {
+      auto child1 = ColWrapper{{11, -11, null, -12, 13, null, 14, -14, 15, -15}, nulls_at({2, 5})};
+      auto child2 = ColWrapper{{null, -16, 17, -17, 18, -18, 19, -19, 20, null}, nulls_at({0, 9})};
+      return StructsCol{{child1, child2}, nulls_at({0, 2, 5})};
+    }();
+
+    auto child_strings = [] {
+      return StringsCol{
+        "Banana", "Bear", "Mango", "Duck", "Apple", "Cat", "Cherry", "Dog", "Kiwi", "Rabbit"};
+    }();
+
+    return StructsCol{{child_structs1, child_structs2, child_strings}, nulls_at({0, 5})};
+  }();
+
+  auto const results = cudf::interleave_columns(TView{{structs1, structs2}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results, verbosity);
+}
+
+TYPED_TEST(StructsColumnsInterleaveTypedTest, SlicedColumnsInputNoNull)
+{
+  using ColWrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+  constexpr int32_t NOT_USE{-1};  // mark for elements that we don't care
+
+  auto const structs1_original = [] {
+    auto child1 = ColWrapper{NOT_USE, NOT_USE, 1, 2, 3, NOT_USE};
+    auto child2 = ColWrapper{NOT_USE, NOT_USE, 4, 5, 6, NOT_USE};
+    auto child3 = StringsCol{"NOT_USE", "NOT_USE", "Banana", "Mango", "Apple", "NOT_USE"};
+    return StructsCol{{child1, child2, child3}};
+  }();
+
+  // structs2 has more rows than structs1
+  auto const structs2_original = [] {
+    auto child1 = ColWrapper{NOT_USE, 7, 8, 9, NOT_USE, NOT_USE, NOT_USE};
+    auto child2 = ColWrapper{NOT_USE, 10, 11, 12, NOT_USE, NOT_USE, NOT_USE};
+    auto child3 = StringsCol{"NOT_USE", "Bear", "Duck", "Cat", "NOT_USE", "NOT_USE", "NOT_USE"};
+    return StructsCol{{child1, child2, child3}};
+  }();
+
+  auto const expected = [] {
+    auto child1 = ColWrapper{1, 7, 2, 8, 3, 9};
+    auto child2 = ColWrapper{4, 10, 5, 11, 6, 12};
+    auto child3 = StringsCol{"Banana", "Bear", "Mango", "Duck", "Apple", "Cat"};
+    return StructsCol{{child1, child2, child3}};
+  }();
+
+  auto const structs1 = cudf::slice(structs1_original, {2, 5})[0];
+  auto const structs2 = cudf::slice(structs2_original, {1, 4})[0];
+  auto const results  = cudf::interleave_columns(TView{{structs1, structs2}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results, verbosity);
+}
+
+TYPED_TEST(StructsColumnsInterleaveTypedTest, SlicedColumnsInputWithNulls)
+{
+  using ColWrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+  constexpr int32_t NOT_USE{-1};  // mark for elements that we don't care
+
+  auto const structs1_original = [] {
+    auto child1 = ColWrapper{{NOT_USE, NOT_USE, 1, 2, null, 3, 4, NOT_USE}, null_at(4)};
+    auto child2 = ColWrapper{{NOT_USE, NOT_USE, 4, null, 5, 6, 7, NOT_USE}, null_at(3)};
+    auto child3 = StringsCol{
+      {"NOT_USE", "NOT_USE", "" /*NULL*/, "Banana", "Mango", "Apple", "Cherry", "NOT_USE"},
+      null_at(2)};
+    return StructsCol{{child1, child2, child3}, null_at(2)};
+  }();
+
+  auto const structs2_original = [] {
+    auto child1 = ColWrapper{{7, null, null, 8, 9, NOT_USE, NOT_USE}, nulls_at({1, 2})};
+    auto child2 = ColWrapper{{10, 11, 12, null, 14, NOT_USE, NOT_USE}, null_at(3)};
+    auto child3 = StringsCol{"Bear", "Duck", "Cat", "Dog", "Panda", "NOT_USE", "NOT_USE"};
+    return StructsCol{{child1, child2, child3}, null_at(4)};
+  }();
+
+  auto const structs3_original = [] {
+    auto child1 = ColWrapper{{NOT_USE, NOT_USE, NOT_USE, -1, -2, -3, 0, null}, null_at(7)};
+    auto child2 = ColWrapper{{NOT_USE, NOT_USE, NOT_USE, -5, 0, null, -1, -10}, null_at(5)};
+    auto child3 =
+      StringsCol{"NOT_USE", "NOT_USE", "NOT_USE", "111", "Bànànà", "abcxyz", "é á í", "zzz"};
+    return StructsCol{{child1, child2, child3}, null_at(4)};
+  }();
+
+  auto const expected = [] {
+    auto child1 = ColWrapper{{1, 7, -1, 2, null, -2, null, null, -3, 3, 8, 0, 4, 9, null},
+                             nulls_at({4, 6, 7, 14})};
+    auto child2 = ColWrapper{{4, 10, -5, null, 11, 0, 5, 12, null, 6, null, -1, 7, 14, -10},
+                             nulls_at({3, 8, 10})};
+    auto child3 = StringsCol{{"" /*NULL*/,
+                              "Bear",
+                              "111",
+                              "Banana",
+                              "Duck",
+                              "Bànànà",
+                              "Mango",
+                              "Cat",
+                              "abcxyz",
+                              "Apple",
+                              "Dog",
+                              "é á í",
+                              "Cherry",
+                              "Panda",
+                              "zzz"},
+                             null_at(0)};
+    return StructsCol{{child1, child2, child3}, nulls_at({0, 5, 13})};
+  }();
+
+  auto const structs1 = cudf::slice(structs1_original, {2, 7})[0];
+  auto const structs2 = cudf::slice(structs2_original, {0, 5})[0];
+  auto const structs3 = cudf::slice(structs3_original, {3, 8})[0];
+  auto const results  = cudf::interleave_columns(TView{{structs1, structs2, structs3}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results, verbosity);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

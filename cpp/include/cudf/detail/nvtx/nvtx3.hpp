@@ -54,7 +54,7 @@
  * \code{.cpp}
  * #include "nvtx3.hpp"
  * void some_function(){
- *    // Begins a NVTX range with the messsage "some_function"
+ *    // Begins a NVTX range with the message "some_function"
  *    // The range ends when some_function() returns and `r` is destroyed
  *    nvtx3::thread_range r{"some_function"};
  *
@@ -322,7 +322,7 @@
  * Example:
  * \code{.cpp}
  * // Create an `event_attributes` with the custom message "my message"
- * nvtx3::event_attributes attr{nvtx3::Mesage{"my message"}};
+ * nvtx3::event_attributes attr{nvtx3::message{"my message"}};
  *
  * // strings and string literals implicitly assumed to be a `nvtx3::message`
  * nvtx3::event_attributes attr{"my message"};
@@ -1267,7 +1267,7 @@ class registered_message {
  * nvtx3::thread_range range1{attr1};
  *
  * // `range2` contains message "message 2"
- * nvtx3::thread_range range2{nvtx3::Mesage{"message 2"}};
+ * nvtx3::thread_range range2{nvtx3::message{"message 2"}};
  *
  * // `std::string` and string literals are implicitly assumed to be
  * // the contents of an `nvtx3::message`
@@ -1525,7 +1525,7 @@ class payload {
  *
  * // For convenience, the arguments that can be passed to the
  * `event_attributes`
- * // constructor may be passed to the `domain_thread_range` contructor where
+ * // constructor may be passed to the `domain_thread_range` constructor where
  * // they will be forwarded to the `EventAttribute`s constructor
  * nvtx3::thread_range r{nvtx3::payload{42}, nvtx3::category{1}, "message"};
  * \endcode

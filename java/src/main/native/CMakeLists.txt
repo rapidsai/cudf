@@ -32,7 +32,7 @@ elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
   set(CUDF_JNI_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
-project(CUDF_JNI VERSION 21.08.00 LANGUAGES C CXX)
+project(CUDF_JNI VERSION 21.10.00 LANGUAGES C CXX)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -173,7 +173,6 @@ message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
 
 find_path(ARROW_INCLUDE "arrow"
           HINTS "$ENV{ARROW_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include"
                 "${CUDF_CPP_BUILD_DIR}/_deps/arrow-src/cpp/src")
 
 message(STATUS "ARROW: ARROW_INCLUDE set to ${ARROW_INCLUDE}")
@@ -187,8 +186,8 @@ endif(CUDF_JNI_ARROW_STATIC)
 
 find_library(ARROW_LIBRARY ${CUDF_JNI_ARROW_LIBNAME} REQUIRED
   HINTS "$ENV{ARROW_ROOT}/lib"
-        "$ENV{CONDA_PREFIX}/lib"
-        "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/release")
+        "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/release"
+        "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/debug")
 
 if(NOT ARROW_LIBRARY)
   if(CUDF_JNI_ARROW_STATIC)
@@ -263,7 +262,9 @@ set(SOURCE_FILES
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
     "src/ColumnViewJni.cpp"
+    "src/CompiledExpression.cpp"
     "src/ContiguousTableJni.cpp"
+    "src/HashJoinJni.cpp"
     "src/HostMemoryBufferNativeUtilsJni.cpp"
     "src/NvcompJni.cpp"
     "src/NvtxRangeJni.cpp"
@@ -295,6 +296,14 @@ target_compile_definitions(cudfjni
 
 if(USE_GDS)
     add_library(cufilejni SHARED "src/CuFileJni.cpp")
+    SET_TARGET_PROPERTIES(cufilejni
+        PROPERTIES BUILD_RPATH "\$ORIGIN"
+                   # set target compile options
+                   CXX_STANDARD                        17
+                   CXX_STANDARD_REQUIRED               ON
+                   CUDA_STANDARD                       17
+                   CUDA_STANDARD_REQUIRED              ON
+    )
     target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
     target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
 endif(USE_GDS)

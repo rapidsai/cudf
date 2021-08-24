@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import DataFrame, Index
-from cudf.tests.utils import assert_eq
+from cudf import DataFrame, Index
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize("ncats,nelem", [(2, 2), (2, 10), (10, 100)])

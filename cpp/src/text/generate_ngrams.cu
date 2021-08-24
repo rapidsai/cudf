@@ -41,7 +41,7 @@ namespace {
 /**
  * @brief Generate ngrams from strings column.
  *
- * Adjacent strings are concatented with the provided separator.
+ * Adjacent strings are concatenated with the provided separator.
  * The number of adjacent strings join depends on the specified ngrams value.
  * For example: for bigrams (ngrams=2), pairs of strings are concatenated.
  */

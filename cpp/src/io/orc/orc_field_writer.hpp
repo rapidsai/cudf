@@ -31,15 +31,15 @@ namespace orc {
 
 struct ProtobufWriter::ProtobufFieldWriter {
   int struct_size;
-  ProtobufWriter *p;
+  ProtobufWriter* p;
 
-  ProtobufFieldWriter(ProtobufWriter *pbw) : struct_size(0), p(pbw) {}
+  ProtobufFieldWriter(ProtobufWriter* pbw) : struct_size(0), p(pbw) {}
 
   /**
    * @brief Function to write a unsigned integer to the internal buffer
    */
   template <typename T>
-  void field_uint(int field, const T &value)
+  void field_uint(int field, const T& value)
   {
     struct_size += p->put_uint(field * 8 + PB_TYPE_VARINT);
     struct_size += p->put_uint(static_cast<uint64_t>(value));
@@ -50,7 +50,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
    * buffer
    */
   template <typename T>
-  void field_packed_uint(int field, const std::vector<T> &value)
+  void field_packed_uint(int field, const std::vector<T>& value)
   {
     struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
     auto lpos = p->m_buf->size();
@@ -68,31 +68,33 @@ struct ProtobufWriter::ProtobufFieldWriter {
   /**
    * @brief Function to write a string to the internal buffer
    */
-  void field_string(int field, const std::string &value)
+  void field_string(int field, const std::string& value)
   {
     size_t len = value.length();
     struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
     struct_size += p->put_uint(len) + len;
-    for (size_t i = 0; i < len; i++) p->putb(value[i]);
+    for (size_t i = 0; i < len; i++)
+      p->putb(value[i]);
   }
 
   /**
    * @brief Function to write a blob to the internal buffer
    */
   template <typename T>
-  void field_blob(int field, const std::vector<T> &value)
+  void field_blob(int field, const std::vector<T>& value)
   {
     size_t len = value.size();
     struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
     struct_size += p->put_uint(len) + len;
-    for (size_t i = 0; i < len; i++) p->putb(value[i]);
+    for (size_t i = 0; i < len; i++)
+      p->putb(value[i]);
   }
 
   /**
    * @brief Function to write a struct to the internal buffer
    */
   template <typename T>
-  void field_struct(int field, const T &value)
+  void field_struct(int field, const T& value)
   {
     struct_size += p->put_uint((field)*8 + PB_TYPE_FIXEDLEN);
     auto lpos = p->m_buf->size();
@@ -107,18 +109,20 @@ struct ProtobufWriter::ProtobufFieldWriter {
   /**
    * @brief Function to write a vector of strings to the internal buffer
    */
-  void field_repeated_string(int field, const std::vector<std::string> &value)
+  void field_repeated_string(int field, const std::vector<std::string>& value)
   {
-    for (const auto &elem : value) field_string(field, elem);
+    for (const auto& elem : value)
+      field_string(field, elem);
   }
 
   /**
    * @brief Function to write a vector of structs to the internal buffer
    */
   template <typename T>
-  void field_repeated_struct(int field, const std::vector<T> &value)
+  void field_repeated_struct(int field, const std::vector<T>& value)
   {
-    for (const auto &elem : value) field_struct(field, elem);
+    for (const auto& elem : value)
+      field_struct(field, elem);
   }
 
   /**
@@ -126,9 +130,10 @@ struct ProtobufWriter::ProtobufFieldWriter {
    * buffer
    */
   template <typename T>
-  void field_repeated_struct_blob(int field, const std::vector<T> &value)
+  void field_repeated_struct_blob(int field, const std::vector<T>& value)
   {
-    for (const auto &elem : value) field_blob(field, elem);
+    for (const auto& elem : value)
+      field_blob(field, elem);
   }
 
   /**

@@ -74,7 +74,7 @@ conda config --show-sources
 conda list --show-channel-urls
 
 gpuci_logger "Install dependencies"
-gpuci_conda_retry install -y \
+gpuci_mamba_retry install -y \
                   "cudatoolkit=$CUDA_REL" \
                   "rapids-build-env=$MINOR_VERSION.*" \
                   "rapids-notebook-env=$MINOR_VERSION.*" \
@@ -83,8 +83,8 @@ gpuci_conda_retry install -y \
                   "ucx-py=0.21.*"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-# gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
-# gpuci_conda_retry install -y "your-pkg=1.0.0"
+# gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
+# gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
 
 gpuci_logger "Check compiler versions"
@@ -196,14 +196,6 @@ fi
 
 # Both regular and Project Flash proceed here
 
-################################################################################
-# BUILD - Build libcudf examples
-################################################################################
-
-# If examples grows too large to build, should move to cpu side
-gpuci_logger "Building libcudf examples"
-$WORKSPACE/cpp/examples/build.sh
-
 # set environment variable for numpy 1.16
 # will be enabled for later versions by default
 np_ver=$(python -c "import numpy; print('.'.join(numpy.__version__.split('.')[:-1]))")
@@ -217,7 +209,7 @@ fi
 
 cd "$WORKSPACE/python/cudf"
 gpuci_logger "Python py.test for cuDF"
-py.test -n 6 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term
+py.test -n 6 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term
 
 cd "$WORKSPACE/python/dask_cudf"
 gpuci_logger "Python py.test for dask-cudf"

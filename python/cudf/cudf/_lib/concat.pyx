@@ -1,29 +1,30 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr, make_unique
-from libcpp.vector cimport vector
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
-
-from cudf._lib.cpp.concatenate cimport (
-    concatenate_masks as libcudf_concatenate_masks,
-    concatenate_columns as libcudf_concatenate_columns,
-    concatenate_tables as libcudf_concatenate_tables
-)
-from cudf._lib.cpp.column.column cimport column, column_view
-from cudf._lib.cpp.table.table cimport table, table_view
+from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column, column_view
+from cudf._lib.cpp.concatenate cimport (
+    concatenate_columns as libcudf_concatenate_columns,
+    concatenate_masks as libcudf_concatenate_masks,
+    concatenate_tables as libcudf_concatenate_tables,
+)
+from cudf._lib.cpp.table.table cimport table, table_view
 from cudf._lib.table cimport Table
 from cudf._lib.utils cimport (
+    data_from_unique_ptr,
     make_column_views,
+    make_table_data_views,
     make_table_views,
-    make_table_data_views
 )
 
 from cudf.core.buffer import Buffer
 
-from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+
 
 cpdef concat_masks(object columns):
     cdef device_buffer c_result
@@ -52,7 +53,8 @@ cpdef concat_tables(object tables, bool ignore_index=False):
         c_views = make_table_data_views(tables)
     with nogil:
         c_result = move(libcudf_concatenate_tables(c_views))
-    return Table.from_unique_ptr(
+
+    return data_from_unique_ptr(
         move(c_result),
         column_names=tables[0]._column_names,
         index_names=None if ignore_index else tables[0]._index_names

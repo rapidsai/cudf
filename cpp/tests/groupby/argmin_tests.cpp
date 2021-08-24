@@ -39,7 +39,7 @@ TYPED_TEST(groupby_argmin_test, basic)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::ARGMIN>;
 
-  if (std::is_same<V, bool>::value) return;
+  if (std::is_same_v<V, bool>) return;
 
   fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   fixed_width_column_wrapper<V> vals{9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
@@ -47,10 +47,10 @@ TYPED_TEST(groupby_argmin_test, basic)
   fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
   fixed_width_column_wrapper<R> expect_vals{6, 9, 8};
 
-  auto agg = cudf::make_argmin_aggregation();
+  auto agg = cudf::make_argmin_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_argmin_aggregation();
+  auto agg2 = cudf::make_argmin_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -59,7 +59,7 @@ TYPED_TEST(groupby_argmin_test, zero_valid_keys)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::ARGMIN>;
 
-  if (std::is_same<V, bool>::value) return;
+  if (std::is_same_v<V, bool>) return;
 
   fixed_width_column_wrapper<K> keys({1, 2, 3}, all_nulls());
   fixed_width_column_wrapper<V> vals({3, 4, 5});
@@ -67,10 +67,10 @@ TYPED_TEST(groupby_argmin_test, zero_valid_keys)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_argmin_aggregation();
+  auto agg = cudf::make_argmin_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_argmin_aggregation();
+  auto agg2 = cudf::make_argmin_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -79,7 +79,7 @@ TYPED_TEST(groupby_argmin_test, zero_valid_values)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::ARGMIN>;
 
-  if (std::is_same<V, bool>::value) return;
+  if (std::is_same_v<V, bool>) return;
 
   fixed_width_column_wrapper<K> keys{1, 1, 1};
   fixed_width_column_wrapper<V> vals({3, 4, 5}, all_nulls());
@@ -87,10 +87,10 @@ TYPED_TEST(groupby_argmin_test, zero_valid_values)
   fixed_width_column_wrapper<K> expect_keys{1};
   fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
-  auto agg = cudf::make_argmin_aggregation();
+  auto agg = cudf::make_argmin_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_argmin_aggregation();
+  auto agg2 = cudf::make_argmin_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -99,7 +99,7 @@ TYPED_TEST(groupby_argmin_test, null_keys_and_values)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::ARGMIN>;
 
-  if (std::is_same<V, bool>::value) return;
+  if (std::is_same_v<V, bool>) return;
 
   fixed_width_column_wrapper<K> keys({1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
                                      {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
@@ -111,11 +111,11 @@ TYPED_TEST(groupby_argmin_test, null_keys_and_values)
   //  { 9, 6,     8, 5, 0,   7, 1,    -}
   fixed_width_column_wrapper<R> expect_vals({3, 9, 8, 0}, {1, 1, 1, 0});
 
-  auto agg = cudf::make_argmin_aggregation();
+  auto agg = cudf::make_argmin_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
   // TODO: explore making this a gtest parameter
-  auto agg2 = cudf::make_argmin_aggregation();
+  auto agg2 = cudf::make_argmin_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -133,10 +133,10 @@ TEST_F(groupby_argmin_string_test, basic)
   fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
   fixed_width_column_wrapper<R> expect_vals({3, 5, 7});
 
-  auto agg = cudf::make_argmin_aggregation();
+  auto agg = cudf::make_argmin_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_argmin_aggregation();
+  auto agg2 = cudf::make_argmin_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -151,10 +151,10 @@ TEST_F(groupby_argmin_string_test, zero_valid_values)
   fixed_width_column_wrapper<K> expect_keys{1};
   fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
-  auto agg = cudf::make_argmin_aggregation();
+  auto agg = cudf::make_argmin_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_argmin_aggregation();
+  auto agg2 = cudf::make_argmin_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -173,12 +173,13 @@ TEST_F(groupby_dictionary_argmin_test, basic)
   fixed_width_column_wrapper<R> expect_vals({ 3, 5, 7 });
   // clang-format on
 
-  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_argmin_aggregation());
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals, cudf::make_argmin_aggregation<groupby_aggregation>());
   test_single_agg(keys,
                   vals,
                   expect_keys,
                   expect_vals,
-                  cudf::make_argmin_aggregation(),
+                  cudf::make_argmin_aggregation<groupby_aggregation>(),
                   force_use_sort_impl::YES);
 }
 

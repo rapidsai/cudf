@@ -28,8 +28,8 @@
 using namespace cudf::test::iterators;
 
 namespace {
-constexpr bool print_all{false};  // For debugging
-constexpr int32_t null{0};        // Mark for null elements
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::FIRST_ERROR};
+constexpr int32_t null{0};  // Mark for null elements
 
 using vcol_views = std::vector<cudf::column_view>;
 
@@ -42,7 +42,8 @@ auto merge_lists(vcol_views const& keys_cols, vcol_views const& values_cols)
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = *values;
-  requests[0].aggregations.emplace_back(cudf::make_merge_lists_aggregation());
+  requests[0].aggregations.emplace_back(
+    cudf::make_merge_lists_aggregation<cudf::groupby_aggregation>());
 
   auto gb_obj = cudf::groupby::groupby(cudf::table_view({*keys}));
   auto result = gb_obj.aggregate(requests);
@@ -91,8 +92,8 @@ TYPED_TEST(GroupbyMergeListsTypedTest, EmptyInput)
   auto const expected_keys         = keys_col{};
   auto const expected_lists        = cudf::empty_like(lists0);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_lists, *out_lists, verbosity);
 }
 
 TYPED_TEST(GroupbyMergeListsTypedTest, InputWithoutNull)
@@ -128,8 +129,8 @@ TYPED_TEST(GroupbyMergeListsTypedTest, InputWithoutNull)
     {24, 25, 26}            // key = 4
   };
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, verbosity);
 }
 
 TYPED_TEST(GroupbyMergeListsTypedTest, InputHasNulls)
@@ -167,8 +168,8 @@ TYPED_TEST(GroupbyMergeListsTypedTest, InputHasNulls)
     lists_col{24, 25, 26}                                                      // key = 4
   };
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, verbosity);
 }
 
 TYPED_TEST(GroupbyMergeListsTypedTest, InputHasEmptyLists)
@@ -204,8 +205,8 @@ TYPED_TEST(GroupbyMergeListsTypedTest, InputHasEmptyLists)
     {24, 25, 26}  // key = 4
   };
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, verbosity);
 }
 
 TYPED_TEST(GroupbyMergeListsTypedTest, InputHasNullsAndEmptyLists)
@@ -245,8 +246,8 @@ TYPED_TEST(GroupbyMergeListsTypedTest, InputHasNullsAndEmptyLists)
     lists_col{24, 25, 26}                                                            // key = 4
   };
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, verbosity);
 }
 
 TYPED_TEST(GroupbyMergeListsTypedTest, InputHasListsOfLists)
@@ -283,8 +284,8 @@ TYPED_TEST(GroupbyMergeListsTypedTest, InputHasListsOfLists)
     lists_col{lists_col{17, 18, 19, 20, 21}, lists_col{18, 19, 20}}                      // key = 4
   };
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, verbosity);
 }
 
 TYPED_TEST(GroupbyMergeListsTypedTest, SlicedColumnsInput)
@@ -331,8 +332,8 @@ TYPED_TEST(GroupbyMergeListsTypedTest, SlicedColumnsInput)
     {24, 25, 26}            // key = 4
   };
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, verbosity);
 }
 
 struct GroupbyMergeListsTest : public cudf::test::BaseFixture {
@@ -383,6 +384,6 @@ TEST_F(GroupbyMergeListsTest, StringsColumnInput)
     lists_col{{"Seeedless", "Mini"}, no_nulls()}                  // key = "water melon"
   };
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, verbosity);
 }

@@ -12,7 +12,7 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -278,7 +278,7 @@ def test_json_lines_byte_range(json_input):
 )
 def test_json_lines_dtypes(json_input, dtype):
     df = cudf.read_json(json_input, lines=True, dtype=dtype)
-    assert all(df.dtypes == ["float32", "int32", "int16"])
+    assert all(df.dtypes == ["float64", "int64", "int16"])
 
 
 @pytest.mark.parametrize(
@@ -301,7 +301,7 @@ def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
     pd_df.to_json(fname, compression=out_comp, lines=True, orient="records")
 
     cu_df = cudf.read_json(
-        str(fname), compression=in_comp, lines=True, dtype=["int", "int"]
+        str(fname), compression=in_comp, lines=True, dtype=["int32", "int32"]
     )
     assert_eq(pd_df, cu_df)
 

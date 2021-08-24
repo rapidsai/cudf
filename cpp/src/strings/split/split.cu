@@ -154,10 +154,10 @@ struct split_tokenizer_fn : base_split_tokenizer {
       auto next_delim = ((idx + col) < positions_count)  // boundary check for delims in last string
                           ? (base_ptr + d_positions[idx + col])  // start of next delimiter
                           : str_end_ptr;                         // or end of this string
-      auto eptr = (next_delim < str_end_ptr)      // make sure delimiter is inside this string
+      auto eptr       = (next_delim < str_end_ptr)      // make sure delimiter is inside this string
                       && (col + 1 < token_count)  // and this is not the last token
-                    ? next_delim
-                    : str_end_ptr;
+                          ? next_delim
+                          : str_end_ptr;
       // store the token into the output vector
       d_tokens[col * d_strings.size()] =
         string_index_pair{str_ptr, static_cast<size_type>(eptr - str_ptr)};
@@ -281,10 +281,10 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
       auto prev_delim = (idx >= col)  // boundary check for delims in first string
                           ? (base_ptr + d_positions[idx - col] + 1)  // end of prev delimiter
                           : str_begin_ptr;                           // or the start of this string
-      auto sptr = (prev_delim > str_begin_ptr)    // make sure delimiter is inside the string
+      auto sptr       = (prev_delim > str_begin_ptr)    // make sure delimiter is inside the string
                       && (col + 1 < token_count)  // and this is not the last token
-                    ? prev_delim
-                    : str_begin_ptr;
+                          ? prev_delim
+                          : str_begin_ptr;
       // store the token into the output -- building the array backwards
       d_tokens[d_strings.size() * (token_count - 1 - col)] =
         string_index_pair{sptr, static_cast<size_type>(str_ptr - sptr)};

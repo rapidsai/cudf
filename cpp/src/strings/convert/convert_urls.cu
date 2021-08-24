@@ -335,9 +335,9 @@ std::unique_ptr<column> url_decode(
   size_type chars_start = (strings.offset() == 0) ? 0
                                                   : cudf::detail::get_value<int32_t>(
                                                       strings.offsets(), strings.offset(), stream);
-  size_type chars_end = (offset_count == strings.offsets().size())
-                          ? strings.chars_size()
-                          : cudf::detail::get_value<int32_t>(
+  size_type chars_end   = (offset_count == strings.offsets().size())
+                            ? strings.chars_size()
+                            : cudf::detail::get_value<int32_t>(
                               strings.offsets(), strings.offset() + strings_count, stream);
   size_type chars_bytes = chars_end - chars_start;
 

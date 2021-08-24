@@ -74,5 +74,6 @@ TEST_F(StringsHashTest, HashTest)
   uint32_t h_expected[] = {
     2739798893, 2739798893, 3506676360, 1891213601, 3778137224, 0, 0, 1551088011};
   auto h_values = cudf::detail::make_host_vector_sync(d_values);
-  for (uint32_t idx = 0; idx < h_values.size(); ++idx) EXPECT_EQ(h_values[idx], h_expected[idx]);
+  for (uint32_t idx = 0; idx < h_values.size(); ++idx)
+    EXPECT_EQ(h_values[idx], h_expected[idx]);
 }

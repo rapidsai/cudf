@@ -59,7 +59,7 @@ constexpr std::array<cudf::type_id, sizeof...(Indices)> types_to_ids_impl(
  * array == {type_id::INT32, type_id::FLOAT};
  * ```
  *
- * @tparam TYPES List of types to conver to `type_id`s
+ * @tparam TYPES List of types to convert to `type_id`s
  * @return `std::array` of `type_id`s corresponding to each type in `TYPES`
  */
 template <typename TYPES>

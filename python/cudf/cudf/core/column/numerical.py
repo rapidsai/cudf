@@ -12,6 +12,7 @@ import pandas as pd
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, DtypeObj, ScalarLike
+from cudf.api.types import is_integer_dtype, is_number
 from cudf.core.buffer import Buffer
 from cudf.core.column import (
     ColumnBase,
@@ -31,11 +32,21 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 
-from ...api.types import is_integer_dtype, is_number
 from .numerical_base import NumericalBaseColumn
 
 
 class NumericalColumn(NumericalBaseColumn):
+    """
+    A Column object for Numeric types.
+
+    Parameters
+    ----------
+    data : Buffer
+    dtype : np.dtype
+        The dtype associated with the data Buffer
+    mask : Buffer, optional
+    """
+
     def __init__(
         self,
         data: Buffer,
@@ -45,15 +56,8 @@ class NumericalColumn(NumericalBaseColumn):
         offset: int = 0,
         null_count: int = None,
     ):
-        """
-        Parameters
-        ----------
-        data : Buffer
-        dtype : np.dtype
-            The dtype associated with the data Buffer
-        mask : Buffer, optional
-        """
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
+
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
@@ -121,14 +125,14 @@ class NumericalColumn(NumericalBaseColumn):
         self, binop: str, rhs: BinaryOperand, reflect: bool = False,
     ) -> ColumnBase:
         int_dtypes = [
-            np.dtype("int8"),
-            np.dtype("int16"),
-            np.dtype("int32"),
-            np.dtype("int64"),
-            np.dtype("uint8"),
-            np.dtype("uint16"),
-            np.dtype("uint32"),
-            np.dtype("uint64"),
+            cudf.dtype("int8"),
+            cudf.dtype("int16"),
+            cudf.dtype("int32"),
+            cudf.dtype("int64"),
+            cudf.dtype("uint8"),
+            cudf.dtype("uint16"),
+            cudf.dtype("uint32"),
+            cudf.dtype("uint64"),
         ]
         if rhs is None:
             out_dtype = self.dtype
@@ -139,14 +143,14 @@ class NumericalColumn(NumericalBaseColumn):
                     (
                         NumericalColumn,
                         cudf.Scalar,
-                        cudf.core.column.DecimalColumn,
+                        cudf.core.column.Decimal64Column,
                     ),
                 )
                 or np.isscalar(rhs)
             ):
                 msg = "{!r} operator not supported between {} and {}"
                 raise TypeError(msg.format(binop, type(self), type(rhs)))
-            if isinstance(rhs, cudf.core.column.DecimalColumn):
+            if isinstance(rhs, cudf.core.column.Decimal64Column):
                 lhs: Union[ScalarLike, ColumnBase] = self.as_decimal_column(
                     Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
                 )
@@ -158,9 +162,19 @@ class NumericalColumn(NumericalBaseColumn):
                     (np.isscalar(tmp) and (0 == tmp))
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ):
-                    out_dtype = np.dtype("float64")
+                    out_dtype = cudf.dtype("float64")
 
-        if binop in {"lt", "gt", "le", "ge", "eq", "ne", "NULL_EQUALS"}:
+        if binop in {
+            "l_and",
+            "l_or",
+            "lt",
+            "gt",
+            "le",
+            "ge",
+            "eq",
+            "ne",
+            "NULL_EQUALS",
+        }:
             out_dtype = "bool"
         lhs, rhs = (self, rhs) if not reflect else (rhs, self)
         return libcudf.binaryop.binaryop(lhs, rhs, binop, out_dtype)
@@ -183,13 +197,13 @@ class NumericalColumn(NumericalBaseColumn):
             if isinstance(other, cudf.Scalar):
                 return other
             other_dtype = np.promote_types(self.dtype, other_dtype)
-            if other_dtype == np.dtype("float16"):
-                other_dtype = np.dtype("float32")
+            if other_dtype == cudf.dtype("float16"):
+                other_dtype = cudf.dtype("float32")
                 other = other_dtype.type(other)
             if self.dtype.kind == "b":
                 other_dtype = min_signed_type(other)
             if np.isscalar(other):
-                other = np.dtype(other_dtype).type(other)
+                other = cudf.dtype(other_dtype).type(other)
                 return other
             else:
                 ary = utils.scalar_broadcast_to(
@@ -202,17 +216,17 @@ class NumericalColumn(NumericalBaseColumn):
             raise TypeError(f"cannot broadcast {type(other)}")
 
     def int2ip(self) -> "cudf.core.column.StringColumn":
-        if self.dtype != np.dtype("int64"):
+        if self.dtype != cudf.dtype("int64"):
             raise TypeError("Only int64 type can be converted to ip")
 
         return libcudf.string_casting.int2ip(self)
 
     def as_string_column(
-        self, dtype: Dtype, format=None
+        self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
-                np.dtype(self.dtype)
+                cudf.dtype(self.dtype)
             ](self)
         else:
             return cast(
@@ -249,11 +263,11 @@ class NumericalColumn(NumericalBaseColumn):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DecimalColumn":
+    ) -> "cudf.core.column.Decimal64Column":
         return libcudf.unary.cast(self, dtype)
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
-        dtype = np.dtype(dtype)
+    def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
+        dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
@@ -298,8 +312,8 @@ class NumericalColumn(NumericalBaseColumn):
         """
         Return col with *to_replace* replaced with *value*.
         """
-        to_replace_col = as_column(to_replace)
-        replacement_col = as_column(replacement)
+        to_replace_col = column.as_column(to_replace)
+        replacement_col = column.as_column(replacement)
 
         if type(to_replace_col) != type(replacement_col):
             raise TypeError(
@@ -334,8 +348,16 @@ class NumericalColumn(NumericalBaseColumn):
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
             to_replace_col, replacement_col, replaced
         )
+        df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
+        df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
+        if df._data["old"].null_count == 1:
+            replaced = replaced.fillna(
+                df._data["new"][df._data["old"].isna()][0]
+            )
+            df = df.dropna(subset=["old"])
+
         return libcudf.replace.replace(
-            replaced, to_replace_col, replacement_col
+            replaced, df["old"]._column, df["new"]._column
         )
 
     def fillna(
@@ -600,7 +622,7 @@ def _safe_cast_to_int(col: ColumnBase, dtype: DtypeObj) -> ColumnBase:
     else:
         raise TypeError(
             f"Cannot safely cast non-equivalent "
-            f"{col.dtype.type.__name__} to {np.dtype(dtype).type.__name__}"
+            f"{col.dtype.type.__name__} to {cudf.dtype(dtype).type.__name__}"
         )
 
 
@@ -618,9 +640,12 @@ def _normalize_find_and_replace_input(
         )
         # Scalar case
         if len(col_to_normalize) == 1:
-            col_to_normalize_casted = input_column_dtype.type(
-                col_to_normalize[0]
-            )
+            if cudf._lib.scalar._is_null_host_scalar(col_to_normalize[0]):
+                return normalized_column.astype(input_column_dtype)
+            else:
+                col_to_normalize_casted = input_column_dtype.type(
+                    col_to_normalize[0]
+                )
             if not np.isnan(col_to_normalize_casted) and (
                 col_to_normalize_casted != col_to_normalize[0]
             ):

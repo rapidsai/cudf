@@ -25,7 +25,7 @@ namespace orc {
 // ORC rows are divided into groups and assigned indexes for faster seeking
 static constexpr uint32_t default_row_index_stride = 10000;
 
-enum CompressionKind {
+enum CompressionKind : uint8_t {
   NONE   = 0,
   ZLIB   = 1,
   SNAPPY = 2,
@@ -34,7 +34,7 @@ enum CompressionKind {
   ZSTD   = 5,
 };
 
-enum TypeKind {
+enum TypeKind : int8_t {
   INVALID_TYPE_KIND = -1,
   BOOLEAN           = 0,
   BYTE              = 1,
@@ -56,7 +56,7 @@ enum TypeKind {
   CHAR              = 17,
 };
 
-enum StreamKind {
+enum StreamKind : int8_t {
   INVALID_STREAM_KIND = -1,
   PRESENT             = 0,  // boolean stream of whether the next value is non-null
   DATA                = 1,  // the primary data stream
@@ -69,7 +69,7 @@ enum StreamKind {
   BLOOM_FILTER_UTF8   = 8,  // bloom filters that consistently use utf8
 };
 
-enum ColumnEncodingKind {
+enum ColumnEncodingKind : int8_t {
   INVALID_ENCODING_KIND = -1,
   DIRECT                = 0,  // the encoding is mapped directly to the stream using RLE v1
   DICTIONARY            = 1,  // the encoding uses a dictionary of unique values using RLE v1
@@ -77,7 +77,7 @@ enum ColumnEncodingKind {
   DICTIONARY_V2         = 3,  // the encoding is dictionary-based using RLE v2
 };
 
-enum {  // Protobuf field types
+enum : uint8_t {  // Protobuf field types
   PB_TYPE_VARINT      = 0,
   PB_TYPE_FIXED64     = 1,
   PB_TYPE_FIXEDLEN    = 2,

@@ -252,7 +252,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
   bool quotation   = false;
   auto current     = begin;
   bool escape_next = false;
-  while (true) {
+  while (current < end) {
     // Use simple logic to ignore control chars between any quote seq
     // Handles nominal cases including doublequotes within quotes, but
     // may not output exact failures as PANDAS for malformed fields.
@@ -262,7 +262,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
       quotation = !quotation;
     } else if (!quotation) {
       if (*current == opts.delimiter) {
-        while (opts.multi_delimiter && current < end && *(current + 1) == opts.delimiter) {
+        while (opts.multi_delimiter && (current + 1 < end) && *(current + 1) == opts.delimiter) {
           ++current;
         }
         break;
@@ -283,8 +283,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
       }
     }
 
-    if (current >= end) break;
-    current++;
+    if (current < end) { current++; }
   }
   return current;
 }
@@ -335,7 +334,9 @@ __device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* 
   // Remove preceding zeros
   if (digit_count >= (sizeof(int64_max_abs) - 1)) {
     // Trim zeros at the beginning of raw_data
-    while (*data_begin == '0' && (data_begin < data_end)) { data_begin++; }
+    while (*data_begin == '0' && (data_begin < data_end)) {
+      data_begin++;
+    }
   }
   digit_count = data_end - data_begin;
 

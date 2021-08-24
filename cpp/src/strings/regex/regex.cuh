@@ -18,10 +18,10 @@
 #include <strings/regex/regcomp.h>
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/optional.h>
 #include <thrust/pair.h>
 
 #include <functional>
@@ -38,7 +38,8 @@ struct reljunk;
 struct reinst;
 class reprog;
 
-using string_index_pair = thrust::pair<const char*, cudf::size_type>;
+using match_pair   = thrust::pair<cudf::size_type, cudf::size_type>;
+using match_result = thrust::optional<match_pair>;
 
 constexpr int32_t RX_STACK_SMALL  = 112;    ///< fastest stack size
 constexpr int32_t RX_STACK_MEDIUM = 1104;   ///< faster stack size
@@ -176,15 +177,15 @@ class reprog_device {
    * in the string.
    * @param end Position index to end the search. If found, returns the last position
    * matching in the string.
-   * @param indices All extracted groups
-   * @return Returns true if successful.
+   * @param group_id The specific group to return its matching position values.
+   * @return If valid, returns the character position of the matched group in the given string,
    */
   template <int stack_size>
-  __device__ inline bool extract(int32_t idx,
-                                 string_view const& d_str,
-                                 int32_t begin,
-                                 int32_t end,
-                                 device_span<string_index_pair> indices);
+  __device__ inline match_result extract(cudf::size_type idx,
+                                         string_view const& d_str,
+                                         cudf::size_type begin,
+                                         cudf::size_type end,
+                                         cudf::size_type group_id);
 
  private:
   int32_t _startinst_id, _num_capturing_groups;
@@ -198,21 +199,15 @@ class reprog_device {
   /**
    * @brief Executes the regex pattern on the given string.
    */
-  __device__ inline int32_t regexec(string_view const& d_str,
-                                    reljunk& jnk,
-                                    int32_t& begin,
-                                    int32_t& end,
-                                    string_index_pair* indices = nullptr);
+  __device__ inline int32_t regexec(
+    string_view const& d_str, reljunk& jnk, int32_t& begin, int32_t& end, int32_t group_id = 0);
 
   /**
    * @brief Utility wrapper to setup state memory structures for calling regexec
    */
   template <int stack_size>
-  __device__ inline int32_t call_regexec(int32_t idx,
-                                         string_view const& d_str,
-                                         int32_t& begin,
-                                         int32_t& end,
-                                         string_index_pair* indices = nullptr);
+  __device__ inline int32_t call_regexec(
+    int32_t idx, string_view const& d_str, int32_t& begin, int32_t& end, int32_t group_id = 0);
 
   reprog_device(reprog&);  // must use create()
 };

@@ -218,6 +218,30 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
                                         rmm::mr::device_memory_resource* mr);
 
 /**
+ * @brief Internal API to calculate sum of squares of differences from means.
+ *
+ * If there are only nulls in the group, the output value of that group will be null.
+ *
+ * @code{.pseudo}
+ * values        = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
+ * group_labels  = [0, 0, 0,  1,  1,    2, 2,    3]
+ * group_means   = [2.333333, -1.5, 4.0, <NA>]
+ * group_m2(...) = [4.666666,  1.0, 0.0, <NA>]
+ * @endcode
+ *
+ * @param values Grouped values to compute M2 values
+ * @param group_means Pre-computed groupwise MEAN
+ * @param group_labels ID of group corresponding value in @p values belongs to
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> group_m2(column_view const& values,
+                                 column_view const& group_means,
+                                 cudf::device_span<size_type const> group_labels,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr);
+
+/**
  * @brief Internal API to calculate groupwise variance
  *
  * @code{.pseudo}
@@ -391,6 +415,32 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
                                           size_type num_groups,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Internal API to merge grouped M2 values corresponding to the same key.
+ *
+ * The values of M2 are merged following the parallel algorithm described here:
+ * `https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm`
+ *
+ * Merging M2 values require accessing to partial M2 values, means, and valid counts. Thus, the
+ * input to this aggregation need to be a structs column containing tuples of 3 values
+ * `(valid_count, mean, M2)`.
+ *
+ * This aggregation not only merges the partial results of `M2` but also merged all the partial
+ * results of input aggregations (`COUNT_VALID`, `MEAN`, and `M2`). As such, the output will be a
+ * structs column containing children columns of merged `COUNT_VALID`, `MEAN`, and `M2` values.
+ *
+ * @param values Grouped values (tuples of values `(valid_count, mean, M2)`) to merge.
+ * @param group_offsets Offsets of groups' starting points within @p values.
+ * @param num_groups Number of groups.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> group_merge_m2(column_view const& values,
+                                       cudf::device_span<size_type const> group_offsets,
+                                       size_type num_groups,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr);
 
 /** @endinternal
  *

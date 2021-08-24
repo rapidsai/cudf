@@ -21,7 +21,7 @@ from cudf.core.index import (
     RangeIndex,
     as_index,
 )
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     FLOAT_TYPES,
     NUMERIC_TYPES,
     OTHER_TYPES,
@@ -125,7 +125,16 @@ def test_index_comparision():
 
 
 @pytest.mark.parametrize(
-    "func", [lambda x: x.min(), lambda x: x.max(), lambda x: x.sum()]
+    "func",
+    [
+        lambda x: x.min(),
+        lambda x: x.max(),
+        lambda x: x.sum(),
+        lambda x: x.mean(),
+        lambda x: x.any(),
+        lambda x: x.all(),
+        lambda x: x.prod(),
+    ],
 )
 def test_reductions(func):
     x = np.asarray([4, 5, 6, 10])
@@ -317,16 +326,13 @@ def test_index_copy_datetime(name, dtype, deep=True):
     pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
     cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
-    # By default, cudf.DatetimeIndex uses [ms] as base unit, pandas uses [ns]
-    if dtype == "int64":
-        cidx_copy = cidx_copy * 1000000
     assert_eq(pidx_copy, cidx_copy)
 
 
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize("dtype", ["category", "object"])
 def test_index_copy_string(name, dtype, deep=True):
-    cidx = cudf.core.index.StringIndex(["a", "b", "c"])
+    cidx = cudf.StringIndex(["a", "b", "c"])
     pidx = cidx.to_pandas()
 
     pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
@@ -383,7 +389,7 @@ def test_index_copy_category(name, dtype, deep=True):
     "idx",
     [
         cudf.DatetimeIndex(["2001", "2002", "2003"]),
-        cudf.core.index.StringIndex(["a", "b", "c"]),
+        cudf.StringIndex(["a", "b", "c"]),
         cudf.Int64Index([1, 2, 3]),
         cudf.Float64Index([1.0, 2.0, 3.0]),
         cudf.CategoricalIndex([1, 2, 3]),
@@ -428,7 +434,7 @@ def test_index_copy_deep(idx, deep):
                 idx._values.categories.base_data.ptr
                 == idx_copy._values.categories.base_data.ptr
             ) == same_ref
-    elif isinstance(idx, cudf.core.index.StringIndex):
+    elif isinstance(idx, cudf.StringIndex):
         children = idx._values._base_children
         copy_children = idx_copy._values._base_children
         assert all(
@@ -473,7 +479,7 @@ def test_rangeindex_slice_attr_name():
 def test_from_pandas_str():
     idx = ["a", "b", "c"]
     pidx = pd.Index(idx, name="idx")
-    gidx_1 = cudf.core.index.StringIndex(idx, name="idx")
+    gidx_1 = cudf.StringIndex(idx, name="idx")
     gidx_2 = cudf.from_pandas(pidx)
 
     assert_eq(gidx_1, gidx_2)
@@ -2319,3 +2325,22 @@ def test_get_loc_multi_string(idx, key, method):
         got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "objs",
+    [
+        [pd.RangeIndex(0, 10), pd.RangeIndex(10, 20)],
+        [pd.RangeIndex(10, 20), pd.RangeIndex(22, 40), pd.RangeIndex(50, 60)],
+        [pd.RangeIndex(10, 20, 2), pd.RangeIndex(20, 40, 2)],
+    ],
+)
+def test_range_index_concat(objs):
+    cudf_objs = [cudf.from_pandas(obj) for obj in objs]
+
+    actual = cudf.concat(cudf_objs)
+
+    expected = objs[0]
+    for obj in objs[1:]:
+        expected = expected.append(obj)
+    assert_eq(expected, actual)

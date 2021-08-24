@@ -1,16 +1,16 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import re
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
 import pytest
-from decimal import Decimal
 
 import cudf as gd
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
-from cudf.utils.dtypes import is_categorical_dtype
 from cudf.core.dtypes import Decimal64Dtype
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.utils.dtypes import is_categorical_dtype
 
 
 def make_frames(index=None, nulls="none"):
@@ -1525,5 +1525,28 @@ def test_concat_decimal_numeric_series(s1, s2, s3, expected):
     ],
 )
 def test_concat_decimal_non_numeric(s1, s2, expected):
+    s = gd.concat([s1, s2])
+    assert_eq(s, expected)
+
+
+@pytest.mark.parametrize(
+    "s1, s2, expected",
+    [
+        (
+            gd.Series([{"a": 5}, {"c": "hello"}, {"b": 7}]),
+            gd.Series([{"a": 5, "c": "hello", "b": 7}]),
+            gd.Series(
+                [
+                    {"a": 5, "b": None, "c": None},
+                    {"a": None, "b": None, "c": "hello"},
+                    {"a": None, "b": 7, "c": None},
+                    {"a": 5, "b": 7, "c": "hello"},
+                ],
+                index=[0, 1, 2, 0],
+            ),
+        )
+    ],
+)
+def test_concat_struct_column(s1, s2, expected):
     s = gd.concat([s1, s2])
     assert_eq(s, expected)

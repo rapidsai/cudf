@@ -1,15 +1,16 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint8_t
 from libcpp cimport bool
-from libcpp.string cimport string
-from libcpp.vector cimport vector
 from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
-from libc.stdint cimport uint8_t
+from libcpp.string cimport string
+from libcpp.vector cimport vector
 
-from cudf._lib.cpp.types cimport data_type, size_type
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.table.table_view as cudf_table_view
+from cudf._lib.cpp.types cimport data_type, size_type
+
 
 cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef cppclass parquet_reader_options:

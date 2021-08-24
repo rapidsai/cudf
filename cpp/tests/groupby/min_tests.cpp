@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,10 +46,10 @@ TYPED_TEST(groupby_min_test, basic)
   fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
   fixed_width_column_wrapper<R> expect_vals({0, 1, 2});
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_min_aggregation();
+  auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -64,10 +64,10 @@ TYPED_TEST(groupby_min_test, empty_cols)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_min_aggregation();
+  auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -82,10 +82,10 @@ TYPED_TEST(groupby_min_test, zero_valid_keys)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_min_aggregation();
+  auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -100,10 +100,10 @@ TYPED_TEST(groupby_min_test, zero_valid_values)
   fixed_width_column_wrapper<K> expect_keys{1};
   fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_min_aggregation();
+  auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -122,10 +122,10 @@ TYPED_TEST(groupby_min_test, null_keys_and_values)
   //  { 3, 6,     1, 4, 9,   2, 8,    -}
   fixed_width_column_wrapper<R> expect_vals({3, 1, 2, 0}, {1, 1, 1, 0});
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_min_aggregation();
+  auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -140,10 +140,10 @@ TEST_F(groupby_min_string_test, basic)
   fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
   strings_column_wrapper expect_vals({"aaa", "bat", "$1"});
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_min_aggregation();
+  auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -155,11 +155,47 @@ TEST_F(groupby_min_string_test, zero_valid_values)
   fixed_width_column_wrapper<K> expect_keys{1};
   strings_column_wrapper expect_vals({""}, all_nulls());
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg2 = cudf::make_min_aggregation();
+  auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
+}
+
+TEST_F(groupby_min_string_test, min_sorted_strings)
+{
+  // testcase replicated in issue #8717
+  cudf::test::strings_column_wrapper keys(
+    {"",   "",   "",   "",   "",   "",   "06", "06", "06", "06", "10", "10", "10", "10", "14", "14",
+     "14", "14", "18", "18", "18", "18", "22", "22", "22", "22", "26", "26", "26", "26", "30", "30",
+     "30", "30", "34", "34", "34", "34", "38", "38", "38", "38", "42", "42", "42", "42"},
+    {0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::strings_column_wrapper vals(
+    {"", "", "",   "", "", "", "06", "", "", "", "10", "", "", "", "14", "",
+     "", "", "18", "", "", "", "22", "", "", "", "26", "", "", "", "30", "",
+     "", "", "34", "", "", "", "38", "", "", "", "42", "", "", ""},
+    {0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1,
+     0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0});
+  cudf::test::strings_column_wrapper expect_keys(
+    {"06", "10", "14", "18", "22", "26", "30", "34", "38", "42", ""},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  cudf::test::strings_column_wrapper expect_vals(
+    {"06", "10", "14", "18", "22", "26", "30", "34", "38", "42", ""},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+
+  // fixed_width_column_wrapper<size_type> expect_argmin(
+  // {6, 10, 14, 18, 22, 26, 30, 34, 38, 42, -1},
+  // {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  std::move(agg),
+                  force_use_sort_impl::NO,
+                  null_policy::INCLUDE,
+                  sorted::YES);
 }
 
 struct groupby_dictionary_min_test : public cudf::test::BaseFixture {
@@ -178,12 +214,16 @@ TEST_F(groupby_dictionary_min_test, basic)
 
   auto expect_vals = cudf::dictionary::set_keys(expect_vals_w, vals.keys());
 
-  test_single_agg(keys, vals, expect_keys, expect_vals->view(), cudf::make_min_aggregation());
   test_single_agg(keys,
                   vals,
                   expect_keys,
                   expect_vals->view(),
-                  cudf::make_min_aggregation(),
+                  cudf::make_min_aggregation<cudf::groupby_aggregation>());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals->view(),
+                  cudf::make_min_aggregation<cudf::groupby_aggregation>(),
                   force_use_sort_impl::YES);
 }
 
@@ -210,7 +250,7 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySortMinDecimalAsValue)
     auto const expect_keys     = fixed_width_column_wrapper<K>{1, 2, 3};
     auto const expect_vals_min = fp_wrapper{{0, 1, 2}, scale};
 
-    auto agg2 = cudf::make_min_aggregation();
+    auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
     test_single_agg(
       keys, vals, expect_keys, expect_vals_min, std::move(agg2), force_use_sort_impl::YES);
   }
@@ -234,7 +274,7 @@ TYPED_TEST(FixedPointTestBothReps, GroupByHashMinDecimalAsValue)
     auto const expect_keys     = fixed_width_column_wrapper<K>{1, 2, 3};
     auto const expect_vals_min = fp_wrapper{{0, 1, 2}, scale};
 
-    auto agg6 = cudf::make_min_aggregation();
+    auto agg6 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
     test_single_agg(keys, vals, expect_keys, expect_vals_min, std::move(agg6));
   }
 }

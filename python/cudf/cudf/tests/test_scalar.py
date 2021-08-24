@@ -11,7 +11,7 @@ import pytest
 import cudf
 from cudf import Scalar as pycudf_scalar
 from cudf._lib.copying import get_element
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -198,7 +198,7 @@ def test_null_scalar(dtype):
     s = cudf.Scalar(None, dtype=dtype)
     assert s.value is cudf.NA
     assert s.dtype == (
-        np.dtype(dtype)
+        cudf.dtype(dtype)
         if not isinstance(dtype, cudf.Decimal64Dtype)
         else dtype
     )
@@ -239,7 +239,7 @@ def test_generic_null_scalar_construction_fails(value):
 def test_scalar_dtype_and_validity(dtype):
     s = cudf.Scalar(1, dtype=dtype)
 
-    assert s.dtype == np.dtype(dtype)
+    assert s.dtype == cudf.dtype(dtype)
     assert s.is_valid() is True
 
 

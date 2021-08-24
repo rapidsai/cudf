@@ -11,10 +11,10 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import Series
+from cudf import Series
 from cudf.core.dtypes import Decimal64Dtype
-from cudf.tests import utils
-from cudf.tests.utils import NUMERIC_TYPES, assert_eq, gen_rand
+from cudf.testing import _utils as utils
+from cudf.testing._utils import NUMERIC_TYPES, assert_eq, gen_rand
 
 params_dtype = NUMERIC_TYPES
 
@@ -25,7 +25,7 @@ params = list(product(params_dtype, params_sizes))
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_sum(dtype, nelem):
-    dtype = np.dtype(dtype).type
+    dtype = cudf.dtype(dtype).type
     data = gen_rand(dtype, nelem)
     sr = Series(data)
 
@@ -69,8 +69,8 @@ def test_sum_decimal(dtype, nelem):
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_product(dtype, nelem):
     np.random.seed(0)
-    dtype = np.dtype(dtype).type
-    if np.dtype(dtype).kind in {"u", "i"}:
+    dtype = cudf.dtype(dtype).type
+    if cudf.dtype(dtype).kind in {"u", "i"}:
         data = np.ones(nelem, dtype=dtype)
         # Set at most 30 items to [0..2) to keep the value within 2^32
         for _ in range(30):
@@ -107,22 +107,27 @@ accuracy_for_dtype = {np.float64: 6, np.float32: 5}
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_sum_of_squares(dtype, nelem):
-    dtype = np.dtype(dtype).type
+    dtype = cudf.dtype(dtype).type
     data = gen_rand(dtype, nelem)
     sr = Series(data)
+    df = cudf.DataFrame(sr)
 
     got = sr.sum_of_squares()
-    # got = dtype(got)
+    got_df = df.sum_of_squares()
     expect = (data ** 2).sum()
 
-    if np.dtype(dtype).kind in {"u", "i"}:
+    if cudf.dtype(dtype).kind in {"u", "i"}:
         if 0 <= expect <= np.iinfo(dtype).max:
             np.testing.assert_array_almost_equal(expect, got)
+            np.testing.assert_array_almost_equal(expect, got_df.iloc[0])
         else:
             print("overflow, passing")
     else:
         np.testing.assert_approx_equal(
             expect, got, significant=accuracy_for_dtype[dtype]
+        )
+        np.testing.assert_approx_equal(
+            expect, got_df.iloc[0], significant=accuracy_for_dtype[dtype]
         )
 
 
@@ -141,7 +146,7 @@ def test_sum_of_squares_decimal(dtype):
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_min(dtype, nelem):
-    dtype = np.dtype(dtype).type
+    dtype = cudf.dtype(dtype).type
     data = gen_rand(dtype, nelem)
     sr = Series(data)
 
@@ -167,7 +172,7 @@ def test_min_decimal(dtype, nelem):
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_max(dtype, nelem):
-    dtype = np.dtype(dtype).type
+    dtype = cudf.dtype(dtype).type
     data = gen_rand(dtype, nelem)
     sr = Series(data)
 

@@ -11,7 +11,7 @@ import pytest
 from pyarrow import orc as orc
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 if not os.environ.get("RUN_HDFS_TESTS"):
     pytestmark = pytest.mark.skip("Env not configured to run HDFS tests")

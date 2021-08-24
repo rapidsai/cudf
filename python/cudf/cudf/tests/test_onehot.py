@@ -7,8 +7,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import DataFrame, GenericIndex, Series
-from cudf.tests import utils
+from cudf import DataFrame, Index, Series
+from cudf.testing import _utils as utils
 
 
 def test_onehot_simple():
@@ -86,7 +86,7 @@ def test_onehot_generic_index():
     indices = np.random.randint(low=0, high=100, size=size)
     df = DataFrame()
     values = np.random.randint(low=0, high=4, size=size)
-    df["fo"] = Series(values, index=GenericIndex(indices))
+    df["fo"] = Series(values, index=Index(indices))
     out = df.one_hot_encoding(
         "fo", cats=df.fo.unique(), prefix="fo", dtype=np.int32
     )

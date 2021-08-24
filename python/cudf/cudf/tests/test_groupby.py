@@ -13,16 +13,16 @@ from numpy.testing import assert_array_equal
 import rmm
 
 import cudf
-from cudf.core import DataFrame, Series
+from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.dataset_generator import rand_dataframe
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
 )
+from cudf.testing.dataset_generator import rand_dataframe
 
 _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")
@@ -985,7 +985,7 @@ def test_groupby_index_type():
     df["string_col"] = ["a", "b", "c"]
     df["counts"] = [1, 2, 3]
     res = df.groupby(by="string_col").counts.sum()
-    assert isinstance(res.index, cudf.core.index.StringIndex)
+    assert isinstance(res.index, cudf.StringIndex)
 
 
 @pytest.mark.parametrize(
@@ -1702,7 +1702,6 @@ def test_groupby_2keys_scan(nelem, func):
     # pd.groupby.cumcount returns a series.
     if isinstance(expect_df, pd.Series):
         expect_df = expect_df.to_frame("val")
-    expect_df = expect_df.set_index([pdf["x"], pdf["y"]]).sort_index()
 
     check_dtype = False if func in _index_type_aggs else True
     assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
@@ -1734,10 +1733,6 @@ def test_groupby_shift_row(nelem, shift_perc, direction, fill_value):
     )
     got = gdf.groupby(["x", "y"]).shift(periods=n_shift, fill_value=fill_value)
 
-    # Pandas returns shifted column in original row order. We set its index
-    # to be the key columns, so that `assert_groupby_results_equal` can sort
-    # rows by key columns to make sure cudf and pandas results matches.
-    expected.index = pd.MultiIndex.from_frame(gdf[["x", "y"]].to_pandas())
     assert_groupby_results_equal(
         expected[["val", "val2"]], got[["val", "val2"]]
     )
@@ -1776,10 +1771,6 @@ def test_groupby_shift_row_mixed_numerics(
     expected = pdf.groupby(["0"]).shift(periods=n_shift, fill_value=fill_value)
     got = gdf.groupby(["0"]).shift(periods=n_shift, fill_value=fill_value)
 
-    # Pandas returns shifted column in original row order. We set its index
-    # to be the key columns, so that `assert_groupby_results_equal` can sort
-    # rows by key columns to make sure cudf and pandas results matches.
-    expected.index = gdf["0"].to_pandas()
     assert_groupby_results_equal(
         expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
     )
@@ -1817,10 +1808,6 @@ def test_groupby_shift_row_mixed(nelem, shift_perc, direction):
     expected = pdf.groupby(["0"]).shift(periods=n_shift)
     got = gdf.groupby(["0"]).shift(periods=n_shift)
 
-    # Pandas returns shifted column in original row order. We set its index
-    # to be the key columns, so that `assert_groupby_results_equal` can sort
-    # rows by key columns to make sure cudf and pandas results matches.
-    expected.index = gdf["0"].to_pandas()
     assert_groupby_results_equal(
         expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
     )
@@ -1880,10 +1867,6 @@ def test_groupby_shift_row_mixed_fill(
 
     got = gdf.groupby(["0"]).shift(periods=n_shift, fill_value=fill_value)
 
-    # Pandas returns shifted column in original row order. We set its index
-    # to be the key columns, so that `assert_groupby_results_equal` can sort
-    # rows by key columns to make sure cudf and pandas results matches.
-    expected.index = gdf["0"].to_pandas()
     assert_groupby_results_equal(
         expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
     )
@@ -1916,9 +1899,6 @@ def test_groupby_shift_row_zero_shift(nelem, fill_value):
     expected = gdf
     got = gdf.groupby(["0"]).shift(periods=0, fill_value=fill_value)
 
-    # Here, the result should be the same as input due to 0-shift, only the
-    # key orders are different.
-    expected = expected.set_index("0")
     assert_groupby_results_equal(
         expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
     )
@@ -2106,3 +2086,31 @@ def test_groupby_describe(data, group):
     expect = pdf.groupby(group).describe()
 
     assert_groupby_results_equal(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [], "b": []},
+        {"a": [2, 1, 2, 1, 1, 3], "b": [None, 1, 2, None, 2, None]},
+        {"a": [None], "b": [None]},
+        {"a": [2, 1, 1], "b": [None, 1, 0], "c": [None, 0, 1]},
+    ],
+)
+@pytest.mark.parametrize("agg", ["first", "last", ["first", "last"]])
+def test_groupby_first(data, agg):
+    pdf = pd.DataFrame(data)
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby("a").agg(agg)
+    got = gdf.groupby("a").agg(agg)
+    assert_groupby_results_equal(expect, got, check_dtype=False)
+
+
+def test_groupby_apply_series():
+    def foo(x):
+        return x.sum()
+
+    got = make_frame(DataFrame, 100).groupby("x").y.apply(foo)
+    expect = make_frame(pd.DataFrame, 100).groupby("x").y.apply(foo)
+
+    assert_groupby_results_equal(expect, got)

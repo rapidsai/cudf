@@ -1,19 +1,22 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
-from libcpp.vector cimport vector
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
-from libcpp cimport bool
+from libcpp.vector cimport vector
 
+from cudf._lib.cpp.aggregation cimport (
+    groupby_aggregation,
+    groupby_scan_aggregation,
+)
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
+from cudf._lib.cpp.replace cimport replace_policy
+from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.aggregation cimport aggregation
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.types cimport size_type, order, null_order, null_policy
-from cudf._lib.cpp.replace cimport replace_policy
+from cudf._lib.cpp.types cimport null_order, null_policy, order, size_type
 from cudf._lib.cpp.utilities.host_span cimport host_span
 
 # workaround for https://github.com/cython/cython/issues/3885
@@ -26,7 +29,12 @@ cdef extern from "cudf/groupby.hpp" \
     cdef cppclass aggregation_request:
         aggregation_request() except +
         column_view values
-        vector[unique_ptr[aggregation]] aggregations
+        vector[unique_ptr[groupby_aggregation]] aggregations
+
+    cdef cppclass scan_request:
+        scan_request() except +
+        column_view values
+        vector[unique_ptr[groupby_scan_aggregation]] aggregations
 
     cdef cppclass aggregation_result:
         vector[unique_ptr[column]] results
@@ -76,7 +84,7 @@ cdef extern from "cudf/groupby.hpp" \
             unique_ptr[table],
             vector[aggregation_result]
         ] scan(
-            const vector[aggregation_request]& requests,
+            const vector[scan_request]& requests,
         ) except +
 
         pair[

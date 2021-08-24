@@ -131,7 +131,8 @@ BENCHMARK_DEFINE_F(Search, Table)(::benchmark::State& state) { BM_table(state); 
 static void CustomArguments(benchmark::internal::Benchmark* b)
 {
   for (int num_cols = 1; num_cols <= 10; num_cols *= 2)
-    for (int col_size = 1000; col_size <= 100000000; col_size *= 10) b->Args({num_cols, col_size});
+    for (int col_size = 1000; col_size <= 100000000; col_size *= 10)
+      b->Args({num_cols, col_size});
 }
 
 BENCHMARK_REGISTER_F(Search, Table)

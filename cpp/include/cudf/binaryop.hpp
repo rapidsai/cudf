@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,37 +42,36 @@ enum class binary_operator : int32_t {
   FLOOR_DIV,             ///< operator / after promoting to 64 bit floating point and then
                          ///< flooring the result
   MOD,                   ///< operator %
+  PMOD,                  ///< positive modulo operator
+                         ///< If remainder is negative, this returns (remainder + divisor) % divisor
+                         ///< else, it returns (dividend % divisor)
   PYMOD,                 ///< operator % but following python's sign rules for negatives
   POW,                   ///< lhs ^ rhs
+  LOG_BASE,              ///< logarithm to the base
+  ATAN2,                 ///< 2-argument arctangent
+  SHIFT_LEFT,            ///< operator <<
+  SHIFT_RIGHT,           ///< operator >>
+  SHIFT_RIGHT_UNSIGNED,  ///< operator >>> (from Java)
+                         ///< Logical right shift. Casts to an unsigned value before shifting.
+  BITWISE_AND,           ///< operator &
+  BITWISE_OR,            ///< operator |
+  BITWISE_XOR,           ///< operator ^
+  LOGICAL_AND,           ///< operator &&
+  LOGICAL_OR,            ///< operator ||
   EQUAL,                 ///< operator ==
   NOT_EQUAL,             ///< operator !=
   LESS,                  ///< operator <
   GREATER,               ///< operator >
   LESS_EQUAL,            ///< operator <=
   GREATER_EQUAL,         ///< operator >=
-  BITWISE_AND,           ///< operator &
-  BITWISE_OR,            ///< operator |
-  BITWISE_XOR,           ///< operator ^
-  LOGICAL_AND,           ///< operator &&
-  LOGICAL_OR,            ///< operator ||
-  COALESCE,              ///< operator x,y  x is null ? y : x
-  GENERIC_BINARY,        ///< generic binary operator to be generated with input
-                         ///< ptx code
-  SHIFT_LEFT,            ///< operator <<
-  SHIFT_RIGHT,           ///< operator >>
-  SHIFT_RIGHT_UNSIGNED,  ///< operator >>> (from Java)
-                         ///< Logical right shift. Casts to an unsigned value before shifting.
-  LOG_BASE,              ///< logarithm to the base
-  ATAN2,                 ///< 2-argument arctangent
-  PMOD,                  ///< positive modulo operator
-                         ///< If remainder is negative, this returns (remainder + divisor) % divisor
-                         ///< else, it returns (dividend % divisor)
   NULL_EQUALS,           ///< Returns true when both operands are null; false when one is null; the
                          ///< result of equality when both are non-null
   NULL_MAX,              ///< Returns max of operands when both are non-null; returns the non-null
                          ///< operand when one is null; or invalid when both are null
   NULL_MIN,              ///< Returns min of operands when both are non-null; returns the non-null
                          ///< operand when one is null; or invalid when both are null
+  GENERIC_BINARY,        ///< generic binary operator to be generated with input
+                         ///< ptx code
   INVALID_BINARY         ///< invalid operation
 };
 /**
@@ -83,15 +82,18 @@ enum class binary_operator : int32_t {
  * This distinction is significant in case of non-commutative binary operations
  *
  * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands
+ * AND of the validity of the two operands except NullMin and NullMax (logical OR).
  *
  * @param lhs         The left operand scalar
  * @param rhs         The right operand column
+ * @param op          The binary operator
  * @param output_type The desired data type of the output column
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
+ * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
+ * operations.
  */
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
@@ -108,15 +110,18 @@ std::unique_ptr<column> binary_operation(
  * This distinction is significant in case of non-commutative binary operations
  *
  * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands
+ * AND of the validity of the two operands except NullMin and NullMax (logical OR).
  *
  * @param lhs         The left operand column
  * @param rhs         The right operand scalar
+ * @param op          The binary operator
  * @param output_type The desired data type of the output column
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
+ * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
+ * operations.
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
@@ -131,15 +136,18 @@ std::unique_ptr<column> binary_operation(
  * The output contains the result of `op(lhs[i], rhs[i])` for all `0 <= i < lhs.size()`
  *
  * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands
+ * AND of the validity of the two operands except NullMin and NullMax (logical OR).
  *
  * @param lhs         The left operand column
  * @param rhs         The right operand column
+ * @param op          The binary operator
  * @param output_type The desired data type of the output column
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
  * @throw cudf::logic_error if @p lhs and @p rhs are different sizes
+ * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
+ * operations.
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
  */
 std::unique_ptr<column> binary_operation(
@@ -202,5 +210,83 @@ cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
                                                          cudf::data_type const& lhs,
                                                          cudf::data_type const& rhs);
 
+namespace jit {
+/**
+ * @brief Performs a binary operation between a scalar and a column.
+ *
+ * The output contains the result of `op(lhs, rhs[i])` for all `0 <= i < rhs.size()`
+ * The scalar is the left operand and the column elements are the right operand.
+ * This distinction is significant in case of non-commutative binary operations
+ *
+ * Regardless of the operator, the validity of the output value is the logical
+ * AND of the validity of the two operands
+ *
+ * @param lhs         The left operand scalar
+ * @param rhs         The right operand column
+ * @param op          The binary operator
+ * @param output_type The desired data type of the output column
+ * @param mr          Device memory resource used to allocate the returned column's device memory
+ * @return            Output column of `output_type` type containing the result of
+ *                    the binary operation
+ * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
+ */
+std::unique_ptr<column> binary_operation(
+  scalar const& lhs,
+  column_view const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Performs a binary operation between a column and a scalar.
+ *
+ * The output contains the result of `op(lhs[i], rhs)` for all `0 <= i < lhs.size()`
+ * The column elements are the left operand and the scalar is the right operand.
+ * This distinction is significant in case of non-commutative binary operations
+ *
+ * Regardless of the operator, the validity of the output value is the logical
+ * AND of the validity of the two operands
+ *
+ * @param lhs         The left operand column
+ * @param rhs         The right operand scalar
+ * @param op          The binary operator
+ * @param output_type The desired data type of the output column
+ * @param mr          Device memory resource used to allocate the returned column's device memory
+ * @return            Output column of `output_type` type containing the result of
+ *                    the binary operation
+ * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
+ */
+std::unique_ptr<column> binary_operation(
+  column_view const& lhs,
+  scalar const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Performs a binary operation between two columns.
+ *
+ * The output contains the result of `op(lhs[i], rhs[i])` for all `0 <= i < lhs.size()`
+ *
+ * Regardless of the operator, the validity of the output value is the logical
+ * AND of the validity of the two operands
+ *
+ * @param lhs         The left operand column
+ * @param rhs         The right operand column
+ * @param op          The binary operator
+ * @param output_type The desired data type of the output column
+ * @param mr          Device memory resource used to allocate the returned column's device memory
+ * @return            Output column of `output_type` type containing the result of
+ *                    the binary operation
+ * @throw cudf::logic_error if @p lhs and @p rhs are different sizes
+ * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
+ */
+std::unique_ptr<column> binary_operation(
+  column_view const& lhs,
+  column_view const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+}  // namespace jit
 /** @} */  // end of group
 }  // namespace cudf

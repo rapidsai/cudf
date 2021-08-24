@@ -1,13 +1,13 @@
-from cudf._lib.labeling import label_bins
-from cudf.core.column import as_column
-from cudf.core.column import build_categorical_column
-from cudf.core.index import IntervalIndex, interval_range
-from cudf.utils.dtypes import is_list_like
+from collections.abc import Sequence
+
 import cupy
-import cudf
 import numpy as np
 import pandas as pd
-from collections.abc import Sequence
+
+import cudf
+from cudf.core.column import as_column, build_categorical_column
+from cudf.core.index import IntervalIndex, interval_range
+from cudf.utils.dtypes import is_list_like
 
 # from cudf._lib.filling import sequence
 
@@ -239,7 +239,7 @@ def cut(
         # the input arr must be changed to the same type as the edges
         input_arr = input_arr.astype(left_edges.dtype)
     # get the indexes for the appropriate number
-    index_labels = label_bins(
+    index_labels = cudf._lib.labeling.label_bins(
         input_arr, left_edges, left_inclusive, right_edges, right_inclusive
     )
 

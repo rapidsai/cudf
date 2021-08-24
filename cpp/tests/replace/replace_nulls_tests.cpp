@@ -34,6 +34,8 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 using namespace cudf::test::iterators;
 
 struct ReplaceErrorTest : public cudf::test::BaseFixture {
@@ -335,11 +337,14 @@ TYPED_TEST(ReplaceNullsTest, ReplacementHasNulls)
 TYPED_TEST(ReplaceNullsTest, LargeScale)
 {
   std::vector<TypeParam> inputColumn(10000);
-  for (size_t i = 0; i < inputColumn.size(); i++) inputColumn[i] = i % 2;
+  for (size_t i = 0; i < inputColumn.size(); i++)
+    inputColumn[i] = i % 2;
   std::vector<cudf::valid_type> inputValid(10000);
-  for (size_t i = 0; i < inputValid.size(); i++) inputValid[i] = i % 2;
+  for (size_t i = 0; i < inputValid.size(); i++)
+    inputValid[i] = i % 2;
   std::vector<TypeParam> expectedColumn(10000);
-  for (size_t i = 0; i < expectedColumn.size(); i++) expectedColumn[i] = 1;
+  for (size_t i = 0; i < expectedColumn.size(); i++)
+    expectedColumn[i] = 1;
 
   ReplaceNullsColumn<TypeParam>(
     cudf::test::fixed_width_column_wrapper<TypeParam>(
@@ -352,11 +357,14 @@ TYPED_TEST(ReplaceNullsTest, LargeScale)
 TYPED_TEST(ReplaceNullsTest, LargeScaleScalar)
 {
   std::vector<TypeParam> inputColumn(10000);
-  for (size_t i = 0; i < inputColumn.size(); i++) inputColumn[i] = i % 2;
+  for (size_t i = 0; i < inputColumn.size(); i++)
+    inputColumn[i] = i % 2;
   std::vector<cudf::valid_type> inputValid(10000);
-  for (size_t i = 0; i < inputValid.size(); i++) inputValid[i] = i % 2;
+  for (size_t i = 0; i < inputValid.size(); i++)
+    inputValid[i] = i % 2;
   std::vector<TypeParam> expectedColumn(10000);
-  for (size_t i = 0; i < expectedColumn.size(); i++) expectedColumn[i] = 1;
+  for (size_t i = 0; i < expectedColumn.size(); i++)
+    expectedColumn[i] = 1;
   cudf::numeric_scalar<TypeParam> replacement(1);
 
   ReplaceNullsScalar<TypeParam>(cudf::test::fixed_width_column_wrapper<TypeParam>(
@@ -434,6 +442,48 @@ TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillTrailingNulls)
     cudf::test::fixed_width_column_wrapper<TypeParam>(col.begin(), col.end(), mask.begin()),
     cudf::test::fixed_width_column_wrapper<TypeParam>(
       expect_col.begin(), expect_col.end(), expect_mask.begin()),
+    cudf::replace_policy::FOLLOWING);
+}
+
+TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFillLargeArray)
+{
+  cudf::size_type const sz = 1000;
+
+  // Source: 0, null, null...
+  auto src_begin       = thrust::make_counting_iterator(0);
+  auto src_end         = src_begin + sz;
+  auto nulls_idx_begin = thrust::make_counting_iterator(1);
+  auto nulls_idx_end   = nulls_idx_begin + sz - 1;
+
+  // Expected: 0, 0, 0, ...
+  auto expected_begin = thrust::make_constant_iterator(0);
+  auto expected_end   = expected_begin + sz;
+
+  TestReplaceNullsWithPolicy(
+    cudf::test::fixed_width_column_wrapper<TypeParam>(
+      src_begin, src_end, nulls_at(nulls_idx_begin, nulls_idx_end)),
+    cudf::test::fixed_width_column_wrapper<TypeParam>(expected_begin, expected_end, no_nulls()),
+    cudf::replace_policy::PRECEDING);
+}
+
+TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillLargeArray)
+{
+  cudf::size_type const sz = 1000;
+
+  // Source: null, ... null, 999
+  auto src_begin       = thrust::make_counting_iterator(0);
+  auto src_end         = src_begin + sz;
+  auto nulls_idx_begin = thrust::make_counting_iterator(0);
+  auto nulls_idx_end   = nulls_idx_begin + sz - 1;
+
+  // Expected: 999, 999, 999, ...
+  auto expected_begin = thrust::make_constant_iterator(sz - 1);
+  auto expected_end   = expected_begin + sz;
+
+  TestReplaceNullsWithPolicy(
+    cudf::test::fixed_width_column_wrapper<TypeParam>(
+      src_begin, src_end, nulls_at(nulls_idx_begin, nulls_idx_end)),
+    cudf::test::fixed_width_column_wrapper<TypeParam>(expected_begin, expected_end, no_nulls()),
     cudf::replace_policy::FOLLOWING);
 }
 

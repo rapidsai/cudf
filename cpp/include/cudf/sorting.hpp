@@ -187,7 +187,7 @@ std::unique_ptr<column> rank(
 /**
  * @brief Returns sorted order after sorting each segment in the table.
  *
- * If segment_offsets contains values larger than number of rows, behaviour is undefined.
+ * If segment_offsets contains values larger than number of rows, behavior is undefined.
  * @throws cudf::logic_error if `segment_offsets` is not `size_type` column.
  *
  * @param keys The table that determines the ordering of elements in each segment
@@ -214,7 +214,7 @@ std::unique_ptr<column> segmented_sorted_order(
 /**
  * @brief Performs a lexicographic segmented sort of a table
  *
- * If segment_offsets contains values larger than number of rows, behaviour is undefined.
+ * If segment_offsets contains values larger than number of rows, behavior is undefined.
  * @throws cudf::logic_error if `values.num_rows() != keys.num_rows()`.
  * @throws cudf::logic_error if `segment_offsets` is not `size_type` column.
  *

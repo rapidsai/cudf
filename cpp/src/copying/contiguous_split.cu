@@ -23,6 +23,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
@@ -53,7 +54,7 @@ inline __device__ std::size_t _round_up_safe(std::size_t number_to_round, std::s
  * The definition of "buffer" used throughout this module is a component piece of a
  * cudf column. So for example, a fixed-width column with validity would have 2 associated
  * buffers : the data itself and the validity buffer.  contiguous_split operates by breaking
- * each column up into it's individual components and copying each one as a seperate kernel
+ * each column up into it's individual components and copying each one as a separate kernel
  * block.
  */
 struct src_buf_info {
@@ -131,7 +132,7 @@ struct dst_buf_info {
  */
 template <int block_size>
 __device__ void copy_buffer(uint8_t* __restrict__ dst,
-                            uint8_t* __restrict__ src,
+                            uint8_t const* __restrict__ src,
                             int t,
                             std::size_t num_elements,
                             std::size_t element_size,
@@ -188,15 +189,16 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
     }
 
     // if we're performing a value shift (offsets), or a bit shift (validity) the # of bytes and
-    // alignment must be a multiple of 4. value shifting and bit shifting are mututally exclusive
+    // alignment must be a multiple of 4. value shifting and bit shifting are mutually exclusive
     // and will never both be true at the same time.
     if (value_shift || bit_shift) {
       std::size_t idx = (num_bytes - remainder) / 4;
-      uint32_t v      = remainder > 0 ? (reinterpret_cast<uint32_t*>(src)[idx] - value_shift) : 0;
+      uint32_t v = remainder > 0 ? (reinterpret_cast<uint32_t const*>(src)[idx] - value_shift) : 0;
       while (remainder) {
-        uint32_t const next =
-          remainder > 0 ? (reinterpret_cast<uint32_t*>(src)[idx + 1] - value_shift) : 0;
-        uint32_t const val = (v >> bit_shift) | (next << (32 - bit_shift));
+        uint32_t const next = bit_shift > 0 || remainder > 4
+                                ? (reinterpret_cast<uint32_t const*>(src)[idx + 1] - value_shift)
+                                : 0;
+        uint32_t const val  = (v >> bit_shift) | (next << (32 - bit_shift));
         if (valid_count) { thread_valid_count += __popc(val); }
         reinterpret_cast<uint32_t*>(dst)[idx] = val;
         v                                     = next;
@@ -206,7 +208,7 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
     } else {
       while (remainder) {
         std::size_t const idx = num_bytes - remainder--;
-        uint32_t const val    = reinterpret_cast<uint8_t*>(src)[idx];
+        uint32_t const val    = reinterpret_cast<uint8_t const*>(src)[idx];
         if (valid_count) { thread_valid_count += __popc(val); }
         reinterpret_cast<uint8_t*>(dst)[idx] = val;
       }
@@ -249,12 +251,12 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  *
  * @param num_src_bufs Total number of source buffers (N)
  * @param src_bufs Input source buffers (N)
- * @param dst_bufs Desination buffers (N*M)
+ * @param dst_bufs Destination buffers (N*M)
  * @param buf_info Information on the range of values to be copied for each destination buffer.
  */
 template <int block_size>
 __global__ void copy_partition(int num_src_bufs,
-                               uint8_t** src_bufs,
+                               uint8_t const** src_bufs,
                                uint8_t** dst_bufs,
                                dst_buf_info* buf_info)
 {
@@ -348,13 +350,13 @@ OutputIter setup_src_buf_data(InputIter begin, InputIter end, OutputIter out_buf
 {
   std::for_each(begin, end, [&out_buf](column_view const& col) {
     if (col.nullable()) {
-      *out_buf = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
+      *out_buf = reinterpret_cast<uint8_t const*>(col.null_mask());
       out_buf++;
     }
     // NOTE: we're always returning the base pointer here.  column-level offset is accounted
     // for later. Also, for some column types (string, list, struct) this pointer will be null
     // because there is no associated data with the root column.
-    *out_buf = const_cast<uint8_t*>(col.head<uint8_t>());
+    *out_buf = col.head<uint8_t>();
     out_buf++;
 
     out_buf = setup_src_buf_data(col.child_begin(), col.child_end(), out_buf);
@@ -446,7 +448,7 @@ struct buf_info_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<std::is_same<T, cudf::dictionary32>::value, std::pair<src_buf_info*, size_type>>
+  std::enable_if_t<std::is_same_v<T, cudf::dictionary32>, std::pair<src_buf_info*, size_type>>
   operator()(Args&&...)
   {
     CUDF_FAIL("Unsupported type");
@@ -595,8 +597,15 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
   offset_stack_pos += offset_depth;
 
   // recurse on children
-  return setup_source_buf_info(col.child_begin(),
-                               col.child_end(),
+  cudf::structs_column_view scv(col);
+  std::vector<column_view> sliced_children;
+  sliced_children.reserve(scv.num_children());
+  std::transform(thrust::make_counting_iterator(0),
+                 thrust::make_counting_iterator(scv.num_children()),
+                 std::back_inserter(sliced_children),
+                 [&scv](size_type child_index) { return scv.get_sliced_child(child_index); });
+  return setup_source_buf_info(sliced_children.begin(),
+                               sliced_children.end(),
                                head,
                                current,
                                offset_stack_pos,
@@ -783,17 +792,35 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
   // if inputs are empty, just return num_partitions empty tables
   if (input.column(0).size() == 0) {
+    // sanitize the inputs (to handle corner cases like sliced tables)
+    std::vector<std::unique_ptr<column>> empty_columns;
+    empty_columns.reserve(input.num_columns());
+    std::transform(
+      input.begin(), input.end(), std::back_inserter(empty_columns), [](column_view const& col) {
+        return cudf::empty_like(col);
+      });
+    std::vector<cudf::column_view> empty_column_views;
+    empty_column_views.reserve(input.num_columns());
+    std::transform(empty_columns.begin(),
+                   empty_columns.end(),
+                   std::back_inserter(empty_column_views),
+                   [](std::unique_ptr<column> const& col) { return col->view(); });
+    table_view empty_inputs(empty_column_views);
+
     // build the empty results
     std::vector<packed_table> result;
     result.reserve(num_partitions);
     auto iter = thrust::make_counting_iterator(0);
-    std::transform(
-      iter, iter + num_partitions, std::back_inserter(result), [&input](int partition_index) {
-        return packed_table{input,
-                            packed_columns{std::make_unique<packed_columns::metadata>(pack_metadata(
-                                             input, static_cast<uint8_t const*>(nullptr), 0)),
-                                           std::make_unique<rmm::device_buffer>()}};
-      });
+    std::transform(iter,
+                   iter + num_partitions,
+                   std::back_inserter(result),
+                   [&empty_inputs](int partition_index) {
+                     return packed_table{
+                       empty_inputs,
+                       packed_columns{std::make_unique<packed_columns::metadata>(pack_metadata(
+                                        empty_inputs, static_cast<uint8_t const*>(nullptr), 0)),
+                                      std::make_unique<rmm::device_buffer>()}};
+                   });
 
     return result;
   }
@@ -994,14 +1021,14 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
     cudf::util::round_up_safe(num_partitions * sizeof(uint8_t*), split_align);
   // host-side
   std::vector<uint8_t> h_src_and_dst_buffers(src_bufs_size + dst_bufs_size);
-  uint8_t** h_src_bufs = reinterpret_cast<uint8_t**>(h_src_and_dst_buffers.data());
+  uint8_t const** h_src_bufs = reinterpret_cast<uint8_t const**>(h_src_and_dst_buffers.data());
   uint8_t** h_dst_bufs = reinterpret_cast<uint8_t**>(h_src_and_dst_buffers.data() + src_bufs_size);
   // device-side
   rmm::device_buffer d_src_and_dst_buffers(src_bufs_size + dst_bufs_size + offset_stack_size,
                                            stream,
                                            rmm::mr::get_current_device_resource());
-  uint8_t** d_src_bufs = reinterpret_cast<uint8_t**>(d_src_and_dst_buffers.data());
-  uint8_t** d_dst_bufs = reinterpret_cast<uint8_t**>(
+  uint8_t const** d_src_bufs = reinterpret_cast<uint8_t const**>(d_src_and_dst_buffers.data());
+  uint8_t** d_dst_bufs       = reinterpret_cast<uint8_t**>(
     reinterpret_cast<uint8_t*>(d_src_and_dst_buffers.data()) + src_bufs_size);
 
   // setup src buffers

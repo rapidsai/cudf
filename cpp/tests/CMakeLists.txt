@@ -62,11 +62,13 @@ ConfigureTest(GROUPBY_TEST
     groupby/count_tests.cpp
     groupby/groups_tests.cpp
     groupby/keys_tests.cpp
+    groupby/m2_tests.cpp
     groupby/min_tests.cpp
     groupby/max_scan_tests.cpp
     groupby/max_tests.cpp
     groupby/mean_tests.cpp
     groupby/median_tests.cpp
+    groupby/merge_m2_tests.cpp
     groupby/merge_lists_tests.cpp
     groupby/merge_sets_tests.cpp
     groupby/min_scan_tests.cpp
@@ -74,6 +76,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/nunique_tests.cpp
     groupby/product_tests.cpp
     groupby/quantile_tests.cpp
+    groupby/rank_scan_tests.cpp
     groupby/replace_nulls_tests.cpp
     groupby/shift_tests.cpp
     groupby/std_tests.cpp
@@ -86,6 +89,7 @@ ConfigureTest(GROUPBY_TEST
 # - join tests ------------------------------------------------------------------------------------
 ConfigureTest(JOIN_TEST
     join/join_tests.cpp
+    join/conditional_join_tests.cu
     join/cross_join_tests.cpp
     join/semi_anti_join_tests.cpp)
 
@@ -161,6 +165,8 @@ ConfigureTest(BINARY_TEST
     binaryop/binop-verify-input-test.cpp
     binaryop/binop-null-test.cpp
     binaryop/binop-integration-test.cpp
+    binaryop/binop-compiled-test.cpp
+    binaryop/binop-compiled-fixed_point-test.cpp
     binaryop/binop-generic-ptx-test.cpp
     )
 
@@ -211,7 +217,7 @@ ConfigureTest(SORT_TEST
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
 ConfigureTest(COPYING_TEST
-    copying/concatenate_tests.cpp
+    copying/concatenate_tests.cu
     copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
     copying/copy_tests.cu
@@ -227,6 +233,7 @@ ConfigureTest(COPYING_TEST
     copying/scatter_list_tests.cpp
     copying/scatter_list_scalar_tests.cpp
     copying/scatter_struct_tests.cpp
+    copying/scatter_struct_scalar_tests.cpp
     copying/segmented_gather_list_tests.cpp
     copying/shift_tests.cpp
     copying/slice_tests.cpp
@@ -241,7 +248,8 @@ ConfigureTest(UTILITIES_TEST
     utilities_tests/column_utilities_tests.cpp
     utilities_tests/column_wrapper_tests.cpp
     utilities_tests/lists_column_wrapper_tests.cpp
-    utilities_tests/default_stream_tests.cpp)
+    utilities_tests/default_stream_tests.cpp
+    utilities_tests/type_check_tests.cpp)
 
 ###################################################################################################
 # - span tests -------------------------------------------------------------------------------
@@ -377,7 +385,10 @@ ConfigureTest(STRINGS_TEST
 
 ###################################################################################################
 # - structs test ----------------------------------------------------------------------------------
-ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cu)
+ConfigureTest(STRUCTS_TEST 
+    structs/structs_column_tests.cpp
+    structs/utilities_tests.cpp
+    )
 
 ###################################################################################################
 # - nvtext test -----------------------------------------------------------------------------------

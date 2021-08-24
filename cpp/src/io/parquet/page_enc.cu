@@ -48,19 +48,12 @@ constexpr uint32_t rle_buffer_size = (1 << 9);
 struct frag_init_state_s {
   parquet_column_device_view col;
   PageFragment frag;
-  uint32_t total_dupes;
   size_type start_value_idx;
-  volatile uint32_t scratch_red[32];
-  uint32_t dict[max_page_fragment_size];
-  union {
-    uint16_t u16[1 << (init_hash_bits)];
-    uint32_t u32[1 << (init_hash_bits - 1)];
-  } map;
 };
 
 struct page_enc_state_s {
-  uint8_t *cur;          //!< current output ptr
-  uint8_t *rle_out;      //!< current RLE write ptr
+  uint8_t* cur;          //!< current output ptr
+  uint8_t* rle_out;      //!< current RLE write ptr
   uint32_t rle_run;      //!< current RLE run
   uint32_t run_val;      //!< current RLE run value
   uint32_t rle_pos;      //!< RLE encoder positions
@@ -68,6 +61,7 @@ struct page_enc_state_s {
   uint32_t rle_lit_count;
   uint32_t rle_rpt_count;
   uint32_t page_start_val;
+  uint32_t chunk_start_val;
   volatile uint32_t rpt_map[4];
   volatile uint32_t scratch_red[32];
   EncPage page;
@@ -81,9 +75,9 @@ struct page_enc_state_s {
 /**
  * @brief Return a 12-bit hash from a byte sequence
  */
-inline __device__ uint32_t hash_string(const string_view &val)
+inline __device__ uint32_t hash_string(const string_view& val)
 {
-  char const *ptr = val.data();
+  char const* ptr = val.data();
   uint32_t len    = val.size_bytes();
   if (len != 0) {
     return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
@@ -124,31 +118,22 @@ __global__ void __launch_bounds__(block_size)
   __shared__ __align__(16) frag_init_state_s state_g;
 
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
-  using block_scan   = cub::BlockScan<uint32_t, block_size>;
-  __shared__ union {
-    typename block_reduce::TempStorage reduce_storage;
-    typename block_scan::TempStorage scan_storage;
-  } temp_storage;
+  __shared__ typename block_reduce::TempStorage reduce_storage;
 
-  frag_init_state_s *const s = &state_g;
+  frag_init_state_s* const s = &state_g;
   uint32_t t                 = threadIdx.x;
-  uint32_t start_row, dtype_len, dtype_len_in, dtype;
+  uint32_t start_row, dtype_len, dtype;
 
   if (t == 0) s->col = col_desc[blockIdx.x];
-  for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
-    if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
-  }
   __syncthreads();
   start_row = blockIdx.y * fragment_size;
   if (!t) {
     // frag.num_rows = fragment_size except for the last page fragment which can be smaller.
     // num_rows is fixed but fragment size could be larger if the data is strings or nested.
     s->frag.num_rows           = min(fragment_size, max_num_rows - min(start_row, max_num_rows));
-    s->frag.non_nulls          = 0;
     s->frag.num_dict_vals      = 0;
     s->frag.fragment_data_size = 0;
     s->frag.dict_data_size     = 0;
-    s->total_dupes             = 0;
 
     // To use num_vals instead of num_rows, we need to calculate num_vals on the fly.
     // For list<list<int>>, values between i and i+50 can be calculated by
@@ -190,19 +175,11 @@ __global__ void __launch_bounds__(block_size)
       s->frag.num_values = s->frag.num_rows;
     }
   }
-  dtype = s->col.physical_type;
-  dtype_len =
-    (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
-  if (dtype == INT32) {
-    dtype_len_in = GetDtypeLogicalLen(s->col.leaf_column);
-  } else if (dtype == INT96) {
-    // cudf doesn't support INT96 internally and uses INT64, so treat INT96 as an INT64 for
-    // computing dictionary hash values and reading the data, but we do treat it as 12 bytes for
-    // dtype_len, which determines how much memory we need to allocate for the fragment.
-    dtype_len_in = 8;
-  } else {
-    dtype_len_in = dtype_len;
-  }
+  dtype     = s->col.physical_type;
+  dtype_len = (dtype == INT96)                      ? 12
+              : (dtype == INT64 || dtype == DOUBLE) ? 8
+              : (dtype == BOOLEAN)                  ? 1
+                                                    : 4;
   __syncthreads();
 
   size_type nvals           = s->frag.num_leaf_values;
@@ -213,168 +190,22 @@ __global__ void __launch_bounds__(block_size)
     uint32_t is_valid = (i + t < nvals && val_idx < s->col.leaf_column->size())
                           ? s->col.leaf_column->is_valid(val_idx)
                           : 0;
-    uint32_t len, nz_pos, hash;
+    uint32_t len;
     if (is_valid) {
       len = dtype_len;
       if (dtype != BOOLEAN) {
         if (dtype == BYTE_ARRAY) {
           auto str = s->col.leaf_column->element<string_view>(val_idx);
           len += str.size_bytes();
-          hash = hash_string(str);
-        } else if (dtype_len_in == 8) {
-          hash = uint64_init_hash(s->col.leaf_column->element<uint64_t>(val_idx));
-        } else {
-          hash = uint32_init_hash((dtype_len_in == 4)
-                                    ? s->col.leaf_column->element<uint32_t>(val_idx)
-                                    : (dtype_len_in == 2)
-                                        ? s->col.leaf_column->element<uint16_t>(val_idx)
-                                        : s->col.leaf_column->element<uint8_t>(val_idx));
         }
       }
     } else {
       len = 0;
     }
 
-    uint32_t non_nulls;
-    block_scan(temp_storage.scan_storage).ExclusiveSum(is_valid, nz_pos, non_nulls);
-    nz_pos += s->frag.non_nulls;
+    len = block_reduce(reduce_storage).Sum(len);
+    if (!t) { s->frag.fragment_data_size += len; }
     __syncthreads();
-    len = block_reduce(temp_storage.reduce_storage).Sum(len);
-    if (!t) {
-      s->frag.non_nulls += non_nulls;
-      s->frag.fragment_data_size += len;
-    }
-    __syncthreads();
-    if (is_valid && dtype != BOOLEAN) {
-      uint32_t *dict_index = s->col.dict_index;
-      if (dict_index) {
-        atomicAdd(&s->map.u32[hash >> 1], (hash & 1) ? 1 << 16 : 1);
-        dict_index[start_value_idx + nz_pos] =
-          ((i + t) << init_hash_bits) |
-          hash;  // Store the hash along with the index, so we don't have to recompute it
-      }
-    }
-    __syncthreads();
-  }
-  __syncthreads();
-  // Reorder the 16-bit local indices according to the hash values
-  if (s->col.dict_index) {
-    static_assert((init_hash_bits == 12), "Hardcoded for init_hash_bits=12");
-    // Cumulative sum of hash map counts
-    uint32_t count01 = s->map.u32[t * 4 + 0];
-    uint32_t count23 = s->map.u32[t * 4 + 1];
-    uint32_t count45 = s->map.u32[t * 4 + 2];
-    uint32_t count67 = s->map.u32[t * 4 + 3];
-    uint32_t sum01   = count01 + (count01 << 16);
-    uint32_t sum23   = count23 + (count23 << 16);
-    uint32_t sum45   = count45 + (count45 << 16);
-    uint32_t sum67   = count67 + (count67 << 16);
-    sum23 += (sum01 >> 16) * 0x10001;
-    sum45 += (sum23 >> 16) * 0x10001;
-    sum67 += (sum45 >> 16) * 0x10001;
-    uint32_t sum_w = sum67 >> 16;
-    block_scan(temp_storage.scan_storage).InclusiveSum(sum_w, sum_w);
-    sum_w                 = (sum_w - (sum67 >> 16)) * 0x10001;
-    s->map.u32[t * 4 + 0] = sum_w + sum01 - count01;
-    s->map.u32[t * 4 + 1] = sum_w + sum23 - count23;
-    s->map.u32[t * 4 + 2] = sum_w + sum45 - count45;
-    s->map.u32[t * 4 + 3] = sum_w + sum67 - count67;
-  }
-  __syncthreads();
-  // Put the indices back in hash order
-  if (s->col.dict_index) {
-    uint32_t *dict_index = s->col.dict_index + start_row;
-    uint32_t nnz         = s->frag.non_nulls;
-    for (uint32_t i = 0; i < nnz; i += block_size) {
-      uint32_t pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row, val = 0;
-      bool collision;
-      if (i + t < nnz) {
-        val     = dict_index[i + t];
-        hash    = val & ((1 << init_hash_bits) - 1);
-        sh      = (hash & 1) ? 16 : 0;
-        pos_old = s->map.u16[hash];
-      }
-      // The isolation of the atomicAdd, along with pos_old/pos_new is to guarantee deterministic
-      // behavior for the first row in the hash map that will be used for early duplicate detection
-      __syncthreads();
-      if (i + t < nnz) {
-        pos          = (atomicAdd(&s->map.u32[hash >> 1], 1 << sh) >> sh) & 0xffff;
-        s->dict[pos] = val;
-      }
-      __syncthreads();
-      collision = false;
-      if (i + t < nnz) {
-        pos_new   = s->map.u16[hash];
-        collision = (pos != pos_old && pos_new > pos_old + 1);
-        if (collision) { colliding_row = s->dict[pos_old]; }
-      }
-      __syncthreads();
-      if (collision) { atomicMin(&s->dict[pos_old], val); }
-      __syncthreads();
-      // Resolve collision
-      if (collision && val == s->dict[pos_old]) { s->dict[pos] = colliding_row; }
-    }
-    __syncthreads();
-    // Now that the values are ordered by hash, compare every entry with the first entry in the hash
-    // map, the position of the first entry can be inferred from the hash map counts
-    uint32_t dupe_data_size = 0;
-    for (uint32_t i = 0; i < nnz; i += block_size) {
-      uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0;
-      if (i + t < nnz) {
-        uint32_t dict_val = s->dict[i + t];
-        uint32_t hash     = dict_val & ((1 << init_hash_bits) - 1);
-        ck_row            = start_row + (dict_val >> init_hash_bits);
-        ck_row_ref = start_row + (s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0] >> init_hash_bits);
-        if (ck_row_ref != ck_row) {
-          if (dtype == BYTE_ARRAY) {
-            auto str1 = s->col.leaf_column->element<string_view>(ck_row);
-            auto str2 = s->col.leaf_column->element<string_view>(ck_row_ref);
-            is_dupe   = (str1 == str2);
-            dupe_data_size += (is_dupe) ? 4 + str1.size_bytes() : 0;
-          } else {
-            if (dtype_len_in == 8) {
-              auto v1 = s->col.leaf_column->element<uint64_t>(ck_row);
-              auto v2 = s->col.leaf_column->element<uint64_t>(ck_row_ref);
-              is_dupe = (v1 == v2);
-              dupe_data_size += (is_dupe) ? 8 : 0;
-            } else {
-              uint32_t v1, v2;
-              if (dtype_len_in == 4) {
-                v1 = s->col.leaf_column->element<uint32_t>(ck_row);
-                v2 = s->col.leaf_column->element<uint32_t>(ck_row_ref);
-              } else if (dtype_len_in == 2) {
-                v1 = s->col.leaf_column->element<uint16_t>(ck_row);
-                v2 = s->col.leaf_column->element<uint16_t>(ck_row_ref);
-              } else {
-                v1 = s->col.leaf_column->element<uint8_t>(ck_row);
-                v2 = s->col.leaf_column->element<uint8_t>(ck_row_ref);
-              }
-              is_dupe = (v1 == v2);
-              dupe_data_size += (is_dupe) ? 4 : 0;
-            }
-          }
-        }
-      }
-      uint32_t dupes_in_block;
-      uint32_t dupes_before;
-      block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, dupes_in_block);
-      dupes_before += s->total_dupes;
-      __syncthreads();
-      if (t == 0) { s->total_dupes += dupes_in_block; }
-      if (i + t < nnz) {
-        if (!is_dupe) {
-          s->col.dict_data[start_row + i + t - dupes_before] = ck_row;
-        } else {
-          s->col.dict_index[ck_row] = ck_row_ref | (1u << 31);
-        }
-      }
-    }
-    __syncthreads();
-    dupe_data_size = block_reduce(temp_storage.reduce_storage).Sum(dupe_data_size);
-    if (!t) {
-      s->frag.dict_data_size = s->frag.fragment_data_size - dupe_data_size;
-      s->frag.num_dict_vals  = s->frag.non_nulls - s->total_dupes;
-    }
   }
   __syncthreads();
   if (t == 0) frag[blockIdx.x][blockIdx.y] = s->frag;
@@ -393,7 +224,7 @@ __global__ void __launch_bounds__(128)
   uint32_t frag_id              = blockIdx.y * 4 + (threadIdx.x >> 5);
   uint32_t column_id            = blockIdx.x;
   auto num_fragments_per_column = fragments.size().second;
-  statistics_group *const g     = &group_g[threadIdx.x >> 5];
+  statistics_group* const g     = &group_g[threadIdx.x >> 5];
   if (!lane_id && frag_id < num_fragments_per_column) {
     g->col       = &col_desc[column_id];
     g->start_row = fragments[column_id][frag_id].start_value_idx;
@@ -408,8 +239,8 @@ __global__ void __launch_bounds__(128)
   gpuInitPages(device_2dspan<EncColumnChunk> chunks,
                device_span<gpu::EncPage> pages,
                device_span<parquet_column_device_view const> col_desc,
-               statistics_merge_group *page_grstats,
-               statistics_merge_group *chunk_grstats,
+               statistics_merge_group* page_grstats,
+               statistics_merge_group* chunk_grstats,
                int32_t num_columns)
 {
   // TODO: All writing seems to be done by thread 0. Could be replaced by thrust foreach
@@ -448,22 +279,21 @@ __global__ void __launch_bounds__(128)
       pagestats_g.start_chunk = ck_g.first_fragment;
       pagestats_g.num_chunks  = 0;
     }
-    if (ck_g.has_dictionary) {
+    if (ck_g.use_dictionary) {
       if (!t) {
         page_g.page_data       = ck_g.uncompressed_bfr + page_offset;
         page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
         page_g.num_fragments   = 0;
         page_g.page_type       = PageType::DICTIONARY_PAGE;
-        page_g.dict_bits_plus1 = 0;
         page_g.chunk           = &chunks[blockIdx.y][blockIdx.x];
         page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
         page_g.hdr_size        = 0;
         page_g.max_hdr_size    = 32;
-        page_g.max_data_size   = ck_g.dictionary_size;
+        page_g.max_data_size   = ck_g.uniq_data_size;
         page_g.start_row       = cur_row;
-        page_g.num_rows        = ck_g.total_dict_entries;
-        page_g.num_leaf_values = ck_g.total_dict_entries;
-        page_g.num_values      = ck_g.total_dict_entries;
+        page_g.num_rows        = ck_g.num_dict_entries;
+        page_g.num_leaf_values = ck_g.num_dict_entries;
+        page_g.num_values      = ck_g.num_dict_entries;  // TODO: shouldn't matter for dict page
         page_offset += page_g.max_hdr_size + page_g.max_data_size;
         comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
       }
@@ -482,7 +312,7 @@ __global__ void __launch_bounds__(128)
     // This doesn't actually deal with data. It's agnostic. It only cares about number of rows and
     // page size.
     do {
-      uint32_t fragment_data_size, max_page_size, minmax_len = 0;
+      uint32_t minmax_len = 0;
       __syncwarp();
       if (num_rows < ck_g.num_rows) {
         if (t == 0) { frag_g = ck_g.fragments[fragments_in_chunk]; }
@@ -495,50 +325,27 @@ __global__ void __launch_bounds__(128)
         frag_g.num_rows           = 0;
       }
       __syncwarp();
-      if (ck_g.has_dictionary && fragments_in_chunk < ck_g.num_dict_fragments) {
-        fragment_data_size =
-          frag_g.num_leaf_values * 2;  // Assume worst-case of 2-bytes per dictionary index
-      } else {
-        fragment_data_size = frag_g.fragment_data_size;
-      }
+      uint32_t fragment_data_size =
+        (ck_g.use_dictionary)
+          ? frag_g.num_leaf_values * 2  // Assume worst-case of 2-bytes per dictionary index
+          : frag_g.fragment_data_size;
       // TODO (dm): this convoluted logic to limit page size needs refactoring
-      max_page_size = (values_in_page * 2 >= ck_g.num_values)
-                        ? 256 * 1024
-                        : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024 : 512 * 1024;
+      uint32_t max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
+                               : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
+                                                                         : 512 * 1024;
       if (num_rows >= ck_g.num_rows ||
-          (values_in_page > 0 &&
-           (page_size + fragment_data_size > max_page_size ||
-            (ck_g.has_dictionary && fragments_in_chunk == ck_g.num_dict_fragments)))) {
-        uint32_t dict_bits_plus1;
-
-        if (ck_g.has_dictionary && page_start < ck_g.num_dict_fragments) {
-          uint32_t dict_bits;
-          if (num_dict_entries <= 2) {
-            dict_bits = 1;
-          } else if (num_dict_entries <= 4) {
-            dict_bits = 2;
-          } else if (num_dict_entries <= 16) {
-            dict_bits = 4;
-          } else if (num_dict_entries <= 256) {
-            dict_bits = 8;
-          } else if (num_dict_entries <= 4096) {
-            dict_bits = 12;
-          } else {
-            dict_bits = 16;
-          }
-          page_size       = 1 + 5 + ((values_in_page * dict_bits + 7) >> 3) + (values_in_page >> 8);
-          dict_bits_plus1 = dict_bits + 1;
-        } else {
-          dict_bits_plus1 = 0;
+          (values_in_page > 0 && (page_size + fragment_data_size > max_page_size))) {
+        if (ck_g.use_dictionary) {
+          page_size =
+            1 + 5 + ((values_in_page * ck_g.dict_rle_bits + 7) >> 3) + (values_in_page >> 8);
         }
         if (!t) {
-          page_g.num_fragments   = fragments_in_chunk - page_start;
-          page_g.chunk           = &chunks[blockIdx.y][blockIdx.x];
-          page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
-          page_g.page_type       = PageType::DATA_PAGE;
-          page_g.dict_bits_plus1 = dict_bits_plus1;
-          page_g.hdr_size        = 0;
-          page_g.max_hdr_size    = 32;  // Max size excluding statistics
+          page_g.num_fragments = fragments_in_chunk - page_start;
+          page_g.chunk         = &chunks[blockIdx.y][blockIdx.x];
+          page_g.chunk_id      = blockIdx.y * num_columns + blockIdx.x;
+          page_g.page_type     = PageType::DATA_PAGE;
+          page_g.hdr_size      = 0;
+          page_g.max_hdr_size  = 32;  // Max size excluding statistics
           if (ck_g.stats) {
             uint32_t stats_hdr_len = 16;
             if (col_g.stats_dtype == dtype_string) {
@@ -610,8 +417,8 @@ __global__ void __launch_bounds__(128)
       ck_g.num_pages          = num_pages;
       ck_g.bfr_size           = page_offset;
       ck_g.compressed_size    = comp_page_offset;
-      pagestats_g.start_chunk = ck_g.first_page + ck_g.has_dictionary;  // Exclude dictionary
-      pagestats_g.num_chunks  = num_pages - ck_g.has_dictionary;
+      pagestats_g.start_chunk = ck_g.first_page + ck_g.use_dictionary;  // Exclude dictionary
+      pagestats_g.num_chunks  = num_pages - ck_g.use_dictionary;
     }
   }
   __syncthreads();
@@ -632,7 +439,7 @@ static __device__ __constant__ uint32_t kRleRunMask[16] = {
 /**
  * @brief Variable-length encode an integer
  */
-inline __device__ uint8_t *VlqEncode(uint8_t *p, uint32_t v)
+inline __device__ uint8_t* VlqEncode(uint8_t* p, uint32_t v)
 {
   while (v > 0x7f) {
     *p++ = (v | 0x80);
@@ -646,7 +453,7 @@ inline __device__ uint8_t *VlqEncode(uint8_t *p, uint32_t v)
  * @brief Pack literal values in output bitstream (1,2,4,8,12 or 16 bits per value)
  */
 inline __device__ void PackLiterals(
-  uint8_t *dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
+  uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
 {
   if (w == 1 || w == 2 || w == 4 || w == 8 || w == 12 || w == 16) {
     if (t <= (count | 0x1f)) {
@@ -713,7 +520,7 @@ inline __device__ void PackLiterals(
     // Copy scratch data to final destination
     auto available_bytes = (count * w + 7) / 8;
 
-    auto scratch_bytes = reinterpret_cast<char *>(&scratch[0]);
+    auto scratch_bytes = reinterpret_cast<char*>(&scratch[0]);
     if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
     if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
     __syncthreads();
@@ -730,7 +537,7 @@ inline __device__ void PackLiterals(
  * @param[in] t thread id (0..127)
  */
 static __device__ void RleEncode(
-  page_enc_state_s *s, uint32_t numvals, uint32_t nbits, uint32_t flush, uint32_t t)
+  page_enc_state_s* s, uint32_t numvals, uint32_t nbits, uint32_t flush, uint32_t t)
 {
   uint32_t rle_pos = s->rle_pos;
   uint32_t rle_run = s->rle_run;
@@ -759,7 +566,7 @@ static __device__ void RleEncode(
       if (rle_rpt_count < max_rpt_count || (flush && rle_pos == numvals)) {
         if (t == 0) {
           uint32_t const run_val = s->run_val;
-          uint8_t *dst           = VlqEncode(s->rle_out, rle_run);
+          uint8_t* dst           = VlqEncode(s->rle_out, rle_run);
           *dst++                 = run_val;
           if (nbits > 8) { *dst++ = run_val >> 8; }
           s->rle_out = dst;
@@ -823,7 +630,7 @@ static __device__ void RleEncode(
             rle_rpt_count = 0;                      // Defer repeat run
           }
           if (lit_div8 != 0) {
-            uint8_t *dst = s->rle_out + 1 + (rle_run >> 1) * nbits;
+            uint8_t* dst = s->rle_out + 1 + (rle_run >> 1) * nbits;
             PackLiterals(dst, (rle_pos + t < numvals) ? v0 : 0, lit_div8 * 8, nbits, t);
             rle_run = (rle_run + lit_div8 * 2) | 1;
             rle_pos = min(rle_pos + lit_div8 * 8, numvals);
@@ -833,7 +640,7 @@ static __device__ void RleEncode(
           __syncthreads();
           // Complete literal run
           if (!t) {
-            uint8_t *dst = s->rle_out;
+            uint8_t* dst = s->rle_out;
             dst[0]       = rle_run;  // At most 0x7f
             dst += 1 + nbits * (rle_run >> 1);
             s->rle_out = dst;
@@ -868,13 +675,13 @@ static __device__ void RleEncode(
  * @param[in] flush nonzero if last batch in block
  * @param[in] t thread id (0..127)
  */
-static __device__ void PlainBoolEncode(page_enc_state_s *s,
+static __device__ void PlainBoolEncode(page_enc_state_s* s,
                                        uint32_t numvals,
                                        uint32_t flush,
                                        uint32_t t)
 {
   uint32_t rle_pos = s->rle_pos;
-  uint8_t *dst     = s->rle_out;
+  uint8_t* dst     = s->rle_out;
 
   while (rle_pos < numvals) {
     uint32_t pos    = rle_pos + t;
@@ -935,7 +742,7 @@ __global__ void __launch_bounds__(128, 8)
   using block_scan = cub::BlockScan<uint32_t, block_size>;
   __shared__ typename block_scan::TempStorage temp_storage;
 
-  page_enc_state_s *const s = &state_g;
+  page_enc_state_s* const s = &state_g;
   uint32_t t                = threadIdx.x;
   uint32_t dtype, dtype_len_in, dtype_len_out;
   int32_t dict_bits;
@@ -1002,8 +809,8 @@ __global__ void __launch_bounds__(128, 8)
         __syncthreads();
       }
       if (t < 32) {
-        uint8_t *cur     = s->cur;
-        uint8_t *rle_out = s->rle_out;
+        uint8_t* cur     = s->cur;
+        uint8_t* rle_out = s->rle_out;
         if (t < 4) {
           uint32_t rle_bytes = (uint32_t)(rle_out - cur) - 4;
           cur[t]             = rle_bytes >> (t * 8);
@@ -1015,7 +822,7 @@ __global__ void __launch_bounds__(128, 8)
   } else if (s->page.page_type != PageType::DICTIONARY_PAGE &&
              s->col.num_rep_level_bits() != 0  // This means there ARE repetition levels (has list)
   ) {
-    auto encode_levels = [&](uint8_t const *lvl_val_data, uint32_t nbits) {
+    auto encode_levels = [&](uint8_t const* lvl_val_data, uint32_t nbits) {
       // For list types, the repetition and definition levels are pre-calculated. We just need to
       // encode and write them now.
       if (!t) {
@@ -1040,8 +847,8 @@ __global__ void __launch_bounds__(128, 8)
         __syncthreads();
       }
       if (t < 32) {
-        uint8_t *cur     = s->cur;
-        uint8_t *rle_out = s->rle_out;
+        uint8_t* cur     = s->cur;
+        uint8_t* rle_out = s->rle_out;
         if (t < 4) {
           uint32_t rle_bytes = (uint32_t)(rle_out - cur) - 4;
           cur[t]             = rle_bytes >> (t * 8);
@@ -1056,9 +863,11 @@ __global__ void __launch_bounds__(128, 8)
   }
   // Encode data values
   __syncthreads();
-  dtype = s->col.physical_type;
-  dtype_len_out =
-    (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
+  dtype         = s->col.physical_type;
+  dtype_len_out = (dtype == INT96)                      ? 12
+                  : (dtype == INT64 || dtype == DOUBLE) ? 8
+                  : (dtype == BOOLEAN)                  ? 1
+                                                        : 4;
   if (dtype == INT32) {
     dtype_len_in = GetDtypeLogicalLen(s->col.leaf_column);
   } else if (dtype == INT96) {
@@ -1066,9 +875,12 @@ __global__ void __launch_bounds__(128, 8)
   } else {
     dtype_len_in = dtype_len_out;
   }
-  dict_bits = (dtype == BOOLEAN) ? 1 : (s->page.dict_bits_plus1 - 1);
+  dict_bits = (dtype == BOOLEAN) ? 1
+              : (s->ck.use_dictionary and s->page.page_type != PageType::DICTIONARY_PAGE)
+                ? s->ck.dict_rle_bits
+                : -1;
   if (t == 0) {
-    uint8_t *dst   = s->cur;
+    uint8_t* dst   = s->cur;
     s->rle_run     = 0;
     s->rle_pos     = 0;
     s->rle_numvals = 0;
@@ -1077,37 +889,56 @@ __global__ void __launch_bounds__(128, 8)
       dst[0]     = dict_bits;
       s->rle_out = dst + 1;
     }
-    s->page_start_val = s->page.start_row;
-    if (s->col.parent_column != nullptr) {
+    s->page_start_val    = s->page.start_row;  // Dictionary page's start row is chunk's start row
+    auto chunk_start_val = s->ck.start_row;
+    if (s->col.parent_column != nullptr) {  // TODO: remove this check. parent is now never nullptr
       auto col                    = *(s->col.parent_column);
       auto current_page_start_val = s->page_start_val;
+      // TODO: We do this so much. Add a global function that converts row idx to val idx
       while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
         if (col.type().id() == type_id::STRUCT) {
           current_page_start_val += col.offset();
+          chunk_start_val += col.offset();
           col = col.child(0);
         } else {
-          current_page_start_val = col.child(lists_column_view::offsets_column_index)
-                                     .element<size_type>(current_page_start_val + col.offset());
-          col = col.child(lists_column_view::child_column_index);
+          auto offset_col = col.child(lists_column_view::offsets_column_index);
+          current_page_start_val =
+            offset_col.element<size_type>(current_page_start_val + col.offset());
+          chunk_start_val = offset_col.element<size_type>(chunk_start_val + col.offset());
+          col             = col.child(lists_column_view::child_column_index);
         }
       }
-      s->page_start_val = current_page_start_val;
+      s->page_start_val  = current_page_start_val;
+      s->chunk_start_val = chunk_start_val;
     }
   }
   __syncthreads();
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
-    uint32_t nvals   = min(s->page.num_leaf_values - cur_val_idx, 128);
-    uint32_t val_idx = s->page_start_val + cur_val_idx + t;
-    uint32_t is_valid, len, pos;
+    uint32_t nvals = min(s->page.num_leaf_values - cur_val_idx, 128);
+    uint32_t len, pos;
 
-    if (s->page.page_type == PageType::DICTIONARY_PAGE) {
-      is_valid = (cur_val_idx + t < s->page.num_leaf_values);
-      val_idx  = (is_valid) ? s->col.dict_data[val_idx] : val_idx;
-    } else {
-      is_valid = (val_idx < s->col.leaf_column->size() && cur_val_idx + t < s->page.num_leaf_values)
-                   ? s->col.leaf_column->is_valid(val_idx)
-                   : 0;
-    }
+    auto [is_valid, val_idx] = [&]() {
+      uint32_t val_idx;
+      uint32_t is_valid;
+
+      size_type val_idx_in_block = cur_val_idx + t;
+      if (s->page.page_type == PageType::DICTIONARY_PAGE) {
+        val_idx  = val_idx_in_block;
+        is_valid = (val_idx < s->page.num_leaf_values);
+        if (is_valid) { val_idx = s->ck.dict_data[val_idx]; }
+      } else {
+        size_type val_idx_in_leaf_col = s->page_start_val + val_idx_in_block;
+
+        is_valid = (val_idx_in_leaf_col < s->col.leaf_column->size() &&
+                    val_idx_in_block < s->page.num_leaf_values)
+                     ? s->col.leaf_column->is_valid(val_idx_in_leaf_col)
+                     : 0;
+        val_idx =
+          (s->ck.use_dictionary) ? val_idx_in_leaf_col - s->chunk_start_val : val_idx_in_leaf_col;
+      }
+      return std::make_tuple(is_valid, val_idx);
+    }();
+
     cur_val_idx += nvals;
     if (dict_bits >= 0) {
       // Dictionary encoding
@@ -1121,7 +952,7 @@ __global__ void __launch_bounds__(128, 8)
           if (dtype == BOOLEAN) {
             v = s->col.leaf_column->element<uint8_t>(val_idx);
           } else {
-            v = s->col.dict_index[val_idx];
+            v = s->ck.dict_index[val_idx];
           }
           s->vals[(rle_numvals + pos) & (rle_buffer_size - 1)] = v;
         }
@@ -1138,7 +969,7 @@ __global__ void __launch_bounds__(128, 8)
       __syncthreads();
     } else {
       // Non-dictionary encoding
-      uint8_t *dst = s->cur;
+      uint8_t* dst = s->cur;
 
       if (is_valid) {
         len = dtype_len_out;
@@ -1250,7 +1081,7 @@ __global__ void __launch_bounds__(128, 8)
     }
   }
   if (t == 0) {
-    uint8_t *base                = s->page.page_data + s->page.max_hdr_size;
+    uint8_t* base                = s->page.page_data + s->page.max_hdr_size;
     uint32_t actual_data_size    = static_cast<uint32_t>(s->cur - base);
     uint32_t compressed_bfr_size = GetMaxCompressedBfrSize(actual_data_size);
     s->page.max_data_size        = actual_data_size;
@@ -1298,7 +1129,7 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
   if (t < 32) {
     num_pages = ck_g.num_pages;
     for (uint32_t page = t; page < num_pages; page += 32) {
-      auto &curr_page         = ck_g.pages[page];
+      auto& curr_page         = ck_g.pages[page];
       uint32_t page_data_size = curr_page.max_data_size;
       uncompressed_data_size += page_data_size;
       if (auto comp_status = curr_page.comp_stat; comp_status != nullptr) {
@@ -1329,7 +1160,7 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
 /**
  * Minimal thrift compact protocol support
  */
-inline __device__ uint8_t *cpw_put_uint32(uint8_t *p, uint32_t v)
+inline __device__ uint8_t* cpw_put_uint32(uint8_t* p, uint32_t v)
 {
   while (v > 0x7f) {
     *p++ = v | 0x80;
@@ -1339,7 +1170,7 @@ inline __device__ uint8_t *cpw_put_uint32(uint8_t *p, uint32_t v)
   return p;
 }
 
-inline __device__ uint8_t *cpw_put_uint64(uint8_t *p, uint64_t v)
+inline __device__ uint8_t* cpw_put_uint64(uint8_t* p, uint64_t v)
 {
   while (v > 0x7f) {
     *p++ = v | 0x80;
@@ -1349,19 +1180,19 @@ inline __device__ uint8_t *cpw_put_uint64(uint8_t *p, uint64_t v)
   return p;
 }
 
-inline __device__ uint8_t *cpw_put_int32(uint8_t *p, int32_t v)
+inline __device__ uint8_t* cpw_put_int32(uint8_t* p, int32_t v)
 {
   int32_t s = (v < 0);
   return cpw_put_uint32(p, (v ^ -s) * 2 + s);
 }
 
-inline __device__ uint8_t *cpw_put_int64(uint8_t *p, int64_t v)
+inline __device__ uint8_t* cpw_put_int64(uint8_t* p, int64_t v)
 {
   int64_t s = (v < 0);
   return cpw_put_uint64(p, (v ^ -s) * 2 + s);
 }
 
-inline __device__ uint8_t *cpw_put_fldh(uint8_t *p, int f, int cur, int t)
+inline __device__ uint8_t* cpw_put_fldh(uint8_t* p, int f, int cur, int t)
 {
   if (f > cur && f <= cur + 15) {
     *p++ = ((f - cur) << 4) | t;
@@ -1373,11 +1204,11 @@ inline __device__ uint8_t *cpw_put_fldh(uint8_t *p, int f, int cur, int t)
 }
 
 class header_encoder {
-  uint8_t *current_header_ptr;
+  uint8_t* current_header_ptr;
   int current_field_index;
 
  public:
-  inline __device__ header_encoder(uint8_t *header_start)
+  inline __device__ header_encoder(uint8_t* header_start)
     : current_header_ptr(header_start), current_field_index(0)
   {
   }
@@ -1411,7 +1242,7 @@ class header_encoder {
     current_field_index = field;
   }
 
-  inline __device__ void field_binary(int field, const void *value, uint32_t length)
+  inline __device__ void field_binary(int field, const void* value, uint32_t length)
   {
     current_header_ptr =
       cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_BINARY);
@@ -1421,21 +1252,21 @@ class header_encoder {
     current_field_index = field;
   }
 
-  inline __device__ void end(uint8_t **header_end, bool termination_flag = true)
+  inline __device__ void end(uint8_t** header_end, bool termination_flag = true)
   {
     if (termination_flag == false) { *current_header_ptr++ = 0; }
     *header_end = current_header_ptr;
   }
 
-  inline __device__ uint8_t *get_ptr(void) { return current_header_ptr; }
+  inline __device__ uint8_t* get_ptr(void) { return current_header_ptr; }
 
-  inline __device__ void set_ptr(uint8_t *ptr) { current_header_ptr = ptr; }
+  inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
 
-__device__ uint8_t *EncodeStatistics(uint8_t *start,
-                                     const statistics_chunk *s,
+__device__ uint8_t* EncodeStatistics(uint8_t* start,
+                                     const statistics_chunk* s,
                                      uint8_t dtype,
-                                     float *fp_scratch)
+                                     float* fp_scratch)
 {
   uint8_t *end, dtype_len;
   switch (dtype) {
@@ -1488,7 +1319,7 @@ __global__ void __launch_bounds__(128)
   gpuEncodePageHeaders(device_span<EncPage> pages,
                        device_span<gpu_inflate_status_s const> comp_stat,
                        device_span<statistics_chunk const> page_stats,
-                       const statistics_chunk *chunk_stats)
+                       const statistics_chunk* chunk_stats)
 {
   // When this whole kernel becomes single thread, the following variables need not be __shared__
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -1528,13 +1359,12 @@ __global__ void __launch_bounds__(128)
     // data pages (actual encoding is identical).
     Encoding encoding;
     if (enable_bool_rle) {
-      encoding = (col_g.physical_type != BOOLEAN)
-                   ? (page_type == PageType::DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0)
-                       ? Encoding::PLAIN_DICTIONARY
-                       : Encoding::PLAIN
-                   : Encoding::RLE;
+      encoding = (col_g.physical_type == BOOLEAN) ? Encoding::RLE
+                 : (page_type == PageType::DICTIONARY_PAGE || page_g.chunk->use_dictionary)
+                   ? Encoding::PLAIN_DICTIONARY
+                   : Encoding::PLAIN;
     } else {
-      encoding = (page_type == PageType::DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0)
+      encoding = (page_type == PageType::DICTIONARY_PAGE || page_g.chunk->use_dictionary)
                    ? Encoding::PLAIN_DICTIONARY
                    : Encoding::PLAIN;
     }
@@ -1559,7 +1389,7 @@ __global__ void __launch_bounds__(128)
     } else {
       // DictionaryPageHeader
       encoder.field_struct_begin(7);
-      encoder.field_int32(1, ck_g.total_dict_entries);  // number of values in dictionary
+      encoder.field_int32(1, ck_g.num_dict_entries);  // number of values in dictionary
       encoder.field_int32(2, encoding);
       encoder.field_struct_end(7);
     }
@@ -1579,7 +1409,7 @@ __global__ void __launch_bounds__(1024)
 
   uint32_t t = threadIdx.x;
   uint8_t *dst, *dst_base;
-  const EncPage *first_page;
+  const EncPage* first_page;
   uint32_t num_pages, uncompressed_size;
 
   if (t == 0) ck_g = chunks[blockIdx.x];
@@ -1592,7 +1422,7 @@ __global__ void __launch_bounds__(1024)
   dst_base          = dst;
   uncompressed_size = ck_g.bfr_size;
   for (uint32_t page = 0; page < num_pages; page++) {
-    const uint8_t *src;
+    const uint8_t* src;
     uint32_t hdr_len, data_len;
 
     if (t == 0) { page_g = first_page[page]; }
@@ -1610,12 +1440,12 @@ __global__ void __launch_bounds__(1024)
     memcpy_block<1024, true>(dst, src, data_len, t);
     dst += data_len;
     __syncthreads();
-    if (!t && page == 0 && ck_g.has_dictionary) { ck_g.dictionary_size = hdr_len + data_len; }
+    if (!t && page == 0 && ck_g.use_dictionary) { ck_g.dictionary_size = hdr_len + data_len; }
   }
   if (t == 0) {
     chunks[blockIdx.x].bfr_size        = uncompressed_size;
     chunks[blockIdx.x].compressed_size = (dst - dst_base);
-    if (ck_g.has_dictionary) { chunks[blockIdx.x].dictionary_size = ck_g.dictionary_size; }
+    if (ck_g.use_dictionary) { chunks[blockIdx.x].dictionary_size = ck_g.dictionary_size; }
   }
 }
 
@@ -1625,8 +1455,8 @@ __global__ void __launch_bounds__(1024)
  *
  */
 struct def_level_fn {
-  column_device_view const *parent_col;
-  uint8_t const *d_nullability;
+  column_device_view const* parent_col;
+  uint8_t const* d_nullability;
   uint8_t sub_level_start;
   uint8_t curr_def_level;
 
@@ -1757,12 +1587,14 @@ struct def_level_fn {
  */
 dremel_data get_dremel_data(column_view h_col,
                             // TODO(cp): use device_span once it is converted to a single hd_vec
-                            rmm::device_uvector<uint8_t> const &d_nullability,
-                            std::vector<uint8_t> const &nullability,
+                            rmm::device_uvector<uint8_t> const& d_nullability,
+                            std::vector<uint8_t> const& nullability,
                             rmm::cuda_stream_view stream)
 {
   auto get_list_level = [](column_view col) {
-    while (col.type().id() == type_id::STRUCT) { col = col.child(0); }
+    while (col.type().id() == type_id::STRUCT) {
+      col = col.child(0);
+    }
     return col;
   };
 
@@ -1832,7 +1664,7 @@ dremel_data get_dremel_data(column_view h_col,
   }
 
   std::unique_ptr<rmm::device_buffer> device_view_owners;
-  column_device_view *d_nesting_levels;
+  column_device_view* d_nesting_levels;
   std::tie(device_view_owners, d_nesting_levels) =
     contiguous_copy_column_device_views<column_device_view>(nesting_levels, stream);
 
@@ -1961,9 +1793,9 @@ dremel_data get_dremel_data(column_view h_col,
 
     // Scan to get distance by which each offset value is shifted due to the insertion of empties
     auto scan_it = cudf::detail::make_counting_transform_iterator(
-      column_offsets[level], [off = lcv.offsets().data<size_type>()] __device__(auto i) -> int {
-        return off[i] == off[i + 1];
-      });
+      column_offsets[level],
+      [off = lcv.offsets().data<size_type>(), size = lcv.offsets().size()] __device__(
+        auto i) -> int { return (i + 1 < size) && (off[i] == off[i + 1]); });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
       rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
@@ -2048,9 +1880,9 @@ dremel_data get_dremel_data(column_view h_col,
     // Scan to get distance by which each offset value is shifted due to the insertion of dremel
     // level value fof an empty list
     auto scan_it = cudf::detail::make_counting_transform_iterator(
-      column_offsets[level], [off = lcv.offsets().data<size_type>()] __device__(auto i) -> int {
-        return off[i] == off[i + 1];
-      });
+      column_offsets[level],
+      [off = lcv.offsets().data<size_type>(), size = lcv.offsets().size()] __device__(
+        auto i) -> int { return (i + 1 < size) && (off[i] == off[i + 1]); });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
       rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
@@ -2147,8 +1979,8 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       device_span<gpu::EncPage> pages,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
-                      statistics_merge_group *page_grstats,
-                      statistics_merge_group *chunk_grstats,
+                      statistics_merge_group* page_grstats,
+                      statistics_merge_group* chunk_grstats,
                       rmm::cuda_stream_view stream)
 {
   auto num_rowgroups = chunks.size().first;
@@ -2199,7 +2031,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
 void EncodePageHeaders(device_span<EncPage> pages,
                        device_span<gpu_inflate_status_s const> comp_stat,
                        device_span<statistics_chunk const> page_stats,
-                       const statistics_chunk *chunk_stats,
+                       const statistics_chunk* chunk_stats,
                        rmm::cuda_stream_view stream)
 {
   // TODO: single thread task. No need for 128 threads/block. Earlier it used to employ rest of the

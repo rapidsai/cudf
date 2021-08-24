@@ -568,9 +568,9 @@ std::unique_ptr<column> replace<replace_algorithm::AUTO>(strings_column_view con
     (strings.offset() == 0)
       ? 0
       : cudf::detail::get_value<int32_t>(strings.offsets(), strings.offset(), stream);
-  size_type const chars_end = (offset_count == strings.offsets().size())
-                                ? strings.chars_size()
-                                : cudf::detail::get_value<int32_t>(
+  size_type const chars_end   = (offset_count == strings.offsets().size())
+                                  ? strings.chars_size()
+                                  : cudf::detail::get_value<int32_t>(
                                     strings.offsets(), strings.offset() + strings_count, stream);
   size_type const chars_bytes = chars_end - chars_start;
 
@@ -604,11 +604,11 @@ std::unique_ptr<column> replace<replace_algorithm::CHAR_PARALLEL>(
   auto const offset_count  = strings_count + 1;
   auto const d_offsets     = strings.offsets().data<int32_t>() + strings.offset();
   size_type chars_start    = (strings.offset() == 0) ? 0
-                                                  : cudf::detail::get_value<int32_t>(
+                                                     : cudf::detail::get_value<int32_t>(
                                                       strings.offsets(), strings.offset(), stream);
-  size_type chars_end = (offset_count == strings.offsets().size())
-                          ? strings.chars_size()
-                          : cudf::detail::get_value<int32_t>(
+  size_type chars_end      = (offset_count == strings.offsets().size())
+                               ? strings.chars_size()
+                               : cudf::detail::get_value<int32_t>(
                               strings.offsets(), strings.offset() + strings_count, stream);
   return replace_char_parallel(
     strings, chars_start, chars_end, d_target, d_repl, maxrepl, stream, mr);

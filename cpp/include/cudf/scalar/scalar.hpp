@@ -45,22 +45,9 @@ namespace cudf {
  */
 class scalar {
  public:
-  virtual ~scalar()      = default;
-  scalar(scalar&& other) = default;
-
+  virtual ~scalar() = default;
   scalar& operator=(scalar const& other) = delete;
   scalar& operator=(scalar&& other) = delete;
-
-  /**
-   * @brief Construct a new scalar object by deep copying another.
-   *
-   * @param other The scalar to copy.
-   * @param stream CUDA stream used for device memory operations.
-   * @param mr Device memory resource to use for device memory allocation.
-   */
-  scalar(scalar const& other,
-         rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-         rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Returns the scalar's logical value type.
@@ -78,7 +65,7 @@ class scalar {
   /**
    * @brief Indicates whether the scalar contains a valid value.
    *
-   * @note Using the value when `is_valid() == false` is undefined behaviour. In addition, this
+   * @note Using the value when `is_valid() == false` is undefined behavior. In addition, this
    * function does a stream synchronization.
    *
    * @param stream CUDA stream used for device memory operations.
@@ -102,6 +89,19 @@ class scalar {
   rmm::device_scalar<bool> _is_valid;  ///< Device bool signifying validity
 
   scalar() = delete;
+
+  scalar(scalar&& other) = default;
+
+  /**
+   * @brief Construct a new scalar object by deep copying another.
+   *
+   * @param other The scalar to copy.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
+   */
+  scalar(scalar const& other,
+         rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+         rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new scalar object.
@@ -154,7 +154,7 @@ class fixed_width_scalar : public scalar {
   void set_value(T value, rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
-   * @brief Implicit conversion operator to get the value of the scalar on the host.
+   * @brief Explicit conversion operator to get the value of the scalar on the host.
    */
   explicit operator value_type() const;
 
@@ -366,6 +366,11 @@ class fixed_point_scalar : public scalar {
   T fixed_point_value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
+   * @brief Explicit conversion operator to get the value of the scalar on the host.
+   */
+  explicit operator value_type() const;
+
+  /**
    * @brief Returns a raw pointer to the value in device memory.
    */
   rep_type* data();
@@ -465,7 +470,7 @@ class string_scalar : public scalar {
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Implicit conversion operator to get the value of the scalar in a host std::string.
+   * @brief Explicit conversion operator to get the value of the scalar in a host std::string.
    */
   explicit operator std::string() const;
 
@@ -701,12 +706,15 @@ class list_scalar : public scalar {
  */
 class struct_scalar : public scalar {
  public:
-  struct_scalar()                           = delete;
-  ~struct_scalar()                          = default;
-  struct_scalar(struct_scalar&& other)      = default;
-  struct_scalar(struct_scalar const& other) = default;
+  struct_scalar()                      = delete;
+  ~struct_scalar()                     = default;
+  struct_scalar(struct_scalar&& other) = default;
   struct_scalar& operator=(struct_scalar const& other) = delete;
   struct_scalar& operator=(struct_scalar&& other) = delete;
+
+  struct_scalar(struct_scalar const& other,
+                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new struct scalar object from table_view.

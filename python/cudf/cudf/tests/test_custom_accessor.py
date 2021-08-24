@@ -2,9 +2,9 @@
 
 import pandas as pd
 import pytest
-import cudf as gd
 
-from cudf.tests.utils import assert_eq
+import cudf as gd
+from cudf.testing._utils import assert_eq
 
 
 @gd.api.extensions.register_dataframe_accessor("point")

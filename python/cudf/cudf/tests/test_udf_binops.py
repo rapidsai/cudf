@@ -3,13 +3,12 @@ from __future__ import division
 
 import numpy as np
 import pytest
-
-from cudf import _lib as libcudf
-from cudf.core import Series
-from cudf.utils import dtypes as dtypeutils
-
 from numba.cuda import compile_ptx
 from numba.np import numpy_support
+
+import cudf
+from cudf import Series, _lib as libcudf
+from cudf.utils import dtypes as dtypeutils
 
 
 @pytest.mark.parametrize(
@@ -28,7 +27,7 @@ def test_generic_ptx(dtype):
     def generic_function(a, b):
         return a ** 3 + b
 
-    nb_type = numpy_support.from_dtype(np.dtype(dtype))
+    nb_type = numpy_support.from_dtype(cudf.dtype(dtype))
     type_signature = (nb_type, nb_type)
 
     ptx_code, output_type = compile_ptx(

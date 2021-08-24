@@ -14,7 +14,7 @@ import pyarrow.orc
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 moto = pytest.importorskip("moto", minversion="1.3.14")
 boto3 = pytest.importorskip("boto3")

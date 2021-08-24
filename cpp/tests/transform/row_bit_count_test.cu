@@ -15,7 +15,9 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/io/parquet.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
@@ -24,6 +26,9 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/fill.h>
+#include <thrust/tabulate.h>
 
 using namespace cudf;
 
@@ -190,6 +195,66 @@ TEST_F(RowBitCount, StringsWithNulls)
   cudf::test::fixed_width_column_wrapper<size_type> expected(size_iter, size_iter + strings.size());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+}
+
+namespace {
+
+/**
+ * @brief __device__ functor to multiply input by 2, defined out of line because __device__ lambdas
+ * cannot be defined in a TEST_F().
+ */
+struct times_2 {
+  int32_t __device__ operator()(int32_t i) const { return i * 2; }
+};
+
+}  // namespace
+
+TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
+{
+  // Tests that `row_bit_count()` can handle struct<list<int32_t>> with more
+  // than max_block_size (256) rows.
+  // With a large number of rows, computation spills to multiple thread-blocks,
+  // thus exercising the branch-stack comptutation.
+  // The contents of the input column aren't as pertinent to this test as the
+  // column size. For what it's worth, it looks as follows:
+  //   [ struct({0,1}), struct({2,3}), struct({4,5}), ... ]
+
+  using namespace cudf;
+  auto constexpr num_rows = 1024 * 2;  // Exceeding a block size.
+
+  // List child column = {0, 1, 2, 3, 4, ..., 2*num_rows};
+  auto ints      = make_numeric_column(data_type{type_id::INT32}, num_rows * 2);
+  auto ints_view = ints->mutable_view();
+  thrust::tabulate(thrust::device,
+                   ints_view.begin<int32_t>(),
+                   ints_view.end<int32_t>(),
+                   thrust::identity<int32_t>());
+
+  // List offsets = {0, 2, 4, 6, 8, ..., num_rows*2};
+  auto list_offsets      = make_numeric_column(data_type{type_id::INT32}, num_rows + 1);
+  auto list_offsets_view = list_offsets->mutable_view();
+  thrust::tabulate(thrust::device,
+                   list_offsets_view.begin<offset_type>(),
+                   list_offsets_view.end<offset_type>(),
+                   times_2{});
+
+  // List<int32_t> = {{0,1}, {2,3}, {4,5}, ..., {2*(num_rows-1), 2*num_rows-1}};
+  auto lists_column = make_lists_column(num_rows, std::move(list_offsets), std::move(ints), 0, {});
+
+  // Struct<List<int32_t>.
+  auto struct_members = std::vector<std::unique_ptr<column>>{};
+  struct_members.emplace_back(std::move(lists_column));
+  auto structs_column = make_structs_column(num_rows, std::move(struct_members), 0, {});
+
+  // Compute row_bit_count, and compare.
+  auto row_bit_counts          = row_bit_count(table_view{{structs_column->view()}});
+  auto expected_row_bit_counts = make_numeric_column(data_type{type_id::INT32}, num_rows);
+  thrust::fill_n(thrust::device,
+                 expected_row_bit_counts->mutable_view().begin<int32_t>(),
+                 num_rows,
+                 CHAR_BIT * (2 * sizeof(int32_t) + sizeof(offset_type)));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(row_bit_counts->view(), expected_row_bit_counts->view());
 }
 
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> build_struct_column()
@@ -451,6 +516,61 @@ TEST_F(RowBitCount, NestedTypes)
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *result);
   }
+}
+
+TEST_F(RowBitCount, NullsInStringsList)
+{
+  using offsets_wrapper = cudf::test::fixed_width_column_wrapper<offset_type>;
+
+  // clang-format off
+  auto strings = std::vector<std::string>{ "daïs", "def", "", "z", "bananas", "warp", "", "zing" };
+  auto valids  = std::vector<bool>{            1,     0,   0,  1,         0,      1,   1,     1 };
+  // clang-format on
+
+  cudf::test::strings_column_wrapper col(strings.begin(), strings.end(), valids.begin());
+
+  auto offsets   = cudf::test::fixed_width_column_wrapper<int>{0, 2, 4, 6, 8};
+  auto lists_col = cudf::make_lists_column(
+    4,
+    offsets_wrapper{0, 2, 4, 6, 8}.release(),
+    cudf::test::strings_column_wrapper{strings.begin(), strings.end(), valids.begin()}.release(),
+    0,
+    {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    cudf::row_bit_count(table_view{{lists_col->view()}})->view(),
+    cudf::test::fixed_width_column_wrapper<offset_type>{138, 106, 130, 130});
+}
+
+TEST_F(RowBitCount, EmptyChildColumnInListOfStrings)
+{
+  // Test with a list<string> column with 4 empty list rows.
+  // Note: Since there are no strings in any of the lists,
+  //       the lists column's child can be empty.
+  auto offsets   = cudf::test::fixed_width_column_wrapper<offset_type>{0, 0, 0, 0, 0};
+  auto lists_col = cudf::make_lists_column(
+    4, offsets.release(), cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING}), 0, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    cudf::row_bit_count(table_view{{lists_col->view()}})->view(),
+    cudf::test::fixed_width_column_wrapper<offset_type>{32, 32, 32, 32});
+}
+
+TEST_F(RowBitCount, EmptyChildColumnInListOfLists)
+{
+  // Test with a list<list> column with 4 empty list rows.
+  // Note: Since there are no elements in any of the lists,
+  //       the lists column's child can be empty.
+  auto empty_child_lists_column = [] {
+    auto exemplar = cudf::test::lists_column_wrapper<int32_t>{{0, 1, 2}, {3, 4, 5}};
+    return cudf::empty_like(exemplar);
+  };
+
+  auto offsets   = cudf::test::fixed_width_column_wrapper<offset_type>{0, 0, 0, 0, 0};
+  auto lists_col = cudf::make_lists_column(4, offsets.release(), empty_child_lists_column(), 0, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    cudf::row_bit_count(table_view{{lists_col->view()}})->view(),
+    cudf::test::fixed_width_column_wrapper<offset_type>{32, 32, 32, 32});
 }
 
 struct sum_functor {

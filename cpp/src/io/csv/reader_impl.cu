@@ -40,6 +40,7 @@
 #include <numeric>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 
 using std::string;
 using std::vector;
@@ -47,18 +48,6 @@ using std::vector;
 using cudf::device_span;
 using cudf::host_span;
 using cudf::detail::make_device_uvector_async;
-
-namespace {
-/**
- * @brief Helper class to support inline-overloading for all of a variant's alternative types
- */
-template <class... Ts>
-struct VisitorOverload : Ts... {
-  using Ts::operator()...;
-};
-template <class... Ts>
-VisitorOverload(Ts...)->VisitorOverload<Ts...>;
-}  // namespace
 
 namespace cudf {
 namespace io {
@@ -102,7 +91,7 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
  *
  * @return Tuple of data_type and flags
  */
-std::tuple<data_type, column_parse::flags> get_dtype_info(const std::string &dtype)
+std::tuple<data_type, column_parse::flags> get_dtype_info(const std::string& dtype)
 {
   if (dtype == "hex" || dtype == "hex64") {
     return std::make_tuple(data_type{cudf::type_id::INT64}, column_parse::as_hexadecimal);
@@ -132,8 +121,8 @@ string removeQuotes(string str, char quotechar)
  * @brief Parse the first row to set the column names in the raw_csv parameter.
  * The first row can be either the header row, or the first data row
  */
-std::vector<std::string> setColumnNames(std::vector<char> const &header,
-                                        parse_options_view const &opts,
+std::vector<std::string> setColumnNames(std::vector<char> const& header,
+                                        parse_options_view const& opts,
                                         int header_row,
                                         std::string prefix)
 {
@@ -196,7 +185,7 @@ std::vector<std::string> setColumnNames(std::vector<char> const &header,
 }
 
 template <typename C>
-void erase_except_last(C &container, rmm::cuda_stream_view stream)
+void erase_except_last(C& container, rmm::cuda_stream_view stream)
 {
   cudf::detail::device_single_thread(
     [span = device_span<typename C::value_type>{container}] __device__() mutable {
@@ -222,7 +211,7 @@ reader::impl::select_data_and_row_offsets(rmm::cuda_stream_view stream)
   size_t map_range_size = 0;
   if (range_size != 0) {
     auto num_given_dtypes =
-      std::visit([](const auto &dtypes) { return dtypes.size(); }, opts_.get_dtypes());
+      std::visit([](const auto& dtypes) { return dtypes.size(); }, opts_.get_dtypes());
     const auto num_columns = std::max(opts_.get_names().size(), num_given_dtypes);
     map_range_size         = range_size + calculateMaxRowSize(num_columns);
   }
@@ -240,7 +229,7 @@ reader::impl::select_data_and_row_offsets(rmm::cuda_stream_view stream)
     auto buffer    = source_->host_read(range_offset, data_size);
 
     auto h_data = host_span<char const>(  //
-      reinterpret_cast<const char *>(buffer->data()),
+      reinterpret_cast<const char*>(buffer->data()),
       buffer->size());
 
     std::vector<char> h_uncomp_data_owner;
@@ -269,7 +258,7 @@ reader::impl::select_data_and_row_offsets(rmm::cuda_stream_view stream)
                                        num_rows,
                                        load_whole_file,
                                        stream);
-    auto &row_offsets = data_row_offsets.second;
+    auto& row_offsets = data_row_offsets.second;
     // Exclude the rows that are to be skipped from the end
     if (skip_end_rows > 0 && static_cast<size_t>(skip_end_rows) < row_offsets.size()) {
       row_offsets.shrink(row_offsets.size() - skip_end_rows);
@@ -279,11 +268,46 @@ reader::impl::select_data_and_row_offsets(rmm::cuda_stream_view stream)
   return {rmm::device_uvector<char>{0, stream}, selected_rows_offsets{stream}};
 }
 
+std::vector<data_type> reader::impl::select_data_types(
+  std::map<std::string, data_type> const& col_type_map)
+{
+  std::vector<data_type> selected_dtypes;
+
+  for (int col = 0; col < num_actual_cols_; col++) {
+    if (column_flags_[col] & column_parse::enabled) {
+      auto const col_type_it = col_type_map.find(col_names_[col]);
+      CUDF_EXPECTS(col_type_it != col_type_map.end(),
+                   "Must specify data types for all active columns");
+      selected_dtypes.emplace_back(col_type_it->second);
+    }
+  }
+  return selected_dtypes;
+}
+
+std::vector<data_type> reader::impl::select_data_types(std::vector<data_type> const& dtypes)
+{
+  std::vector<data_type> selected_dtypes;
+
+  if (dtypes.size() == 1) {
+    // If it's a single dtype, assign that dtype to all active columns
+    selected_dtypes.resize(num_active_cols_, dtypes.front());
+  } else {
+    // If it's a list, assign dtypes to active columns in the given order
+    CUDF_EXPECTS(static_cast<int>(dtypes.size()) >= num_actual_cols_,
+                 "Must specify data types for all columns");
+
+    for (int col = 0; col < num_actual_cols_; col++) {
+      if (column_flags_[col] & column_parse::enabled) { selected_dtypes.emplace_back(dtypes[col]); }
+    }
+  }
+  return selected_dtypes;
+}
+
 table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
 {
   auto const data_row_offsets = select_data_and_row_offsets(stream);
-  auto const &data            = data_row_offsets.first;
-  auto const &row_offsets     = data_row_offsets.second;
+  auto const& data            = data_row_offsets.first;
+  auto const& row_offsets     = data_row_offsets.second;
 
   // Exclude the end-of-data row from number of rows with actual data
   num_records_ = std::max(row_offsets.size(), 1ul) - 1;
@@ -308,14 +332,16 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
 
     // Looking for duplicates
     std::unordered_map<string, int> col_names_histogram;
-    for (auto &col_name : col_names_) {
+    for (auto& col_name : col_names_) {
       // Operator [] inserts a default-initialized value if the given key is not
       // present
       if (++col_names_histogram[col_name] > 1) {
         if (opts_.is_enabled_mangle_dupe_cols()) {
           // Rename duplicates of column X as X.1, X.2, ...; First appearance
           // stays as X
-          col_name += "." + std::to_string(col_names_histogram[col_name] - 1);
+          do {
+            col_name += "." + std::to_string(col_names_histogram[col_name] - 1);
+          } while (col_names_histogram[col_name]++);
         } else {
           // All duplicate columns will be ignored; First appearance is parsed
           const auto idx     = &col_name - col_names_.data();
@@ -336,27 +362,46 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
     for (const auto index : opts_.get_use_cols_indexes()) {
       column_flags_[index] = column_parse::enabled;
     }
-    num_active_cols_ = opts_.get_use_cols_indexes().size();
+    num_active_cols_ = std::unordered_set<int>(opts_.get_use_cols_indexes().begin(),
+                                               opts_.get_use_cols_indexes().end())
+                         .size();
 
-    for (const auto &name : opts_.get_use_cols_names()) {
+    for (const auto& name : opts_.get_use_cols_names()) {
       const auto it = std::find(col_names_.begin(), col_names_.end(), name);
       if (it != col_names_.end()) {
-        column_flags_[it - col_names_.begin()] = column_parse::enabled;
-        num_active_cols_++;
+        auto curr_it = it - col_names_.begin();
+        if (column_flags_[curr_it] == column_parse::disabled) {
+          column_flags_[curr_it] = column_parse::enabled;
+          num_active_cols_++;
+        }
       }
     }
   }
 
-  // User can specify which columns should be inferred as datetime
-  if (!opts_.get_infer_date_indexes().empty() || !opts_.get_infer_date_names().empty()) {
-    for (const auto index : opts_.get_infer_date_indexes()) {
+  // User can specify which columns should be read as datetime
+  if (!opts_.get_parse_dates_indexes().empty() || !opts_.get_parse_dates_names().empty()) {
+    for (const auto index : opts_.get_parse_dates_indexes()) {
       column_flags_[index] |= column_parse::as_datetime;
     }
 
-    for (const auto &name : opts_.get_infer_date_names()) {
+    for (const auto& name : opts_.get_parse_dates_names()) {
       auto it = std::find(col_names_.begin(), col_names_.end(), name);
       if (it != col_names_.end()) {
         column_flags_[it - col_names_.begin()] |= column_parse::as_datetime;
+      }
+    }
+  }
+
+  // User can specify which columns should be parsed as hexadecimal
+  if (!opts_.get_parse_hex_indexes().empty() || !opts_.get_parse_hex_names().empty()) {
+    for (const auto index : opts_.get_parse_hex_indexes()) {
+      column_flags_[index] |= column_parse::as_hexadecimal;
+    }
+
+    for (const auto& name : opts_.get_parse_hex_names()) {
+      auto it = std::find(col_names_.begin(), col_names_.end(), name);
+      if (it != col_names_.end()) {
+        column_flags_[it - col_names_.begin()] |= column_parse::as_hexadecimal;
       }
     }
   }
@@ -368,17 +413,14 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
   auto out_columns = std::vector<std::unique_ptr<cudf::column>>();
 
   bool has_to_infer_column_types =
-    std::visit([](const auto &dtypes) { return dtypes.empty(); }, opts_.get_dtypes());
+    std::visit([](const auto& dtypes) { return dtypes.empty(); }, opts_.get_dtypes());
 
   std::vector<data_type> column_types;
   if (has_to_infer_column_types) {
     column_types = infer_column_types(data, row_offsets, stream);
   } else {
-    column_types =
-      std::visit(VisitorOverload{
-                   [&](const std::vector<data_type> &data_types) { return data_types; },
-                   [&](const std::vector<string> &dtypes) { return parse_column_types(dtypes); }},
-                 opts_.get_dtypes());
+    column_types = std::visit([&](auto const& data_types) { return select_data_types(data_types); },
+                              opts_.get_dtypes());
   }
 
   out_columns.reserve(column_types.size());
@@ -422,7 +464,9 @@ size_t reader::impl::find_first_row_start(host_span<char const> data)
   // For now, look for the first terminator (assume the first terminator isn't within a quote)
   // TODO: Attempt to infer this from the data
   size_t pos = 0;
-  while (pos < data.size() && data[pos] != opts.terminator) { ++pos; }
+  while (pos < data.size() && data[pos] != opts.terminator) {
+    ++pos;
+  }
   return std::min(pos + 1, data.size());
 }
 
@@ -529,7 +573,9 @@ reader::impl::load_data_and_gather_row_offsets(host_span<char const> data,
         stream.synchronize();
 
         size_t rows_out_of_range = 0;
-        for (uint32_t i = 0; i < num_blocks; i++) { rows_out_of_range += row_ctx[i]; }
+        for (uint32_t i = 0; i < num_blocks; i++) {
+          rows_out_of_range += row_ctx[i];
+        }
         if (rows_out_of_range != 0) {
           // Keep one row out of range (used to infer length of previous row)
           auto new_row_offsets_size =
@@ -641,80 +687,7 @@ std::vector<data_type> reader::impl::infer_column_types(device_span<char const> 
   }
 
   if (opts_.get_timestamp_type().id() != cudf::type_id::EMPTY) {
-    for (auto &type : dtypes) {
-      if (cudf::is_timestamp(type)) { type = opts_.get_timestamp_type(); }
-    }
-  }
-
-  for (size_t i = 0; i < dtypes.size(); i++) {
-    // Replace EMPTY dtype with STRING
-    if (dtypes[i].id() == type_id::EMPTY) { dtypes[i] = data_type{type_id::STRING}; }
-  }
-
-  return dtypes;
-}
-
-std::vector<data_type> reader::impl::parse_column_types(
-  const std::vector<std::string> &types_as_strings)
-{
-  std::vector<data_type> dtypes;
-
-  const bool is_dict = std::all_of(types_as_strings.begin(),
-                                   types_as_strings.end(),
-                                   [](const auto &s) { return s.find(':') != std::string::npos; });
-
-  if (!is_dict) {
-    if (types_as_strings.size() == 1) {
-      // If it's a single dtype, assign that dtype to all active columns
-      data_type dtype_;
-      column_parse::flags col_flags_;
-      std::tie(dtype_, col_flags_) = get_dtype_info(types_as_strings[0]);
-      dtypes.resize(num_active_cols_, dtype_);
-      for (int col = 0; col < num_actual_cols_; col++) { column_flags_[col] |= col_flags_; }
-      CUDF_EXPECTS(dtypes.back().id() != cudf::type_id::EMPTY, "Unsupported data type");
-    } else {
-      // If it's a list, assign dtypes to active columns in the given order
-      CUDF_EXPECTS(static_cast<int>(types_as_strings.size()) >= num_actual_cols_,
-                   "Must specify data types for all columns");
-
-      auto dtype_ = std::back_inserter(dtypes);
-
-      for (int col = 0; col < num_actual_cols_; col++) {
-        if (column_flags_[col] & column_parse::enabled) {
-          column_parse::flags col_flags_;
-          std::tie(dtype_, col_flags_) = get_dtype_info(types_as_strings[col]);
-          column_flags_[col] |= col_flags_;
-          CUDF_EXPECTS(dtypes.back().id() != cudf::type_id::EMPTY, "Unsupported data type");
-        }
-      }
-    }
-  } else {
-    // Translate vector of `name : dtype` strings to map
-    // NOTE: Incoming pairs can be out-of-order from column names in dataset
-    std::unordered_map<std::string, std::string> col_type_map;
-    for (const auto &pair : types_as_strings) {
-      const auto pos     = pair.find_last_of(':');
-      const auto name    = pair.substr(0, pos);
-      const auto dtype   = pair.substr(pos + 1, pair.size());
-      col_type_map[name] = dtype;
-    }
-
-    auto dtype_ = std::back_inserter(dtypes);
-
-    for (int col = 0; col < num_actual_cols_; col++) {
-      if (column_flags_[col] & column_parse::enabled) {
-        CUDF_EXPECTS(col_type_map.find(col_names_[col]) != col_type_map.end(),
-                     "Must specify data types for all active columns");
-        column_parse::flags col_flags_;
-        std::tie(dtype_, col_flags_) = get_dtype_info(col_type_map[col_names_[col]]);
-        column_flags_[col] |= col_flags_;
-        CUDF_EXPECTS(dtypes.back().id() != cudf::type_id::EMPTY, "Unsupported data type");
-      }
-    }
-  }
-
-  if (opts_.get_timestamp_type().id() != cudf::type_id::EMPTY) {
-    for (auto &type : dtypes) {
+    for (auto& type : dtypes) {
       if (cudf::is_timestamp(type)) { type = opts_.get_timestamp_type(); }
     }
   }
@@ -753,8 +726,8 @@ std::vector<column_buffer> reader::impl::decode_data(device_span<char const> dat
     }
   }
 
-  thrust::host_vector<void *> h_data(num_active_cols_);
-  thrust::host_vector<bitmask_type *> h_valid(num_active_cols_);
+  thrust::host_vector<void*> h_data(num_active_cols_);
+  thrust::host_vector<bitmask_type*> h_valid(num_active_cols_);
 
   for (int i = 0; i < num_active_cols_; ++i) {
     h_data[i]  = out_buffers[i].data();
@@ -777,7 +750,7 @@ std::vector<column_buffer> reader::impl::decode_data(device_span<char const> dat
  * @brief Create a serialized trie for N/A value matching, based on the options.
  */
 cudf::detail::trie create_na_trie(char quotechar,
-                                  csv_reader_options const &reader_opts,
+                                  csv_reader_options const& reader_opts,
                                   rmm::cuda_stream_view stream)
 {
   // Default values to recognize as null values
@@ -815,7 +788,7 @@ cudf::detail::trie create_na_trie(char quotechar,
   return cudf::detail::create_serialized_trie(na_values, stream);
 }
 
-parse_options make_parse_options(csv_reader_options const &reader_opts,
+parse_options make_parse_options(csv_reader_options const& reader_opts,
                                  rmm::cuda_stream_view stream)
 {
   auto parse_opts = parse_options{};
@@ -873,9 +846,9 @@ parse_options make_parse_options(csv_reader_options const &reader_opts,
 
 reader::impl::impl(std::unique_ptr<datasource> source,
                    std::string filepath,
-                   csv_reader_options const &options,
+                   csv_reader_options const& options,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource *mr)
+                   rmm::mr::device_memory_resource* mr)
   : mr_(mr), source_(std::move(source)), filepath_(filepath), opts_(options)
 {
   num_actual_cols_ = opts_.get_names().size();
@@ -890,10 +863,10 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 }
 
 // Forward to implementation
-reader::reader(std::vector<std::string> const &filepaths,
-               csv_reader_options const &options,
+reader::reader(std::vector<std::string> const& filepaths,
+               csv_reader_options const& options,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource *mr)
+               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
   // Delay actual instantiation of data source until read to allow for
@@ -902,10 +875,10 @@ reader::reader(std::vector<std::string> const &filepaths,
 }
 
 // Forward to implementation
-reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-               csv_reader_options const &options,
+reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+               csv_reader_options const& options,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource *mr)
+               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
   _impl = std::make_unique<impl>(std::move(sources[0]), "", options, stream, mr);

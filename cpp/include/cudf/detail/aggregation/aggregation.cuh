@@ -643,7 +643,7 @@ struct identity_initializer {
  * The `i`th column will be initialized with the identity value of the `i`th
  * aggregation operation in `aggs`.
  *
- * @throw cudf::logic_error if column type and corresponging agg are incompatible
+ * @throw cudf::logic_error if column type and corresponding agg are incompatible
  * @throw cudf::logic_error if column type is not fixed-width
  *
  * @param table The table of columns to initialize.

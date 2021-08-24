@@ -61,8 +61,8 @@ class reader::impl {
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<datasource> source,
-                avro_reader_options const &options,
-                rmm::mr::device_memory_resource *mr);
+                avro_reader_options const& options,
+                rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns
@@ -72,7 +72,7 @@ class reader::impl {
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(avro_reader_options const &options, rmm::cuda_stream_view stream);
+  table_with_metadata read(avro_reader_options const& options, rmm::cuda_stream_view stream);
 
  private:
   /**
@@ -83,7 +83,7 @@ class reader::impl {
    *
    * @return Device buffer to decompressed block data
    */
-  rmm::device_buffer decompress_data(const rmm::device_buffer &comp_block_data,
+  rmm::device_buffer decompress_data(const rmm::device_buffer& comp_block_data,
                                      rmm::cuda_stream_view stream);
 
   /**
@@ -95,16 +95,16 @@ class reader::impl {
    * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void decode_data(const rmm::device_buffer &block_data,
-                   const std::vector<std::pair<uint32_t, uint32_t>> &dict,
+  void decode_data(const rmm::device_buffer& block_data,
+                   const std::vector<std::pair<uint32_t, uint32_t>>& dict,
                    cudf::device_span<string_index_pair> global_dictionary,
                    size_t num_rows,
                    std::vector<std::pair<int, std::string>> columns,
-                   std::vector<column_buffer> &out_buffers,
+                   std::vector<column_buffer>& out_buffers,
                    rmm::cuda_stream_view stream);
 
  private:
-  rmm::mr::device_memory_resource *_mr = nullptr;
+  rmm::mr::device_memory_resource* _mr = nullptr;
   std::unique_ptr<datasource> _source;
   std::unique_ptr<metadata> _metadata;
 

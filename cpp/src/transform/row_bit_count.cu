@@ -178,7 +178,7 @@ struct flatten_functor {
   }
 
   // strings
-  template <typename T, std::enable_if_t<std::is_same<T, string_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, string_view>>* = nullptr>
   void operator()(column_view const& col,
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
@@ -194,7 +194,7 @@ struct flatten_functor {
   }
 
   // lists
-  template <typename T, std::enable_if_t<std::is_same<T, list_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, list_view>>* = nullptr>
   void operator()(column_view const& col,
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
@@ -227,7 +227,7 @@ struct flatten_functor {
   }
 
   // structs
-  template <typename T, std::enable_if_t<std::is_same<T, struct_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, struct_view>>* = nullptr>
   void operator()(column_view const& col,
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
@@ -258,8 +258,8 @@ struct flatten_functor {
 
   // everything else
   template <typename T, typename... Args>
-  std::enable_if_t<!cudf::is_fixed_width<T>() && !std::is_same<T, string_view>::value &&
-                     !std::is_same<T, list_view>::value && !std::is_same<T, struct_view>::value,
+  std::enable_if_t<!cudf::is_fixed_width<T>() && !std::is_same_v<T, string_view> &&
+                     !std::is_same_v<T, list_view> && !std::is_same_v<T, struct_view>,
                    void>
   operator()(Args&&...)
   {
@@ -334,10 +334,21 @@ template <>
 __device__ size_type row_size_functor::operator()<string_view>(column_device_view const& col,
                                                                row_span const& span)
 {
-  column_device_view const& offsets = col.child(strings_column_view::offsets_column_index);
   auto const num_rows{span.row_end - span.row_start};
+  if (num_rows == 0) {
+    // For empty columns, the `span` cannot have a row size.
+    return 0;
+  }
+
+  auto const& offsets = col.child(strings_column_view::offsets_column_index);
   auto const row_start{span.row_start + col.offset()};
   auto const row_end{span.row_end + col.offset()};
+  if (row_start == row_end) {
+    // Empty row contributes 0 bits to row_bit_count().
+    // Note: Validity bit doesn't count either. There are no rows in the child column
+    //       corresponding to this span.
+    return 0;
+  }
 
   auto const offsets_size  = sizeof(offset_type) * CHAR_BIT;
   auto const validity_size = col.nullable() ? 1 : 0;
@@ -380,7 +391,7 @@ __device__ size_type row_size_functor::operator()<struct_view>(column_device_vie
 /**
  * @brief Kernel for computing per-row sizes in bits.
  *
- * @param cols An span of column_device_views represeting a column hierarcy
+ * @param cols An span of column_device_views representing a column hierarchy
  * @param info An span of column_info structs corresponding the elements in `cols`
  * @param output Output span of size (# rows) where per-row bit sizes are stored
  * @param max_branch_depth Maximum depth of the span stack needed per-thread
@@ -397,7 +408,7 @@ __global__ void compute_row_sizes(device_span<column_device_view const> cols,
   if (tid >= num_rows) { return; }
 
   // branch stack. points to the last list prior to branching.
-  row_span* my_branch_stack = thread_branch_stacks + (tid * max_branch_depth);
+  row_span* my_branch_stack = thread_branch_stacks + (threadIdx.x * max_branch_depth);
   size_type branch_depth{0};
 
   // current row span - always starts at 1 row.
@@ -434,7 +445,7 @@ __global__ void compute_row_sizes(device_span<column_device_view const> cols,
     size += cudf::type_dispatcher(col.type(), row_size_functor{}, col, cur_span);
 
     // if this is a list column, update the working span from our offsets
-    if (col.type().id() == type_id::LIST) {
+    if (col.type().id() == type_id::LIST && col.size() > 0) {
       column_device_view const& offsets = col.child(lists_column_view::offsets_column_index);
       auto const base_offset            = offsets.data<offset_type>()[col.offset()];
       cur_span.row_start =

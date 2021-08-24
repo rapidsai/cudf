@@ -10,7 +10,7 @@ from hypothesis import given, settings, strategies as st
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests import utils
+from cudf.testing import _utils as utils
 from cudf.utils.dtypes import cudf_dtypes_to_pandas_dtypes
 
 repr_categories = utils.NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
@@ -24,11 +24,11 @@ def test_null_series(nrows, dtype):
     data = cudf.Series(np.random.randint(1, 9, size))
     column = data.set_mask(mask)
     sr = cudf.Series(column).astype(dtype)
-    if dtype != "category" and np.dtype(dtype).kind in {"u", "i"}:
+    if dtype != "category" and cudf.dtype(dtype).kind in {"u", "i"}:
         ps = pd.Series(
             sr._column.data_array_view.copy_to_host(),
             dtype=cudf_dtypes_to_pandas_dtypes.get(
-                np.dtype(dtype), np.dtype(dtype)
+                cudf.dtype(dtype), cudf.dtype(dtype)
             ),
         )
         ps[sr.isnull().to_pandas()] = pd.NA
