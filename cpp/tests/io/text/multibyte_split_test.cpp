@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,68 +18,126 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
-
-#include <cudf/io/text/host_input_stream.hpp>
-
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
-
 #include <cudf/strings/strings_column_view.hpp>
-
-#include <sstream>
 
 using namespace cudf;
 using namespace test;
 
-constexpr bool print_all{false};
+// 😀 | F0 9F 98 80 | 11110000 10011111 10011000 10000000
+// 😎 | F0 9F 98 8E | 11110000 10011111 10011000 10001110
 
 struct MultibyteSplitTest : public BaseFixture {
 };
 
-TEST_F(MultibyteSplitTest, Simple)
+TEST_F(MultibyteSplitTest, NondeterministicMatching)
 {
-  std::string separator = "😎";  // F0 9F 98 8E | 11110000 11111001 1100010 11101000
-  std::string input =
-    "here😎"
-    "is😎"
-    "some😎"
-    "simple😎"
-    "text😎"
-    "seperated😎"
-    "by😎"
-    "emojis😎"
-    "which😎"
-    "are😎"
-    "multple😎"
-    "bytes😎"
-    "and😎"
-    "used😎"
-    "as😎"
-    "delimeters.";
+  auto delimiter  = std::string("abac");
+  auto host_input = std::string("ababacabacab");
 
-  auto expected = strings_column_wrapper{"here",
-                                         "is",
-                                         "some",
-                                         "simple",
-                                         "text",
-                                         "seperated",
-                                         "by",
-                                         "emojis",
-                                         "which",
-                                         "are",
-                                         "multple",
-                                         "bytes",
-                                         "and",
-                                         "used",
-                                         "as",
-                                         "delimeters."};
+  auto expected = strings_column_wrapper{"ababac", "abac", "ab"};
 
-  auto input_stream    = std::basic_istringstream(input);
-  auto input_stream_io = cudf::io::text::host_input_stream(input_stream);
+  auto source = cudf::io::text::make_source(host_input);
+  auto out    = cudf::io::text::multibyte_split(*source, delimiter);
 
-  auto out = cudf::io::text::multibyte_split(input_stream_io, separator);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, print_all);
+TEST_F(MultibyteSplitTest, DelimiterAtEnd)
+{
+  auto delimiter  = std::string(":");
+  auto host_input = std::string("abcdefg:");
+
+  auto expected = strings_column_wrapper{"abcdefg:", ""};
+
+  auto source = cudf::io::text::make_source(host_input);
+  auto out    = cudf::io::text::multibyte_split(*source, delimiter);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
+
+TEST_F(MultibyteSplitTest, LargeInput)
+{
+  auto host_input    = std::string();
+  auto host_expected = std::vector<std::string>();
+
+  for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
+    host_input += "...:|";
+    host_expected.emplace_back(std::string("...:|"));
+  }
+
+  host_expected.emplace_back(std::string(""));
+
+  auto expected = strings_column_wrapper{host_expected.begin(), host_expected.end()};
+
+  auto delimiter = std::string("...:|");
+  auto source    = cudf::io::text::make_source(host_input);
+  auto out       = cudf::io::text::multibyte_split(*source, delimiter);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
+
+TEST_F(MultibyteSplitTest, OverlappingMatchErasure)
+{
+  auto delimiter = "::";
+
+  auto host_input = std::string(
+    ":::::"
+    ":::::");
+  auto expected = strings_column_wrapper{":::::", ":::::"};
+
+  auto source = cudf::io::text::make_source(host_input);
+  auto out    = cudf::io::text::multibyte_split(*source, delimiter);
+
+  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out); // this use case it not yet supported.
+}
+
+TEST_F(MultibyteSplitTest, HandpickedInput)
+{
+  auto delimiters = "::|";
+  auto host_input = std::string(
+    "aaa::|"
+    "bbb::|"
+    "ccc::|"
+    "ddd::|"
+    "eee::|"
+    "fff::|"
+    "ggg::|"
+    "hhh::|"
+    "___::|"
+    "here::|"
+    "is::|"
+    "another::|"
+    "simple::|"
+    "text::|"
+    "seperated::|"
+    "by::|"
+    "emojis::|"
+    "which::|"
+    "are::|"
+    "multiple::|"
+    "bytes::|"
+    "and::|"
+    "used::|"
+    "as::|"
+    "delimiters.::|"
+    "::|"
+    "::|"
+    "::|");
+
+  auto expected = strings_column_wrapper{
+    "aaa::|",         "bbb::|",      "ccc::|",       "ddd::|",  "eee::|",    "fff::|",
+    "ggg::|",         "hhh::|",      "___::|",       "here::|", "is::|",     "another::|",
+    "simple::|",      "text::|",     "seperated::|", "by::|",   "emojis::|", "which::|",
+    "are::|",         "multiple::|", "bytes::|",     "and::|",  "used::|",   "as::|",
+    "delimiters.::|", "::|",         "::|",          "::|",     ""};
+
+  auto source = cudf::io::text::make_source(host_input);
+  auto out    = cudf::io::text::multibyte_split(*source, delimiters);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
 }
