@@ -22,8 +22,8 @@ function(find_and_configure_cucollections)
 
     # Find or install cuCollections
     CPMFindPackage(NAME   cuco
-        GITHUB_REPOSITORY NVIDIA/cuCollections
-        GIT_TAG           0d602ae21ea4f38d23ed816aa948453d97b2ee4e
+        GITHUB_REPOSITORY PointKernel/cuCollections
+        GIT_TAG           static-multi-map
         OPTIONS           "BUILD_TESTS OFF"
                           "BUILD_BENCHMARKS OFF"
                           "BUILD_EXAMPLES OFF"

@@ -154,8 +154,6 @@ include(cmake/thirdparty/CUDF_GetLibcudacxx.cmake)
 include(cmake/thirdparty/CUDF_GetcuCollections.cmake)
 # find or install GoogleTest
 include(cmake/thirdparty/CUDF_GetGTest.cmake)
-# find cuCollections
-include(cmake/thirdparty/CUDF_GetCUCO.cmake)
 # preprocess jitify-able kernels
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
 # find cuFile
@@ -500,7 +498,6 @@ target_compile_definitions(cudf PRIVATE "JITIFY_PRINT_LOG=0")
 target_include_directories(cudf
            PUBLIC      "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>"
                        "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
-                       "$<BUILD_INTERFACE:${CUCO_INCLUDE_DIR}>"
                        "$<BUILD_INTERFACE:${LIBCUDACXX_INCLUDE_DIR}>"
                        "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
                        "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
