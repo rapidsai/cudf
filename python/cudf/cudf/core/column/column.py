@@ -601,7 +601,7 @@ class ColumnBase(Column, Serializable):
             try:
                 if is_scalar(value):
                     input = self
-                    out = input.as_frame()._scatter(key, [value])._as_column()
+                    out = input.as_frame()._scatter(key, value)._as_column()
                 else:
                     if not isinstance(value, Column):
                         value = as_column(value)

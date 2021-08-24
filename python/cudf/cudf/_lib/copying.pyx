@@ -192,63 +192,49 @@ def gather(
     )
 
 
-def _scatter_table(Table source_table, Column scatter_map,
+def _scatter_table(object source, Column scatter_map,
                    Table target_table, bool bounds_check=True):
 
-    cdef table_view source_table_view = source_table.data_view()
     cdef column_view scatter_map_view = scatter_map.view()
+    # cdef table_view target_table_view = target_column.table_view()
     cdef table_view target_table_view = target_table.data_view()
     cdef bool c_bounds_check = bounds_check
-
     cdef unique_ptr[table] c_result
 
-    with nogil:
-        c_result = move(
-            cpp_copying.scatter(
-                source_table_view,
-                scatter_map_view,
-                target_table_view,
-                c_bounds_check
-            )
-        )
+    # Needed for the table branch
+    cdef table_view source_table_view
 
-    data, _ = data_from_unique_ptr(
-        move(c_result),
-        column_names=target_table._column_names,
-        index_names=None
-    )
-
-    return data, (
-        None if target_table._index is None else target_table._index.copy(
-            deep=False)
-    )
-
-
-def _scatter_scalar(scalars, Column scatter_map,
-                    Table target_table, bool bounds_check=True):
-
+    # Needed for the scalar branch
     cdef vector[reference_wrapper[constscalar]] source_scalars
-    source_scalars.reserve(len(scalars))
-    cdef bool c_bounds_check = bounds_check
     cdef DeviceScalar slr
-    for val, col in zip(scalars, target_table._columns):
-        slr = as_device_scalar(val, col.dtype)
+
+    if isinstance(source, Table):
+        source_table_view = (<Table> source).data_view()
+
+        with nogil:
+            c_result = move(
+                cpp_copying.scatter(
+                    source_table_view,
+                    scatter_map_view,
+                    target_table_view,
+                    c_bounds_check
+                )
+            )
+    else:
+        target_column = next(iter(target_table._columns))
+        slr = as_device_scalar(source, target_column.dtype)
         source_scalars.push_back(reference_wrapper[constscalar](
             slr.get_raw_ptr()[0]))
-    cdef column_view scatter_map_view = scatter_map.view()
-    cdef table_view target_table_view = target_table.data_view()
 
-    cdef unique_ptr[table] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.scatter(
-                source_scalars,
-                scatter_map_view,
-                target_table_view,
-                c_bounds_check
+        with nogil:
+            c_result = move(
+                cpp_copying.scatter(
+                    source_scalars,
+                    scatter_map_view,
+                    target_table_view,
+                    c_bounds_check
+                )
             )
-        )
 
     data, _ = data_from_unique_ptr(
         move(c_result),
@@ -274,10 +260,7 @@ def scatter(object input, object scatter_map, Table target,
     if not isinstance(scatter_map, Column):
         scatter_map = as_column(scatter_map)
 
-    if isinstance(input, Table):
-        return _scatter_table(input, scatter_map, target, bounds_check)
-    else:
-        return _scatter_scalar(input, scatter_map, target, bounds_check)
+    return _scatter_table(input, scatter_map, target, bounds_check)
 
 
 def _reverse_column(Column source_column):
