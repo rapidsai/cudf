@@ -93,7 +93,6 @@ class MultiIndex(BaseIndex):
 
         self._name = None
 
-        column_names = []
         if labels:
             warnings.warn(
                 "the 'labels' keyword is deprecated, use 'codes' " "instead",
@@ -123,17 +122,6 @@ class MultiIndex(BaseIndex):
             self._levels = levels
             return
 
-        # name setup
-        if isinstance(names, (Sequence, pd.core.indexes.frozen.FrozenList,),):
-            if sum(x is None for x in names) > 1:
-                column_names = list(range(len(codes)))
-            else:
-                column_names = names
-        elif names is None:
-            column_names = list(range(len(codes)))
-        else:
-            column_names = names
-
         if len(levels) == 0:
             raise ValueError("Must pass non-zero number of levels/codes")
 
@@ -146,10 +134,12 @@ class MultiIndex(BaseIndex):
             self._codes = codes
         elif len(levels) == len(codes):
             self._codes = cudf.DataFrame()
-            for i, codes in enumerate(codes):
-                name = column_names[i] or i
-                codes = column.as_column(codes)
-                self._codes[name] = codes.astype(np.int64)
+            self._codes = cudf.DataFrame._from_data(
+                {
+                    i: column.as_column(code).astype(np.int64)
+                    for i, code in enumerate(codes)
+                }
+            )
         else:
             raise ValueError(
                 "MultiIndex has unequal number of levels and "
@@ -160,20 +150,20 @@ class MultiIndex(BaseIndex):
         self._validate_levels_and_codes(self._levels, self._codes)
 
         source_data = cudf.DataFrame()
-        for i, name in enumerate(self._codes.columns):
-            codes = as_index(self._codes[name]._column)
-            if -1 in self._codes[name].values:
+        for i, n in enumerate(self._codes.columns):
+            codes = as_index(self._codes[n]._column)
+            if -1 in self._codes[n].values:
                 # Must account for null(s) in _source_data column
                 level = cudf.DataFrame(
-                    {name: [None] + list(self._levels[i])},
+                    {n: [None] + list(self._levels[i])},
                     index=range(-1, len(self._levels[i])),
                 )
             else:
-                level = cudf.DataFrame({name: self._levels[i]})
+                level = cudf.DataFrame({n: self._levels[i]})
 
-            source_data[name] = libcudf.copying.gather(
+            source_data[n] = libcudf.copying.gather(
                 level, codes._data.columns[0]
-            )[0][name]
+            )[0][n]
 
         self._data = source_data._data
         self.names = names
@@ -1106,10 +1096,12 @@ class MultiIndex(BaseIndex):
         match = self.take(index)
         if isinstance(index, slice):
             return match
-        result = []
-        for level, item in enumerate(match.codes):
-            result.append(match.levels[level][match.codes[item].iloc[0]])
-        return tuple(result)
+        if isinstance(index, int):
+            # we are indexing into a single row of the MultiIndex,
+            # return that row as a tuple:
+            return match.to_pandas()[0]
+        else:
+            return match
 
     def to_frame(self, index=True, name=None):
         df = self._source_data

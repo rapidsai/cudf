@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/types.hpp>
 
 #include <memory>
@@ -89,7 +89,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  * @return std::unique_ptr<column> Output column.
  */
 std::unique_ptr<column> compute_column(
-  table_view const table,
+  table_view const& table,
   ast::expression const& expr,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
