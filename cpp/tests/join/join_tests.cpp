@@ -1256,9 +1256,8 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     auto result = hash_join.full_join(t0, cudf::null_equality::EQUAL, optional_size);
     column_wrapper<int32_t> col_gold_0{{NoneValue, NoneValue, NoneValue, NoneValue, 4, 0, 1, 2, 3}};
     column_wrapper<int32_t> col_gold_1{{0, 1, 2, 3, 4, NoneValue, NoneValue, NoneValue, NoneValue}};
-
-    auto table_ptrs = gather_maps_as_tables(col_gold_0, col_gold_1, result);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*table_ptrs.first, *table_ptrs.second);
+    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
   }
 
   {
@@ -1277,8 +1276,8 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     auto result = hash_join.left_join(t0, cudf::null_equality::EQUAL, optional_size);
     column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{NoneValue, NoneValue, NoneValue, NoneValue, 4}};
-    auto table_ptrs = gather_maps_as_tables(col_gold_0, col_gold_1, result);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*table_ptrs.first, *table_ptrs.second);
+    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
   }
 
   {
@@ -1297,8 +1296,8 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     auto result = hash_join.inner_join(t0, cudf::null_equality::EQUAL, optional_size);
     column_wrapper<int32_t> col_gold_0{{2, 4, 0}};
     column_wrapper<int32_t> col_gold_1{{1, 1, 4}};
-    auto table_ptrs = gather_maps_as_tables(col_gold_0, col_gold_1, result);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*table_ptrs.first, *table_ptrs.second);
+    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
   }
 }
 
@@ -1337,8 +1336,8 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
     auto result = hash_join.left_join(t0, cudf::null_equality::EQUAL, output_size);
     column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{0, NoneValue, 2, NoneValue, NoneValue}};
-    auto table_ptrs = gather_maps_as_tables(col_gold_0, col_gold_1, result);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*table_ptrs.first, *table_ptrs.second);
+    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
   }
 
   {
@@ -1347,8 +1346,8 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
     auto result = hash_join.inner_join(t0, cudf::null_equality::EQUAL, output_size);
     column_wrapper<int32_t> col_gold_0{{0, 2}};
     column_wrapper<int32_t> col_gold_1{{0, 2}};
-    auto table_ptrs = gather_maps_as_tables(col_gold_0, col_gold_1, result);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*table_ptrs.first, *table_ptrs.second);
+    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
   }
 
   {
@@ -1357,8 +1356,8 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
     auto result = hash_join.full_join(t0, cudf::null_equality::EQUAL, output_size);
     column_wrapper<int32_t> col_gold_0{{NoneValue, NoneValue, NoneValue, 0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{1, 3, 4, 0, NoneValue, 2, NoneValue, NoneValue}};
-    auto table_ptrs = gather_maps_as_tables(col_gold_0, col_gold_1, result);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*table_ptrs.first, *table_ptrs.second);
+    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
   }
 }
 
