@@ -139,8 +139,9 @@ def test_to_orc(tmpdir, dtypes, compression, compute):
 @pytest.mark.parametrize("split_stripes", [True, False, 5])
 @pytest.mark.parametrize("aggregate_files", [False, True])
 @pytest.mark.parametrize("filters", [None, [("a", ">=", 4)]])
+@pytest.mark.parametrize("sample_data", [True, False])
 def test_orc_roundtrip_aggregate_files(
-    tmpdir, split_stripes, aggregate_files, filters
+    tmpdir, split_stripes, aggregate_files, filters, sample_data,
 ):
 
     # Test general round-trip behavior of non-partitioned orc data.
