@@ -435,7 +435,7 @@ def crosstab(
 
 
     data = {
-        **dict(zip(unique_rownames, index)),        data = {**dict(zip(np.unique(index),index)),**dict(zip(np.unique(columns),columns)),}
+        # **dict(zip(unique_rownames, index)),        data = {**dict(zip(np.unique(index),index)),**dict(zip(np.unique(columns),columns)),}
         **dict(zip(unique_colnames, columns)),
     }
 
@@ -457,8 +457,6 @@ def crosstab(
 
     table = table.rename_axis(index=rownames_mapper, axis=0)
     table = table.rename_axis(columns=colnames_mapper, axis=1)
-
-
 
 
 
@@ -494,46 +492,46 @@ def crosstab(
     )
 
 
-def _get_names(arrs, names, prefix: str = "row"):
-    if names is None:
-        names = []
-        for i, arr in enumerate(arrs):
-            if isinstance(arr, Series) and arr.name is not None:
-                names.append(arr.name)
-            else:
-                names.append(f"{prefix}_{i}")
-    else:
-        if len(names) != len(arrs):
-            raise AssertionError("arrays and names must have the same length")
-        if not isinstance(names, list):
-            names = list(names)
+# def _get_names(arrs, names, prefix: str = "row"):
+#     if names is None:
+#         names = []
+#         for i, arr in enumerate(arrs):
+#             if isinstance(arr, Series) and arr.name is not None:
+#                 names.append(arr.name)
+#             else:
+#                 names.append(f"{prefix}_{i}")
+#     else:
+#         if len(names) != len(arrs):
+#             raise AssertionError("arrays and names must have the same length")
+#         if not isinstance(names, list):
+#             names = list(names)
 
-    return names
+#     return names
 
 
-   def  _build_names_mapper(rownames: list[str], colnames: list[str]):
-       def get_duplicates(names):
-        seen: set = set()
-        return {name for name in names if name not in seen}
+# def  _build_names_mapper(rownames: list[str], colnames: list[str]):
+#        def get_duplicates(names):
+#             seen: set = set()
+#             return {name for name in names if name not in seen}
 
-        shared_names = set(rownames).intersection(set(colnames))
-        dup_names = get_duplicates(rownames) | get_duplicates(colnames) | shared_names
+#             shared_names = set(rownames).intersection(set(colnames))
+#             dup_names = get_duplicates(rownames) | get_duplicates(colnames) | shared_names
 
-        rownames_mapper = {
-            f"row_{i}": name for i, name in enumerate(rownames) if name in dup_names
-        }
-        unique_rownames = [
-            f"row_{i}" if name in dup_names else name for i, name in enumerate(rownames)
-        ]
+#             rownames_mapper = {
+#                 f"row_{i}": name for i, name in enumerate(rownames) if name in dup_names
+#             }
+#             unique_rownames = [
+#                 f"row_{i}" if name in dup_names else name for i, name in enumerate(rownames)
+#             ]
 
-        colnames_mapper = {
-            f"col_{i}": name for i, name in enumerate(colnames) if name in dup_names
-        }
-        unique_colnames = [
-            f"col_{i}" if name in dup_names else name for i, name in enumerate(colnames)
-        ]
+#             colnames_mapper = {
+#                 f"col_{i}": name for i, name in enumerate(colnames) if name in dup_names
+#             }
+#             unique_colnames = [
+#                 f"col_{i}" if name in dup_names else name for i, name in enumerate(colnames)
+#             ]
 
-        return rownames_mapper, unique_rownames, colnames_mapper, unique_colnames
+#             return rownames_mapper, unique_rownames, colnames_mapper, unique_colnames
 
 
 
