@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/types.hpp>
 
 #include <memory>
@@ -81,13 +81,15 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  * This evaluates an expression over a table to produce a new column. Also called an n-ary
  * transform.
  *
+ * @throws cudf::logic_error if passed an expression operating on table_reference::RIGHT.
+ *
  * @param table The table used for expression evaluation.
  * @param expr The root of the expression tree.
  * @param mr Device memory resource.
  * @return std::unique_ptr<column> Output column.
  */
 std::unique_ptr<column> compute_column(
-  table_view const table,
+  table_view const& table,
   ast::expression const& expr,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

@@ -25,6 +25,7 @@
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
+#include <cudf/structs/structs_column_view.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -112,15 +113,17 @@ std::unique_ptr<scalar> reduce(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  std::unique_ptr<scalar> result = make_default_constructed_scalar(output_dtype, stream, mr);
-  result->set_valid_async(false, stream);
+  // Returns default scalar if input column is non-valid. In terms of nested columns, we need to
+  // handcraft the default scalar with input column.
+  if (col.size() <= col.null_count()) {
+    if (col.type().id() == type_id::EMPTY || col.type() != output_dtype) {
+      return make_default_constructed_scalar(output_dtype, stream, mr);
+    }
+    return make_empty_scalar_like(col, stream, mr);
+  }
 
-  // check if input column is empty
-  if (col.size() <= col.null_count()) return result;
-
-  result =
-    aggregation_dispatcher(agg->kind, reduce_dispatch_functor{col, output_dtype, stream, mr}, agg);
-  return result;
+  return aggregation_dispatcher(
+    agg->kind, reduce_dispatch_functor{col, output_dtype, stream, mr}, agg);
 }
 }  // namespace detail
 

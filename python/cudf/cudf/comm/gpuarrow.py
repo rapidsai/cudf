@@ -6,10 +6,11 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+from cudf import Series
 from cudf._lib.gpuarrow import (
     CudaRecordBatchStreamReader as _CudaRecordBatchStreamReader,
 )
-from cudf.core import Series, column
+from cudf.core import column
 from cudf.utils.utils import mask_bitsize, mask_dtype
 
 

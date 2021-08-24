@@ -803,9 +803,9 @@ def _pivot(df, index, columns):
     Parameters
     ----------
     df : DataFrame
-    index : cudf.core.index.Index
+    index : cudf.Index
         Index labels of the result
-    columns : cudf.core.index.Index
+    columns : cudf.Index
         Column labels of the result
     """
     columns_labels, columns_idx = columns._encode()
