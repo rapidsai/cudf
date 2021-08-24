@@ -198,16 +198,12 @@ class Rolling(GetAttrGetItemMixin):
         )
 
     def _apply_agg_series(self, sr, agg_name):
+        source_column = sr._column
+        min_periods = self.min_periods or 1
         if isinstance(self.window, int):
-            result_col = libcudf.rolling.rolling(
-                sr._column,
-                None,
-                None,
-                self.window,
-                self.min_periods,
-                self.center,
-                agg_name,
-            )
+            preceding_window = None
+            following_window = None
+            window = self.window
         elif isinstance(self.window, BaseIndexer):
             start, end = self.window.get_window_bounds(
                 num_values=len(self.obj),
@@ -225,26 +221,23 @@ class Rolling(GetAttrGetItemMixin):
             following_window = (end - idx - cudf.Scalar(1, "int32")).astype(
                 "int32"
             )
-
-            result_col = libcudf.rolling.rolling(
-                sr._column,
-                preceding_window,
-                following_window,
-                None,
-                self.min_periods or 1,
-                self.center,
-                agg_name,
-            )
+            window = None
         else:
-            result_col = libcudf.rolling.rolling(
-                sr._column,
-                as_column(self.window),
-                column.full(self.window.size, 0, dtype=self.window.dtype),
-                None,
-                self.min_periods,
-                self.center,
-                agg_name,
+            preceding_window = as_column(self.window)
+            following_window = column.full(
+                self.window.size, 0, dtype=self.window.dtype
             )
+            window = None
+
+        result_col = libcudf.rolling.rolling(
+            source_column=source_column,
+            pre_column_window=preceding_window,
+            fwd_column_window=following_window,
+            window=window,
+            min_periods=min_periods,
+            center=self.center,
+            op=agg_name,
+        )
         return sr._from_data({sr.name: result_col}, sr._index)
 
     def _apply_agg_dataframe(self, df, agg_name):
@@ -335,12 +328,10 @@ class Rolling(GetAttrGetItemMixin):
             if self.min_periods is None:
                 min_periods = window
         else:
-            if isinstance(window, numba.cuda.devicearray.DeviceNDArray):
-                # window is a device_array of window sizes
-                self.window = window
-                self.min_periods = min_periods
-                return
-            elif isinstance(window, BaseIndexer):
+            if isinstance(
+                window, (numba.cuda.devicearray.DeviceNDArray, BaseIndexer)
+            ):
+                # window is a device_array of window sizes or BaseIndexer
                 self.window = window
                 self.min_periods = min_periods
                 return
