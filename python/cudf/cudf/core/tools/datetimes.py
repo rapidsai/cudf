@@ -761,14 +761,10 @@ def date_range(
     _periods_not_specified = False
 
     if freq is not None:
-        if isinstance(freq, str):
-            offset = DateOffset._from_freqstr(freq)
-        elif isinstance(freq, DateOffset):
+        if isinstance(freq, DateOffset):
             offset = freq
         else:
-            raise TypeError(
-                "`freq` must be a str or a cudf.DateOffset object."
-            )
+            raise TypeError("`freq` must be a cudf.DateOffset object.")
 
         if _check_mixed_freqeuency(offset):
             raise NotImplementedError(
