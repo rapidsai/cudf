@@ -807,8 +807,8 @@ struct operator_functor<ast_operator::NULL_EQUAL, true> {
     if (!lhs.has_value() && !rhs.has_value()) { return {true}; }
     // Case 2: Neither is null, so the output is given by the operation.
     if (lhs.has_value() && rhs.has_value()) { return {NonNullOperator{}(*lhs, *rhs)}; }
-    // Case 3: One value is null, while the other is not, so we propagate nulls.
-    return {};
+    // Case 3: One value is null, while the other is not, so we return false.
+    return {false};
   }
 };
 
