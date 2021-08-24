@@ -142,11 +142,9 @@ __device__ DecimalType parse_decimal(char const* iter, char const* iter_end, int
   exp_ten += exp_offset;
 
   // shift the output value based on the exp_ten and the scale values
-  if (exp_ten < scale) {
-    value = value / static_cast<uint64_t>(exp10(static_cast<double>(scale - exp_ten)));
-  } else {
-    value = value * static_cast<uint64_t>(exp10(static_cast<double>(exp_ten - scale)));
-  }
+  value = exp_ten < scale
+            ? value / static_cast<__uint128_t>(exp10(static_cast<double>(scale - exp_ten)))
+            : value * static_cast<__uint128_t>(exp10(static_cast<double>(exp_ten - scale)));
 
   return static_cast<DecimalType>(value) * (sign == 0 ? 1 : sign);
 }
