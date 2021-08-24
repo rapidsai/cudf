@@ -194,7 +194,7 @@ class CudfORCEngine:
         split_stripes=True,
         aggregate_files=False,
         gather_statistics=True,
-        files_per_metadata_tasks=None,
+        files_per_metadata_task=None,
     ):
 
         # Extract column and index from meta
@@ -229,8 +229,8 @@ class CudfORCEngine:
         # on each path (and collect statistics) independently.
         # Therefore, this call can be parallelized over the paths.
         npaths = len(dataset_info["paths"])
-        if files_per_metadata_tasks is None:
-            files_per_metadata_tasks = 32
+        if files_per_metadata_task is None:
+            files_per_metadata_task = 32
 
         # Extract necessary info from dataset_info
         all_paths = dataset_info["paths"]
@@ -240,7 +240,7 @@ class CudfORCEngine:
         dir_columns_need_stats = dataset_info["dir_columns_need_stats"]
         file_columns_need_stats = dataset_info["file_columns_need_stats"]
 
-        if files_per_metadata_tasks and (npaths >= files_per_metadata_tasks):
+        if files_per_metadata_task and (npaths >= files_per_metadata_task):
             # Collect partition plan on workers (in parallel)
             gather_parts_dsk = {}
             name = "gather-orc-parts-" + tokenize(
@@ -251,18 +251,18 @@ class CudfORCEngine:
                 split_stripes,
                 aggregate_files,
                 gather_statistics,
-                files_per_metadata_tasks,
+                files_per_metadata_task,
             )
             for i_task, i_path in enumerate(
-                range(0, npaths, files_per_metadata_tasks)
+                range(0, npaths, files_per_metadata_task)
             ):
                 gather_parts_dsk[(name, i_task)] = (
                     apply,
                     cls._gather_parts,
                     [
-                        all_paths[i_path : i_path + files_per_metadata_tasks],
+                        all_paths[i_path : i_path + files_per_metadata_task],
                         directory_partitions[
-                            i_path : i_path + files_per_metadata_tasks
+                            i_path : i_path + files_per_metadata_task
                         ]
                         if directory_partitions
                         else [],
@@ -734,7 +734,7 @@ def read_orc(
     aggregate_files=None,
     storage_options=None,
     gather_statistics=True,
-    files_per_metadata_tasks=None,
+    files_per_metadata_task=None,
     sample_data=None,
     read_kwargs=None,
 ):
@@ -782,7 +782,7 @@ def read_orc(
         Further parameters to pass to the bytes backend.
     gather_statistics : bool, default True
         Whether to gather file and stripe statistics from the orc metadata.
-    files_per_metadata_tasks : int, optional
+    files_per_metadata_task : int, optional
         Number of files to process within each metadata-processing task.
         Default is ``32``. If set to ``0``, metadata-processing will be
         performed in serial (on the client).
@@ -860,7 +860,7 @@ def read_orc(
         split_stripes=split_stripes,
         aggregate_files=aggregate_files,
         gather_statistics=gather_statistics,
-        files_per_metadata_tasks=files_per_metadata_tasks,
+        files_per_metadata_task=files_per_metadata_task,
     )
 
     # Add read_kwargs to common_kwargs
