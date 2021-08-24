@@ -32,8 +32,8 @@ class expression_parser;
 /**
  * @brief A generic expression that can be evaluated to return a value.
  *
- * This class is a part of a "visitor" pattern with the `linearizer` class.
- * Nodes inheriting from this class can accept visitors.
+ * This class is a part of a "visitor" pattern with the `expression_parser` class.
+ * Expressions inheriting from this class can accept parsers as visitors.
  */
 struct expression {
   virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
