@@ -65,14 +65,15 @@ static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t*& cur, 
  *
  * @return data pointer at the end of the row (start of next row)
  */
-static const uint8_t* __device__ avro_decode_row(const schemadesc_s* schema,
-                                                 schemadesc_s* schema_g,
-                                                 uint32_t schema_len,
-                                                 size_t row,
-                                                 size_t max_rows,
-                                                 const uint8_t* cur,
-                                                 const uint8_t* end,
-                                                 device_span<string_index_pair> global_dictionary)
+static const uint8_t* __device__
+avro_decode_row(const schemadesc_s* schema,
+                schemadesc_s* schema_g,
+                uint32_t schema_len,
+                size_t row,
+                size_t max_rows,
+                const uint8_t* cur,
+                const uint8_t* end,
+                device_span<string_index_pair const> global_dictionary)
 {
   uint32_t array_start = 0, array_repeat_count = 0;
   int array_children = 0;
@@ -230,7 +231,7 @@ static const uint8_t* __device__ avro_decode_row(const schemadesc_s* schema,
 extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
   gpuDecodeAvroColumnData(block_desc_s* blocks,
                           schemadesc_s* schema_g,
-                          device_span<string_index_pair> global_dictionary,
+                          device_span<string_index_pair const> global_dictionary,
                           const uint8_t* avro_data,
                           uint32_t num_blocks,
                           uint32_t schema_len,
@@ -313,7 +314,7 @@ extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
  */
 void DecodeAvroColumnData(block_desc_s* blocks,
                           schemadesc_s* schema,
-                          device_span<string_index_pair> global_dictionary,
+                          device_span<string_index_pair const> global_dictionary,
                           const uint8_t* avro_data,
                           uint32_t num_blocks,
                           uint32_t schema_len,

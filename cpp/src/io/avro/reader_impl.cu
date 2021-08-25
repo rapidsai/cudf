@@ -246,11 +246,11 @@ rmm::device_buffer decompress_data(datasource& source,
 }
 
 void decode_data(metadata& meta,
-                 const rmm::device_buffer& block_data,
-                 const std::vector<std::pair<uint32_t, uint32_t>>& dict,
-                 device_span<string_index_pair> global_dictionary,
+                 rmm::device_buffer const& block_data,
+                 std::vector<std::pair<uint32_t, uint32_t>> const& dict,
+                 device_span<string_index_pair const> global_dictionary,
                  size_t num_rows,
-                 std::vector<std::pair<int, std::string>> selection,
+                 std::vector<std::pair<int, std::string>> const& selection,
                  std::vector<column_buffer>& out_buffers,
                  rmm::cuda_stream_view stream)
 {

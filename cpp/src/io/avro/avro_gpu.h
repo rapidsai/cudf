@@ -52,7 +52,7 @@ struct schemadesc_s {
  */
 void DecodeAvroColumnData(block_desc_s* blocks,
                           schemadesc_s* schema,
-                          cudf::device_span<string_index_pair> global_dictionary,
+                          cudf::device_span<string_index_pair const> global_dictionary,
                           const uint8_t* avro_data,
                           uint32_t num_blocks,
                           uint32_t schema_len,
