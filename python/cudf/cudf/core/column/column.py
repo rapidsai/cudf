@@ -603,8 +603,9 @@ class ColumnBase(Column, Serializable):
                     key = as_column(key)
                 if not is_scalar(value) and not isinstance(value, Column):
                     value = as_column(value)
-                out = libcudf.copying.scatter(value, key, self)
-                out._with_type_metadata(self)
+                out = libcudf.copying.scatter(
+                    value, key, self
+                )._with_type_metadata(self.dtype)
             except RuntimeError as e:
                 if "out of bounds" in str(e):
                     raise IndexError(
