@@ -3791,6 +3791,8 @@ class Series(SingleColumnFrame, Serializable):
         return codes
 
     # UDF related
+    def apply(self, func, convert_dtype=True, args=(), **kwargs):
+        return super()._apply(func)
 
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.

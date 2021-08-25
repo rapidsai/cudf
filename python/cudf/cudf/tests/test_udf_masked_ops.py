@@ -53,6 +53,22 @@ def run_masked_udf_test(func_pdf, func_gdf, data, **kwargs):
     assert_eq(expect, obtain, **kwargs)
 
 
+def run_masked_udf_series(func_psr, func_gsr, data, **kwargs):
+
+    # Skip testing CUDA 11.0
+    runtime = cuda.cudadrv.runtime.Runtime()
+    mjr, mnr = runtime.get_version()
+    if mjr < 11 or (mjr == 11 and mnr < 1):
+        pytest.skip("Skip testing for CUDA 11.0")
+
+    gsr = data
+    psr = data.to_pandas(nullable=True)
+
+    expect = psr.apply(func_psr)
+    obtain = gsr.apply(func_gsr)
+    assert_eq(expect, obtain, **kwargs)
+
+
 @pytest.mark.parametrize("op", arith_ops)
 def test_arith_masked_vs_masked(op):
     # This test should test all the typing
@@ -290,3 +306,102 @@ def test_apply_everything():
         }
     )
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
+
+
+###
+
+
+@pytest.mark.parametrize(
+    "data", [cudf.Series([1, 2, 3]), cudf.Series([1, cudf.NA, 3])]
+)
+def test_series_apply_basic(data):
+    def func(x):
+        return x + 1
+
+    run_masked_udf_series(func, func, data, check_dtype=False)
+
+
+def test_series_apply_null_conditional():
+    def func_pdf(x):
+        if x is pd.NA:
+            return 42
+        else:
+            return x - 1
+
+    def func_gdf(x):
+        if x is cudf.NA:
+            return 42
+        else:
+            return x - 1
+
+    data = cudf.Series([1, cudf.NA, 3])
+
+    run_masked_udf_series(func_pdf, func_gdf, data)
+
+
+###
+
+
+@pytest.mark.parametrize("op", arith_ops)
+def test_series_arith_masked_vs_masked(op):
+    def func(x):
+        return op(x, x)
+
+    data = cudf.Series([1, cudf.NA, 3])
+    run_masked_udf_series(func, func, data, check_dtype=False)
+
+
+@pytest.mark.parametrize("op", comparison_ops)
+def test_series_compare_masked_vs_masked(op):
+    """
+    In the series case, only one other MaskedType to compare with
+    - itself
+    """
+
+    def func(x):
+        return op(x, x)
+
+    data = cudf.Series([1, cudf.NA, 3])
+    run_masked_udf_series(func, func, data, check_dtype=False)
+
+
+@pytest.mark.parametrize("op", arith_ops)
+@pytest.mark.parametrize("constant", [1, 1.5, cudf.NA])
+def test_series_arith_masked_vs_constant(op, constant):
+    def func(x):
+        return op(x, constant)
+
+    # Just a single column -> result will be all NA
+    data = cudf.Series([1, 2, cudf.NA])
+
+    run_masked_udf_series(func, func, data, check_dtype=False)
+
+
+@pytest.mark.parametrize("op", arith_ops)
+@pytest.mark.parametrize("constant", [1, 1.5, cudf.NA])
+def test_series_arith_masked_vs_constant_reflected(op, constant):
+    def func(x):
+        return op(constant, x)
+
+    # Just a single column -> result will be all NA
+    data = cudf.Series([1, 2, cudf.NA])
+
+    run_masked_udf_series(func, func, data, check_dtype=False)
+
+
+def test_series_masked_is_null_conditional():
+    def func_psr(x):
+        if x is pd.NA:
+            return 42
+        else:
+            return x
+
+    def func_gsr(x):
+        if x is cudf.NA:
+            return 42
+        else:
+            return x
+
+    data = cudf.Series([1, cudf.NA, 3, cudf.NA])
+
+    run_masked_udf_series(func_psr, func_gsr, data, check_dtype=False)

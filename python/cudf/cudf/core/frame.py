@@ -27,6 +27,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
+from cudf.core.udf import pipeline
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     _is_non_decimal_numeric_dtype,
@@ -1548,14 +1549,16 @@ class Frame(libcudf.table.Table):
         result._copy_type_metadata(self)
         return result
 
+    @property
+    def dtypes(self):
+        return pd.Series([self.dtype])
+
     @annotate("APPLY", color="purple", domain="cudf_python")
     def _apply(self, func):
         """
         Apply `func` across the rows of the frame.
         """
-        output_dtype, ptx = cudf.core.udf.pipeline.compile_masked_udf(
-            func, self.dtypes
-        )
+        output_dtype, ptx = pipeline.compile_masked_udf(func, self.dtypes)
         result = cudf._lib.transform.masked_udf(self, ptx, output_dtype)
         return result
 
