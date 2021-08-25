@@ -58,7 +58,7 @@ def test_series_replace_all(gsr, to_replace, value):
     actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
     expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
 
-    assert_eq(expected, actual)
+    assert_eq(expected.sort_index(), actual.sort_index())
 
 
 def test_series_replace():
@@ -75,7 +75,7 @@ def test_series_replace():
     psr4 = psr3.replace("one", "two")
     sr3 = cudf.from_pandas(psr3)
     sr4 = sr3.replace("one", "two")
-    assert_eq(psr4, sr4)
+    assert_eq(psr4.sort_index(), sr4.sort_index())
 
     psr5 = psr3.replace("one", "five")
     sr5 = sr3.replace("one", "five")
@@ -226,7 +226,7 @@ def test_dataframe_replace(df, to_replace, value):
     expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
     actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
 
-    assert_eq(expected, actual)
+    assert_eq(expected.sort_index(), actual.sort_index())
 
 
 def test_dataframe_replace_with_nulls():
@@ -1001,8 +1001,8 @@ def test_replace_inplace():
     assert_eq(sr_copy, psr_copy)
     sr.replace("one", "two", inplace=True)
     psr.replace("one", "two", inplace=True)
-    assert_eq(sr, psr)
-    assert_eq(sr_copy, psr_copy)
+    assert_eq(sr.sort_index(), psr.sort_index())
+    assert_eq(sr_copy.sort_index(), psr_copy.sort_index())
 
     pdf = pd.DataFrame({"A": [0, 1, 2, 3, 4], "B": [5, 6, 7, 8, 9]})
     gdf = cudf.from_pandas(pdf)
@@ -1342,4 +1342,4 @@ def test_series_replace_errors():
 def test_replace_nulls(gsr, old, new, expected):
 
     actual = gsr.replace(old, new)
-    assert_eq(expected, actual)
+    assert_eq(expected.sort_index(), actual.sort_index())

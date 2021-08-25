@@ -296,7 +296,7 @@ def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
     assert_eq(pdfIndex, gdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(pdf.loc[key_tuple], gdf.loc[key_tuple])
+    assert_eq(pdf.loc[key_tuple].sort_index(), gdf.loc[key_tuple].sort_index())
 
 
 @pytest.mark.parametrize(
@@ -964,7 +964,7 @@ def test_multiindex_rows_with_wildcard(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(pdf.loc[("a",), :], gdf.loc[("a",), :])
+    assert_eq(pdf.loc[("a",), :].sort_index(), gdf.loc[("a",), :].sort_index())
     assert_eq(pdf.loc[(("a"), ("store")), :], gdf.loc[(("a"), ("store")), :])
     assert_eq(
         pdf.loc[(("a"), ("store"), ("storm")), :],
