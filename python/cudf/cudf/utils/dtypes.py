@@ -385,9 +385,7 @@ def min_column_type(x, expected_type):
         return x.dtype
 
     if np.issubdtype(x.dtype, np.floating):
-        max_bound_dtype = np.min_scalar_type(x.max())
-        min_bound_dtype = np.min_scalar_type(x.min())
-        result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
+        return get_min_float_dtype(x)
 
     elif np.issubdtype(expected_type, np.integer):
         max_bound_dtype = np.min_scalar_type(x.max())
@@ -402,7 +400,9 @@ def min_column_type(x, expected_type):
 def get_min_float_dtype(col):
     max_bound_dtype = np.min_scalar_type(float(col.max()))
     min_bound_dtype = np.min_scalar_type(float(col.min()))
-    result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
+    result_type = np.promote_types(
+        "float32", np.promote_types(max_bound_dtype, min_bound_dtype)
+    )
     return cudf.dtype(result_type)
 
 
@@ -542,6 +542,8 @@ def find_common_type(dtypes):
         dtypes.add(np.result_type(*td_dtypes))
 
     common_dtype = np.find_common_type(list(dtypes), [])
+    if common_dtype == np.dtype("float16"):
+        return cudf.dtype("float32")
     return cudf.dtype(common_dtype)
 
 
