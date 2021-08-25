@@ -245,15 +245,24 @@ rmm::device_buffer decompress_data(datasource& source,
   return decomp_block_data;
 }
 
-void decode_data(metadata& meta,
-                 rmm::device_buffer const& block_data,
-                 std::vector<std::pair<uint32_t, uint32_t>> const& dict,
-                 device_span<string_index_pair const> global_dictionary,
-                 size_t num_rows,
-                 std::vector<std::pair<int, std::string>> const& selection,
-                 std::vector<column_buffer>& out_buffers,
-                 rmm::cuda_stream_view stream)
+std::vector<column_buffer> decode_data(metadata& meta,
+                                       rmm::device_buffer const& block_data,
+                                       std::vector<std::pair<uint32_t, uint32_t>> const& dict,
+                                       device_span<string_index_pair const> global_dictionary,
+                                       size_t num_rows,
+                                       std::vector<std::pair<int, std::string>> const& selection,
+                                       std::vector<data_type> const& column_types,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
+  auto out_buffers = std::vector<column_buffer>();
+
+  for (size_t i = 0; i < column_types.size(); ++i) {
+    auto col_idx     = selection[i].first;
+    bool is_nullable = (meta.columns[col_idx].schema_null_idx >= 0);
+    out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, mr);
+  }
+
   // Build gpu schema
   hostdevice_vector<gpu::schemadesc_s> schema_desc(meta.schema.size());
   uint32_t min_row_data_size = 0;
@@ -342,6 +351,8 @@ void decode_data(metadata& meta,
     const auto schema_null_idx  = meta.columns[col_idx].schema_null_idx;
     out_buffers[i].null_count() = (schema_null_idx >= 0) ? schema_desc[schema_null_idx].count : 0;
   }
+
+  return out_buffers;
 }
 
 table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
@@ -445,15 +456,15 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
         stream.synchronize();
       }
 
-      std::vector<column_buffer> out_buffers;
-      for (size_t i = 0; i < column_types.size(); ++i) {
-        auto col_idx     = selected_columns[i].first;
-        bool is_nullable = (meta.columns[col_idx].schema_null_idx >= 0);
-        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, mr);
-      }
-
-      decode_data(
-        meta, block_data, dict, d_global_dict, num_rows, selected_columns, out_buffers, stream);
+      auto out_buffers = decode_data(meta,
+                                     block_data,
+                                     dict,
+                                     d_global_dict,
+                                     num_rows,
+                                     selected_columns,
+                                     column_types,
+                                     stream,
+                                     mr);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
         out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, mr));
