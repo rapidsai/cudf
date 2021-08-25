@@ -26,7 +26,6 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/json.hpp>
@@ -394,48 +393,6 @@ std::pair<std::vector<std::string>, col_map_ptr_type> get_column_names_and_map(
   }
 }
 
-std::vector<data_type> parse_data_types(std::vector<std::string> const& column_names,
-                                        std::vector<std::string> const& types_as_strings)
-{
-  CUDF_EXPECTS(types_as_strings.size() == column_names.size(),
-               "Need to specify the type of each column.\n");
-  std::vector<data_type> dtypes;
-  // Assume that the dtype is in dictionary format only if all elements contain a colon
-  const bool is_dict = std::all_of(
-    std::cbegin(types_as_strings), std::cend(types_as_strings), [](const std::string& s) {
-      return std::find(std::cbegin(s), std::cend(s), ':') != std::cend(s);
-    });
-
-  auto split_on_colon = [](std::string_view s) {
-    auto const i = s.find(":");
-    return std::pair{s.substr(0, i), s.substr(i + 1)};
-  };
-
-  if (is_dict) {
-    std::map<std::string, data_type> col_type_map;
-    std::transform(
-      std::cbegin(types_as_strings),
-      std::cend(types_as_strings),
-      std::inserter(col_type_map, col_type_map.end()),
-      [&](auto const& ts) {
-        auto const [col_name, type_str] = split_on_colon(ts);
-        return std::pair{std::string{col_name}, convert_string_to_dtype(std::string{type_str})};
-      });
-
-    // Using the map here allows O(n log n) complexity
-    std::transform(std::cbegin(column_names),
-                   std::cend(column_names),
-                   std::back_inserter(dtypes),
-                   [&](auto const& column_name) { return col_type_map[column_name]; });
-  } else {
-    std::transform(std::cbegin(types_as_strings),
-                   std::cend(types_as_strings),
-                   std::back_inserter(dtypes),
-                   [](auto const& col_dtype) { return convert_string_to_dtype(col_dtype); });
-  }
-  return dtypes;
-}
-
 std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
                                       parse_options_view const& parse_opts,
                                       std::vector<std::string> const& column_names,
@@ -449,11 +406,15 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
 
   if (!has_to_infer_column_types) {
     return std::visit(cudf::detail::visitor_overload{
-                        [&](const std::vector<data_type>& dtypes) { return dtypes; },
+                        [&](const std::vector<data_type>& dtypes) {
+                          CUDF_EXPECTS(dtypes.size() == metadata_.column_names.size(),
+                                       "Must specify types for all columns");
+                          return dtypes;
+                        },
                         [&](const std::map<std::string, data_type>& dtypes) {
                           std::vector<data_type> sorted_dtypes;
-                          std::transform(std::cbegin(column_names),
-                                         std::cend(column_names),
+                          std::transform(std::cbegin(metadata_.column_names),
+                                         std::cend(metadata_.column_names),
                                          std::back_inserter(sorted_dtypes),
                                          [&](auto const& column_name) {
                                            auto const it = dtypes.find(column_name);
@@ -462,11 +423,8 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
                                            return it->second;
                                          });
                           return sorted_dtypes;
-                        },
-                        [&](std::vector<std::string> const& dtypes) {
-                          return parse_data_types(column_names, dtypes);
                         }},
-                      reader_opts.get_dtypes());
+                      options_.get_dtypes());
   } else {
     CUDF_EXPECTS(rec_starts.size() != 0, "No data available for data type inference.\n");
     auto const num_columns       = column_names.size();
