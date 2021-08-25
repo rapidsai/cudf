@@ -58,9 +58,9 @@ __global__ void compute_percentiles_kernel(offset_type const* tdigest_offsets,
   double const* mean   = mean_ + tdigest_offsets[tdigest_index];
   double const* weight = weight_ + tdigest_offsets[tdigest_index];
 
-  // if we're at either end
   double const total_weight = cumulative_weight[tdigest_size - 1];
   double const cluster_q    = percentage * total_weight;
+
   if (cluster_q <= 1) {
     output[tid] = mean[0];
     return;
