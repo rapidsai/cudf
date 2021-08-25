@@ -107,6 +107,8 @@ struct ceil_timestamp {
         return time_point_cast<typename Timestamp::duration>(ceil<duration_ns>(ts));
       default: cudf_assert(false && "Unexpected resolution");
     }
+
+    return {};
   }
 };
 
