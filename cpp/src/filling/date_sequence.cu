@@ -2,13 +2,12 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
+#include <cudf/detail/date_sequence.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-
-#include <cudf/detail/date_sequence.cuh>
 
 namespace cudf {
 namespace detail {
