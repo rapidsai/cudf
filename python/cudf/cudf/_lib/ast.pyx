@@ -30,7 +30,7 @@ class ASTOperator(Enum):
     PYMOD = libcudf_ast.ast_operator.PYMOD
     POW = libcudf_ast.ast_operator.POW
     EQUAL = libcudf_ast.ast_operator.EQUAL
-    NULL_EQUAL = libcudf_ast.ast_operator.NULL_EQUAL
+    # NULL_EQUAL = libcudf_ast.ast_operator.NULL_EQUAL
     NOT_EQUAL = libcudf_ast.ast_operator.NOT_EQUAL
     LESS = libcudf_ast.ast_operator.LESS
     GREATER = libcudf_ast.ast_operator.GREATER
@@ -40,9 +40,9 @@ class ASTOperator(Enum):
     BITWISE_OR = libcudf_ast.ast_operator.BITWISE_OR
     BITWISE_XOR = libcudf_ast.ast_operator.BITWISE_XOR
     LOGICAL_AND = libcudf_ast.ast_operator.LOGICAL_AND
-    NULL_LOGICAL_AND = libcudf_ast.ast_operator.NULL_LOGICAL_AND
+    # NULL_LOGICAL_AND = libcudf_ast.ast_operator.NULL_LOGICAL_AND
     LOGICAL_OR = libcudf_ast.ast_operator.LOGICAL_OR
-    NULL_LOGICAL_OR = libcudf_ast.ast_operator.NULL_LOGICAL_OR
+    # NULL_LOGICAL_OR = libcudf_ast.ast_operator.NULL_LOGICAL_OR
     # Unary operators
     IDENTITY = libcudf_ast.ast_operator.IDENTITY
     SIN = libcudf_ast.ast_operator.SIN
@@ -80,14 +80,14 @@ cdef class Literal(Expression):
         # TODO: Generalize this to other types of literals.
         cdef int val = value
         self.c_scalar = make_unique[numeric_scalar[int64_t]](val, True)
-        self.c_obj = <unique_ptr[libcudf_ast.node]> make_unique[
+        self.c_obj = <unique_ptr[libcudf_ast.expression]> make_unique[
             libcudf_ast.literal](
                 <numeric_scalar[int64_t] &>dereference(self.c_scalar))
 
 
 cdef class ColumnReference(Expression):
     def __cinit__(self, size_type index):
-        self.c_obj = <unique_ptr[libcudf_ast.node]> make_unique[
+        self.c_obj = <unique_ptr[libcudf_ast.expression]> make_unique[
             libcudf_ast.column_reference](index)
 
 
@@ -100,11 +100,11 @@ cdef class Operation(Expression):
             <underlying_type_ast_operator> op.value)
 
         if right is None:
-            self.c_obj = <unique_ptr[libcudf_ast.node]> make_unique[
-                libcudf_ast.expression](op_value, dereference(left.c_obj))
+            self.c_obj = <unique_ptr[libcudf_ast.expression]> make_unique[
+                libcudf_ast.operation](op_value, dereference(left.c_obj))
         else:
-            self.c_obj = <unique_ptr[libcudf_ast.node]> make_unique[
-                libcudf_ast.expression](
+            self.c_obj = <unique_ptr[libcudf_ast.expression]> make_unique[
+                libcudf_ast.operation](
                     op_value, dereference(left.c_obj), dereference(right.c_obj)
             )
 
@@ -248,14 +248,13 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
 
 def evaluate_expression(Table df, Operation expr):
     """Evaluate an Operation on a Table."""
-    result_data = ColumnAccessor()
     cdef unique_ptr[column] col = libcudf_ast.compute_column(
         df.view(),
         <libcudf_ast.expression &> dereference(expr.c_obj.get())
     )
-    result_data['result'] = Column.from_unique_ptr(move(col))
-    result_table = Table(data=result_data)
-    return DataFrame._from_table(result_table)
+    return DataFrame._from_data(
+        {'result': Column.from_unique_ptr(move(col))}
+    )
 
 
 def make_and_evaluate_expression(expr, df):

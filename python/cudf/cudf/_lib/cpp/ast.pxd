@@ -25,7 +25,7 @@ cdef extern from "cudf/ast/expressions.hpp" namespace "cudf::ast" nogil:
         PYMOD "cudf::ast::ast_operator::PYMOD"
         POW "cudf::ast::ast_operator::POW"
         EQUAL "cudf::ast::ast_operator::EQUAL"
-        NULL_EQUAL "cudf::ast::ast_operator::NULL_EQUAL"
+        # NULL_EQUAL "cudf::ast::ast_operator::NULL_EQUAL"
         NOT_EQUAL "cudf::ast::ast_operator::NOT_EQUAL"
         LESS "cudf::ast::ast_operator::LESS"
         GREATER "cudf::ast::ast_operator::GREATER"
@@ -34,9 +34,9 @@ cdef extern from "cudf/ast/expressions.hpp" namespace "cudf::ast" nogil:
         BITWISE_AND "cudf::ast::ast_operator::BITWISE_AND"
         BITWISE_OR "cudf::ast::ast_operator::BITWISE_OR"
         BITWISE_XOR "cudf::ast::ast_operator::BITWISE_XOR"
-        NULL_LOGICAL_AND "cudf::ast::ast_operator::NULL_LOGICAL_AND"
+        # NULL_LOGICAL_AND "cudf::ast::ast_operator::NULL_LOGICAL_AND"
         LOGICAL_AND "cudf::ast::ast_operator::LOGICAL_AND"
-        NULL_LOGICAL_OR "cudf::ast::ast_operator::NULL_LOGICAL_OR"
+        # NULL_LOGICAL_OR "cudf::ast::ast_operator::NULL_LOGICAL_OR"
         LOGICAL_OR "cudf::ast::ast_operator::LOGICAL_OR"
         # Unary operators
         IDENTITY "cudf::ast::ast_operator::IDENTITY"
@@ -84,9 +84,9 @@ cdef extern from "cudf/ast/expressions.hpp" namespace "cudf::ast" nogil:
         column_reference(size_type) except +
         column_reference(size_type, table_reference) except +
 
-    cdef cppclass expression(expression):
-        expression(ast_operator, const expression &)
-        expression(ast_operator, const expression&, const expression&)
+    cdef cppclass operation(expression):
+        operation(ast_operator, const expression &)
+        operation(ast_operator, const expression&, const expression&)
 
 cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] compute_column(
