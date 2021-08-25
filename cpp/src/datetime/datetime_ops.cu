@@ -44,6 +44,12 @@ enum class datetime_component {
   SECOND,
 };
 
+// Number of days until month indexed by leap year and month (0-based index)
+static __device__ int16_t const days_until_month[2][13] = {
+  {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365},  // For non leap years
+  {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366}   // For leap years
+};
+
 template <datetime_component Component>
 struct extract_component_operator {
   template <typename Timestamp>
