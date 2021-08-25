@@ -116,7 +116,8 @@ class literal : public expression {
    * @param value A numeric scalar value.
    */
   template <typename T>
-  literal(cudf::numeric_scalar<T>& value) : value(cudf::get_scalar_device_view(value))
+  literal(cudf::numeric_scalar<T>& value)
+    : scalar(value), value(cudf::get_scalar_device_view(value))
   {
   }
 
@@ -127,7 +128,8 @@ class literal : public expression {
    * @param value A timestamp scalar value.
    */
   template <typename T>
-  literal(cudf::timestamp_scalar<T>& value) : value(cudf::get_scalar_device_view(value))
+  literal(cudf::timestamp_scalar<T>& value)
+    : scalar(value), value(cudf::get_scalar_device_view(value))
   {
   }
 
@@ -138,7 +140,8 @@ class literal : public expression {
    * @param value A duration scalar value.
    */
   template <typename T>
-  literal(cudf::duration_scalar<T>& value) : value(cudf::get_scalar_device_view(value))
+  literal(cudf::duration_scalar<T>& value)
+    : scalar(value), value(cudf::get_scalar_device_view(value))
   {
   }
 
@@ -164,7 +167,15 @@ class literal : public expression {
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
+  /**
+   * @brief Check if the underlying scalar is valid.
+   *
+   * @return bool
+   */
+  bool is_valid() const { return scalar.is_valid(); }
+
  private:
+  cudf::scalar const& scalar;
   cudf::detail::fixed_width_scalar_device_view_base const value;
 };
 

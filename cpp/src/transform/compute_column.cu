@@ -88,8 +88,9 @@ std::unique_ptr<column> compute_column(table_view const& table,
   // If none of the input columns actually contain nulls, we can still use the
   // non-nullable version of the expression evaluation code path for
   // performance, so we capture that information as well.
-  auto const nullable  = cudf::nullable(table);
-  auto const has_nulls = nullable && cudf::has_nulls(table);
+  auto const expr_has_nulls = ast::detail::contains_null_literal(&expr);
+  auto const nullable       = cudf::nullable(table) || expr_has_nulls;
+  auto const has_nulls      = (nullable && cudf::has_nulls(table)) || expr_has_nulls;
 
   auto const parser = ast::detail::expression_parser{expr, table, has_nulls, stream, mr};
 
