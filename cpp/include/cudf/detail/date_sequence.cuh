@@ -12,14 +12,6 @@
 
 namespace cudf {
 namespace detail {
-
-template <typename Timestamp>
-CUDA_DEVICE_CALLABLE Timestamp add_dateoffset(
-  cudf::timestamp_scalar_device_view<Timestamp> const initial, std::size_t n, std::size_t months)
-{
-  return datetime::detail::add_calendrical_months_with_scale_back(initial.value(), n * months);
-}
-
 struct date_sequence_functor {
   template <typename T>
   typename std::enable_if_t<cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>>
@@ -40,8 +32,9 @@ struct date_sequence_functor {
                       thrust::make_counting_iterator<std::size_t>(0),
                       thrust::make_counting_iterator<std::size_t>(n),
                       output_view.begin<T>(),
-                      [device_input, n, months] __device__(std::size_t i) {
-                        return add_dateoffset<T>(device_input, i, months);
+                      [initial = device_input, months] __device__(std::size_t i) {
+                        return datetime::detail::add_calendrical_months_with_scale_back(
+                          initial.value(), i * months);
                       });
 
     return output;
