@@ -744,8 +744,10 @@ def date_range(
     if tz is not None:
         raise NotImplementedError("tz is currently unsupported.")
 
-    if normalize is not None:
-        raise NotImplementedError("normalize is currently unsupported.")
+    if normalize:
+        raise NotImplementedError(
+            "normalizing timestamps to midnight is unsupported."
+        )
 
     if closed is not None:
         raise NotImplementedError("closed is currently unsupported.")
