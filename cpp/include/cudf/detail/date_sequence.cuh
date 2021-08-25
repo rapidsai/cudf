@@ -1,5 +1,3 @@
-#include <sys/syscall.h>
-#include <chrono>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
@@ -10,6 +8,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <sys/syscall.h>
+
+#include <chrono>
 
 namespace cudf {
 namespace detail {

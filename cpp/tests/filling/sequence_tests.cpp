@@ -24,7 +24,6 @@
 
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
-
 #include <cudf/unary.hpp>
 
 using namespace cudf;
