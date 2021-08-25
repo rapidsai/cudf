@@ -211,6 +211,7 @@ add_library(cudfjni SHARED
     src/ColumnViewJni.cpp
     src/CompiledExpression.cpp
     src/ContiguousTableJni.cpp
+    src/HashJoinJni.cpp
     src/HostMemoryBufferNativeUtilsJni.cpp
     src/NvcompJni.cpp
     src/NvtxRangeJni.cpp
