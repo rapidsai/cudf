@@ -307,6 +307,7 @@ add_library(cudf
     src/io/parquet/writer_impl.cu
     src/io/statistics/orc_column_statistics.cu
     src/io/statistics/parquet_column_statistics.cu
+    src/io/text/multibyte_split.cu
     src/io/utilities/column_buffer.cpp
     src/io/utilities/data_sink.cpp
     src/io/utilities/datasource.cpp
@@ -368,8 +369,9 @@ add_library(cudf
     src/reshape/interleave_columns.cu
     src/reshape/tile.cu
     src/rolling/grouped_rolling.cu
-    src/rolling/rolling.cu
     src/rolling/range_window_bounds.cpp
+    src/rolling/rolling.cu
+    src/rolling/rolling_collect_list.cu
     src/round/round.cu
     src/scalar/scalar.cpp
     src/scalar/scalar_factories.cpp
