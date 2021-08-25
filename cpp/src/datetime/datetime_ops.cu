@@ -237,7 +237,10 @@ struct add_calendrical_months_functor {
                       timestamp_column.end<Timestamp>(),
                       months_column.begin<int16_t>(),
                       output.begin<Timestamp>(),
-                      add_calendrical_months_functor_impl{});
+                      [] __device__(auto& timestamp, auto& months) {
+                        return add_calendrical_months_with_scale_back<Timestamp, int16_t>(timestamp,
+                                                                                          months);
+                      });
   }
 };
 

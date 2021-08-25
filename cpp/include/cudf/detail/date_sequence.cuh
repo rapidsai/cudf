@@ -1,4 +1,5 @@
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/detail/datetime_ops.cuh>
@@ -9,10 +10,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <sys/syscall.h>
-
-#include <chrono>
-
 namespace cudf {
 namespace detail {
 
@@ -20,8 +17,7 @@ template <typename Timestamp>
 CUDA_DEVICE_CALLABLE Timestamp add_dateoffset(
   cudf::timestamp_scalar_device_view<Timestamp> const initial, std::size_t n, std::size_t months)
 {
-  datetime::detail::add_calendrical_months_functor_impl f{};
-  return f(initial.value(), n * months);
+  return datetime::detail::add_calendrical_months_with_scale_back(initial.value(), n * months);
 }
 
 struct date_sequence_functor {
