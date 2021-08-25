@@ -183,7 +183,7 @@ cdef extern from "cudf/io/csv.hpp" \
         csv_reader_options build() except+
 
     cdef cudf_io_types.table_with_metadata read_csv(
-        csv_reader_options &options
+        csv_reader_options options
     ) except +
 
     cdef cppclass csv_writer_options:
