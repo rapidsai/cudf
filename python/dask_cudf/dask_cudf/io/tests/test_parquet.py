@@ -327,6 +327,7 @@ def test_chunksize(tmpdir, chunksize, metadata):
         split_row_groups=True,
         gather_statistics=True,
     )
+    ddf2.compute(scheduler="synchronous")
 
     dd.assert_eq(ddf1, ddf2, check_divisions=False)
 
