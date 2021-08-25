@@ -232,10 +232,10 @@ def test_dataframe_replace(df, to_replace, value):
     expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
     actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
 
-    assert_eq(
-        expected.sort_values().reset_index(drop=True),
-        actual.sort_values().reset_index(drop=True),
-    )
+    expected_sorted = expected.sort_values(by=list(expected.columns), axis=0)
+    actual_sorted = actual.sort_values(by=list(actual.columns), axis=0)
+
+    assert_eq(expected_sorted, actual_sorted)
 
 
 def test_dataframe_replace_with_nulls():
