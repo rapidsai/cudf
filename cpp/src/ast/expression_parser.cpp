@@ -235,7 +235,7 @@ bool contains_null_literal(expression const* expr)
     }
     return false;
   }
-  CUDF_FAIL("Unknown expression type!.");
+  CUDF_FAIL("Unknown expression type!");
   return false;
 }
 
