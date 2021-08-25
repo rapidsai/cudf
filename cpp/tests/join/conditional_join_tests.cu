@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,8 +44,6 @@ constexpr cudf::size_type JoinNoneValue =
 // Common column references.
 const auto col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
 const auto col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-const auto col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
-const auto col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
 
 // Common expressions.
 auto left_zero_eq_right_zero =

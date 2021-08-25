@@ -392,14 +392,6 @@ class ColumnBase(Column, Serializable):
 
         return self
 
-        fill_code = self._encode(fill_value)
-        fill_scalar = as_device_scalar(fill_code, self.codes.dtype)
-
-        result = self if inplace else self.copy()
-
-        libcudf.filling.fill_in_place(result.codes, begin, end, fill_scalar)
-        return result
-
     def shift(self, offset: int, fill_value: ScalarLike) -> ColumnBase:
         return libcudf.copying.shift(self, offset, fill_value)
 

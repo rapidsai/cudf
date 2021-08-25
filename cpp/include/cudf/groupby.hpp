@@ -56,8 +56,23 @@ class sort_groupby_helper;
  * `values.size()` column must equal `keys.num_rows()`.
  */
 struct aggregation_request {
-  column_view values;                                      ///< The elements to aggregate
-  std::vector<std::unique_ptr<aggregation>> aggregations;  ///< Desired aggregations
+  column_view values;                                              ///< The elements to aggregate
+  std::vector<std::unique_ptr<groupby_aggregation>> aggregations;  ///< Desired aggregations
+};
+
+/**
+ * @brief Request for groupby aggregation(s) for scanning a column.
+ *
+ * The group membership of each `value[i]` is determined by the corresponding
+ * row `i` in the original order of `keys` used to construct the
+ * `groupby`. I.e., for each `aggregation`, `values[i]` is aggregated with all
+ * other `values[j]` where rows `i` and `j` in `keys` are equivalent.
+ *
+ * `values.size()` column must equal `keys.num_rows()`.
+ */
+struct scan_request {
+  column_view values;  ///< The elements to aggregate
+  std::vector<std::unique_ptr<groupby_scan_aggregation>> aggregations;  ///< Desired aggregations
 };
 
 /**
@@ -222,7 +237,7 @@ class groupby {
    * specified in `requests`.
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> scan(
-    host_span<aggregation_request const> requests,
+    host_span<scan_request const> requests,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -388,7 +403,7 @@ class groupby {
     rmm::mr::device_memory_resource* mr);
 
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> sort_scan(
-    host_span<aggregation_request const> requests,
+    host_span<scan_request const> requests,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr);
 };
