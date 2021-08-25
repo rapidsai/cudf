@@ -2,18 +2,17 @@
 
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.cpp.types cimport size_type
-
+from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.scalar.scalar cimport (
+    duration_scalar,
     numeric_scalar,
     timestamp_scalar,
-    duration_scalar
 )
-from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.types cimport size_type
 
 
-cdef extern from "cudf/ast/operators.hpp" namespace "cudf::ast" nogil:
+cdef extern from "cudf/ast/expressions.hpp" namespace "cudf::ast" nogil:
     ctypedef enum ast_operator:
         # Binary operators
         ADD "cudf::ast::ast_operator::ADD"
@@ -26,6 +25,7 @@ cdef extern from "cudf/ast/operators.hpp" namespace "cudf::ast" nogil:
         PYMOD "cudf::ast::ast_operator::PYMOD"
         POW "cudf::ast::ast_operator::POW"
         EQUAL "cudf::ast::ast_operator::EQUAL"
+        NULL_EQUAL "cudf::ast::ast_operator::NULL_EQUAL"
         NOT_EQUAL "cudf::ast::ast_operator::NOT_EQUAL"
         LESS "cudf::ast::ast_operator::LESS"
         GREATER "cudf::ast::ast_operator::GREATER"
@@ -34,7 +34,9 @@ cdef extern from "cudf/ast/operators.hpp" namespace "cudf::ast" nogil:
         BITWISE_AND "cudf::ast::ast_operator::BITWISE_AND"
         BITWISE_OR "cudf::ast::ast_operator::BITWISE_OR"
         BITWISE_XOR "cudf::ast::ast_operator::BITWISE_XOR"
+        NULL_LOGICAL_AND "cudf::ast::ast_operator::NULL_LOGICAL_AND"
         LOGICAL_AND "cudf::ast::ast_operator::LOGICAL_AND"
+        NULL_LOGICAL_OR "cudf::ast::ast_operator::NULL_LOGICAL_OR"
         LOGICAL_OR "cudf::ast::ast_operator::LOGICAL_OR"
         # Unary operators
         IDENTITY "cudf::ast::ast_operator::IDENTITY"
@@ -61,35 +63,32 @@ cdef extern from "cudf/ast/operators.hpp" namespace "cudf::ast" nogil:
         BIT_INVERT "cudf::ast::ast_operator::BIT_INVERT"
         NOT "cudf::ast::ast_operator::NOT"
 
-cdef extern from "cudf/ast/detail/linearizer.hpp" \
-        namespace "cudf::ast::detail" nogil:
-    cdef cppclass node:
+    cdef cppclass expression:
         pass
 
-cdef extern from "cudf/ast/nodes.hpp" namespace "cudf::ast" nogil:
     ctypedef enum table_reference:
         LEFT "cudf::ast::table_reference::LEFT"
         RIGHT "cudf::ast::table_reference::RIGHT"
         OUTPUT "cudf::ast::table_reference::OUTPUT"
 
-    cdef cppclass literal(node):
+    cdef cppclass literal(expression):
         # Due to https://github.com/cython/cython/issues/3198, we need to
         # specify a return type for templated constructors.
         literal literal[T](numeric_scalar[T] &) except +
         literal literal[T](timestamp_scalar[T] &) except +
         literal literal[T](duration_scalar[T] &) except +
 
-    cdef cppclass column_reference(node):
+    cdef cppclass column_reference(expression):
         # Allow for default C++ parameters by declaring multiple constructors
         # with the default parameters optionally omitted.
         column_reference(size_type) except +
         column_reference(size_type, table_reference) except +
 
-    cdef cppclass expression(node):
-        expression(ast_operator, const node &)
-        expression(ast_operator, const node&, const node&)
+    cdef cppclass expression(expression):
+        expression(ast_operator, const expression &)
+        expression(ast_operator, const expression&, const expression&)
 
-cdef extern from "cudf/ast/transform.hpp" namespace "cudf::ast" nogil:
+cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] compute_column(
         const table_view table,
         const expression &expr

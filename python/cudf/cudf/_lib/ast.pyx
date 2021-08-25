@@ -1,22 +1,22 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-from enum import Enum
 import ast
+from enum import Enum
 
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dataframe import DataFrame
 
 from cython.operator cimport dereference
-from cudf._lib.cpp.types cimport size_type
 from libc.stdint cimport int64_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
+
+cimport cudf._lib.cpp.ast as libcudf_ast
 from cudf._lib.ast cimport underlying_type_ast_operator
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.types cimport size_type
 from cudf._lib.table cimport Table
-
-cimport cudf._lib.cpp.ast as libcudf_ast
 
 
 class ASTOperator(Enum):
@@ -30,6 +30,7 @@ class ASTOperator(Enum):
     PYMOD = libcudf_ast.ast_operator.PYMOD
     POW = libcudf_ast.ast_operator.POW
     EQUAL = libcudf_ast.ast_operator.EQUAL
+    NULL_EQUAL = libcudf_ast.ast_operator.NULL_EQUAL
     NOT_EQUAL = libcudf_ast.ast_operator.NOT_EQUAL
     LESS = libcudf_ast.ast_operator.LESS
     GREATER = libcudf_ast.ast_operator.GREATER
@@ -39,7 +40,9 @@ class ASTOperator(Enum):
     BITWISE_OR = libcudf_ast.ast_operator.BITWISE_OR
     BITWISE_XOR = libcudf_ast.ast_operator.BITWISE_XOR
     LOGICAL_AND = libcudf_ast.ast_operator.LOGICAL_AND
+    NULL_LOGICAL_AND = libcudf_ast.ast_operator.NULL_LOGICAL_AND
     LOGICAL_OR = libcudf_ast.ast_operator.LOGICAL_OR
+    NULL_LOGICAL_OR = libcudf_ast.ast_operator.NULL_LOGICAL_OR
     # Unary operators
     IDENTITY = libcudf_ast.ast_operator.IDENTITY
     SIN = libcudf_ast.ast_operator.SIN
@@ -72,7 +75,7 @@ class TableReference(Enum):
     OUTPUT = libcudf_ast.table_reference.OUTPUT
 
 
-cdef class Literal(Node):
+cdef class Literal(Expression):
     def __cinit__(self, value):
         # TODO: Generalize this to other types of literals.
         cdef int val = value
@@ -82,14 +85,14 @@ cdef class Literal(Node):
                 <numeric_scalar[int64_t] &>dereference(self.c_scalar))
 
 
-cdef class ColumnReference(Node):
+cdef class ColumnReference(Expression):
     def __cinit__(self, size_type index):
         self.c_obj = <unique_ptr[libcudf_ast.node]> make_unique[
             libcudf_ast.column_reference](index)
 
 
-cdef class Expression(Node):
-    def __cinit__(self, op, Node left, Node right=None):
+cdef class Operation(Expression):
+    def __cinit__(self, op, Expression left, Expression right=None):
         # This awkward double casting appears to be the only way to get Cython
         # to generate valid C++ that doesn't try to apply the shift operator
         # directly to values of the enum (which is invalid).
@@ -178,7 +181,7 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
     stack : list
         The current set of nodes to process. This list is empty on the initial
         call to this function. New elements are added whenever new nodes are
-        created. When parsing the current root requires creating an Expression
+        created. When parsing the current root requires creating an Operation
         node, a suitable number of elements (corresponding to the arity of the
         operator) are popped from the stack as the operands for the operation.
         When the recursive traversal is complete, the stack will have length
@@ -186,7 +189,7 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
     nodes : list
         The set of all nodes created while parsing the expression. This
         argument is necessary because all C++ node types are non-owning
-        objects, so if the Python Nodes corresponding to nodes in the
+        objects, so if the Python Expressions corresponding to nodes in the
         expression go out of scope and are garbage-collected the final
         expression will contain references to invalid data and seg fault upon
         evaluation.  This list must remain in scope until the expression has
@@ -209,7 +212,7 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                 ast_traverse(value.operand, col_names, stack, nodes)
                 op = python_cudf_ast_map[type(value.op)]
                 nodes.append(stack.pop())
-                stack.append(Expression(op, nodes[-1]))
+                stack.append(Operation(op, nodes[-1]))
             # TODO: The expected behavior of the below is questionable. pandas
             # converts bitwise operators in query to logical operators, which I
             # don't think we want. This might have to be a preprocessing of the
@@ -222,7 +225,7 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                 # maybe handle this more explicitly.
                 nodes.append(stack.pop())
                 nodes.append(stack.pop())
-                stack.append(Expression(op, nodes[-1], nodes[-2]))
+                stack.append(Operation(op, nodes[-1], nodes[-2]))
             elif isinstance(value, ast.Compare):
                 if len(value.comparators) != 1:
                     # TODO: Can relax this comparison by unpacking the
@@ -234,7 +237,7 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                 # should maybe handle this more explicitly.
                 nodes.append(stack.pop())
                 nodes.append(stack.pop())
-                stack.append(Expression(op, nodes[-1], nodes[-2]))
+                stack.append(Operation(op, nodes[-1], nodes[-2]))
             elif isinstance(value, list):
                 for item in value:
                     if isinstance(item, ast.AST):
@@ -243,8 +246,8 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                 ast_traverse(value, col_names, stack, nodes)
 
 
-def evaluate_expression(Table df, Expression expr):
-    """Evaluate an Expression on a Table."""
+def evaluate_expression(Table df, Operation expr):
+    """Evaluate an Operation on a Table."""
     result_data = ColumnAccessor()
     cdef unique_ptr[column] col = libcudf_ast.compute_column(
         df.view(),
