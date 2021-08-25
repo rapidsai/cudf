@@ -1783,6 +1783,12 @@ def as_column(
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
+        if isinstance(arbitrary, pa.lib.HalfFloatArray):
+            raise NotImplementedError(
+                "Type casting from `float16` to `float32` is not "
+                "yet supported in pyarrow, see: "
+                "https://issues.apache.org/jira/browse/ARROW-13762"
+            )
         col = ColumnBase.from_arrow(arbitrary)
         if isinstance(arbitrary, pa.NullArray):
             if type(dtype) == str and dtype == "empty":
@@ -1949,6 +1955,8 @@ def as_column(
             if dtype is not None:
                 data = data.astype(dtype)
         elif arb_dtype.kind in ("f"):
+            if arb_dtype == np.dtype("float16"):
+                arb_dtype = np.dtype("float32")
             arb_dtype = cudf.dtype(arb_dtype if dtype is None else dtype)
             data = as_column(
                 cupy.asarray(arbitrary, dtype=arb_dtype),

@@ -7,6 +7,7 @@ from string import ascii_letters, digits
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -1232,8 +1233,21 @@ def test_nested_series_from_sequence_data(data, expected):
     assert_eq(actual, expected)
 
 
-def test_series_upcast_float16():
-    array = cp.ones(5, dtype=cp.float16)
-    actual_series = cudf.Series(array)
-    expected_series = cudf.Series(array.astype("float32"))
+@pytest.mark.parametrize(
+    "data",
+    [
+        cp.ones(5, dtype=cp.float16),
+        np.ones(5, dtype="float16"),
+        pd.Series([0.1, 1.2, 3.3], dtype="float16"),
+        pytest.param(
+            pa.array(np.ones(5, dtype="float16")),
+            marks=pytest.mark.xfail(
+                reason="https://issues.apache.org/jira/browse/ARROW-13762"
+            ),
+        ),
+    ],
+)
+def test_series_upcast_float16(data):
+    actual_series = cudf.Series(data)
+    expected_series = cudf.Series(data, dtype="float32")
     assert_eq(actual_series, expected_series)
