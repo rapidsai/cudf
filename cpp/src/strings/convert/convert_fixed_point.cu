@@ -97,7 +97,8 @@ struct string_to_decimal_check_fn {
 
     auto const iter_end = d_str.data() + d_str.size_bytes();
 
-    auto [value, exp_offset] = parse_integer(iter, iter_end);
+    using UnsignedDecimalType = std::make_unsigned_t<DecimalType>;
+    auto [value, exp_offset]  = parse_integer<UnsignedDecimalType>(iter, iter_end);
 
     // only exponent notation is expected here
     if ((iter < iter_end) && (*iter != 'e' && *iter != 'E')) { return false; }
@@ -112,16 +113,10 @@ struct string_to_decimal_check_fn {
     exp_ten += exp_offset;
 
     // finally, check for overflow based on the exp_ten and scale values
-    if (exp_ten < scale) {
-      // temporary bug fix
-      // TODO: fix once David's refactor/comprehensive bug fix is done
-      return (value / static_cast<__uint128_t>(exp10(static_cast<double>(scale - exp_ten)))) <=
-             static_cast<__uint128_t>(cuda::std::numeric_limits<DecimalType>::max());
-    } else {
-      return value <= static_cast<__uint128_t>(
-                        cuda::std::numeric_limits<DecimalType>::max() /
-                        static_cast<DecimalType>(exp10(static_cast<double>(exp_ten - scale))));
-    }
+    return (exp_ten < scale) or
+           value <= static_cast<UnsignedDecimalType>(
+                      std::numeric_limits<DecimalType>::max() /
+                      static_cast<DecimalType>(exp10(static_cast<double>(exp_ten - scale))));
   }
 };
 
