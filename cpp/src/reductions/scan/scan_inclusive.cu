@@ -392,6 +392,12 @@ rmm::device_vector<double> ewma_noadjust(column_view const& input, double beta) 
 
   });
 
+  // TODO: the first pair is WRONG using the above. Reset just that pair
+  thrust::transform(input.begin<double>(), input.begin<double>() + 1, pairs.begin(),  [=] __host__ __device__ (double input) -> thrust::pair<double, double> {
+    return thrust::pair<double, double>(beta, input);
+
+  });
+
   rmm::device_vector<double> result = compute_recurrence(pairs);
   return result;
 }
