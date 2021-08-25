@@ -51,6 +51,14 @@ std::unique_ptr<column> sequence(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @copydoc cudf::date_sequence(size_type size,
+ *                              scalar const& init,
+ *                              size_type months,
+ *                              rmm::mr::device_memory_resource* mr)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 std::unique_ptr<cudf::column> date_sequence(
   size_type size,
   scalar const& init,
