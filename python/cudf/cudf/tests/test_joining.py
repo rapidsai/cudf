@@ -1377,10 +1377,8 @@ def test_categorical_typecast_inner():
     expect_dtype = CategoricalDtype(categories=[1, 2, 3], ordered=False)
     expect_data = cudf.Series([1, 2, 3], dtype=expect_dtype, name="key")
 
-    assert_eq(
-        expect_data,
-        result["key"].sort_values().reset_index(drop=True),
-        check_categorical=False,
+    assert_join_results_equal(
+        expect_data, result["key"], how="inner", check_categorical=False
     )
 
     # Equal categories, unequal ordering -> error
@@ -1399,10 +1397,8 @@ def test_categorical_typecast_inner():
 
     expect_dtype = cudf.CategoricalDtype(categories=[2, 3], ordered=False)
     expect_data = cudf.Series([2, 3], dtype=expect_dtype, name="key")
-    assert_eq(
-        expect_data,
-        result["key"].sort_values().reset_index(drop=True),
-        check_categorical=False,
+    assert_join_results_equal(
+        expect_data, result["key"], how="inner", check_categorical=False
     )
 
     # One is ordered -> error
@@ -1433,7 +1429,7 @@ def test_categorical_typecast_left():
     expect_dtype = CategoricalDtype(categories=[1, 2, 3], ordered=False)
     expect_data = cudf.Series([1, 2, 3], dtype=expect_dtype, name="key")
 
-    assert_eq(expect_data, result["key"].sort_values().reset_index(drop=True))
+    assert_join_results_equal(expect_data, result["key"], how="left")
 
     # equal categories, unequal ordering -> error
     left = make_categorical_dataframe([1, 2, 3], ordered=True)
@@ -1452,7 +1448,7 @@ def test_categorical_typecast_left():
     expect_dtype = CategoricalDtype(categories=[1, 2, 3], ordered=False)
     expect_data = cudf.Series([1, 2, 3], dtype=expect_dtype, name="key")
 
-    assert_eq(expect_data, result["key"].sort_values().reset_index(drop=True))
+    assert_join_results_equal(expect_data, result["key"], how="left")
 
     # unequal categories, unequal ordering -> error
     left = make_categorical_dataframe([1, 2, 3], ordered=True)
@@ -1487,7 +1483,7 @@ def test_categorical_typecast_outer():
     expect_dtype = CategoricalDtype(categories=[1, 2, 3], ordered=False)
     expect_data = cudf.Series([1, 2, 3], dtype=expect_dtype, name="key")
 
-    assert_eq(expect_data, result["key"].sort_values().reset_index(drop=True))
+    assert_join_results_equal(expect_data, result["key"], how="outer")
 
     # equal categories, both ordered -> common dtype
     left = make_categorical_dataframe([1, 2, 3], ordered=True)
@@ -1497,7 +1493,7 @@ def test_categorical_typecast_outer():
     expect_dtype = CategoricalDtype(categories=[1, 2, 3], ordered=True)
     expect_data = cudf.Series([1, 2, 3], dtype=expect_dtype, name="key")
 
-    assert_eq(expect_data, result["key"].sort_values().reset_index(drop=True))
+    assert_join_results_equal(expect_data, result["key"], how="outer")
 
     # equal categories, one ordered -> error
     left = make_categorical_dataframe([1, 2, 3], ordered=False)
@@ -1516,7 +1512,7 @@ def test_categorical_typecast_outer():
     expect_dtype = CategoricalDtype(categories=[1, 2, 3, 4], ordered=False)
     expect_data = cudf.Series([1, 2, 3, 4], dtype=expect_dtype, name="key")
 
-    assert_eq(expect_data, result["key"].sort_values().reset_index(drop=True))
+    assert_join_results_equal(expect_data, result["key"], how="outer")
 
     # unequal categories, one ordered -> error
     left = make_categorical_dataframe([1, 2, 3], ordered=False)
