@@ -20,6 +20,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/detail/datetime.hpp>
+#include <cudf/detail/datetime_ops.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table_view.hpp>
@@ -75,12 +76,6 @@ struct extract_component_operator {
       default: return 0;
     }
   }
-};
-
-// Number of days until month indexed by leap year and month (0-based index)
-static __device__ int16_t const days_until_month[2][13] = {
-  {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365},  // For non leap years
-  {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366}   // For leap years
 };
 
 // Round up the date to the last day of the month and return the
@@ -236,24 +231,7 @@ struct add_calendrical_months_functor {
                       timestamp_column.end<Timestamp>(),
                       months_column.begin<int16_t>(),
                       output.begin<Timestamp>(),
-                      [] __device__(auto time_val, auto months_val) {
-                        using namespace cuda::std::chrono;
-                        using duration_m = duration<int32_t, months::period>;
-
-                        // Get the days component from the input
-                        auto days_since_epoch = floor<days>(time_val);
-
-                        // Add the number of months
-                        year_month_day ymd{days_since_epoch};
-                        ymd += duration_m{months_val};
-
-                        // If the new date isn't valid, scale it back to the last day of the
-                        // month.
-                        if (!ymd.ok()) ymd = ymd.year() / ymd.month() / last;
-
-                        // Put back the time component to the date
-                        return sys_days{ymd} + (time_val - days_since_epoch);
-                      });
+                      add_calendrical_months_functor_impl{});
   }
 };
 

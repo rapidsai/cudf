@@ -1383,6 +1383,124 @@ def test_is_month_start(data, dtype):
 
 
 @pytest.mark.parametrize(
+    "start",
+    [
+        "2000-02-13 08:41:06",  # leap year
+        "1996-11-21 04:05:30",  # non leap year
+        "1970-01-01 00:00:00",  # unix epoch time 0
+        "1831-05-08 15:23:21",
+    ],
+)
+@pytest.mark.parametrize(
+    "end",
+    [
+        "2000-02-13 08:41:06",  # leap year
+        "1996-11-21 04:05:30",  # non leap year
+        "1970-01-01 00:00:00",  # unix epoch time 0
+        "1831-05-08 15:23:21",
+    ],
+)
+@pytest.mark.parametrize("periods", [1, 10, 100])
+def test_date_range_start_end_periods(start, end, periods):
+    expect = pd.date_range(start=start, end=end, periods=periods, name="a")
+    got = cudf.date_range(start=start, end=end, periods=periods, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+@pytest.mark.parametrize(
+    "start",
+    [
+        "2000-02-13 08:41:06",  # leap year
+        "1996-11-21 04:05:30",  # non leap year
+        "1970-01-01 00:00:00",  # unix epoch time 0
+        "1831-05-08 15:23:21",
+    ],
+)
+@pytest.mark.parametrize(
+    "end",
+    [
+        "2000-02-13 08:41:06",  # leap year
+        "1996-11-21 04:05:30",  # non leap year
+        "1970-01-01 00:00:00",  # unix epoch time 0
+        "1831-05-08 15:23:21",
+    ],
+)
+@pytest.mark.parametrize(
+    "freq",
+    [{"months": 3, "years": 1}, {"hours": 10, "days": 57, "nanoseconds": 3}],
+)
+def test_date_range_start_end_freq(start, end, freq):
+    _gfreq = cudf.DateOffset(**freq)
+    _pfreq = pd.DateOffset(**freq)
+
+    expect = pd.date_range(start=start, end=end, freq=_pfreq, name="a")
+    got = cudf.date_range(start=start, end=end, freq=_gfreq, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+@pytest.mark.parametrize(
+    "start",
+    [
+        "2000-02-13 08:41:06",  # leap year
+        "1996-11-21 04:05:30",  # non leap year
+        "1970-01-01 00:00:00",  # unix epoch time 0
+        "1831-05-08 15:23:21",
+    ],
+)
+@pytest.mark.parametrize(
+    "freq",
+    [{"months": 3, "years": 1}, {"hours": 10, "days": 57, "nanoseconds": 3}],
+)
+@pytest.mark.parametrize("periods", [1, 10, 100])
+def test_date_range_start_freq_periods(start, freq, periods):
+    _gfreq = cudf.DateOffset(**freq)
+    _pfreq = pd.DateOffset(**freq)
+
+    expect = pd.date_range(start=start, periods=periods, freq=_pfreq, name="a")
+    got = cudf.date_range(start=start, periods=periods, freq=_gfreq, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+@pytest.mark.parametrize(
+    "end",
+    [
+        "2000-02-13 08:41:06",  # leap year
+        "1996-11-21 04:05:30",  # non leap year
+        "1970-01-01 00:00:00",  # unix epoch time 0
+        "1831-05-08 15:23:21",
+    ],
+)
+@pytest.mark.parametrize(
+    "freq",
+    [{"months": 3, "years": 1}, {"hours": 10, "days": 57, "nanoseconds": 3}],
+)
+@pytest.mark.parametrize("periods", [1, 10, 100])
+def test_date_range_end_freq_periods(end, freq, periods):
+    _gfreq = cudf.DateOffset(**freq)
+    _pfreq = pd.DateOffset(**freq)
+
+    expect = pd.date_range(end=end, periods=periods, freq=_pfreq, name="a")
+    got = cudf.date_range(end=end, periods=periods, freq=_gfreq, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+@pytest.mark.parametrize(
     "data",
     [
         [
