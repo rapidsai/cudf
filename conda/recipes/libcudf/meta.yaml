@@ -119,10 +119,9 @@ test:
     - test -f $PREFIX/include/cudf/hashing.hpp
     - test -f $PREFIX/include/cudf/interop.hpp
     - test -f $PREFIX/include/cudf/io/avro.hpp
+    - test -f $PREFIX/include/cudf/io/csv.hpp
     - test -f $PREFIX/include/cudf/io/data_sink.hpp
     - test -f $PREFIX/include/cudf/io/datasource.hpp
-    - test -f $PREFIX/include/cudf/io/orc_metadata.hpp
-    - test -f $PREFIX/include/cudf/io/csv.hpp
     - test -f $PREFIX/include/cudf/io/detail/avro.hpp
     - test -f $PREFIX/include/cudf/io/detail/csv.hpp
     - test -f $PREFIX/include/cudf/io/detail/json.hpp
@@ -130,8 +129,15 @@ test:
     - test -f $PREFIX/include/cudf/io/detail/parquet.hpp
     - test -f $PREFIX/include/cudf/io/detail/utils.hpp
     - test -f $PREFIX/include/cudf/io/json.hpp
+    - test -f $PREFIX/include/cudf/io/orc_metadata.hpp
     - test -f $PREFIX/include/cudf/io/orc.hpp
     - test -f $PREFIX/include/cudf/io/parquet.hpp
+    - test -f $PREFIX/include/cudf/io/text/data_chunk_source_factories.hpp
+    - test -f $PREFIX/include/cudf/io/text/data_chunk_source.hpp
+    - test -f $PREFIX/include/cudf/io/text/detail/multistate.hpp
+    - test -f $PREFIX/include/cudf/io/text/detail/tile_state.hpp
+    - test -f $PREFIX/include/cudf/io/text/detail/trie.hpp
+    - test -f $PREFIX/include/cudf/io/text/multibyte_split.hpp
     - test -f $PREFIX/include/cudf/io/types.hpp
     - test -f $PREFIX/include/cudf/ipc.hpp
     - test -f $PREFIX/include/cudf/join.hpp
