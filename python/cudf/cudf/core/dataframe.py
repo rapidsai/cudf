@@ -547,10 +547,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         column_names = pickle.loads(header["column_names"])
         columns = column.deserialize_columns(header["columns"], column_frames)
 
-        return cls._from_data(
-            dict(zip(column_names, columns)),
-            index=index,
-        )
+        return cls._from_data(dict(zip(column_names, columns)), index=index,)
 
     @property
     def dtypes(self):
