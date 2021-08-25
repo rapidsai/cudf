@@ -47,8 +47,8 @@ class StructMethods:
 
         Examples
         --------
-        >>> import cudf, dask_cudf as dgd
-        >>> ds = dgd.from_cudf(cudf.Series(
+        >>> import cudf, dask_cudf
+        >>> ds = dask_cudf.from_cudf(cudf.Series(
         ...     [{'a': 42, 'b': 'str1', 'c': [-1]},
         ...      {'a': 0,  'b': 'str2', 'c': [400, 500]},
         ...      {'a': 7,  'b': '',     'c': []}]), npartitions=2)

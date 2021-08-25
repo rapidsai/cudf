@@ -511,7 +511,7 @@ def test_dask_struct_field_Int_Error(data):
     ],
 )
 def test_struct_explode(data):
-    expect = pd.DataFrame(data)
-    got = dgd.from_cudf(Series(data), 2).struct.explode().compute()
+    expect = Series(data).struct.explode()
+    got = dgd.from_cudf(Series(data), 2).struct.explode()
 
-    assert_eq(expect, got)
+    assert_eq(expect, got.compute())
