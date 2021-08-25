@@ -152,8 +152,9 @@ rmm::device_buffer decompress_data(datasource& source,
                                    rmm::cuda_stream_view stream)
 {
   size_t uncompressed_data_size = 0;
-  hostdevice_vector<gpu_inflate_input_s> inflate_in(meta.block_list.size());
-  hostdevice_vector<gpu_inflate_status_s> inflate_out(meta.block_list.size());
+
+  auto inflate_in  = hostdevice_vector<gpu_inflate_input_s>(meta.block_list.size());
+  auto inflate_out = hostdevice_vector<gpu_inflate_status_s>(meta.block_list.size());
 
   if (meta.codec == "deflate") {
     // Guess an initial maximum uncompressed block size
@@ -264,9 +265,11 @@ std::vector<column_buffer> decode_data(metadata& meta,
   }
 
   // Build gpu schema
-  hostdevice_vector<gpu::schemadesc_s> schema_desc(meta.schema.size());
+  auto schema_desc = hostdevice_vector<gpu::schemadesc_s>(meta.schema.size());
+
   uint32_t min_row_data_size = 0;
   int skip_field_cnt         = 0;
+
   for (size_t i = 0; i < meta.schema.size(); i++) {
     type_kind_e kind = meta.schema[i].kind;
     if (skip_field_cnt != 0) {
@@ -290,8 +293,9 @@ std::vector<column_buffer> decode_data(metadata& meta,
       }
     }
     if (kind == type_enum && !meta.schema[i].symbols.size()) { kind = type_int; }
-    schema_desc[i].kind    = kind;
-    schema_desc[i].count   = (kind == type_enum) ? 0 : (uint32_t)meta.schema[i].num_children;
+    schema_desc[i].kind = kind;
+    schema_desc[i].count =
+      (kind == type_enum) ? 0 : static_cast<uint32_t>(meta.schema[i].num_children);
     schema_desc[i].dataptr = nullptr;
     CUDF_EXPECTS(kind != type_union || meta.schema[i].num_children < 2 ||
                    (meta.schema[i].num_children == 2 &&
