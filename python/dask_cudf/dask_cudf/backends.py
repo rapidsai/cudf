@@ -259,7 +259,12 @@ def is_categorical_dtype_cudf(obj):
 
 
 try:
-    from dask.dataframe.dispatch import percentile_dispatch
+    try:
+        from dask.array.dispatch import (
+            percentile_lookup as percentile_dispatch,
+        )
+    except ImportError:
+        from dask.dataframe.dispatch import percentile_dispatch
 
     @percentile_dispatch.register((cudf.Series, cp.ndarray, cudf.Index))
     def percentile_cudf(a, q, interpolation="linear"):
