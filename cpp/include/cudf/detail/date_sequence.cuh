@@ -21,7 +21,6 @@ CUDA_DEVICE_CALLABLE Timestamp add_dateoffset(
   cudf::timestamp_scalar_device_view<Timestamp> const initial, std::size_t n, std::size_t months)
 {
   datetime::detail::add_calendrical_months_functor_impl f{};
-  // just add `n` days:
   return f(initial.value(), n * months);
 }
 
