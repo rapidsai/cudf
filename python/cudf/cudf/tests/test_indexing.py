@@ -361,7 +361,10 @@ def test_dataframe_loc_duplicate_index_scalar():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5]}, index=[1, 2, 1, 4, 2])
     gdf = cudf.DataFrame.from_pandas(pdf)
 
-    assert_eq(pdf.loc[2].sort_index(), gdf.loc[2].sort_index())
+    assert_eq(
+        pdf.loc[2].sort_values().reset_index(drop=True),
+        gdf.loc[2].sort_values().reset_index(drop=True),
+    )
 
 
 @pytest.mark.parametrize(

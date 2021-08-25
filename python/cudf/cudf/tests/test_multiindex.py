@@ -965,7 +965,10 @@ def test_multiindex_rows_with_wildcard(pdf, gdf, pdfIndex):
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     assert_eq(pdf.loc[("a",), :].sort_index(), gdf.loc[("a",), :].sort_index())
-    assert_eq(pdf.loc[(("a"), ("store")), :], gdf.loc[(("a"), ("store")), :])
+    assert_eq(
+        pdf.loc[(("a"), ("store")), :].sort_index(),
+        gdf.loc[(("a"), ("store")), :].sort_index(),
+    )
     assert_eq(
         pdf.loc[(("a"), ("store"), ("storm")), :],
         gdf.loc[(("a"), ("store"), ("storm")), :],
