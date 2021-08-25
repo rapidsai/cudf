@@ -375,6 +375,9 @@ class NumericalColumn(NumericalBaseColumn):
         else:
             col = self
 
+        if col.null_count == 0:
+            return col
+
         if method is not None:
             return super(NumericalColumn, col).fillna(fill_value, method)
 

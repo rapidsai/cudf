@@ -240,6 +240,7 @@ def compile_udf(udf, type_signature):
       An numpy type
 
     """
+    import cudf.core.udf
 
     # Check if we've already compiled a similar (but possibly distinct)
     # function before

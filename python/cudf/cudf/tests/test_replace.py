@@ -657,6 +657,7 @@ def test_fillna_method_fixed_width_non_num(data, container, method, inplace):
         pd.DataFrame(
             {"a": [1, 2, None], "b": [None, None, 5]}, index=["a", "p", "z"]
         ),
+        pd.DataFrame({"a": [1, 2, 3]}),
     ],
 )
 @pytest.mark.parametrize(
@@ -671,6 +672,7 @@ def test_fillna_method_fixed_width_non_num(data, container, method, inplace):
         {"b": pd.Series([11, 22, 33], index=["a", "p", "z"])},
         {"a": 5, "b": pd.Series([3, 4, 5], index=["a", "p", "z"])},
         {"c": 100},
+        np.nan,
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
