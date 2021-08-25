@@ -1864,6 +1864,34 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  // Test non-null-supporting equality at least once.
+  @Test
+  void testConditionalInnerJoinGatherMapsEqual() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.EQUAL,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table right = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 9) // left
+             .column(2, 3) // right
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      GatherMap[] maps = left.conditionalInnerJoinGatherMaps(right, condition);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
   @Test
   void testConditionalInnerJoinGatherMapsNulls() {
     BinaryOperation expr = new BinaryOperation(BinaryOperator.NULL_EQUAL,
