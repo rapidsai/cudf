@@ -52,7 +52,7 @@ The following table lists all of cudf types. For methods requiring dtype argumen
 
 **Struct and List datatypes**
 
-cuDF supports arbitrarily deep nested lists. Such as** ``list(list(int))``, **even list of structs or structs of lists
+cuDF supports arbitrarily deep nested lists. Such as ``list(list(int))``, even list of structs or structs of lists
 
 cuDF also supports arbitrary fields for structs - that is, it is possible to have a struct with any number of fields and any number of types that cuDF supports, even a struct of structs
 
