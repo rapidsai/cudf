@@ -42,7 +42,7 @@ class ExponentialMovingWindow(_RollingBase):
         if agg_name == 'mean':
             result = scan('ewma', sr._column, True, com=self.com, adjust=self.adjust)
         elif agg_name == 'var':
-            result = None
+            result = scan("ewmvar", sr._column, True, com=self.com, adjust=self.adjust)
         else:
             result = None
         return result

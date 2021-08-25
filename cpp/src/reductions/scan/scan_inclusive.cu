@@ -453,6 +453,19 @@ std::unique_ptr<column> ewma(
   return result;
 }
 
+
+std::unique_ptr<column> ewmvar(
+  column_view const& input, 
+  double com,
+  bool adjust,
+  rmm::cuda_stream_view stream, 
+  rmm::mr::device_memory_resource* mr) 
+{
+  std::cout << "here!" << std::endl;
+  std::unique_ptr<column> result = ewm(input, com, adjust, stream, mr);
+  return result;
+}
+
 std::unique_ptr<column> scan_inclusive(
   column_view const& input,
   std::unique_ptr<aggregation> const& agg,
