@@ -319,15 +319,15 @@ std::vector<column_buffer> decode_data(metadata& meta,
       cudf::detail::set_null_mask(out_buffers[i].null_mask(), 0, num_rows, true, stream);
     }
   }
-  rmm::device_buffer block_list(
-    meta.block_list.data(), meta.block_list.size() * sizeof(block_desc_s), stream);
+
+  auto block_list = cudf::detail::make_device_uvector_async(meta.block_list, stream);
+
   schema_desc.host_to_device(stream);
 
-  gpu::DecodeAvroColumnData(static_cast<block_desc_s*>(block_list.data()),
+  gpu::DecodeAvroColumnData(block_list,
                             schema_desc.device_ptr(),
                             global_dictionary,
                             static_cast<const uint8_t*>(block_data.data()),
-                            static_cast<uint32_t>(meta.block_list.size()),
                             static_cast<uint32_t>(schema_desc.size()),
                             meta.num_rows,
                             meta.skip_rows,
