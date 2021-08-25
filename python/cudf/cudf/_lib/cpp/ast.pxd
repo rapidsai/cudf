@@ -69,7 +69,6 @@ cdef extern from "cudf/ast/expressions.hpp" namespace "cudf::ast" nogil:
     ctypedef enum table_reference:
         LEFT "cudf::ast::table_reference::LEFT"
         RIGHT "cudf::ast::table_reference::RIGHT"
-        OUTPUT "cudf::ast::table_reference::OUTPUT"
 
     cdef cppclass literal(expression):
         # Due to https://github.com/cython/cython/issues/3198, we need to

@@ -3,7 +3,6 @@
 import ast
 from enum import Enum
 
-from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dataframe import DataFrame
 
 from cython.operator cimport dereference
@@ -72,7 +71,6 @@ class ASTOperator(Enum):
 class TableReference(Enum):
     LEFT = libcudf_ast.table_reference.LEFT
     RIGHT = libcudf_ast.table_reference.RIGHT
-    OUTPUT = libcudf_ast.table_reference.OUTPUT
 
 
 cdef class Literal(Expression):
@@ -207,34 +205,23 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
         for field in root._fields:
             value = getattr(root, field)
             if isinstance(value, ast.UnaryOp):
-                # TODO: I think here we can optimize by just calling on
-                # value.operand, need to verify.
+                # Faster to directly parse the operand and skip the op.
                 ast_traverse(value.operand, col_names, stack, nodes)
                 op = python_cudf_ast_map[type(value.op)]
                 nodes.append(stack.pop())
                 stack.append(Operation(op, nodes[-1]))
-            # TODO: The expected behavior of the below is questionable. pandas
-            # converts bitwise operators in query to logical operators, which I
-            # don't think we want. This might have to be a preprocessing of the
-            # expression string in df.query that replaces `|` with `or` and `&`
-            # with `and`.
-            elif isinstance(value, (ast.BinOp, ast.BoolOp)):
+            elif isinstance(value, (ast.BinOp, ast.BoolOp, ast.Compare)):
+                if (
+                    isinstance(value, ast.Compare)
+                    and len(value.comparators) != 1
+                ):
+                    # TODO: Can relax this requirement by unpacking the
+                    # comparison into multiple.
+                    raise ValueError("Only binary comparisons are supported.")
                 ast_traverse(value, col_names, stack, nodes)
                 op = python_cudf_ast_map[type(value.op)]
                 # TODO: This assumes that left is parsed before right, should
                 # maybe handle this more explicitly.
-                nodes.append(stack.pop())
-                nodes.append(stack.pop())
-                stack.append(Operation(op, nodes[-1], nodes[-2]))
-            elif isinstance(value, ast.Compare):
-                if len(value.comparators) != 1:
-                    # TODO: Can relax this comparison by unpacking the
-                    # comparison into multiple.
-                    raise ValueError("Only binary comparisons are supported.")
-                ast_traverse(value, col_names, stack, nodes)
-                op = python_cudf_ast_map[type(value.ops[0])]
-                # TODO: This assumes that left is parsed before comparators,
-                # should maybe handle this more explicitly.
                 nodes.append(stack.pop())
                 nodes.append(stack.pop())
                 stack.append(Operation(op, nodes[-1], nodes[-2]))
@@ -246,8 +233,8 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                 ast_traverse(value, col_names, stack, nodes)
 
 
-def evaluate_expression(Table df, Operation expr):
-    """Evaluate an Operation on a Table."""
+def evaluate_expression(Table df, Expression expr):
+    """Evaluate an Expression on a Table."""
     cdef unique_ptr[column] col = libcudf_ast.compute_column(
         df.view(),
         <libcudf_ast.expression &> dereference(expr.c_obj.get())
