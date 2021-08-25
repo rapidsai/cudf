@@ -518,11 +518,13 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   private static Stream<Arguments> createBinaryBooleanOperationParams() {
-    Boolean[] in1 = new Boolean[] { false, true, null, true, false };
-    Boolean[] in2 = new Boolean[] { true, null, null, true, false };
+    Boolean[] in1 = new Boolean[] { false, true, false, null, true, false };
+    Boolean[] in2 = new Boolean[] { true, null, null, null, true, false };
     return Stream.of(
         Arguments.of(BinaryOperator.LOGICAL_AND, in1, in2, mapArray(in1, in2, (a, b) -> a && b)),
-        Arguments.of(BinaryOperator.LOGICAL_OR, in1, in2, mapArray(in1, in2, (a, b) -> a || b)));
+        Arguments.of(BinaryOperator.LOGICAL_OR, in1, in2, mapArray(in1, in2, (a, b) -> a || b)),
+        Arguments.of(BinaryOperator.NULL_LOGICAL_AND, in1, in2, Arrays.asList(false, null, false, null, true, false)),
+        Arguments.of(BinaryOperator.NULL_LOGICAL_OR, in1, in2, Arrays.asList(true, true, null, null, true, false)));
   }
 
   @ParameterizedTest
