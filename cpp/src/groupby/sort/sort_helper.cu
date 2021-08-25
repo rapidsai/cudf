@@ -105,6 +105,9 @@ sort_groupby_helper::sort_groupby_helper(table_view const& keys,
   _struct_null_vectors = std::move(struct_null_vectors);
   _keys                = flattened_keys;
 
+  // Cannot depend on caller's sorting if the column contains nulls,
+  // and null values are to be excluded.
+  // Re-sort the data, to filter out nulls more easily.
   if (keys_pre_sorted == sorted::YES and include_null_keys == null_policy::EXCLUDE and
       has_nulls(keys)) {
     _keys_pre_sorted = sorted::NO;
