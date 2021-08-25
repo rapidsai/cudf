@@ -69,8 +69,10 @@ conditional_join(table_view const& left,
   // If none of the input columns actually contain nulls, we can still use the
   // non-nullable version of the expression evaluation code path for
   // performance, so we capture that information as well.
-  auto const nullable  = cudf::nullable(left) || cudf::nullable(right);
-  auto const has_nulls = nullable && (cudf::has_nulls(left) || cudf::has_nulls(right));
+  auto const expr_has_nulls = ast::detail::contains_null_literal(&binary_predicate);
+  auto const nullable       = cudf::nullable(left) || cudf::nullable(right) || expr_has_nulls;
+  auto const has_nulls =
+    (nullable && (cudf::has_nulls(left) || cudf::has_nulls(right))) || expr_has_nulls;
 
   auto const parser =
     ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
