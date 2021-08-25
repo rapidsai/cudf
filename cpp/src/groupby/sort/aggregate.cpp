@@ -539,10 +539,17 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
   if (cache.has_result(col_idx, agg)) { return; }
 
   auto const delta = dynamic_cast<cudf::detail::tdigest_aggregation const&>(agg).delta;
+
+  auto count_agg = make_count_aggregation();
+  operator()<aggregation::COUNT_VALID>(*count_agg);
+  column_view valid_counts = cache.get_result(col_idx, *count_agg);
+
   cache.add_result(col_idx,
                    agg,
                    detail::group_tdigest(get_sorted_values(),
                                          helper.group_offsets(stream),
+                                         helper.group_labels(stream),
+                                         valid_counts,
                                          helper.num_groups(stream),
                                          delta,
                                          stream,

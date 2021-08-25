@@ -459,6 +459,8 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
  *
  * @param values Grouped (and sorted) values to merge.
  * @param group_offsets Offsets of groups' starting points within @p values.
+ * @param group_labels 0-based ID of group that the corresponding value belongs to
+ * @param group_valid_counts Per-group counts of valid elements.
  * @param num_groups Number of groups.
  * @param delta Parameter controlling the level of compression of the tdigest. Higher
  * values result in a larger, more precise tdigest.
@@ -469,6 +471,8 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
  */
 std::unique_ptr<column> group_tdigest(column_view const& values,
                                       cudf::device_span<size_type const> group_offsets,
+                                      cudf::device_span<size_type const> group_labels,
+                                      column_view const& group_valid_counts,
                                       size_type num_groups,
                                       int delta,
                                       rmm::cuda_stream_view stream,

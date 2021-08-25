@@ -96,16 +96,11 @@ struct nearest_value_scalar_weights {
  * the cumulative weight for a given value index I is simply I+1.
  */
 struct cumulative_scalar_weight {
-  offset_type const* group_offsets;
-  size_type num_group_offsets;
+  cudf::device_span<size_type const> group_offsets;
+  cudf::device_span<size_type const> group_labels;
   std::tuple<size_type, size_type, double> operator() __device__(size_type value_index) const
   {
-    auto const group_index =
-      static_cast<size_type>(
-        thrust::upper_bound(
-          thrust::seq, group_offsets, group_offsets + num_group_offsets, value_index) -
-        group_offsets) -
-      1;
+    auto const group_index          = group_labels[value_index];
     auto const relative_value_index = value_index - group_offsets[group_index];
     return {group_index, relative_value_index, relative_value_index + 1};
   }
@@ -430,47 +425,48 @@ std::unique_ptr<column> compute_tdigests(int delta,
   return cudf::make_lists_column(num_groups, std::move(offsets), std::move(tdigests), 0, {});
 }
 
-struct weight_from_offsets {
-  cudf::device_span<size_type const> group_offsets;
-  double operator()(size_type group_index)
-  {
-    return group_offsets[group_index + 1] - group_offsets[group_index];
-  }
+struct scalar_weight {
+  size_type const* group_valid_counts;
+
+  __device__ double operator()(size_type group_index) { return group_valid_counts[group_index]; }
 };
 
 struct typed_group_tdigest {
   template <typename T, typename std::enable_if_t<cudf::is_numeric<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& col,
                                      cudf::device_span<size_type const> group_offsets,
+                                     cudf::device_span<size_type const> group_labels,
+                                     column_view const& group_valid_counts,
                                      size_type num_groups,
                                      int delta,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     // first, generate cluster weight information for each input group
-    auto total_group_weight =
-      cudf::detail::make_counting_transform_iterator(0, weight_from_offsets{group_offsets});
+    auto total_weight = cudf::detail::make_counting_transform_iterator(
+      0, scalar_weight{group_valid_counts.begin<size_type>()});
     auto [group_cluster_wl, group_num_clusters] = generate_group_cluster_limits(
-      delta, num_groups, nearest_value_scalar_weights{}, total_group_weight, stream);
+      delta, num_groups, nearest_value_scalar_weights{}, total_weight, stream);
 
     // for simple input values, the "centroids" all have a weight of 1.
     auto sorted_centroids = thrust::make_transform_iterator(col.begin<T>(), make_centroid_tuple{});
 
     // generate the final tdigest
-    return compute_tdigests(
-      delta,
-      sorted_centroids,
-      sorted_centroids + col.size(),
-      cumulative_scalar_weight{group_offsets.begin(), static_cast<size_type>(group_offsets.size())},
-      group_cluster_wl,
-      *group_num_clusters,
-      stream,
-      mr);
+    return compute_tdigests(delta,
+                            sorted_centroids,
+                            sorted_centroids + col.size(),
+                            cumulative_scalar_weight{group_offsets, group_labels},
+                            group_cluster_wl,
+                            *group_num_clusters,
+                            stream,
+                            mr);
   }
 
   template <typename T, typename std::enable_if_t<!cudf::is_numeric<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& col,
                                      cudf::device_span<size_type const> group_offsets,
+                                     cudf::device_span<size_type const> group_labels,
+                                     column_view const& group_valid_counts,
                                      size_type num_groups,
                                      int delta,
                                      rmm::cuda_stream_view stream,
@@ -484,13 +480,23 @@ struct typed_group_tdigest {
 
 std::unique_ptr<column> group_tdigest(column_view const& col,
                                       cudf::device_span<size_type const> group_offsets,
+                                      cudf::device_span<size_type const> group_labels,
+                                      column_view const& group_valid_counts,
                                       size_type num_groups,
                                       int delta,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  return cudf::type_dispatcher(
-    col.type(), typed_group_tdigest{}, col, group_offsets, num_groups, delta, stream, mr);
+  return cudf::type_dispatcher(col.type(),
+                               typed_group_tdigest{},
+                               col,
+                               group_offsets,
+                               group_labels,
+                               group_valid_counts,
+                               num_groups,
+                               delta,
+                               stream,
+                               mr);
 }
 
 std::unique_ptr<column> group_merge_tdigest(column_view const& input,
