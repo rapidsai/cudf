@@ -164,7 +164,7 @@ $ py.test -v dask_cudf                           # run dask_cudf test suite
 
 #### Building and testing the `libcudf_kafka` C++ library
 
-This section provides instructions for building and testing C++ libcudf_kafka. Thus, C++ libcudf_kafka only contributor will be all set after following instructions below:
+This section provides instructions for building and testing C++ libcudf_kafka.
 
 - First, build the `libcudf` C++ library following the steps above
 
