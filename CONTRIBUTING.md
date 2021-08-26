@@ -190,7 +190,7 @@ $ python setup.py develop
 
 #### Python custreamz contributors:
 
-- First, build C++ `libcudf`, C++ `libcudf_kafka`, and Python `cudf_kafka` following the steps above
+- First, build `libcudf`, `libcudf_kafka`, and `cudf_kafka` following the steps above
 
 - To install in edit/develop mode the `custreamz` python package:
 ```bash
