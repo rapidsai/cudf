@@ -1259,7 +1259,8 @@ def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
     else:
         pres = pd.concat([df1, df2])
         gres = cudf.concat([cudf.from_pandas(df1), cudf.from_pandas(df2)])
-        assert_eq(cudf.from_pandas(pres), gres)
+        # Pandas 1.3.2+ returns mixed `object` dtype result.
+        assert_eq(cudf.from_pandas(pres.astype(gres.dtypes)), gres)
 
 
 def test_dataframe_concat_different_column_types():
@@ -1767,12 +1768,16 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
 
     for i in range(num_cols):
         colname = string.ascii_lowercase[i]
-        data = pd.Series(np.random.randint(0, 26, num_rows).astype(dtype))
+        data = pd.Series(
+            np.random.randint(0, 26, num_rows).astype(dtype),
+            dtype=pd.BooleanDtype() if dtype == "bool" else None,
+        )
         if nulls == "some":
             idx = np.random.choice(
                 num_rows, size=int(num_rows / 2), replace=False
             )
-            data[idx] = null_rep
+            if len(idx):
+                data[idx] = null_rep
         elif nulls == "all":
             data[:] = null_rep
         pdf[colname] = data
