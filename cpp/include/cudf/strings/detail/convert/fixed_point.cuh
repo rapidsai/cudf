@@ -17,7 +17,7 @@
 #include <thrust/optional.h>
 #include <thrust/pair.h>
 
-#include <type_traits>
+#include <cuda/std/type_traits>
 
 namespace cudf {
 namespace strings {
@@ -137,7 +137,7 @@ __device__ DecimalType parse_decimal(char const* iter, char const* iter_end, int
   // if string begins with a sign, continue with next character
   if (sign != 0) ++iter;
 
-  using UnsignedDecimalType = std::make_unsigned_t<DecimalType>;
+  using UnsignedDecimalType = cuda::std::make_unsigned_t<DecimalType>;
   auto [value, exp_offset]  = parse_integer<UnsignedDecimalType>(iter, iter_end);
   if (value == 0) { return DecimalType{0}; }
 

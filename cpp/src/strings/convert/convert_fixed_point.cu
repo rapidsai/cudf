@@ -37,6 +37,8 @@
 #include <thrust/optional.h>
 #include <thrust/transform.h>
 
+#include <cuda/std/type_traits>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -97,7 +99,7 @@ struct string_to_decimal_check_fn {
 
     auto const iter_end = d_str.data() + d_str.size_bytes();
 
-    using UnsignedDecimalType = std::make_unsigned_t<DecimalType>;
+    using UnsignedDecimalType = cuda::std::make_unsigned_t<DecimalType>;
     auto [value, exp_offset]  = parse_integer<UnsignedDecimalType>(iter, iter_end);
 
     // only exponent notation is expected here
