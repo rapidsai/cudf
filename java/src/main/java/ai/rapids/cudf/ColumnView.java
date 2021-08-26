@@ -1369,10 +1369,28 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
   }
 
+  /**
+   * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
+   * a t-digest aggregation.
+   *
+   * @param percentiles Required percentiles [0,1]
+   * @return the percentiles as doubles, in the same order passed in
+   */
   public final ColumnVector approxPercentile(double[] percentiles) {
     try (ColumnVector cv = ColumnVector.fromDoubles(percentiles)) {
-      return new ColumnVector(approxPercentile(getNativeView(), cv.getNativeView()));
+      return approxPercentile(cv);
     }
+  }
+
+  /**
+   * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
+   * a t-digest aggregation.
+   *
+   * @param percentiles Column containing percentiles [0,1]
+   * @return the percentiles as doubles, in the same order passed in
+   */
+  public final ColumnVector approxPercentile(ColumnVector percentiles) {
+    return new ColumnVector(approxPercentile(getNativeView(), percentiles.getNativeView()));
   }
 
   /**
