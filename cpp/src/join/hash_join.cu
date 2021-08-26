@@ -41,7 +41,7 @@ class row_contains_null {
 
   __device__ __inline__ bool operator()(const pair_type& pair) const noexcept
   {
-    return !_row_bitmask || cudf::bit_is_set(_row_bitmask, pair.second);
+    return _row_bitmask == nullptr or cudf::bit_is_set(_row_bitmask, pair.second);
   }
 
  private:
