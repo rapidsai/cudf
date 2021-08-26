@@ -370,7 +370,7 @@ struct expression_evaluator {
   }
 
   /**
-   * @brief Callable to perform a unary operation.
+   * @brief Callable to perform a binary operation.
    *
    * @tparam LHS Type of the left input value.
    * @tparam RHS Type of the right input value.
@@ -404,23 +404,6 @@ struct expression_evaluator {
                             typed_lhs,
                             typed_rhs,
                             output);
-  }
-
-  template <typename OperatorFunctor,
-            typename LHS,
-            typename RHS,
-            typename OutputType,
-            std::enable_if_t<!detail::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  __device__ void operator()(OutputType& output_object,
-                             cudf::size_type left_row_index,
-                             cudf::size_type right_row_index,
-                             detail::device_data_reference const lhs,
-                             detail::device_data_reference const rhs,
-                             detail::device_data_reference const output,
-                             cudf::size_type output_row_index,
-                             ast_operator const op) const
-  {
-    cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
   }
 
   /**
