@@ -128,7 +128,7 @@ $ # for other contributors
 $./build.sh libcudf                     
 ```
 
-#### Building and testing the `cudf` Python library
+#### Building, installing, and testing the `cudf` Python library
 
 - First, build the `libcudf` C++ library following the steps above
 
