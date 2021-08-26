@@ -26,6 +26,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/json.hpp>
@@ -405,26 +406,25 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
     std::visit([](const auto& dtypes) { return dtypes.empty(); }, reader_opts.get_dtypes());
 
   if (!has_to_infer_column_types) {
-    return std::visit(cudf::detail::visitor_overload{
-                        [&](const std::vector<data_type>& dtypes) {
-                          CUDF_EXPECTS(dtypes.size() == metadata_.column_names.size(),
-                                       "Must specify types for all columns");
-                          return dtypes;
-                        },
-                        [&](const std::map<std::string, data_type>& dtypes) {
-                          std::vector<data_type> sorted_dtypes;
-                          std::transform(std::cbegin(metadata_.column_names),
-                                         std::cend(metadata_.column_names),
-                                         std::back_inserter(sorted_dtypes),
-                                         [&](auto const& column_name) {
-                                           auto const it = dtypes.find(column_name);
-                                           CUDF_EXPECTS(it != dtypes.end(),
-                                                        "Must specify types for all columns");
-                                           return it->second;
-                                         });
-                          return sorted_dtypes;
-                        }},
-                      options_.get_dtypes());
+    return std::visit(
+      cudf::detail::visitor_overload{
+        [&](const std::vector<data_type>& dtypes) {
+          CUDF_EXPECTS(dtypes.size() == column_names.size(), "Must specify types for all columns");
+          return dtypes;
+        },
+        [&](const std::map<std::string, data_type>& dtypes) {
+          std::vector<data_type> sorted_dtypes;
+          std::transform(std::cbegin(column_names),
+                         std::cend(column_names),
+                         std::back_inserter(sorted_dtypes),
+                         [&](auto const& column_name) {
+                           auto const it = dtypes.find(column_name);
+                           CUDF_EXPECTS(it != dtypes.end(), "Must specify types for all columns");
+                           return it->second;
+                         });
+          return sorted_dtypes;
+        }},
+      reader_opts.get_dtypes());
   } else {
     CUDF_EXPECTS(rec_starts.size() != 0, "No data available for data type inference.\n");
     auto const num_columns       = column_names.size();
