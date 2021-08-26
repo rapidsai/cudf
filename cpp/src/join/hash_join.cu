@@ -77,11 +77,6 @@ void build_join_hash_table(cudf::table_view const& build,
   CUDF_EXPECTS(0 != build_device_table->num_columns(), "Selected build dataset is empty");
   CUDF_EXPECTS(0 != build_device_table->num_rows(), "Build side table has no rows");
 
-  auto const row_bitmask = (compare_nulls == null_equality::EQUAL)
-                             ? rmm::device_buffer{0, stream}
-                             : cudf::detail::bitmask_and(build, stream);
-  row_contains_null pred{static_cast<bitmask_type const*>(row_bitmask.data())};
-
   row_hash hash_build{*build_device_table};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_build, empty_key_sentinel};
@@ -90,7 +85,14 @@ void build_join_hash_table(cudf::table_view const& build,
   auto iter = thrust::make_transform_iterator(first, pair_func);
 
   size_type const build_table_num_rows{build_device_table->num_rows()};
-  hash_table.insert_if(iter, iter + build_table_num_rows, pred, stream.value());
+  if (compare_nulls == null_equality::EQUAL) {
+    hash_table.insert(iter, iter + build_table_num_rows, stream.value());
+  } else {
+    auto const row_bitmask = cudf::detail::bitmask_and(build, stream);
+    row_contains_null pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+
+    hash_table.insert_if(iter, iter + build_table_num_rows, pred, stream.value());
+  }
 }
 
 /**
