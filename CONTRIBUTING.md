@@ -92,7 +92,7 @@ conda activate cudf_dev
 ```
 - For other CUDA versions, check the corresponding cudf_dev_cuda*.yml file in conda/environments
 
-### Build cuDF from Source
+### Build cuDF from source
 
 - A `build.sh` script is provided in `$CUDF_HOME`. Running the script with no additional arguments will install the `libcudf`, `cudf` and `dask_cudf` libraries. By default, the libraries are installed to the `$CONDA_PREFIX` directory. To install into a different location, set the location in `$INSTALL_PREFIX`. Finally, note that the script depends on the `nvcc` executable being on your path, or defined in `$CUDACXX`.
 ```bash
