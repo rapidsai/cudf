@@ -65,7 +65,7 @@ static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t*& cur, 
  *
  * @return data pointer at the end of the row (start of next row)
  */
-static const uint8_t* __device__
+static uint8_t const* __device__
 avro_decode_row(schemadesc_s const* schema,
                 schemadesc_s* schema_g,
                 uint32_t schema_len,
@@ -231,7 +231,7 @@ extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
   gpuDecodeAvroColumnData(device_span<block_desc_s const> blocks,
                           schemadesc_s* schema_g,
                           device_span<string_index_pair const> global_dictionary,
-                          const uint8_t* avro_data,
+                          uint8_t const* avro_data,
                           uint32_t schema_len,
                           uint32_t min_row_size,
                           size_t max_rows,
@@ -312,7 +312,7 @@ extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
 void DecodeAvroColumnData(device_span<block_desc_s const> blocks,
                           schemadesc_s* schema,
                           device_span<string_index_pair const> global_dictionary,
-                          const uint8_t* avro_data,
+                          uint8_t const* avro_data,
                           uint32_t schema_len,
                           size_t max_rows,
                           size_t first_row,
