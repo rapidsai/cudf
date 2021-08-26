@@ -25,6 +25,13 @@ namespace cudf {
 namespace io {
 namespace text {
 
+class device_data_chunk {
+ public:
+  virtual char const* data() const                 = 0;
+  virtual std::size_t size() const                 = 0;
+  virtual operator device_span<char const>() const = 0;
+};
+
 /**
  * @brief a reader capable of producing views over device memory.
  *
@@ -51,8 +58,8 @@ class data_chunk_reader {
    * reader reaches end of underlying data source. Returned data must be accessed in stream order
    * relative to the specified @param stream.
    */
-  virtual device_span<char const> get_next_chunk(std::size_t size,
-                                                 rmm::cuda_stream_view stream) = 0;
+  virtual std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t size,
+                                                            rmm::cuda_stream_view stream) = 0;
 };
 
 /**
