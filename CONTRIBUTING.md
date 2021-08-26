@@ -117,7 +117,7 @@ The general workflow for building and testing the C++ and Python components of c
 
 #### Building and testing the `libcudf` C++ library
 
-This section provides instructions for building and testing C++ libcudf. Thus, C++ libcudf only contributor will be all set after following instructions below:
+This section provides instructions for building and testing C++ libcudf.
  
 ```bash
 $ cd $CUDF_HOME
