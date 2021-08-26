@@ -138,7 +138,7 @@ $ make test
 
 - First, build the `libcudf` C++ library following the steps above
 
-- To build and install in edit/develop `cudf` python package in edit/develop mode:
+- To build and install in edit/develop `cudf` python package:
 ```bash
 $ cd $CUDF_HOME/python/cudf
 $ python setup.py build_ext --inplace
