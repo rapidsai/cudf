@@ -70,9 +70,10 @@ struct expression_result {
   // used, whereas passing it as a parameter keeps it in registers for fast
   // access at the point where indexing occurs.
   template <typename Element>
-  __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
+  __device__ void set_value(cudf::size_type index,
+                            possibly_null_value_t<Element, has_nulls> const& result)
   {
-    subclass()->set_value();
+    subclass()->set_value(index, result);
   }
 
   __device__ bool is_valid() const { subclass()->is_valid(); }
@@ -96,7 +97,8 @@ struct value_expression_result
   __device__ value_expression_result() {}
 
   template <typename Element>
-  __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
+  __device__ void set_value(cudf::size_type index,
+                            possibly_null_value_t<Element, has_nulls> const& result)
   {
     if constexpr (std::is_same_v<Element, T>) {
       _obj = result;
@@ -154,7 +156,8 @@ struct mutable_column_expression_result
   __device__ mutable_column_expression_result(mutable_column_device_view& obj) : _obj(obj) {}
 
   template <typename Element>
-  __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
+  __device__ void set_value(cudf::size_type index,
+                            possibly_null_value_t<Element, has_nulls> const& result)
   {
     if constexpr (has_nulls) {
       if (result.has_value()) {
@@ -278,47 +281,44 @@ struct expression_evaluator {
    */
   template <typename Element, CUDF_ENABLE_IF(column_device_view::has_element_accessor<Element>())>
   __device__ possibly_null_value_t<Element, has_nulls> resolve_input(
-    detail::device_data_reference device_data_reference,
+    detail::device_data_reference const& input_reference,
     cudf::size_type left_row_index,
     thrust::optional<cudf::size_type> right_row_index = {}) const
   {
-    auto const data_index = device_data_reference.data_index;
-    auto const ref_type   = device_data_reference.reference_type;
     // TODO: Everywhere in the code assumes that the table reference is either
     // left or right. Should we error-check somewhere to prevent
     // table_reference::OUTPUT from being specified?
     using ReturnType = possibly_null_value_t<Element, has_nulls>;
-    if (ref_type == detail::device_data_reference_type::COLUMN) {
+    if (input_reference.reference_type == detail::device_data_reference_type::COLUMN) {
       // If we have nullable data, return an empty nullable type with no value if the data is null.
-      auto const& table =
-        (device_data_reference.table_source == table_reference::LEFT) ? left : right;
+      auto const& table = (input_reference.table_source == table_reference::LEFT) ? left : right;
       // Note that the code below assumes that a right index has been passed in
-      // any case where device_data_reference.table_source == table_reference::RIGHT.
+      // any case where input_reference.table_source == table_reference::RIGHT.
       // Otherwise, behavior is undefined.
-      auto const row_index = (device_data_reference.table_source == table_reference::LEFT)
-                               ? left_row_index
-                               : *right_row_index;
+      auto const row_index =
+        (input_reference.table_source == table_reference::LEFT) ? left_row_index : *right_row_index;
       if constexpr (has_nulls) {
-        return table.column(data_index).is_valid(row_index)
-                 ? ReturnType(table.column(data_index).element<Element>(row_index))
+        return table.column(input_reference.data_index).is_valid(row_index)
+                 ? ReturnType(table.column(input_reference.data_index).element<Element>(row_index))
                  : ReturnType();
 
       } else {
-        return ReturnType(table.column(data_index).element<Element>(row_index));
+        return ReturnType(table.column(input_reference.data_index).element<Element>(row_index));
       }
-    } else if (ref_type == detail::device_data_reference_type::LITERAL) {
+    } else if (input_reference.reference_type == detail::device_data_reference_type::LITERAL) {
       if constexpr (has_nulls) {
-        return plan.literals[data_index].is_valid()
-                 ? ReturnType(plan.literals[data_index].value<Element>())
+        return plan.literals[input_reference.data_index].is_valid()
+                 ? ReturnType(plan.literals[input_reference.data_index].value<Element>())
                  : ReturnType();
 
       } else {
-        return ReturnType(plan.literals[data_index].value<Element>());
+        return ReturnType(plan.literals[input_reference.data_index].value<Element>());
       }
     } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
       // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
       // Using a temporary variable ensures that the compiler knows the result is aligned
-      IntermediateDataType<has_nulls> intermediate = thread_intermediate_storage[data_index];
+      IntermediateDataType<has_nulls> intermediate =
+        thread_intermediate_storage[input_reference.data_index];
       ReturnType tmp;
       memcpy(&tmp, &intermediate, sizeof(ReturnType));
       return tmp;
@@ -330,7 +330,7 @@ struct expression_evaluator {
   template <typename Element,
             CUDF_ENABLE_IF(not column_device_view::has_element_accessor<Element>())>
   __device__ possibly_null_value_t<Element, has_nulls> resolve_input(
-    detail::device_data_reference device_data_reference,
+    detail::device_data_reference const& device_data_reference,
     cudf::size_type left_row_index,
     thrust::optional<cudf::size_type> right_row_index = {}) const
   {
@@ -355,8 +355,8 @@ struct expression_evaluator {
   template <typename Input, typename OutputType>
   __device__ void operator()(OutputType& output_object,
                              cudf::size_type const input_row_index,
-                             detail::device_data_reference const input,
-                             detail::device_data_reference const output,
+                             detail::device_data_reference const& input,
+                             detail::device_data_reference const& output,
                              cudf::size_type const output_row_index,
                              ast_operator const op) const
   {
@@ -389,9 +389,9 @@ struct expression_evaluator {
   __device__ void operator()(OutputType& output_object,
                              cudf::size_type const left_row_index,
                              cudf::size_type const right_row_index,
-                             detail::device_data_reference const lhs,
-                             detail::device_data_reference const rhs,
-                             detail::device_data_reference const output,
+                             detail::device_data_reference const& lhs,
+                             detail::device_data_reference const& rhs,
+                             detail::device_data_reference const& output,
                              cudf::size_type const output_row_index,
                              ast_operator const op) const
   {
@@ -440,6 +440,17 @@ struct expression_evaluator {
                            cudf::size_type const right_row_index,
                            cudf::size_type const output_row_index)
   {
+    // TODO: Attempting to pass a reference to the device data reference is
+    // significantly faster for the non-null code path, but actually
+    // _degrades_ performance for the nullable code path. The reasons are
+    // likely due to subtle tradeoffs in what is getting put into registers
+    // when passing around raw values vs optionals, so for now I'm
+    // referencing shared mem directly for the non-null code path but copying
+    // locally for the nullable code path.
+    using device_data_reference_t = std::conditional_t<has_nulls,
+                                                       detail::device_data_reference const,
+                                                       detail::device_data_reference const&>;
+
     cudf::size_type operator_source_index{0};
     for (cudf::size_type operator_index = 0; operator_index < plan.operators.size();
          ++operator_index) {
@@ -448,9 +459,9 @@ struct expression_evaluator {
       auto const arity = ast_operator_arity(op);
       if (arity == 1) {
         // Unary operator
-        auto const input =
+        device_data_reference_t input =
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        auto const output =
+        device_data_reference_t output =
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto input_row_index =
           input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
@@ -464,11 +475,11 @@ struct expression_evaluator {
                         op);
       } else if (arity == 2) {
         // Binary operator
-        auto const lhs =
+        device_data_reference_t lhs =
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        auto const rhs =
+        device_data_reference_t rhs =
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        auto const output =
+        device_data_reference_t output =
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
         type_dispatcher(lhs.data_type,
                         detail::single_dispatch_binary_operator{},
@@ -522,12 +533,11 @@ struct expression_evaluator {
               typename OutputType,
               CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
     __device__ void resolve_output(OutputType& output_object,
-                                   detail::device_data_reference const device_data_reference,
+                                   detail::device_data_reference const& device_data_reference,
                                    cudf::size_type const row_index,
-                                   possibly_null_value_t<Element, has_nulls> const result) const
+                                   possibly_null_value_t<Element, has_nulls> const& result) const
     {
-      auto const ref_type = device_data_reference.reference_type;
-      if (ref_type == detail::device_data_reference_type::COLUMN) {
+      if (device_data_reference.reference_type == detail::device_data_reference_type::COLUMN) {
         output_object.template set_value<Element>(row_index, result);
       } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
         // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
@@ -542,9 +552,9 @@ struct expression_evaluator {
               typename OutputType,
               CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
     __device__ void resolve_output(OutputType& output_object,
-                                   detail::device_data_reference const device_data_reference,
+                                   detail::device_data_reference const& device_data_reference,
                                    cudf::size_type const row_index,
-                                   possibly_null_value_t<Element, has_nulls> const result) const
+                                   possibly_null_value_t<Element, has_nulls> const& result) const
     {
       cudf_assert(false && "Invalid type in resolve_output.");
     }
@@ -584,8 +594,8 @@ struct expression_evaluator {
                                           possibly_null_value_t<Input, has_nulls>>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
-                               possibly_null_value_t<Input, has_nulls> const input,
-                               detail::device_data_reference const output) const
+                               possibly_null_value_t<Input, has_nulls> const& input,
+                               detail::device_data_reference const& output) const
     {
       // The output data type is the same whether or not nulls are present, so
       // pull from the non-nullable operator.
@@ -601,8 +611,8 @@ struct expression_evaluator {
                                            possibly_null_value_t<Input, has_nulls>>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
-                               possibly_null_value_t<Input, has_nulls> const input,
-                               detail::device_data_reference const output) const
+                               possibly_null_value_t<Input, has_nulls> const& input,
+                               detail::device_data_reference const& output) const
     {
       cudf_assert(false && "Invalid unary dispatch operator for the provided input.");
     }
@@ -641,9 +651,9 @@ struct expression_evaluator {
                 nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
-                               possibly_null_value_t<LHS, has_nulls> const lhs,
-                               possibly_null_value_t<RHS, has_nulls> const rhs,
-                               detail::device_data_reference const output) const
+                               possibly_null_value_t<LHS, has_nulls> const& lhs,
+                               possibly_null_value_t<RHS, has_nulls> const& rhs,
+                               detail::device_data_reference const& output) const
     {
       // The output data type is the same whether or not nulls are present, so
       // pull from the non-nullable operator.
@@ -662,9 +672,9 @@ struct expression_evaluator {
                                             possibly_null_value_t<RHS, has_nulls>>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
-                               possibly_null_value_t<LHS, has_nulls> const lhs,
-                               possibly_null_value_t<RHS, has_nulls> const rhs,
-                               detail::device_data_reference output) const
+                               possibly_null_value_t<LHS, has_nulls> const& lhs,
+                               possibly_null_value_t<RHS, has_nulls> const& rhs,
+                               detail::device_data_reference const& output) const
     {
       cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
     }
