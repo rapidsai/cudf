@@ -349,7 +349,7 @@ std::size_t hash_join::hash_join_impl::inner_join_size(cudf::table_view const& p
   CUDF_FUNC_RANGE();
 
   // Return directly if build table is empty
-  if (!_hash_table) { return 0; }
+  if (_hash_table == nullptr) { return 0; }
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
     probe, {}, {}, structs::detail::column_nullability::FORCE);
@@ -369,7 +369,7 @@ std::size_t hash_join::hash_join_impl::left_join_size(cudf::table_view const& pr
   CUDF_FUNC_RANGE();
 
   // Trivial left join case - exit early
-  if (!_hash_table) { return probe.num_rows(); }
+  if (_hash_table == nullptr) { return probe.num_rows(); }
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
     probe, {}, {}, structs::detail::column_nullability::FORCE);
@@ -390,7 +390,7 @@ std::size_t hash_join::hash_join_impl::full_join_size(cudf::table_view const& pr
   CUDF_FUNC_RANGE();
 
   // Trivial left join case - exit early
-  if (!_hash_table) { return probe.num_rows(); }
+  if (_hash_table == nullptr) { return probe.num_rows(); }
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
     probe, {}, {}, structs::detail::column_nullability::FORCE);
@@ -449,7 +449,7 @@ hash_join::hash_join_impl::probe_join_indices(cudf::table_view const& probe,
                                               rmm::mr::device_memory_resource* mr) const
 {
   // Trivial left join case - exit early
-  if (!_hash_table && JoinKind != cudf::detail::join_kind::INNER_JOIN) {
+  if (_hash_table == nullptr and JoinKind != cudf::detail::join_kind::INNER_JOIN) {
     return get_trivial_left_join_indices(probe, stream, mr);
   }
 
