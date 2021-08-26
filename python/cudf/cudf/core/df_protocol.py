@@ -96,14 +96,15 @@ def convert_column_to_cupy_ndarray(col : ColumnObject, copy : bool = False) -> n
     if col.offset != 0:
         raise NotImplementedError("column.offset > 0 not handled yet")
 
-    if col.describe_null[0] not in (0, 1):
-        raise NotImplementedError("Null values represented as masks or "
-                                  "sentinel values not handled yet")
+    # if col.describe_null[0] not in (0, 1):
+    #     raise NotImplementedError("Null values represented as masks or "
+    #                               "sentinel values not handled yet")
 
     _buffer, _dtype = col.get_data_buffer()
-    return buffer_to_cupy_ndarray(_buffer, _dtype, copy=copy)
+    _mask_buffer = col.get_mask()
+    return buffer_to_cupy_ndarray(_buffer, _dtype, _mask_buffer, copy=copy)
 
-def buffer_to_cupy_ndarray(_buffer, _dtype, copy : bool = False) -> cp.ndarray:
+def buffer_to_cupy_ndarray(_buffer, _dtype, _mask_buffer = None, copy : bool = False) -> cp.ndarray:
     if _buffer.__dlpack_device__()[0] == 2: # dataframe is on GPU/CUDA
         x = cp.fromDlpack(_buffer.__dlpack__())
 
@@ -158,7 +159,8 @@ def convert_categorical_column(col : ColumnObject, copy:bool=False) :
     #    codes = col._col.values.codes
     categories = cp.asarray(list(mapping.values()))
     codes_buffer, codes_dtype = col.get_data_buffer()
-    codes = buffer_to_cupy_ndarray(codes_buffer, codes_dtype, copy=copy)
+    _mask_buffer = col.get_mask()
+    codes = buffer_to_cupy_ndarray(codes_buffer, codes_dtype, _mask_buffer, copy=copy)
     values = categories[codes]
 
     # Seems like Pandas can only construct with non-null values, so need to
@@ -513,19 +515,21 @@ class _CuDFColumn:
         _k = _DtypeKind
         kind = self.dtype[0]
         value = None
-        if kind == _k.FLOAT:
-            null = 1  # np.nan
-        elif kind == _k.DATETIME:
-            null = 1  # np.datetime64('NaT')
-        elif kind in (_k.INT, _k.UINT, _k.BOOL):
-            # TODO: check if extension dtypes are used once support for them is
-            #       implemented in this procotol code
-            null = 0  # integer and boolean dtypes are non-nullable
-        elif kind == _k.CATEGORICAL:
-            # Null values for categoricals are stored as `-1` sentinel values
-            # in the category date (e.g., `col.cat.codes` is uint8 np.ndarray at least)
-            null = 2
-            value = -1
+        if kind in (_k.INT, _k.UINT, _k.FLOAT, _k.CATEGORICAL):
+            null = 3
+        # if kind == _k.FLOAT:
+        #     null = 1  # np.nan
+        # elif kind == _k.DATETIME:
+        #     null = 1  # np.datetime64('NaT')
+        # elif kind in (_k.INT, _k.UINT, _k.BOOL):
+        #     # TODO: check if extension dtypes are used once support for them is
+        #     #       implemented in this procotol code
+        #     null = 0  # integer and boolean dtypes are non-nullable
+        # elif kind == _k.CATEGORICAL:
+        #     # Null values for categoricals are stored as `-1` sentinel values
+        #     # in the category date (e.g., `col.values.codes` is int8 np.ndarray)
+        #     null = 2
+        #     value = -1
         else:
             raise NotImplementedError(f'Data type {self.dtype} not yet supported')
 
@@ -562,13 +566,13 @@ class _CuDFColumn:
         """
         _k = _DtypeKind
         if self.dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.BOOL):
-            buffer = _CuDFBuffer(cp.array(self._col.to_gpu_array(), copy=False))
+            buffer = _CuDFBuffer(cp.array(self._col.fillna(0).to_gpu_array(), copy=False))
             dtype = self.dtype
         elif self.dtype[0] == _k.CATEGORICAL:
             _, value = self.describe_null
             codes = self._col.cat.codes
             # handling null/NaN
-            buffer = _CuDFBuffer(cp.array(codes.fillna(100), copy=False))
+            buffer = _CuDFBuffer(cp.array(codes.fillna(0), copy=False))
             dtype = self._dtype_from_cudfdtype(codes.dtype)
         else:
             raise NotImplementedError(f"Data type {self._col.dtype} not handled yet")
@@ -582,14 +586,27 @@ class _CuDFColumn:
         Raises RuntimeError if null representation is not a bit or byte mask.
         """
         null, value = self.describe_null
+        buffer = None
         if null == 0:
             msg = "This column is non-nullable so does not have a mask"
         elif null == 1:
             msg = "This column uses NaN as null so does not have a separate mask"
+
+        elif null == 3:
+            
+            _k = _DtypeKind
+            if self.dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.BOOL):
+                buffer = _CuDFBuffer(cp.array(self._col.nullmask, copy=False))
+            elif self.dtype[0] == _k.CATEGORICAL:
+                codes = self._col.cat.codes.nullmask
+                # handling null/NaN
+                buffer = _CuDFBuffer(cp.array(codes, copy=False))
+
         else:
             raise NotImplementedError('See self.describe_null')
 
-        raise RuntimeError(msg)
+        return buffer
+
 
     # def get_children(self) -> Iterable[Column]:
     #     """
@@ -635,13 +652,13 @@ class _CuDFDataFrame:
         return self._df.columns.tolist()
 
     def get_column(self, i: int) -> _CuDFColumn:
-        return _CuDFColumn(self._df.iloc[:, i])
+        return _CuDFColumn(self._df.iloc[:, i], self._nan_as_null)
 
     def get_column_by_name(self, name: str) -> _CuDFColumn:
-        return _CuDFColumn(self._df[name])
+        return _CuDFColumn(self._df[name], self._nan_as_null)
 
     def get_columns(self) -> Iterable[_CuDFColumn]:
-        return [_CuDFColumn(self._df[name]) for name in self._df.columns]
+        return [_CuDFColumn(self._df[name], self._nan_as_null) for name in self._df.columns]
 
     def select_columns(self, indices: Sequence[int]) -> '_CuDFDataFrame':
         if not isinstance(indices, collections.Sequence):
@@ -664,7 +681,7 @@ class _CuDFDataFrame:
         if not isinstance(names, collections.Sequence):
             raise ValueError("`names` is not a sequence")
 
-        return _CuDFDataFrame(self._df.loc[:, names])
+        return _CuDFDataFrame(self._df.loc[:, names], self._nan_as_null)
 
     def get_chunks(self, n_chunks : Optional[int] = None) -> Iterable['_CuDFDataFrame']:
         """

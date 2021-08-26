@@ -83,6 +83,15 @@ def test_categorical_dtype():
     _test_from_dataframe_equals(cdf.__dataframe__(), copy=False)
     _test_from_dataframe_equals(cdf.__dataframe__(), copy=True)
 
+def test_NA_int_dtype():
+    data_int = dict(a=[1, None, 3], b=[9, 10, None])
+    _test_datatype(data_int)
+
+# def test_NA2_int_dtype():
+#     data_int = dict(a=[1, None, 3, None, 5], b=[9, 10, None, 7, 8])
+#     _test_datatype(data_int)
+
+
 # def test_bool_dtype():
 #     data_bool = dict(a=[True, True, False], b=[False, True, False])
 #     _datatype(data_bool)
