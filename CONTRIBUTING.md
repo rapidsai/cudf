@@ -111,11 +111,11 @@ cd $CUDF_HOME
 $ ./build.sh --help            
 ```
 
-### Install and Test cuDF for contributors
+### Build, Install and Test cuDF libraries for contributors
 
-The general workflow for building and testing the C++ and Python components of cuDF are provided below. Please also see the last section about [code formatting](###code-formatting).
+The general workflow is provided below. Please, also see the last section about [code formatting](###code-formatting).
 
-#### Building and testing the `libcudf` C++ library
+#### `libcudf` (C++)
 
 If you're only interested in building the library (and not the unit tests):
  
@@ -134,7 +134,7 @@ To run the tests:
 $ make test                                      
 ```
 
-#### Building, installing, and testing the `cudf` Python library
+#### `cudf` (Python)
 
 - First, build the `libcudf` C++ library following the steps above
 
@@ -151,7 +151,7 @@ $ cd $CUDF_HOME/python
 $ py.test -v cudf/cudf/tests
 ```
 
-#### Installing and testing the `dask-cudf` Python library
+#### `dask-cudf` (Python)
 
 - First, build the `libcudf` C++ and `cudf` Python libraries following the steps above
 
@@ -168,7 +168,7 @@ $ cd $CUDF_HOME/python
 $ py.test -v dask_cudf
 ```
 
-#### Building and testing the `libcudf_kafka` C++ library
+#### `libcudf_kafka` (C++)
 
 If you're only interested in building the library (and not the unit tests):
  
@@ -187,9 +187,9 @@ To run the tests:
 $ make test                                      
 ```
 
-#### Python cudf-kafka contributors:
+#### `cudf-kafka` (Python)
 
-- First, build the `libcudf` and `libcudf_kafka` C++ libraries following the steps above
+- First, build the `libcudf` and `libcudf_kafka` following the steps above
 
 - To install in edit/develop mode the `cudf-kafka` python package:
 ```bash
@@ -198,7 +198,7 @@ $ python setup.py build_ext --inplace
 $ python setup.py develop
 ```
 
-#### Python custreamz contributors:
+#### `custreamz` (Python)
 
 - First, build `libcudf`, `libcudf_kafka`, and `cudf_kafka` following the steps above
 
@@ -215,7 +215,7 @@ $ cd $CUDF_HOME/python
 $ py.test -v custreamz
 ```
 
-#### Java contributors:
+#### `cudf` (Java):
 
 - First, build the `libcudf` C++ library following the steps above
 
