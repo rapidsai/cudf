@@ -147,7 +147,7 @@ $ py.test -v cudf/cudf/tests                     # run cudf test suite
 
 #### Installing and testing the `dask-cudf` Python library
 
-- Requirements : `C++ libcudf`, `Python cudf`
+- First, build the `libcudf` C++ and `cudf` Python libraries following the steps above
 
 - To install in edit/develop mode the `dask-cudf` python package:
 ```bash
@@ -166,7 +166,7 @@ $ py.test -v dask_cudf                           # run dask_cudf test suite
 
 This section provides instructions for building and testing C++ libcudf_kafka. Thus, C++ libcudf_kafka only contributor will be all set after following instructions below:
 
-- Requirements : `C++ libcudf`
+- First, build the `libcudf` C++ library following the steps above
 
 ```bash
 $ cd $CUDF_HOME
@@ -179,7 +179,7 @@ $./build.sh libcudf_kafka
 
 #### Python cudf-kafka contributors:
 
-- Requirements : `C++ libcudf`, `C++ libcudf_kafka`
+- First, build the `libcudf` and `libcudf_kafka` C++ libraries following the steps above
 
 - To install in edit/develop mode the `cudf-kafka` python package:
 ```bash
@@ -190,7 +190,7 @@ $ python setup.py develop
 
 #### Python custreamz contributors:
 
-- Requirements : `C++ libcudf`, `C++ libcudf_kafka`, `Python cudf_kafka`
+- First, build C++ `libcudf`, C++ `libcudf_kafka`, and Python `cudf_kafka` following the steps above
 
 - To install in edit/develop mode the `custreamz` python package:
 ```bash
@@ -207,7 +207,7 @@ $ py.test -v custreamz                           # run custreamz test suite
 
 #### Java contributors:
 
-- Requirements : `C++ libcudf`
+- First, build the `libcudf` C++ library following the steps above
 
 Please refer to [Java README](https://github.com/rapidsai/cudf/blob/branch-21.10/java/README.md)
 
