@@ -347,7 +347,9 @@ std::size_t hash_join::hash_join_impl::inner_join_size(cudf::table_view const& p
                                                        rmm::cuda_stream_view stream) const
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(_hash_table, "Hash table of hash join is null.");
+
+  // Return directly if build table is empty
+  if (!_hash_table) { return 0; }
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
     probe, {}, {}, structs::detail::column_nullability::FORCE);
