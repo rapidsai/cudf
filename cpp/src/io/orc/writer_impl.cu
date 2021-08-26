@@ -679,13 +679,14 @@ encoded_data writer::impl::encode_columns(orc_table_view const& orc_table,
   for (auto const& column : orc_table.columns) {
     for (auto const& stripe : segmentation.stripes) {
       for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
-        auto const rg_idx = *rg_idx_it;
-        auto& ck          = chunks[column.index()][rg_idx];
-
-        ck.start_row     = segmentation.rowgroups[rg_idx][column.index()].begin;
-        ck.num_rows      = segmentation.rowgroups[rg_idx][column.index()].size();
-        ck.encoding_kind = column.orc_encoding();
-        ck.type_kind     = column.orc_kind();
+        auto const rg_idx      = *rg_idx_it;
+        auto& ck               = chunks[column.index()][rg_idx];
+        ck.start_row           = segmentation.rowgroups[rg_idx][column.index()].begin;
+        ck.num_rows            = segmentation.rowgroups[rg_idx][column.index()].size();
+        ck.null_mask_start_row = ck.start_row;
+        ck.null_mask_num_rows  = ck.num_rows;
+        ck.encoding_kind       = column.orc_encoding();
+        ck.type_kind           = column.orc_kind();
         if (ck.type_kind == TypeKind::STRING) {
           ck.dict_index = (ck.encoding_kind == DICTIONARY_V2)
                             ? column.host_stripe_dict(stripe.id)->dict_index
@@ -696,6 +697,24 @@ encoded_data writer::impl::encode_columns(orc_table_view const& orc_table,
         }
         ck.scale = column.scale();
         if (ck.type_kind == TypeKind::DECIMAL) { ck.decimal_offsets = column.decimal_offsets(); }
+      }
+    }
+  }
+
+  for (auto const& column : orc_table.columns) {
+    if (not column.nullable() or not column.parent_index().has_value()) continue;
+    for (auto const& stripe : segmentation.stripes) {
+      for (auto rg_idx_it = stripe.cbegin(); rg_idx_it + 1 < stripe.cend(); ++rg_idx_it) {
+        auto const rg_idx = *rg_idx_it;
+        auto& ck          = chunks[column.index()][rg_idx];
+        auto& ck_next     = chunks[column.index()][rg_idx + 1];
+        if (ck.null_mask_num_rows % 8) {
+          auto borrow_bits = std::min(8 - ck.num_rows % 8, ck_next.null_mask_num_rows);
+          std::cout << borrow_bits << std::endl;
+          ck.null_mask_num_rows += borrow_bits;
+          ck_next.null_mask_start_row += borrow_bits;
+          ck_next.null_mask_num_rows -= borrow_bits;
+        }
       }
     }
   }
@@ -1165,7 +1184,7 @@ void splatter_null_mask(device_span<orc_column_device_view> d_columns,
   CUDA_TRY(cudaMemsetAsync(static_cast<void*>(out_mask.data()),
                            255,
                            out_mask.size() * sizeof(bitmask_type),
-                           stream.value()));                   
+                           stream.value()));
 }
 
 struct pushdown_null_masks {

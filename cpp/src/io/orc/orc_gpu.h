@@ -133,6 +133,8 @@ struct RowGroup {
 struct EncChunk {
   uint32_t start_row;                // start row of this chunk
   uint32_t num_rows;                 // number of rows in this chunk
+  uint32_t null_mask_start_row;      // adjusted to multiple of 8
+  uint32_t null_mask_num_rows;       // adjusted to multiple of 8
   ColumnEncodingKind encoding_kind;  // column encoding kind
   TypeKind type_kind;                // column data type
   uint8_t dtype_len;                 // data type length
