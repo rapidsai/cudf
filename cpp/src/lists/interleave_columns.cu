@@ -156,20 +156,25 @@ struct compute_string_sizes_and_interleave_lists_fn {
   }
 };
 
-/**
- * @brief Struct used in type_dispatcher to interleave list entries of the input lists columns and
- * output the results into a destination column.
- */
-struct interleave_list_entries_fn {
-  template <class T>
-  std::enable_if_t<std::is_same_v<T, cudf::string_view>, std::unique_ptr<column>> operator()(
-    table_view const& input,
-    column_view const& output_list_offsets,
-    size_type num_output_lists,
-    size_type num_output_entries,
-    bool data_has_null_mask,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const noexcept
+// Error case when no other overload or specialization is available
+template <typename T, typename Enable = void>
+struct interleave_list_entries_impl {
+  template <typename... Args>
+  std::unique_ptr<column> operator()(Args&&...)
+  {
+    CUDF_FAIL("Called `interleave_list_entries_fn()` on non-supported types.");
+  }
+};
+
+template <typename T>
+struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>> {
+  std::unique_ptr<column> operator()(table_view const& input,
+                                     column_view const& output_list_offsets,
+                                     size_type num_output_lists,
+                                     size_type num_output_entries,
+                                     bool data_has_null_mask,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const noexcept
   {
     auto const table_dv_ptr = table_device_view::create(input);
     auto comp_fn            = compute_string_sizes_and_interleave_lists_fn{
@@ -193,16 +198,17 @@ struct interleave_list_entries_fn {
                                stream,
                                mr);
   }
+};
 
-  template <class T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(
-    table_view const& input,
-    column_view const& output_list_offsets,
-    size_type num_output_lists,
-    size_type num_output_entries,
-    bool data_has_null_mask,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const noexcept
+template <typename T>
+struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
+  std::unique_ptr<column> operator()(table_view const& input,
+                                     column_view const& output_list_offsets,
+                                     size_type num_output_lists,
+                                     size_type num_output_entries,
+                                     bool data_has_null_mask,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const noexcept
   {
     auto const num_cols     = input.num_columns();
     auto const table_dv_ptr = table_device_view::create(input);
@@ -267,20 +273,29 @@ struct interleave_list_entries_fn {
 
     return output;
   }
+};
 
+/**
+ * @brief Struct used in type_dispatcher to interleave list entries of the input lists columns and
+ * output the results into a destination column.
+ */
+struct interleave_list_entries_fn {
   template <class T>
-  std::enable_if_t<not std::is_same_v<T, cudf::string_view> and not cudf::is_fixed_width<T>(),
-                   std::unique_ptr<column>>
-  operator()(table_view const&,
-             column_view const&,
-             size_type,
-             size_type,
-             bool,
-             rmm::cuda_stream_view,
-             rmm::mr::device_memory_resource*) const
+  std::unique_ptr<column> operator()(table_view const& input,
+                                     column_view const& output_list_offsets,
+                                     size_type num_output_lists,
+                                     size_type num_output_entries,
+                                     bool data_has_null_mask,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
-    // Currently, only support string_view and fixed-width types
-    CUDF_FAIL("Called `interleave_list_entries_fn()` on non-supported types.");
+    return interleave_list_entries_impl<T>{}(input,
+                                             output_list_offsets,
+                                             num_output_lists,
+                                             num_output_entries,
+                                             data_has_null_mask,
+                                             stream,
+                                             mr);
   }
 };
 
