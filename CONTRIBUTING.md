@@ -108,7 +108,7 @@ cd $CUDF_HOME
 ```
 - Other libraries like `cudf-kafka` and `custreamz` can be installed with this script. For the complete list of libraries as well as details about the script usage, run the `help` command:
 ```bash
-$ ./build.sh --help            
+./build.sh --help            
 ```
 
 ### Build, Install and Test cuDF libraries for contributors
@@ -120,18 +120,18 @@ The general workflow is provided below. Please, also see the last section about 
 If you're only interested in building the library (and not the unit tests):
  
 ```bash
-$ cd $CUDF_HOME
-$./build.sh libcudf
+cd $CUDF_HOME
+./build.sh libcudf
 ```
 If, in addition, you want to build tests:
 
 ```bash
-$./build.sh libcudf tests
+./build.sh libcudf tests
 ```
 To run the tests:
 
 ```bash
-$ make test                                      
+make test                                      
 ```
 
 #### `cudf` (Python)
@@ -140,15 +140,15 @@ $ make test
 
 - To build and install in edit/develop `cudf` python package:
 ```bash
-$ cd $CUDF_HOME/python/cudf
-$ python setup.py build_ext --inplace
-$ python setup.py develop
+cd $CUDF_HOME/python/cudf
+python setup.py build_ext --inplace
+python setup.py develop
 ```
 
 - To run `cudf` tests :
 ```bash
-$ cd $CUDF_HOME/python
-$ py.test -v cudf/cudf/tests
+cd $CUDF_HOME/python
+py.test -v cudf/cudf/tests
 ```
 
 #### `dask-cudf` (Python)
@@ -157,15 +157,15 @@ $ py.test -v cudf/cudf/tests
 
 - To install in edit/develop mode the `dask-cudf` python package:
 ```bash
-$ cd $CUDF_HOME/python/dask_cudf
-$ python setup.py build_ext --inplace
-$ python setup.py develop
+cd $CUDF_HOME/python/dask_cudf
+python setup.py build_ext --inplace
+python setup.py develop
 ```
 
 - To run `dask_cudf` tests :
 ```bash
-$ cd $CUDF_HOME/python
-$ py.test -v dask_cudf
+cd $CUDF_HOME/python
+py.test -v dask_cudf
 ```
 
 #### `libcudf_kafka` (C++)
@@ -173,18 +173,18 @@ $ py.test -v dask_cudf
 If you're only interested in building the library (and not the unit tests):
  
 ```bash
-$ cd $CUDF_HOME
-$./build.sh libcudf_kafka
+cd $CUDF_HOME
+./build.sh libcudf_kafka
 ```
 If, in addition, you want to build tests:
 
 ```bash
-$./build.sh libcudf_kafka tests
+./build.sh libcudf_kafka tests
 ```
 To run the tests:
 
 ```bash
-$ make test                                      
+make test                                      
 ```
 
 #### `cudf-kafka` (Python)
@@ -193,9 +193,9 @@ $ make test
 
 - To install in edit/develop mode the `cudf-kafka` python package:
 ```bash
-$ cd $CUDF_HOME/python/cudf_kafka
-$ python setup.py build_ext --inplace
-$ python setup.py develop
+cd $CUDF_HOME/python/cudf_kafka
+python setup.py build_ext --inplace
+python setup.py develop
 ```
 
 #### `custreamz` (Python)
@@ -204,15 +204,15 @@ $ python setup.py develop
 
 - To install in edit/develop mode the `custreamz` python package:
 ```bash
-$ cd $CUDF_HOME/python/custreamz
-$ python setup.py build_ext --inplace
-$ python setup.py develop
+cd $CUDF_HOME/python/custreamz
+python setup.py build_ext --inplace
+python setup.py develop
 ```
 
 - To run `custreamz` tests :
 ```bash
-$ cd $CUDF_HOME/python
-$ py.test -v custreamz
+cd $CUDF_HOME/python
+py.test -v custreamz
 ```
 
 #### `cudf` (Java):
@@ -232,7 +232,7 @@ Follow the [above instructions](####build-cudf-from-source) to build from source
 
 For example:
 ```bash
-$ ./build.sh libcudf -g
+./build.sh libcudf -g
 ```
 
 This builds `libcudf` in Debug mode which enables some `assert` safety checks and includes symbols in the library for debugging.
@@ -291,11 +291,11 @@ A Dockerfile is provided with a preconfigured conda environment for building and
 
 From cudf project root run the following, to build with defaults:
 ```bash
-$ docker build --tag cudf .
+docker build --tag cudf .
 ```
 After the container is built run the container:
 ```bash
-$ docker run --runtime=nvidia -it cudf bash
+docker run --runtime=nvidia -it cudf bash
 ```
 Activate the conda environment `cudf` to use the newly built cuDF and libcudf libraries:
 ```
