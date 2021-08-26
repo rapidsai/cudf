@@ -1,8 +1,9 @@
 # Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 import math
+import re
 import warnings
-from typing import Sequence, Union
+from typing import Sequence, Type, TypeVar, Union
 
 import cupy as cp
 import numpy as np
@@ -350,6 +351,9 @@ def get_units(value):
     return value
 
 
+_T = TypeVar("_T", bound="DateOffset")
+
+
 class DateOffset:
     """
     An object used for binary ops where calendrical arithmetic
@@ -426,6 +430,8 @@ class DateOffset:
     }
 
     _CODES_TO_UNITS = {v: k for k, v in _UNITS_TO_CODES.items()}
+
+    _FREQSTR_REGEX = re.compile("([0-9]+)([a-zA-Z]+)")
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
@@ -539,7 +545,9 @@ class DateOffset:
             kwargs["seconds"] = seconds
         return kwargs
 
-    def _datetime_binop(self, datetime_col, op, reflect=False):
+    def _datetime_binop(
+        self, datetime_col, op, reflect=False
+    ) -> column.DatetimeColumn:
         if reflect and op == "sub":
             raise TypeError(
                 f"Can not subtract a {type(datetime_col).__name__}"
@@ -573,7 +581,7 @@ class DateOffset:
         return col
 
     @property
-    def _is_no_op(self):
+    def _is_no_op(self) -> bool:
         # some logic could be implemented here for more complex cases
         # such as +1 year, -12 months
         return all([i == 0 for i in self._kwds.values()])
@@ -594,30 +602,38 @@ class DateOffset:
         return repr_str
 
     @classmethod
-    def _from_freqstr(cls, freqstr):
+    def _from_freqstr(cls: Type[_T], freqstr: str) -> _T:
         """
         Parse a string and return a DateOffset object
         expects strings of the form 3D, 25W, 10ms, 42ns, etc.
         """
-        numeric_part = ""
-        freq_part = ""
+        match = cls._FREQSTR_REGEX.match(freqstr)
 
-        for x in freqstr:
-            if x.isdigit():
-                numeric_part += x
-            else:
-                freq_part += x
+        if match is None:
+            raise ValueError(f"Invalid frequency string: {freqstr}")
 
-        if (
-            freq_part not in cls._CODES_TO_UNITS
-            or not numeric_part + freq_part == freqstr
-        ):
+        numeric_part = match.group(1)
+        freq_part = match.group(2)
+
+        # Pandas uses `t/T` for minute frequency,
+        # we expect lowercase "m"
+        if freq_part.lower() == "t":
+            freq_part = "m"
+
+        if freq_part not in cls._CODES_TO_UNITS:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")
 
         return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
 
     def to_pandas(self):
         return pd.DateOffset(**self.kwds, n=1)
+
+    @classmethod
+    def from_pandas(cls: Type[_T], offset) -> _T:
+        if offset.kwds:
+            return cls(offset.n, **offset.kwds)
+        else:
+            return cls._from_freqstr(offset.freqstr)
 
 
 def _isin_datetimelike(
@@ -743,9 +759,6 @@ def date_range(
     """
     if tz is not None:
         raise NotImplementedError("tz is currently unsupported.")
-
-    if normalize is not None:
-        raise NotImplementedError("normalize is currently unsupported.")
 
     if closed is not None:
         raise NotImplementedError("closed is currently unsupported.")
