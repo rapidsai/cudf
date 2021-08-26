@@ -130,7 +130,7 @@ $./build.sh libcudf
 
 #### Building and testing the `cudf` Python library
 
-- Requirement : `C++ libcudf`
+- First, build the `libcudf` C++ library following the steps above
 
 - To build and install in edit/develop mode the `cudf` python package, in the `python/cudf` folder:
 ```bash
