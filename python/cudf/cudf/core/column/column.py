@@ -525,7 +525,9 @@ class ColumnBase(Column, Serializable):
             return self.element_indexing(int(arg))
         elif isinstance(arg, slice):
             start, stop, stride = arg.indices(len(self))
-            return self.slice(start, stop, stride)
+            return self.slice(start, stop, stride)._with_type_metadata(
+                self.dtype
+            )
         else:
             arg = as_column(arg)
             if len(arg) == 0:
