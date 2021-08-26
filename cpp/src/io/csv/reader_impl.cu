@@ -31,6 +31,7 @@
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/csv.hpp>
@@ -101,28 +102,6 @@ class selected_rows_offsets {
   auto size() const { return selected.size(); }
   auto data() const { return selected.data(); }
 };
-
-/**
- * @brief Translates a dtype string and returns its dtype enumeration and any
- * extended dtype flags that are supported by cuIO. Often, this is a column
- * with the same underlying dtype the basic types, but with different parsing
- * interpretations.
- *
- * @param[in] dtype String containing the basic or extended dtype
- *
- * @return Tuple of data_type and flags
- */
-std::tuple<data_type, column_parse::flags> get_dtype_info(const std::string& dtype)
-{
-  if (dtype == "hex" || dtype == "hex64") {
-    return std::make_tuple(data_type{cudf::type_id::INT64}, column_parse::as_hexadecimal);
-  }
-  if (dtype == "hex32") {
-    return std::make_tuple(data_type{cudf::type_id::INT32}, column_parse::as_hexadecimal);
-  }
-
-  return std::make_tuple(convert_string_to_dtype(dtype), column_parse::as_default);
-}
 
 /**
  * @brief Removes the first and Last quote in the string
@@ -501,6 +480,26 @@ std::vector<data_type> select_data_types(std::vector<column_parse::flags> const&
   return selected_dtypes;
 }
 
+std::vector<data_type> get_data_types_from_column_names(
+  std::vector<column_parse::flags> const& column_flags,
+  std::map<std::string, data_type> const& column_type_map,
+  std::vector<std::string> const& column_names,
+  int32_t num_actual_columns)
+{
+  std::vector<data_type> selected_dtypes;
+
+  for (int32_t i = 0; i < num_actual_columns; i++) {
+    if (column_flags[i] & column_parse::enabled) {
+      auto const col_type_it = column_type_map.find(column_names[i]);
+      CUDF_EXPECTS(col_type_it != column_type_map.end(),
+                   "Must specify data types for all active columns");
+      selected_dtypes.emplace_back(col_type_it->second);
+    }
+  }
+
+  return selected_dtypes;
+}
+
 std::vector<data_type> infer_column_types(parse_options const& parse_opts,
                                           std::vector<column_parse::flags> const& column_flags,
                                           device_span<char const> data,
@@ -764,8 +763,20 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       reader_opts.get_timestamp_type(),
       stream);
   } else {
-    column_types = std::visit([&](auto const& data_types) { return select_data_types(data_types); },
-                              opts_.get_dtypes());
+    column_types =
+      std::visit(cudf::detail::visitor_overload{
+                   [&](const std::vector<data_type>& data_types) {
+                     return select_data_types(
+                       column_flags, data_types, num_actual_columns, num_active_columns);
+                   },
+                   [&](const std::map<std::string, data_type>& data_types) {
+                     return get_data_types_from_column_names(  //
+                       column_flags,
+                       data_types,
+                       column_names,
+                       num_actual_columns);
+                   }},
+                 reader_opts.get_dtypes());
   }
 
   out_columns.reserve(column_types.size());
