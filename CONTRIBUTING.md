@@ -111,7 +111,7 @@ cd $CUDF_HOME
 ./build.sh --help            
 ```
 
-### Build, Install and Test cuDF libraries for contributors
+### Build, install and test cuDF libraries for contributors
 
 The general workflow is provided below. Please, also see the last section about [code formatting](###code-formatting).
 
