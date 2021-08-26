@@ -145,7 +145,7 @@ $ cd $CUDF_HOME/python
 $ py.test -v cudf/cudf/tests                     # run cudf test suite
 ```
 
-#### Python dask-cudf contributors:
+#### Installing and testing the `dask-cudf` Python library
 
 - Requirements : `C++ libcudf`, `Python cudf`
 
