@@ -270,6 +270,7 @@ class writer::impl {
    * @param dict_index Dictionary index memory
    * @param dec_chunk_sizes Information about size of encoded decimal columns
    * @param segmentation stripe and rowgroup ranges
+   * @param aligned_rowgroups TODO
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Encoded data and per-chunk stream descriptors
    */
@@ -277,6 +278,7 @@ class writer::impl {
                               string_dictionaries&& dictionaries,
                               encoder_decimal_info&& dec_chunk_sizes,
                               file_segmentation const& segmentation,
+                                          std::vector<std::vector<rowgroup_rows>> aligned_rowgroups,
                               orc_streams const& streams);
 
   /**

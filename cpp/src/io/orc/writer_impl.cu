@@ -665,6 +665,7 @@ encoded_data writer::impl::encode_columns(orc_table_view const& orc_table,
                                           string_dictionaries&& dictionaries,
                                           encoder_decimal_info&& dec_chunk_sizes,
                                           file_segmentation const& segmentation,
+                                          std::vector<std::vector<rowgroup_rows>> aligned_rowgroups,
                                           orc_streams const& streams)
 {
   auto const num_columns = orc_table.num_columns();
@@ -683,8 +684,8 @@ encoded_data writer::impl::encode_columns(orc_table_view const& orc_table,
         auto& ck               = chunks[column.index()][rg_idx];
         ck.start_row           = segmentation.rowgroups[rg_idx][column.index()].begin;
         ck.num_rows            = segmentation.rowgroups[rg_idx][column.index()].size();
-        ck.null_mask_start_row = ck.start_row;
-        ck.null_mask_num_rows  = ck.num_rows;
+        ck.null_mask_start_row = aligned_rowgroups[rg_idx][column.index()].begin;
+        ck.null_mask_num_rows  = aligned_rowgroups[rg_idx][column.index()].size();
         ck.encoding_kind       = column.orc_encoding();
         ck.type_kind           = column.orc_kind();
         if (ck.type_kind == TypeKind::STRING) {
@@ -697,24 +698,6 @@ encoded_data writer::impl::encode_columns(orc_table_view const& orc_table,
         }
         ck.scale = column.scale();
         if (ck.type_kind == TypeKind::DECIMAL) { ck.decimal_offsets = column.decimal_offsets(); }
-      }
-    }
-  }
-
-  for (auto const& column : orc_table.columns) {
-    if (not column.nullable() or not column.parent_index().has_value()) continue;
-    for (auto const& stripe : segmentation.stripes) {
-      for (auto rg_idx_it = stripe.cbegin(); rg_idx_it + 1 < stripe.cend(); ++rg_idx_it) {
-        auto const rg_idx = *rg_idx_it;
-        auto& ck          = chunks[column.index()][rg_idx];
-        auto& ck_next     = chunks[column.index()][rg_idx + 1];
-        if (ck.null_mask_num_rows % 8) {
-          auto borrow_bits = std::min(8 - ck.num_rows % 8, ck_next.null_mask_num_rows);
-          std::cout << borrow_bits << std::endl;
-          ck.null_mask_num_rows += borrow_bits;
-          ck_next.null_mask_start_row += borrow_bits;
-          ck_next.null_mask_num_rows -= borrow_bits;
-        }
       }
     }
   }
@@ -1529,6 +1512,37 @@ string_dictionaries allocate_dictionaries(orc_table_view const& orc_table,
           std::move(is_dict_enabled)};
 }
 
+std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
+  orc_table_view const& orc_table,
+  file_segmentation const& segmentation,
+  pushdown_null_masks const& pd_masks)
+{
+  std::vector<std::vector<rowgroup_rows>> rgs;
+  rgs.reserve(segmentation.num_rowgroups());
+  for (auto rg_idx = 0ul; rg_idx < segmentation.num_rowgroups(); ++rg_idx) {
+    auto in_rg = segmentation.rowgroups[rg_idx];
+    rgs.emplace_back(in_rg.begin(), in_rg.end());
+  }
+
+  for (auto const& column : orc_table.columns) {
+    if (not column.nullable() or not column.parent_index().has_value()) continue;
+    for (auto const& stripe : segmentation.stripes) {
+      for (auto rg_idx_it = stripe.cbegin(); rg_idx_it + 1 < stripe.cend(); ++rg_idx_it) {
+        auto const rg_idx = *rg_idx_it;
+        auto& rg          = rgs[rg_idx][column.index()];
+        auto& rg_next     = rgs[rg_idx + 1][column.index()];
+        if (rg.size() % 8) {
+          auto borrow_bits = std::min(8 - rg.size() % 8, rg_next.size());
+          rg.end += borrow_bits;
+          rg_next.begin += borrow_bits;
+        }
+      }
+    }
+  }
+
+  return rgs;
+}
+
 void writer::impl::write(table_view const& table)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
@@ -1573,6 +1587,9 @@ void writer::impl::write(table_view const& table)
   auto const segmentation =
     calculate_segmentation(orc_table.columns, std::move(rowgroup_bounds), max_stripe_size_);
 
+  auto const aligned_rowgroup_bounds =
+    calculate_aligned_rowgroup_bounds(orc_table, segmentation, pd_masks);
+
   // Build stripe-level dictionaries
   hostdevice_2dvector<gpu::StripeDictionary> stripe_dict(
     segmentation.num_stripes(), orc_table.num_string_columns(), stream);
@@ -1585,12 +1602,17 @@ void writer::impl::write(table_view const& table)
                        stripe_dict);
   }
 
-  auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
+  auto dec_chunk_sizes =
+    decimal_chunk_sizes(orc_table, segmentation, stream);  // TODO include pushdown buffer here
 
   auto streams =
     create_streams(orc_table.columns, segmentation, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
-  auto enc_data = encode_columns(
-    orc_table, std::move(dictionaries), std::move(dec_chunk_sizes), segmentation, streams);
+  auto enc_data = encode_columns(orc_table,
+                                 std::move(dictionaries),
+                                 std::move(dec_chunk_sizes),
+                                 segmentation,
+                                 aligned_rowgroup_bounds,
+                                 streams);
 
   // Assemble individual disparate column chunks into contiguous data streams
   size_type const num_index_streams = (orc_table.num_columns() + 1);
