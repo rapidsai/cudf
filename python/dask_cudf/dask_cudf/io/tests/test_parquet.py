@@ -288,6 +288,15 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
             if not fn.startswith("_"):
                 assert "part" in fn
 
+    if parse_version(dask.__version__) > parse_version("2021.07.0"):
+        # This version of Dask supports `aggregate_files=True`.
+        # Check that we can aggregate by a partition name.
+        df_read = dd.read_parquet(
+            tmpdir, engine="pyarrow", aggregate_files="year"
+        )
+        gdf_read = dask_cudf.read_parquet(tmpdir, aggregate_files="year")
+        dd.assert_eq(df_read, gdf_read)
+
 
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
