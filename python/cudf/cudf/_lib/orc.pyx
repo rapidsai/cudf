@@ -8,11 +8,8 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp.column.column cimport column
-
-from cudf.utils.dtypes import is_struct_dtype
-
 from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.io.orc cimport (
     chunked_orc_writer_options,
     orc_chunked_writer,
@@ -53,7 +50,7 @@ import numpy as np
 
 from cudf._lib.utils cimport data_from_unique_ptr, get_column_names
 
-from cudf._lib.utils import _index_level_name, generate_pandas_metadata
+from cudf._lib.utils import generate_pandas_metadata
 
 
 cpdef read_raw_orc_statistics(filepath_or_buffer):
