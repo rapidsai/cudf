@@ -15,8 +15,11 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/detail/utilities.cuh>
@@ -86,6 +89,50 @@ generate_list_offsets_and_validities(table_view const& input,
   return {std::move(list_offsets), std::move(validities)};
 }
 
+// Error case when no other overload or specialization is available
+template <typename T, typename Enable = void>
+struct interleave_list_entries_impl {
+  template <typename... Args>
+  std::unique_ptr<column> operator()(Args&&...)
+  {
+    CUDF_FAIL("Called `interleave_list_entries_fn()` on non-supported types.");
+  }
+};
+
+/**
+ * @brief Concatenate all input columns into one column and gather its rows to generate an output
+ * column that is the result of interleaving the input columns.
+ */
+std::unique_ptr<column> concatenate_and_gather_lists(host_span<column_view const> columns_to_concat,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr)
+{
+  // Concatenate all columns into a single (temporary) column.
+  auto const concatenated_col =
+    cudf::detail::concatenate(columns_to_concat, stream, rmm::mr::get_current_device_resource());
+
+  // The number of input columns is known to be non-zero thus it's safe to call `front()` here.
+  auto const num_cols       = columns_to_concat.size();
+  auto const num_input_rows = columns_to_concat.front().size();
+
+  // Generate the gather map that interleaves the input columns.
+  auto const iter_gather = cudf::detail::make_counting_transform_iterator(
+    0, [num_cols, num_input_rows] __device__(auto const idx) {
+      auto const source_col_idx = idx % num_cols;
+      auto const source_row_idx = idx / num_cols;
+      return source_col_idx * num_input_rows + source_row_idx;
+    });
+
+  // The gather API should be able to handle any data type for the input columns.
+  auto result = cudf::detail::gather(table_view{{concatenated_col->view()}},
+                                     iter_gather,
+                                     iter_gather + concatenated_col->size(),
+                                     out_of_bounds_policy::DONT_CHECK,
+                                     stream,
+                                     mr);
+  return std::move(result->release()[0]);
+}
+
 /**
  * @brief Compute string sizes, string validities, and interleave string lists functor.
  *
@@ -153,16 +200,6 @@ struct compute_string_sizes_and_interleave_lists_fn {
         thrust::copy(thrust::seq, input_ptr, input_ptr + end_byte - start_byte, output_ptr);
       }
     }
-  }
-};
-
-// Error case when no other overload or specialization is available
-template <typename T, typename Enable = void>
-struct interleave_list_entries_impl {
-  template <typename... Args>
-  std::unique_ptr<column> operator()(Args&&...)
-  {
-    CUDF_FAIL("Called `interleave_list_entries_fn()` on non-supported types.");
   }
 };
 
@@ -316,13 +353,20 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
                  "All columns of the input table must be of lists column type.");
 
     auto const child_col = lists_column_view(col).child();
-    CUDF_EXPECTS(not cudf::is_nested(child_col.type()), "Nested types are not supported.");
     CUDF_EXPECTS(entry_type == child_col.type(),
                  "The types of entries in the input columns must be the same.");
   }
 
   if (input.num_rows() == 0) { return cudf::empty_like(input.column(0)); }
   if (input.num_columns() == 1) { return std::make_unique<column>(*(input.begin()), stream, mr); }
+
+  // For nested types, we rely on the `concatenate_and_gather` method, which costs more memory due
+  // to concatenation of the input columns into a temporary column. For non-nested types, we can
+  // directly interleave the input columns into the output column for better efficiency.
+  if (cudf::is_nested(entry_type)) {
+    auto const input_columns = std::vector<column_view>(input.begin(), input.end());
+    return concatenate_and_gather_lists(host_span<column_view const>{input_columns}, stream, mr);
+  }
 
   // Generate offsets of the output lists column.
   auto [list_offsets, list_validities] =
