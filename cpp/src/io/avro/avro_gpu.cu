@@ -66,13 +66,13 @@ static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t*& cur, 
  * @return data pointer at the end of the row (start of next row)
  */
 static const uint8_t* __device__
-avro_decode_row(const schemadesc_s* schema,
+avro_decode_row(schemadesc_s const* schema,
                 schemadesc_s* schema_g,
                 uint32_t schema_len,
                 size_t row,
                 size_t max_rows,
-                const uint8_t* cur,
-                const uint8_t* end,
+                uint8_t const* cur,
+                uint8_t const* end,
                 device_span<string_index_pair const> global_dictionary)
 {
   uint32_t array_start = 0, array_repeat_count = 0;
