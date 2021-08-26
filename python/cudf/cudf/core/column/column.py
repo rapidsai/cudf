@@ -69,7 +69,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
     np_to_pa_dtype,
     pandas_dtypes_alias_to_cudf_alias,
-    pandas_dtypes_to_cudf_dtypes,
+    pandas_dtypes_to_np_dtypes,
 )
 from cudf.utils.utils import mask_dtype
 
@@ -894,7 +894,7 @@ class ColumnBase(Column, Serializable):
         dtype = (
             pandas_dtypes_alias_to_cudf_alias.get(dtype, dtype)
             if isinstance(dtype, str)
-            else pandas_dtypes_to_cudf_dtypes.get(dtype, dtype)
+            else pandas_dtypes_to_np_dtypes.get(dtype, dtype)
         )
         if _is_non_decimal_numeric_dtype(dtype):
             return self.as_numerical_column(dtype, **kwargs)
@@ -1729,9 +1729,13 @@ def as_column(
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
-        current_dtype = cudf.dtype(desc["typestr"])
+        current_dtype = np.dtype(desc["typestr"])
 
-        arb_dtype = cudf.dtype(current_dtype)
+        arb_dtype = (
+            np.dtype("float32")
+            if current_dtype == "float16"
+            else cudf.dtype(current_dtype)
+        )
 
         if desc.get("mask", None) is not None:
             # Extract and remove the mask from arbitrary before
@@ -1775,6 +1779,12 @@ def as_column(
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
+        if isinstance(arbitrary, pa.lib.HalfFloatArray):
+            raise NotImplementedError(
+                "Type casting from `float16` to `float32` is not "
+                "yet supported in pyarrow, see: "
+                "https://issues.apache.org/jira/browse/ARROW-3802"
+            )
         col = ColumnBase.from_arrow(arbitrary)
         if isinstance(arbitrary, pa.NullArray):
             if type(dtype) == str and dtype == "empty":
@@ -1797,7 +1807,7 @@ def as_column(
         elif arbitrary.dtype == np.bool_:
             data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype)
         elif arbitrary.dtype.kind in ("f"):
-            arb_dtype = cudf.dtype(arbitrary.dtype)
+            arb_dtype = np.dtype(arbitrary.dtype)
             data = as_column(
                 cupy.asarray(arbitrary, dtype=arb_dtype),
                 nan_as_null=nan_as_null,
@@ -1850,7 +1860,7 @@ def as_column(
         # CUDF assumes values are always contiguous
         desc = arbitrary.__array_interface__
         shape = desc["shape"]
-        arb_dtype = cudf.dtype(desc["typestr"])
+        arb_dtype = np.dtype(desc["typestr"])
         # CUDF assumes values are always contiguous
         if len(shape) > 1:
             raise ValueError("Data must be 1-dimensional")
@@ -1941,6 +1951,8 @@ def as_column(
             if dtype is not None:
                 data = data.astype(dtype)
         elif arb_dtype.kind in ("f"):
+            if arb_dtype == np.dtype("float16"):
+                arb_dtype = np.dtype("float32")
             arb_dtype = cudf.dtype(arb_dtype if dtype is None else dtype)
             data = as_column(
                 cupy.asarray(arbitrary, dtype=arb_dtype),
@@ -1956,7 +1968,11 @@ def as_column(
             if arbitrary.dtype == pd.StringDtype():
                 arb_dtype = cudf.dtype("O")
             else:
-                arb_dtype = cudf.dtype(arbitrary.dtype)
+                arb_dtype = (
+                    cudf.dtype("float32")
+                    if arbitrary.dtype == "float16"
+                    else cudf.dtype(arbitrary.dtype)
+                )
                 if arb_dtype != arbitrary.dtype.numpy_dtype:
                     arbitrary = arbitrary.astype(arb_dtype)
         if (
@@ -2131,7 +2147,7 @@ def _construct_array(
             arbitrary,
             dtype=native_dtype
             if native_dtype is None
-            else cudf.dtype(native_dtype),
+            else np.dtype(native_dtype),
         )
     return arbitrary
 
