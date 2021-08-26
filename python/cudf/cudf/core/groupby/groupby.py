@@ -1230,13 +1230,25 @@ class SeriesGroupBy(GroupBy):
 
 
 class Grouper(object):
-    def __init__(self, key=None, level=None):
+    def __init__(self, key=None, level=None, freq=None):
         if key is not None and level is not None:
             raise ValueError("Grouper cannot specify both key and level")
         if key is None and level is None:
             raise ValueError("Grouper must specify either key or level")
         self.key = key
         self.level = level
+        # TODO: move this logic to someplace it can be reused
+        if freq:
+            if isinstance(freq, str):
+                self.freq = cudf.DateOffset._from_freqstr(freq)
+            elif isinstance(freq, pd.DateOffset):
+                self.freq = cudf.DateOffset.from_pandas(freq)
+            else:
+                if not isinstance(freq, cudf.DateOffset):
+                    raise TypeError(
+                        "Unsupported type for freq: {type(freq).__name__}"
+                    )
+        self.freq = freq
 
 
 class _Grouping(Serializable):
