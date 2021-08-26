@@ -37,6 +37,7 @@
 #include <thrust/optional.h>
 #include <thrust/transform.h>
 
+#include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
 namespace cudf {
@@ -117,7 +118,7 @@ struct string_to_decimal_check_fn {
     // finally, check for overflow based on the exp_ten and scale values
     return (exp_ten < scale) or
            value <= static_cast<UnsignedDecimalType>(
-                      std::numeric_limits<DecimalType>::max() /
+                      cuda::std::numeric_limits<DecimalType>::max() /
                       static_cast<DecimalType>(exp10(static_cast<double>(exp_ten - scale))));
   }
 };
