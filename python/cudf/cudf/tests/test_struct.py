@@ -245,6 +245,14 @@ def test_dataframe_to_struct():
             None,
             4,
         ),
+        (
+            [
+                {"a": {"b": 42, "c": "abc"}},
+                {"a": {"b": 42, "c": "hello world"}},
+            ],
+            0,
+            1,
+        ),
     ],
 )
 def test_struct_slice(series, start, end):
