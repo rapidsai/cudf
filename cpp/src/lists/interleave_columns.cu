@@ -89,16 +89,6 @@ generate_list_offsets_and_validities(table_view const& input,
   return {std::move(list_offsets), std::move(validities)};
 }
 
-// Error case when no other overload or specialization is available
-template <typename T, typename Enable = void>
-struct interleave_list_entries_impl {
-  template <typename... Args>
-  std::unique_ptr<column> operator()(Args&&...)
-  {
-    CUDF_FAIL("Called `interleave_list_entries_fn()` on non-supported types.");
-  }
-};
-
 /**
  * @brief Concatenate all input columns into one column and gather its rows to generate an output
  * column that is the result of interleaving the input columns.
@@ -200,6 +190,16 @@ struct compute_string_sizes_and_interleave_lists_fn {
         thrust::copy(thrust::seq, input_ptr, input_ptr + end_byte - start_byte, output_ptr);
       }
     }
+  }
+};
+
+// Error case when no other overload or specialization is available
+template <typename T, typename Enable = void>
+struct interleave_list_entries_impl {
+  template <typename... Args>
+  std::unique_ptr<column> operator()(Args&&...)
+  {
+    CUDF_FAIL("Called `interleave_list_entries_fn()` on non-supported types.");
   }
 };
 
