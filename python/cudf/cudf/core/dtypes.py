@@ -41,7 +41,7 @@ def dtype(arbitrary):
     except TypeError:
         pass
     else:
-        if np_dtype not in cudf._lib.types.np_to_cudf_types:
+        if np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
 

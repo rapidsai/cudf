@@ -68,7 +68,7 @@ class TypeId(IntEnum):
     DECIMAL64 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL64
 
 
-np_to_cudf_types = {
+SUPPORTED_NUMPY_TO_LIBCUDF_TYPES = {
     np.dtype("int8"): TypeId.INT8,
     np.dtype("int16"): TypeId.INT16,
     np.dtype("int32"): TypeId.INT32,
@@ -91,7 +91,7 @@ np_to_cudf_types = {
     np.dtype("timedelta64[ns]"): TypeId.DURATION_NANOSECONDS,
 }
 
-cudf_to_np_types = {
+LIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
     TypeId.INT8: np.dtype("int8"),
     TypeId.INT16: np.dtype("int16"),
     TypeId.INT32: np.dtype("int32"),
@@ -207,7 +207,9 @@ cdef dtype_from_column_view(column_view cv):
             scale=-cv.type().scale()
         )
     else:
-        return cudf_to_np_types[<underlying_type_t_type_id>(tid)]
+        return LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
+            <underlying_type_t_type_id>(tid)
+        ]
 
 cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
     if cudf.api.types.is_list_dtype(dtype):
@@ -221,7 +223,7 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
     else:
         tid = <libcudf_types.type_id> (
             <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(dtype)]))
+                SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[np.dtype(dtype)]))
 
     if tid in (
         libcudf_types.type_id.DECIMAL64,

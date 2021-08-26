@@ -45,7 +45,7 @@ from cudf._lib.io.utils cimport (
 )
 from cudf._lib.table cimport Table
 
-from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from cudf._lib.types cimport underlying_type_t_type_id
 
@@ -97,7 +97,9 @@ cpdef read_orc(object filepaths_or_buffers,
             if timestamp_type is None else
             <type_id>(
                 <underlying_type_t_type_id> (
-                    np_to_cudf_types[cudf.dtype(timestamp_type)]
+                    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[
+                        cudf.dtype(timestamp_type)
+                    ]
                 )
             )
         ),
