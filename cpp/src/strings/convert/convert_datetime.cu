@@ -976,7 +976,7 @@ struct datetime_formatter : public from_timestamp_base<T> {
           break;
         }
         case 'b':    // abbreviated month of the year
-        case 'B': {  // monthe of the year
+        case 'B': {  // month of the year
           auto const month = static_cast<uint32_t>(ymd.month());
           auto const month_idx =
             month - 1 + offset_months + (item.value == 'b' ? months_in_year : 0);

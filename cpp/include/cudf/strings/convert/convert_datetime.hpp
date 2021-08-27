@@ -161,10 +161,10 @@ std::unique_ptr<column> is_timestamp(
  * The time units of the input column do not influence the number of digits written by
  * the "%f" specifier. The "%f" supports a precision value to write out numeric digits
  * for the subsecond value. Specify the precision with a single integer value (1-9)
- * between the "%" and the "f" as follows: use "%3f" for milliseconds,
- * "%6f" for microseconds and "%9f" for nanoseconds. If the precision is higher than
- * the units, then zeroes are padded to the right of the subsecond value.
- * If the precision is lower than the units, the subsecond value may be truncated.
+ * between the "%" and the "f" as follows: use "%3f" for milliseconds, use "%6f" for
+ * microseconds and use "%9f" for nanoseconds. If the precision is higher than the
+ * units, then zeroes are padded to the right of the subsecond value. If the precision
+ * is lower than the units, the subsecond value may be truncated.
  *
  * If the "%a", "%A", "%b", "%B" specifiers are included in the format, the caller
  * should provide the format names in the `names` strings column using the following
@@ -185,6 +185,7 @@ std::unique_ptr<column> is_timestamp(
  *
  * The following code is an example of retrieving these strings from the locale
  * using c++ std functions:
+ * 
  * @code{.cpp}
  * #include <clocale>
  * #include <langinfo.h>
