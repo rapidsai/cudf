@@ -1185,7 +1185,21 @@ def test_writer_timestamp_stream_size(datadir, tmpdir):
 def test_no_row_group_index_orc_read(datadir, fname):
     fpath = datadir / fname
 
-    got = pa.orc.ORCFile(fpath).read()
-    expect = cudf.read_orc(fpath)
+    expect = pa.orc.ORCFile(fpath).read()
+    got = cudf.read_orc(fpath)
 
-    assert got.equals(expect.to_arrow())
+    assert expect.equals(got.to_arrow())
+
+
+def test_names_in_struct_dtype_nesting(datadir):
+    fname = datadir / "TestOrcFile.NestedStructDataFrame.orc"
+
+    expect = pa.orc.ORCFile(fname).read()
+    got = cudf.read_orc(fname)
+
+    # test dataframes
+    assert expect.equals(got.to_arrow())
+
+    edf = cudf.DataFrame(expect.to_pandas())
+    # test schema
+    assert edf.dtypes.equals(got.dtypes)
