@@ -1055,24 +1055,17 @@ column_buffer&& reader::impl::assemble_buffer(const int32_t orc_col_id,
       for (size_t idx = 0; idx < _metadata->get_col_type(orc_col_id).subtypes.size(); idx++) {
         auto name = (idx == 0) ? "key" : "value";
         auto col  = _metadata->get_col_type(orc_col_id).subtypes[idx];
-        // printf("RGSL : col id is %u \n", col);
         child_col_buffers.emplace_back(assemble_buffer(col, col_buffers, level + 1, stream));
-        // printf("RGSL : Assembled child column \n");
         child_col_buffers.back().name = name;
-        // printf("RGSL : ------------------------------------- child_col_buffers.back() size of the
-        // buffer is %d \n", child_col_buffers[idx].size);
       }
       // Create a struct buffer
       auto num_rows = child_col_buffers[0].size;
-      // printf("RGSL : num_rows is %d \n", num_rows);
       auto struct_buffer =
         column_buffer(cudf::data_type(type_id::STRUCT), num_rows, false, stream, _mr);
       struct_buffer.children = std::move(child_col_buffers);
       struct_buffer.name     = "struct";
 
-      // printf("RGSL : Created struct column \n");
       col_buffer.children.emplace_back(std::move(struct_buffer));
-      // printf("RGSL : Created column buffer in map \n");
     } break;
 
     default: break;
@@ -1180,6 +1173,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       // Map each ORC column to its column
       _col_meta.orc_col_map[level][col.id] = column_types.size() - 1;
+      // TODO: Once MAP type is supported in cuDF, update this for MAP as well
       if (col_type == type_id::LIST or col_type == type_id::STRUCT) nested_col.emplace_back(col);
     }
 

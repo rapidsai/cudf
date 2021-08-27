@@ -1119,14 +1119,14 @@ def gen_map_buff(size=10000):
     return buff
 
 
-map_buff = gen_map_buff(size=28000)
+map_buff = gen_map_buff(size=100000)
 
 
 @pytest.mark.parametrize(
     "columns",
     [None, ["lvl1_map", "lvl2_struct_map"], ["lvl2_struct_map", "lvl2_map"]],
 )
-@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 28000])
+@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100000])
 @pytest.mark.parametrize("use_index", [True, False])
 def test_map_type_read(columns, num_rows, use_index):
     tbl = pa.orc.ORCFile(map_buff).read()
