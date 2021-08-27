@@ -13,6 +13,7 @@ from cudf._typing import DtypeObj
 from cudf.api.types import is_dtype_equal, is_integer
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
 from cudf.utils.dtypes import (
     is_list_like,
@@ -28,6 +29,7 @@ class BaseIndex(Serializable):
 
     dtype: DtypeObj
     _accessors: Set[Any] = set()
+    _data: ColumnAccessor
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
 
@@ -39,10 +41,6 @@ class BaseIndex(Serializable):
 
     @cached_property
     def _values(self) -> ColumnBase:
-        raise NotImplementedError
-
-    @property
-    def _data(self) -> cudf.core.column_accessor.ColumnAccessor:
         raise NotImplementedError
 
     def copy(self, deep: bool = True) -> BaseIndex:
