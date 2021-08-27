@@ -53,7 +53,7 @@ TYPED_TEST(groupby_min_scan_test, basic)
   result_wrapper expect_vals({5, 5, 1, 6, 6, 0, 0, 7, 2, 2});
   // clang-format on
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -68,7 +68,7 @@ TYPED_TEST(groupby_min_scan_test, empty_cols)
   key_wrapper expect_keys{};
   result_wrapper expect_vals{};
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -85,7 +85,7 @@ TYPED_TEST(groupby_min_scan_test, zero_valid_keys)
   result_wrapper expect_vals{};
   // clang-format on
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -102,7 +102,7 @@ TYPED_TEST(groupby_min_scan_test, zero_valid_values)
   result_wrapper expect_vals({-1, -1, -1}, all_nulls());
   // clang-format on
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -122,7 +122,7 @@ TYPED_TEST(groupby_min_scan_test, null_keys_and_values)
                              { 0, 1, 1, 1, 1,  0, 1, 1,    1, 0});
   // clang-format on
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -137,7 +137,7 @@ TEST_F(groupby_min_scan_string_test, basic)
   key_wrapper expect_keys{1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
   strings_column_wrapper expect_vals;
 
-  auto agg = cudf::make_min_aggregation();
+  auto agg = cudf::make_min_aggregation<groupby_scan_aggregation>();
   CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg)),
                             "Unsupported groupby scan type-agg combination");
 }
@@ -167,7 +167,7 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySortMinScanDecimalAsValue)
     auto const expect_vals_min = fp_wrapper{{5, 5, 1, 6, 6, 0, 0, 7, 2, 2}, scale};
     // clang-format on
 
-    auto agg = cudf::make_min_aggregation();
+    auto agg = cudf::make_min_aggregation<groupby_scan_aggregation>();
     test_single_scan(keys, vals, expect_keys, expect_vals_min, std::move(agg));
   }
 }

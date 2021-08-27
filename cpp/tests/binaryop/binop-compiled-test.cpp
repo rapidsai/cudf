@@ -79,15 +79,24 @@ struct BinaryOperationCompiledTest : public BinaryOperationTest {
     auto lhs = lhs_random_column<TypeLhs>(col_size);
     auto rhs = rhs_random_column<TypeRhs>(col_size);
 
-    auto out = cudf::experimental::binary_operation(lhs, rhs, op, data_type(type_to_id<TypeOut>()));
+    auto out = cudf::binary_operation(lhs, rhs, op, data_type(type_to_id<TypeOut>()));
     ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, OPERATOR());
 
     auto s_lhs = this->template make_random_wrapped_scalar<TypeLhs>();
     auto s_rhs = this->template make_random_wrapped_scalar<TypeRhs>();
+    s_lhs.set_valid_async(true);
+    s_rhs.set_valid_async(true);
 
-    out = cudf::experimental::binary_operation(lhs, s_rhs, op, data_type(type_to_id<TypeOut>()));
+    out = cudf::binary_operation(lhs, s_rhs, op, data_type(type_to_id<TypeOut>()));
     ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, s_rhs, OPERATOR());
-    out = cudf::experimental::binary_operation(s_lhs, rhs, op, data_type(type_to_id<TypeOut>()));
+    out = cudf::binary_operation(s_lhs, rhs, op, data_type(type_to_id<TypeOut>()));
+    ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, s_lhs, rhs, OPERATOR());
+
+    s_lhs.set_valid_async(false);
+    s_rhs.set_valid_async(false);
+    out = cudf::binary_operation(lhs, s_rhs, op, data_type(type_to_id<TypeOut>()));
+    ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, s_rhs, OPERATOR());
+    out = cudf::binary_operation(s_lhs, rhs, op, data_type(type_to_id<TypeOut>()));
     ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, s_lhs, rhs, OPERATOR());
   }
 };
@@ -305,8 +314,8 @@ TYPED_TEST(BinaryOperationCompiledTest_FloatOps, Pow_Vector_Vector)
   }();
   auto rhs = rhs_random_column<TypeRhs>(100);
 
-  auto out = cudf::experimental::binary_operation(
-    lhs, rhs, cudf::binary_operator::POW, data_type(type_to_id<TypeOut>()));
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::POW, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, POW(), NearEqualComparator<TypeOut>{2});
 }
@@ -333,7 +342,7 @@ TYPED_TEST(BinaryOperationCompiledTest_FloatOps, LogBase_Vector_Vector)
   auto rhs_elements = cudf::detail::make_counting_transform_iterator(0, [](auto) { return 7; });
   fixed_width_column_wrapper<TypeRhs> rhs(rhs_elements, rhs_elements + 50);
 
-  auto out = cudf::experimental::binary_operation(
+  auto out = cudf::binary_operation(
     lhs, rhs, cudf::binary_operator::LOG_BASE, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOG_BASE());
@@ -355,7 +364,7 @@ TYPED_TEST(BinaryOperationCompiledTest_FloatOps, ATan2_Vector_Vector)
   auto lhs = lhs_random_column<TypeLhs>(col_size);
   auto rhs = rhs_random_column<TypeRhs>(col_size);
 
-  auto out = cudf::experimental::binary_operation(
+  auto out = cudf::binary_operation(
     lhs, rhs, cudf::binary_operator::ATAN2, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
@@ -519,6 +528,11 @@ struct BinaryOperationCompiledTest_NullOps : public BinaryOperationCompiledTest<
 };
 TYPED_TEST_CASE(BinaryOperationCompiledTest_NullOps, Null_types);
 
+template <typename T>
+using column_wrapper = std::conditional_t<std::is_same_v<T, std::string>,
+                                          cudf::test::strings_column_wrapper,
+                                          cudf::test::fixed_width_column_wrapper<T>>;
+
 template <typename TypeOut, typename TypeLhs, typename TypeRhs, class OP>
 auto NullOp_Result(column_view lhs, column_view rhs)
 {
@@ -537,8 +551,7 @@ auto NullOp_Result(column_view lhs, column_view rhs)
                    result_mask.push_back(output_valid);
                    return result;
                  });
-  return cudf::test::fixed_width_column_wrapper<TypeOut>(
-    result.cbegin(), result.cend(), result_mask.cbegin());
+  return column_wrapper<TypeOut>(result.cbegin(), result.cend(), result_mask.cbegin());
 }
 
 TYPED_TEST(BinaryOperationCompiledTest_NullOps, NullEquals_Vector_Vector)
@@ -552,7 +565,7 @@ TYPED_TEST(BinaryOperationCompiledTest_NullOps, NullEquals_Vector_Vector)
   auto rhs            = rhs_random_column<TypeRhs>(col_size);
   auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs, NULL_EQUALS>(lhs, rhs);
 
-  auto const result = cudf::experimental::binary_operation(
+  auto const result = cudf::binary_operation(
     lhs, rhs, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -570,7 +583,7 @@ TEST_F(BinaryOperationCompiledTest_NullOpsString, NullEquals_Vector_Vector)
   auto rhs            = rhs_random_column<TypeRhs>(col_size);
   auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs, NULL_EQUALS>(lhs, rhs);
 
-  auto const result = cudf::experimental::binary_operation(
+  auto const result = cudf::binary_operation(
     lhs, rhs, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -586,7 +599,7 @@ TYPED_TEST(BinaryOperationCompiledTest_NullOps, NullMax_Vector_Vector)
   auto rhs            = rhs_random_column<TypeRhs>(col_size);
   auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs, NULL_MAX>(lhs, rhs);
 
-  auto const result = cudf::experimental::binary_operation(
+  auto const result = cudf::binary_operation(
     lhs, rhs, cudf::binary_operator::NULL_MAX, data_type(type_to_id<TypeOut>()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -602,9 +615,41 @@ TYPED_TEST(BinaryOperationCompiledTest_NullOps, NullMin_Vector_Vector)
   auto rhs            = rhs_random_column<TypeRhs>(col_size);
   auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs, NULL_MIN>(lhs, rhs);
 
-  auto const result = cudf::experimental::binary_operation(
+  auto const result = cudf::binary_operation(
     lhs, rhs, cudf::binary_operator::NULL_MIN, data_type(type_to_id<TypeOut>()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(BinaryOperationCompiledTest_NullOpsString, NullMax_Vector_Vector)
+{
+  using TypeOut  = std::string;
+  using TypeLhs  = std::string;
+  using TypeRhs  = std::string;
+  using NULL_MAX = cudf::library::operation::NullMax<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs            = lhs_random_column<TypeLhs>(col_size);
+  auto rhs            = rhs_random_column<TypeRhs>(col_size);
+  auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs, NULL_MAX>(lhs, rhs);
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::NULL_MAX, data_type(type_to_id<cudf::string_view>()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
+}
+
+TEST_F(BinaryOperationCompiledTest_NullOpsString, NullMin_Vector_Vector)
+{
+  using TypeOut  = std::string;
+  using TypeLhs  = std::string;
+  using TypeRhs  = std::string;
+  using NULL_MIN = cudf::library::operation::NullMin<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs            = lhs_random_column<TypeLhs>(col_size);
+  auto rhs            = rhs_random_column<TypeRhs>(col_size);
+  auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs, NULL_MIN>(lhs, rhs);
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::NULL_MIN, data_type(type_to_id<cudf::string_view>()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
 }
 
 }  // namespace cudf::test::binop

@@ -3669,7 +3669,7 @@ def test_one_row_head():
     "np_dtype,pd_dtype",
     [
         tuple(item)
-        for item in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes.items()
+        for item in cudf.utils.dtypes.np_dtypes_to_pandas_dtypes.items()
     ],
 )
 def test_series_astype_pandas_nullable(dtype, np_dtype, pd_dtype):
@@ -5909,17 +5909,17 @@ def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
         (
             pd.Series([random.random() for _ in range(10)], dtype="float128"),
             None,
-            NotImplementedError,
+            TypeError,
         ),
     ],
 )
 def test_from_pandas_unsupported_types(data, expected_upcast_type, error):
     pdf = pd.DataFrame({"one_col": data})
-    if error == NotImplementedError:
-        with pytest.raises(error):
+    if error is not None:
+        with pytest.raises(ValueError):
             cudf.from_pandas(data)
 
-        with pytest.raises(error):
+        with pytest.raises(ValueError):
             cudf.Series(data)
 
         with pytest.raises(error):
@@ -8757,6 +8757,43 @@ def test_frame_series_where():
     expected = gdf.where(gdf.notna(), gdf.mean())
     actual = pdf.where(pdf.notna(), pdf.mean(), axis=1)
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "array,is_error",
+    [
+        (cupy.arange(20, 40).reshape(-1, 2), False),
+        (cupy.arange(20, 50).reshape(-1, 3), True),
+        (np.arange(20, 40).reshape(-1, 2), False),
+        (np.arange(20, 30).reshape(-1, 1), False),
+        (cupy.arange(20, 30).reshape(-1, 1), False),
+    ],
+)
+def test_dataframe_indexing_setitem_np_cp_array(array, is_error):
+    gdf = cudf.DataFrame({"a": range(10), "b": range(10)})
+    pdf = gdf.to_pandas()
+    if not is_error:
+        gdf.loc[:, ["a", "b"]] = array
+        pdf.loc[:, ["a", "b"]] = cupy.asnumpy(array)
+
+        assert_eq(gdf, pdf)
+    else:
+        assert_exceptions_equal(
+            lfunc=pdf.loc.__setitem__,
+            rfunc=gdf.loc.__setitem__,
+            lfunc_args_and_kwargs=(
+                [(slice(None, None, None), ["a", "b"]), cupy.asnumpy(array)],
+                {},
+            ),
+            rfunc_args_and_kwargs=(
+                [(slice(None, None, None), ["a", "b"]), array],
+                {},
+            ),
+            compare_error_message=False,
+            expected_error_message="shape mismatch: value array of shape "
+            "(10, 3) could not be broadcast to indexing "
+            "result of shape (10, 2)",
+        )
 
 
 @pytest.mark.parametrize(

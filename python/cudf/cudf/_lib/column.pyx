@@ -30,7 +30,10 @@ from cudf._lib.cpp.strings.convert.convert_integers cimport (
     from_integers as cpp_from_integers,
 )
 
-from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
+from cudf._lib.types import (
+    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
+    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES,
+)
 
 from cudf._lib.types cimport (
     dtype_from_column_view,
