@@ -348,6 +348,62 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
     verbosity);
 }
 
+TYPED_TEST(TypedDatetimeOpsTest, TestCeilDatetime)
+{
+  using T = TypeParam;
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace cuda::std::chrono;
+
+  auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
+  auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
+
+  auto input = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop_));
+
+  auto host_val                     = to_host<T>(input);
+  thrust::host_vector<T> timestamps = host_val.first;
+
+  thrust::host_vector<T> ceiled_day(timestamps.size());
+  thrust::transform(timestamps.begin(), timestamps.end(), ceiled_day.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(ceil<days>(i));
+  });
+  auto expected_day =
+    fixed_width_column_wrapper<T, typename T::duration::rep>(ceiled_day.begin(), ceiled_day.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_day(input), expected_day);
+
+  thrust::host_vector<T> ceiled_hour(timestamps.size());
+  thrust::transform(timestamps.begin(), timestamps.end(), ceiled_hour.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(ceil<hours>(i));
+  });
+  auto expected_hour = fixed_width_column_wrapper<T, typename T::duration::rep>(ceiled_hour.begin(),
+                                                                                ceiled_hour.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_hour(input), expected_hour);
+
+  std::vector<T> ceiled_minute(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), ceiled_minute.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(ceil<minutes>(i));
+  });
+  auto expected_minute = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    ceiled_minute.begin(), ceiled_minute.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_minute(input), expected_minute);
+
+  std::vector<T> ceiled_second(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), ceiled_second.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(ceil<seconds>(i));
+  });
+  auto expected_second = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    ceiled_second.begin(), ceiled_second.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_second(input), expected_second);
+
+  std::vector<T> ceiled_millisecond(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), ceiled_millisecond.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(ceil<milliseconds>(i));
+  });
+  auto expected_millisecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    ceiled_millisecond.begin(), ceiled_millisecond.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_millisecond(input), expected_millisecond);
+}
+
 TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
 {
   using namespace cudf::test;
@@ -568,6 +624,41 @@ TEST_F(BasicDatetimeOpsTest, TestIsLeapYear)
     cudf::test::fixed_width_column_wrapper<bool>{
       {true, XXX, false, true, true, false, false, false, XXX, true, false, XXX},
       {true, false, true, true, true, true, true, true, false, true, true, false}});
+}
+
+TEST_F(BasicDatetimeOpsTest, TestDaysInMonths)
+
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace cuda::std::chrono;
+
+  auto timestamps_s =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      {
+        0L,            // NULL
+        -1887541682L,  // 1910-03-10 10:51:58
+        0L,            // NULL
+        -1251006943L,  // 1930-05-11 18:04:17
+        -932134638L,   // 1940-06-18 09:42:42
+        -614354877L,   // 1950-07-14 09:52:03
+        -296070394L,   // 1960-08-14 06:13:26
+        22840404L,     // 1970-09-22 08:33:24
+        339817190L,    // 1980-10-08 01:39:50
+        657928062L,    // 1990-11-06 21:47:42
+        976630837L,    // 2000-12-12 14:20:37
+        1294699018L,   // 2011-01-10 22:36:58
+        1613970182L,   // 2021-02-22 05:03:02 - non leap year February
+        1930963331L,   // 2031-03-11 02:42:11
+        2249867102L,   // 2041-04-18 03:05:02
+        951426858L,    // 2000-02-24 21:14:18 - leap year February
+      },
+      iterators::nulls_at({0, 2})};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*days_in_month(timestamps_s),
+                                 cudf::test::fixed_width_column_wrapper<int16_t>{
+                                   {-1, 31, -1, 31, 30, 31, 31, 30, 31, 30, 31, 31, 28, 31, 30, 29},
+                                   iterators::nulls_at({0, 2})});
 }
 
 TEST_F(BasicDatetimeOpsTest, TestQuarter)

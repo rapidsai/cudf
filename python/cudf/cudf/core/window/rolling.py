@@ -4,6 +4,7 @@ import itertools
 
 import numba
 import pandas as pd
+from pandas.api.indexers import BaseIndexer
 
 import cudf
 from cudf import _lib as libcudf
@@ -20,7 +21,7 @@ class Rolling(GetAttrGetItemMixin):
 
     Parameters
     ----------
-    window : int or offset
+    window : int, offset or a BaseIndexer subclass
         Size of the window, i.e., the number of observations used
         to calculate the statistic.
         For datetime indexes, an offset can be provided instead
@@ -28,6 +29,8 @@ class Rolling(GetAttrGetItemMixin):
         As opposed to a fixed window size, each window will be
         sized to accommodate observations within the time period
         specified by the offset.
+        If a BaseIndexer subclass is passed, calculates the window
+        boundaries based on the defined ``get_window_bounds`` method.
     min_periods : int, optional
         The minimum number of observations in the window that are
         required to be non-null, so that the result is non-null.
@@ -195,27 +198,47 @@ class Rolling(GetAttrGetItemMixin):
         )
 
     def _apply_agg_series(self, sr, agg_name):
+        source_column = sr._column
+        min_periods = self.min_periods or 1
         if isinstance(self.window, int):
-            result_col = libcudf.rolling.rolling(
-                sr._column,
-                None,
-                None,
-                self.window,
-                self.min_periods,
-                self.center,
-                agg_name,
+            preceding_window = None
+            following_window = None
+            window = self.window
+        elif isinstance(self.window, BaseIndexer):
+            start, end = self.window.get_window_bounds(
+                num_values=len(self.obj),
+                min_periods=self.min_periods,
+                center=self.center,
+                closed=None,
             )
+            start = as_column(start, dtype="int32")
+            end = as_column(end, dtype="int32")
+
+            idx = cudf.core.column.arange(len(start))
+            preceding_window = (idx - start + cudf.Scalar(1, "int32")).astype(
+                "int32"
+            )
+            following_window = (end - idx - cudf.Scalar(1, "int32")).astype(
+                "int32"
+            )
+            window = None
         else:
-            result_col = libcudf.rolling.rolling(
-                sr._column,
-                as_column(self.window),
-                column.full(self.window.size, 0, dtype=self.window.dtype),
-                None,
-                self.min_periods,
-                self.center,
-                agg_name,
+            preceding_window = as_column(self.window)
+            following_window = column.full(
+                self.window.size, 0, dtype=self.window.dtype
             )
-        return sr._copy_construct(data=result_col)
+            window = None
+
+        result_col = libcudf.rolling.rolling(
+            source_column=source_column,
+            pre_column_window=preceding_window,
+            fwd_column_window=following_window,
+            window=window,
+            min_periods=min_periods,
+            center=self.center,
+            op=agg_name,
+        )
+        return sr._from_data({sr.name: result_col}, sr._index)
 
     def _apply_agg_dataframe(self, df, agg_name):
         result_df = cudf.DataFrame({})
@@ -258,12 +281,12 @@ class Rolling(GetAttrGetItemMixin):
 
         See also
         --------
-        cudf.core.series.Series.applymap : Apply an elementwise function to
+        cudf.Series.applymap : Apply an elementwise function to
             transform the values in the Column.
 
         Notes
         -----
-        See notes of the :meth:`cudf.core.series.Series.applymap`
+        See notes of the :meth:`cudf.Series.applymap`
 
         """
         has_nulls = False
@@ -305,15 +328,17 @@ class Rolling(GetAttrGetItemMixin):
             if self.min_periods is None:
                 min_periods = window
         else:
-            if isinstance(window, numba.cuda.devicearray.DeviceNDArray):
-                # window is a device_array of window sizes
+            if isinstance(
+                window, (numba.cuda.devicearray.DeviceNDArray, BaseIndexer)
+            ):
+                # window is a device_array of window sizes or BaseIndexer
                 self.window = window
                 self.min_periods = min_periods
                 return
 
             if not isinstance(self.obj.index, cudf.core.index.DatetimeIndex):
                 raise ValueError(
-                    "window must be an integer for " "non datetime index"
+                    "window must be an integer for non datetime index"
                 )
 
             self._time_window = True
@@ -326,7 +351,7 @@ class Rolling(GetAttrGetItemMixin):
                 window = window.to_timedelta64()
             except ValueError as e:
                 raise ValueError(
-                    "window must be integer or " "convertible to a timedelta"
+                    "window must be integer or convertible to a timedelta"
                 ) from e
             if self.min_periods is None:
                 min_periods = 1
@@ -353,14 +378,15 @@ class Rolling(GetAttrGetItemMixin):
 
 
 class RollingGroupby(Rolling):
-    def __init__(self, groupby, window, min_periods=None, center=False):
-        """
-        Grouped rolling window calculation.
+    """
+    Grouped rolling window calculation.
 
-        See also
-        --------
-        cudf.core.window.Rolling
-        """
+    See also
+    --------
+    cudf.core.window.Rolling
+    """
+
+    def __init__(self, groupby, window, min_periods=None, center=False):
         sort_order = groupby.grouping.keys.argsort()
 
         # TODO: there may be overlap between the columns

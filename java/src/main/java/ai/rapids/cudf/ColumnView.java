@@ -101,11 +101,39 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         || !nullCount.isPresent();
   }
 
+  /**
+   * Create a new column view based off of data already on the device. Ref count on the buffers
+   * is not incremented and none of the underlying buffers are owned by this view. The returned
+   * ColumnView is only valid as long as the underlying buffers remain valid. If the buffers are
+   * closed before this ColumnView is closed, it will result in undefined behavior.
+   *
+   * If ownership is needed, call {@link ColumnView#copyToColumnVector}
+   *
+   * @param type           the type of the vector
+   * @param rows           the number of rows in this vector.
+   * @param nullCount      the number of nulls in the dataset.
+   * @param dataBuffer     a host buffer required for nested types including strings and string
+   *                       categories. The ownership doesn't change on this buffer
+   * @param validityBuffer an optional validity buffer. Must be provided if nullCount != 0.
+   *                       The ownership doesn't change on this buffer
+   * @param offsetBuffer   The offsetbuffer for columns that need an offset buffer
+   */
+  public ColumnView(DType type, long rows, Optional<Long> nullCount,
+                    BaseDeviceMemoryBuffer dataBuffer,
+                    BaseDeviceMemoryBuffer validityBuffer, BaseDeviceMemoryBuffer offsetBuffer) {
+    this(type, (int) rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        dataBuffer, validityBuffer, offsetBuffer, null);
+    assert (!type.isNestedType());
+    assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
+        || !nullCount.isPresent();
+  }
+
   private ColumnView(DType type, long rows, int nullCount,
                      BaseDeviceMemoryBuffer dataBuffer, BaseDeviceMemoryBuffer validityBuffer,
                      BaseDeviceMemoryBuffer offsetBuffer, ColumnView[] children) {
     this(ColumnVector.initViewHandle(type, (int) rows, nullCount, dataBuffer, validityBuffer,
-        offsetBuffer, Arrays.stream(children).mapToLong(c -> c.getNativeView()).toArray()));
+        offsetBuffer, children == null ? new long[]{} :
+            Arrays.stream(children).mapToLong(c -> c.getNativeView()).toArray()));
   }
 
   /** Creates a ColumnVector from a column view handle
@@ -138,6 +166,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   public final DType getType() {
     return type;
+  }
+
+  /**
+   * Returns the child column views for this view
+   * Please note that it is the responsibility of the caller to close these views.
+   * @return an array of child column views
+   */
+  public final ColumnView[] getChildColumnViews() {
+    int numChildren = getNumChildren();
+    if (!getType().isNestedType()) {
+      return null;
+    }
+    ColumnView[] views = new ColumnView[numChildren];
+    try {
+      for (int i = 0; i < numChildren; i++) {
+        views[i] = getChildColumnView(i);
+      }
+      return views;
+    } catch(Throwable t) {
+      for (ColumnView v: views) {
+        if (v != null) {
+          v.close();
+        }
+      }
+      throw t;
+    }
   }
 
   /**
@@ -1135,7 +1189,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar sum(DType outType) {
-    return reduce(Aggregation.sum(), outType);
+    return reduce(ReductionAggregation.sum(), outType);
   }
 
   /**
@@ -1143,7 +1197,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the same type as this column.
    */
   public Scalar min() {
-    return reduce(Aggregation.min(), type);
+    return reduce(ReductionAggregation.min(), type);
   }
 
   /**
@@ -1160,7 +1214,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         return tmp.min(outType);
       }
     }
-    return reduce(Aggregation.min(), outType);
+    return reduce(ReductionAggregation.min(), outType);
   }
 
   /**
@@ -1168,7 +1222,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the same type as this column.
    */
   public Scalar max() {
-    return reduce(Aggregation.max(), type);
+    return reduce(ReductionAggregation.max(), type);
   }
 
   /**
@@ -1185,7 +1239,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         return tmp.max(outType);
       }
     }
-    return reduce(Aggregation.max(), outType);
+    return reduce(ReductionAggregation.max(), outType);
   }
 
   /**
@@ -1201,7 +1255,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar product(DType outType) {
-    return reduce(Aggregation.product(), outType);
+    return reduce(ReductionAggregation.product(), outType);
   }
 
   /**
@@ -1217,7 +1271,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * scalar of the specified type.
    */
   public Scalar sumOfSquares(DType outType) {
-    return reduce(Aggregation.sumOfSquares(), outType);
+    return reduce(ReductionAggregation.sumOfSquares(), outType);
   }
 
   /**
@@ -1241,7 +1295,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                types are currently supported.
    */
   public Scalar mean(DType outType) {
-    return reduce(Aggregation.mean(), outType);
+    return reduce(ReductionAggregation.mean(), outType);
   }
 
   /**
@@ -1265,7 +1319,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                types are currently supported.
    */
   public Scalar variance(DType outType) {
-    return reduce(Aggregation.variance(), outType);
+    return reduce(ReductionAggregation.variance(), outType);
   }
 
   /**
@@ -1290,7 +1344,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                types are currently supported.
    */
   public Scalar standardDeviation(DType outType) {
-    return reduce(Aggregation.standardDeviation(), outType);
+    return reduce(ReductionAggregation.standardDeviation(), outType);
   }
 
   /**
@@ -1309,7 +1363,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Null values are skipped.
    */
   public Scalar any(DType outType) {
-    return reduce(Aggregation.any(), outType);
+    return reduce(ReductionAggregation.any(), outType);
   }
 
   /**
@@ -1330,7 +1384,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   @Deprecated
   public Scalar all(DType outType) {
-    return reduce(Aggregation.all(), outType);
+    return reduce(ReductionAggregation.all(), outType);
   }
 
   /**
@@ -1343,7 +1397,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(Aggregation aggregation) {
+  public Scalar reduce(ReductionAggregation aggregation) {
     return reduce(aggregation, type);
   }
 
@@ -1360,7 +1414,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(Aggregation aggregation, DType outType) {
+  public Scalar reduce(ReductionAggregation aggregation, DType outType) {
     long nativeId = aggregation.createNativeInstance();
     try {
       return new Scalar(outType, reduce(getNativeView(), nativeId, outType.typeId.getNativeId(), outType.getScale()));
@@ -1390,20 +1444,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws IllegalArgumentException if unsupported window specification * (i.e. other than {@link WindowOptions.FrameType#ROWS} is used.
    */
   public final ColumnVector rollingWindow(RollingAggregation op, WindowOptions options) {
-    Aggregation agg = op.getBaseAggregation();
     // Check that only row-based windows are used.
     if (!options.getFrameType().equals(WindowOptions.FrameType.ROWS)) {
       throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
           + options.getFrameType());
     }
 
-    long nativePtr = agg.createNativeInstance();
+    long nativePtr = op.createNativeInstance();
     try {
       Scalar p = options.getPrecedingScalar();
       Scalar f = options.getFollowingScalar();
       return new ColumnVector(
           rollingWindow(this.getNativeView(),
-              agg.getDefaultOutput(),
+              op.getDefaultOutput(),
               options.getMinPeriods(),
               nativePtr,
               p == null || !p.isValid() ? 0 : p.getInt(),
@@ -1420,7 +1473,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * This is just a convenience method for an inclusive scan with a SUM aggregation.
    */
   public final ColumnVector prefixSum() {
-    return scan(Aggregation.sum());
+    return scan(ScanAggregation.sum());
   }
 
   /**
@@ -1431,7 +1484,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                   null policy too. Currently none of those aggregations are supported so
    *                   it is undefined how they would interact with each other.
    */
-  public final ColumnVector scan(Aggregation aggregation, ScanType scanType, NullPolicy nullPolicy) {
+  public final ColumnVector scan(ScanAggregation aggregation, ScanType scanType, NullPolicy nullPolicy) {
     long nativeId = aggregation.createNativeInstance();
     try {
       return new ColumnVector(scan(getNativeView(), nativeId,
@@ -1446,7 +1499,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param aggregation the aggregation to perform
    * @param scanType should the scan be inclusive, include the current row, or exclusive.
    */
-  public final ColumnVector scan(Aggregation aggregation, ScanType scanType) {
+  public final ColumnVector scan(ScanAggregation aggregation, ScanType scanType) {
     return scan(aggregation, scanType, NullPolicy.EXCLUDE);
   }
 
@@ -1454,7 +1507,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Computes an inclusive scan for a column that excludes nulls.
    * @param aggregation the aggregation to perform
    */
-  public final ColumnVector scan(Aggregation aggregation) {
+  public final ColumnVector scan(ScanAggregation aggregation) {
     return scan(aggregation, ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
   }
 

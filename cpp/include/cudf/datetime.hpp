@@ -207,6 +207,21 @@ std::unique_ptr<cudf::column> is_leap_year(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Extract the number of days in the month
+ *
+ * output[i] contains the number of days in the month of date `column[i]`
+ * output[i] is null if `column[i]` is null
+ *
+ * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
+ *
+ * @param cudf::column_view of the input datetime values
+ * @return cudf::column of datatype INT16 of days in month of the corresponding date
+ */
+std::unique_ptr<cudf::column> days_in_month(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief  Returns the quarter of the date
  *
  * `output[i]` will be a value from {1, 2, 3, 4} corresponding to the quater of month given by
@@ -222,5 +237,90 @@ std::unique_ptr<cudf::column> extract_quarter(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
+
+/**
+ * @brief Round up to the nearest day
+ *
+ * @param cudf::column_view of the input datetime values
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
+ */
+std::unique_ptr<cudf::column> ceil_day(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round up to the nearest hour
+ *
+ * @param cudf::column_view of the input datetime values
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
+ */
+std::unique_ptr<cudf::column> ceil_hour(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round up to the nearest minute
+ *
+ * @param cudf::column_view of the input datetime values
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
+ */
+std::unique_ptr<cudf::column> ceil_minute(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round up to the nearest second
+ *
+ * @param cudf::column_view of the input datetime values
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
+ */
+std::unique_ptr<cudf::column> ceil_second(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round up to the nearest millisecond
+ *
+ * @param cudf::column_view of the input datetime values
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
+ */
+std::unique_ptr<column> ceil_millisecond(
+  column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round up to the nearest microsecond
+ *
+ * @param cudf::column_view of the input datetime values
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
+ */
+std::unique_ptr<column> ceil_microsecond(
+  column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round up to the nearest nanosecond
+ *
+ * @param cudf::column_view of the input datetime values
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
+ */
+std::unique_ptr<column> ceil_nanosecond(
+  column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 }  // namespace datetime
 }  // namespace cudf

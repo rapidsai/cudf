@@ -2,6 +2,7 @@
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
+from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -49,8 +50,10 @@ cdef extern from "cudf/io/csv.hpp" \
         cudf_io_types.quote_style get_quoting() except+
         char get_quotechar() except+
         bool is_enabled_doublequote() except+
-        vector[string] get_infer_date_names() except+
-        vector[int] get_infer_date_indexes() except+
+        vector[string] get_parse_dates_names() except+
+        vector[int] get_parse_dates_indexes() except+
+        vector[string] get_parse_hex_names() except+
+        vector[int] get_parse_hex_indexes() except+
 
         # Conversion settings
         vector[string] get_dtype() except+
@@ -92,11 +95,14 @@ cdef extern from "cudf/io/csv.hpp" \
         void set_quoting(cudf_io_types.quote_style style) except+
         void set_quotechar(char val) except+
         void set_doublequote(bool val) except+
-        void set_infer_date_names(vector[string]) except+
-        void set_infer_date_indexes(vector[int]) except+
+        void set_parse_dates(vector[string]) except+
+        void set_parse_dates(vector[int]) except+
+        void set_parse_hex(vector[string]) except+
+        void set_parse_hex(vector[int]) except+
 
         # Conversion settings
-        void set_dtypes(vector[string] types) except+
+        void set_dtypes(vector[data_type] types) except+
+        void set_dtypes(map[string, data_type] types) except+
         void set_true_values(vector[string] vals) except+
         void set_false_values(vector[string] vals) except+
         void set_na_values(vector[string] vals) except+
@@ -157,11 +163,15 @@ cdef extern from "cudf/io/csv.hpp" \
         ) except+
         csv_reader_options_builder& quotechar(char val) except+
         csv_reader_options_builder& doublequote(bool val) except+
-        csv_reader_options_builder& infer_date_names(vector[string]) except+
-        csv_reader_options_builder& infer_date_indexes(vector[int]) except+
+        csv_reader_options_builder& parse_dates(vector[string]) except+
+        csv_reader_options_builder& parse_dates(vector[int]) except+
 
         # Conversion settings
         csv_reader_options_builder& dtypes(vector[string] types) except+
+        csv_reader_options_builder& dtypes(vector[data_type] types) except+
+        csv_reader_options_builder& dtypes(
+            map[string, data_type] types
+        ) except+
         csv_reader_options_builder& true_values(vector[string] vals) except+
         csv_reader_options_builder& false_values(vector[string] vals) except+
         csv_reader_options_builder& na_values(vector[string] vals) except+
