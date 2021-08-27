@@ -33,6 +33,8 @@ using cudf::io::io_type;
   benchmark(name##_buffer_output, type_or_group, static_cast<uint32_t>(io_type::HOST_BUFFER)); \
   benchmark(name##_void_output, type_or_group, static_cast<uint32_t>(io_type::VOID));
 
+std::string random_file_in_dir(std::string const& dir_path);
+
 /**
  * @brief Class to create a coupled `source_info` and `sink_info` of given type.
  */
