@@ -888,4 +888,27 @@ TEST_F(JsonReaderTest, JsonLinesMultipleFileInputs)
                                  float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
 }
 
+TEST_F(JsonReaderTest, BadDtypeParams)
+{
+  std::string buffer = "[1,2,3,4]";
+
+  cudf_io::json_reader_options options_vec =
+    cudf_io::json_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+      .lines(true)
+      .dtypes({dtype<int8_t>()});
+
+  // should throw because there are four columns and only one dtype
+  EXPECT_THROW(cudf_io::read_json(options_vec), cudf::logic_error);
+
+  cudf_io::json_reader_options options_map =
+    cudf_io::json_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+      .lines(true)
+      .dtypes(std::map<std::string, cudf::data_type>{{"0", dtype<int8_t>()},
+                                                     {"1", dtype<int8_t>()},
+                                                     {"2", dtype<int8_t>()},
+                                                     {"wrong_name", dtype<int8_t>()}});
+  // should throw because one of the columns is not in the dtype map
+  EXPECT_THROW(cudf_io::read_json(options_map), cudf::logic_error);
+}
+
 CUDF_TEST_PROGRAM_MAIN()

@@ -4,8 +4,6 @@ import itertools
 
 import numpy as np
 
-from cudf.core.column_accessor import ColumnAccessor
-
 from cython.operator cimport dereference
 from libc.stdint cimport uintptr_t
 from libcpp.memory cimport unique_ptr
@@ -18,6 +16,8 @@ from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport mutable_table_view, table_view
 from cudf._lib.cpp.types cimport size_type
+
+import cudf
 
 
 cdef class Table:
@@ -34,7 +34,7 @@ cdef class Table:
         """
         if data is None:
             data = {}
-        self._data = ColumnAccessor(data)
+        self._data = cudf.core.column_accessor.ColumnAccessor(data)
         self._index = index
 
     @property

@@ -53,7 +53,7 @@ _np_pa_dtypes = {
     np.str_: pa.string(),
 }
 
-cudf_dtypes_to_pandas_dtypes = {
+np_dtypes_to_pandas_dtypes = {
     np.dtype("uint8"): pd.UInt8Dtype(),
     np.dtype("uint16"): pd.UInt16Dtype(),
     np.dtype("uint32"): pd.UInt32Dtype(),
@@ -79,7 +79,7 @@ pyarrow_dtypes_to_pandas_dtypes = {
     pa.string(): pd.StringDtype(),
 }
 
-pandas_dtypes_to_cudf_dtypes = {
+pandas_dtypes_to_np_dtypes = {
     pd.UInt8Dtype(): np.dtype("uint8"),
     pd.UInt16Dtype(): np.dtype("uint16"),
     pd.UInt32Dtype(): np.dtype("uint32"),
@@ -105,10 +105,10 @@ pandas_dtypes_alias_to_cudf_alias = {
 }
 
 if PANDAS_GE_120:
-    cudf_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
-    cudf_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
-    pandas_dtypes_to_cudf_dtypes[pd.Float32Dtype()] = np.dtype("float32")
-    pandas_dtypes_to_cudf_dtypes[pd.Float64Dtype()] = np.dtype("float64")
+    np_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
+    np_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
+    pandas_dtypes_to_np_dtypes[pd.Float32Dtype()] = np.dtype("float32")
+    pandas_dtypes_to_np_dtypes[pd.Float64Dtype()] = np.dtype("float64")
     pandas_dtypes_alias_to_cudf_alias["Float32"] = "float32"
     pandas_dtypes_alias_to_cudf_alias["Float64"] = "float64"
 
@@ -154,7 +154,7 @@ def np_to_pa_dtype(dtype):
             return pa.duration(time_unit)
         # default fallback unit is ns
         return pa.duration("ns")
-    return _np_pa_dtypes[np.dtype(dtype).type]
+    return _np_pa_dtypes[cudf.dtype(dtype).type]
 
 
 def get_numeric_type_info(dtype):
@@ -197,7 +197,7 @@ def cudf_dtype_from_pydata_dtype(dtype):
         return cudf.core.dtypes.Decimal32Dtype
     elif is_decimal64_dtype(dtype):
         return cudf.core.dtypes.Decimal64Dtype
-    elif dtype in cudf._lib.types.np_to_cudf_types:
+    elif dtype in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
         return dtype.type
 
     return infer_dtype_from_object(dtype)
@@ -216,7 +216,7 @@ def cudf_dtype_to_pa_type(dtype):
     ):
         return dtype.to_arrow()
     else:
-        return np_to_pa_dtype(np.dtype(dtype))
+        return np_to_pa_dtype(cudf.dtype(dtype))
 
 
 def cudf_dtype_from_pa_type(typ):
@@ -351,7 +351,7 @@ def min_signed_type(x, min_size=8):
     that can represent the integer ``x``
     """
     for int_dtype in np.sctypes["int"]:
-        if (np.dtype(int_dtype).itemsize * 8) >= min_size:
+        if (cudf.dtype(int_dtype).itemsize * 8) >= min_size:
             if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
                 return int_dtype
     # resort to using `int64` and let numpy raise appropriate exception:
@@ -364,7 +364,7 @@ def min_unsigned_type(x, min_size=8):
     that can represent the integer ``x``
     """
     for int_dtype in np.sctypes["uint"]:
-        if (np.dtype(int_dtype).itemsize * 8) >= min_size:
+        if (cudf.dtype(int_dtype).itemsize * 8) >= min_size:
             if 0 <= x <= np.iinfo(int_dtype).max:
                 return int_dtype
     # resort to using `uint64` and let numpy raise appropriate exception:
@@ -385,50 +385,25 @@ def min_column_type(x, expected_type):
         return x.dtype
 
     if np.issubdtype(x.dtype, np.floating):
+        return get_min_float_dtype(x)
+
+    elif np.issubdtype(expected_type, np.integer):
         max_bound_dtype = np.min_scalar_type(x.max())
         min_bound_dtype = np.min_scalar_type(x.min())
         result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
-        if result_type == np.dtype("float16"):
-            # cuDF does not support float16 dtype
-            result_type = np.dtype("float32")
-        return result_type
+    else:
+        result_type = x.dtype
 
-    if np.issubdtype(expected_type, np.integer):
-        max_bound_dtype = np.min_scalar_type(x.max())
-        min_bound_dtype = np.min_scalar_type(x.min())
-        return np.promote_types(max_bound_dtype, min_bound_dtype)
-
-    return x.dtype
+    return cudf.dtype(result_type)
 
 
 def get_min_float_dtype(col):
     max_bound_dtype = np.min_scalar_type(float(col.max()))
     min_bound_dtype = np.min_scalar_type(float(col.min()))
-    result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
-    if result_type == np.dtype("float16"):
-        # cuDF does not support float16 dtype
-        result_type = np.dtype("float32")
-    return result_type
-
-
-def check_cast_unsupported_dtype(dtype):
-    if is_categorical_dtype(dtype):
-        return dtype
-
-    if isinstance(dtype, pd.core.arrays.numpy_.PandasDtype):
-        dtype = dtype.numpy_dtype
-    else:
-        dtype = np.dtype(dtype)
-
-    if dtype in cudf._lib.types.np_to_cudf_types:
-        return dtype
-
-    if dtype == np.dtype("float16"):
-        return np.dtype("float32")
-
-    raise NotImplementedError(
-        f"Cannot cast {dtype} dtype, as it is not supported by CuDF."
+    result_type = np.promote_types(
+        "float32", np.promote_types(max_bound_dtype, min_bound_dtype)
     )
+    return cudf.dtype(result_type)
 
 
 def is_mixed_with_object_dtype(lhs, rhs):
@@ -452,7 +427,7 @@ def get_time_unit(obj):
 
 
 def _get_nan_for_dtype(dtype):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     if pd.api.types.is_datetime64_dtype(
         dtype
     ) or pd.api.types.is_timedelta64_dtype(dtype):
@@ -550,7 +525,7 @@ def find_common_type(dtypes):
                 [dtype for dtype in dtypes if is_decimal_dtype(dtype)]
             )
         else:
-            return np.dtype("O")
+            return cudf.dtype("O")
 
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately
@@ -568,10 +543,8 @@ def find_common_type(dtypes):
 
     common_dtype = np.find_common_type(list(dtypes), [])
     if common_dtype == np.dtype("float16"):
-        # cuDF does not support float16 dtype
-        return np.dtype("float32")
-    else:
-        return common_dtype
+        return cudf.dtype("float32")
+    return cudf.dtype(common_dtype)
 
 
 def _can_cast(from_dtype, to_dtype):
@@ -581,10 +554,12 @@ def _can_cast(from_dtype, to_dtype):
     `np.can_cast` but with some special handling around
     cudf specific dtypes.
     """
+    if from_dtype in {None, cudf.NA}:
+        return True
     if isinstance(from_dtype, type):
-        from_dtype = np.dtype(from_dtype)
+        from_dtype = cudf.dtype(from_dtype)
     if isinstance(to_dtype, type):
-        to_dtype = np.dtype(to_dtype)
+        to_dtype = cudf.dtype(to_dtype)
 
     # TODO : Add precision & scale checking for
     # decimal types in future

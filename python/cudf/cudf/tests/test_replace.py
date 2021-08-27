@@ -273,9 +273,7 @@ def test_series_fillna_numerical(psr, data_dtype, fill_value, inplace):
     # https://pandas.pydata.org/pandas-docs/stable/user_guide/integer_na.html
     if np.dtype(data_dtype).kind not in ("f") and test_psr.dtype.kind == "i":
         test_psr = test_psr.astype(
-            cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes[
-                np.dtype(data_dtype)
-            ]
+            cudf.utils.dtypes.np_dtypes_to_pandas_dtypes[np.dtype(data_dtype)]
         )
 
     gsr = cudf.from_pandas(test_psr)
@@ -318,7 +316,7 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
     pdata = container(data)
 
     if np.dtype(data_dtype).kind not in ("f"):
-        data_dtype = cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes[
+        data_dtype = cudf.utils.dtypes.np_dtypes_to_pandas_dtypes[
             np.dtype(data_dtype)
         ]
     pdata = pdata.astype(data_dtype)
@@ -657,6 +655,7 @@ def test_fillna_method_fixed_width_non_num(data, container, method, inplace):
         pd.DataFrame(
             {"a": [1, 2, None], "b": [None, None, 5]}, index=["a", "p", "z"]
         ),
+        pd.DataFrame({"a": [1, 2, 3]}),
     ],
 )
 @pytest.mark.parametrize(
@@ -671,6 +670,7 @@ def test_fillna_method_fixed_width_non_num(data, container, method, inplace):
         {"b": pd.Series([11, 22, 33], index=["a", "p", "z"])},
         {"a": 5, "b": pd.Series([3, 4, 5], index=["a", "p", "z"])},
         {"c": 100},
+        np.nan,
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])

@@ -245,3 +245,8 @@ ConfigureBench(STRINGS_BENCH
 # - json benchmark -------------------------------------------------------------------
 ConfigureBench(JSON_BENCH
   string/json_benchmark.cpp)
+
+###################################################################################################
+# - io benchmark ---------------------------------------------------------------------
+ConfigureBench(MULTIBYTE_SPLIT_BENCHMARK
+  io/text/multibyte_split_benchmark.cpp)

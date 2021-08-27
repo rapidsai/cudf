@@ -101,11 +101,39 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         || !nullCount.isPresent();
   }
 
+  /**
+   * Create a new column view based off of data already on the device. Ref count on the buffers
+   * is not incremented and none of the underlying buffers are owned by this view. The returned
+   * ColumnView is only valid as long as the underlying buffers remain valid. If the buffers are
+   * closed before this ColumnView is closed, it will result in undefined behavior.
+   *
+   * If ownership is needed, call {@link ColumnView#copyToColumnVector}
+   *
+   * @param type           the type of the vector
+   * @param rows           the number of rows in this vector.
+   * @param nullCount      the number of nulls in the dataset.
+   * @param dataBuffer     a host buffer required for nested types including strings and string
+   *                       categories. The ownership doesn't change on this buffer
+   * @param validityBuffer an optional validity buffer. Must be provided if nullCount != 0.
+   *                       The ownership doesn't change on this buffer
+   * @param offsetBuffer   The offsetbuffer for columns that need an offset buffer
+   */
+  public ColumnView(DType type, long rows, Optional<Long> nullCount,
+                    BaseDeviceMemoryBuffer dataBuffer,
+                    BaseDeviceMemoryBuffer validityBuffer, BaseDeviceMemoryBuffer offsetBuffer) {
+    this(type, (int) rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        dataBuffer, validityBuffer, offsetBuffer, null);
+    assert (!type.isNestedType());
+    assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
+        || !nullCount.isPresent();
+  }
+
   private ColumnView(DType type, long rows, int nullCount,
                      BaseDeviceMemoryBuffer dataBuffer, BaseDeviceMemoryBuffer validityBuffer,
                      BaseDeviceMemoryBuffer offsetBuffer, ColumnView[] children) {
     this(ColumnVector.initViewHandle(type, (int) rows, nullCount, dataBuffer, validityBuffer,
-        offsetBuffer, Arrays.stream(children).mapToLong(c -> c.getNativeView()).toArray()));
+        offsetBuffer, children == null ? new long[]{} :
+            Arrays.stream(children).mapToLong(c -> c.getNativeView()).toArray()));
   }
 
   /** Creates a ColumnVector from a column view handle
@@ -138,6 +166,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   public final DType getType() {
     return type;
+  }
+
+  /**
+   * Returns the child column views for this view
+   * Please note that it is the responsibility of the caller to close these views.
+   * @return an array of child column views
+   */
+  public final ColumnView[] getChildColumnViews() {
+    int numChildren = getNumChildren();
+    if (!getType().isNestedType()) {
+      return null;
+    }
+    ColumnView[] views = new ColumnView[numChildren];
+    try {
+      for (int i = 0; i < numChildren; i++) {
+        views[i] = getChildColumnView(i);
+      }
+      return views;
+    } catch(Throwable t) {
+      for (ColumnView v: views) {
+        if (v != null) {
+          v.close();
+        }
+      }
+      throw t;
+    }
   }
 
   /**
