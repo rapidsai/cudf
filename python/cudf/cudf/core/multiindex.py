@@ -1524,9 +1524,14 @@ class MultiIndex(BaseIndex):
         if not isinstance(multiindex, pd.MultiIndex):
             raise TypeError("not a pandas.MultiIndex")
 
+        names = multiindex.names
+        if not len(multiindex.names) == len(set(multiindex.names)):
+            # non-unique names
+            names = tuple(range(len(names)))
+
         mi = cls(
             names=multiindex.names,
-            source_data=multiindex.to_frame(),
+            source_data=multiindex.to_frame(name=names),
             nan_as_null=nan_as_null,
         )
 
