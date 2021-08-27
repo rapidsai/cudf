@@ -185,7 +185,7 @@ std::unique_ptr<column> is_timestamp(
  *
  * The following code is an example of retrieving these strings from the locale
  * using c++ std functions:
- * 
+ *
  * @code{.cpp}
  * #include <clocale>
  * #include <langinfo.h>
