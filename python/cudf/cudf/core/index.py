@@ -260,31 +260,6 @@ class RangeIndex(BaseIndex):
         )
 
     def drop_duplicates(self, keep="first"):
-        """
-        Return Index with duplicate values removed
-
-        Parameters
-        ----------
-        keep : {‘first’, ‘last’, False}, default ‘first’
-            * ‘first’ : Drop duplicates except for the
-                first occurrence.
-            * ‘last’ : Drop duplicates except for the
-                last occurrence.
-            *  False : Drop all duplicates.
-
-        Returns
-        -------
-        deduplicated : RangeIndex
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.RangeIndex(0, 10)
-        >>> idx
-        RangeIndex(start=0, stop=10, step=1)
-        >>> idx.drop_duplicates()
-        RangeIndex(start=0, stop=10, step=1)
-        """  # noqa: E501
         return self
 
     def __repr__(self):
@@ -630,7 +605,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         Returns
         -------
-        deduplicated : Index
+        Index
 
         Examples
         --------
