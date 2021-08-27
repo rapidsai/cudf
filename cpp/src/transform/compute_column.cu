@@ -69,12 +69,12 @@ __launch_bounds__(max_block_size) __global__
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
   auto const start_idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
   auto const stride    = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
-  auto evaluator       = cudf::ast::detail::expression_evaluator<has_nulls>(
-    table, device_expression_data, thread_intermediate_storage);
+  auto evaluator =
+    cudf::ast::detail::expression_evaluator<has_nulls>(table, device_expression_data);
 
   for (cudf::size_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
     auto output_dest = ast::detail::mutable_column_expression_result<has_nulls>(output_column);
-    evaluator.evaluate(output_dest, row_index);
+    evaluator.evaluate(output_dest, row_index, thread_intermediate_storage);
   }
 }
 
