@@ -21,7 +21,7 @@ from libcpp.utility cimport move
 
 import cudf
 from cudf._lib.types import (
-    cudf_to_np_types,
+    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
     datetime_unit_map,
     duration_unit_map,
 )
@@ -199,7 +199,7 @@ cdef class DeviceScalar:
                 )
             else:
                 s._dtype = ListDtype(
-                    cudf_to_np_types[
+                    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
                         <underlying_type_t_type_id>(
                             (<list_scalar*>s.get_raw_ptr())[0]
                             .view().type().id()
@@ -210,7 +210,7 @@ cdef class DeviceScalar:
             if dtype is not None:
                 s._dtype = dtype
             else:
-                s._dtype = cudf_to_np_types[
+                s._dtype = LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
                     <underlying_type_t_type_id>(cdtype.id())
                 ]
         return s

@@ -586,9 +586,9 @@ class TimeDeltaColumn(column.ColumnBase):
 
 
 def determine_out_dtype(lhs_dtype: Dtype, rhs_dtype: Dtype) -> Dtype:
-    if np.can_cast(cudf.dtype(lhs_dtype), cudf.dtype(rhs_dtype)):
+    if np.can_cast(np.dtype(lhs_dtype), np.dtype(rhs_dtype)):
         return rhs_dtype
-    elif np.can_cast(cudf.dtype(rhs_dtype), cudf.dtype(lhs_dtype)):
+    elif np.can_cast(np.dtype(rhs_dtype), np.dtype(lhs_dtype)):
         return lhs_dtype
     else:
         raise TypeError(f"Cannot type-cast {lhs_dtype} and {rhs_dtype}")
