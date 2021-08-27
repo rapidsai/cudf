@@ -1103,7 +1103,9 @@ def gen_map_buff(size=10000):
             "lvl2_struct_map": lvl2_struct_map,
         }
     )
-    writer = po.Writer(buff, schema, stripe_size=1024)
+    writer = po.Writer(
+        buff, schema, stripe_size=1024, compression=po.CompressionKind.NONE
+    )
     tuples = list(
         map(
             lambda x: (None,) if x[0] is pd.NA else x,
