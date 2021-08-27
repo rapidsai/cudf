@@ -2102,7 +2102,7 @@ def test_get_loc_single_unique_numeric(idx, key, method):
     "idx", [pd.RangeIndex(3, 100, 4)],
 )
 @pytest.mark.parametrize("key", list(range(1, 110, 3)))
-@pytest.mark.parametrize("method", [None, "ffill", "bfill", "nearest"])
+@pytest.mark.parametrize("method", [None, "ffill"])
 def test_get_loc_rangeindex(idx, key, method):
     pi = idx
     gi = cudf.from_pandas(pi)

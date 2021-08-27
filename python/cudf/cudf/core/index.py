@@ -2,6 +2,7 @@
 
 from __future__ import annotations, division, print_function
 
+import math
 import pickle
 from numbers import Number
 from typing import (
@@ -506,9 +507,37 @@ class RangeIndex(BaseIndex):
             )
 
     def get_loc(self, key, method=None, tolerance=None):
-        return self._as_int64().get_loc(
-            key, method=method, tolerance=tolerance
-        )
+        # Given an actual integer,
+        idx = (key - self._start) / self._step
+        idx_int_upper_bound = (self._stop - self._start) // self._step
+        if method is None:
+            if tolerance is not None:
+                raise ValueError(
+                    "tolerance argument only valid if using pad, "
+                    "backfill or nearest lookups"
+                )
+
+            if idx > idx_int_upper_bound or idx < 0:
+                raise KeyError(key)
+
+            idx_int = (key - self._start) // self._step
+            if idx_int != idx:
+                raise KeyError(key)
+            return idx_int
+
+        if (method == "ffill" and idx < 0) or (
+            method == "bfill" and idx > idx_int_upper_bound
+        ):
+            raise KeyError(key)
+
+        round_method = {
+            "ffill": math.floor,
+            "bfill": math.ceil,
+            "nearest": round,
+        }[method]
+        if tolerance is not None and (abs(idx) * self._step > tolerance):
+            raise KeyError(key)
+        return np.clip(round_method(idx), 0, idx_int_upper_bound, dtype=int)
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
