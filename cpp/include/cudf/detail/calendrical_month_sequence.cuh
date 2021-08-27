@@ -12,7 +12,7 @@
 
 namespace cudf {
 namespace detail {
-struct date_sequence_functor {
+struct calendrical_month_sequence_functor {
   template <typename T>
   typename std::enable_if_t<cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>>
   operator()(size_type n,

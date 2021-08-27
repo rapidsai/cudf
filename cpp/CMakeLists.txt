@@ -237,7 +237,7 @@ add_library(cudf
     src/filling/fill.cu
     src/filling/repeat.cu
     src/filling/sequence.cu
-    src/filling/date_sequence.cu
+    src/filling/calendrical_month_sequence.cu
     src/groupby/groupby.cu
     src/groupby/hash/groupby.cu
     src/groupby/sort/aggregate.cpp

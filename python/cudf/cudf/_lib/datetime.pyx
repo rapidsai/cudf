@@ -5,7 +5,7 @@ cimport cudf._lib.cpp.datetime as libcudf_datetime
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.filling cimport date_sequence
+from cudf._lib.cpp.filling cimport calendrical_month_sequence
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
@@ -82,7 +82,7 @@ def date_range(DeviceScalar start, size_type n, offset):
     )
 
     with nogil:
-        c_result = move(date_sequence(
+        c_result = move(calendrical_month_sequence(
             n,
             start.c_value.get()[0],
             months
