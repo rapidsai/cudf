@@ -133,19 +133,19 @@ TYPED_TEST(groupby_sum_scan_test, null_keys_and_values)
 }
 
 template <typename T>
-struct FixedPointTest_32_64_Reps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-using RepTypes = ::testing::Types<int32_t, int64_t>;
-TYPED_TEST_CASE(FixedPointTest_32_64_Reps, RepTypes);
+TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTest_32_64_Reps, GroupBySortSumScanDecimalAsValue)
+TYPED_TEST(FixedPointTestAllReps, GroupBySortSumScanDecimalAsValue)
 {
   using namespace numeric;
-  using decimalXX      = TypeParam;
-  using RepType        = cudf::device_storage_type_t<decimalXX>;
-  using fp_wrapper     = fixed_point_column_wrapper<RepType>;
-  using out_fp_wrapper = fixed_point_column_wrapper<int64_t>;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = fixed_point_column_wrapper<RepType>;
+  using SumType    = std::conditional_t<std::is_same_v<decimal128, TypeParam>, __int128_t, int64_t>;
+  using out_fp_wrapper = fixed_point_column_wrapper<SumType>;
 
   for (auto const i : {2, 1, 0, -1, -2}) {
     auto const scale = scale_type{i};
@@ -161,6 +161,31 @@ TYPED_TEST(FixedPointTest_32_64_Reps, GroupBySortSumScanDecimalAsValue)
     test_single_scan(keys, vals, expect_keys, expect_vals_sum, std::move(agg2));
   }
 }
+
+// struct Decimal128Only : public cudf::test::BaseFixture {
+// };
+
+// TEST_F(Decimal128Only, GroupBySortSumScanDecimalAsValue)
+// {
+//   using namespace numeric;
+//   using RepType        = cudf::device_storage_type_t<decimal128>;
+//   using fp_wrapper     = fixed_point_column_wrapper<RepType>;
+//   using out_fp_wrapper = fixed_point_column_wrapper<RepType>;
+
+//   for (auto const i : {2, 1, 0, -1, -2}) {
+//     auto const scale = scale_type{i};
+//     // clang-format off
+//     auto const keys = key_wrapper{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+//     auto const vals = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+
+//     auto const expect_keys     = key_wrapper    {1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+//     auto const expect_vals_sum = out_fp_wrapper{{0, 3, 9, 1, 5, 10, 19, 2, 9, 17}, scale};
+//     // clang-format on
+
+//     auto agg2 = cudf::make_sum_aggregation<groupby_scan_aggregation>();
+//     test_single_scan(keys, vals, expect_keys, expect_vals_sum, std::move(agg2));
+//   }
+// }
 
 }  // namespace test
 }  // namespace cudf
