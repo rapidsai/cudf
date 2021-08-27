@@ -618,7 +618,7 @@ class metadata {
 struct orc_column_device_view {
   column_device_view cudf_column;
   thrust::optional<uint32_t> parent_index;
-  bitmask_type* pushdown_null_mask = nullptr;
+  bitmask_type const* pushdown_null_mask = nullptr;
 };
 
 /**

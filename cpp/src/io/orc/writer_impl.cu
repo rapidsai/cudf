@@ -1531,23 +1531,21 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
   auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(
     orc_table.num_columns() * segmentation.num_rowgroups(), stream);
   auto const d_valid_counts_view = device_2dspan<cudf::size_type>{
-    d_valid_counts.data(), orc_table.num_columns(), segmentation.num_rowgroups()};
-  // Note: counts are transposed compared to rowgroups
+    d_valid_counts.data(), segmentation.num_rowgroups(), orc_table.num_columns()};
   gpu::per_rowgroup_valid_counts(
     orc_table.d_columns, segmentation.rowgroups, d_valid_counts_view, stream);
 
+  auto const v = cudf::detail::make_std_vector_sync(d_valid_counts, stream);
+  for (auto e : v)
+    std::cout << e << ' ';
+  std::cout << std::endl;
+
   // D: thread per stripe; scan to find number of bits to borrow
   // in: stripes, rgs, counts
-  // out: bits to borrow [col][rg] (NOT in place)
-
-  // D: thread/warp per rg; bits to rows (due to PD nulls) could be rowgroup_range
-  // in: rgs, bb
-  // out: row offsets [col][rg]
+  // out: row offsets [rg][col]
   // need to move to the next rg if not enough!!
 
   // D2H (sync hdvector)
-
-  // H: transpose, fill out empty (where pd mask is null) with rg
 
   // lists only!
   std::vector<std::vector<rowgroup_rows>> rgs;

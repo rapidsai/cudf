@@ -19,6 +19,7 @@
 
 #include <io/utilities/block_utils.cuh>
 
+#include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -466,17 +467,36 @@ extern "C" __global__ void __launch_bounds__(128, 8)
     __syncthreads();
   }
 }
-
-void __global__ gpu_per_rowgroup_valid_counts(device_span<orc_column_device_view const> columns,
-                                              device_2dspan<rowgroup_rows const> rowgroups,
-                                              device_2dspan<cudf::size_type> valid_counts)
+template <int block_size>
+__global__ void __launch_bounds__(block_size, 2)
+  gpu_per_rowgroup_valid_counts(device_span<orc_column_device_view const> columns,
+                                device_2dspan<rowgroup_rows const> rowgroups,
+                                device_2dspan<size_type> valid_counts)
 {
+  typedef cub::BlockReduce<size_type, 128> BlockReduce;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
+
   auto const column_id = blockIdx.x;
   auto const& column   = columns[column_id];
   if (column.pushdown_null_mask == nullptr) return;
+
   auto const rowgroup_id = blockIdx.y;
-  uint32_t t             = threadIdx.x;
-  printf("%d,%d,%d\n", column_id, rowgroup_id, t);
+  auto const t           = threadIdx.x;
+
+  auto const rg                            = rowgroups[rowgroup_id][column_id];
+  size_type count                          = 0;
+  static constexpr size_type bits_per_word = sizeof(bitmask_type) * 8;
+  for (auto row = t * bits_per_word + rg.begin; row < rg.end; row += block_size * bits_per_word) {
+    auto const begin_bit = row;
+    auto const end_bit   = min(static_cast<size_type>(row + bits_per_word), rg.end);
+    auto const mask_len  = end_bit - begin_bit;
+    auto const mask =
+      cudf::detail::get_mask_offset_word(column.cudf_column.null_mask(), 0, row, end_bit) &
+      ((1 << mask_len) - 1);
+    count += __popc(mask);
+  }
+  auto const total_count = BlockReduce(temp_storage).Sum(count);
+  if (t == 0) { valid_counts[rowgroup_id][column_id] = total_count; }
 }
 
 void __host__ ParseCompressedStripeData(CompressedStreamInfo* strm_info,
@@ -543,8 +563,8 @@ void __host__ per_rowgroup_valid_counts(device_span<orc_column_device_view const
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid(columns.size(), rowgroups.size().first);  // 1 rowgroup per block
-  gpu_per_rowgroup_valid_counts<<<dim_grid, dim_block, 0, stream.value()>>>(
-    columns, rowgroups, valid_counts);
+  gpu_per_rowgroup_valid_counts<128>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(columns, rowgroups, valid_counts);
 }
 
 }  // namespace gpu

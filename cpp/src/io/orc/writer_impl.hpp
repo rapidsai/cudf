@@ -278,7 +278,7 @@ class writer::impl {
                               string_dictionaries&& dictionaries,
                               encoder_decimal_info&& dec_chunk_sizes,
                               file_segmentation const& segmentation,
-                                          std::vector<std::vector<rowgroup_rows>> aligned_rowgroups,
+                              std::vector<std::vector<rowgroup_rows>> aligned_rowgroups,
                               orc_streams const& streams);
 
   /**
