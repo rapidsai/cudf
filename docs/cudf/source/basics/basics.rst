@@ -38,46 +38,16 @@ The following table lists all of cudf types. For methods requiring dtype argumen
     +------------------------+------------------------------+-------------------------------------------------------------------------------------+---------------------------------------------+
     | Decimal                | Decimal64Dtype               | (none)                                                                              | (none)                                      |
     +------------------------+------------------------------+-------------------------------------------------------------------------------------+---------------------------------------------+
-    | List                   | ListDtype₁.₁                 | `list <https://docs.rapids.ai/api/cudf/stable/api.html#lists>`_                     | (none)₁.₂                                   |
+    | List                   | ListDtype₁.₁                 | `list <https://docs.python.org/3/library/stdtypes.html#list>`_                      | (none)₁.₂                                   |
     +------------------------+------------------------------+-------------------------------------------------------------------------------------+---------------------------------------------+
-    | Struct                 | StructDtype₁.₁               | `struct <https://nvidia.github.io/spark-rapids/docs/supported_ops.html#types>`_     | (none)₁.₂                                   |
+    | Struct                 | StructDtype₁.₁               | `struct <https://docs.python.org/3/library/stdtypes.html#dict>`_                    | (none)₁.₂                                   |
     +------------------------+------------------------------+-------------------------------------------------------------------------------------+---------------------------------------------+
 
 **Note: All dtypes above are Nullable**
 
-**1.1 The complete datatypes for both lists and structs are inferred from the data that it is composed upon. For example, the data type for the value** ``[[1, 2], [3, 4]]`` **is inferred as** ``ListDtype(int64)``.
+**1.1 The dtype of columns containing lists and structs can be inferred from the data. For example, the data type for the value** ``[[1, 2], [3, 4]]`` **is inferred as** ``ListDtype(int64)``
+**1.2 cuDF does not support string aliases for** ``list`` and ``struct`` **data types**
 
-**1.2 cuDF does not support string aliases where dtype would equal** ``'list'`` **or** ``'struct'`` **list's and structs are inferred by the datatype explicitly or through a determination based on the data that the list or struct is composed upon**
-
-
-**Struct and List datatypes**
-
-cuDF supports arbitrarily deep nested lists. Such as ``list(list(int))``, even list of structs or structs of lists
-
-cuDF also supports arbitrary fields for structs - that is, it is possible to have a struct with any number of fields and any number of types that cuDF supports, even a struct of structs
-
-Structs should be made up by same type of datatype or cuDF will produce an error - Example below
-    
-.. code-block:: python
-    
-    >>> df = cudf.Series(
-    >>> [{'a':'dog', 'b':'cat', 'c':'astronomy'},
-    >>> {'a':'fish', 'b':'gerbil', 'c':7}]
-    >>> )
-    >>> df
-        
-If Struct rows do not have the same members in each row, null values will be filled in for the members missing in any of the rows - Example below
-
-.. code-block:: python
-
-    >>> df = cudf.Series(
-    >>> [{'a':'dog', 'b':'cat', 'c':'astronomy'},
-    >>> {'a':'fish', 'b':'gerbil'}]
-    >>> )
-    >>> df
-                                           Example
-    0  {'a': 'dog ', 'b': 'cat', 'c': 'astronomy'}
-    1      {'a': 'fish', 'b': 'gerbil', 'c': None}
  
 .. _np.int8: 
 .. _np.int16: 
