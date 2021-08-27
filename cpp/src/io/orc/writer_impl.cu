@@ -1229,6 +1229,15 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
   }
 
   // attach null masks to device column views (async)
+  auto const d_mask_ptrs = cudf::detail::make_device_uvector_async(mask_ptrs, stream);
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0ul),
+    orc_table.num_columns(),
+    [cols = device_span<orc_column_device_view>{orc_table.d_columns},
+     ptrs = device_span<bitmask_type const* const>{d_mask_ptrs}] __device__(auto& idx) {
+      cols[idx].pushdown_null_mask = ptrs[idx];
+    });
 
   return {std::move(pd_masks), std::move(mask_ptrs)};
 }
