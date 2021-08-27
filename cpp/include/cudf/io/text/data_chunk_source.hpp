@@ -26,13 +26,13 @@ namespace io {
 namespace text {
 
 /**
- * @brief A contract gauranteeing stream-ordered memory access to the underlying device data.
+ * @brief A contract guaranteeing stream-ordered memory access to the underlying device data.
  *
- * This class gaurantees access to the underlying data for the stream on which the data was
+ * This class guarantees access to the underlying data for the stream on which the data was
  * allocated. Possible implementations may own the device data, or may only have a view over the
- * data. Any work enqueued to the stream on which this data was allocated is gauranteed to be
- * performed prior to the destruction of the underlying data, but otherwise no gaurantees are made
- * regarding if or when the underlying gets destroyed.
+ * data. Any work enqueued to the stream on which this data was allocated is guaranteed to be
+ * performed prior to the destruction of the underlying data, but otherwise no guarantees are made
+ * regarding if or when the underlying data gets destroyed.
  */
 class device_data_chunk {
  public:
