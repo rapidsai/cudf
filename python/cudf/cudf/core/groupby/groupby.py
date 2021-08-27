@@ -1233,16 +1233,16 @@ class Grouper(object):
     def __init__(self, key=None, level=None, freq=None):
         if key is not None and level is not None:
             raise ValueError("Grouper cannot specify both key and level")
-        if key is None and level is None:
+        if (key, level) == (None, None) and not freq:
             raise ValueError("Grouper must specify either key or level")
         self.key = key
         self.level = level
         # TODO: move this logic to someplace it can be reused
         if freq:
             if isinstance(freq, str):
-                self.freq = cudf.DateOffset._from_freqstr(freq)
+                freq = cudf.DateOffset._from_freqstr(freq)
             elif isinstance(freq, pd.DateOffset):
-                self.freq = cudf.DateOffset.from_pandas(freq)
+                freq = cudf.DateOffset.from_pandas(freq)
             else:
                 if not isinstance(freq, cudf.DateOffset):
                     raise TypeError(
@@ -1256,14 +1256,6 @@ class _Grouping(Serializable):
         self._obj = obj
         self._key_columns = []
         self.names = []
-        # For transform operations, we want to filter out only the value
-        # columns that will be used. When part of the key columns are composed
-        # from columns in `obj`, these columns are not included in the value
-        # columns. This only happens when `by` is specified with
-        # column labels or `Grouper` object with `key` param. To avoid that
-        # external objects overlaps in names to `obj`, these column
-        # names are recorded separately in this list.
-        self._key_column_names_from_obj = []
 
         # Need to keep track of named key columns
         # to support `as_index=False` correctly
@@ -1332,9 +1324,7 @@ class _Grouping(Serializable):
         """
         # If the key columns are in `obj`, filter them out
         value_column_names = [
-            x
-            for x in self._obj._data.names
-            if x not in self._key_column_names_from_obj
+            x for x in self._obj._data.names if x not in self._named_columns
         ]
         value_columns = self._obj._data.select_by_label(value_column_names)
         return self._obj.__class__._from_data(value_columns)
@@ -1360,13 +1350,40 @@ class _Grouping(Serializable):
         self._key_columns.append(self._obj._data[by])
         self.names.append(by)
         self._named_columns.append(by)
-        self._key_column_names_from_obj.append(by)
 
     def _handle_grouper(self, by):
-        if by.key:
+        if by.freq:
+            self._handle_freq(by.key, by.freq)
+        elif by.key:
             self._handle_label(by.key)
         else:
             self._handle_level(by.level)
+
+    def _handle_freq(self, key, freq):
+        import cudf._lib.labeling
+
+        # TODO fix:
+        if key is None:
+            key_column = self._obj.index._column
+        else:
+            key_column = self._obj._data[key]
+
+        rng = cudf.date_range(
+            pd.Timestamp(key_column.min()) - freq.to_pandas(),
+            pd.Timestamp(key_column.max()) + freq.to_pandas(),
+            freq=freq,
+        )
+        labels = cudf._lib.labeling.label_bins(
+            key_column,
+            left_edges=rng[:-1]._column,
+            left_inclusive=False,
+            right_edges=rng[1:]._column,
+            right_inclusive=True,
+        )
+
+        self._key_columns.append(rng.take(labels))
+        self.names.append(key)
+        self._named_columns.append(key)
 
     def _handle_level(self, by):
         level_values = self._obj.index.get_level_values(by)

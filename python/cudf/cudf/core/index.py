@@ -2937,6 +2937,7 @@ class IntervalIndex(GenericIndex):
             data = column.as_column(data)
             data.dtype.closed = closed
 
+        self.closed = closed
         super().__init__(data, **kwargs)
 
     def from_breaks(breaks, closed="right", name=None, copy=False, dtype=None):

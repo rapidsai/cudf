@@ -2114,3 +2114,22 @@ def test_groupby_apply_series():
     expect = make_frame(pd.DataFrame, 100).groupby("x").y.apply(foo)
 
     assert_groupby_results_equal(expect, got)
+
+
+def test_groupby_freq():
+    pdf = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-02"),
+                pd.Timestamp("2000-01-02"),
+                pd.Timestamp("2000-01-09"),
+                pd.Timestamp("2000-01-16"),
+            ],
+            "ID": [0, 1, 2, 3],
+            "Price": [10, 20, 30, 40],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby(pd.Grouper(key="Publish date", freq="1W")).mean()
+    got = gdf.groupby(cudf.Grouper(key="Publish date", freq="1W")).mean()
+    assert_eq(expect, got)
