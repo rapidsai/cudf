@@ -25,6 +25,15 @@ namespace cudf {
 namespace io {
 namespace text {
 
+/**
+ * @brief A contract gauranteeing stream-ordered memory access to the underlying device data.
+ *
+ * This class gaurantees access to the underlying data for the stream on which the data was
+ * allocated. Possible implementations may own the device data, or may only have a view over the
+ * data. Any work enqueued to the stream on which this data was allocated is gauranteed to be
+ * performed prior to the destruction of the underlying data, but otherwise no gaurantees are made
+ * regarding if or when the underlying gets destroyed.
+ */
 class device_data_chunk {
  public:
   virtual char const* data() const                 = 0;
@@ -39,8 +48,7 @@ class device_data_chunk {
  * source. A data source may be a file, a region of device memory, or a region of host memory.
  * Reading data from these data sources efficiently requires different strategies dependings on the
  * type of data source, type of compression, capabilities of the host and device, the data's
- * destination. Whole-file decompression should be hidden behind this interface
- *
+ * destination. Whole-file decompression should be hidden behind this interface.
  */
 class data_chunk_reader {
  public:
@@ -65,7 +73,6 @@ class data_chunk_reader {
 /**
  * @brief a data source capable of creating a reader which can produce views of the data source in
  * device memory.
- *
  */
 class data_chunk_source {
  public:
