@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
+from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column
 from cudf.core.index import IntervalIndex, interval_range
 
@@ -111,19 +112,17 @@ def cut(
         )
 
     if labels is not False:
-        # TODO: figure out how to handle this correctly
-        # if not (labels is None or is_list_like(labels)):
-        #     raise ValueError(
-        #         "Bin labels must either be False, None or passed in as a "
-        #         "list-like argument"
-        #     )
-        # if ordered and labels is not None:
-        #     if len(set(labels)) != len(labels):
-        #         raise ValueError(
-        #             "labels must be unique if ordered=True;"
-        #             "pass ordered=False for duplicate labels"
-        #         )
-        pass
+        if not (labels is None or is_list_like(labels)):
+            raise ValueError(
+                "Bin labels must either be False, None or passed in as a "
+                "list-like argument"
+            )
+        if ordered and labels is not None:
+            if len(set(labels)) != len(labels):
+                raise ValueError(
+                    "labels must be unique if ordered=True;"
+                    "pass ordered=False for duplicate labels"
+                )
 
     # bins can either be an int, sequence of scalars or an intervalIndex
     if isinstance(bins, Sequence):
@@ -203,18 +202,18 @@ def cut(
                 int_label_bins, closed=closed
             )
     elif labels is not False:
-        # TODO: figure out how to handle this correctly
-        # if not (is_list_like(labels)):
-        #     raise ValueError(
-        #         "Bin labels must either be False, None or passed in as a "
-        #         "list-like argument"
-        #     )
-        # if ordered and len(set(labels)) != len(labels):
-        #     raise ValueError(
-        #         "labels must be unique if ordered=True; "
-        #         "pass ordered=False for"
-        #         "duplicate labels"
-        #     )
+        if not (is_list_like(labels)):
+            raise ValueError(
+                "Bin labels must either be False, None or passed in as a "
+                "list-like argument"
+            )
+        if ordered and len(set(labels)) != len(labels):
+            raise ValueError(
+                "labels must be unique if ordered=True; "
+                "pass ordered=False for"
+                "duplicate labels"
+            )
+
         if len(labels) != len(bins) - 1:
             raise ValueError(
                 "Bin labels must be one fewer than the number of bin edges"
