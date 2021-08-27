@@ -26,8 +26,9 @@ TEST_F(NewRowOp, BasicTest)
   std::default_random_engine generator;
   std::uniform_int_distribution<int> distribution(0, 100);
 
-  const cudf::size_type n_rows{1 << 10};
+  const cudf::size_type n_rows{1 << 6};
   const cudf::size_type n_cols{1};
+  const cudf::size_type depth{8};
 
   // Create columns with values in the range [0,100)
   std::vector<column_wrapper> columns;
@@ -45,18 +46,23 @@ TEST_F(NewRowOp, BasicTest)
     return col.release();
   });
 
-  // Lets add some nulls
-  std::vector<bool> struct_validity;
-  std::uniform_int_distribution<int> bool_distribution(0, 10);
-  std::generate_n(std::back_inserter(struct_validity), cols[0]->size(), [&]() {
-    return bool_distribution(generator);
-  });
-  cudf::test::structs_column_wrapper struct_col(std::move(cols), struct_validity);
+  std::vector<std::unique_ptr<cudf::column>> child_cols = std::move(cols);
+  // Lets add some layers
+  for (int i = 0; i < depth; i++) {
+    std::vector<bool> struct_validity;
+    std::uniform_int_distribution<int> bool_distribution(0, 10 * (i + 1));
+    std::generate_n(
+      std::back_inserter(struct_validity), n_rows, [&]() { return bool_distribution(generator); });
+    cudf::test::structs_column_wrapper struct_col(std::move(child_cols), struct_validity);
+    child_cols = std::vector<std::unique_ptr<cudf::column>>{};
+    child_cols.push_back(struct_col.release());
+  }
 
-  // cudf::test::print(struct_col);
+  cudf::test::print(child_cols[0]->view());
 
   // // Create table view
-  auto input = cudf::table_view({struct_col});
+  // auto input = cudf::table_view({struct_col});
+  auto input = cudf::table(std::move(child_cols));
 
   auto result1 = cudf::sorted_order(input);
   // cudf::test::print(result1->view());

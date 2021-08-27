@@ -41,6 +41,7 @@ static void BM_sort(benchmark::State& state, bool nulls)
   std::uniform_int_distribution<int> distribution(0, 100);
 
   const cudf::size_type n_rows{(cudf::size_type)state.range(0)};
+  const cudf::size_type depth{(cudf::size_type)state.range(1)};
   const cudf::size_type n_cols{1};
 
   // Create columns with values in the range [0,100)
@@ -51,7 +52,7 @@ static void BM_sort(benchmark::State& state, bool nulls)
       0, [&](auto row) { return distribution(generator); });
     if (!nulls) return column_wrapper(elements, elements + n_rows);
     auto valids = cudf::detail::make_counting_transform_iterator(
-      0, [](auto i) { return i % 100 == 0 ? false : true; });
+      0, [](auto i) { return i % 10 == 0 ? false : true; });
     return column_wrapper(elements, elements + n_rows, valids);
   });
 
@@ -60,16 +61,20 @@ static void BM_sort(benchmark::State& state, bool nulls)
     return col.release();
   });
 
-  // Lets add some nulls
-  std::vector<bool> struct_validity;
-  std::uniform_int_distribution<int> bool_distribution(0, 1000);
-  std::generate_n(std::back_inserter(struct_validity), cols[0]->size(), [&]() {
-    return bool_distribution(generator);
-  });
-  cudf::test::structs_column_wrapper struct_col(std::move(cols), struct_validity);
+  std::vector<std::unique_ptr<cudf::column>> child_cols = std::move(cols);
+  // Lets add some layers
+  for (int i = 0; i < depth; i++) {
+    std::vector<bool> struct_validity;
+    std::uniform_int_distribution<int> bool_distribution(0, 100 * (i + 1));
+    std::generate_n(
+      std::back_inserter(struct_validity), n_rows, [&]() { return bool_distribution(generator); });
+    cudf::test::structs_column_wrapper struct_col(std::move(child_cols), struct_validity);
+    child_cols = std::vector<std::unique_ptr<cudf::column>>{};
+    child_cols.push_back(struct_col.release());
+  }
 
   // // Create table view
-  auto input = cudf::table_view({struct_col});
+  auto input = cudf::table(std::move(child_cols));
   // auto input = cudf::table_view({cols[0]->view()});
 
   for (auto _ : state) {
@@ -85,7 +90,7 @@ static void BM_sort(benchmark::State& state, bool nulls)
   (::benchmark::State & st) { BM_sort<stable>(st, nulls); } \
   BENCHMARK_REGISTER_F(Sort, name)                          \
     ->RangeMultiplier(8)                                    \
-    ->Ranges({{1 << 10, 1 << 26}, {1, 1}})                  \
+    ->Ranges({{1 << 10, 1 << 26}, {1, 8}})                  \
     ->UseManualTime()                                       \
     ->Unit(benchmark::kMillisecond);
 
