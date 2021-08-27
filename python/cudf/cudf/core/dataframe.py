@@ -2585,7 +2585,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         if not len(columns) == len(self._data.names):
             raise ValueError(
-                f"Length mismatch: expected {len(self._data.names)} elements ,"
+                f"Length mismatch: expected {len(self._data.names)} elements, "
                 f"got {len(columns)} elements"
             )
 
