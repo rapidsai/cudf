@@ -509,7 +509,9 @@ class ColumnBase(Column, Serializable):
             return column_empty(0, self.dtype, masked=True)
         # compute mask slice
         if stride == 1:
-            return libcudf.copying.column_slice(self, [start, stop])[0]
+            return libcudf.copying.column_slice(self, [start, stop])[
+                0
+            ]._with_type_metadata(self.dtype)
         else:
             # Need to create a gather map for given slice with stride
             gather_map = arange(
@@ -717,6 +719,7 @@ class ColumnBase(Column, Serializable):
                 self.as_frame()
                 ._gather(indices, keep_index=keep_index, nullify=nullify)
                 ._as_column()
+                ._with_type_metadata(self.dtype)
             )
         except RuntimeError as e:
             if "out of bounds" in str(e):
