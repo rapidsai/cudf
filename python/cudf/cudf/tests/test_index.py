@@ -2099,6 +2099,35 @@ def test_get_loc_single_unique_numeric(idx, key, method):
 
 
 @pytest.mark.parametrize(
+    "idx", [pd.RangeIndex(3, 100, 4)],
+)
+@pytest.mark.parametrize("key", list(range(1, 110, 3)))
+@pytest.mark.parametrize("method", [None, "ffill", "bfill", "nearest"])
+def test_get_loc_rangeindex(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if (
+        (key not in pi and method is None)
+        # Get key before the first element is KeyError
+        or (key < pi.start and method in "ffill")
+        # Get key after the last element is KeyError
+        or (key >= pi.stop and method in "bfill")
+    ):
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
     "idx",
     [
         pd.Index([1, 3, 3, 6]),  # monotonic
