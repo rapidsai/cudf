@@ -445,6 +445,11 @@ void orc_encode_statistics(uint8_t* blob_bfr,
                            uint32_t statistics_count,
                            rmm::cuda_stream_view stream);
 
+void per_rowgroup_valid_counts(device_span<orc_column_device_view const> columns,
+                               device_2dspan<rowgroup_rows const> rowgroups,
+                               device_2dspan<cudf::size_type> valid_counts,
+                               rmm::cuda_stream_view stream);
+
 }  // namespace gpu
 }  // namespace orc
 }  // namespace io

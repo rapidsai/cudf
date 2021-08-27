@@ -467,6 +467,18 @@ extern "C" __global__ void __launch_bounds__(128, 8)
   }
 }
 
+void __global__ gpu_per_rowgroup_valid_counts(device_span<orc_column_device_view const> columns,
+                                              device_2dspan<rowgroup_rows const> rowgroups,
+                                              device_2dspan<cudf::size_type> valid_counts)
+{
+  auto const column_id = blockIdx.x;
+  auto const& column   = columns[column_id];
+  if (column.pushdown_null_mask == nullptr) return;
+  auto const rowgroup_id = blockIdx.y;
+  uint32_t t             = threadIdx.x;
+  printf("%d,%d,%d\n", column_id, rowgroup_id, t);
+}
+
 void __host__ ParseCompressedStripeData(CompressedStreamInfo* strm_info,
                                         int32_t num_streams,
                                         uint32_t compression_block_size,
@@ -522,6 +534,17 @@ void __host__ ParseRowGroupIndex(RowGroup* row_groups,
                                                                     num_rowgroups,
                                                                     rowidx_stride,
                                                                     use_base_stride);
+}
+
+void __host__ per_rowgroup_valid_counts(device_span<orc_column_device_view const> columns,
+                                        device_2dspan<rowgroup_rows const> rowgroups,
+                                        device_2dspan<cudf::size_type> valid_counts,
+                                        rmm::cuda_stream_view stream)
+{
+  dim3 dim_block(128, 1);
+  dim3 dim_grid(columns.size(), rowgroups.size().first);  // 1 rowgroup per block
+  gpu_per_rowgroup_valid_counts<<<dim_grid, dim_block, 0, stream.value()>>>(
+    columns, rowgroups, valid_counts);
 }
 
 }  // namespace gpu

@@ -1168,13 +1168,14 @@ void splatter_null_mask(device_span<orc_column_device_view> d_columns,
                            255,
                            out_mask.size() * sizeof(bitmask_type),
                            stream.value()));
+  // TODO: reset bits where offsets are set but elem is null
 }
 
 struct pushdown_null_masks {
   // owning vector
   std::vector<rmm::device_uvector<bitmask_type>> data;
   // vector of pointers, pre-order
-  std::vector<device_span<bitmask_type>> masks;
+  std::vector<bitmask_type const*> masks;
 };
 
 pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
@@ -1190,20 +1191,20 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
     }
     auto const parent_col =
       col.parent_index().has_value() ? &orc_table.column(col.parent_index().value()) : nullptr;
-    auto const parent_null_mask = parent_col != nullptr ? mask_ptrs[parent_col->index()] : nullptr;
-    auto const null_mask        = col.null_mask();
+    auto const parent_pd_mask = parent_col != nullptr ? mask_ptrs[parent_col->index()] : nullptr;
+    auto const null_mask      = col.null_mask();
 
-    if (null_mask == nullptr and parent_null_mask == nullptr) {
+    if (null_mask == nullptr and parent_pd_mask == nullptr) {
       mask_ptrs.emplace_back(nullptr);
       continue;
     }
     if (col.orc_kind() == STRUCT) {
-      if (null_mask != nullptr and parent_null_mask == nullptr) {
+      if (null_mask != nullptr and parent_pd_mask == nullptr) {
         // reuse own null mask
         mask_ptrs.emplace_back(null_mask);
-      } else if (null_mask == nullptr and parent_null_mask != nullptr) {
+      } else if (null_mask == nullptr and parent_pd_mask != nullptr) {
         // reuse parent's pushdown mask
-        mask_ptrs.emplace_back(parent_null_mask);
+        mask_ptrs.emplace_back(parent_pd_mask);
       } else {
         // both are nullable, allocate pushdown mask
         pd_masks.emplace_back(num_bitmask_words(col.size()), stream);
@@ -1213,7 +1214,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
         thrust::transform(rmm::exec_policy(stream),
                           null_mask,
                           null_mask + pd_masks.back().size(),
-                          parent_null_mask,
+                          parent_pd_mask,
                           pd_masks.back().data(),
                           [] __device__(auto& l, auto& r) { return l & r; });
       }
@@ -1223,13 +1224,13 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
       pd_masks.emplace_back(num_bitmask_words(child_col.size()), stream);
       mask_ptrs.emplace_back(pd_masks.back().data());
       splatter_null_mask(
-        orc_table.d_columns, col.index(), null_mask, parent_null_mask, pd_masks.back(), stream);
+        orc_table.d_columns, col.index(), null_mask, parent_pd_mask, pd_masks.back(), stream);
     }
   }
 
   // attach null masks to device column views (async)
 
-  return {};
+  return {std::move(pd_masks), std::move(mask_ptrs)};
 }
 
 template <typename T>
@@ -1515,15 +1516,37 @@ string_dictionaries allocate_dictionaries(orc_table_view const& orc_table,
 std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
   orc_table_view const& orc_table,
   file_segmentation const& segmentation,
-  pushdown_null_masks const& pd_masks)
+  pushdown_null_masks const& pd_masks,
+  rmm::cuda_stream_view stream)
 {
+  auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(
+    orc_table.num_columns() * segmentation.num_rowgroups(), stream);
+  auto const d_valid_counts_view = device_2dspan<cudf::size_type>{
+    d_valid_counts.data(), orc_table.num_columns(), segmentation.num_rowgroups()};
+  // Note: counts are transposed compared to rowgroups
+  gpu::per_rowgroup_valid_counts(
+    orc_table.d_columns, segmentation.rowgroups, d_valid_counts_view, stream);
+
+  // D: thread per stripe; scan to find number of bits to borrow
+  // in: stripes, rgs, counts
+  // out: bits to borrow [col][rg] (NOT in place)
+
+  // D: thread/warp per rg; bits to rows (due to PD nulls) could be rowgroup_range
+  // in: rgs, bb
+  // out: row offsets [col][rg]
+  // need to move to the next rg if not enough!!
+
+  // D2H (sync hdvector)
+
+  // H: transpose, fill out empty (where pd mask is null) with rg
+
+  // lists only!
   std::vector<std::vector<rowgroup_rows>> rgs;
   rgs.reserve(segmentation.num_rowgroups());
   for (auto rg_idx = 0ul; rg_idx < segmentation.num_rowgroups(); ++rg_idx) {
     auto in_rg = segmentation.rowgroups[rg_idx];
     rgs.emplace_back(in_rg.begin(), in_rg.end());
   }
-
   for (auto const& column : orc_table.columns) {
     if (not column.nullable() or not column.parent_index().has_value()) continue;
     for (auto const& stripe : segmentation.stripes) {
@@ -1532,6 +1555,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
         auto& rg          = rgs[rg_idx][column.index()];
         auto& rg_next     = rgs[rg_idx + 1][column.index()];
         if (rg.size() % 8) {
+          // TODO need to move to the next rg if not enough!!
           auto borrow_bits = std::min(8 - rg.size() % 8, rg_next.size());
           rg.end += borrow_bits;
           rg_next.begin += borrow_bits;
@@ -1588,7 +1612,7 @@ void writer::impl::write(table_view const& table)
     calculate_segmentation(orc_table.columns, std::move(rowgroup_bounds), max_stripe_size_);
 
   auto const aligned_rowgroup_bounds =
-    calculate_aligned_rowgroup_bounds(orc_table, segmentation, pd_masks);
+    calculate_aligned_rowgroup_bounds(orc_table, segmentation, pd_masks, stream);
 
   // Build stripe-level dictionaries
   hostdevice_2dvector<gpu::StripeDictionary> stripe_dict(
