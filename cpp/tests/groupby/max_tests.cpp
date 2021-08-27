@@ -238,9 +238,17 @@ TEST_F(groupby_dictionary_max_test, fixed_width)
   fixed_width_column_wrapper<V>  expect_vals_w({ 0xABC, 0xFFF, 0xF1 });
   // clang-format on
 
-  test_single_agg(keys, vals, expect_keys, expect_vals_w, cudf::make_max_aggregation());
-  test_single_agg(
-    keys, vals, expect_keys, expect_vals_w, cudf::make_max_aggregation(), force_use_sort_impl::YES);
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals_w,
+                  cudf::make_max_aggregation<cudf::groupby_aggregation>());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals_w,
+                  cudf::make_max_aggregation<cudf::groupby_aggregation>(),
+                  force_use_sort_impl::YES);
 }
 
 template <typename T>
