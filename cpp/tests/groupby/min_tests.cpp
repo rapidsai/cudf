@@ -227,6 +227,30 @@ TEST_F(groupby_dictionary_min_test, basic)
                   force_use_sort_impl::YES);
 }
 
+TEST_F(groupby_dictionary_min_test, fixed_width)
+{
+  using V = int64_t;
+
+  // clang-format off
+  fixed_width_column_wrapper<K> keys{     1,     2,    3,     1,     2,     2,     1,    3,    3,    2 };
+  dictionary_column_wrapper<V>  vals{ 0xABC, 0xBBB, 0xF1, 0xAAA, 0xFFF, 0xBAA, 0xAAA, 0x01, 0xF1, 0xEEE};
+  fixed_width_column_wrapper<K> expect_keys    {     1,     2,    3 };
+  fixed_width_column_wrapper<V>  expect_vals_w({ 0xAAA, 0xBAA, 0x01 });
+  // clang-format on
+
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals_w,
+                  cudf::make_min_aggregation<cudf::groupby_aggregation>());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals_w,
+                  cudf::make_min_aggregation<cudf::groupby_aggregation>(),
+                  force_use_sort_impl::YES);
+}
+
 template <typename T>
 struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
