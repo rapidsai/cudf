@@ -1535,43 +1535,67 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
   gpu::per_rowgroup_valid_counts(
     orc_table.d_columns, segmentation.rowgroups, d_valid_counts_view, stream);
 
-  auto const v = cudf::detail::make_std_vector_sync(d_valid_counts, stream);
-  for (auto e : v)
-    std::cout << e << ' ';
-  std::cout << std::endl;
-
   // D: thread per stripe; scan to find number of bits to borrow
   // in: stripes, rgs, counts
   // out: row offsets [rg][col]
   // need to move to the next rg if not enough!!
+  auto aligned_rowgroups = hostdevice_2dvector<rowgroup_rows>(
+    segmentation.num_rowgroups(), orc_table.num_columns(), stream);
+  CUDA_TRY(cudaMemcpyAsync(aligned_rowgroups.base_device_ptr(),
+                           segmentation.rowgroups.base_device_ptr(),
+                           aligned_rowgroups.count() * sizeof(rowgroup_rows),
+                           cudaMemcpyDefault,
+                           stream.value()));
+  auto const d_stripes = cudf::detail::make_device_uvector_async(segmentation.stripes, stream);
 
-  // D2H (sync hdvector)
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    orc_table.num_columns() * segmentation.num_stripes(),
+    [columns   = device_span<orc_column_device_view const>{orc_table.d_columns},
+     stripes   = device_span<stripe_rowgroups const>{d_stripes},
+     vcounts   = d_valid_counts_view,
+     rowgroups = device_2dspan<rowgroup_rows const>{segmentation.rowgroups}, // maybe not needed
+     out_rowgroups = device_2dspan<rowgroup_rows>{aligned_rowgroups}] __device__(auto& idx) {
+    auto const col_idx = idx / stripes.size();
+    // no alignment needed for root columns
+    if (not columns[col_idx].parent_index.has_value()) return;
 
-  // lists only!
-  std::vector<std::vector<rowgroup_rows>> rgs;
-  rgs.reserve(segmentation.num_rowgroups());
-  for (auto rg_idx = 0ul; rg_idx < segmentation.num_rowgroups(); ++rg_idx) {
-    auto in_rg = segmentation.rowgroups[rg_idx];
-    rgs.emplace_back(in_rg.begin(), in_rg.end());
-  }
-  for (auto const& column : orc_table.columns) {
-    if (not column.nullable() or not column.parent_index().has_value()) continue;
-    for (auto const& stripe : segmentation.stripes) {
-      for (auto rg_idx_it = stripe.cbegin(); rg_idx_it + 1 < stripe.cend(); ++rg_idx_it) {
-        auto const rg_idx = *rg_idx_it;
-        auto& rg          = rgs[rg_idx][column.index()];
-        auto& rg_next     = rgs[rg_idx + 1][column.index()];
-        if (rg.size() % 8) {
-          // TODO need to move to the next rg if not enough!!
-          auto borrow_bits = std::min(8 - rg.size() % 8, rg_next.size());
-          rg.end += borrow_bits;
-          rg_next.begin += borrow_bits;
-        }
+    auto const stripe_idx = idx % stripes.size();
+    auto const stripe     = stripes[stripe_idx];
+
+    auto const parent_col_idx = columns[col_idx].parent_index.value();
+    auto const parent_column  = columns[parent_col_idx];
+
+    for (auto rg_idx = stripe.first; rg_idx + 1 < stripe.first + stripe.size; ++rg_idx) {
+      auto& rg          = out_rowgroups[rg_idx][col_idx];
+      auto& rg_next     = out_rowgroups[rg_idx + 1][col_idx];
+      auto const size = (parent_column.pushdown_null_mask != nullptr) ? vcounts[rg_idx][parent_col_idx] : rg.size();
+      if (size % 8) {
+        // TODO need to move to the next rg if not enough!!
+        auto borrow_bits = std::min(8 - size % 8, rg_next.size());
+        rg.end += borrow_bits;
+        rg_next.begin += borrow_bits;
       }
     }
-  }
+  });
 
-  return rgs;
+aligned_rowgroups.device_to_host(stream, true);
+// create the vector of vectors
+
+// lists only!
+std::vector<std::vector<rowgroup_rows>> rgs;
+rgs.reserve(segmentation.num_rowgroups());
+for (auto rg_idx = 0ul; rg_idx < segmentation.num_rowgroups(); ++rg_idx) {
+  auto in_rg = aligned_rowgroups[rg_idx];
+  rgs.emplace_back(in_rg.begin(), in_rg.end());
+}
+
+for (auto& v : rgs)
+  for (auto e : v)
+    std::cout << e.begin << '.' << e.end << std::endl;
+
+return rgs;
 }
 
 void writer::impl::write(table_view const& table)
