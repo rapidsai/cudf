@@ -5923,6 +5923,13 @@ class DatetimeProperties(object):
             data=out_column, index=self.series._index, name=self.series.name
         )
 
+    def _ceil_datetime(self, field):
+        out_column = self.series._column.ceil_datetime(field)
+
+        return Series(
+            data=out_column, index=self.series._index, name=self.series.name
+        )
+
     def strftime(self, date_format, *args, **kwargs):
         """
         Convert to Series using specified ``date_format``.
