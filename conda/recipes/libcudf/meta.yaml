@@ -55,13 +55,12 @@ test:
     - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
     - test -f $PREFIX/include/cudf/ast/expressions.hpp
     - test -f $PREFIX/include/cudf/binaryop.hpp
-    - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
+    - test -f $PREFIX/include/cudf/calendrical_month_sequence.cuh
     - test -f $PREFIX/include/cudf/column/column_factories.hpp
     - test -f $PREFIX/include/cudf/column/column.hpp
     - test -f $PREFIX/include/cudf/column/column_view.hpp
     - test -f $PREFIX/include/cudf/concatenate.hpp
     - test -f $PREFIX/include/cudf/copying.hpp
-    - test -f $PREFIX/include/cudf/calendrical_month_sequence.cuh
     - test -f $PREFIX/include/cudf/datetime.hpp
     - test -f $PREFIX/include/cudf/detail/aggregation/aggregation.hpp
     - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
@@ -141,6 +140,7 @@ test:
     - test -f $PREFIX/include/cudf/io/types.hpp
     - test -f $PREFIX/include/cudf/ipc.hpp
     - test -f $PREFIX/include/cudf/join.hpp
+    - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
     - test -f $PREFIX/include/cudf/lists/detail/combine.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
