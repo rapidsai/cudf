@@ -22,12 +22,11 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/null_mask.hpp>
 #include <structs/utilities.hpp>
-#include "cudf/column/column_factories.hpp"
-#include "cudf/detail/null_mask.hpp"
-#include "cudf/null_mask.hpp"
-#include "cudf/types.hpp"
 
 namespace cudf::test {
 

@@ -21,13 +21,12 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
-#include <iterator>
+#include <cudf/utilities/traits.hpp>
 #include <structs/utilities.hpp>
-#include "cudf/types.hpp"
-#include "cudf/utilities/traits.hpp"
 
 #include <bitset>
 
