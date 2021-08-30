@@ -15,12 +15,7 @@ arith_ops = [
     operator.truediv,
     operator.floordiv,
     operator.mod,
-    pytest.param(
-        operator.pow,
-        marks=pytest.mark.xfail(
-            reason="https://github.com/rapidsai/cudf/issues/8470"
-        ),
-    ),
+    operator.pow
 ]
 
 comparison_ops = [
