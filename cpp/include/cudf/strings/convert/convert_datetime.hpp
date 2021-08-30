@@ -219,7 +219,7 @@ std::unique_ptr<column> is_timestamp(
  * @param format The string specifying output format.
  *        Default format is "%Y-%m-%dT%H:%M:%SZ".
  * @param names The string names to use for weekdays ("%a", "%A") and months ("%b", "%B")
- *        Default is an empty `strings_column_view`
+ *        Default is an empty `strings_column_view`.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with formatted timestamps.
  */
