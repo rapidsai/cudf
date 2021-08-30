@@ -1528,6 +1528,8 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
   pushdown_null_masks const& pd_masks,
   rmm::cuda_stream_view stream)
 {
+  if (segmentation.num_rowgroups() == 0) return {};
+
   auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(
     orc_table.num_columns() * segmentation.num_rowgroups(), stream);
   auto const d_valid_counts_view = device_2dspan<cudf::size_type>{
@@ -1555,47 +1557,83 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
     [columns   = device_span<orc_column_device_view const>{orc_table.d_columns},
      stripes   = device_span<stripe_rowgroups const>{d_stripes},
      vcounts   = d_valid_counts_view,
-     rowgroups = device_2dspan<rowgroup_rows const>{segmentation.rowgroups}, // maybe not needed
+     rowgroups = device_2dspan<rowgroup_rows const>{segmentation.rowgroups},  // maybe not needed
      out_rowgroups = device_2dspan<rowgroup_rows>{aligned_rowgroups}] __device__(auto& idx) {
-    auto const col_idx = idx / stripes.size();
-    // no alignment needed for root columns
-    if (not columns[col_idx].parent_index.has_value()) return;
+      auto const col_idx = idx / stripes.size();
+      // no alignment needed for root columns
+      if (not columns[col_idx].parent_index.has_value()) return;
 
-    auto const stripe_idx = idx % stripes.size();
-    auto const stripe     = stripes[stripe_idx];
+      auto const stripe_idx = idx % stripes.size();
+      auto const stripe     = stripes[stripe_idx];
 
-    auto const parent_col_idx = columns[col_idx].parent_index.value();
-    auto const parent_column  = columns[parent_col_idx];
+      auto const parent_col_idx = columns[col_idx].parent_index.value();
+      auto const parent_column  = columns[parent_col_idx];
+      auto const stripe_end     = stripe.first + stripe.size;
 
-    for (auto rg_idx = stripe.first; rg_idx + 1 < stripe.first + stripe.size; ++rg_idx) {
-      auto& rg          = out_rowgroups[rg_idx][col_idx];
-      auto& rg_next     = out_rowgroups[rg_idx + 1][col_idx];
-      auto const size = (parent_column.pushdown_null_mask != nullptr) ? vcounts[rg_idx][parent_col_idx] : rg.size();
-      if (size % 8) {
-        // TODO need to move to the next rg if not enough!!
-        auto borrow_bits = std::min(8 - size % 8, rg_next.size());
-        rg.end += borrow_bits;
-        rg_next.begin += borrow_bits;
+      for (auto rg_idx = stripe.first; rg_idx + 1 < stripe_end; ++rg_idx) {
+        auto& rg      = out_rowgroups[rg_idx][col_idx];
+        auto& rg_next = out_rowgroups[rg_idx + 1][col_idx];
+        if (parent_column.pushdown_null_mask == nullptr) {
+          if (rg.size() % 8) {
+            // size of the next rowgroup can be smaller only for the last rowgroup
+            auto const bits_to_borrow = std::min(8 - rg.size() % 8, rg_next.size());
+            rg.end += bits_to_borrow;
+            rg_next.begin += bits_to_borrow;
+          }
+        } else if (vcounts[rg_idx][parent_col_idx] % 8) {
+          auto bits_to_borrow = 8 - vcounts[rg_idx][parent_col_idx] % 8;
+          auto curr_rg        = rg_idx + 1;
+          // find rg
+          while (curr_rg < stripe_end and vcounts[curr_rg][parent_col_idx] <= bits_to_borrow) {
+            out_rowgroups[curr_rg][col_idx].begin = out_rowgroups[curr_rg][col_idx].end;  // empty
+            bits_to_borrow -= vcounts[curr_rg][parent_col_idx];
+            ++curr_rg;
+          }
+          if (curr_rg == stripe_end) {
+            rg.end = out_rowgroups[stripe_end - 1][col_idx].end;
+            break;
+          } else {
+            auto curr_bit = out_rowgroups[curr_rg][col_idx].begin;
+
+            // find word
+            while (bits_to_borrow != 0) {
+              auto const mask = cudf::detail::get_mask_offset_word(
+                parent_column.pushdown_null_mask, 0, curr_bit, curr_bit + 32);
+              auto const valid_in_word = __popc(mask);
+
+              if (valid_in_word > bits_to_borrow) break;
+              bits_to_borrow -= valid_in_word;
+              curr_bit += 32;
+            }
+
+            // find bit
+            while (bits_to_borrow != 0) {
+              if (bit_is_set(parent_column.pushdown_null_mask, curr_bit)) { --bits_to_borrow; };
+              ++curr_bit;
+            }
+
+            out_rowgroups[curr_rg][col_idx].begin = curr_bit;
+            rg.end                                = curr_bit;
+            rg_idx                                = curr_rg - 1;
+          }
+        }
       }
-    }
-  });
+    });
 
-aligned_rowgroups.device_to_host(stream, true);
-// create the vector of vectors
+  aligned_rowgroups.device_to_host(stream, true);
 
-// lists only!
-std::vector<std::vector<rowgroup_rows>> rgs;
-rgs.reserve(segmentation.num_rowgroups());
-for (auto rg_idx = 0ul; rg_idx < segmentation.num_rowgroups(); ++rg_idx) {
-  auto in_rg = aligned_rowgroups[rg_idx];
-  rgs.emplace_back(in_rg.begin(), in_rg.end());
-}
+  std::vector<std::vector<rowgroup_rows>> rgs;
+  rgs.reserve(segmentation.num_rowgroups());
+  for (auto rg_idx = 0ul; rg_idx < segmentation.num_rowgroups(); ++rg_idx) {
+    auto in_rg = aligned_rowgroups[rg_idx];
+    rgs.emplace_back(in_rg.begin(), in_rg.end());
+  }
 
-for (auto& v : rgs)
-  for (auto e : v)
-    std::cout << e.begin << '.' << e.end << std::endl;
+  for (auto& v : rgs)
+    for (auto e : v)
+      std::cout << e.begin << '.' << e.end << std::endl;
 
-return rgs;
+  return rgs;
 }
 
 void writer::impl::write(table_view const& table)
