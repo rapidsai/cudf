@@ -118,8 +118,14 @@ conditional_join(table_view const& left,
 
   // If the output size will be zero, we can return immediately.
   if (join_size == 0) {
-    return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
-                          std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+    auto join_indices{
+      std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr))};
+    if (join_type == join_kind::FULL_JOIN) {
+      auto complement_indices = detail::get_left_join_indices_complement(
+        join_indices.second, left.num_rows(), right.num_rows(), stream, mr);
+      join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
+    }
   }
 
   rmm::device_scalar<size_type> write_index(0, stream);

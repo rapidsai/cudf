@@ -570,6 +570,14 @@ TYPED_TEST(ConditionalFullJoinTest, TestOneColumnNoneEqual)
               {JoinNoneValue, 2}});
 };
 
+TYPED_TEST(ConditionalFullJoinTest, TestOneColumnLeftEmpty)
+{
+  this->test({{}},
+             {{3, 4, 5}},
+             left_zero_eq_right_zero,
+             {{JoinNoneValue, 0}, {JoinNoneValue, 1}, {JoinNoneValue, 2}});
+};
+
 TYPED_TEST(ConditionalFullJoinTest, TestTwoColumnThreeRowSomeEqual)
 {
   this->test({{0, 1, 2}, {10, 20, 30}},
