@@ -28,7 +28,7 @@ __device__ Timestamp add_calendrical_months_with_scale_back(Timestamp time_val,
   using namespace cuda::std::chrono;
 
   // Get the days component from the input
-  auto days_since_epoch = floor<days>(time_val);
+  auto const days_since_epoch = floor<days>(time_val);
 
   // Add the number of months
   year_month_day ymd{days_since_epoch};

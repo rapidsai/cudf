@@ -209,10 +209,10 @@ std::unique_ptr<column> sequence(
  * output[i] = `init` + i * `months`
  *
  * @param init The initial timestamp
- * @param n Number of timestamps to generate
+ * @param size Number of timestamps to generate
  * @param months Months to increment
  *
- * @returns cudf::column
+ * @returns Timestamps column with sequences of months.
  * @throw cudf::logic_error if input datatype is not a TIMESTAMP
  */
 std::unique_ptr<cudf::column> calendrical_month_sequence(
