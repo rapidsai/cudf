@@ -2120,8 +2120,8 @@ def test_groupby_freq():
     pdf = pd.DataFrame(
         {
             "Publish date": [
-                pd.Timestamp("2000-01-02"),
-                pd.Timestamp("2000-01-02"),
+                pd.Timestamp("2000-01-03"),
+                pd.Timestamp("2000-01-03"),
                 pd.Timestamp("2000-01-09"),
                 pd.Timestamp("2000-01-16"),
             ],
@@ -2132,4 +2132,4 @@ def test_groupby_freq():
     gdf = cudf.from_pandas(pdf)
     expect = pdf.groupby(pd.Grouper(key="Publish date", freq="1W")).mean()
     got = gdf.groupby(cudf.Grouper(key="Publish date", freq="1W")).mean()
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_like=True, check_dtype=False)

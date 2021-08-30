@@ -1237,17 +1237,6 @@ class Grouper(object):
             raise ValueError("Grouper must specify either key or level")
         self.key = key
         self.level = level
-        # TODO: move this logic to someplace it can be reused
-        if freq:
-            if isinstance(freq, str):
-                freq = cudf.DateOffset._from_freqstr(freq)
-            elif isinstance(freq, pd.DateOffset):
-                freq = cudf.DateOffset.from_pandas(freq)
-            else:
-                if not isinstance(freq, cudf.DateOffset):
-                    raise TypeError(
-                        "Unsupported type for freq: {type(freq).__name__}"
-                    )
         self.freq = freq
 
 
@@ -1368,18 +1357,42 @@ class _Grouping(Serializable):
         else:
             key_column = self._obj._data[key]
 
+        label = "left"
+
+        # conver freq to a pd.DateOffset:
+        if isinstance(freq, str):
+            offset = pd.tseries.frequencies.to_offset(freq)
+        elif isinstance(freq, cudf.DateOffset):
+            offset = freq.to_pandas()
+        else:
+            if not isinstance(freq, pd.DateOffset):
+                raise TypeError(
+                    "Unsupported type for freq: {type(freq).__name__}"
+                )
+            offset = freq
+
         rng = cudf.date_range(
-            pd.Timestamp(key_column.min()) - freq.to_pandas(),
-            pd.Timestamp(key_column.max()) + freq.to_pandas(),
+            pd.Timestamp(key_column.min()) - offset,
+            pd.Timestamp(key_column.max()) + offset,
             freq=freq,
         )
+
+        if offset.freqstr == "M" or offset.freqstr.startswith("W-"):
+            label = "right"
+
         labels = cudf._lib.labeling.label_bins(
             key_column,
             left_edges=rng[:-1]._column,
-            left_inclusive=False,
+            left_inclusive=(label == "left"),
             right_edges=rng[1:]._column,
-            right_inclusive=True,
+            right_inclusive=(label == "right"),
         )
+
+        if label == "right":
+            # Pandas uses the 'right' labels for these by default
+            rng = rng[1:]
+        else:
+            rng = rng[:-1]
 
         self._key_columns.append(rng.take(labels))
         self.names.append(key)

@@ -628,6 +628,9 @@ class DateOffset:
     def to_pandas(self):
         return pd.DateOffset(**self.kwds, n=1)
 
+    def name(self):
+        return self.to_pandas().name
+
     @classmethod
     def from_pandas(cls: Type[_T], offset) -> _T:
         if offset.kwds:
@@ -757,6 +760,7 @@ def date_range(
                 dtype='datetime64[ns]')
 
     """
+
     if tz is not None:
         raise NotImplementedError("tz is currently unsupported.")
 
@@ -775,15 +779,20 @@ def date_range(
 
     if freq is not None:
         if isinstance(freq, DateOffset):
-            offset = freq
+            offset = freq.to_pandas()
+        elif isinstance(freq, str):
+            offset = pd.tseries.frequencies.to_offset(freq)
         else:
-            raise TypeError("`freq` must be a cudf.DateOffset object.")
+            if not isinstance(freq, pd.DateOffset):
+                raise TypeError(
+                    "`freq` must be a string or DateOffset object."
+                )
+            offset = freq
 
         if _check_mixed_freqeuency(offset):
             raise NotImplementedError(
                 "Mixing fixed and non-fixed frequency offset is unsupported."
             )
-        offset = offset.to_pandas()
 
         if start is None:
             end = cudf.Scalar(end, dtype=dtype)
@@ -878,6 +887,7 @@ def _offset_to_nanoseconds_lower_bound(offset: DateOffset) -> int:
         kwds.get("years", 0) * (365 * nanoseconds_per_day)
         + kwds.get("months", 0) * (28 * nanoseconds_per_day)
         + kwds.get("weeks", 0) * (7 * nanoseconds_per_day)
+        + int("weekday" in kwds) * (7 * nanoseconds_per_day)
         + kwds.get("days", 0) * nanoseconds_per_day
         + kwds.get("hours", 0) * 3600 * 1e9
         + kwds.get("minutes", 0) * 60 * 1e9
