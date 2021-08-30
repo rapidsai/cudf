@@ -581,6 +581,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
                    agg,
                    detail::group_merge_tdigest(get_grouped_values(),
                                                helper.group_offsets(stream),
+                                               helper.group_labels(stream),
                                                helper.num_groups(stream),
                                                delta,
                                                stream,
