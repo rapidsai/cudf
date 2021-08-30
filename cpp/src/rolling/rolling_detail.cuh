@@ -322,7 +322,7 @@ struct DeviceRollingVariance {
                                    [&input](auto i) { return input.is_valid_nocheck(i); })
                 : end_index - start_index;
 
-    // Result is null in one of the following cases:
+    // Result will be null if any of the following conditions are met:
     // - All inputs are null
     // - Number of valid inputs is less than `min_periods`
     bool output_is_valid = count > 0 and (count >= min_periods);
