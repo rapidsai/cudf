@@ -42,12 +42,11 @@ struct calendrical_month_sequence_functor {
     auto output_column_type = cudf::data_type{cudf::type_to_id<T>()};
     auto output             = cudf::make_fixed_width_column(
       output_column_type, n, cudf::mask_state::UNALLOCATED, stream, mr);
-    auto output_view = static_cast<cudf::mutable_column_view>(*output);
 
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<std::size_t>(0),
                       thrust::make_counting_iterator<std::size_t>(n),
-                      output_view.begin<T>(),
+                      output->mutable_view().begin<T>(),
                       [initial = device_input, months] __device__(std::size_t i) {
                         return datetime::detail::add_calendrical_months_with_scale_back(
                           initial.value(), i * months);
@@ -56,13 +55,9 @@ struct calendrical_month_sequence_functor {
     return output;
   }
 
-  template <typename T>
+  template <typename T, typename... Args>
   typename std::enable_if_t<!cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>>
-  operator()(size_type n,
-             scalar const& input,
-             size_type months,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  operator()(Args&&...)
   {
     CUDF_FAIL("Cannot make a date_range of a non-datetime type");
   }
