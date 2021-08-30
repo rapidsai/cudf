@@ -341,38 +341,6 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
   }
 }
 
-namespace {
-
-/**
- * @brief Functor to fetch a column-view's `head()` pointer.
- *
- * Required because `column_view::head<T>()` is a function template
- * that necessitates type dispatch.
- */
-struct head_pointer_getter {
-  template <typename T>
-  void* operator()(cudf::column_view const& col) const
-  {
-    if constexpr (is_rep_layout_compatible<T>()) {
-      return const_cast<void*>(reinterpret_cast<void const*>(col.head<T>()));
-    } else if constexpr (is_fixed_point<T>()) {
-      return operator()<typename T::rep>(col);
-    } else {
-      // List/Struct don't have data themselves.
-      return nullptr;
-    }
-  }
-};
-
-/**
- * @brief Utility to fetch a column_view's `head()` pointer as a `void*`.
- */
-void* get_head_pointer(cudf::column_view const& col)
-{
-  return cudf::type_dispatcher(col.type(), head_pointer_getter{}, col);
-}
-};  // namespace
-
 std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_parent_nulls(
   column_view const& parent, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
@@ -419,7 +387,7 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
     return cudf::column_view(
       child.type(),
       child.size(),
-      get_head_pointer(child),
+      child.head(),
       new_child_mask,
       cudf::UNKNOWN_NULL_COUNT,
       child.offset(),
