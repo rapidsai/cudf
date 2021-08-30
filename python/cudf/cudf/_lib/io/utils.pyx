@@ -138,14 +138,6 @@ cdef Column update_column_struct_field_names(
 ):
     cdef vector[string] field_names
 
-    if is_struct_dtype(col):
-        field_names.reserve(len(col.base_children))
-        for i in range(info.children.size()):
-            field_names.push_back(info.children[i].name)
-        col = col._rename_fields(
-            field_names
-        )
-
     if col.children:
         children = list(col.children)
         for i, child in enumerate(children):
@@ -154,4 +146,13 @@ cdef Column update_column_struct_field_names(
                 info.children[i]
             )
         col.set_base_children(tuple(children))
+
+    if is_struct_dtype(col):
+        field_names.reserve(len(col.base_children))
+        for i in range(info.children.size()):
+            field_names.push_back(info.children[i].name)
+        col = col._rename_fields(
+            field_names
+        )
+
     return col
