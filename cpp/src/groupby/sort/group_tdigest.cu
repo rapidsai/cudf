@@ -35,6 +35,10 @@
 #include <thrust/binary_search.h>
 #include <thrust/iterator/discard_iterator.h>
 
+std::unique_ptr<rmm::device_uvector<double>> weights_gpu;
+std::unique_ptr<cudf::column> mean_gpu;
+std::unique_ptr<cudf::column> weight_gpu;
+
 namespace cudf {
 namespace groupby {
 namespace detail {
@@ -43,11 +47,16 @@ namespace {
 
 // the most representative point within a cluster of similar
 // values. {mean, weight}
-typedef thrust::tuple<double, double> centroid_tuple;
+typedef thrust::tuple<double, double, bool> centroid_tuple;
 
 // make a centroid from a scalar with a weight of 1.
+template <typename T>
 struct make_centroid_tuple {
-  centroid_tuple operator() __device__(double v) { return {v, 1}; }
+  column_device_view const col;
+  centroid_tuple operator() __device__(size_type index)
+  {
+    return {col.element<T>(index), 1, col.is_valid(index)};
+  }
 };
 
 // make a centroid from an input stream of mean/weight values.
@@ -55,26 +64,34 @@ struct make_weighted_centroid_tuple {
   double const* mean;
   double const* weight;
 
-  centroid_tuple operator() __device__(size_type index) { return {mean[index], weight[index]}; }
+  centroid_tuple operator() __device__(size_type index)
+  {
+    return {mean[index], weight[index], true};
+  }
 };
 
 // merge two centroids
 struct merge_centroid_tuple {
   centroid_tuple operator() __device__(centroid_tuple const& lhs, centroid_tuple const& rhs)
   {
+    bool const lhs_valid = thrust::get<2>(lhs);
+    bool const rhs_valid = thrust::get<2>(rhs);
+    if (!lhs_valid && !rhs_valid) { return {0, 0, false}; }
+    if (!lhs_valid) { return rhs; }
+    if (!rhs_valid) { return lhs; }
+
     double const lhs_mean   = thrust::get<0>(lhs);
     double const rhs_mean   = thrust::get<0>(rhs);
     double const lhs_weight = thrust::get<1>(lhs);
     double const rhs_weight = thrust::get<1>(rhs);
-
     double const new_weight = lhs_weight + rhs_weight;
-    return {(lhs_mean * lhs_weight + rhs_mean * rhs_weight) / new_weight, new_weight};
+    return {(lhs_mean * lhs_weight + rhs_mean * rhs_weight) / new_weight, new_weight, true};
   }
 };
 
 /**
- * @brief A functor which returns the nearest weight in the input stream prior to the specified
- *  next weight limits.
+ * @brief A functor which returns the nearest cumulative weight in the input stream prior to the
+ * specified next weight limits.
  *
  * This functor assumes the weight for all scalars is simply 1. Under this assumption,
  * the nearest weight that will be <= the next limit is simply the nearest whole number, which
@@ -107,30 +124,29 @@ struct cumulative_scalar_weight {
 };
 
 /**
- * @brief A functor which returns the nearest weight in the input stream prior to the specified
- *  next weight limit.
+ * @brief A functor which returns the nearest cumulative weight in the input stream prior to the
+ * specified next weight limit.
  *
  * This functor assumes we are dealing with grouped, weighted centroids.
  */
 struct nearest_value_centroid_weights {
-  double const* weights;
-  size_type const num_weights;
+  double const* cumulative_weights;
   offset_type const* outer_offsets;  // groups
   offset_type const* inner_offsets;  // tdigests within a group
 
   double operator() __device__(double cur_weight, double next_limit, size_type group_index)
   {
-    auto const first_tdigest_index = outer_offsets[group_index];
-    auto const first_weight_index  = inner_offsets[first_tdigest_index];
+    auto const tdigest_begin = outer_offsets[group_index];
+    auto const tdigest_end   = outer_offsets[group_index + 1];
+    auto const num_weights   = inner_offsets[tdigest_end] - inner_offsets[tdigest_begin];
+    double const* group_cumulative_weights = cumulative_weights + inner_offsets[tdigest_begin];
 
-    auto const last_tdigest_index = outer_offsets[group_index + 1] - 1;
-    auto const last_weight_index  = inner_offsets[last_tdigest_index + 1] - 1;
-
-    double const* group_weights = weights + first_weight_index;
-    auto const num_weights      = last_weight_index - first_weight_index;
-
-    return *(
-      thrust::lower_bound(thrust::seq, group_weights, group_weights + num_weights, next_limit) - 1);
+    auto const index = ((thrust::lower_bound(thrust::seq,
+                                             group_cumulative_weights,
+                                             group_cumulative_weights + num_weights,
+                                             next_limit)) -
+                        group_cumulative_weights);
+    return index == 0 ? 0 : group_cumulative_weights[index - 1];
   }
 };
 
@@ -142,6 +158,7 @@ struct nearest_value_centroid_weights {
  */
 struct cumulative_centroid_weight {
   double const* cumulative_weights;
+  cudf::device_span<size_type const> group_labels;
   offset_type const* outer_offsets;  // groups
   int num_outer_offsets;
   offset_type const* inner_offsets;  // tdigests with a group
@@ -155,12 +172,7 @@ struct cumulative_centroid_weight {
           thrust::seq, inner_offsets, inner_offsets + num_inner_offsets, value_index) -
         inner_offsets) -
       1;
-    auto const group_index =
-      static_cast<size_type>(
-        thrust::upper_bound(
-          thrust::seq, outer_offsets, outer_offsets + num_outer_offsets, tdigest_index) -
-        outer_offsets) -
-      1;
+    auto const group_index                 = group_labels[tdigest_index];
     auto const first_tdigest_index         = outer_offsets[group_index];
     auto const first_weight_index          = inner_offsets[first_tdigest_index];
     auto const relative_value_index        = value_index - first_weight_index;
@@ -235,6 +247,7 @@ __global__ void generate_cluster_limits_kernel(int delta_,
     // cluster (because adding the next value will cross the current limit).
     cur_weight =
       next_limit < 0 ? 0 : max(cur_weight + 1, nearest_weight(cur_weight, next_limit, tid));
+
     if (cur_weight >= total_weight) { break; }
     // based on where we are closing the cluster off (not including the incoming weight),
     // compute the next cluster limit
@@ -401,6 +414,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
               thrust::lower_bound(
                 thrust::seq, weight_limits, weight_limits + num_clusters, cumulative_weight) -
               weight_limits);
+
       return res;
     });
 
@@ -409,8 +423,8 @@ std::unique_ptr<column> compute_tdigests(int delta,
     tdigests->child(cudf::detail::tdigest_mean_column_index).mutable_view();
   cudf::mutable_column_view weight_col =
     tdigests->child(cudf::detail::tdigest_weight_column_index).mutable_view();
-  auto output = thrust::make_zip_iterator(
-    thrust::make_tuple(mean_col.begin<double>(), weight_col.begin<double>()));
+  auto output           = thrust::make_zip_iterator(thrust::make_tuple(
+    mean_col.begin<double>(), weight_col.begin<double>(), thrust::make_discard_iterator()));
   auto const num_values = std::distance(centroids_begin, centroids_end);
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         keys,
@@ -449,7 +463,9 @@ struct typed_group_tdigest {
       delta, num_groups, nearest_value_scalar_weights{}, total_weight, stream);
 
     // for simple input values, the "centroids" all have a weight of 1.
-    auto sorted_centroids = thrust::make_transform_iterator(col.begin<T>(), make_centroid_tuple{});
+    auto d_col = cudf::column_device_view::create(col);
+    auto sorted_centroids =
+      cudf::detail::make_counting_transform_iterator(0, make_centroid_tuple<T>{*d_col});
 
     // generate the final tdigest
     return compute_tdigests(delta,
@@ -501,6 +517,7 @@ std::unique_ptr<column> group_tdigest(column_view const& col,
 
 std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                                             cudf::device_span<size_type const> group_offsets,
+                                            cudf::device_span<size_type const> group_labels,
                                             size_type num_groups,
                                             int delta,
                                             rmm::cuda_stream_view stream,
@@ -591,8 +608,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                              rmm::mr::get_current_device_resource());
   auto keys = cudf::detail::make_counting_transform_iterator(
     0,
-    [outer_offsets     = group_offsets.data(),
-     num_outer_offsets = group_offsets.size(),
+    [group_labels      = group_labels.begin(),
      inner_offsets     = tdigest_offsets.begin<size_type>(),
      num_inner_offsets = tdigest_offsets.size()] __device__(int index) {
       // what -original- tdigest index this absolute index corresponds to
@@ -604,11 +620,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
         1;
 
       // what group index the original tdigest belongs to
-      return static_cast<size_type>(
-               thrust::upper_bound(
-                 thrust::seq, outer_offsets, outer_offsets + num_outer_offsets, tdigest_index) -
-               outer_offsets) -
-             1;
+      return group_labels[tdigest_index];
     });
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 keys,
@@ -623,16 +635,13 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
      inner_offsets = tdigest_offsets.begin<size_type>(),
      cumulative_weights =
        cumulative_weights->view().begin<double>()] __device__(size_type group_index) {
-      // index of the last incoming tdigest that makes up this group
-      auto const last_tdigest_index = outer_offsets[group_index + 1] - 1;
-      auto const last_weight_index  = inner_offsets[last_tdigest_index + 1] - 1;
+      auto const last_weight_index = inner_offsets[outer_offsets[group_index + 1]] - 1;
       return cumulative_weights[last_weight_index];
     });
   auto [group_cluster_wl, group_num_clusters] = generate_group_cluster_limits(
     delta,
     num_groups,
     nearest_value_centroid_weights{cumulative_weights->view().begin<double>(),
-                                   cumulative_weights->size(),
                                    group_offsets.data(),
                                    tdigest_offsets.begin<size_type>()},
     total_group_weight,
@@ -648,6 +657,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                           centroids,
                           centroids + merged->num_rows(),
                           cumulative_centroid_weight{cumulative_weights->view().begin<double>(),
+                                                     group_labels,
                                                      group_offsets.data(),
                                                      static_cast<size_type>(group_offsets.size()),
                                                      tdigest_offsets.begin<size_type>(),
