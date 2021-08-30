@@ -1254,13 +1254,14 @@ TYPED_TEST(FixedPointTests, VarStd)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<double>;
 
+  double const nan = std::numeric_limits<double>::signaling_NaN();
   double const inf = std::numeric_limits<double>::infinity();
   size_type preceding_window{3}, following_window{0}, min_periods{1}, ddof{2};
 
   // The variance of `input` given `scale` == 0
   std::vector<double> result_base_v{
-    -1, inf, 1882804.66666666667, 1928018.666666666667, 1874.6666666666667, 2.0};
-  std::vector<bool> result_mask_v{0, 1, 1, 1, 1, 1};
+    nan, inf, 1882804.66666666667, 1928018.666666666667, 1874.6666666666667, 2.0};
+  std::vector<bool> result_mask_v{1, 1, 1, 1, 1, 1};
 
   // var tests
   for (int32_t s = -2; s <= 2; s++) {
