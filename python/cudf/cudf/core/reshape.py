@@ -5,6 +5,8 @@ import itertools
 import numpy as np
 import pandas as pd
 
+from cudf.utils.dtypes import is_list_like
+
 import cudf
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
@@ -409,129 +411,78 @@ def crosstab(
     columns : array-like, Series, or list of arrays/Series
         Values to group by in the columns.
     """
-    breakpoint()
-    columns_idx = cudf.core.index.Index(columns)
-    columns_labels, columns_idx = columns_idx._encode()
-    index_labels, index_idx = cudf.core.index.Index(index)._encode()
-    column_labels = columns_labels.to_pandas().to_flat_index()
+    # try:
+    #     columns_idx = [cudf.core.index.Index(columns)]
+    #     columns= [columns]
+    # except:
+    #     columns_idx = [cudf.core.index.Index(col) for col in columns]
+    # try:
+    #     cudf_index = cudf.core.index.Index(index)
+    #     index_idx = [cudf_index]
+    #     index_labels, _ = cudf_index._encode()
+    # except:
+    #     index_idx = [idx for idx in index]
+    #     index_labels, _ = cudf.core.index.MultiIndex(index).encode()
 
-    # the result of pivot always has a multicolumn
-    result = cudf.core.column_accessor.ColumnAccessor(
-        multiindex=True, level_names=(None,) + (colnames,)
-    )
+    # if rownames is None:
+    #     rownames =[f"row_{i}" for i,arr in enumerate(index_idx)]
+    # if colnames is None:
+    #     colnames =[f"col_{i}" for i,arr in enumerate(columns_idx)]
 
+    # names = rownames + colnames
 
-    rownames = _get_names(index, rownames, prefix="row")
+    # coldict = dict(zip(range(len(columns_idx)),columns_idx))
+    # df = cudf.DataFrame(coldict)
+    # df.index = index #check what happens with more than one 
+    # groups = [index]+columns
+    # df = df.groupby(groups).count()
+    # df.index._names=names
+    # df = df.reset_index()
+    # table=df.pivot(index=rownames,columns=colnames,values=[0])
+    # table = table.fillna(0)
+    # table.index = index_labels
+    # table.index.names =rownames
+    # table.columns = table.columns.droplevel()
 
-    colnames = _get_names(columns, colnames, prefix="col")
+    if colnames is None:
+        colnames = []
+        if isinstance(columns, (np.ndarray, cupy.ndarray)):
+            colnames.append(["col_0"])
+        elif isinstance(arr, (cudf.Series, pd.Series)) and arr.name is not None:
+            colnames.append(arr.name)
+        else:
+            for i, arr in enumerate(columns):
+                names.append(f"col_{i}")
+    else:
+        if len(colnames) != len(columns):
+            raise AssertionError("arrays and names must have the same length")
+        if not isinstance(colnames, list):
+            colnames = list(colnames)
 
-    # duplicate names mapped to unique names for pivot op
-    (
-        rownames_mapper,
-        unique_rownames,
-        colnames_mapper,
-        unique_colnames,
-    ) = _build_names_mapper(rownames, colnames)
+    if rownames is None:
+        rownames = []
+        if isinstance(index, (np.ndarray, cupy.ndarray)):
+            rownames.append(["row_0"])
+        elif isinstance(arr, (cudf.Series, pd.Series)) and arr.name is not None:
+            rownames.append(arr.name)
+        else:
+            for i, arr in enumerate(index):
+                names.append(f"row_{i}")
+    else:
+        if len(rownames) != len(index):
+            raise AssertionError("arrays and names must have the same length")
+        if not isinstance(rownames, list):
+            rownames = list(rownames)
 
-
-    data = {
-        # **dict(zip(unique_rownames, index)),        data = {**dict(zip(np.unique(index),index)),**dict(zip(np.unique(columns),columns)),}
-        **dict(zip(unique_colnames, columns)),
-    }
-
-    df = DataFrame(data, index=common_idx)
-
-    if values is None:
-        df["__dummy__"] = 0
-        kwargs = {"aggfunc": len, "fill_value": 0}
-
-    table = df.pivot_table(
-        "__dummy__",
-        index=unique_rownames,
-        columns=unique_colnames,
-        margins=margins,
-        margins_name=margins_name,
-        dropna=dropna,
-        **kwargs,
-    )
-
-    table = table.rename_axis(index=rownames_mapper, axis=0)
-    table = table.rename_axis(columns=colnames_mapper, axis=1)
-
-
-
-    def as_tuple(x):
-        return x if isinstance(x, tuple) else (x,)
-
-    for v in df:
-        names = [as_tuple(v) + as_tuple(name) for name in column_labels]
-        nrows = len(index_labels)
-        ncols = len(names)
-        num_elements = nrows * ncols
-        if num_elements > 0:
-            col = df._data[v]
-            scatter_map = (columns_idx * np.int32(nrows)) + index_idx
-            target = cudf.core.frame.Frame(
-                {
-                    None: cudf.core.column.column_empty_like(
-                        col, masked=True, newsize=nrows * ncols
-                    )
-                }
-            )
-            target._data[None][scatter_map] = col
-            result_frames = target._split(range(nrows, nrows * ncols, nrows))
-            result.update(
-                {
-                    name: next(iter(f._columns))
-                    for name, f in zip(names, result_frames)
-                }
-            )
-
-    return cudf.DataFrame._from_data(
-        result, index=cudf.Index(index_labels, name=index.name)
-    )
+    data = {dict(zip(rownames,index)),dict(zip(colnames:columns))}
+    df = cudf.DataFrame(data)
+    names = rownames + colnames 
+    new_df = df.groupby(names)colnames.count()
+    cudf.Series
+    elif is_list_like(columns):
 
 
-# def _get_names(arrs, names, prefix: str = "row"):
-#     if names is None:
-#         names = []
-#         for i, arr in enumerate(arrs):
-#             if isinstance(arr, Series) and arr.name is not None:
-#                 names.append(arr.name)
-#             else:
-#                 names.append(f"{prefix}_{i}")
-#     else:
-#         if len(names) != len(arrs):
-#             raise AssertionError("arrays and names must have the same length")
-#         if not isinstance(names, list):
-#             names = list(names)
-
-#     return names
-
-
-# def  _build_names_mapper(rownames: list[str], colnames: list[str]):
-#        def get_duplicates(names):
-#             seen: set = set()
-#             return {name for name in names if name not in seen}
-
-#             shared_names = set(rownames).intersection(set(colnames))
-#             dup_names = get_duplicates(rownames) | get_duplicates(colnames) | shared_names
-
-#             rownames_mapper = {
-#                 f"row_{i}": name for i, name in enumerate(rownames) if name in dup_names
-#             }
-#             unique_rownames = [
-#                 f"row_{i}" if name in dup_names else name for i, name in enumerate(rownames)
-#             ]
-
-#             colnames_mapper = {
-#                 f"col_{i}": name for i, name in enumerate(colnames) if name in dup_names
-#             }
-#             unique_colnames = [
-#                 f"col_{i}" if name in dup_names else name for i, name in enumerate(colnames)
-#             ]
-
-#             return rownames_mapper, unique_rownames, colnames_mapper, unique_colnames
+    return table.fillna(0)
 
 
 
