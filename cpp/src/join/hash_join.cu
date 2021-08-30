@@ -348,7 +348,9 @@ std::size_t hash_join::hash_join_impl::inner_join_size(cudf::table_view const& p
                                                        rmm::cuda_stream_view stream) const
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(!_empty, "Hash table of hash join is null.");
+
+  // Return directly if build table is empty
+  if (_empty) { return 0; }
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
     probe, {}, {}, structs::detail::column_nullability::FORCE);
@@ -448,7 +450,7 @@ hash_join::hash_join_impl::probe_join_indices(cudf::table_view const& probe,
                                               rmm::mr::device_memory_resource* mr) const
 {
   // Trivial left join case - exit early
-  if (_empty && JoinKind != cudf::detail::join_kind::INNER_JOIN) {
+  if (_empty and JoinKind != cudf::detail::join_kind::INNER_JOIN) {
     return get_trivial_left_join_indices(probe, stream, mr);
   }
 

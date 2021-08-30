@@ -25,9 +25,9 @@ from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
-    cudf_dtypes_to_pandas_dtypes,
     min_column_type,
     min_signed_type,
+    np_dtypes_to_pandas_dtypes,
     numeric_normalize_types,
     to_cudf_compatible_scalar,
 )
@@ -197,7 +197,7 @@ class NumericalColumn(NumericalBaseColumn):
             if isinstance(other, cudf.Scalar):
                 return other
             other_dtype = np.promote_types(self.dtype, other_dtype)
-            if other_dtype == cudf.dtype("float16"):
+            if other_dtype == np.dtype("float16"):
                 other_dtype = cudf.dtype("float32")
                 other = other_dtype.type(other)
             if self.dtype.kind == "b":
@@ -587,8 +587,8 @@ class NumericalColumn(NumericalBaseColumn):
     def to_pandas(
         self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "pd.Series":
-        if nullable and self.dtype in cudf_dtypes_to_pandas_dtypes:
-            pandas_nullable_dtype = cudf_dtypes_to_pandas_dtypes[self.dtype]
+        if nullable and self.dtype in np_dtypes_to_pandas_dtypes:
+            pandas_nullable_dtype = np_dtypes_to_pandas_dtypes[self.dtype]
             arrow_array = self.to_arrow()
             pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
             pd_series = pd.Series(pandas_array, copy=False)

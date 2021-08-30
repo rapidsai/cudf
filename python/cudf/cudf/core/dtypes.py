@@ -36,16 +36,12 @@ def dtype(arbitrary):
     # first, try interpreting arbitrary as a NumPy dtype that we support:
     try:
         np_dtype = np.dtype(arbitrary)
-        if np_dtype.name == "float16":
-            return np.dtype("float32")
-        elif np_dtype.name == "float128":
-            raise NotImplementedError()
-        elif np_dtype.kind in ("OU"):
+        if np_dtype.kind in ("OU"):
             return np.dtype("object")
     except TypeError:
         pass
     else:
-        if np_dtype.kind not in "biufUOMm":
+        if np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
 

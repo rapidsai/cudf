@@ -282,9 +282,7 @@ def test_series_fillna_numerical(psr, data_dtype, fill_value, inplace):
     # https://pandas.pydata.org/pandas-docs/stable/user_guide/integer_na.html
     if np.dtype(data_dtype).kind not in ("f") and test_psr.dtype.kind == "i":
         test_psr = test_psr.astype(
-            cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes[
-                np.dtype(data_dtype)
-            ]
+            cudf.utils.dtypes.np_dtypes_to_pandas_dtypes[np.dtype(data_dtype)]
         )
 
     gsr = cudf.from_pandas(test_psr)
@@ -327,7 +325,7 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
     pdata = container(data)
 
     if np.dtype(data_dtype).kind not in ("f"):
-        data_dtype = cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes[
+        data_dtype = cudf.utils.dtypes.np_dtypes_to_pandas_dtypes[
             np.dtype(data_dtype)
         ]
     pdata = pdata.astype(data_dtype)

@@ -987,8 +987,26 @@ TEST_F(JoinTest, EmptyRightTableInnerJoin)
   Table t0(std::move(cols0));
   Table empty1(std::move(cols1));
 
-  auto result = cudf::inner_join(t0, empty1, {0, 1}, {0, 1});
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty1, *result);
+  {
+    auto result = cudf::inner_join(t0, empty1, {0, 1}, {0, 1});
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty1, *result);
+  }
+
+  {
+    cudf::hash_join hash_join(empty1, cudf::null_equality::EQUAL);
+
+    auto output_size                         = hash_join.inner_join_size(t0);
+    std::optional<std::size_t> optional_size = output_size;
+
+    std::size_t const size_gold = 0;
+    EXPECT_EQ(output_size, size_gold);
+
+    auto result = hash_join.inner_join(t0, cudf::null_equality::EQUAL, optional_size);
+    column_wrapper<int32_t> col_gold_0{};
+    column_wrapper<int32_t> col_gold_1{};
+    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+  }
 }
 
 TEST_F(JoinTest, EmptyRightTableLeftJoin)
@@ -1008,8 +1026,26 @@ TEST_F(JoinTest, EmptyRightTableLeftJoin)
   Table t0(std::move(cols0));
   Table empty1(std::move(cols1));
 
-  auto result = cudf::left_join(t0, empty1, {0, 1}, {0, 1});
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(t0, *result);
+  {
+    auto result = cudf::left_join(t0, empty1, {0, 1}, {0, 1});
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(t0, *result);
+  }
+
+  {
+    cudf::hash_join hash_join(empty1, cudf::null_equality::EQUAL);
+
+    auto output_size                         = hash_join.left_join_size(t0);
+    std::optional<std::size_t> optional_size = output_size;
+
+    std::size_t const size_gold = 5;
+    EXPECT_EQ(output_size, size_gold);
+
+    auto result = hash_join.left_join(t0, cudf::null_equality::EQUAL, optional_size);
+    column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
+    column_wrapper<int32_t> col_gold_1{{NoneValue, NoneValue, NoneValue, NoneValue, NoneValue}};
+    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+  }
 }
 
 TEST_F(JoinTest, EmptyRightTableFullJoin)
@@ -1029,8 +1065,26 @@ TEST_F(JoinTest, EmptyRightTableFullJoin)
   Table t0(std::move(cols0));
   Table empty1(std::move(cols1));
 
-  auto result = cudf::full_join(t0, empty1, {0, 1}, {0, 1});
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(t0, *result);
+  {
+    auto result = cudf::full_join(t0, empty1, {0, 1}, {0, 1});
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(t0, *result);
+  }
+
+  {
+    cudf::hash_join hash_join(empty1, cudf::null_equality::EQUAL);
+
+    auto output_size                         = hash_join.full_join_size(t0);
+    std::optional<std::size_t> optional_size = output_size;
+
+    std::size_t const size_gold = 5;
+    EXPECT_EQ(output_size, size_gold);
+
+    auto result = hash_join.full_join(t0, cudf::null_equality::EQUAL, optional_size);
+    column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
+    column_wrapper<int32_t> col_gold_1{{NoneValue, NoneValue, NoneValue, NoneValue, NoneValue}};
+    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+  }
 }
 
 // Both tables empty
