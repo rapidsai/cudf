@@ -124,27 +124,6 @@ def transform(Column input, op):
     return Column.from_unique_ptr(move(c_output))
 
 
-def masked_udf(Table incols, op, output_type):
-    cdef table_view data_view = incols.data_view()
-    cdef string c_str = op.encode("UTF-8")
-    cdef type_id c_tid
-    cdef data_type c_dtype
-
-    c_tid = <type_id> (
-        <underlying_type_t_type_id> np_to_cudf_types[output_type]
-    )
-    c_dtype = data_type(c_tid)
-
-    with nogil:
-        c_output = move(libcudf_transform.generalized_masked_op(
-            data_view,
-            c_str,
-            c_dtype,
-        ))
-
-    return Column.from_unique_ptr(move(c_output))
-
-
 def table_encode(Table input):
     cdef table_view c_input = input.data_view()
     cdef pair[unique_ptr[table], unique_ptr[column]] c_result

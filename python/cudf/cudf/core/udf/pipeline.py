@@ -107,7 +107,6 @@ def _define_function(df):
     
     start += "\tret_data_arr[i] = ret.value\n"
     start += "\tret_mask_arr[i] = ret.valid\n"
-    #start += "\tret_mask_arr[i] = True\n"
 
     return start
 
