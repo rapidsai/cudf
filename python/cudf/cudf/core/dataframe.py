@@ -4757,12 +4757,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         runtime compilation features
         """
 
-        # libcudacxx tuples are not compatible with nvrtc 11.0
-        runtime = cuda.cudadrv.runtime.Runtime()
-        mjr, mnr = runtime.get_version()
-        if mjr < 11 or (mjr == 11 and mnr < 1):
-            raise RuntimeError("DataFrame.apply requires CUDA 11.1+")
-
         for dtype in self.dtypes:
             if (
                 isinstance(dtype, cudf.core.dtypes._BaseDtype)
