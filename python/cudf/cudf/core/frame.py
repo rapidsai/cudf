@@ -1545,10 +1545,7 @@ class Frame(libcudf.table.Table):
         """
         Apply `func` across the rows of the frame.
         """
-        output_dtype, ptx = cudf.core.udf.pipeline.compile_masked_udf(
-            func, self.dtypes
-        )
-        result = cudf._lib.transform.masked_udf(self, ptx, output_dtype)
+        result = cudf.core.udf.pipeline.udf_pipeline(self, func)
         return result
 
     def rank(

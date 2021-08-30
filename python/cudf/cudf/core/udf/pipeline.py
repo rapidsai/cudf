@@ -2,8 +2,12 @@ from numba.np import numpy_support
 from nvtx import annotate
 
 from cudf.core.udf.typing import MaskedType
+from cudf.core.udf.classes import Masked
 from cudf.utils import cudautils
-
+from numba import cuda
+import cupy
+import cudf
+from cudf._lib.transform import bools_to_mask
 
 @annotate("NUMBA JIT", color="green", domain="cudf_python")
 def compile_masked_udf(func, dtypes):
@@ -50,3 +54,89 @@ def nulludf(func):
         return to_udf_table._apply(func)
 
     return wrapper
+
+from numba.types import int32, boolean, void, Tuple
+import numpy as np
+libcudf_bitmask_type = numpy_support.from_dtype(np.dtype('int32'))
+
+def masked_arrty_from_np_type(dtype):
+    """
+    Return a type representing a tuple of arrays,
+    the first element an array of the numba type
+    corresponding to `dtype`, and the second an 
+    array of bools represe
+    """
+    nb_scalar_ty = numpy_support.from_dtype(dtype)
+    return Tuple(
+        (
+            nb_scalar_ty[::1],
+            libcudf_bitmask_type[::1]
+        )
+    )
+
+mask_bitsize = np.dtype('int32').itemsize * 8
+
+@cuda.jit(device=True)
+def mask_get(mask, pos):
+    return (mask[pos // mask_bitsize] >> (pos % mask_bitsize)) & 1
+
+
+def _define_function(df):
+    
+    num_vars = len(df.dtypes)
+    
+    start = "def _kernel(retval, "
+    
+    sig = ", ".join(["input_col_" + str(i) for i in range(num_vars)])
+    start += (sig + "):\n")
+        
+    start += "\ti = cuda.grid(1)\n"
+    start += "\tret_data_arr, ret_mask_arr = retval\n"
+        
+        
+    fargs = []
+    for i in range(num_vars):
+        ii = str(i)
+        start += "\td_"+ii+","+"m_"+ii+"=input_col_"+ii+"\n"
+        arg = "masked_"+ii
+        start += "\t"+arg+"="+"Masked("+"d_"+ii+"[i]"+","+"mask_get(m_"+ii+","+"i)"+")\n"
+        fargs.append(arg)
+        
+    fargs = "(" + ",".join(fargs) + ")\n"
+    start += "\tret = f_"+fargs+"\n"
+    
+    start += "\tret_data_arr[i] = ret.value\n"
+    start += "\tret_mask_arr[i] = ret.valid\n"
+    #start += "\tret_mask_arr[i] = True\n"
+
+    return start
+
+def udf_pipeline(df, f):
+    retty = compile_masked_udf(f, df.dtypes)[0]
+
+    return_type = Tuple(
+        (numpy_support.from_dtype(retty)[::1], boolean[::1])
+    )
+    sig = void(return_type, *[masked_arrty_from_np_type(dtype) for dtype in df.dtypes])
+    global f_
+    
+    f_ = cuda.jit(device=True)(f)
+    # Set f_launch into the global namespace
+    exec(_define_function(df), globals())
+    # compile
+    kernel = cuda.jit(sig)(_kernel)
+    ans_col = cupy.empty(len(df), dtype=retty)
+    ans_mask = cudf.core.column.column_empty(len(df), dtype='bool')
+    
+    launch_args = [(ans_col, ans_mask)]
+    for col in df.columns:
+        data = df[col]._column.data
+        mask = df[col]._column.mask
+        if mask is None:
+            # FIXME - this should work if there isnt a mask
+            mask = bools_to_mask(cudf.core.column.as_column(cupy.ones(len(df), dtype='bool')))
+        launch_args.append((data, mask))
+
+    kernel[1, len(df)](*launch_args)
+    result = cudf.Series(ans_col).set_mask(bools_to_mask(ans_mask))
+    return result
