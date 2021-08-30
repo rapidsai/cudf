@@ -370,6 +370,7 @@ def test_groupby_2keys_agg(nelem, func):
     # https://github.com/pandas-dev/pandas/issues/40685 is resolved.
     # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
 )
+@pytest.mark.xfail(reason="https://github.com/pandas-dev/pandas/issues/43209")
 def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     # The number of digits after the decimal to use.
     decimal_digits = 2
@@ -1948,7 +1949,7 @@ def test_groupby_fillna_multi_value(nelem):
 
     # In this specific case, Pandas returns the rows in grouped order.
     # Cudf returns columns in orginal order.
-    expect.index = expect.index.get_level_values(1)
+    expect.index = expect.index.get_level_values(0)
     assert_groupby_results_equal(expect[value_cols], got[value_cols])
 
 

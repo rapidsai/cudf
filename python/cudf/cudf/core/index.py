@@ -665,7 +665,7 @@ class BaseIndex(SingleColumnFrame, Serializable):
             if self.dtype != other.dtype:
                 difference = difference.astype(self.dtype)
 
-        if sort is None:
+        if sort is None and len(other):
             return difference.sort_values()
 
         return difference

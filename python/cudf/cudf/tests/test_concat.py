@@ -525,9 +525,22 @@ def test_concat_empty_dataframes(df, other, ignore_index):
     if expected.shape != df.shape:
         for key, col in actual[actual.columns].iteritems():
             if is_categorical_dtype(col.dtype):
-                expected[key] = expected[key].fillna("-1")
+                if expected[key].dtype != "category":
+                    # TODO: Pandas bug:
+                    # https://github.com/pandas-dev/pandas/issues/42840
+                    expected[key] = expected[key].fillna("-1").astype("str")
+                else:
+                    expected[key] = (
+                        expected[key]
+                        .cat.add_categories(["-1"])
+                        .fillna("-1")
+                        .astype("str")
+                    )
                 actual[key] = col.astype("str").fillna("-1")
-        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+            else:
+                expected[key] = expected[key].fillna(-1)
+                actual[key] = col.fillna(-1)
+        assert_eq(expected, actual, check_dtype=False)
     else:
         assert_eq(
             expected, actual, check_index_type=False if gdf.empty else True
@@ -1079,8 +1092,23 @@ def test_concat_join_empty_dataframes(
         if axis == 0:
             for key, col in actual[actual.columns].iteritems():
                 if is_categorical_dtype(col.dtype):
-                    expected[key] = expected[key].fillna("-1")
+                    if expected[key].dtype != "category":
+                        # TODO: Pandas bug:
+                        # https://github.com/pandas-dev/pandas/issues/42840
+                        expected[key] = (
+                            expected[key].fillna("-1").astype("str")
+                        )
+                    else:
+                        expected[key] = (
+                            expected[key]
+                            .cat.add_categories(["-1"])
+                            .fillna("-1")
+                            .astype("str")
+                        )
                     actual[key] = col.astype("str").fillna("-1")
+                else:
+                    expected[key] = expected[key].fillna(-1)
+                    actual[key] = col.fillna(-1)
 
             assert_eq(
                 expected.fillna(-1),
@@ -1100,7 +1128,11 @@ def test_concat_join_empty_dataframes(
                 check_column_type=False,
             )
     assert_eq(
-        expected, actual, check_index_type=False, check_column_type=False
+        expected,
+        actual,
+        check_dtype=False,
+        check_index_type=False,
+        check_column_type=False,
     )
 
 

@@ -550,7 +550,15 @@ def test_empty_df_head_tail_index(n):
             None,
         ),
         (pd.Index(range(5)), pd.Index(range(4)) > 0, None, ValueError),
-        (pd.Index(range(5)), pd.Index(range(5)) > 1, 10, None),
+        pytest.param(
+            pd.Index(range(5)),
+            pd.Index(range(5)) > 1,
+            10,
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/43240"
+            ),
+        ),
         (
             pd.Index(np.arange(10)),
             (pd.Index(np.arange(10)) % 3) == 0,
@@ -671,13 +679,12 @@ def test_index_where(data, condition, other, error):
             assert_eq(expect.categories, got.categories)
         else:
             assert_eq(
-                ps.where(ps_condition, other=ps_other)
-                .fillna(gs._columns[0].default_na_value())
-                .values,
+                ps.where(ps_condition, other=ps_other).fillna(
+                    gs._columns[0].default_na_value()
+                ),
                 gs.where(gs_condition, other=gs_other)
                 .to_pandas()
-                .fillna(gs._columns[0].default_na_value())
-                .values,
+                .fillna(gs._columns[0].default_na_value()),
             )
     else:
         assert_exceptions_equal(

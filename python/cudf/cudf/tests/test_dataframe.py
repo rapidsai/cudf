@@ -1765,12 +1765,13 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     pdf = pd.DataFrame()
 
     null_rep = np.nan if dtype in ["float32", "float64"] else None
-
+    np_dtype = dtype
+    dtype = np.dtype(dtype)
+    dtype = cudf.utils.dtypes.np_dtypes_to_pandas_dtypes.get(dtype, dtype)
     for i in range(num_cols):
         colname = string.ascii_lowercase[i]
         data = pd.Series(
-            np.random.randint(0, 26, num_rows).astype(dtype),
-            dtype=pd.BooleanDtype() if dtype == "bool" else None,
+            np.random.randint(0, 26, num_rows).astype(np_dtype), dtype=dtype,
         )
         if nulls == "some":
             idx = np.random.choice(
@@ -1789,8 +1790,8 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
 
     expect = pdf.transpose()
 
-    assert_eq(expect, got_function)
-    assert_eq(expect, got_property)
+    assert_eq(expect, got_function.to_pandas(nullable=True))
+    assert_eq(expect, got_property.to_pandas(nullable=True))
 
 
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
@@ -7849,8 +7850,13 @@ def test_describe_misc_exclude(df, exclude):
         cudf.DataFrame(
             {
                 "a": ["hello", "world", "rapids", "ai", "nvidia"],
-                "b": cudf.Series([1, 21, 21, 11, 11], dtype="timedelta64[s]"),
-            }
+                "b": cudf.Series(
+                    [1, 21, 21, 11, 11],
+                    dtype="timedelta64[s]",
+                    index=["a", "b", "c", "d", " e"],
+                ),
+            },
+            index=["a", "b", "c", "d", " e"],
         ),
         cudf.DataFrame(
             {
@@ -7866,7 +7872,6 @@ def test_describe_misc_exclude(df, exclude):
 @pytest.mark.parametrize("dropna", [True, False])
 def test_dataframe_mode(df, numeric_only, dropna):
     pdf = df.to_pandas()
-
     expected = pdf.mode(numeric_only=numeric_only, dropna=dropna)
     actual = df.mode(numeric_only=numeric_only, dropna=dropna)
 
