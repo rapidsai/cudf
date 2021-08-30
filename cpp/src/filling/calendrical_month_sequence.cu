@@ -33,15 +33,8 @@ std::unique_ptr<cudf::column> calendrical_month_sequence(size_type size,
                                                          rmm::cuda_stream_view stream,
                                                          rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(cudf::is_timestamp(init.type()), "Column type should be timestamp");
-  auto output_col_type = init.type();
-
-  // Return empty column if n = 0
-  if (size == 0) return cudf::make_empty_column(output_col_type);
-
-  auto launch = calendrical_month_sequence_functor{};
-
-  return type_dispatcher(init.type(), launch, size, init, months, stream, mr);
+  return type_dispatcher(
+    init.type(), calendrical_month_sequence_functor{}, size, init, months, stream, mr);
 }
 }  // namespace detail
 

@@ -37,6 +37,9 @@ struct calendrical_month_sequence_functor {
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
+    // Return empty column if n = 0
+    if (n == 0) return cudf::make_empty_column(input.type());
+
     auto const device_input =
       get_scalar_device_view(static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(input)));
     auto output_column_type = cudf::data_type{cudf::type_to_id<T>()};
