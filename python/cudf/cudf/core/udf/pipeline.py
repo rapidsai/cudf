@@ -117,12 +117,14 @@ def udf_pipeline(df, f):
         (numpy_support.from_dtype(retty)[::1], boolean[::1])
     )
     sig = void(return_type, *[masked_arrty_from_np_type(dtype) for dtype in df.dtypes])
-    global f_
     
     f_ = cuda.jit(device=True)(f)
     # Set f_launch into the global namespace
-    exec(_define_function(df), globals())
+    lcl = {}
+    exec(_define_function(df), {'f_': f_, 'cuda': cuda, "Masked": Masked, "mask_get": mask_get},  lcl)
+    _kernel = lcl['_kernel']
     # compile
+    breakpoint()
     kernel = cuda.jit(sig)(_kernel)
     ans_col = cupy.empty(len(df), dtype=retty)
     ans_mask = cudf.core.column.column_empty(len(df), dtype='bool')
@@ -136,6 +138,6 @@ def udf_pipeline(df, f):
             mask = bools_to_mask(cudf.core.column.as_column(cupy.ones(len(df), dtype='bool')))
         launch_args.append((data, mask))
 
-    kernel[1, len(df)](*launch_args)
+    kernel.forall(len(df))(*launch_args, len(df))
     result = cudf.Series(ans_col).set_mask(bools_to_mask(ans_mask))
     return result
