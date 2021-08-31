@@ -8612,7 +8612,14 @@ def test_explode(data, labels, ignore_index, p_index, label_to_explode):
     pdf = pd.DataFrame(data, index=p_index, columns=labels)
     gdf = cudf.from_pandas(pdf)
 
-    expect = pdf.explode(label_to_explode, ignore_index)
+    # TODO: Remove this workaround after
+    #  following issue is fixed:
+    # https://github.com/pandas-dev/pandas/issues/43314
+    if isinstance(label_to_explode, int):
+        pdlabel_to_explode = [label_to_explode]
+    else:
+        pdlabel_to_explode = label_to_explode
+    expect = pdf.explode(pdlabel_to_explode, ignore_index)
     got = gdf.explode(label_to_explode, ignore_index)
 
     assert_eq(expect, got, check_dtype=False)

@@ -58,19 +58,16 @@ def test_rank_all_arguments(
         expect = pdf["str"].rank(**kwargs)
         got = gdf["str"].rank(**kwargs)
         assert expect.empty == got.empty
-
-    # TODO: https://github.com/pandas-dev/pandas/issues/32593
-    # Dataframe (bug in pandas)
-    if (
-        na_option == "top"
-        and method == "first"
-        and not dtype == "O"
-        and ascending
-    ):
-        assert_eq(gdf.rank(**kwargs), pdf.rank(**kwargs))
+        expected = pdf.select_dtypes(include=np.number)
     else:
-        with pytest.raises(AssertionError, match="values are different"):
-            assert_eq(gdf.rank(**kwargs), pdf.rank(**kwargs))
+        expected = pdf.copy(deep=True)
+
+    # TODO: Remove per column iteration once the
+    # following issue is fixedhttps://github.com/pandas-dev/pandas/issues/43310
+    for col in expected.columns:
+        expected[col] = pdf[col].rank(**kwargs)
+    actual = gdf.rank(**kwargs)
+    assert_eq(expected, actual)
 
 
 def test_rank_error_arguments(pdf):
