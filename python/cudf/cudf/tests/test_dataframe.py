@@ -7872,6 +7872,7 @@ def test_describe_misc_exclude(df, exclude):
 @pytest.mark.parametrize("dropna", [True, False])
 def test_dataframe_mode(df, numeric_only, dropna):
     pdf = df.to_pandas()
+
     expected = pdf.mode(numeric_only=numeric_only, dropna=dropna)
     actual = df.mode(numeric_only=numeric_only, dropna=dropna)
 

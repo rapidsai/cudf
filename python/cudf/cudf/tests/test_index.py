@@ -1873,7 +1873,12 @@ def test_index_fillna(data, fill_value):
     pdi = pd.Index(data)
     gdi = cudf.Index(data)
 
-    assert_eq(pdi.fillna(fill_value), gdi.fillna(fill_value))
+    if isinstance(gdi, cudf.Int64Index) and isinstance(pdi, pd.Float64Index):
+        assert_eq(
+            pdi.fillna(fill_value).astype(gdi.dtype), gdi.fillna(fill_value)
+        )
+    else:
+        assert_eq(pdi.fillna(fill_value), gdi.fillna(fill_value))
 
 
 @pytest.mark.parametrize(

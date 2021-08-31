@@ -1199,12 +1199,7 @@ def test_explode(data, ignore_index, p_index):
     expect = pdf.explode(ignore_index)
     got = gdf.explode(ignore_index)
 
-    if data == [1, 2, 3, 4, 5] and ignore_index and p_index is not None:
-        # https://github.com/pandas-dev/pandas/issues/40487
-        with pytest.raises(AssertionError, match="different"):
-            assert_eq(expect, got, check_dtype=False)
-    else:
-        assert_eq(expect, got, check_dtype=False)
+    assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(
