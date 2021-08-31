@@ -5923,7 +5923,7 @@ class DatetimeProperties(object):
             data=out_column, index=self.series._index, name=self.series.name
         )
 
-    def _ceil_datetime(self, field):
+    def ceil(self, field):
         out_column = self.series._column.ceil_datetime(field)
 
         return Series(
