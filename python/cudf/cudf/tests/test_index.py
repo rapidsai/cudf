@@ -680,11 +680,11 @@ def test_index_where(data, condition, other, error):
         else:
             assert_eq(
                 ps.where(ps_condition, other=ps_other).fillna(
-                    gs._columns[0].default_na_value()
+                    gs._values.default_na_value()
                 ),
                 gs.where(gs_condition, other=gs_other)
                 .to_pandas()
-                .fillna(gs._columns[0].default_na_value()),
+                .fillna(gs._values.default_na_value()),
             )
     else:
         assert_exceptions_equal(
@@ -2091,6 +2091,35 @@ def test_get_loc_single_unique_numeric(idx, key, method):
         or (key == 0 and method in "ffill")
         # Get key after the last element is KeyError
         or (key == 7 and method in "bfill")
+    ):
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx", [pd.RangeIndex(3, 100, 4)],
+)
+@pytest.mark.parametrize("key", list(range(1, 110, 3)))
+@pytest.mark.parametrize("method", [None, "ffill"])
+def test_get_loc_rangeindex(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if (
+        (key not in pi and method is None)
+        # Get key before the first element is KeyError
+        or (key < pi.start and method in "ffill")
+        # Get key after the last element is KeyError
+        or (key >= pi.stop and method in "bfill")
     ):
         assert_exceptions_equal(
             lfunc=pi.get_loc,
