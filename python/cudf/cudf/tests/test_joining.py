@@ -810,7 +810,7 @@ def test_join_datetimes_index(dtype):
     pdf = pdf_lhs.join(pdf_rhs, sort=True)
     gdf = gdf_lhs.join(gdf_rhs, sort=True)
 
-    assert gdf["d"].dtype == np.dtype(dtype)
+    assert gdf["d"].dtype == cudf.dtype(dtype)
 
     assert_join_results_equal(pdf, gdf, how="inner")
 
@@ -2112,3 +2112,23 @@ def test_string_join_values_nulls():
     got = got.sort_values(by=["a", "b", "c"]).reset_index(drop=True)
 
     assert_join_results_equal(expect, got, how="left")
+
+
+def test_join_on_index_with_duplicate_names():
+    # although index levels with duplicate names are poorly supported
+    # overall, we *should* be able to join on them:
+    lhs = pd.DataFrame({"a": [1, 2, 3]})
+    rhs = pd.DataFrame({"b": [1, 2, 3]})
+    lhs.index = pd.MultiIndex.from_tuples(
+        [(1, 1), (1, 2), (2, 1)], names=["x", "x"]
+    )
+    rhs.index = pd.MultiIndex.from_tuples(
+        [(1, 1), (1, 3), (2, 1)], names=["x", "x"]
+    )
+    expect = lhs.join(rhs, how="inner")
+
+    lhs = cudf.from_pandas(lhs)
+    rhs = cudf.from_pandas(rhs)
+    got = lhs.join(rhs, how="inner")
+
+    assert_join_results_equal(expect, got, how="inner")

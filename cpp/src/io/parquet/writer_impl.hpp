@@ -153,12 +153,11 @@ class writer::impl {
    * @param chunks column chunk array
    * @param col_desc column description array
    * @param num_columns Total number of columns
-   * @param num_dictionaries Total number of dictionaries
    */
-  void build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
-                                device_span<gpu::parquet_column_device_view const> col_desc,
-                                uint32_t num_columns,
-                                uint32_t num_dictionaries);
+  void init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
+                       device_span<gpu::parquet_column_device_view const> col_desc,
+                       uint32_t num_columns);
+
   /**
    * @brief Initialize encoder pages
    *

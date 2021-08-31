@@ -27,7 +27,7 @@ struct scan_tile_state_view {
   __device__ inline void set_status(cudf::size_type tile_idx, scan_tile_status status)
   {
     auto const offset = (tile_idx + num_tiles) % num_tiles;
-    tile_status[offset].store(status);
+    tile_status[offset].store(status, cuda::memory_order_relaxed);
   }
 
   __device__ inline void set_partial_prefix(cudf::size_type tile_idx, T value)
@@ -92,48 +92,38 @@ struct scan_tile_state {
 
 template <typename T>
 struct scan_tile_state_callback {
-  struct _TempStorage {
-    T exclusive_prefix;
-  };
-
-  using TempStorage = cub::Uninitialized<_TempStorage>;
-
-  __device__ inline scan_tile_state_callback(TempStorage& temp_storage,
-                                             scan_tile_state_view<T>& tile_state,
+  __device__ inline scan_tile_state_callback(scan_tile_state_view<T>& tile_state,
                                              cudf::size_type tile_idx)
-    : _temp_storage(temp_storage.Alias()), _tile_state(tile_state), _tile_idx(tile_idx)
+    : _tile_state(tile_state), _tile_idx(tile_idx)
   {
   }
 
   __device__ inline T operator()(T const& block_aggregate)
   {
-    if (threadIdx.x == 0) {
-      _tile_state.set_partial_prefix(_tile_idx, block_aggregate);  //
-    }
-
-    auto predecessor_idx    = _tile_idx - 1 - threadIdx.x;
-    auto predecessor_status = scan_tile_status::invalid;
-
-    // scan partials to form prefix
+    T exclusive_prefix;
 
     if (threadIdx.x == 0) {
+      _tile_state.set_partial_prefix(_tile_idx, block_aggregate);
+
+      auto predecessor_idx    = _tile_idx - 1;
+      auto predecessor_status = scan_tile_status::invalid;
+
+      // scan partials to form prefix
+
       auto window_partial = _tile_state.get_prefix(predecessor_idx, predecessor_status);
       while (predecessor_status != scan_tile_status::inclusive) {
         predecessor_idx--;
         auto predecessor_prefix = _tile_state.get_prefix(predecessor_idx, predecessor_status);
         window_partial          = predecessor_prefix + window_partial;
       }
-      _temp_storage.exclusive_prefix = window_partial;
+      exclusive_prefix = window_partial;
+
+      _tile_state.set_inclusive_prefix(_tile_idx, exclusive_prefix + block_aggregate);
     }
 
-    if (threadIdx.x == 0) {
-      _tile_state.set_inclusive_prefix(_tile_idx, _temp_storage.exclusive_prefix + block_aggregate);
-    }
-
-    return _temp_storage.exclusive_prefix;
+    return exclusive_prefix;
   }
 
-  _TempStorage& _temp_storage;
   scan_tile_state_view<T>& _tile_state;
   cudf::size_type _tile_idx;
 };

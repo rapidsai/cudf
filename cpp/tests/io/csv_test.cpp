@@ -415,7 +415,7 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
   result_strings.reserve(reference_strings.size());
 
   std::ifstream read_result_file(filepath);
-  assert(read_result_file.is_open());
+  ASSERT_TRUE(read_result_file.is_open());
 
   std::copy(std::istream_iterator<std::string>(read_result_file),
             std::istream_iterator<std::string>(),
@@ -461,7 +461,7 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
   result_strings.reserve(reference_strings.size());
 
   std::ifstream read_result_file(filepath);
-  assert(read_result_file.is_open());
+  ASSERT_TRUE(read_result_file.is_open());
 
   std::copy(std::istream_iterator<std::string>(read_result_file),
             std::istream_iterator<std::string>(),
@@ -1858,7 +1858,11 @@ TEST_F(CsvReaderTest, HeaderEmbeddedDelimiter)
   cudf_io::csv_reader_options in_opts =
     cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
       .names(names)
-      .dtypes(std::vector<std::string>{"int32", "str", "int32", "int32", "int32"});
+      .dtypes({dtype<int32_t>(),
+               dtype<cudf::string_view>(),
+               dtype<int32_t>(),
+               dtype<int32_t>(),
+               dtype<int32_t>()});
   auto result = cudf_io::read_csv(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result.tbl->view());
@@ -2175,9 +2179,9 @@ TEST_F(CsvReaderTest, DtypesMap)
   auto result = cudf_io::read_csv(in_opts);
 
   const auto result_table = result.tbl->view();
-  assert(result_table->num_columns() == 2);
-  assert(result_table.column(0).type() == data_type{type_id::INT32});
-  assert(result_table.column(1).type() == data_type{type_id::INT16});
+  ASSERT_EQ(result_table.num_columns(), 2);
+  ASSERT_EQ(result_table.column(0).type(), data_type{type_id::INT32});
+  ASSERT_EQ(result_table.column(1).type(), data_type{type_id::INT16});
   expect_column_data_equal(std::vector<int32_t>{12, 34, 56}, result_table.column(0));
   expect_column_data_equal(std::vector<int16_t>{9, 8, 7}, result_table.column(1));
 }

@@ -17,8 +17,7 @@
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/operators.hpp>
-#include <cudf/ast/nodes.hpp>
-#include <cudf/ast/operators.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/assert.cuh>
@@ -30,6 +29,8 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/optional.h>
 
 namespace cudf {
 
@@ -191,13 +192,13 @@ struct mutable_column_expression_result
 };
 
 /**
- * @brief Despite to a binary operator based on a single data type.
+ * @brief Dispatch to a binary operator based on a single data type.
  *
  * This functor is a dispatcher for binary operations that assumes that both
- * operands to a binary operation are of the same type. This assumption is
- * encoded in the one non-deducible template parameter LHS, the type of the
- * left-hand operand, which is then used as the template parameter for both the
- * left and right operands to the binary operator f.
+ * operands are of the same type. This assumption is encoded in the
+ * non-deducible template parameter LHS, the type of the left-hand operand,
+ * which is then used as the template parameter for both the left and right
+ * operands to the binary operator f.
  */
 struct single_dispatch_binary_operator {
   /**
@@ -286,17 +287,26 @@ struct expression_evaluator {
    */
   template <typename Element, CUDF_ENABLE_IF(column_device_view::has_element_accessor<Element>())>
   __device__ possibly_null_value_t<Element, has_nulls> resolve_input(
-    detail::device_data_reference device_data_reference, cudf::size_type row_index) const
+    detail::device_data_reference device_data_reference,
+    cudf::size_type left_row_index,
+    thrust::optional<cudf::size_type> right_row_index = {}) const
   {
     auto const data_index = device_data_reference.data_index;
     auto const ref_type   = device_data_reference.reference_type;
     // TODO: Everywhere in the code assumes that the table reference is either
     // left or right. Should we error-check somewhere to prevent
     // table_reference::OUTPUT from being specified?
-    auto const& table = device_data_reference.table_source == table_reference::LEFT ? left : right;
-    using ReturnType  = possibly_null_value_t<Element, has_nulls>;
+    using ReturnType = possibly_null_value_t<Element, has_nulls>;
     if (ref_type == detail::device_data_reference_type::COLUMN) {
       // If we have nullable data, return an empty nullable type with no value if the data is null.
+      auto const& table =
+        (device_data_reference.table_source == table_reference::LEFT) ? left : right;
+      // Note that the code below assumes that a right index has been passed in
+      // any case where device_data_reference.table_source == table_reference::RIGHT.
+      // Otherwise, behavior is undefined.
+      auto const row_index = (device_data_reference.table_source == table_reference::LEFT)
+                               ? left_row_index
+                               : *right_row_index;
       if constexpr (has_nulls) {
         return table.column(data_index).is_valid(row_index)
                  ? ReturnType(table.column(data_index).element<Element>(row_index))
@@ -322,7 +332,9 @@ struct expression_evaluator {
   template <typename Element,
             CUDF_ENABLE_IF(not column_device_view::has_element_accessor<Element>())>
   __device__ possibly_null_value_t<Element, has_nulls> resolve_input(
-    detail::device_data_reference device_data_reference, cudf::size_type row_index) const
+    detail::device_data_reference device_data_reference,
+    cudf::size_type left_row_index,
+    thrust::optional<cudf::size_type> right_row_index = {}) const
   {
     cudf_assert(false && "Unsupported type in resolve_input.");
     // Unreachable return used to silence compiler warnings.
@@ -385,8 +397,8 @@ struct expression_evaluator {
                              cudf::size_type const output_row_index,
                              ast_operator const op) const
   {
-    auto const typed_lhs = resolve_input<LHS>(lhs, left_row_index);
-    auto const typed_rhs = resolve_input<RHS>(rhs, right_row_index);
+    auto const typed_lhs = resolve_input<LHS>(lhs, left_row_index, right_row_index);
+    auto const typed_rhs = resolve_input<RHS>(rhs, left_row_index, right_row_index);
     ast_operator_dispatcher(op,
                             binary_expression_output_handler<LHS, RHS>(*this),
                             output_object,
@@ -447,19 +459,18 @@ struct expression_evaluator {
                            cudf::size_type const right_row_index,
                            cudf::size_type const output_row_index)
   {
-    auto operator_source_index = static_cast<cudf::size_type>(0);
+    cudf::size_type operator_source_index{0};
     for (cudf::size_type operator_index = 0; operator_index < plan.operators.size();
-         operator_index++) {
+         ++operator_index) {
       // Execute operator
       auto const op    = plan.operators[operator_index];
       auto const arity = ast_operator_arity(op);
       if (arity == 1) {
         // Unary operator
         auto const input =
-          plan.data_references[plan.operator_source_indices[operator_source_index]];
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto const output =
-          plan.data_references[plan.operator_source_indices[operator_source_index + 1]];
-        operator_source_index += arity + 1;
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto input_row_index =
           input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
         type_dispatcher(input.data_type,
@@ -472,12 +483,12 @@ struct expression_evaluator {
                         op);
       } else if (arity == 2) {
         // Binary operator
-        auto const lhs = plan.data_references[plan.operator_source_indices[operator_source_index]];
+        auto const lhs =
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto const rhs =
-          plan.data_references[plan.operator_source_indices[operator_source_index + 1]];
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto const output =
-          plan.data_references[plan.operator_source_indices[operator_source_index + 2]];
-        operator_source_index += arity + 1;
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
         type_dispatcher(lhs.data_type,
                         detail::single_dispatch_binary_operator{},
                         *this,
