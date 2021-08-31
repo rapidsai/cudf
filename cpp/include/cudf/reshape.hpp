@@ -97,6 +97,12 @@ std::unique_ptr<column> byte_cast(
   flip_endianness endian_configuration,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+
+std::pair<std::unique_ptr<column>, std::unique_ptr<table>> one_hot_encoding(
+  column_view const& input_column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()
+);
+
 /** @} */  // end of group
 
 }  // namespace cudf
