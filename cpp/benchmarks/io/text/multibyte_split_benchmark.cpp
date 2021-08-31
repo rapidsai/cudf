@@ -20,6 +20,7 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
+
 #include <cudf_test/file_utilities.hpp>
 
 #include <cudf/io/text/data_chunk_source_factories.hpp>

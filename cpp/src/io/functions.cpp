@@ -26,12 +26,10 @@
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/detail/orc.hpp>
 #include <cudf/io/detail/parquet.hpp>
-#include <cudf/io/detail/text.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/parquet.hpp>
-#include <cudf/io/text.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -105,12 +103,6 @@ chunked_parquet_writer_options_builder chunked_parquet_writer_options::builder(
   sink_info const& sink)
 {
   return chunked_parquet_writer_options_builder(sink);
-}
-
-// Returns builder for text_reader_options
-text_reader_options_builder text_reader_options::builder(source_info const& src)
-{
-  return text_reader_options_builder{src};
 }
 
 namespace {
