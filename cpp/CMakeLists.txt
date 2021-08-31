@@ -618,7 +618,7 @@ if(CUDF_BUILD_BENCHMARKS)
                         "BENCHMARK_ENABLE_INSTALL OFF")
 
     # Find or install NVBench
-    include(${rapids-cmake}/cpm/nvbench.cmake)
+    include(${rapids-cmake-dir}/cpm/nvbench.cmake)
     rapids_cpm_nvbench()
     add_subdirectory(benchmarks)
 endif()

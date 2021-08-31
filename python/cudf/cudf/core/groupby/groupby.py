@@ -103,6 +103,43 @@ class GroupBy(Serializable):
             zip(group_names.to_pandas(), grouped_index._split(offsets[1:-1]))
         )
 
+    def get_group(self, name, obj=None):
+        """
+        Construct DataFrame from group with provided name.
+
+        Parameters
+        ----------
+        name : object
+            The name of the group to get as a DataFrame.
+        obj : DataFrame, default None
+            The DataFrame to take the DataFrame out of.  If
+            it is None, the object groupby was called on will
+            be used.
+
+        Returns
+        -------
+        group : same type as obj
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]})
+        >>> df
+           X  Y
+        0  A  1
+        1  B  4
+        2  A  3
+        3  B  2
+        >>> df.groupby("X").get_group("A")
+           X  Y
+        0  A  1
+        2  A  3
+        """
+        if obj is None:
+            obj = self.obj
+
+        return obj.loc[self.groups[name]]
+
     def size(self):
         """
         Return the size of each group.
