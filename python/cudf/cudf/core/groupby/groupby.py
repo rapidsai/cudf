@@ -464,7 +464,7 @@ class GroupBy(Serializable):
         chunk_results = [function(chk) for chk in chunks]
 
         if not len(chunk_results):
-            return self.obj.__class__()
+            return self.obj.head(0)
 
         if cudf.utils.dtypes.is_scalar(chunk_results[0]):
             result = cudf.Series(chunk_results, index=group_names)

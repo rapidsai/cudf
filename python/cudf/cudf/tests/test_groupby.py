@@ -1658,6 +1658,7 @@ def test_groupby_apply_no_keys(pdf):
     assert_groupby_results_equal(
         pdf.groupby([]).apply(lambda x: x.max()),
         gdf.groupby([]).apply(lambda x: x.max()),
+        check_index_type=False,  # Int64Index v/s Float64Index
     )
 
 
