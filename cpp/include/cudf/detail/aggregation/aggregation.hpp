@@ -76,7 +76,9 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class ewma_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                          class ewmvar_aggregation const& agg);                                   
+                                                          class ewmvar_aggregation const& agg);        
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class ewmstd_aggregation const& agg);                                    
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class rank_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
@@ -122,6 +124,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class row_number_aggregation const& agg);
   virtual void visit(class ewma_aggregation const& agg);
   virtual void visit(class ewmvar_aggregation const& agg);
+  virtual void visit(class ewmstd_aggregation const& agg);
   virtual void visit(class rank_aggregation const& agg);
   virtual void visit(class dense_rank_aggregation const& agg);
   virtual void visit(class collect_list_aggregation const& agg);
@@ -642,6 +645,28 @@ class ewmvar_aggregation final : public rolling_aggregation {
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
+/**
+ * @brief Derived class for specifying an ewmstd aggregation
+ */
+class ewmstd_aggregation final : public rolling_aggregation {
+
+ public:
+  double com;
+  bool adjust;
+  ewmstd_aggregation(double com, bool adjust) : aggregation{EWMSTD} {this->com=com; this->adjust=adjust;}
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<ewmstd_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
 
 /**
  * @brief Derived class for specifying a rank aggregation
@@ -1125,6 +1150,12 @@ struct target_type_impl<Source, aggregation::EWMVAR> {
   using type = size_type;
 };
 
+template <typename Source>
+struct target_type_impl<Source, aggregation::EWMSTD> {
+  using type = size_type;
+};
+
+
 // Always use size_type accumulator for RANK
 template <typename Source>
 struct target_type_impl<Source, aggregation::RANK> {
@@ -1269,6 +1300,8 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::EWMA>(std::forward<Ts>(args)...);
     case aggregation::EWMVAR:
       return f.template operator()<aggregation::EWMVAR>(std::forward<Ts>(args)...);
+    case aggregation::EWMSTD:
+      return f.template operator()<aggregation::EWMSTD>(std::forward<Ts>(args)...);
     case aggregation::RANK:
       return f.template operator()<aggregation::RANK>(std::forward<Ts>(args)...);
     case aggregation::DENSE_RANK:

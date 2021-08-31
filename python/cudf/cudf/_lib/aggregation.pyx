@@ -283,6 +283,13 @@ cdef class Aggregation:
         return agg
 
     @classmethod
+    def ewmstd(cls, com=1.0, adjust=True):
+        cdef Aggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.make_ewmstd_aggregation[aggregation](com, adjust))
+        return agg
+
+    @classmethod
     def from_udf(cls, op, *args, **kwargs):
         cdef Aggregation agg = cls()
 

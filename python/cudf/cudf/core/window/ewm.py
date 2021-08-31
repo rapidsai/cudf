@@ -22,15 +22,15 @@ class ExponentialMovingWindow(_RollingBase):
         self.com = get_center_of_mass(com, span, halflife, alpha)
 
     def mean(self):
-        return self._apply_agg("mean")
+        return self._apply_agg("ewma")
 
     def var(self, bias):
         self.bias = bias
-        return self._apply_agg("var")
+        return self._apply_agg("ewmvar")
 
     def std(self, bias):
         self.bias = bias
-        return self._apply_agg("std")
+        return self._apply_agg("ewmstd")
 
     def corr(self, other):
         raise NotImplementedError("corr not yet supported.")
@@ -39,10 +39,4 @@ class ExponentialMovingWindow(_RollingBase):
         raise NotImplementedError("cov not yet supported.")
 
     def _apply_agg_series(self, sr, agg_name):
-        if agg_name == 'mean':
-            result = scan('ewma', sr._column, True, com=self.com, adjust=self.adjust)
-        elif agg_name == 'var':
-            result = scan("ewmvar", sr._column, True, com=self.com, adjust=self.adjust)
-        else:
-            result = None
-        return result
+        return scan(agg_name, sr._column, True, com=self.com, adjust=self.adjust)

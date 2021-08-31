@@ -513,6 +513,30 @@ std::unique_ptr<column> ewmvar(
 }
 
 
+std::unique_ptr<column> ewmstd(
+  column_view const& input, 
+  double com,
+  bool adjust,
+  rmm::cuda_stream_view stream, 
+  rmm::mr::device_memory_resource* mr) 
+{
+  std::unique_ptr<column> var = ewmvar(input, com, adjust, stream, mr);
+  auto var_view = var.get()[0].mutable_view();
+
+  thrust::transform(
+    rmm::exec_policy(stream),
+    var_view.begin<double>(),
+    var_view.end<double>(),
+    var_view.begin<double>(),
+    [=] __host__ __device__ (double input) -> double {
+      return sqrt(input);
+
+    });
+
+  return var;
+
+}
+
 std::unique_ptr<column> scan_inclusive(
   column_view const& input,
   std::unique_ptr<aggregation> const& agg,

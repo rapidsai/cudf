@@ -55,6 +55,13 @@ std::unique_ptr<column> ewmvar(column_view const& input,
                              rmm::mr::device_memory_resource* mr); 
 
 
+std::unique_ptr<column> ewmstd(column_view const& input, 
+                             double com,
+                             bool adjust,
+                             rmm::cuda_stream_view stream, 
+                             rmm::mr::device_memory_resource* mr); 
+
+
 template <template <typename> typename DispatchFn>
 std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
                                           std::unique_ptr<aggregation> const& agg,
@@ -67,7 +74,6 @@ std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
       is_numeric(input.type()) || is_compound(input.type()) || is_fixed_point(input.type()),
       "Unexpected non-numeric or non-string type.");
   }
-  std::cout << "before switch " << std::endl;
   switch (agg->kind) {
     case aggregation::SUM:
       return type_dispatcher<dispatch_storage_type>(
@@ -95,6 +101,11 @@ std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
       double com = (dynamic_cast<ewmvar_aggregation*>(agg.get()))->com;
       bool adjust = (dynamic_cast<ewmvar_aggregation*>(agg.get()))->adjust; 
       return ewmvar(input, com, adjust, stream, mr);
+    }
+    case aggregation::EWMSTD: {
+      double com = (dynamic_cast<ewmstd_aggregation*>(agg.get()))->com;
+      bool adjust = (dynamic_cast<ewmstd_aggregation*>(agg.get()))->adjust; 
+      return ewmstd(input, com, adjust, stream, mr);
     }
 
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
