@@ -965,6 +965,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # Handle case if cudf_func is same as numpy function
             if cudf_func is func:
                 return NotImplemented
+            # numpy returns an array from the dot product of two dataframes
+            elif (
+                func is np.dot
+                and isinstance(args[0], (DataFrame, pd.DataFrame))
+                and isinstance(args[1], (DataFrame, pd.DataFrame))
+            ):
+                return cudf_func(*args, **kwargs).values
             else:
                 return cudf_func(*args, **kwargs)
         else:
