@@ -262,7 +262,6 @@ static __device__ uint32_t ByteRLE(
     }
   }
   if (!t) { s->strm_pos[cid] = static_cast<uint32_t>(dst - s->stream.data_ptrs[cid]); }
-  __syncthreads();
   return out_cnt;
 }
 
@@ -643,23 +642,22 @@ __global__ void __launch_bounds__(block_size)
   uint32_t group_id       = blockIdx.y;
   int t                   = threadIdx.x;
   if (t == 0) {
-    s->chunk  = chunks[col_id][group_id];
-    s->stream = streams[col_id][group_id];
-  }
-  if (t < CI_NUM_STREAMS) { s->strm_pos[t] = 0; }
-  __syncthreads();
-  if (!t) {
-    s->cur_row      = 0;
-    s->present_rows = 0;
-    s->present_out  = 0;
-    s->numvals      = 0;
-    s->numlengths   = 0;
-    s->nnz          = 0;
+    s->chunk                = chunks[col_id][group_id];
+    s->stream               = streams[col_id][group_id];
+    s->cur_row              = 0;
+    s->present_rows         = 0;
+    s->present_out          = 0;
+    s->numvals              = 0;
+    s->numlengths           = 0;
+    s->nnz                  = 0;
+    s->strm_pos[CI_DATA]    = 0;
+    s->strm_pos[CI_PRESENT] = 0;
+    s->strm_pos[CI_INDEX]   = 0;
     // Dictionary data is encoded in a separate kernel
-    if (s->chunk.encoding_kind == DICTIONARY_V2) {
-      s->strm_pos[CI_DATA2]      = s->stream.lengths[CI_DATA2];
-      s->strm_pos[CI_DICTIONARY] = s->stream.lengths[CI_DICTIONARY];
-    }
+    s->strm_pos[CI_DATA2] =
+      s->chunk.encoding_kind == DICTIONARY_V2 ? s->stream.lengths[CI_DATA2] : 0;
+    s->strm_pos[CI_DICTIONARY] =
+      s->chunk.encoding_kind == DICTIONARY_V2 ? s->stream.lengths[CI_DICTIONARY] : 0;
   }
 
   auto validity_byte = [&] __device__(int row) -> uint8_t& {
@@ -668,57 +666,56 @@ __global__ void __launch_bounds__(block_size)
   };
 
   __syncthreads();
-  while (s->cur_row < s->chunk.num_rows || s->present_rows < s->chunk.null_mask_num_rows ||
-         s->numvals + s->numlengths != 0) {
-    // Encode valid map
-    if (s->present_rows < s->chunk.null_mask_num_rows) {
-      uint32_t present_rows = s->present_rows;  // number of rows read so far
-      uint32_t nrows        =                   // number of rows read in this iteration
-        min(s->chunk.null_mask_num_rows - present_rows,
-            encode_block_size * 8 - (present_rows - (s->present_out & ~7)));
-      if (t * 8 < nrows) {
-        auto const row_in_group = present_rows + t * 8;
-        auto const row          = s->chunk.null_mask_start_row + row_in_group;
-        uint8_t valid           = 0;
-        if (row < s->chunk.leaf_column->size()) {
-          if (s->chunk.leaf_column->nullable()) {
-            size_type current_valid_offset = row + s->chunk.leaf_column->offset();
-            size_type next_valid_offset =
-              current_valid_offset + min(32, s->chunk.leaf_column->size());
+  // Encode valid map
+  while (s->present_out < s->chunk.null_mask_num_rows) {
+    uint32_t present_rows = s->present_rows;  // number of rows read so far
+    uint32_t nrows        =                   // number of rows read in this iteration
+      min(s->chunk.null_mask_num_rows - present_rows,
+          encode_block_size * 8 - (present_rows - (s->present_out & ~7)));
+    if (t * 8 < nrows) {
+      auto const row_in_group = present_rows + t * 8;
+      auto const row          = s->chunk.null_mask_start_row + row_in_group;
+      uint8_t valid           = 0;
+      if (row < s->chunk.leaf_column->size()) {
+        if (s->chunk.leaf_column->nullable()) {
+          size_type current_valid_offset = row + s->chunk.leaf_column->offset();
+          size_type next_valid_offset =
+            current_valid_offset + min(32, s->chunk.leaf_column->size());
 
-            bitmask_type mask = cudf::detail::get_mask_offset_word(
-              s->chunk.leaf_column->null_mask(), 0, current_valid_offset, next_valid_offset);
-            valid = 0xff & mask;
-          } else {
-            valid = 0xff;
-          }
-          if (row + 7 > s->chunk.leaf_column->size()) {
-            valid = valid & ((1 << (s->chunk.leaf_column->size() - row)) - 1);
-          }
+          bitmask_type mask = cudf::detail::get_mask_offset_word(
+            s->chunk.leaf_column->null_mask(), 0, current_valid_offset, next_valid_offset);
+          valid = 0xff & mask;
+        } else {
+          valid = 0xff;
         }
-        // not guaranteed to write to a byte anymore
-        validity_byte(row_in_group) = valid;
-      }
-      __syncthreads();
-      present_rows += nrows;
-      if (!t) { s->present_rows = present_rows; }
-
-      // RLE encode the present stream
-      auto nrows_out = present_rows - s->present_out;  // number of values to encode
-      if (nrows_out > ((present_rows < s->chunk.null_mask_num_rows) ? 130 * 8 : 0)) {
-        uint32_t present_out = s->present_out;
-        if (s->stream.ids[CI_PRESENT] >= 0) {
-          auto const flush      = (present_rows < s->chunk.null_mask_num_rows) ? 0 : 7;
-          auto const nbytes_out = (nrows_out + flush) / 8;
-          nrows_out =
-            ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, present_out / 8, nbytes_out, flush, t) * 8;
+        if (row + 7 > s->chunk.leaf_column->size()) {
+          valid = valid & ((1 << (s->chunk.leaf_column->size() - row)) - 1);
         }
-        __syncthreads();
-        if (!t) { s->present_out = min(present_out + nrows_out, present_rows); }
       }
-      __syncthreads();
+      // not guaranteed to write to a byte anymore
+      validity_byte(row_in_group) = valid;
     }
+    __syncthreads();
+    present_rows += nrows;
+    if (!t) { s->present_rows = present_rows; }
 
+    // RLE encode the present stream
+    auto nrows_out = present_rows - s->present_out;  // number of values to encode
+    if (nrows_out > ((present_rows < s->chunk.null_mask_num_rows) ? 130 * 8 : 0)) {
+      uint32_t present_out = s->present_out;
+      if (s->stream.ids[CI_PRESENT] >= 0) {
+        auto const flush      = (present_rows < s->chunk.null_mask_num_rows) ? 0 : 7;
+        auto const nbytes_out = (nrows_out + flush) / 8;
+        nrows_out =
+          ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, present_out / 8, nbytes_out, flush, t) * 8;
+      }
+      __syncthreads();
+      if (!t) { s->present_out = min(present_out + nrows_out, present_rows); }
+    }
+    __syncthreads();
+  }
+
+  while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
     // Fetch non-null values
     if (s->chunk.type_kind != LIST && !s->stream.data_ptrs[CI_DATA]) {
       // Pass-through

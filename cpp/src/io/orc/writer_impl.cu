@@ -1629,10 +1629,6 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
     rgs.emplace_back(in_rg.begin(), in_rg.end());
   }
 
-  for (auto& v : rgs)
-    for (auto e : v)
-      std::cout << e.begin << '.' << e.end << std::endl;
-
   return rgs;
 }
 
