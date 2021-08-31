@@ -3498,7 +3498,7 @@ public class TableTest extends CudfTestBase {
          ColumnVector expected = ColumnVector.fromLists(
                  new ListType(false, new BasicType(false, DType.FLOAT64)),
                  Arrays.asList(100d, 150d, 160d),
-                 Arrays.asList(70d, 110d, 160d) // actual result is 70, 70, 70
+                 Arrays.asList(70d, 110d, 160d)
          )) {
       assertColumnsAreEqual(expected, actual);
     }
@@ -3526,7 +3526,7 @@ public class TableTest extends CudfTestBase {
          ColumnVector expected = ColumnVector.fromLists(
                  new ListType(false, new BasicType(false, DType.FLOAT64)),
                  Arrays.asList(70d, 110d, 160d),
-                 Arrays.asList(100d, 150d, 160d)// actual result is 100, 100, 100
+                 Arrays.asList(100d, 150d, 160d)
          )) {
       assertColumnsAreEqual(expected, actual);
     }
