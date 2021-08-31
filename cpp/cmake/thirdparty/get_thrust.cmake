@@ -24,17 +24,21 @@ function(find_and_configure_thrust VERSION)
         set(cpm_thrust_disconnect_update "")
     endif()
 
-    CPMAddPackage(NAME Thrust
-        VERSION         ${VERSION}
-        GIT_REPOSITORY  https://github.com/NVIDIA/thrust.git
-        GIT_TAG         ${VERSION}
-        GIT_SHALLOW     TRUE
+    rapids_cpm_find(
+        Thrust ${VERSION}
+        BUILD_EXPORT_SET cudf-exports
+        INSTALL_EXPORT_SET cudf-exports
+        CPM_ARGS
+        GIT_REPOSITORY https://github.com/NVIDIA/thrust.git
+        GIT_TAG ${VERSION}
+        GIT_SHALLOW TRUE
         ${cpm_thrust_disconnect_update}
         PATCH_COMMAND   patch --reject-file=- -p1 -N < ${CUDF_SOURCE_DIR}/cmake/thrust.patch || true
-        )
+        OPTIONS "THRUST_INSTALL TRUE")
 
-    thrust_create_target(cudf::Thrust FROM_OPTIONS)
-    set(THRUST_LIBRARY "cudf::Thrust" PARENT_SCOPE)
+    if(NOT TARGET cudf::Thrust)
+        thrust_create_target(cudf::Thrust FROM_OPTIONS)
+    endif()
 
     include(GNUInstallDirs)
     install(DIRECTORY "${Thrust_SOURCE_DIR}/thrust"
@@ -52,6 +56,10 @@ function(find_and_configure_thrust VERSION)
     install(DIRECTORY "${Thrust_SOURCE_DIR}/dependencies/cub/cub/cmake"
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/dependencies/cub/")
 
+
+    # Store where CMake can find our custom Thrust install
+    include("${rapids-cmake-dir}/export/find_package_root.cmake")
+    rapids_export_find_package_root(INSTALL Thrust [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/Thrust/]=] cudf-exports)
 endfunction()
 
 set(CUDF_MIN_VERSION_Thrust 1.12.0)
