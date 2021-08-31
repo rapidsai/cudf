@@ -623,6 +623,8 @@ TYPED_TEST(RollingVarStdTest, SimpleStaticVarianceStd)
 
   using ResultType = double;
 
+  double const nan = std::numeric_limits<double>::signaling_NaN();
+
   size_type const ddof = 1, min_periods = 0, preceding_window = 2, following_window = 1;
 
   auto const col_data =
@@ -631,91 +633,20 @@ TYPED_TEST(RollingVarStdTest, SimpleStaticVarianceStd)
 
   auto const expected_var =
     cudf::is_boolean<TypeParam>()
-      ? std::vector<ResultType>{XXX, XXX, 0, 0, XXX, XXX, XXX, 0.5, 0.3333333333333333, 0, 0}
-      : std::vector<ResultType>{XXX, XXX, 8, 8, XXX, XXX, XXX, 32, 16.33333333333333, 3, 4.5};
+      ? std::vector<ResultType>{XXX, nan, 0, 0, nan, XXX, nan, 0.5, 0.3333333333333333, 0, 0}
+      : std::vector<ResultType>{XXX, nan, 8, 8, nan, XXX, nan, 32, 16.33333333333333, 3, 4.5};
   std::vector<ResultType> expected_std(expected_var.size());
   std::transform(expected_var.begin(), expected_var.end(), expected_std.begin(), [](auto const& x) {
     return std::sqrt(x);
   });
 
   const std::vector<bool> expected_mask = {0, /* all null window */
-                                           0, /* count == ddof */
+                                           1, /* 0 div 0, nan */
                                            1,
                                            1,
-                                           0, /* count == ddof */
+                                           1, /* 0 div 0, nan */
                                            0, /* all null window */
-                                           0, /* count == ddof */
-                                           1,
-                                           1,
-                                           1,
-                                           1};
-
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
-  fixed_width_column_wrapper<ResultType> var_expect(
-    expected_var.begin(), expected_var.end(), expected_mask.begin());
-  fixed_width_column_wrapper<ResultType> std_expect(
-    expected_std.begin(), expected_std.end(), expected_mask.begin());
-
-  std::unique_ptr<cudf::column> var_result, std_result;
-  // static sizes
-  EXPECT_NO_THROW(var_result = cudf::rolling_window(input,
-                                                    preceding_window,
-                                                    following_window,
-                                                    min_periods,
-                                                    dynamic_cast<cudf::rolling_aggregation const&>(
-                                                      *cudf::make_variance_aggregation(ddof))););
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*var_result, var_expect);
-
-  EXPECT_NO_THROW(std_result = cudf::rolling_window(input,
-                                                    preceding_window,
-                                                    following_window,
-                                                    min_periods,
-                                                    dynamic_cast<cudf::rolling_aggregation const&>(
-                                                      *cudf::make_std_aggregation(ddof))););
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*std_result, std_expect);
-
-#undef XXX
-}
-
-TYPED_TEST(RollingVarStdTest, SimpleStaticVarianceStdNegativeDDOF)
-{
-#define XXX 0  // NULL stub
-
-  using ResultType = double;
-
-  size_type const ddof = -1, min_periods = 0, preceding_window = 2, following_window = 1;
-
-  auto const col_data =
-    cudf::test::make_type_param_vector<TypeParam>({XXX, XXX, 9, 5, XXX, XXX, XXX, 0, 8, 5, 8});
-  const std::vector<bool> col_mask = {0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1};
-
-  auto const expected_var =
-    cudf::is_boolean<TypeParam>()
-      ? std::vector<
-          ResultType>{XXX, 0, 0, 0, 0, XXX, 0, 0.16666666666666667, 0.1666666666666667, 0, 0}
-      : std::vector<ResultType>{XXX,
-                                0,
-                                2.666666666666667,
-                                2.666666666666667,
-                                0,
-                                XXX,
-                                0,
-                                10.666666666666667,
-                                8.166666666666667,
-                                1.5,
-                                1.5};
-  std::vector<ResultType> expected_std(expected_var.size());
-  std::transform(expected_var.begin(), expected_var.end(), expected_std.begin(), [](auto const& x) {
-    return std::sqrt(x);
-  });
-
-  const std::vector<bool> expected_mask = {0, /* all null window */
-                                           1,
-                                           1,
-                                           1,
-                                           1,
-                                           0, /* all null window */
-                                           1,
+                                           1, /* 0 div 0, nan */
                                            1,
                                            1,
                                            1,
@@ -763,13 +694,13 @@ TEST_F(RollingtVarStdTestUntyped, SimpleStaticVarianceStdInfNaN)
   const std::vector<bool> col_mask = {1, 1, 0, 1, 1, 1, 1, 1, 0, 1};
 
   auto const expected_var =
-    std::vector<ResultType>{XXX, 0.5, 0.5, nan, nan, nan, 16, nan, nan, nan};
+    std::vector<ResultType>{nan, 0.5, 0.5, nan, nan, nan, 16, nan, nan, nan};
   std::vector<ResultType> expected_std(expected_var.size());
   std::transform(expected_var.begin(), expected_var.end(), expected_std.begin(), [](auto const& x) {
     return std::sqrt(x);
   });
 
-  const std::vector<bool> expected_mask = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  const std::vector<bool> expected_mask = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
   fixed_width_column_wrapper<double> input(col_data.begin(), col_data.end(), col_mask.begin());
   fixed_width_column_wrapper<ResultType> var_expect(
@@ -1323,14 +1254,17 @@ TYPED_TEST(FixedPointTests, VarStd)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<double>;
 
-  size_type preceding_window{2}, following_window{0}, min_periods{1}, ddof{1};
+  double const nan = std::numeric_limits<double>::signaling_NaN();
+  double const inf = std::numeric_limits<double>::infinity();
+  size_type preceding_window{3}, following_window{0}, min_periods{1}, ddof{2};
 
   // The variance of `input` given `scale` == 0
-  std::vector<double> result_base_v{-1, 1422984.5, 1401138.0, 1352.0, 2.0, 0.5};
-  std::vector<bool> result_mask_v{0, 1, 1, 1, 1, 1};
+  std::vector<double> result_base_v{
+    nan, inf, 1882804.66666666667, 1928018.666666666667, 1874.6666666666667, 2.0};
+  std::vector<bool> result_mask_v{1, 1, 1, 1, 1, 1};
 
   // var tests
-  for (int32_t s = -5; s < 5; s++) {
+  for (int32_t s = -2; s <= 2; s++) {
     auto const scale = scale_type{s};
     auto const input = fp_wrapper{{42, 1729, 55, 3, 1, 2}, {1, 1, 1, 1, 1, 1}, scale};
 
@@ -1353,7 +1287,7 @@ TYPED_TEST(FixedPointTests, VarStd)
   }
 
   // std tests
-  for (int32_t s = -5; s < 5; s++) {
+  for (int32_t s = -2; s <= 2; s++) {
     auto const scale = scale_type{s};
     auto const input = fp_wrapper{{42, 1729, 55, 3, 1, 2}, {1, 1, 1, 1, 1, 1}, scale};
 

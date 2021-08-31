@@ -65,6 +65,8 @@
 #include <thrust/pair.h>
 #include <thrust/transform.h>
 
+#include <cuda/std/limits>
+
 #include <memory>
 
 namespace cudf {
@@ -320,35 +322,41 @@ struct DeviceRollingVariance {
                                    [&input](auto i) { return input.is_valid_nocheck(i); })
                 : end_index - start_index;
 
-    // The denominator of the variance is `count - ddof`, it is strictly positive
-    // to gaurantee that variance is non-negative.
-    bool output_is_valid = count > 0 and (count >= min_periods) and (ddof < count);
+    // Result will be null if any of the following conditions are met:
+    // - All inputs are null
+    // - Number of valid inputs is less than `min_periods`
+    bool output_is_valid = count > 0 and (count >= min_periods);
 
     if (output_is_valid) {
-      // Welford algorithm
-      // See https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
-      OutputType m{0}, m2{0};
-      size_type running_count{0};
+      if (count >= ddof) {
+        // Welford algorithm
+        // See https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
+        OutputType m{0}, m2{0};
+        size_type running_count{0};
 
-      for (size_type i = start_index; i < end_index; i++) {
-        if (has_nulls and input.is_null_nocheck(i)) { continue; }
+        for (size_type i = start_index; i < end_index; i++) {
+          if (has_nulls and input.is_null_nocheck(i)) { continue; }
 
-        OutputType const x = static_cast<OutputType>(input.element<DeviceInputType>(i));
+          OutputType const x = static_cast<OutputType>(input.element<DeviceInputType>(i));
 
-        running_count++;
-        OutputType const tmp1 = x - m;
-        m += tmp1 / running_count;
-        OutputType const tmp2 = x - m;
-        m2 += tmp1 * tmp2;
-      }
-      if constexpr (is_fixed_point<InputType>()) {
-        // For fixed_point types, the previous computed value used unscaled rep-value,
-        // the final result should be multiplied by the square of decimal `scale`.
-        OutputType scaleby = exp10(static_cast<double>(input.type().scale()));
-        scaleby *= scaleby;
-        output.element<OutputType>(current_index) = m2 / (count - ddof) * scaleby;
+          running_count++;
+          OutputType const tmp1 = x - m;
+          m += tmp1 / running_count;
+          OutputType const tmp2 = x - m;
+          m2 += tmp1 * tmp2;
+        }
+        if constexpr (is_fixed_point<InputType>()) {
+          // For fixed_point types, the previous computed value used unscaled rep-value,
+          // the final result should be multiplied by the square of decimal `scale`.
+          OutputType scaleby = exp10(static_cast<double>(input.type().scale()));
+          scaleby *= scaleby;
+          output.element<OutputType>(current_index) = m2 / (count - ddof) * scaleby;
+        } else {
+          output.element<OutputType>(current_index) = m2 / (count - ddof);
+        }
       } else {
-        output.element<OutputType>(current_index) = m2 / (count - ddof);
+        output.element<OutputType>(current_index) =
+          cuda::std::numeric_limits<OutputType>::signaling_NaN();
       }
     }
 
