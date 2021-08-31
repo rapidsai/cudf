@@ -2201,22 +2201,22 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
   // make up some kind of dataframe
   auto constexpr num_rows = 10;
 
-  template<typename T>
+  template <typename T>
   create_random_column_wrapper(int32_t num_rows)
   {
     auto values = random_values<T>(num_rows);
     return column_wrapper<T>(values.begin(), values.end());
   }
 
-  auto int8_column = create_random_column_wrapper<int8_t>(num_rows);
-  auto int16_column = create_random_column_wrapper<int16_t>(num_rows);
-  auto int32_column = create_random_column_wrapper<int32_t>(num_rows);
-  auto int64_column = create_random_column_wrapper<int64_t>(num_rows);
-  auto uint8_column = create_random_column_wrapper<uint8_t>(num_rows);
-  auto uint16_column = create_random_column_wrapper<uint16_t>(num_rows);
-  auto uint32_column = create_random_column_wrapper<uint32_t>(num_rows);
-  auto uint64_column = create_random_column_wrapper<uint64_t>(num_rows);
-  auto float32_column = create_random_column_wrapper<float>(num_rows);
+  auto int8_column     = create_random_column_wrapper<int8_t>(num_rows);
+  auto int16_column    = create_random_column_wrapper<int16_t>(num_rows);
+  auto int32_column    = create_random_column_wrapper<int32_t>(num_rows);
+  auto int64_column    = create_random_column_wrapper<int64_t>(num_rows);
+  auto uint8_column    = create_random_column_wrapper<uint8_t>(num_rows);
+  auto uint16_column   = create_random_column_wrapper<uint16_t>(num_rows);
+  auto uint32_column   = create_random_column_wrapper<uint32_t>(num_rows);
+  auto uint64_column   = create_random_column_wrapper<uint64_t>(num_rows);
+  auto float32_column  = create_random_column_wrapper<float>(num_rows);
   auto float64_columnn = create_random_column_wrapper<double>(num_rows);
 
   auto input_columns = std::vector<cudf::column_view>{int8_column,
@@ -2251,15 +2251,17 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
                dtype<uint64_t>(),
                dtype<float>(),
                dtype<double>()});
+
+  struct table_with_metadata {
+    std::unique_ptr<table> tbl;
+    table_metadata metadata;
+  };
+
   auto new_table_and_metadata = cudf_io::read_csv(read_options);
 
-  struct table_with_metadata { 
-    std::unique_ptr<table> tbl; 
-    table_metadata metadata; 
-  }; 
-
   // check to see / assert / verify they are identical, or at least as identical as expected.
-  EXPECT_EQ(input_table, new_table_and_metadata);
+  const auto new_table_view = new_table_and_metadata.tbl->view();
+  EXPECT_EQ(input_table, new_table_view);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
