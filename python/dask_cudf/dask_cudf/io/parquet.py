@@ -79,6 +79,9 @@ class CudfEngine(ArrowDatasetEngine):
         )
 
         if partitions and partition_keys is None:
+
+            # Use `HivePartitioning` by default
+            partitioning = partitioning or {"obj": pa_ds.HivePartitioning}
             ds = pa_ds.dataset(
                 paths,
                 filesystem=fs,
