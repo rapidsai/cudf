@@ -461,10 +461,57 @@ std::unique_ptr<column> ewmvar(
   rmm::cuda_stream_view stream, 
   rmm::mr::device_memory_resource* mr) 
 {
-  std::cout << "here!" << std::endl;
-  std::unique_ptr<column> result = ewm(input, com, adjust, stream, mr);
-  return result;
+  
+  // get means
+  std::unique_ptr<column> means = ewma(input, com, adjust, stream, mr);
+  auto means_view = means.get()[0].mutable_view();
+
+  // construct deltas: (x_i - mu_i)(x_i - mu_{i-1})
+  rmm::device_vector<double> d_this(input.size());
+  rmm::device_vector<double> d_last(input.size());
+
+  thrust::transform(
+    rmm::exec_policy(stream),
+    input.begin<double>() + 1,
+    input.end<double>(),
+    means_view.begin<double>() + 1,
+    d_this.begin()+1,
+    thrust::minus<double>()
+  );
+
+  thrust::transform(
+    rmm::exec_policy(stream),
+    input.begin<double>() + 1,
+    input.end<double>(),
+    means_view.begin<double>(),
+    d_last.begin()+1,
+    thrust::minus<double>()
+  );
+
+  thrust::transform(
+    rmm::exec_policy(stream),
+    d_this.begin(),
+    d_this.end(),
+    d_last.begin(),
+    means_view.begin<double>(),
+    thrust::multiplies<double>()
+  );
+
+  thrust::transform(
+    rmm::exec_policy(stream),
+    means_view.begin<double>(),
+    means_view.begin<double>() + 1,
+    means_view.begin<double>(),
+    [=] __host__ __device__ (double input) -> double {
+      return input;
+
+    });
+
+
+  //return means;
+  return ewm(means.get()[0].view(), com, adjust, stream, mr);
 }
+
 
 std::unique_ptr<column> scan_inclusive(
   column_view const& input,
