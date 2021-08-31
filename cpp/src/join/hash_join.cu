@@ -85,7 +85,7 @@ void build_join_hash_table(cudf::table_view const& build,
   auto iter = thrust::make_transform_iterator(first, pair_func);
 
   size_type const build_table_num_rows{build_device_table->num_rows()};
-  if (compare_nulls == null_equality::EQUAL) {
+  if ((compare_nulls == null_equality::EQUAL) or (not nullable(build))) {
     hash_table.insert(iter, iter + build_table_num_rows, stream.value());
   } else {
     auto const row_bitmask = cudf::detail::bitmask_and(build, stream);
