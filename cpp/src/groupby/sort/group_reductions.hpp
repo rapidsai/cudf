@@ -441,7 +441,23 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
                                        size_type num_groups,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr);
-
+/**
+ * @brief Internal API to find correlation of child columns of a non-nullable struct column.
+ * TODO fill documentation.
+ *
+ * @param values Grouped values (tuples of values `(valid_count, mean, M2)`) to merge.
+ * @param group_offsets Offsets of groups' starting points within @p values.
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param num_groups Number of groups.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> group_corr(column_view const& values,
+                                   cudf::device_span<size_type const> group_offsets,
+                                   cudf::device_span<size_type const> group_labels,
+                                   size_type num_groups,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr);
 /** @endinternal
  *
  */

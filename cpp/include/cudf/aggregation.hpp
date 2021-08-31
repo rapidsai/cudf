@@ -87,7 +87,8 @@ class aggregation {
     CUDA,            ///< CUDA UDF based reduction
     MERGE_LISTS,     ///< merge multiple lists values into one list
     MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
-    MERGE_M2         ///< merge partial values of M2 aggregation
+    MERGE_M2,        ///< merge partial values of M2 aggregation,
+    CORR,            ///< correlation among multiple columns
   };
 
   aggregation() = delete;
@@ -487,6 +488,16 @@ std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal = nu
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_m2_aggregation();
+
+/**
+ * @brief Factory to create a CORR aggregation
+ *
+ * Compute correlation matrix amond the input columns.
+ * The input columns are child columns of a non-nullable struct columns.
+ *
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_corr_aggregation();
 
 /** @} */  // end of group
 }  // namespace cudf

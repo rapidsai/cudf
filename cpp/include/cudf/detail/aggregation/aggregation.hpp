@@ -91,6 +91,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
                                                           class merge_sets_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class merge_m2_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class corr_aggregation const& agg);
 };
 
 class aggregation_finalizer {  // Declares the interface for the finalizer
@@ -125,6 +127,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class merge_lists_aggregation const& agg);
   virtual void visit(class merge_sets_aggregation const& agg);
   virtual void visit(class merge_m2_aggregation const& agg);
+  virtual void visit(class corr_aggregation const& agg);
 };
 
 /**
@@ -885,6 +888,25 @@ class merge_m2_aggregation final : public groupby_aggregation {
 };
 
 /**
+ * @brief Derived aggregation class for specifying CORR aggregation
+ */
+class corr_aggregation final : public groupby_aggregation {
+ public:
+  explicit corr_aggregation() : aggregation{CORR} {}
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<corr_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
  * @brief Sentinel value used for `ARGMAX` aggregation.
  *
  * The output column for an `ARGMAX` aggregation is initialized with the
@@ -1118,6 +1140,12 @@ struct target_type_impl<SourceType, aggregation::MERGE_M2> {
   using type = struct_view;
 };
 
+// Always use struct for CORR
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::CORR> {
+  using type = double;
+};
+
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation
  * `k` on elements of type `Source`
@@ -1222,6 +1250,8 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::MERGE_SETS>(std::forward<Ts>(args)...);
     case aggregation::MERGE_M2:
       return f.template operator()<aggregation::MERGE_M2>(std::forward<Ts>(args)...);
+    case aggregation::CORR:
+      return f.template operator()<aggregation::CORR>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
