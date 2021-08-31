@@ -281,14 +281,7 @@ TYPED_TEST(FixedPointTestAllReps, GroupBySortMaxDecimalAsValue)
   }
 }
 
-template <typename T>
-struct FixedPointTest_32_64_Reps : public cudf::test::BaseFixture {
-};
-
-using RepTypes = ::testing::Types<numeric::decimal32, numeric::decimal64>;
-TYPED_TEST_CASE(FixedPointTest_32_64_Reps, RepTypes);
-
-TYPED_TEST(FixedPointTest_32_64_Reps, GroupByHashMaxDecimalAsValue)
+TYPED_TEST(FixedPointTestAllReps, GroupByHashMaxDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
