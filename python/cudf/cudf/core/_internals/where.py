@@ -10,7 +10,7 @@ import cudf
 from cudf._typing import ColumnLike, ScalarLike
 from cudf.core.column import ColumnBase
 from cudf.core.dataframe import DataFrame
-from cudf.core.frame import Frame
+from cudf.core.frame import Frame, SingleColumnFrame
 from cudf.core.index import Index
 from cudf.core.series import Series
 
@@ -94,9 +94,9 @@ def _check_and_cast_columns_with_other(
 
 
 def _normalize_columns_and_scalars_type(
-    frame: Union[Series, Index, DataFrame], other: Any, inplace: bool = False,
+    frame: Frame, other: Any, inplace: bool = False,
 ) -> Tuple[
-    Union[Series, Index, DataFrame, ColumnLike], Any,
+    Union[Frame, ColumnLike], Any,
 ]:
     """
     Try to normalize the other's dtypes as per frame.
@@ -177,10 +177,7 @@ def _normalize_columns_and_scalars_type(
 
 
 def where(
-    frame: Union[Series, Index, DataFrame],
-    cond: Any,
-    other: Any = None,
-    inplace: bool = False,
+    frame: Frame, cond: Any, other: Any = None, inplace: bool = False,
 ) -> Optional[Union[Frame]]:
     """
     Replace values where the condition is False.
@@ -332,6 +329,7 @@ def where(
         return frame._mimic_inplace(out_df, inplace=inplace)
 
     else:
+        frame = cast(SingleColumnFrame, frame)
         if isinstance(other, DataFrame):
             raise NotImplementedError(
                 "cannot align with a higher dimensional Frame"

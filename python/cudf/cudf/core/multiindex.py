@@ -6,7 +6,7 @@ import numbers
 import pickle
 import warnings
 from collections.abc import Sequence
-from typing import Any, List, Mapping, Tuple, Union
+from typing import Any, List, MutableMapping, Optional, Tuple, Union
 
 import cupy
 import numpy as np
@@ -18,12 +18,12 @@ from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.column import as_column, column
-from cudf.core.frame import SingleColumnFrame
-from cudf.core.index import BaseIndex, as_index
+from cudf.core.frame import Frame
+from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
 from cudf.utils.utils import _maybe_indices_to_slice
 
 
-class MultiIndex(BaseIndex):
+class MultiIndex(Frame, BaseIndex):
     """A multi-level or hierarchical index.
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
@@ -191,11 +191,6 @@ class MultiIndex(BaseIndex):
             )
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
-    @property
-    def _num_columns(self):
-        # MultiIndex is not a single-columned frame.
-        return super(SingleColumnFrame, self)._num_columns
-
     def rename(self, names, inplace=False):
         """
         Alter MultiIndex level names
@@ -283,14 +278,18 @@ class MultiIndex(BaseIndex):
 
         return self._set_names(names=names, inplace=inplace)
 
-    # TODO: This type ignore is indicating a real problem, which is that
-    # MultiIndex should not be inheriting from SingleColumnFrame, but fixing
-    # that will have to wait until we reshuffle the Index hierarchy.
     @classmethod
-    def _from_data(  # type: ignore
-        cls, data: Mapping, index=None
+    def _from_data(
+        cls,
+        data: MutableMapping,
+        index: Optional[cudf.core.index.BaseIndex] = None,
+        name: Any = None,
     ) -> MultiIndex:
-        return cls.from_frame(cudf.DataFrame._from_data(data))
+        assert index is None
+        obj = cls.from_frame(cudf.DataFrame._from_data(data))
+        if name is not None:
+            obj.name = name
+        return obj
 
     @property
     def shape(self):
@@ -434,6 +433,15 @@ class MultiIndex(BaseIndex):
     def __copy__(self):
         return self.copy(deep=True)
 
+    def __iter__(self):
+        """
+        Iterating over a GPU object is not effecient and hence not supported.
+
+        Consider using ``.to_arrow()``, ``.to_pandas()`` or ``.values_host``
+        if you wish to iterate over the values.
+        """
+        cudf.utils.utils.raise_iteration_error(obj=self)
+
     def _popn(self, n):
         """ Returns a copy of this index without the left-most n values.
 
@@ -534,68 +542,6 @@ class MultiIndex(BaseIndex):
 
         data_output = "\n".join(lines)
         return output_prefix + data_output
-
-    @classmethod
-    def from_arrow(cls, table):
-        """
-        Convert PyArrow Table to MultiIndex
-
-        Parameters
-        ----------
-        table : PyArrow Table
-            PyArrow Object which has to be converted to MultiIndex
-
-        Returns
-        -------
-        cudf MultiIndex
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> tbl = pa.table({"a":[1, 2, 3], "b":["a", "b", "c"]})
-        >>> cudf.MultiIndex.from_arrow(tbl)
-        MultiIndex([(1, 'a'),
-                    (2, 'b'),
-                    (3, 'c')],
-                   names=['a', 'b'])
-        """
-
-        return super(SingleColumnFrame, cls).from_arrow(table)
-
-    def to_arrow(self):
-        """Convert MultiIndex to PyArrow Table
-
-        Returns
-        -------
-        PyArrow Table
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":[2, 3, 4]})
-        >>> mindex = cudf.Index(df)
-        >>> mindex
-        MultiIndex([(1, 2),
-                    (2, 3),
-                    (3, 4)],
-                   names=['a', 'b'])
-        >>> mindex.to_arrow()
-        pyarrow.Table
-        a: int64
-        b: int64
-        >>> mindex.to_arrow()['a']
-        <pyarrow.lib.ChunkedArray object at 0x7f5c6b71fad0>
-        [
-            [
-                1,
-                2,
-                3
-            ]
-        ]
-        """
-
-        return super(SingleColumnFrame, self).to_arrow()
 
     @property
     def codes(self):
@@ -1401,7 +1347,7 @@ class MultiIndex(BaseIndex):
             popped_data[n] = self._data.pop(n)
 
         # construct the popped result
-        popped = cudf.Index._from_data(popped_data)
+        popped = cudf.core.index._index_from_data(popped_data)
         popped.names = popped_names
 
         # update self
@@ -1547,6 +1493,18 @@ class MultiIndex(BaseIndex):
                 self._source_data.drop_duplicates(ignore_index=True)
             )
         return self._is_unique
+
+    @property
+    def is_monotonic(self):
+        """Return boolean if values in the object are monotonic_increasing.
+
+        This property is an alias for :attr:`is_monotonic_increasing`.
+
+        Returns
+        -------
+        bool
+        """
+        return self.is_monotonic_increasing
 
     @property
     def is_monotonic_increasing(self):
@@ -1853,11 +1811,9 @@ class MultiIndex(BaseIndex):
         partial_index = self.__class__._from_data(
             data=self._data.select_by_index(slice(key_as_table._num_columns))
         )
-        (
-            lower_bound,
-            upper_bound,
-            sort_inds,
-        ) = partial_index._lexsorted_equal_range(key_as_table, is_sorted)
+        (lower_bound, upper_bound, sort_inds,) = _lexsorted_equal_range(
+            partial_index, key_as_table, is_sorted
+        )
 
         if lower_bound == upper_bound:
             raise KeyError(key)
