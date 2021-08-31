@@ -4016,10 +4016,7 @@ def test_series_values_property(data):
                 reason="Nulls not supported by as_gpu_matrix"
             ),
         ),
-        pytest.param(
-            {"A": [], "B": []},
-            marks=pytest.mark.xfail(reason="Requires at least 1 row"),
-        ),
+        {"A": [], "B": []},
         pytest.param(
             {"A": [1, 2, 3], "B": ["a", "b", "c"]},
             marks=pytest.mark.xfail(
