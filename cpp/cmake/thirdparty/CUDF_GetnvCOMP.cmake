@@ -24,7 +24,7 @@ function(find_and_configure_nvcomp VERSION)
     CPMFindPackage(NAME nvcomp
         VERSION            ${VERSION}
         GITHUB_REPOSITORY  NVIDIA/nvcomp
-        GIT_TAG            f5b8dee714bd2970d8230efa95f337c91f080257
+        GIT_TAG            3a12516afdeab4ace01298031757f84b8dda81b7
         GIT_SHALLOW        TRUE
         OPTIONS            "BUILD_TESTS OFF"
                            "BUILD_BENCHMARKS OFF"
