@@ -423,27 +423,9 @@ def test_dataframe_drop_index(pdf, index, inplace):
         ("speed", 1),
         ("weight", 1),
         ("length", 1),
-        pytest.param(
-            "cow",
-            None,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/36293"
-            ),
-        ),
-        pytest.param(
-            "lama",
-            None,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/36293"
-            ),
-        ),
-        pytest.param(
-            "falcon",
-            None,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/36293"
-            ),
-        ),
+        ("cow", None),
+        ("lama", None,),
+        ("falcon", None,),
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
@@ -1943,9 +1925,6 @@ def test_dataframe_count_reduction(data, func):
 def test_dataframe_min_count_ops(data, ops, skipna, min_count):
     psr = pd.DataFrame(data)
     gsr = cudf.DataFrame(data)
-
-    if PANDAS_GE_120 and psr.shape[0] * psr.shape[1] < min_count:
-        pytest.xfail("https://github.com/pandas-dev/pandas/issues/39738")
 
     assert_eq(
         getattr(psr, ops)(skipna=skipna, min_count=min_count),
