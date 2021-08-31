@@ -2,7 +2,6 @@
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
-from libcpp.vector cimport vector
 
 from cudf._lib.cpp.column.column cimport column
 
@@ -25,4 +24,4 @@ cdef extern from "cudf/io/text/multibyte_split.hpp" \
         namespace "cudf::io::text" nogil:
 
     unique_ptr[column]multibyte_split(data_chunk_source source,
-                                      vector[string] delimiters) except+
+                                      string delimiter) except+

@@ -1017,8 +1017,14 @@ Configuration object for a text Datasource
 
 Parameters
 ----------
+filepath_or_buffer : str, path object, or file-like object
+    Either a path to a file (a `str`, `pathlib.Path`, or
+    `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
+    or any object with a `read()` method (such as builtin `open()` file handler
+    function or `StringIO`).
 delimiter : string, default None, The delimiter that should be used
-    for splitting text chunks into seperate cudf column rows.
+    for splitting text chunks into seperate cudf column rows. Currently
+    only a single delimiter is supported.
 
 """
 doc_read_text = docfmt_partial(docstring=_docstring_text_datasource)

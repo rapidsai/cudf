@@ -6,7 +6,6 @@ from cython.operator cimport dereference
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
-from libcpp.vector cimport vector
 
 from cudf.core.column_accessor import ColumnAccessor
 
@@ -29,16 +28,15 @@ cpdef read_text(object filepaths_or_buffers,
     --------
     cudf.io.text.read_text
     """
-    # TODO: Do we support multiple inputs here?
-    cdef string filename = filepaths_or_buffers[0].encode()
-    cdef vector[string] delims = [delimiter.encode()]
+    cdef string filename = filepaths_or_buffers.encode()
+    cdef string delim = delimiter.encode()
 
     cdef unique_ptr[data_chunk_source] datasource
     cdef unique_ptr[column] c_col
 
     with nogil:
         datasource = move(make_source_from_file(filename))
-        c_col = move(multibyte_split(dereference(datasource), delims))
+        c_col = move(multibyte_split(dereference(datasource), delim))
 
     col = Column.from_unique_ptr(move(c_col))
     df = cudf.DataFrame._from_data(ColumnAccessor({"col_name": col}))
