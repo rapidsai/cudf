@@ -1470,9 +1470,17 @@ class MultiIndex(Frame, BaseIndex):
         if not isinstance(multiindex, pd.MultiIndex):
             raise TypeError("not a pandas.MultiIndex")
 
+        # if `multiindex` has two or more levels that
+        # have the same name, then `multiindex.to_frame()`
+        # results in a DataFrame containing only one of those
+        # levels. Thus, set `names` to some tuple of unique values
+        # and then call `multiindex.to_frame(name=names)`,
+        # which preserves all levels of `multiindex`.
+        names = tuple(range(len(multiindex.names)))
+
         mi = cls(
             names=multiindex.names,
-            source_data=multiindex.to_frame(),
+            source_data=multiindex.to_frame(name=names),
             nan_as_null=nan_as_null,
         )
 

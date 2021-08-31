@@ -41,7 +41,6 @@ from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
-from cudf.core.window import Rolling
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -535,11 +534,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         # Use the column directly to avoid duplicating the index
         # need to pickle column names to handle numpy integer columns
-        header["column_names"] = pickle.dumps(tuple(self._data.names))
-        column_header, column_frames = column.serialize_columns(self._columns)
-        header["columns"] = column_header
+        header["columns"], column_frames = column.serialize_columns(
+            self._columns
+        )
         frames.extend(column_frames)
 
+        header["column_names"] = pickle.dumps(tuple(self._data.names))
         return header, frames
 
     @classmethod
@@ -556,7 +556,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         column_names = pickle.loads(header["column_names"])
         columns = column.deserialize_columns(header["columns"], column_frames)
 
-        return cls(dict(zip(column_names, columns)), index=index)
+        return cls._from_data(dict(zip(column_names, columns)), index=index,)
 
     @property
     def dtypes(self):
@@ -1038,43 +1038,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             new[k] = v
         return new
 
-    def head(self, n=5):
-        """
-        Returns the first n rows as a new DataFrame
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2, 3, 4]
-        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-        >>> df.head(2)
-           key   val
-        0    0  10.0
-        1    1  11.0
-        """
-        return self.iloc[:n]
-
-    def tail(self, n=5):
-        """
-        Returns the last n rows as a new DataFrame
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2, 3, 4]
-        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-        >>> df.tail(2)
-           key   val
-        3    3  13.0
-        4    4  14.0
-        """
-        if n == 0:
-            return self.iloc[0:0]
-
-        return self.iloc[-n:]
-
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
     def _concat(
@@ -1277,31 +1240,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             out._index.names = objs[0]._index.names
 
         return out
-
-    def to_string(self):
-        """
-        Convert to string
-
-        cuDF uses Pandas internals for efficient string formatting.
-        Set formatting options using pandas string formatting options and
-        cuDF objects will print identically to Pandas objects.
-
-        cuDF supports `null/None` as a value in any column type, which
-        is transparently supported during this output process.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2]
-        >>> df['val'] = [float(i + 10) for i in range(3)]
-        >>> df.to_string()
-        '   key   val\\n0    0  10.0\\n1    1  11.0\\n2    2  12.0'
-        """
-        return self.__repr__()
-
-    def __str__(self):
-        return self.to_string()
 
     def astype(self, dtype, copy=False, errors="raise", **kwargs):
         """
@@ -1855,14 +1793,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             source_df[col] = source_df[col].where(mask, that)
 
         self._mimic_inplace(source_df, inplace=True)
-
-    def __invert__(self):
-        # Defer logic to Series since pandas semantics dictate different
-        # behaviors for different types that requires too much special casing
-        # of the standard _unaryop.
-        return DataFrame(
-            data={col: ~self[col] for col in self}, index=self.index
-        )
 
     def radd(self, other, axis=1, level=None, fill_value=None):
         """
@@ -2797,7 +2727,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         if not len(columns) == len(self._data.names):
             raise ValueError(
-                f"Length mismatch: expected {len(self._data.names)} elements ,"
+                f"Length mismatch: expected {len(self._data.names)} elements, "
                 f"got {len(columns)} elements"
             )
 
@@ -3716,15 +3646,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             self._data = out._data
         else:
             return out.copy(deep=copy)
-
-    def nans_to_nulls(self):
-        """
-        Convert nans (if any) to nulls.
-        """
-        df = self.copy()
-        for col in df.columns:
-            df[col] = df[col].nans_to_nulls()
-        return df
 
     def as_gpu_matrix(self, columns=None, order="F"):
         """Convert to a matrix in device memory.
@@ -4716,19 +4637,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             as_index=as_index,
             dropna=dropna,
             sort=sort,
-        )
-
-    @copy_docstring(Rolling)
-    def rolling(
-        self, window, min_periods=None, center=False, axis=0, win_type=None
-    ):
-        return Rolling(
-            self,
-            window,
-            min_periods=min_periods,
-            center=center,
-            axis=axis,
-            win_type=win_type,
         )
 
     def query(self, expr, local_dict=None):
@@ -6943,27 +6851,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         from cudf.io import feather as feather
 
         feather.to_feather(self, path, *args, **kwargs)
-
-    @ioutils.doc_to_json()
-    def to_json(self, path_or_buf=None, *args, **kwargs):
-        """{docstring}"""
-        from cudf.io import json as json
-
-        return json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
-
-    @ioutils.doc_to_hdf()
-    def to_hdf(self, path_or_buf, key, *args, **kwargs):
-        """{docstring}"""
-        from cudf.io import hdf as hdf
-
-        hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
-
-    @ioutils.doc_to_dlpack()
-    def to_dlpack(self):
-        """{docstring}"""
-        from cudf.io import dlpack as dlpack
-
-        return dlpack.to_dlpack(self)
 
     @ioutils.doc_dataframe_to_csv()
     def to_csv(
