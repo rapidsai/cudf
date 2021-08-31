@@ -153,9 +153,7 @@ std::unique_ptr<column> url_encode(
                              std::move(offsets_column),
                              std::move(chars_column),
                              strings.null_count(),
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail
@@ -412,9 +410,7 @@ std::unique_ptr<column> url_decode(
                              std::move(offsets_column),
                              std::move(chars_column),
                              strings.null_count(),
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

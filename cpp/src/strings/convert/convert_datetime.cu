@@ -977,9 +977,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                              std::move(offsets_column),
                              std::move(chars_column),
                              timestamps.null_count(),
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

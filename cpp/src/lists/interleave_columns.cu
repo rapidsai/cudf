@@ -189,9 +189,7 @@ struct interleave_list_entries_fn {
                                std::move(offsets_column),
                                std::move(chars_column),
                                null_count,
-                               std::move(null_mask),
-                               stream,
-                               mr);
+                               std::move(null_mask));
   }
 
   template <class T>
