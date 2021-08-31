@@ -61,7 +61,8 @@ class TimeDeltaColumn(column.ColumnBase):
         offset: int = 0,
         null_count: int = None,
     ):
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
+
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
@@ -90,6 +91,15 @@ class TimeDeltaColumn(column.ColumnBase):
             # cannot exist in `self`.
             return False
         return item.view("int64") in self.as_numerical
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the TimeDeltaColumn.
+        """
+        raise NotImplementedError(
+            "TimeDelta Arrays is not yet implemented in cudf"
+        )
 
     def to_arrow(self) -> pa.Array:
         mask = None
@@ -138,7 +148,7 @@ class TimeDeltaColumn(column.ColumnBase):
                     rhs = cudf.Scalar(None, "float64")
             else:
                 rhs = rhs.astype(common_dtype).astype("float64")
-            out_dtype = np.dtype("int64")
+            out_dtype = cudf.dtype("int64")
         elif rhs.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
@@ -205,7 +215,7 @@ class TimeDeltaColumn(column.ColumnBase):
             else:
                 rhs = rhs.astype(common_dtype).astype("float64")
 
-            out_dtype = np.dtype("float64")
+            out_dtype = cudf.dtype("float64")
         elif rhs.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
@@ -345,7 +355,7 @@ class TimeDeltaColumn(column.ColumnBase):
             )
         if len(self) > 0:
             return string._timedelta_to_str_typecast_functions[
-                np.dtype(self.dtype)
+                cudf.dtype(self.dtype)
             ](self, format=format)
         else:
             return cast(
@@ -354,7 +364,7 @@ class TimeDeltaColumn(column.ColumnBase):
             )
 
     def as_timedelta_column(self, dtype: Dtype, **kwargs) -> TimeDeltaColumn:
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
@@ -595,7 +605,7 @@ def _timedelta_add_result_dtype(
         lhs_unit = units.index(lhs_time_unit)
         rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
         rhs_unit = units.index(rhs_time_unit)
-        out_dtype = np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
+        out_dtype = cudf.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
     else:
         raise TypeError(
             f"Addition of {lhs.dtype} with {rhs.dtype} "
@@ -620,7 +630,7 @@ def _timedelta_sub_result_dtype(
         lhs_unit = units.index(lhs_time_unit)
         rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
         rhs_unit = units.index(rhs_time_unit)
-        out_dtype = np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
+        out_dtype = cudf.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
     else:
         raise TypeError(
             f"Subtraction of {lhs.dtype} with {rhs.dtype} "

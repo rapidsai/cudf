@@ -31,6 +31,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -62,6 +63,8 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
+  using namespace cudf::structs::detail;
+
   // If sort groupby has been called once on this groupby object, then
   // always use sort groupby from now on. Because once keys are sorted,
   // all the aggs that can be done by hash groupby are efficiently done by
@@ -70,7 +73,13 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
   // satisfied with a hash implementation
   if (_keys_are_sorted == sorted::NO and not _helper and
       detail::hash::can_use_hash_groupby(_keys, requests)) {
-    return detail::hash::groupby(_keys, requests, _include_null_keys, stream, mr);
+    // Optionally flatten nested key columns.
+    auto [flattened_keys, _, __, ___] =
+      flatten_nested_columns(_keys, {}, {}, column_nullability::FORCE);
+    auto [grouped_keys, results] =
+      detail::hash::groupby(flattened_keys, requests, _include_null_keys, stream, mr);
+    return std::make_pair(unflatten_nested_columns(std::move(grouped_keys), _keys),
+                          std::move(results));
   } else {
     return sort_aggregate(requests, stream, mr);
   }
@@ -120,7 +129,8 @@ struct empty_column_constructor {
 };
 
 /// Make an empty table with appropriate types for requested aggs
-auto empty_results(host_span<aggregation_request const> requests)
+template <typename RequestType>
+auto empty_results(host_span<RequestType const> requests)
 {
   std::vector<aggregation_result> empty_results;
 
@@ -144,7 +154,8 @@ auto empty_results(host_span<aggregation_request const> requests)
 }
 
 /// Verifies the agg requested on the request's values is valid
-void verify_valid_requests(host_span<aggregation_request const> requests)
+template <typename RequestType>
+void verify_valid_requests(host_span<RequestType const> requests)
 {
   CUDF_EXPECTS(
     std::all_of(
@@ -184,7 +195,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
 // Compute scan requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan(
-  host_span<aggregation_request const> requests, rmm::mr::device_memory_resource* mr)
+  host_span<scan_request const> requests, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(

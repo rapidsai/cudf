@@ -1828,43 +1828,79 @@ def gdf(pdf):
 @pytest.mark.parametrize(
     "data",
     [
-        {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
-        {"x": [1, 2, 3], "y": [4, 5, 6]},
-        {"x": [np.nan, np.nan, np.nan], "y": [np.nan, np.nan, np.nan]},
-        {"x": [], "y": []},
+        {
+            "x": [np.nan, 2, 3, 4, 100, np.nan],
+            "y": [4, 5, 6, 88, 99, np.nan],
+            "z": [7, 8, 9, 66, np.nan, 77],
+        },
+        {"x": [1, 2, 3], "y": [4, 5, 6], "z": [7, 8, 9]},
+        {
+            "x": [np.nan, np.nan, np.nan],
+            "y": [np.nan, np.nan, np.nan],
+            "z": [np.nan, np.nan, np.nan],
+        },
+        {"x": [], "y": [], "z": []},
         {"x": []},
     ],
 )
+@pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize(
     "func",
     [
-        lambda df, **kwargs: df.min(**kwargs),
-        lambda df, **kwargs: df.max(**kwargs),
-        lambda df, **kwargs: df.sum(**kwargs),
-        lambda df, **kwargs: df.product(**kwargs),
-        lambda df, **kwargs: df.cummin(**kwargs),
-        lambda df, **kwargs: df.cummax(**kwargs),
-        lambda df, **kwargs: df.cumsum(**kwargs),
-        lambda df, **kwargs: df.cumprod(**kwargs),
-        lambda df, **kwargs: df.mean(**kwargs),
-        lambda df, **kwargs: df.median(**kwargs),
-        lambda df, **kwargs: df.sum(**kwargs),
-        lambda df, **kwargs: df.max(**kwargs),
-        lambda df, **kwargs: df.std(ddof=1, **kwargs),
-        lambda df, **kwargs: df.var(ddof=1, **kwargs),
-        lambda df, **kwargs: df.std(ddof=2, **kwargs),
-        lambda df, **kwargs: df.var(ddof=2, **kwargs),
-        lambda df, **kwargs: df.kurt(**kwargs),
-        lambda df, **kwargs: df.skew(**kwargs),
-        lambda df, **kwargs: df.all(**kwargs),
-        lambda df, **kwargs: df.any(**kwargs),
+        "min",
+        "max",
+        "sum",
+        "prod",
+        "product",
+        "cummin",
+        "cummax",
+        "cumsum",
+        "cumprod",
+        "mean",
+        "median",
+        "sum",
+        "max",
+        "std",
+        "var",
+        "kurt",
+        "skew",
+        "all",
+        "any",
     ],
 )
 @pytest.mark.parametrize("skipna", [True, False, None])
-def test_dataframe_reductions(data, func, skipna):
+def test_dataframe_reductions(data, axis, func, skipna):
     pdf = pd.DataFrame(data=data)
     gdf = cudf.DataFrame.from_pandas(pdf)
-    assert_eq(func(pdf, skipna=skipna), func(gdf, skipna=skipna))
+
+    # Reductions can fail in numerous possible ways when attempting row-wise
+    # reductions, which are only partially supported. Catching the appropriate
+    # exception here allows us to detect API breakage in the form of changing
+    # exceptions.
+    expected_exception = None
+    if axis == 1:
+        if func in ("kurt", "skew"):
+            expected_exception = NotImplementedError
+        elif func not in cudf.core.dataframe._cupy_nan_methods_map:
+            if skipna is False:
+                expected_exception = NotImplementedError
+            elif any(col.nullable for name, col in gdf.iteritems()):
+                expected_exception = ValueError
+            elif func in ("cummin", "cummax"):
+                expected_exception = AttributeError
+
+    # Test different degrees of freedom for var and std.
+    all_kwargs = [{"ddof": 1}, {"ddof": 2}] if func in ("var", "std") else [{}]
+    for kwargs in all_kwargs:
+        if expected_exception is not None:
+            with pytest.raises(expected_exception):
+                getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),
+        else:
+            assert_eq(
+                getattr(pdf, func)(axis=axis, skipna=skipna, **kwargs),
+                getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),
+                check_dtype=False,
+            )
 
 
 @pytest.mark.parametrize(
@@ -3633,7 +3669,7 @@ def test_one_row_head():
     "np_dtype,pd_dtype",
     [
         tuple(item)
-        for item in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes.items()
+        for item in cudf.utils.dtypes.np_dtypes_to_pandas_dtypes.items()
     ],
 )
 def test_series_astype_pandas_nullable(dtype, np_dtype, pd_dtype):
@@ -5873,17 +5909,17 @@ def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
         (
             pd.Series([random.random() for _ in range(10)], dtype="float128"),
             None,
-            NotImplementedError,
+            TypeError,
         ),
     ],
 )
 def test_from_pandas_unsupported_types(data, expected_upcast_type, error):
     pdf = pd.DataFrame({"one_col": data})
-    if error == NotImplementedError:
-        with pytest.raises(error):
+    if error is not None:
+        with pytest.raises(ValueError):
             cudf.from_pandas(data)
 
-        with pytest.raises(error):
+        with pytest.raises(ValueError):
             cudf.Series(data)
 
         with pytest.raises(error):
@@ -8107,17 +8143,7 @@ def test_dataframe_pipe_error():
 
 
 @pytest.mark.parametrize(
-    "op",
-    [
-        "count",
-        "cummin",
-        "cummax",
-        "cummax",
-        "cumprod",
-        "kurt",
-        "kurtosis",
-        "skew",
-    ],
+    "op", ["count", "kurt", "kurtosis", "skew"],
 )
 def test_dataframe_axis1_unsupported_ops(op):
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [8, 9, 10]})
@@ -8731,6 +8757,43 @@ def test_frame_series_where():
     expected = gdf.where(gdf.notna(), gdf.mean())
     actual = pdf.where(pdf.notna(), pdf.mean(), axis=1)
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "array,is_error",
+    [
+        (cupy.arange(20, 40).reshape(-1, 2), False),
+        (cupy.arange(20, 50).reshape(-1, 3), True),
+        (np.arange(20, 40).reshape(-1, 2), False),
+        (np.arange(20, 30).reshape(-1, 1), False),
+        (cupy.arange(20, 30).reshape(-1, 1), False),
+    ],
+)
+def test_dataframe_indexing_setitem_np_cp_array(array, is_error):
+    gdf = cudf.DataFrame({"a": range(10), "b": range(10)})
+    pdf = gdf.to_pandas()
+    if not is_error:
+        gdf.loc[:, ["a", "b"]] = array
+        pdf.loc[:, ["a", "b"]] = cupy.asnumpy(array)
+
+        assert_eq(gdf, pdf)
+    else:
+        assert_exceptions_equal(
+            lfunc=pdf.loc.__setitem__,
+            rfunc=gdf.loc.__setitem__,
+            lfunc_args_and_kwargs=(
+                [(slice(None, None, None), ["a", "b"]), cupy.asnumpy(array)],
+                {},
+            ),
+            rfunc_args_and_kwargs=(
+                [(slice(None, None, None), ["a", "b"]), array],
+                {},
+            ),
+            compare_error_message=False,
+            expected_error_message="shape mismatch: value array of shape "
+            "(10, 3) could not be broadcast to indexing "
+            "result of shape (10, 2)",
+        )
 
 
 @pytest.mark.parametrize(

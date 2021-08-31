@@ -13,7 +13,7 @@ from cudf._fuzz_testing.utils import (
     pyarrow_to_pandas,
 )
 from cudf.testing import dataset_generator as dg
-from cudf.utils.dtypes import pandas_dtypes_to_cudf_dtypes
+from cudf.utils.dtypes import pandas_dtypes_to_np_dtypes
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -100,7 +100,7 @@ class CSVReader(IOFuzz):
                         dtype_val = {
                             col_name: "category"
                             if cudf.utils.dtypes.is_categorical_dtype(dtype)
-                            else pandas_dtypes_to_cudf_dtypes[dtype]
+                            else pandas_dtypes_to_np_dtypes[dtype]
                             for col_name, dtype in dtype_val.items()
                         }
                     params_dict[param] = dtype_val

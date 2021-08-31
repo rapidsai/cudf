@@ -123,6 +123,9 @@ def to_datetime(
     if yearfirst:
         raise NotImplementedError("yearfirst support is not yet implemented")
 
+    if format is not None and "%f" in format:
+        format = format.replace("%f", "%9f")
+
     try:
         if isinstance(arg, cudf.DataFrame):
             # we require at least Ymd
@@ -495,7 +498,7 @@ class DateOffset:
                     dtype = "int16"
                 else:
                     unit = self._UNITS_TO_CODES[k]
-                    dtype = np.dtype(f"timedelta64[{unit}]")
+                    dtype = cudf.dtype(f"timedelta64[{unit}]")
                 scalars[k] = cudf.Scalar(v, dtype=dtype)
 
         self._scalars = scalars

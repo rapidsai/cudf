@@ -30,65 +30,61 @@ public final class DType {
   2. Update SINGLETON_DTYPE_LOOKUP to reflect new type. The order should be maintained between
   DTypeEnum and SINGLETON_DTYPE_LOOKUP */
   public enum DTypeEnum {
-    EMPTY(0, 0, "NOT SUPPORTED"),
-    INT8(1, 1, "byte"),
-    INT16(2, 2, "short"),
-    INT32(4, 3, "int"),
-    INT64(8, 4, "long"),
-    UINT8(1, 5, "uint8"),
-    UINT16(2, 6, "uint16"),
-    UINT32(4, 7, "uint32"),
-    UINT64(8, 8, "uint64"),
-    FLOAT32(4, 9, "float"),
-    FLOAT64(8, 10, "double"),
+    EMPTY(0, 0),
+    INT8(1, 1),
+    INT16(2, 2),
+    INT32(4, 3),
+    INT64(8, 4),
+    UINT8(1, 5),
+    UINT16(2, 6),
+    UINT32(4, 7),
+    UINT64(8, 8),
+    FLOAT32(4, 9),
+    FLOAT64(8, 10),
     /**
      * Byte wise true non-0/false 0.  In general true will be 1.
      */
-    BOOL8(1, 11, "bool"),
+    BOOL8(1, 11),
     /**
      * Days since the UNIX epoch
      */
-    TIMESTAMP_DAYS(4, 12, "date32"),
+    TIMESTAMP_DAYS(4, 12),
     /**
      * s since the UNIX epoch
      */
-    TIMESTAMP_SECONDS(8, 13, "timestamp[s]"),
+    TIMESTAMP_SECONDS(8, 13),
     /**
      * ms since the UNIX epoch
      */
-    TIMESTAMP_MILLISECONDS(8, 14, "timestamp[ms]"),
+    TIMESTAMP_MILLISECONDS(8, 14),
     /**
      * microseconds since the UNIX epoch
      */
-    TIMESTAMP_MICROSECONDS(8, 15, "timestamp[us]"),
+    TIMESTAMP_MICROSECONDS(8, 15),
     /**
      * ns since the UNIX epoch
      */
-    TIMESTAMP_NANOSECONDS(8, 16, "timestamp[ns]"),
+    TIMESTAMP_NANOSECONDS(8, 16),
 
-    //We currently don't have mappings for duration type to I/O files, and these
-    //simpleNames might change in future when we do
-    DURATION_DAYS(4, 17, "int32"),
-    DURATION_SECONDS(8, 18, "int64"),
-    DURATION_MILLISECONDS(8, 19, "int64"),
-    DURATION_MICROSECONDS(8, 20, "int64"),
-    DURATION_NANOSECONDS(8, 21, "int64"),
-    //DICTIONARY32(4, 22, "NO IDEA"),
+    DURATION_DAYS(4, 17),
+    DURATION_SECONDS(8, 18),
+    DURATION_MILLISECONDS(8, 19),
+    DURATION_MICROSECONDS(8, 20),
+    DURATION_NANOSECONDS(8, 21),
+    //DICTIONARY32(4, 22),
 
-    STRING(0, 23, "str"),
-    LIST(0, 24, "list"),
-    DECIMAL32(4, 25, "decimal32"),
-    DECIMAL64(8, 26, "decimal64"),
-    STRUCT(0, 27, "struct");
+    STRING(0, 23),
+    LIST(0, 24),
+    DECIMAL32(4, 25),
+    DECIMAL64(8, 26),
+    STRUCT(0, 27);
 
     final int sizeInBytes;
     final int nativeId;
-    final String simpleName;
 
-    DTypeEnum(int sizeInBytes, int nativeId, String simpleName) {
+    DTypeEnum(int sizeInBytes, int nativeId) {
       this.sizeInBytes = sizeInBytes;
       this.nativeId = nativeId;
-      this.simpleName = simpleName;
     }
 
     public int getNativeId() { return nativeId; }
@@ -190,12 +186,6 @@ public final class DType {
    *         if scale = 2, decimal value = 123456 * 10^2 = 12345600
    */
   public int getScale() { return scale; }
-
-  /**
-   * Returns string name mapped to type.
-   * @return name corresponding to type
-   */
-  public String getSimpleName() { return typeId.simpleName; }
 
   /**
    * Return enum for this DType
