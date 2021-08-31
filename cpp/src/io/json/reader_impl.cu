@@ -50,31 +50,6 @@ namespace detail {
 namespace json {
 using namespace cudf::io;
 
-namespace {
-/**
- * @brief Estimates the maximum expected length or a row, based on the number
- * of columns
- *
- * If the number of columns is not available, it will return a value large
- * enough for most use cases
- *
- * @param[in] num_columns Number of columns in the JSON file (optional)
- *
- * @return Estimated maximum size of a row, in bytes
- */
-constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept
-{
-  constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
-  constexpr size_t column_bytes  = 64;
-  constexpr size_t base_padding  = 1024;  // 1KB
-  return num_columns == 0
-           ? max_row_bytes  // Use flat size if the # of columns is not known
-           : base_padding +
-               num_columns * column_bytes;  // Expand size based on the # of columns, if available
-}
-
-}  // anonymous namespace
-
 /**
  * @brief Aggregate the table containing keys info by their hash values.
  *
@@ -87,12 +62,12 @@ std::unique_ptr<table> aggregate_keys_info(std::unique_ptr<table> info)
   auto const info_view = info->view();
   std::vector<groupby::aggregation_request> requests;
   requests.emplace_back(groupby::aggregation_request{info_view.column(0)});
-  requests.back().aggregations.emplace_back(make_min_aggregation());
-  requests.back().aggregations.emplace_back(make_nth_element_aggregation(0));
+  requests.back().aggregations.emplace_back(make_min_aggregation<groupby_aggregation>());
+  requests.back().aggregations.emplace_back(make_nth_element_aggregation<groupby_aggregation>(0));
 
   requests.emplace_back(groupby::aggregation_request{info_view.column(1)});
-  requests.back().aggregations.emplace_back(make_min_aggregation());
-  requests.back().aggregations.emplace_back(make_nth_element_aggregation(0));
+  requests.back().aggregations.emplace_back(make_min_aggregation<groupby_aggregation>());
+  requests.back().aggregations.emplace_back(make_nth_element_aggregation<groupby_aggregation>(0));
 
   // Aggregate by hash values
   groupby::groupby gb_obj(
@@ -231,25 +206,12 @@ std::pair<std::vector<std::string>, col_map_ptr_type> reader::impl::get_json_obj
  *
  * @param[in] range_offset Number of bytes offset from the start
  * @param[in] range_size Bytes to read; use `0` for all remaining data
+ * @param[in] range_size_padded Bytes to read with padding; use `0` for all remaining data
  */
-void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
+void reader::impl::ingest_raw_input(size_t range_offset,
+                                    size_t range_size,
+                                    size_t range_size_padded)
 {
-  size_t map_range_size = 0;
-  if (range_size != 0) {
-    auto const dtype_option_size =
-      std::visit([](const auto& dtypes) { return dtypes.size(); }, options_.get_dtypes());
-    map_range_size = range_size + calculate_max_row_size(dtype_option_size);
-  }
-
-  // Support delayed opening of the file if using memory mapping datasource
-  // This allows only mapping of a subset of the file if using byte range
-  if (sources_.empty()) {
-    assert(!filepaths_.empty());
-    for (const auto& path : filepaths_) {
-      sources_.emplace_back(datasource::create(path, range_offset, map_range_size));
-    }
-  }
-
   // Iterate through the user defined sources and read the contents into the local buffer
   CUDF_EXPECTS(!sources_.empty(), "No sources were defined");
   size_t total_source_size = 0;
@@ -262,14 +224,14 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
   size_t bytes_read = 0;
   for (const auto& source : sources_) {
     if (!source->is_empty()) {
-      auto data_size = (map_range_size != 0) ? map_range_size : source->size();
+      auto data_size = (range_size_padded != 0) ? range_size_padded : source->size();
       bytes_read += source->host_read(range_offset, data_size, &buffer_[bytes_read]);
     }
   }
 
   byte_range_offset_ = range_offset;
   byte_range_size_   = range_size;
-  load_whole_file_   = byte_range_offset_ == 0 && byte_range_size_ == 0;
+  load_whole_source_ = byte_range_offset_ == 0 && byte_range_size_ == 0;
 }
 
 /**
@@ -280,11 +242,7 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
  */
 void reader::impl::decompress_input(rmm::cuda_stream_view stream)
 {
-  const auto compression_type =
-    infer_compression_type(options_.get_compression(),
-                           filepaths_.size() > 0 ? filepaths_[0] : "",
-                           {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
-  if (compression_type == "none") {
+  if (options_.get_compression() == compression_type::NONE) {
     // Do not use the owner vector here to avoid extra copy
     uncomp_data_ = reinterpret_cast<const char*>(buffer_.data());
     uncomp_size_ = buffer_.size();
@@ -293,12 +251,12 @@ void reader::impl::decompress_input(rmm::cuda_stream_view stream)
       host_span<char const>(                     //
         reinterpret_cast<const char*>(buffer_.data()),
         buffer_.size()),
-      compression_type);
+      options_.get_compression());
 
     uncomp_data_ = uncomp_data_owner_.data();
     uncomp_size_ = uncomp_data_owner_.size();
   }
-  if (load_whole_file_) data_ = rmm::device_buffer(uncomp_data_, uncomp_size_, stream);
+  if (load_whole_source_) data_ = rmm::device_buffer(uncomp_data_, uncomp_size_, stream);
 }
 
 rmm::device_uvector<uint64_t> reader::impl::find_record_starts(rmm::cuda_stream_view stream)
@@ -310,7 +268,7 @@ rmm::device_uvector<uint64_t> reader::impl::find_record_starts(rmm::cuda_stream_
   if (allow_newlines_in_strings_) { chars_to_count.push_back('\"'); }
   // If not starting at an offset, add an extra row to account for the first row in the file
   cudf::size_type prefilter_count = ((byte_range_offset_ == 0) ? 1 : 0);
-  if (load_whole_file_) {
+  if (load_whole_source_) {
     prefilter_count += count_all_from_set(data_, chars_to_count, stream);
   } else {
     prefilter_count += count_all_from_set(uncomp_data_, uncomp_size_, chars_to_count, stream);
@@ -328,7 +286,7 @@ rmm::device_uvector<uint64_t> reader::impl::find_record_starts(rmm::cuda_stream_
   std::vector<char> chars_to_find{'\n'};
   if (allow_newlines_in_strings_) { chars_to_find.push_back('\"'); }
   // Passing offset = 1 to return positions AFTER the found character
-  if (load_whole_file_) {
+  if (load_whole_source_) {
     find_all_from_set(data_, chars_to_find, 1, find_result_ptr, stream);
   } else {
     find_all_from_set(uncomp_data_, uncomp_size_, chars_to_find, 1, find_result_ptr, stream);
@@ -466,71 +424,32 @@ void reader::impl::set_column_names(device_span<uint64_t const> rec_starts,
   }
 }
 
-std::vector<data_type> reader::impl::parse_data_types(
-  std::vector<std::string> const& types_as_strings)
-{
-  CUDF_EXPECTS(types_as_strings.size() == metadata_.column_names.size(),
-               "Need to specify the type of each column.\n");
-  std::vector<data_type> dtypes;
-  // Assume that the dtype is in dictionary format only if all elements contain a colon
-  const bool is_dict = std::all_of(
-    std::cbegin(types_as_strings), std::cend(types_as_strings), [](const std::string& s) {
-      return std::find(std::cbegin(s), std::cend(s), ':') != std::cend(s);
-    });
-
-  auto split_on_colon = [](std::string_view s) {
-    auto const i = s.find(":");
-    return std::pair{s.substr(0, i), s.substr(i + 1)};
-  };
-
-  if (is_dict) {
-    std::map<std::string, data_type> col_type_map;
-    std::transform(
-      std::cbegin(types_as_strings),
-      std::cend(types_as_strings),
-      std::inserter(col_type_map, col_type_map.end()),
-      [&](auto const& ts) {
-        auto const [col_name, type_str] = split_on_colon(ts);
-        return std::pair{std::string{col_name}, convert_string_to_dtype(std::string{type_str})};
-      });
-
-    // Using the map here allows O(n log n) complexity
-    std::transform(std::cbegin(metadata_.column_names),
-                   std::cend(metadata_.column_names),
-                   std::back_inserter(dtypes),
-                   [&](auto const& column_name) { return col_type_map[column_name]; });
-  } else {
-    std::transform(std::cbegin(types_as_strings),
-                   std::cend(types_as_strings),
-                   std::back_inserter(dtypes),
-                   [](auto const& col_dtype) { return convert_string_to_dtype(col_dtype); });
-  }
-  return dtypes;
-}
-
 void reader::impl::set_data_types(device_span<uint64_t const> rec_starts,
                                   rmm::cuda_stream_view stream)
 {
   bool has_to_infer_column_types =
     std::visit([](const auto& dtypes) { return dtypes.empty(); }, options_.get_dtypes());
   if (!has_to_infer_column_types) {
-    dtypes_ = std::visit(
-      cudf::detail::visitor_overload{
-        [&](const std::vector<data_type>& dtypes) { return dtypes; },
-        [&](const std::map<std::string, data_type>& dtypes) {
-          std::vector<data_type> sorted_dtypes;
-          std::transform(std::cbegin(metadata_.column_names),
-                         std::cend(metadata_.column_names),
-                         std::back_inserter(sorted_dtypes),
-                         [&](auto const& column_name) {
-                           auto const it = dtypes.find(column_name);
-                           CUDF_EXPECTS(it != dtypes.end(), "Must specify types for all columns");
-                           return it->second;
-                         });
-          return sorted_dtypes;
-        },
-        [&](std::vector<std::string> const& dtypes) { return parse_data_types(dtypes); }},
-      options_.get_dtypes());
+    dtypes_ = std::visit(cudf::detail::visitor_overload{
+                           [&](const std::vector<data_type>& dtypes) {
+                             CUDF_EXPECTS(dtypes.size() == metadata_.column_names.size(),
+                                          "Must specify types for all columns");
+                             return dtypes;
+                           },
+                           [&](const std::map<std::string, data_type>& dtypes) {
+                             std::vector<data_type> sorted_dtypes;
+                             std::transform(std::cbegin(metadata_.column_names),
+                                            std::cend(metadata_.column_names),
+                                            std::back_inserter(sorted_dtypes),
+                                            [&](auto const& column_name) {
+                                              auto const it = dtypes.find(column_name);
+                                              CUDF_EXPECTS(it != dtypes.end(),
+                                                           "Must specify types for all columns");
+                                              return it->second;
+                                            });
+                             return sorted_dtypes;
+                           }},
+                         options_.get_dtypes());
   } else {
     CUDF_EXPECTS(rec_starts.size() != 0, "No data available for data type inference.\n");
     auto const num_columns       = metadata_.column_names.size();
@@ -661,11 +580,10 @@ table_with_metadata reader::impl::convert_data_to_table(device_span<uint64_t con
 }
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
-                   std::vector<std::string> const& filepaths,
                    json_reader_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
-  : options_(options), mr_(mr), sources_(std::move(sources)), filepaths_(filepaths)
+  : options_(options), mr_(mr), sources_(std::move(sources))
 {
   CUDF_EXPECTS(options_.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
@@ -688,10 +606,11 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 table_with_metadata reader::impl::read(json_reader_options const& options,
                                        rmm::cuda_stream_view stream)
 {
-  auto range_offset = options.get_byte_range_offset();
-  auto range_size   = options.get_byte_range_size();
+  auto range_offset      = options.get_byte_range_offset();
+  auto range_size        = options.get_byte_range_size();
+  auto range_size_padded = options.get_byte_range_size_with_padding();
 
-  ingest_raw_input(range_offset, range_size);
+  ingest_raw_input(range_offset, range_size, range_size_padded);
   CUDF_EXPECTS(buffer_.size() != 0, "Ingest failed: input data is null.\n");
 
   decompress_input(stream);
@@ -714,25 +633,12 @@ table_with_metadata reader::impl::read(json_reader_options const& options,
 }
 
 // Forward to implementation
-reader::reader(std::vector<std::string> const& filepaths,
-               json_reader_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
-{
-  // Delay actual instantiation of data source until read to allow for
-  // partial memory mapping of file using byte ranges
-  std::vector<std::unique_ptr<datasource>> src = {};  // Empty datasources
-  _impl = std::make_unique<impl>(std::move(src), filepaths, options, stream, mr);
-}
-
-// Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                json_reader_options const& options,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
 {
-  std::vector<std::string> file_paths = {};  // Empty filepaths
-  _impl = std::make_unique<impl>(std::move(sources), file_paths, options, stream, mr);
+  _impl = std::make_unique<impl>(std::move(sources), options, stream, mr);
 }
 
 // Destructor within this translation unit
