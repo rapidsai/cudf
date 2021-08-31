@@ -289,8 +289,8 @@ struct DeviceRollingCountAll {
  */
 template <typename InputType>
 struct DeviceRollingVariance {
-  size_type min_periods;
-  size_type ddof;
+  size_type const min_periods;
+  size_type const ddof;
 
   // what operations do we support
   template <typename T = InputType, aggregation::Kind O = aggregation::VARIANCE>
@@ -310,7 +310,7 @@ struct DeviceRollingVariance {
                              mutable_column_device_view& output,
                              size_type start_index,
                              size_type end_index,
-                             size_type current_index)
+                             size_type current_index) const
   {
     using DeviceInputType = device_storage_type_t<InputType>;
 
