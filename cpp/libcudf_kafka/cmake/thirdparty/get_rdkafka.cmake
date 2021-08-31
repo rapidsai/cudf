@@ -14,25 +14,28 @@
 # limitations under the License.
 #=============================================================================
 
-function(find_and_configure_cucollections)
 
-    if(TARGET cuco::cuco)
-        return()
-    endif()
-
-    # Find or install cuCollections
-    CPMFindPackage(NAME   cuco
-        GITHUB_REPOSITORY PointKernel/cuCollections
-        GIT_TAG           static-multi-map
-        OPTIONS           "BUILD_TESTS OFF"
-                          "BUILD_BENCHMARKS OFF"
-                          "BUILD_EXAMPLES OFF"
+function( get_RDKafka )
+  rapids_find_generate_module(RDKAFKA
+    HEADER_NAMES rdkafkacpp.h
+    INCLUDE_SUFFIXES librdkafka
+    LIBRARY_NAMES rdkafka++
+    BUILD_EXPORT_SET cudf_kafka-exports
+    INSTALL_EXPORT_SET cudf_kafka-exports
     )
 
-    set(CUCO_INCLUDE_DIR "${cuco_SOURCE_DIR}/include" PARENT_SCOPE)
+  if(DEFINED ENV{RDKAFKA_ROOT})
+    # Since this is inside a function the modification of
+    # CMAKE_PREFIX_PATH won't leak to other callers/users
+    list(APPEND CMAKE_PREFIX_PATH "$ENV{RDKAFKA_ROOT}")
+    list(APPEND CMAKE_PREFIX_PATH "$ENV{RDKAFKA_ROOT}/build")
+  endif()
 
-    # Make sure consumers of cudf can also see cuco::cuco target
-    fix_cmake_global_defaults(cuco::cuco)
+
+  rapids_find_package(RDKAFKA REQUIRED
+    BUILD_EXPORT_SET cudf_kafka-exports
+    INSTALL_EXPORT_SET cudf_kafka-exports)
+
 endfunction()
 
-find_and_configure_cucollections()
+get_RDKafka()
