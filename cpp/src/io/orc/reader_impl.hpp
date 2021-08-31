@@ -53,8 +53,13 @@ class aggregate_orc_metadata;
  */
 struct reader_column_meta {
   std::vector<std::vector<int32_t>>
-    orc_col_map;                          // Mapping between column id in orc to processing order.
-  std::vector<uint32_t> num_child_rows;   // number of rows in child columns
+    orc_col_map;                         // Mapping between column id in orc to processing order.
+  std::vector<uint32_t> num_child_rows;  // number of rows in child columns
+
+  std::vector<column_validity_info>
+    parent_column_data;  // consists of parent column valid_map and null count
+  std::vector<size_type> parent_column_index;
+
   std::vector<uint32_t> child_start_row;  // start row of child columns [stripe][column]
   std::vector<uint32_t>
     num_child_rows_per_stripe;  // number of rows of child columns [stripe][column]
@@ -151,12 +156,14 @@ class reader::impl {
    * @brief Aggregate child metadata from parent column chunks.
    *
    * @param chunks Vector of list of parent column chunks.
-   * @param chunks Vector of list of parent column row groups.
+   * @param row_groups Vector of list of row index descriptors
+   * @param out_buffers Column buffers for columns.
    * @param list_col Vector of column metadata of list type parent columns.
    * @param level Current nesting level being processed.
    */
   void aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDesc> chunks,
                             cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
+                            std::vector<column_buffer>& out_buffers,
                             std::vector<orc_column_meta> const& list_col,
                             const int32_t level);
 
@@ -207,7 +214,7 @@ class reader::impl {
   bool _use_index            = true;
   bool _use_np_dtypes        = true;
   bool _has_timestamp_column = false;
-  bool _has_list_column      = false;
+  bool _has_nested_column    = false;
   std::vector<std::string> _decimal_cols_as_float;
   data_type _timestamp_type{type_id::EMPTY};
   reader_column_meta _col_meta;

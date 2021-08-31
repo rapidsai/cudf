@@ -72,13 +72,11 @@ class reader::impl {
    * @brief Constructor from a dataset source with reader options.
    *
    * @param source Dataset source
-   * @param filepath Filepath if reading dataset from a file
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<datasource> source,
-                std::string filepath,
                 csv_reader_options const& options,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr);
@@ -182,13 +180,20 @@ class reader::impl {
                                             rmm::cuda_stream_view stream);
 
   /**
-   * @brief Parses the columns' data types from the vector of dtypes that are provided as strings.
+   * @brief Selects the columns' data types from the map of dtypes.
    *
-   * @param types_as_strings The vector of strings from which to parse the columns' target data
-   * types
-   * @return List of columns' data types
+   * @param col_type_map Column name -> data type map specifying the columns' target data types
+   * @return Sorted list of selected columns' data types
    */
-  std::vector<data_type> parse_column_types(std::vector<std::string> const& types_as_strings);
+  std::vector<data_type> select_data_types(std::map<std::string, data_type> const& col_type_map);
+
+  /**
+   * @brief Selects the columns' data types from the list of dtypes.
+   *
+   * @param dtypes Vector of data types specifying the columns' target data types
+   * @return Sorted list of selected columns' data types
+   */
+  std::vector<data_type> select_data_types(std::vector<data_type> const& dtypes);
 
   /**
    * @brief Converts the row-column data and outputs to column bufferrs.
@@ -206,8 +211,6 @@ class reader::impl {
  private:
   rmm::mr::device_memory_resource* mr_ = nullptr;
   std::unique_ptr<datasource> source_;
-  std::string filepath_;
-  std::string compression_type_;
   const csv_reader_options opts_;
 
   cudf::size_type num_records_ = 0;  // Number of rows with actual data

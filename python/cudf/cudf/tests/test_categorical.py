@@ -799,7 +799,7 @@ def test_categorical_setitem_with_nan():
 @pytest.mark.parametrize("dtype", list(NUMERIC_TYPES) + ["object"])
 @pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])
 def test_series_construction_with_nulls(input_obj, dtype):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     input_obj = [
         dtype.type(v) if v is not cudf.NA else cudf.NA for v in input_obj
     ]
@@ -830,3 +830,14 @@ def test_serialize_categorical_columns(data):
     df = cudf.DataFrame(data)
     recreated = df.__class__.deserialize(*df.serialize())
     assert_eq(recreated, df)
+
+
+@pytest.mark.parametrize(
+    "data", [["$ 1", "$ 2", "hello"], ["($) 1", "( 2", "hello", "^1$"]]
+)
+@pytest.mark.parametrize("value", ["$ 1", "hello", "$", "^1$"])
+def test_categorical_string_index_contains(data, value):
+    idx = cudf.CategoricalIndex(data)
+    pidx = idx.to_pandas()
+
+    assert_eq(value in idx, value in pidx)

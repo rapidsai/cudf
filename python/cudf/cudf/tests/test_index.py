@@ -125,7 +125,16 @@ def test_index_comparision():
 
 
 @pytest.mark.parametrize(
-    "func", [lambda x: x.min(), lambda x: x.max(), lambda x: x.sum()]
+    "func",
+    [
+        lambda x: x.min(),
+        lambda x: x.max(),
+        lambda x: x.sum(),
+        lambda x: x.mean(),
+        lambda x: x.any(),
+        lambda x: x.all(),
+        lambda x: x.prod(),
+    ],
 )
 def test_reductions(func):
     x = np.asarray([4, 5, 6, 10])
@@ -323,7 +332,7 @@ def test_index_copy_datetime(name, dtype, deep=True):
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize("dtype", ["category", "object"])
 def test_index_copy_string(name, dtype, deep=True):
-    cidx = cudf.core.index.StringIndex(["a", "b", "c"])
+    cidx = cudf.StringIndex(["a", "b", "c"])
     pidx = cidx.to_pandas()
 
     pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
@@ -380,7 +389,7 @@ def test_index_copy_category(name, dtype, deep=True):
     "idx",
     [
         cudf.DatetimeIndex(["2001", "2002", "2003"]),
-        cudf.core.index.StringIndex(["a", "b", "c"]),
+        cudf.StringIndex(["a", "b", "c"]),
         cudf.Int64Index([1, 2, 3]),
         cudf.Float64Index([1.0, 2.0, 3.0]),
         cudf.CategoricalIndex([1, 2, 3]),
@@ -425,7 +434,7 @@ def test_index_copy_deep(idx, deep):
                 idx._values.categories.base_data.ptr
                 == idx_copy._values.categories.base_data.ptr
             ) == same_ref
-    elif isinstance(idx, cudf.core.index.StringIndex):
+    elif isinstance(idx, cudf.StringIndex):
         children = idx._values._base_children
         copy_children = idx_copy._values._base_children
         assert all(
@@ -470,7 +479,7 @@ def test_rangeindex_slice_attr_name():
 def test_from_pandas_str():
     idx = ["a", "b", "c"]
     pidx = pd.Index(idx, name="idx")
-    gidx_1 = cudf.core.index.StringIndex(idx, name="idx")
+    gidx_1 = cudf.StringIndex(idx, name="idx")
     gidx_2 = cudf.from_pandas(pidx)
 
     assert_eq(gidx_1, gidx_2)
@@ -663,11 +672,11 @@ def test_index_where(data, condition, other, error):
         else:
             assert_eq(
                 ps.where(ps_condition, other=ps_other)
-                .fillna(gs._columns[0].default_na_value())
+                .fillna(gs._values.default_na_value())
                 .values,
                 gs.where(gs_condition, other=gs_other)
                 .to_pandas()
-                .fillna(gs._columns[0].default_na_value())
+                .fillna(gs._values.default_na_value())
                 .values,
             )
     else:
@@ -2090,6 +2099,35 @@ def test_get_loc_single_unique_numeric(idx, key, method):
 
 
 @pytest.mark.parametrize(
+    "idx", [pd.RangeIndex(3, 100, 4)],
+)
+@pytest.mark.parametrize("key", list(range(1, 110, 3)))
+@pytest.mark.parametrize("method", [None, "ffill"])
+def test_get_loc_rangeindex(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if (
+        (key not in pi and method is None)
+        # Get key before the first element is KeyError
+        or (key < pi.start and method in "ffill")
+        # Get key after the last element is KeyError
+        or (key >= pi.stop and method in "bfill")
+    ):
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
     "idx",
     [
         pd.Index([1, 3, 3, 6]),  # monotonic
@@ -2316,3 +2354,22 @@ def test_get_loc_multi_string(idx, key, method):
         got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "objs",
+    [
+        [pd.RangeIndex(0, 10), pd.RangeIndex(10, 20)],
+        [pd.RangeIndex(10, 20), pd.RangeIndex(22, 40), pd.RangeIndex(50, 60)],
+        [pd.RangeIndex(10, 20, 2), pd.RangeIndex(20, 40, 2)],
+    ],
+)
+def test_range_index_concat(objs):
+    cudf_objs = [cudf.from_pandas(obj) for obj in objs]
+
+    actual = cudf.concat(cudf_objs)
+
+    expected = objs[0]
+    for obj in objs[1:]:
+        expected = expected.append(obj)
+    assert_eq(expected, actual)

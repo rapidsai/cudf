@@ -27,6 +27,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/lists/detail/drop_list_duplicates.hpp>
 #include <cudf/table/table.hpp>
@@ -146,7 +147,10 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
   if (cache.has_result(col_idx, agg)) return;
 
   auto result = [&]() {
-    if (cudf::is_fixed_width(values.type())) {
+    auto values_type = cudf::is_dictionary(values.type())
+                         ? dictionary_column_view(values).keys().type()
+                         : values.type();
+    if (cudf::is_fixed_width(values_type)) {
       return detail::group_min(
         get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr);
     } else {
@@ -183,7 +187,10 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
   if (cache.has_result(col_idx, agg)) return;
 
   auto result = [&]() {
-    if (cudf::is_fixed_width(values.type())) {
+    auto values_type = cudf::is_dictionary(values.type())
+                         ? dictionary_column_view(values).keys().type()
+                         : values.type();
+    if (cudf::is_fixed_width(values_type)) {
       return detail::group_max(
         get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr);
     } else {
@@ -258,7 +265,7 @@ void aggregate_result_functor::operator()<aggregation::VARIANCE>(aggregation con
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto var_agg   = dynamic_cast<cudf::detail::var_aggregation const&>(agg);
+  auto& var_agg  = dynamic_cast<cudf::detail::var_aggregation const&>(agg);
   auto mean_agg  = make_mean_aggregation();
   auto count_agg = make_count_aggregation();
   operator()<aggregation::MEAN>(*mean_agg);
@@ -281,8 +288,8 @@ void aggregate_result_functor::operator()<aggregation::STD>(aggregation const& a
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto std_agg = dynamic_cast<cudf::detail::std_aggregation const&>(agg);
-  auto var_agg = make_variance_aggregation(std_agg._ddof);
+  auto& std_agg = dynamic_cast<cudf::detail::std_aggregation const&>(agg);
+  auto var_agg  = make_variance_aggregation(std_agg._ddof);
   operator()<aggregation::VARIANCE>(*var_agg);
   column_view var_result = cache.get_result(col_idx, *var_agg);
 
@@ -298,7 +305,7 @@ void aggregate_result_functor::operator()<aggregation::QUANTILE>(aggregation con
   auto count_agg = make_count_aggregation();
   operator()<aggregation::COUNT_VALID>(*count_agg);
   column_view group_sizes = cache.get_result(col_idx, *count_agg);
-  auto quantile_agg       = dynamic_cast<cudf::detail::quantile_aggregation const&>(agg);
+  auto& quantile_agg      = dynamic_cast<cudf::detail::quantile_aggregation const&>(agg);
 
   auto result = detail::group_quantiles(get_sorted_values(),
                                         group_sizes,
@@ -336,7 +343,7 @@ void aggregate_result_functor::operator()<aggregation::NUNIQUE>(aggregation cons
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto nunique_agg = dynamic_cast<cudf::detail::nunique_aggregation const&>(agg);
+  auto& nunique_agg = dynamic_cast<cudf::detail::nunique_aggregation const&>(agg);
 
   auto result = detail::group_nunique(get_sorted_values(),
                                       helper.group_labels(stream),
@@ -353,7 +360,7 @@ void aggregate_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation 
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto nth_element_agg = dynamic_cast<cudf::detail::nth_element_aggregation const&>(agg);
+  auto& nth_element_agg = dynamic_cast<cudf::detail::nth_element_aggregation const&>(agg);
 
   auto count_agg = make_count_aggregation(nth_element_agg._null_handling);
   if (count_agg->kind == aggregation::COUNT_VALID) {
@@ -474,12 +481,12 @@ void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation c
 {
   if (cache.has_result(col_idx, agg)) { return; }
 
-  auto const merged_result  = detail::group_merge_lists(get_grouped_values(),
+  auto const merged_result   = detail::group_merge_lists(get_grouped_values(),
                                                        helper.group_offsets(stream),
                                                        helper.num_groups(stream),
                                                        stream,
                                                        rmm::mr::get_current_device_resource());
-  auto const merge_sets_agg = dynamic_cast<cudf::detail::merge_sets_aggregation const&>(agg);
+  auto const& merge_sets_agg = dynamic_cast<cudf::detail::merge_sets_aggregation const&>(agg);
   cache.add_result(col_idx,
                    agg,
                    lists::detail::drop_list_duplicates(lists_column_view(merged_result->view()),

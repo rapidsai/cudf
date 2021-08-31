@@ -77,6 +77,8 @@ class aggregation {
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
+    RANK,            ///< get rank       of current index
+    DENSE_RANK,      ///< get dense rank of current index
     COLLECT_LIST,    ///< collect values into a list
     COLLECT_SET,     ///< collect values into a list without duplicate entries
     LEAD,            ///< window function, accesses row at specified offset following current row
@@ -104,8 +106,7 @@ class aggregation {
 };
 
 /**
- * @brief Derived class intended for enforcing operation-specific restrictions
- * when calling various cudf functions.
+ * @brief Derived class intended for rolling_window specific aggregation usage.
  *
  * As an example, rolling_window will only accept rolling_aggregation inputs,
  * and the appropriate derived classes (sum_aggregation, mean_aggregation, etc)
@@ -117,6 +118,28 @@ class rolling_aggregation : public virtual aggregation {
 
  protected:
   rolling_aggregation() {}
+};
+
+/**
+ * @brief Derived class intended for groupby specific aggregation usage.
+ */
+class groupby_aggregation : public virtual aggregation {
+ public:
+  ~groupby_aggregation() = default;
+
+ protected:
+  groupby_aggregation() {}
+};
+
+/**
+ * @brief Derived class intended for groupby specific scan usage.
+ */
+class groupby_scan_aggregation : public virtual aggregation {
+ public:
+  ~groupby_scan_aggregation() = default;
+
+ protected:
+  groupby_scan_aggregation() {}
 };
 
 enum class udf_type : bool { CUDA, PTX };
@@ -254,6 +277,110 @@ template <typename Base = aggregation>
 std::unique_ptr<Base> make_row_number_aggregation();
 
 /**
+ * @brief Factory to create a RANK aggregation
+ *
+ * `RANK` returns a non-nullable column of size_type "ranks": the number of rows preceding or
+ * equal to the current row plus one. As a result, ranks are not unique and gaps will appear in
+ * the ranking sequence.
+ *
+ * This aggregation only works with "scan" algorithms. The input column into the group or
+ * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
+ * If rows are ordered by more than one column, the orderby input column should be a struct
+ * column containing the ordering columns.
+ *
+ * Note:
+ *  1. This method requires that the rows are presorted by the group keys and order_by columns.
+ *  2. `RANK` aggregations will return a fully valid column regardless of null_handling policy
+ *     specified in the scan.
+ *  3. `RANK` aggregations are not compatible with exclusive scans.
+ *
+ * @code{.pseudo}
+ * Example: Consider an motor-racing statistics dataset, containing the following columns:
+ *   1. driver_name:   (STRING) Name of the car driver
+ *   2. num_overtakes: (INT32)  Number of times the driver overtook another car in a lap
+ *   3. lap_number:    (INT32)  The number of the lap
+ *
+ * For the following presorted data:
+ *
+ *  [ // driver_name,  num_overtakes,  lap_number
+ *    {   "bottas",        2,            3        },
+ *    {   "bottas",        2,            7        },
+ *    {   "bottas",        2,            7        },
+ *    {   "bottas",        1,            1        },
+ *    {   "bottas",        1,            2        },
+ *    {   "hamilton",      4,            1        },
+ *    {   "hamilton",      4,            1        },
+ *    {   "hamilton",      3,            4        },
+ *    {   "hamilton",      2,            4        }
+ *  ]
+ *
+ * A grouped rank aggregation scan with:
+ *   groupby column      : driver_name
+ *   input orderby column: struct_column{num_overtakes, lap_number}
+ *  result: column<size_type>{1, 2, 2, 4, 5, 1, 1, 3, 4}
+ *
+ * A grouped rank aggregation scan with:
+ *   groupby column      : driver_name
+ *   input orderby column: num_overtakes
+ *  result: column<size_type>{1, 1, 1, 4, 4, 1, 1, 3, 4}
+ * @endcode
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_rank_aggregation();
+
+/**
+ * @brief Factory to create a DENSE_RANK aggregation
+ *
+ * `DENSE_RANK` returns a non-nullable column of size_type "dense ranks": the preceding unique
+ * value's rank plus one. As a result, ranks are not unique but there are no gaps in the ranking
+ * sequence (unlike RANK aggregations).
+ *
+ * This aggregation only works with "scan" algorithms. The input column into the group or
+ * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
+ * If rows are ordered by more than one column, the orderby input column should be a struct
+ * column containing the ordering columns.
+ *
+ * Note:
+ *  1. This method requires that the rows are presorted by the group keys and order_by columns.
+ *  2. `DENSE_RANK` aggregations will return a fully valid column regardless of null_handling
+ *     policy specified in the scan.
+ *  3. `DENSE_RANK` aggregations are not compatible with exclusive scans.
+ *
+ * @code{.pseudo}
+ * Example: Consider an motor-racing statistics dataset, containing the following columns:
+ *   1. driver_name:   (STRING) Name of the car driver
+ *   2. num_overtakes: (INT32)  Number of times the driver overtook another car in a lap
+ *   3. lap_number:    (INT32)  The number of the lap
+ *
+ * For the following presorted data:
+ *
+ *  [ // driver_name,  num_overtakes,  lap_number
+ *    {   "bottas",        2,            3        },
+ *    {   "bottas",        2,            7        },
+ *    {   "bottas",        2,            7        },
+ *    {   "bottas",        1,            1        },
+ *    {   "bottas",        1,            2        },
+ *    {   "hamilton",      4,            1        },
+ *    {   "hamilton",      4,            1        },
+ *    {   "hamilton",      3,            4        },
+ *    {   "hamilton",      2,            4        }
+ *  ]
+ *
+ * A grouped dense rank aggregation scan with:
+ *   groupby column      : driver_name
+ *   input orderby column: struct_column{num_overtakes, lap_number}
+ *  result: column<size_type>{1, 2, 2, 3, 4, 1, 1, 2, 3}
+ *
+ * A grouped dense rank aggregation scan with:
+ *   groupby column      : driver_name
+ *   input orderby column: num_overtakes
+ *  result: column<size_type>{1, 1, 1, 2, 2, 1, 1, 2, 3}
+ * @endcode
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_dense_rank_aggregation();
+
+/**
  * @brief Factory to create a COLLECT_LIST aggregation
  *
  * `COLLECT_LIST` returns a list column of all included elements in the group/series.
@@ -268,7 +395,7 @@ std::unique_ptr<Base> make_collect_list_aggregation(
   null_policy null_handling = null_policy::INCLUDE);
 
 /**
- * @brief Factory to create a COLLECT_SET aggregation.
+ * @brief Factory to create a COLLECT_SET aggregation
  *
  * `COLLECT_SET` returns a lists column of all included elements in the group/series. Within each
  * list, the duplicated entries are dropped out such that each entry appears only once.

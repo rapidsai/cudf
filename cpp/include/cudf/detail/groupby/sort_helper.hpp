@@ -60,17 +60,7 @@ struct sort_groupby_helper {
    */
   sort_groupby_helper(table_view const& keys,
                       null_policy include_null_keys = null_policy::EXCLUDE,
-                      sorted keys_pre_sorted        = sorted::NO)
-    : _keys(keys),
-      _num_keys(-1),
-      _keys_pre_sorted(keys_pre_sorted),
-      _include_null_keys(include_null_keys)
-  {
-    if (keys_pre_sorted == sorted::YES and include_null_keys == null_policy::EXCLUDE and
-        has_nulls(keys)) {
-      _keys_pre_sorted = sorted::NO;
-    }
-  };
+                      sorted keys_pre_sorted        = sorted::NO);
 
   ~sort_groupby_helper()                          = default;
   sort_groupby_helper(sort_groupby_helper const&) = delete;
@@ -133,6 +123,11 @@ struct sort_groupby_helper {
    * @brief Get the number of groups in `keys`
    */
   size_type num_groups(rmm::cuda_stream_view stream) { return group_offsets(stream).size() - 1; }
+
+  /**
+   * @brief check if the groupby keys are presorted
+   */
+  bool is_presorted() { return _keys_pre_sorted == sorted::YES; }
 
   /**
    * @brief Return the effective number of keys
@@ -222,6 +217,8 @@ struct sort_groupby_helper {
   column_ptr _unsorted_keys_labels;  ///< Group labels for unsorted _keys
   column_ptr _keys_bitmask_column;   ///< Column representing rows with one or more nulls values
   table_view _keys;                  ///< Input keys to sort by
+  table_view _unflattened_keys;      ///< Input keys, unflattened and possibly nested
+  std::vector<column_ptr> _struct_null_vectors;  ///< Null vectors for struct columns in _keys
 
   index_vector_ptr
     _group_offsets;  ///< Indices into sorted _keys indicating starting index of each groups

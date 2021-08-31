@@ -28,6 +28,7 @@
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -175,12 +176,12 @@ size_t gather_stream_info(const size_t stripe_index,
                           const orc::StripeInformation* stripeinfo,
                           const orc::StripeFooter* stripefooter,
                           const std::vector<int>& orc2gdf,
-                          const std::vector<orc_column_meta>& gdf2orc,
                           const std::vector<orc::SchemaType> types,
                           bool use_index,
                           size_t* num_dictionary_entries,
                           cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-                          std::vector<orc_stream_info>& stream_info)
+                          std::vector<orc_stream_info>& stream_info,
+                          bool apply_struct_map)
 {
   uint64_t src_offset = 0;
   uint64_t dst_offset = 0;
@@ -193,7 +194,7 @@ size_t gather_stream_info(const size_t stripe_index,
     auto const column_id = *stream.column_id;
     auto col             = orc2gdf[column_id];
 
-    if (col == -1) {
+    if (col == -1 and apply_struct_map) {
       // A struct-type column has no data itself, but rather child columns
       // for each of its fields. There is only a PRESENT stream, which
       // needs to be included for the reader.
@@ -267,6 +268,7 @@ class aggregate_orc_metadata {
   size_type const num_rows;
   size_type const num_columns;
   size_type const num_stripes;
+  bool row_grp_idx_present = true;
 
   /**
    * @brief Create a metadata object from each element in the source vector
@@ -366,6 +368,8 @@ class aggregate_orc_metadata {
     return per_file_metadata[source_idx].get_column_name(column_idx);
   }
 
+  auto is_row_grp_idx_present() const { return row_grp_idx_present; }
+
   std::vector<cudf::io::orc::metadata::stripe_source_mapping> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
     size_type& row_start,
@@ -455,6 +459,7 @@ class aggregate_orc_metadata {
           ProtobufReader(sf_data, sf_length)
             .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
           mapping.stripe_info[i].second = &per_file_metadata[mapping.source_idx].stripefooters[i];
+          if (stripe->indexLength == 0) { row_grp_idx_present = false; }
         }
       }
     }
@@ -464,57 +469,42 @@ class aggregate_orc_metadata {
 
   /**
    * @brief Adds column as per the request and saves metadata about children.
-   *        Struct children are in the same level as struct, only list column
-   *        children are pushed to next level.
+   *        Children of a column will be added to the next level.
    *
    * @param selection A vector that saves list of columns as per levels of nesting.
    * @param types A vector of schema types of columns.
    * @param level current level of nesting.
    * @param id current column id that needs to be added.
    * @param has_timestamp_column True if timestamp column present and false otherwise.
-   *
-   * @return returns number of child columns at same level in case of struct and next level in case
-   * of list
+   * @param has_nested_column True if any of the selected column is a nested type.
    */
-  uint32_t add_column(std::vector<std::vector<orc_column_meta>>& selection,
-                      std::vector<SchemaType> const& types,
-                      const size_t level,
-                      const uint32_t id,
-                      bool& has_timestamp_column,
-                      bool& has_list_column)
+  void add_column(std::vector<std::vector<orc_column_meta>>& selection,
+                  std::vector<SchemaType> const& types,
+                  const size_t level,
+                  const uint32_t id,
+                  bool& has_timestamp_column,
+                  bool& has_nested_column)
   {
-    uint32_t num_lvl_child_columns = 0;
     if (level == selection.size()) { selection.emplace_back(); }
     selection[level].push_back({id, 0});
     const int col_id = selection[level].size() - 1;
     if (types[id].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
 
     switch (types[id].kind) {
-      case orc::LIST: {
-        uint32_t lvl_cols = 0;
-        if (not types[id].subtypes.empty()) {
-          has_list_column = true;
-          // Since list column needs to be processed before its child can be processed,
-          // child column is being added to next level
-          lvl_cols =
-            add_column(selection, types, level + 1, id + 1, has_timestamp_column, has_list_column);
-        }
-        // The list child column may be a struct in which case lvl_cols will be > 1
-        selection[level][col_id].num_children = lvl_cols;
-      } break;
-
-      case orc::STRUCT:
+      case orc::LIST:
+      case orc::STRUCT: {
+        has_nested_column = true;
         for (const auto child_id : types[id].subtypes) {
-          num_lvl_child_columns +=
-            add_column(selection, types, level, child_id, has_timestamp_column, has_list_column);
+          // Since nested column needs to be processed before its child can be processed,
+          // child column is being added to next level
+          add_column(
+            selection, types, level + 1, child_id, has_timestamp_column, has_nested_column);
         }
-        selection[level][col_id].num_children = num_lvl_child_columns;
-        break;
+        selection[level][col_id].num_children = types[id].subtypes.size();
+      } break;
 
       default: break;
     }
-
-    return num_lvl_child_columns + 1;
   }
 
   /**
@@ -522,11 +512,12 @@ class aggregate_orc_metadata {
    *
    * @param use_names List of column names to select
    * @param has_timestamp_column True if timestamp column present and false otherwise
+   * @param has_nested_column True if any of the selected column is a nested type.
    *
    * @return Vector of list of ORC column meta-data
    */
   std::vector<std::vector<orc_column_meta>> select_columns(
-    std::vector<std::string> const& use_names, bool& has_timestamp_column, bool& has_list_column)
+    std::vector<std::string> const& use_names, bool& has_timestamp_column, bool& has_nested_column)
   {
     auto const& pfm = per_file_metadata[0];
     std::vector<std::vector<orc_column_meta>> selection;
@@ -543,7 +534,7 @@ class aggregate_orc_metadata {
           auto col_id = pfm.ff.types[0].subtypes[index];
           if (pfm.get_column_name(col_id) == use_name) {
             name_found = true;
-            add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column, has_list_column);
+            add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column, has_nested_column);
             // Should start with next index
             index = i + 1;
             break;
@@ -553,7 +544,7 @@ class aggregate_orc_metadata {
       }
     } else {
       for (auto const& col_id : pfm.ff.types[0].subtypes) {
-        add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column, has_list_column);
+        add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column, has_nested_column);
       }
     }
 
@@ -683,6 +674,137 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   return decomp_data;
 }
 
+/**
+ * @brief Updates null mask of columns whose parent is a struct column.
+ *        If struct column has null element, that row would be
+ *        skipped while writing child column in ORC, so we need to insert the missing null
+ *        elements in child column.
+ *        There is another behavior from pyspark, where if the child column doesn't have any null
+ *        elements, it will not have present stream, so in that case parent null mask need to be
+ *        copied to child column.
+ *
+ * @param chunks Vector of list of column chunk descriptors
+ * @param out_buffers Output columns' device buffers
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource to use for device memory allocation
+ */
+void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
+                      std::vector<column_buffer>& out_buffers,
+                      rmm::cuda_stream_view stream,
+                      rmm::mr::device_memory_resource* mr)
+{
+  const auto num_stripes = chunks.size().first;
+  const auto num_columns = chunks.size().second;
+  bool is_mask_updated   = false;
+
+  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    if (chunks[0][col_idx].parent_validity_info.valid_map_base != nullptr) {
+      if (not is_mask_updated) {
+        chunks.device_to_host(stream, true);
+        is_mask_updated = true;
+      }
+
+      auto parent_valid_map_base = chunks[0][col_idx].parent_validity_info.valid_map_base;
+      auto child_valid_map_base  = out_buffers[col_idx].null_mask();
+      auto child_mask_len =
+        chunks[0][col_idx].column_num_rows - chunks[0][col_idx].parent_validity_info.null_count;
+      auto parent_mask_len = chunks[0][col_idx].column_num_rows;
+
+      if (child_valid_map_base != nullptr) {
+        rmm::device_uvector<uint32_t> dst_idx(child_mask_len, stream);
+        // Copy indexes at which the parent has valid value.
+        thrust::copy_if(rmm::exec_policy(stream),
+                        thrust::make_counting_iterator(0),
+                        thrust::make_counting_iterator(0) + parent_mask_len,
+                        dst_idx.begin(),
+                        [parent_valid_map_base] __device__(auto idx) {
+                          return bit_is_set(parent_valid_map_base, idx);
+                        });
+
+        auto merged_null_mask = cudf::detail::create_null_mask(
+          parent_mask_len, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
+        auto merged_mask      = static_cast<bitmask_type*>(merged_null_mask.data());
+        uint32_t* dst_idx_ptr = dst_idx.data();
+        // Copy child valid bits from child column to valid indexes, this will merge both child and
+        // parent null masks
+        thrust::for_each(rmm::exec_policy(stream),
+                         thrust::make_counting_iterator(0),
+                         thrust::make_counting_iterator(0) + dst_idx.size(),
+                         [child_valid_map_base, dst_idx_ptr, merged_mask] __device__(auto idx) {
+                           if (bit_is_set(child_valid_map_base, idx)) {
+                             cudf::set_bit(merged_mask, dst_idx_ptr[idx]);
+                           };
+                         });
+
+        out_buffers[col_idx]._null_mask = std::move(merged_null_mask);
+
+      } else {
+        // Since child column doesn't have a mask, copy parent null mask
+        auto mask_size = bitmask_allocation_size_bytes(parent_mask_len);
+        out_buffers[col_idx]._null_mask =
+          rmm::device_buffer(static_cast<void*>(parent_valid_map_base), mask_size, stream, mr);
+      }
+    }
+  }
+
+  thrust::counting_iterator<int, thrust::host_space_tag> col_idx_it(0);
+  thrust::counting_iterator<int, thrust::host_space_tag> stripe_idx_it(0);
+
+  if (is_mask_updated) {
+    // Update chunks with pointers to column data which might have been changed.
+    std::for_each(stripe_idx_it, stripe_idx_it + num_stripes, [&](auto stripe_idx) {
+      std::for_each(col_idx_it, col_idx_it + num_columns, [&](auto col_idx) {
+        auto& chunk          = chunks[stripe_idx][col_idx];
+        chunk.valid_map_base = out_buffers[col_idx].null_mask();
+      });
+    });
+    chunks.host_to_device(stream, true);
+  }
+}
+
+/**
+ * @brief Compute the per-stripe prefix sum of null count, for each struct column in the current
+ * layer.
+ */
+void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& chunks,
+                      cudf::host_span<rmm::device_uvector<uint32_t>> prefix_sums,
+                      rmm::cuda_stream_view stream)
+{
+  auto const num_stripes = chunks.size().first;
+  if (num_stripes == 0) return;
+
+  auto const num_columns = chunks.size().second;
+  std::vector<thrust::pair<size_type, cudf::device_span<uint32_t>>> prefix_sums_to_update;
+  for (auto col_idx = 0ul; col_idx < num_columns; ++col_idx) {
+    // Null counts sums are only needed for children of struct columns
+    if (chunks[0][col_idx].type_kind == STRUCT) {
+      prefix_sums_to_update.emplace_back(col_idx, prefix_sums[col_idx]);
+    }
+  }
+  auto const d_prefix_sums_to_update =
+    cudf::detail::make_device_uvector_async(prefix_sums_to_update, stream);
+
+  thrust::for_each(rmm::exec_policy(stream),
+                   d_prefix_sums_to_update.begin(),
+                   d_prefix_sums_to_update.end(),
+                   [chunks = cudf::detail::device_2dspan<gpu::ColumnDesc const>{chunks}] __device__(
+                     auto const& idx_psums) {
+                     auto const col_idx = idx_psums.first;
+                     auto const psums   = idx_psums.second;
+
+                     thrust::transform(
+                       thrust::seq,
+                       thrust::make_counting_iterator(0),
+                       thrust::make_counting_iterator(0) + psums.size(),
+                       psums.begin(),
+                       [&](auto stripe_idx) { return chunks[stripe_idx][col_idx].null_count; });
+
+                     thrust::inclusive_scan(thrust::seq, psums.begin(), psums.end(), psums.begin());
+                   });
+  // `prefix_sums_to_update` goes out of scope, copy has to be done before we return
+  stream.synchronize();
+}
+
 void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
                                       size_t num_dicts,
                                       size_t skip_rows,
@@ -695,22 +817,31 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
 {
   const auto num_stripes = chunks.size().first;
   const auto num_columns = chunks.size().second;
+  thrust::counting_iterator<int, thrust::host_space_tag> col_idx_it(0);
+  thrust::counting_iterator<int, thrust::host_space_tag> stripe_idx_it(0);
 
   // Update chunks with pointers to column data
-  for (size_t i = 0; i < num_stripes; ++i) {
-    for (size_t j = 0; j < num_columns; ++j) {
-      auto& chunk            = chunks[i][j];
-      chunk.column_data_base = out_buffers[j].data();
-      chunk.valid_map_base   = out_buffers[j].null_mask();
-    }
-  }
+  std::for_each(stripe_idx_it, stripe_idx_it + num_stripes, [&](auto stripe_idx) {
+    std::for_each(col_idx_it, col_idx_it + num_columns, [&](auto col_idx) {
+      auto& chunk            = chunks[stripe_idx][col_idx];
+      chunk.column_data_base = out_buffers[col_idx].data();
+      chunk.valid_map_base   = out_buffers[col_idx].null_mask();
+    });
+  });
 
   // Allocate global dictionary for deserializing
   rmm::device_uvector<gpu::DictionaryEntry> global_dict(num_dicts, stream);
 
-  chunks.host_to_device(stream);
+  chunks.host_to_device(stream, true);
   gpu::DecodeNullsAndStringDictionaries(
     chunks.base_device_ptr(), global_dict.data(), num_columns, num_stripes, skip_rows, stream);
+
+  if (level > 0) {
+    // Update nullmasks for children if parent was a struct and had null mask
+    update_null_mask(chunks, out_buffers, stream, _mr);
+  }
+
+  // Update the null map for child columns
   gpu::DecodeOrcColumnData(chunks.base_device_ptr(),
                            global_dict.data(),
                            row_groups,
@@ -724,16 +855,21 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
                            stream);
   chunks.device_to_host(stream, true);
 
-  for (size_t i = 0; i < num_stripes; ++i) {
-    for (size_t j = 0; j < num_columns; ++j) {
-      out_buffers[j].null_count() += chunks[i][j].null_count;
-    }
-  }
+  std::for_each(col_idx_it + 0, col_idx_it + num_columns, [&](auto col_idx) {
+    out_buffers[col_idx].null_count() =
+      std::accumulate(stripe_idx_it + 0,
+                      stripe_idx_it + num_stripes,
+                      0,
+                      [&](auto null_count, auto const stripe_idx) {
+                        return null_count + chunks[stripe_idx][col_idx].null_count;
+                      });
+  });
 }
 
 // Aggregate child column metadata per stripe and per column
 void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDesc> chunks,
                                         cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
+                                        std::vector<column_buffer>& out_buffers,
                                         std::vector<orc_column_meta> const& list_col,
                                         const int32_t level)
 {
@@ -743,10 +879,13 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
   const auto num_child_cols         = _selected_columns[level + 1].size();
   const auto number_of_child_chunks = num_child_cols * num_of_stripes;
   auto& num_child_rows              = _col_meta.num_child_rows;
+  auto& parent_column_data          = _col_meta.parent_column_data;
 
   // Reset the meta to store child column details.
   num_child_rows.resize(_selected_columns[level + 1].size());
   std::fill(num_child_rows.begin(), num_child_rows.end(), 0);
+  parent_column_data.resize(number_of_child_chunks);
+  _col_meta.parent_column_index.resize(number_of_child_chunks);
   _col_meta.child_start_row.resize(number_of_child_chunks);
   _col_meta.num_child_rows_per_stripe.resize(number_of_child_chunks);
   _col_meta.rwgrp_meta.resize(num_of_rowgroups * num_child_cols);
@@ -795,6 +934,25 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
         child_start_row[stripe_id][child_col_idx] = (stripe_id == 0) ? 0 : start_row;
       }
       start_row += child_rows;
+    }
+
+    // Parent column null mask and null count would be required for child column
+    // to adjust its nullmask.
+    auto type              = out_buffers[parent_col_idx].type.id();
+    auto parent_null_count = static_cast<uint32_t>(out_buffers[parent_col_idx].null_count());
+    auto parent_valid_map  = out_buffers[parent_col_idx].null_mask();
+    auto num_rows          = out_buffers[parent_col_idx].size;
+
+    for (uint32_t id = 0; id < p_col.num_children; id++) {
+      const auto child_col_idx                     = index + id;
+      _col_meta.parent_column_index[child_col_idx] = parent_col_idx;
+      if (type == type_id::STRUCT) {
+        parent_column_data[child_col_idx] = {parent_valid_map, parent_null_count};
+        // Number of rows in child will remain same as parent in case of struct column
+        num_child_rows[child_col_idx] = num_rows;
+      } else {
+        parent_column_data[child_col_idx] = {nullptr, 0};
+      }
     }
     index += p_col.num_children;
   });
@@ -861,13 +1019,9 @@ column_buffer&& reader::impl::assemble_buffer(const int32_t orc_col_id,
   col_buffer.name = _metadata->get_column_name(0, orc_col_id);
   switch (col_buffer.type.id()) {
     case type_id::LIST:
-      col_buffer.children.emplace_back(
-        assemble_buffer(_metadata->get_col_type(orc_col_id).subtypes[0], col_buffers, level + 1));
-      break;
-
     case type_id::STRUCT:
       for (auto const& col : _metadata->get_col_type(orc_col_id).subtypes) {
-        col_buffer.children.emplace_back(assemble_buffer(col, col_buffers, level));
+        col_buffer.children.emplace_back(assemble_buffer(col, col_buffers, level + 1));
       }
 
       break;
@@ -884,16 +1038,14 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>>&& col_
                                   std::vector<column_name_info>& schema_info,
                                   rmm::cuda_stream_view stream)
 {
-  for (size_t i = 0; i < _selected_columns[0].size();) {
-    auto const& col_meta = _selected_columns[0][i];
-    schema_info.emplace_back("");
-
-    auto col_buffer = assemble_buffer(col_meta.id, col_buffers, 0);
-    out_columns.emplace_back(make_column(col_buffer, &schema_info.back(), stream, _mr));
-
-    // Need to skip child columns of struct which are at the same level and have been processed
-    i += (col_buffers[0][i].type.id() == type_id::STRUCT) ? col_meta.num_children + 1 : 1;
-  }
+  std::transform(_selected_columns[0].begin(),
+                 _selected_columns[0].end(),
+                 std::back_inserter(out_columns),
+                 [&](auto const col_meta) {
+                   schema_info.emplace_back("");
+                   auto col_buffer = assemble_buffer(col_meta.id, col_buffers, 0);
+                   return make_column(col_buffer, &schema_info.back(), stream, _mr);
+                 });
 }
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
@@ -906,7 +1058,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 
   // Select only columns required by the options
   _selected_columns =
-    _metadata->select_columns(options.get_columns(), _has_timestamp_column, _has_list_column);
+    _metadata->select_columns(options.get_columns(), _has_timestamp_column, _has_nested_column);
 
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {
@@ -928,14 +1080,15 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                        const std::vector<std::vector<size_type>>& stripes,
                                        rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(skip_rows == 0 or (not _has_list_column),
-               "skip_rows is not supported by list column");
+  CUDF_EXPECTS(skip_rows == 0 or (not _has_nested_column),
+               "skip_rows is not supported by nested columns");
 
   std::vector<std::unique_ptr<column>> out_columns;
   // buffer and stripe data are stored as per nesting level
   std::vector<std::vector<column_buffer>> out_buffers(_selected_columns.size());
   std::vector<column_name_info> schema_info;
   std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data(_selected_columns.size());
+  std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
   table_metadata out_metadata;
 
   // There are no columns in the table
@@ -944,14 +1097,14 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // Select only stripes required (aka row groups)
   const auto selected_stripes = _metadata->select_stripes(stripes, skip_rows, num_rows);
 
-  // Iterates through levels of nested columns, struct columns and its children will be
-  // in the same level since child column also have same number of rows,
-  // list column children will be 1 level down compared to parent.
+  // Iterates through levels of nested columns, child column will be one level down
+  // compared to parent column.
   for (size_t level = 0; level < _selected_columns.size(); level++) {
     auto& selected_columns = _selected_columns[level];
     // Association between each ORC column and its cudf::column
     _col_meta.orc_col_map.emplace_back(_metadata->get_num_cols(), -1);
-    std::vector<orc_column_meta> list_col;
+    std::vector<orc_column_meta> nested_col;
+    bool is_data_empty = false;
 
     // Get a list of column data types
     std::vector<data_type> column_types;
@@ -979,20 +1132,18 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       // Map each ORC column to its column
       _col_meta.orc_col_map[level][col.id] = column_types.size() - 1;
-      if (col_type == type_id::LIST) list_col.emplace_back(col);
+      if (col_type == type_id::LIST or col_type == type_id::STRUCT) nested_col.emplace_back(col);
     }
 
     // If no rows or stripes to read, return empty columns
     if (num_rows <= 0 || selected_stripes.empty()) {
-      for (size_t i = 0; i < _selected_columns[0].size();) {
-        auto const& col_meta = _selected_columns[0][i];
-        auto const schema    = _metadata->get_schema(col_meta.id);
-        schema_info.emplace_back("");
-        out_columns.push_back(
-          std::move(create_empty_column(col_meta.id, schema_info.back(), stream)));
-        // Since struct children will be in the same level, have to skip them.
-        i += (schema.kind == orc::STRUCT) ? col_meta.num_children + 1 : 1;
-      }
+      std::transform(_selected_columns[0].begin(),
+                     _selected_columns[0].end(),
+                     std::back_inserter(out_columns),
+                     [&](auto const col_meta) {
+                       schema_info.emplace_back("");
+                       return create_empty_column(col_meta.id, schema_info.back(), stream);
+                     });
       break;
     } else {
       // Get the total number of stripes across all input files.
@@ -1010,6 +1161,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       const bool use_index =
         (_use_index == true) &&
+        // Do stripes have row group index
+        _metadata->is_row_grp_idx_present() &&
         // Only use if we don't have much work with complete columns & stripes
         // TODO: Consider nrows, gpu, and tune the threshold
         (num_rows > _metadata->get_row_index_stride() && !(_metadata->get_row_index_stride() & 7) &&
@@ -1021,6 +1174,14 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // Logically view streams as columns
       std::vector<orc_stream_info> stream_info;
 
+      null_count_prefix_sums.emplace_back();
+      null_count_prefix_sums.back().reserve(_selected_columns[level].size());
+      std::generate_n(
+        std::back_inserter(null_count_prefix_sums.back()), _selected_columns[level].size(), [&]() {
+          return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(total_num_stripes,
+                                                                          stream);
+        });
+
       // Tracker for eventually deallocating compressed and uncompressed data
       auto& stripe_data = lvl_stripe_data[level];
 
@@ -1029,6 +1190,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       size_t num_rowgroups    = 0;
       int stripe_idx          = 0;
 
+      std::vector<std::pair<std::future<size_t>, size_t>> read_tasks;
       for (auto const& stripe_source_mapping : selected_stripes) {
         // Iterate through the source files selected stripes
         for (auto const& stripe : stripe_source_mapping.stripe_info) {
@@ -1040,20 +1202,28 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                                           stripe_info,
                                                           stripe_footer,
                                                           _col_meta.orc_col_map[level],
-                                                          selected_columns,
                                                           _metadata->get_types(),
                                                           use_index,
                                                           &num_dict_entries,
                                                           chunks,
-                                                          stream_info);
+                                                          stream_info,
+                                                          level == 0);
 
-          CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
+          if (total_data_size == 0) {
+            CUDF_EXPECTS(stripe_info->indexLength == 0, "Invalid index rowgroup stream data");
+            // In case ROW GROUP INDEX is not present and all columns are structs with no null
+            // stream, there is nothing to read at this level.
+            auto fn_check_dtype = [](auto dtype) { return dtype.id() == type_id::STRUCT; };
+            CUDF_EXPECTS(std::all_of(column_types.begin(), column_types.end(), fn_check_dtype),
+                         "Expected streams data within stripe");
+            is_data_empty = true;
+          }
 
           stripe_data.emplace_back(total_data_size, stream);
           auto dst_base = static_cast<uint8_t*>(stripe_data.back().data());
 
           // Coalesce consecutive streams into one read
-          while (stream_count < stream_info.size()) {
+          while (not is_data_empty and stream_count < stream_info.size()) {
             const auto d_dst  = dst_base + stream_info[stream_count].dst_pos;
             const auto offset = stream_info[stream_count].offset;
             auto len          = stream_info[stream_count].length;
@@ -1066,10 +1236,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             }
             if (_metadata->per_file_metadata[stripe_source_mapping.source_idx]
                   .source->is_device_read_preferred(len)) {
-              CUDF_EXPECTS(
-                _metadata->per_file_metadata[stripe_source_mapping.source_idx].source->device_read(
-                  offset, len, d_dst, stream) == len,
-                "Unexpected discrepancy in bytes read.");
+              read_tasks.push_back(
+                std::make_pair(_metadata->per_file_metadata[stripe_source_mapping.source_idx]
+                                 .source->device_read_async(offset, len, d_dst, stream),
+                               len));
+
             } else {
               const auto buffer =
                 _metadata->per_file_metadata[stripe_source_mapping.source_idx].source->host_read(
@@ -1101,10 +1272,19 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                 ? stripe_info->numberOfRows
                 : _col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
             chunk.column_num_rows = (level == 0) ? num_rows : _col_meta.num_child_rows[col_idx];
-            chunk.encoding_kind   = stripe_footer->columns[selected_columns[col_idx].id].kind;
-            chunk.type_kind       = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
+            chunk.parent_validity_info =
+              (level == 0) ? column_validity_info{} : _col_meta.parent_column_data[col_idx];
+            chunk.parent_null_count_prefix_sums =
+              (level == 0)
+                ? nullptr
+                : null_count_prefix_sums[level - 1][_col_meta.parent_column_index[col_idx]].data();
+            chunk.encoding_kind = stripe_footer->columns[selected_columns[col_idx].id].kind;
+            chunk.type_kind     = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
                                 .ff.types[selected_columns[col_idx].id]
                                 .kind;
+            // num_child_rows for a struct column will be same, for other nested types it will be
+            // calculated.
+            chunk.num_child_rows = (chunk.type_kind != orc::STRUCT) ? 0 : chunk.num_rows;
             auto const decimal_as_float64 =
               should_convert_decimal_column_to_float(_decimal_cols_as_float,
                                                      _metadata->per_file_metadata[0],
@@ -1125,8 +1305,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             if (chunk.type_kind == orc::TIMESTAMP) {
               chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
             }
-            for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
-              chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
+            if (not is_data_empty) {
+              for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
+                chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
+              }
             }
           }
           stripe_start_row += num_rows_per_stripe;
@@ -1134,6 +1316,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
           stripe_idx++;
         }
+      }
+      for (auto& task : read_tasks) {
+        CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
       }
 
       // Process dataset chunk pages into output columns
@@ -1157,7 +1342,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                          });
         }
         // Setup row group descriptors if using indexes
-        if (_metadata->per_file_metadata[0].ps.compression != orc::NONE) {
+        if (_metadata->per_file_metadata[0].ps.compression != orc::NONE and not is_data_empty) {
           auto decomp_data =
             decompress_stripe_data(chunks,
                                    stripe_data,
@@ -1208,24 +1393,29 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, stream, _mr);
         }
 
-        decode_stream_data(chunks,
-                           num_dict_entries,
-                           skip_rows,
-                           tz_table.view(),
-                           row_groups,
-                           _metadata->get_row_index_stride(),
-                           out_buffers[level],
-                           level,
-                           stream);
+        if (not is_data_empty) {
+          decode_stream_data(chunks,
+                             num_dict_entries,
+                             skip_rows,
+                             tz_table.view(),
+                             row_groups,
+                             _metadata->get_row_index_stride(),
+                             out_buffers[level],
+                             level,
+                             stream);
+        }
 
-        // Extract information to process list child columns
-        if (list_col.size()) {
+        // Extract information to process nested child columns
+        if (nested_col.size()) {
+          if (not is_data_empty) {
+            scan_null_counts(chunks, null_count_prefix_sums[level], stream);
+          }
           row_groups.device_to_host(stream, true);
-          aggregate_child_meta(chunks, row_groups, list_col, level);
+          aggregate_child_meta(chunks, row_groups, out_buffers[level], nested_col, level);
         }
 
         // ORC stores number of elements at each row, so we need to generate offsets from that
-        if (list_col.size()) {
+        if (nested_col.size()) {
           std::vector<list_buffer_data> buff_data;
           std::for_each(
             out_buffers[level].begin(), out_buffers[level].end(), [&buff_data](auto& out_buffer) {
@@ -1235,8 +1425,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
               }
             });
 
-          auto const dev_buff_data = cudf::detail::make_device_uvector_async(buff_data, stream);
-          generate_offsets_for_list(dev_buff_data, stream);
+          if (buff_data.size()) {
+            auto const dev_buff_data = cudf::detail::make_device_uvector_async(buff_data, stream);
+            generate_offsets_for_list(dev_buff_data, stream);
+          }
         }
       }
     }
@@ -1263,15 +1455,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   }
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
-}
-
-// Forward to implementation
-reader::reader(std::vector<std::string> const& filepaths,
-               orc_reader_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
-{
-  _impl = std::make_unique<impl>(datasource::create(filepaths), options, mr);
 }
 
 // Forward to implementation

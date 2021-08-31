@@ -258,3 +258,37 @@ def test_struct_slice(series, start, end):
     else:
         expected = cudf.Series(series[start:end])
         assert sr[start:end].to_arrow() == expected.to_arrow()
+
+
+def test_struct_slice_nested_struct():
+    data = [
+        {"a": {"b": 42, "c": "abc"}},
+        {"a": {"b": 42, "c": "hello world"}},
+    ]
+
+    got = cudf.Series(data)[0:1]
+    expect = cudf.Series(data[0:1])
+    assert got.__repr__() == expect.__repr__()
+    assert got.dtype.to_arrow() == expect.dtype.to_arrow()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{}],
+        [{"a": None}],
+        [{"a": 1}],
+        [{"a": "one"}],
+        [{"a": 1}, {"a": 2}],
+        [{"a": 1, "b": "one"}, {"a": 2, "b": "two"}],
+        [{"b": "two", "a": None}, None, {"a": "one", "b": "two"}],
+    ],
+)
+def test_struct_field_errors(data):
+    got = cudf.Series(data)
+
+    with pytest.raises(KeyError):
+        got.struct.field("notWithinFields")
+
+    with pytest.raises(IndexError):
+        got.struct.field(100)

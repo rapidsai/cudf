@@ -10,7 +10,7 @@ import cudf
 from cudf._typing import ColumnLike, ScalarLike
 from cudf.core.column import ColumnBase
 from cudf.core.dataframe import DataFrame
-from cudf.core.frame import Frame
+from cudf.core.frame import Frame, SingleColumnFrame
 from cudf.core.index import Index
 from cudf.core.series import Series
 
@@ -27,7 +27,9 @@ def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> ScalarLike:
             f"{type(other).__name__} to {col.dtype.name}"
         )
 
-    return cudf.Scalar(other, dtype=col.dtype if other is None else None)
+    return cudf.Scalar(
+        other, dtype=col.dtype if other in {None, cudf.NA} else None
+    )
 
 
 def _check_and_cast_columns_with_other(
@@ -92,9 +94,9 @@ def _check_and_cast_columns_with_other(
 
 
 def _normalize_columns_and_scalars_type(
-    frame: Union[Series, Index, DataFrame], other: Any, inplace: bool = False,
+    frame: Frame, other: Any, inplace: bool = False,
 ) -> Tuple[
-    Union[Series, Index, DataFrame, ColumnLike], Any,
+    Union[Frame, ColumnLike], Any,
 ]:
     """
     Try to normalize the other's dtypes as per frame.
@@ -175,10 +177,7 @@ def _normalize_columns_and_scalars_type(
 
 
 def where(
-    frame: Union[Series, Index, DataFrame],
-    cond: Any,
-    other: Any = None,
-    inplace: bool = False,
+    frame: Frame, cond: Any, other: Any = None, inplace: bool = False,
 ) -> Optional[Union[Frame]]:
     """
     Replace values where the condition is False.
@@ -234,9 +233,15 @@ def where(
 
     if isinstance(frame, DataFrame):
         if hasattr(cond, "__cuda_array_interface__"):
-            cond = DataFrame(
-                cond, columns=frame._column_names, index=frame.index
-            )
+            if isinstance(cond, Series):
+                cond = DataFrame(
+                    {name: cond for name in frame._column_names},
+                    index=frame.index,
+                )
+            else:
+                cond = DataFrame(
+                    cond, columns=frame._column_names, index=frame.index
+                )
         elif (
             hasattr(cond, "__array_interface__")
             and cond.__array_interface__["shape"] != frame.shape
@@ -324,6 +329,7 @@ def where(
         return frame._mimic_inplace(out_df, inplace=inplace)
 
     else:
+        frame = cast(SingleColumnFrame, frame)
         if isinstance(other, DataFrame):
             raise NotImplementedError(
                 "cannot align with a higher dimensional Frame"
@@ -378,6 +384,6 @@ def where(
         if isinstance(frame, Index):
             result = Index(result, name=frame.name)
         else:
-            result = frame._copy_construct(data=result)
+            result = frame._from_data({frame.name: result}, frame._index)
 
         return frame._mimic_inplace(result, inplace=inplace)

@@ -386,7 +386,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, cudf.Index):
-        return cudf.Index._concat(objs)
+        return cudf.core.index.GenericIndex._concat(objs)
     else:
         raise TypeError(f"cannot concatenate object of type {typ}")
 
@@ -781,8 +781,8 @@ def merge_sorted(
     if by_index and ignore_index:
         raise ValueError("`by_index` and `ignore_index` cannot both be True")
 
-    result = objs[0].__class__._from_table(
-        cudf._lib.merge.merge_sorted(
+    result = objs[0].__class__._from_data(
+        *cudf._lib.merge.merge_sorted(
             objs,
             keys=keys,
             by_index=by_index,
@@ -803,9 +803,9 @@ def _pivot(df, index, columns):
     Parameters
     ----------
     df : DataFrame
-    index : cudf.core.index.Index
+    index : cudf.Index
         Index labels of the result
-    columns : cudf.core.index.Index
+    columns : cudf.Index
         Column labels of the result
     """
     columns_labels, columns_idx = columns._encode()
@@ -822,22 +822,31 @@ def _pivot(df, index, columns):
 
     for v in df:
         names = [as_tuple(v) + as_tuple(name) for name in column_labels]
-        col = df._data[v]
-        result.update(
-            cudf.DataFrame._from_table(
-                col.scatter_to_table(
-                    index_idx,
-                    columns_idx,
-                    names,
-                    nrows=len(index_labels),
-                    ncols=len(names),
-                )
-            )._data
-        )
-    out = cudf.DataFrame._from_data(
+        nrows = len(index_labels)
+        ncols = len(names)
+        num_elements = nrows * ncols
+        if num_elements > 0:
+            col = df._data[v]
+            scatter_map = (columns_idx * np.int32(nrows)) + index_idx
+            target = cudf.core.frame.Frame(
+                {
+                    None: cudf.core.column.column_empty_like(
+                        col, masked=True, newsize=nrows * ncols
+                    )
+                }
+            )
+            target._data[None][scatter_map] = col
+            result_frames = target._split(range(nrows, nrows * ncols, nrows))
+            result.update(
+                {
+                    name: next(iter(f._columns))
+                    for name, f in zip(names, result_frames)
+                }
+            )
+
+    return cudf.DataFrame._from_data(
         result, index=cudf.Index(index_labels, name=index.name)
     )
-    return out
 
 
 def pivot(data, index=None, columns=None, values=None):

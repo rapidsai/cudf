@@ -1152,7 +1152,7 @@ __global__ void __launch_bounds__(block_size)
 
   if (t == 0) s->chunk = chunks[chunk_id];
   __syncthreads();
-  const size_t max_num_rows = s->chunk.column_num_rows;
+  const size_t max_num_rows = s->chunk.column_num_rows - s->chunk.parent_validity_info.null_count;
 
   if (is_nulldec) {
     uint32_t null_count = 0;
@@ -1167,8 +1167,17 @@ __global__ void __launch_bounds__(block_size)
       // No present stream: all rows are valid
       s->vals.u32[t] = ~0;
     }
-    while (s->top.nulls_desc_row < s->chunk.num_rows) {
-      uint32_t nrows_max = min(s->chunk.num_rows - s->top.nulls_desc_row, blockDim.x * 32);
+    auto const prev_parent_null_count =
+      (s->chunk.parent_null_count_prefix_sums != nullptr && stripe > 0)
+        ? s->chunk.parent_null_count_prefix_sums[stripe - 1]
+        : 0;
+    auto const parent_null_count =
+      (s->chunk.parent_null_count_prefix_sums != nullptr)
+        ? s->chunk.parent_null_count_prefix_sums[stripe] - prev_parent_null_count
+        : 0;
+    auto const num_elems = s->chunk.num_rows - parent_null_count;
+    while (s->top.nulls_desc_row < num_elems) {
+      uint32_t nrows_max = min(num_elems - s->top.nulls_desc_row, blockDim.x * 32);
       uint32_t nrows;
       size_t row_in;
 
@@ -1186,7 +1195,8 @@ __global__ void __launch_bounds__(block_size)
         nrows = nrows_max;
       }
       __syncthreads();
-      row_in = s->chunk.start_row + s->top.nulls_desc_row;
+
+      row_in = s->chunk.start_row + s->top.nulls_desc_row - prev_parent_null_count;
       if (row_in + nrows > first_row && row_in < first_row + max_num_rows &&
           s->chunk.valid_map_base != NULL) {
         int64_t dst_row   = row_in - first_row;
@@ -1250,7 +1260,7 @@ __global__ void __launch_bounds__(block_size)
     // Sum up the valid counts and infer null_count
     null_count = block_reduce(temp_storage.bk_storage).Sum(null_count);
     if (t == 0) {
-      chunks[chunk_id].null_count = null_count;
+      chunks[chunk_id].null_count = parent_null_count + null_count;
       chunks[chunk_id].skip_count = s->chunk.skip_count;
     }
   } else {
@@ -1334,7 +1344,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
          s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row) {
     uint32_t nrows = min(s->top.data.end_row - (s->top.data.cur_row + s->top.data.nrows),
                          min((row_decoder_buffer_size - s->u.rowdec.nz_count) * 2, blockDim.x));
-    if (s->chunk.strm_len[CI_PRESENT] > 0) {
+    if (s->chunk.valid_map_base != NULL) {
       // We have a present stream
       uint32_t rmax  = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
       uint32_t r     = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);

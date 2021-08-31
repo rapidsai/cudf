@@ -443,6 +443,26 @@ std::unique_ptr<column> make_strings_column(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Construct a STRING type column given offsets, columns, and optional null count and null
+ * mask.
+ *
+ * @param[in] num_strings The number of strings the column represents.
+ * @param[in] offsets The offset values for this column. The number of elements is one more than the
+ * total number of strings so the `offset[last] - offset[0]` is the total number of bytes in the
+ * strings vector.
+ * @param[in] chars The char bytes for all the strings for this column. Individual strings are
+ * identified by the offsets and the nullmask.
+ * @param[in] null_mask The bits specifying the null strings in device memory. Arrow format for
+ *  nulls is used for interpreting this bitmask.
+ * @param[in] null_count The number of null string entries.
+ */
+std::unique_ptr<column> make_strings_column(size_type num_strings,
+                                            rmm::device_uvector<size_type>&& offsets,
+                                            rmm::device_uvector<char>&& chars,
+                                            rmm::device_buffer&& null_mask = {},
+                                            size_type null_count = cudf::UNKNOWN_NULL_COUNT);
+
+/**
  * @brief Construct a LIST type column given offsets column, child column, null mask and null
  * count.
  *

@@ -197,23 +197,21 @@ class ProtobufReader {
     return (field_number * 8) + PB_TYPE_VARINT;
   }
 
-  template <typename base_t,
-            typename std::enable_if_t<std::is_same<base_t, float>::value>* = nullptr>
+  template <typename base_t, typename std::enable_if_t<std::is_same_v<base_t, float>>* = nullptr>
   int static constexpr encode_field_number_base(int field_number) noexcept
   {
     return (field_number * 8) + PB_TYPE_FIXED32;
   }
 
-  template <typename base_t,
-            typename std::enable_if_t<std::is_same<base_t, double>::value>* = nullptr>
+  template <typename base_t, typename std::enable_if_t<std::is_same_v<base_t, double>>* = nullptr>
   int static constexpr encode_field_number_base(int field_number) noexcept
   {
     return (field_number * 8) + PB_TYPE_FIXED64;
   }
 
   template <typename T,
-            typename std::enable_if_t<!std::is_class<T>::value or
-                                      std::is_same<T, std::string>::value>* = nullptr>
+            typename std::enable_if_t<!std::is_class<T>::value or std::is_same_v<T, std::string>>* =
+              nullptr>
   int static constexpr encode_field_number(int field_number) noexcept
   {
     return encode_field_number_base<T>(field_number);
@@ -251,7 +249,7 @@ class ProtobufReader {
     value = static_cast<T>(get<uint32_t>());
   }
 
-  template <typename T, typename std::enable_if_t<std::is_same<T, std::string>::value>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_same_v<T, std::string>>* = nullptr>
   void read_field(T& value, const uint8_t* end)
   {
     auto const size = read_field_size(end);
@@ -271,7 +269,7 @@ class ProtobufReader {
   template <
     typename T,
     typename std::enable_if_t<std::is_same<T, std::vector<typename T::value_type>>::value and
-                              !std::is_same<std::string, typename T::value_type>::value>* = nullptr>
+                              !std::is_same_v<std::string, typename T::value_type>>* = nullptr>
   void read_field(T& value, const uint8_t* end)
   {
     auto const size = read_field_size(end);
@@ -540,10 +538,7 @@ class OrcDecompressor {
 };
 
 /**
- * @brief Stores orc id for each column and its adjacent number of children
- * in case of struct or number of children in case of list column.
- * If list column has struct column, then all child columns of that struct are treated as child
- * column of list.
+ * @brief Stores orc id for each column and number of children in that column.
  *
  * @code{.pseudo}
  * Consider following data where a struct has two members and a list column
@@ -560,9 +555,16 @@ class OrcDecompressor {
  *
  */
 struct orc_column_meta {
-  // orc_column_meta(uint32_t _id, uint32_t _num_children) : id(_id), num_children(_num_children){};
   uint32_t id;            // orc id for the column
   uint32_t num_children;  // number of children at the same level of nesting in case of struct
+};
+
+/**
+ * @brief Stores column's validity map and null count
+ */
+struct column_validity_info {
+  uint32_t* valid_map_base;
+  uint32_t null_count;
 };
 
 /**

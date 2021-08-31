@@ -239,7 +239,7 @@ TYPED_TEST(ColumnUtilitiesTestFloatingPoint, PrintColumnNumeric)
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col(
     {10001523.25, 2.0, 3.75, 0.000000034, 5.3});
 
-  auto expected = std::is_same<TypeParam, double>::value
+  auto expected = std::is_same_v<TypeParam, double>
                     ? "10001523.25,2,3.75,3.4e-08,5.2999999999999998"
                     : "10001523,2,3.75,3.39999993e-08,5.30000019";
 
@@ -253,7 +253,7 @@ TYPED_TEST(ColumnUtilitiesTestFloatingPoint, PrintColumnWithInvalids)
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col(
     {10001523.25, 2.0, 3.75, 0.000000034, 5.3}, {1, 0, 1, 0, 1});
 
-  auto expected = std::is_same<TypeParam, double>::value
+  auto expected = std::is_same_v<TypeParam, double>
                     ? "10001523.25,NULL,3.75,NULL,5.2999999999999998"
                     : "10001523,NULL,3.75,NULL,5.30000019";
 

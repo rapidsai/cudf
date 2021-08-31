@@ -129,16 +129,25 @@ cdef update_struct_field_names(
     vector[column_name_info]& schema_info
 ):
     for i, (name, col) in enumerate(table._data.items()):
-        table._data[name] = _update_column_struct_field_names(
+        table._data[name] = update_column_struct_field_names(
             col, schema_info[i]
         )
 
 
-cdef Column _update_column_struct_field_names(
+cdef Column update_column_struct_field_names(
     Column col,
     column_name_info& info
 ):
     cdef vector[string] field_names
+
+    if col.children:
+        children = list(col.children)
+        for i, child in enumerate(children):
+            children[i] = update_column_struct_field_names(
+                child,
+                info.children[i]
+            )
+        col.set_base_children(tuple(children))
 
     if is_struct_dtype(col):
         field_names.reserve(len(col.base_children))
@@ -148,12 +157,4 @@ cdef Column _update_column_struct_field_names(
             field_names
         )
 
-    if col.children:
-        children = list(col.children)
-        for i, child in enumerate(children):
-            children[i] = _update_column_struct_field_names(
-                child,
-                info.children[i]
-            )
-        col.set_base_children(tuple(children))
     return col

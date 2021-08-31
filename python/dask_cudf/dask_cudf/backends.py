@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+from collections.abc import Iterator
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -51,8 +53,8 @@ def _nonempty_index(idx):
         data = np.array([start, "1970-01-02"], dtype=idx.dtype)
         values = cudf.core.column.as_column(data)
         return cudf.core.index.DatetimeIndex(values, name=idx.name)
-    elif isinstance(idx, cudf.core.index.StringIndex):
-        return cudf.core.index.StringIndex(["cat", "dog"], name=idx.name)
+    elif isinstance(idx, cudf.StringIndex):
+        return cudf.StringIndex(["cat", "dog"], name=idx.name)
     elif isinstance(idx, cudf.core.index.CategoricalIndex):
         key = tuple(idx._data.keys())
         assert len(key) == 1
@@ -67,10 +69,10 @@ def _nonempty_index(idx):
         return cudf.core.index.GenericIndex(
             np.arange(2, dtype=idx.dtype), name=idx.name
         )
-    elif isinstance(idx, cudf.core.MultiIndex):
+    elif isinstance(idx, cudf.core.multiindex.MultiIndex):
         levels = [meta_nonempty(lev) for lev in idx.levels]
         codes = [[0, 0] for i in idx.levels]
-        return cudf.core.MultiIndex(
+        return cudf.core.multiindex.MultiIndex(
             levels=levels, codes=codes, names=idx.names
         )
 
@@ -255,6 +257,57 @@ def tolist_cudf(obj):
 def is_categorical_dtype_cudf(obj):
     return cudf.utils.dtypes.is_categorical_dtype(obj)
 
+
+try:
+    try:
+        from dask.array.dispatch import percentile_lookup
+    except ImportError:
+        from dask.dataframe.dispatch import (
+            percentile_dispatch as percentile_lookup,
+        )
+
+    @percentile_lookup.register((cudf.Series, cp.ndarray, cudf.Index))
+    def percentile_cudf(a, q, interpolation="linear"):
+        # Cudf dispatch to the equivalent of `np.percentile`:
+        # https://numpy.org/doc/stable/reference/generated/numpy.percentile.html
+        a = cudf.Series(a)
+        # a is series.
+        n = len(a)
+        if not len(a):
+            return None, n
+        if isinstance(q, Iterator):
+            q = list(q)
+
+        if cudf.utils.dtypes.is_categorical_dtype(a.dtype):
+            result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
+
+            return (
+                pd.Categorical.from_codes(
+                    result, a.dtype.categories, a.dtype.ordered
+                ),
+                n,
+            )
+        if np.issubdtype(a.dtype, np.datetime64):
+            result = a.quantile(
+                [i / 100.0 for i in q], interpolation=interpolation
+            )
+
+            if q[0] == 0:
+                # https://github.com/dask/dask/issues/6864
+                result[0] = min(result[0], a.min())
+            return result.to_pandas(), n
+        if not np.issubdtype(a.dtype, np.number):
+            interpolation = "nearest"
+        return (
+            a.quantile(
+                [i / 100.0 for i in q], interpolation=interpolation
+            ).to_pandas(),
+            n,
+        )
+
+
+except ImportError:
+    pass
 
 try:
     from dask.dataframe.dispatch import union_categoricals_dispatch
