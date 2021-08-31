@@ -125,13 +125,13 @@ class GroupBy(Serializable):
         >>> import cudf
         >>> df = cudf.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]})
         >>> df
-        X  Y
+           X  Y
         0  A  1
         1  B  4
         2  A  3
         3  B  2
         >>> df.groupby("X").get_group("A")
-        X  Y
+           X  Y
         0  A  1
         2  A  3
         """
