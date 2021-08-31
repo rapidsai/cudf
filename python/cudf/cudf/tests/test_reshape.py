@@ -525,3 +525,7 @@ def test_pivot_duplicate_error():
         gdf.pivot(index="a", columns="b")
     with pytest.raises(ValueError):
         gdf.pivot(index="b", columns="a")
+
+
+
+

@@ -7,7 +7,7 @@ import pandas as pd
 
 from cudf.utils.dtypes import is_list_like
 
-import cudf
+import cudf, cupy
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -399,6 +399,7 @@ def crosstab(
     values=None,
     rownames=None,
     colnames=None,
+    
 ):
     """
     Compute a simple cross tabulation of two (or more) factors. By default
@@ -411,80 +412,61 @@ def crosstab(
     columns : array-like, Series, or list of arrays/Series
         Values to group by in the columns.
     """
-    # try:
-    #     columns_idx = [cudf.core.index.Index(columns)]
-    #     columns= [columns]
-    # except:
-    #     columns_idx = [cudf.core.index.Index(col) for col in columns]
-    # try:
-    #     cudf_index = cudf.core.index.Index(index)
-    #     index_idx = [cudf_index]
-    #     index_labels, _ = cudf_index._encode()
-    # except:
-    #     index_idx = [idx for idx in index]
-    #     index_labels, _ = cudf.core.index.MultiIndex(index).encode()
-
-    # if rownames is None:
-    #     rownames =[f"row_{i}" for i,arr in enumerate(index_idx)]
-    # if colnames is None:
-    #     colnames =[f"col_{i}" for i,arr in enumerate(columns_idx)]
-
-    # names = rownames + colnames
-
-    # coldict = dict(zip(range(len(columns_idx)),columns_idx))
-    # df = cudf.DataFrame(coldict)
-    # df.index = index #check what happens with more than one 
-    # groups = [index]+columns
-    # df = df.groupby(groups).count()
-    # df.index._names=names
-    # df = df.reset_index()
-    # table=df.pivot(index=rownames,columns=colnames,values=[0])
-    # table = table.fillna(0)
-    # table.index = index_labels
-    # table.index.names =rownames
-    # table.columns = table.columns.droplevel()
-
-    if colnames is None:
-        colnames = []
-        if isinstance(columns, (np.ndarray, cupy.ndarray)):
-            colnames.append(["col_0"])
-        elif isinstance(arr, (cudf.Series, pd.Series)) and arr.name is not None:
-            colnames.append(arr.name)
-        else:
-            for i, arr in enumerate(columns):
-                names.append(f"col_{i}")
+    if isinstance(columns, (np.ndarray, cupy.ndarray,cudf.Series, pd.Series)):
+        columns_idx = [cudf.core.index.Index(columns)]
     else:
-        if len(colnames) != len(columns):
-            raise AssertionError("arrays and names must have the same length")
-        if not isinstance(colnames, list):
-            colnames = list(colnames)
+        columns_idx = [cudf.core.index.Index(col) for col in columns]
+    if isinstance(index, (np.ndarray, cupy.ndarray, cudf.Series, pd.Series)):
+        cudf_index = cudf.core.index.Index(index)
+        index_idx = [cudf_index]
+        index_labels, _ = cudf_index._encode()
+        # except:
+    else:
+        index_idx = [idx for idx in index]
+        index_labels, _ = cudf.MultiIndex(index).encode()
 
     if rownames is None:
-        rownames = []
-        if isinstance(index, (np.ndarray, cupy.ndarray)):
-            rownames.append(["row_0"])
-        elif isinstance(arr, (cudf.Series, pd.Series)) and arr.name is not None:
-            rownames.append(arr.name)
+        if isinstance(index, (cudf.Series, pd.Series)) and index.name is not None:
+            rownames=[index.name]
         else:
-            for i, arr in enumerate(index):
-                names.append(f"row_{i}")
+            rownames =[f"row_{i}" for i,arr in enumerate(index_idx)]
     else:
-        if len(rownames) != len(index):
-            raise AssertionError("arrays and names must have the same length")
         if not isinstance(rownames, list):
             rownames = list(rownames)
+        if len(rownames) != len([index]):
+            raise AssertionError("arrays and names must have the same length")
 
-    data = {dict(zip(rownames,index)),dict(zip(colnames:columns))}
-    df = cudf.DataFrame(data)
-    names = rownames + colnames 
-    new_df = df.groupby(names)colnames.count()
-    cudf.Series
-    elif is_list_like(columns):
+    if colnames is None:
+        if isinstance(columns, (cudf.Series, pd.Series)) and columns.name is not None:
+            #a series as input
+            colnames= [columns.name]
+        else:
+            colnames =[f"col_{i}" for i,arr in enumerate(columns_idx)]
+    else:
+        if not isinstance(colnames, list):
+            colnames = list(colnames)
+        if len(colnames) != len(columns):
+            raise AssertionError("arrays and names must have the same length")
 
+    names = rownames + colnames
+    if not isinstance(columns, list):
+            columns = [columns]
 
-    return table.fillna(0)
+    coldict = dict(zip(range(len(columns_idx)),columns_idx))
+    df = cudf.DataFrame(coldict)
+    df.index = index
+    groups = [index]+columns
+    df = df.groupby(groups).count()
+    df.index._names=names
+    df = df.reset_index()
+    table=df.pivot(index=rownames,columns=colnames,values=[0])
+    table = table.fillna(0)
+    table.index = index_labels
+    table.index.names =rownames
+    table.columns = table.columns.droplevel()
+    return table
 
-
+   
 
 def melt(
     frame,
