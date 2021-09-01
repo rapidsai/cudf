@@ -406,6 +406,7 @@ void compute_ewma_noadjust(column_view const& input,
                     });
 
   // TODO: the first pair is WRONG using the above. Reset just that pair
+
   thrust::transform(input.begin<double>(),
                     input.begin<double>() + 1,
                     pairs.begin(),
@@ -453,6 +454,7 @@ std::unique_ptr<column> ewmvar(column_view const& input,
   rmm::device_vector<double> d_this(input.size());
   rmm::device_vector<double> d_last(input.size());
 
+  // x_i - mu_i
   thrust::transform(rmm::exec_policy(stream),
                     input.begin<double>() + 1,
                     input.end<double>(),
@@ -460,6 +462,7 @@ std::unique_ptr<column> ewmvar(column_view const& input,
                     d_this.begin() + 1,
                     thrust::minus<double>());
 
+  // x_i - mu_{i-1}
   thrust::transform(rmm::exec_policy(stream),
                     input.begin<double>() + 1,
                     input.end<double>(),
@@ -467,20 +470,13 @@ std::unique_ptr<column> ewmvar(column_view const& input,
                     d_last.begin() + 1,
                     thrust::minus<double>());
 
+  // (x_i - mu_i)(x_i - mu_{i-1})
   thrust::transform(rmm::exec_policy(stream),
                     d_this.begin(),
                     d_this.end(),
                     d_last.begin(),
                     means_view.begin<double>(),
                     thrust::multiplies<double>());
-
-  thrust::transform(rmm::exec_policy(stream),
-                    means_view.begin<double>(),
-                    means_view.begin<double>() + 1,
-                    means_view.begin<double>(),
-                    [=] __host__ __device__(double input) -> double {
-                      return input;
-                    });
 
   // return means;
   return ewma(means.get()[0].view(), com, adjust, stream, mr);
