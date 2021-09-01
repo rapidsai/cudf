@@ -778,10 +778,10 @@ def date_range(
     _periods_not_specified = False
 
     if freq is not None:
-        if isinstance(freq, DateOffset):
+        if isinstance(freq, pd.DateOffset):
             offset = freq.to_pandas()
         elif isinstance(freq, str):
-            offset = pd.tseries.frequencies.to_offset(freq)
+            offset = DateOffset._from_freqstr(freq).to_pandas()
         else:
             if not isinstance(freq, pd.DateOffset):
                 raise TypeError(

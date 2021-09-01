@@ -68,7 +68,6 @@ class GroupBy(Serializable):
         dropna : bool, optional
             If True (default), do not include the "null" group.
         """
-        self.obj = obj
         self._as_index = as_index
         self._sort = sort
         self._dropna = dropna
@@ -77,6 +76,10 @@ class GroupBy(Serializable):
             self.grouping = by
         else:
             self.grouping = _Grouping(obj, by, level)
+
+    @property
+    def obj(self):
+        return self.grouping._obj
 
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
@@ -240,6 +243,17 @@ class GroupBy(Serializable):
                     result.index.get_level_values(col_name)._values,
                 )
             result.index = cudf.core.index.RangeIndex(len(result))
+
+        # TODO TODO TODO
+        if hasattr(self.grouping, "_rng"):
+            result = result.join(
+                cudf.DataFrame(
+                    index=cudf.Index(
+                        self.grouping._rng, name=self.grouping.names[0]
+                    )
+                ),
+                how="right",
+            )
 
         return result
 
@@ -1354,8 +1368,10 @@ class _Grouping(Serializable):
         # TODO fix:
         if key is None:
             key_column = self._obj.index._column
+            # key_name = self._obj.index.name
         else:
             key_column = self._obj._data[key]
+            # key_name = key
 
         label = "left"
 
@@ -1371,14 +1387,12 @@ class _Grouping(Serializable):
                 )
             offset = freq
 
-        rng = cudf.date_range(
-            pd.Timestamp(key_column.min()) - offset,
-            pd.Timestamp(key_column.max()) + offset,
-            freq=freq,
-        )
-
         if offset.freqstr == "M" or offset.freqstr.startswith("W-"):
             label = "right"
+
+        start = key_column.min()
+        end = key_column.max()
+        rng = cudf.date_range(start=start, end=end, freq=freq,)
 
         labels = cudf._lib.labeling.label_bins(
             key_column,
@@ -1388,6 +1402,7 @@ class _Grouping(Serializable):
             right_inclusive=(label == "right"),
         )
 
+        breakpoint()
         if label == "right":
             # Pandas uses the 'right' labels for these by default
             rng = rng[1:]
@@ -1397,6 +1412,8 @@ class _Grouping(Serializable):
         self._key_columns.append(rng.take(labels))
         self.names.append(key)
         self._named_columns.append(key)
+        self._rng = rng
+        self._is_freq = True
 
     def _handle_level(self, by):
         level_values = self._obj.index.get_level_values(by)
