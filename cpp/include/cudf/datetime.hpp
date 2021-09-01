@@ -178,8 +178,7 @@ std::unique_ptr<cudf::column> day_of_year(
  * @endcode
 
  * @param[in] timestamps cudf::column_view of timestamp type.
- * @param[in] months cudf::column_view of integer type containing the number of
- months to add.
+ * @param[in] months cudf::column_view of integer type containing the number of months to add.
  *
  * @returns cudf::column of timestamp type containing the computed timestamps.
  * @throw cudf::logic_error if `timestamps` datatype is not a TIMESTAMP or if `months` datatype
