@@ -690,7 +690,7 @@ def date_range(
         Number of periods to generate.
 
     freq : DateOffset
-        Frequencis to generate the datetime series. Mixed fixed-frequency and
+        Frequencies to generate the datetime series. Mixed fixed-frequency and
         non-fixed frequency offset is unsupported. See notes for detail.
 
     tz : str or tzinfo, optional
