@@ -7,9 +7,9 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from dask.dataframe.categorical import categorical_dtype_dispatch
 from dask.dataframe.core import get_parallel_type, meta_nonempty
 from dask.dataframe.dispatch import (
+    categorical_dtype_dispatch,
     concat_dispatch,
     group_split_dispatch,
     hash_object_dispatch,
