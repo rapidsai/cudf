@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,25 +14,15 @@
 # limitations under the License.
 #=============================================================================
 
-function(find_and_configure_cucollections)
+# Jitify doesn't have a version :/
 
-    if(TARGET cuco::cuco)
-        return()
-    endif()
-
-    # Find or install cuCollections
-    CPMFindPackage(NAME   cuco
-        GITHUB_REPOSITORY NVIDIA/cuCollections
-        GIT_TAG           0d602ae21ea4f38d23ed816aa948453d97b2ee4e
-        OPTIONS           "BUILD_TESTS OFF"
-                          "BUILD_BENCHMARKS OFF"
-                          "BUILD_EXAMPLES OFF"
-    )
-
-    set(CUCO_INCLUDE_DIR "${cuco_SOURCE_DIR}/include" PARENT_SCOPE)
-
-    # Make sure consumers of cudf can also see cuco::cuco target
-    fix_cmake_global_defaults(cuco::cuco)
+function(find_and_configure_jitify)
+    rapids_cpm_find(jitify 2.0.0
+            GIT_REPOSITORY  https://github.com/rapidsai/jitify.git
+            GIT_TAG         cudf_0.19
+            GIT_SHALLOW     TRUE
+            DOWNLOAD_ONLY   TRUE)
+    set(JITIFY_INCLUDE_DIR "${jitify_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()
 
-find_and_configure_cucollections()
+find_and_configure_jitify()
