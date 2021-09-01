@@ -13,6 +13,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_130, PANDAS_LT_140
 from cudf.core.column import as_column
 from cudf.core.index import as_index
 from cudf.testing._utils import assert_eq, assert_exceptions_equal, assert_neq
@@ -1007,6 +1008,10 @@ def test_multicolumn_loc(pdf, pdfIndex):
     assert_eq(pdf.loc[:, ["a", "b"]], gdf.loc[:, ["a", "b"]])
 
 
+@pytest.mark.xfail(
+    condition=PANDAS_GE_130 and PANDAS_LT_140,
+    reason="https://github.com/pandas-dev/pandas/issues/43351",
+)
 def test_multicolumn_set_item(pdf, pdfIndex):
     pdf = pdf.T
     pdf.columns = pdfIndex
