@@ -2238,29 +2238,26 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
   cudf_io::write_csv(writer_options);
 
   // read the temp csv file using default options
-  cudf_io::csv_reader_options read_options =
-    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
-      .header(-1)
-      .dtypes({dtype<int8_t>(),
-               dtype<int16_t>(),
-               dtype<int32_t>(),
-               dtype<int64_t>(),
-               dtype<uint8_t>(),
-               dtype<uint16_t>(),
-               dtype<uint32_t>(),
-               dtype<uint64_t>(),
-               dtype<float>(),
-               dtype<double>()});
+  auto read_options = cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+                        .header(-1)
+                        .dtypes({dtype<int8_t>(),
+                                 dtype<int16_t>(),
+                                 dtype<int32_t>(),
+                                 dtype<int64_t>(),
+                                 dtype<uint8_t>(),
+                                 dtype<uint16_t>(),
+                                 dtype<uint32_t>(),
+                                 dtype<uint64_t>(),
+                                 dtype<float>(),
+                                 dtype<double>()});
 
   struct table_with_metadata {
     std::unique_ptr<table> tbl;
     table_metadata metadata;
-  };
-
-  auto new_table_and_metadata = cudf_io::read_csv(read_options);
+  } new_table_and_metadata = cudf_io::read_csv(read_options);
 
   // check to see / assert / verify they are identical, or at least as identical as expected.
-  const auto new_table_view = new_table_and_metadata.tbl->view();
+  auto new_table_view = new_table_and_metadata.tbl->view();
   EXPECT_EQ(input_table, new_table_view);
 }
 
