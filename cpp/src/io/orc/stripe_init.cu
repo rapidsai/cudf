@@ -478,7 +478,7 @@ __global__ void __launch_bounds__(block_size, 2)
 
   auto const column_id = blockIdx.x;
   auto const& column   = columns[column_id];
-  if (column.pushdown_null_mask == nullptr) return;
+  if (column.pushdown_mask == nullptr) return;
 
   auto const rowgroup_id = blockIdx.y;
   auto const t           = threadIdx.x;

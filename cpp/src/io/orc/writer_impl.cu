@@ -1244,7 +1244,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
     orc_table.num_columns(),
     [cols = device_span<orc_column_device_view>{orc_table.d_columns},
      ptrs = device_span<bitmask_type const* const>{d_mask_ptrs}] __device__(auto& idx) {
-      cols[idx].pushdown_null_mask = ptrs[idx];
+      cols[idx].pushdown_mask = ptrs[idx];
     });
 
   return {std::move(pd_masks), std::move(mask_ptrs)};
@@ -1581,7 +1581,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
       for (auto rg_idx = stripe.first; rg_idx + 1 < stripe_end; ++rg_idx) {
         auto& rg      = out_rowgroups[rg_idx][col_idx];
         auto& rg_next = out_rowgroups[rg_idx + 1][col_idx];
-        if (parent_column.pushdown_null_mask == nullptr) {
+        if (parent_column.pushdown_mask == nullptr) {
           if (rg.size() % 8) {
             // size of the next rowgroup can be smaller only for the last rowgroup
             auto const bits_to_borrow = std::min(8 - rg.size() % 8, rg_next.size());
@@ -1606,7 +1606,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
             // find word
             while (bits_to_borrow != 0) {
               auto const mask = cudf::detail::get_mask_offset_word(
-                parent_column.pushdown_null_mask, 0, curr_bit, curr_bit + 32);
+                parent_column.pushdown_mask, 0, curr_bit, curr_bit + 32);
               auto const valid_in_word = __popc(mask);
 
               if (valid_in_word > bits_to_borrow) break;
@@ -1616,7 +1616,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
 
             // find bit
             while (bits_to_borrow != 0) {
-              if (bit_is_set(parent_column.pushdown_null_mask, curr_bit)) { --bits_to_borrow; };
+              if (bit_is_set(parent_column.pushdown_mask, curr_bit)) { --bits_to_borrow; };
               ++curr_bit;
             }
 
