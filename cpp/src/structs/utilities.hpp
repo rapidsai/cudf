@@ -126,7 +126,7 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
                               rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief Pushdown nulls from a parent mask into a child column, using AND.
+ * @brief Pushdown nulls from a parent mask into a child column, using bitwise AND.
  *
  * Rather than modify the argument column, this function constructs new equivalent column_view
  * instances, with new null mask values. This function returns both a (possibly new) column,
