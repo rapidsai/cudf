@@ -13,26 +13,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
+
+file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.10/RAPIDS.cmake
+     ${CMAKE_BINARY_DIR}/RAPIDS.cmake)
+include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
+
+include(rapids-cmake)
+include(rapids-cuda)
+include(rapids-find)
 
 # Use GPU_ARCHS if it is defined
 if(DEFINED GPU_ARCHS)
   set(CMAKE_CUDA_ARCHITECTURES "${GPU_ARCHS}")
 endif()
+rapids_cuda_init_architectures(CUDF_JNI)
 
-# If `CMAKE_CUDA_ARCHITECTURES` is not defined, build for all supported architectures. If
-# `CMAKE_CUDA_ARCHITECTURES` is set to an empty string (""), build for only the current
-# architecture. If `CMAKE_CUDA_ARCHITECTURES` is specified by the user, use user setting.
-
-# This needs to be run before enabling the CUDA language due to the default initialization behavior
-# of `CMAKE_CUDA_ARCHITECTURES`, https://gitlab.kitware.com/cmake/cmake/-/issues/21302
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "ALL")
-  set(CUDF_JNI_BUILD_FOR_ALL_ARCHS TRUE)
-elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
-  set(CUDF_JNI_BUILD_FOR_DETECTED_ARCHS TRUE)
-endif()
-
-project(CUDF_JNI VERSION 21.10.00 LANGUAGES C CXX)
+project(CUDF_JNI VERSION 21.10.00 LANGUAGES C CXX CUDA)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -71,11 +68,8 @@ set(CUDF_CUDA_FLAGS "")
 set(CUDF_CXX_DEFINITIONS "")
 set(CUDF_CUDA_DEFINITIONS "")
 
-# * find CUDAToolkit package
-# * determine GPU architectures
-# * enable the CMake CUDA language
-# * set other CUDA compilation flags
-include(ConfigureCUDA)
+rapids_find_package(CUDAToolkit REQUIRED)
+include(ConfigureCUDA) # set other CUDA compilation flags
 
 # Disable NVTX if necessary
 if(NOT USE_NVTX)
@@ -85,33 +79,12 @@ endif()
 if(PER_THREAD_DEFAULT_STREAM)
     message(STATUS "Using per-thread default stream")
     add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
-endif(PER_THREAD_DEFAULT_STREAM)
-
-###################################################################################################
-# - build type ------------------------------------------------------------------------------------
-
-# Set a default build type if none was specified
-set(DEFAULT_BUILD_TYPE "Release")
-
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-  message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' since none specified.")
-  set(CMAKE_BUILD_TYPE "${DEFAULT_BUILD_TYPE}" CACHE
-      STRING "Choose the type of build." FORCE)
-  # Set the possible values of build type for cmake-gui
-  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
-    "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
 ###################################################################################################
-# - cudart options --------------------------------------------------------------------------------
-# cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
-
-if(CUDA_STATIC_RUNTIME)
-    message(STATUS "Enabling static linking of cudart")
-    set(CUDART_LIBRARY "cudart_static")
-else()
-    set(CUDART_LIBRARY "cudart")
-endif(CUDA_STATIC_RUNTIME)
+# - build type ------------------------------------------------------------------------------------
+# Set a default build type if none was specified
+rapids_cmake_build_type("Release")
 
 ###################################################################################################
 # - Thrust/CUB/libcudacxx ------------------------------------------------------------------------------------
@@ -182,7 +155,7 @@ if(CUDF_JNI_ARROW_STATIC)
   set(CUDF_JNI_ARROW_LIBNAME "libarrow.a")
 else()
   set(CUDF_JNI_ARROW_LIBNAME "arrow")
-endif(CUDF_JNI_ARROW_STATIC)
+endif()
 
 find_library(ARROW_LIBRARY ${CUDF_JNI_ARROW_LIBNAME} REQUIRED
   HINTS "$ENV{ARROW_ROOT}/lib"
@@ -194,10 +167,10 @@ if(NOT ARROW_LIBRARY)
     message(FATAL_ERROR "Arrow static library not found. Was libcudf built with CUDF_USE_ARROW_STATIC=ON?")
   else()
     message(FATAL_ERROR "Arrow dynamic library not found.")
-  endif(CUDF_JNI_ARROW_STATIC)
+  endif()
 else()
   message(STATUS "ARROW: ARROW_LIBRARY set to ${ARROW_LIBRARY}")
-endif(NOT ARROW_LIBRARY)
+endif()
 
 ###################################################################################################
 # - find JNI -------------------------------------------------------------------------------------
@@ -206,7 +179,7 @@ if(JNI_FOUND)
     message(STATUS "JDK with JNI in ${JNI_INCLUDE_DIRS}")
 else()
     message(FATAL_ERROR "JDK with JNI not found, please check your settings.")
-endif(JNI_FOUND)
+endif()
 
 ###################################################################################################
 # - nvcomp ----------------------------------------------------------------------------------------
@@ -216,9 +189,7 @@ if(NVCOMP_FOUND)
     message(STATUS "nvcomp compression library found in ${NVCOMP_ROOT}")
 else()
     message(FATAL_ERROR "nvcomp compression library not found.")
-endif(NVCOMP_FOUND)
-
-add_library(nvcomp STATIC IMPORTED ${NVCOMP_LIB})
+endif()
 
 ###################################################################################################
 # - GDS/cufile ------------------------------------------------------------------------------------
@@ -226,56 +197,55 @@ add_library(nvcomp STATIC IMPORTED ${NVCOMP_LIB})
 if(USE_GDS)
     message(STATUS "Building with GPUDirect Storage (GDS)/cuFile support")
     find_package(cuFile REQUIRED)
-endif(USE_GDS)
-
-###################################################################################################
-# - include paths ---------------------------------------------------------------------------------
-
-include_directories("${THRUST_INCLUDE}"
-                    "${CUB_INCLUDE}"
-                    "${LIBCUDACXX_INCLUDE}"
-                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
-                    "${NVCOMP_INCLUDE_DIR}"
-                    "${CMAKE_BINARY_DIR}/include"
-                    "${CMAKE_SOURCE_DIR}/include"
-                    "${SPDLOG_INCLUDE}"
-                    "${CMAKE_SOURCE_DIR}/src"
-                    "${JNI_INCLUDE_DIRS}"
-                    "${CUDF_INCLUDE}"
-                    "${RMM_INCLUDE}"
-                    "${ARROW_INCLUDE}")
-
-###################################################################################################
-# - library paths ---------------------------------------------------------------------------------
-
-link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
-                 "${CMAKE_BINARY_DIR}/lib")
-
+endif()
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
 
-set(SOURCE_FILES
-    "src/row_conversion.cu"
-    "src/AggregationJni.cpp"
-    "src/CudfJni.cpp"
-    "src/CudaJni.cpp"
-    "src/ColumnVectorJni.cpp"
-    "src/ColumnViewJni.cpp"
-    "src/CompiledExpression.cpp"
-    "src/ContiguousTableJni.cpp"
-    "src/HostMemoryBufferNativeUtilsJni.cpp"
-    "src/NvcompJni.cpp"
-    "src/NvtxRangeJni.cpp"
-    "src/RmmJni.cpp"
-    "src/ScalarJni.cpp"
-    "src/TableJni.cpp"
-    "src/map_lookup.cu")
-add_library(cudfjni SHARED ${SOURCE_FILES})
+add_library(cudfjni SHARED
+    src/row_conversion.cu
+    src/AggregationJni.cpp
+    src/CudfJni.cpp
+    src/CudaJni.cpp
+    src/ColumnVectorJni.cpp
+    src/ColumnViewJni.cpp
+    src/CompiledExpression.cpp
+    src/ContiguousTableJni.cpp
+    src/HashJoinJni.cpp
+    src/HostMemoryBufferNativeUtilsJni.cpp
+    src/NvcompJni.cpp
+    src/NvtxRangeJni.cpp
+    src/RmmJni.cpp
+    src/ScalarJni.cpp
+    src/TableJni.cpp
+    src/map_lookup.cu)
+
+###################################################################################################
+# - include paths ---------------------------------------------------------------------------------
+
+target_include_directories(cudfjni
+  PUBLIC
+      "${THRUST_INCLUDE}"
+      "${CUB_INCLUDE}"
+      "${LIBCUDACXX_INCLUDE}"
+      "${CUDAToolkit_INCLUDE_DIRS}"
+      "${NVCOMP_INCLUDE_DIR}"
+      "${CMAKE_BINARY_DIR}/include"
+      "${CMAKE_SOURCE_DIR}/include"
+      "${SPDLOG_INCLUDE}"
+      "${CMAKE_SOURCE_DIR}/src"
+      "${JNI_INCLUDE_DIRS}"
+      "${CUDF_INCLUDE}"
+      "${RMM_INCLUDE}"
+      "${ARROW_INCLUDE}")
+
+###################################################################################################
+# - compile options ---------------------------------------------------------------------------------
 
 #Override RPATH for cudfjni
-SET_TARGET_PROPERTIES(cudfjni
-    PROPERTIES BUILD_RPATH "\$ORIGIN"
+set_target_properties(cudfjni
+        PROPERTIES BUILD_RPATH                    "\$ORIGIN"
+               INSTALL_RPATH                      "\$ORIGIN"
                # set target compile options
                CXX_STANDARD                        17
                CXX_STANDARD_REQUIRED               ON
@@ -294,18 +264,17 @@ target_compile_definitions(cudfjni
 )
 
 if(USE_GDS)
-    add_library(cufilejni SHARED "src/CuFileJni.cpp")
-    SET_TARGET_PROPERTIES(cufilejni
-        PROPERTIES BUILD_RPATH "\$ORIGIN"
+    add_library(cufilejni SHARED src/CuFileJni.cpp)
+    set_target_properties(cufilejni
+        PROPERTIES BUILD_RPATH                        "\$ORIGIN"
+                   INSTALL_RPATH                      "\$ORIGIN"
                    # set target compile options
                    CXX_STANDARD                        17
                    CXX_STANDARD_REQUIRED               ON
-                   CUDA_STANDARD                       17
-                   CUDA_STANDARD_REQUIRED              ON
     )
     target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
     target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
-endif(USE_GDS)
+endif()
 
 ###################################################################################################
 # - rmm logging level -----------------------------------------------------------------------------
@@ -321,4 +290,16 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni ${NVCOMP_LIB} ${CUDF_LIB} ${ARROW_LIBRARY} ${CUDART_LIBRARY} cuda)
+target_link_libraries(cudfjni PRIVATE nvcomp ${CUDF_LIB} ${ARROW_LIBRARY})
+
+###################################################################################################
+# - cudart options --------------------------------------------------------------------------------
+# cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
+
+if(CUDA_STATIC_RUNTIME)
+    # Tell CMake what CUDA language runtime to use
+    set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Static)
+else()
+    # Tell CMake what CUDA language runtime to use
+    set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
+endif()

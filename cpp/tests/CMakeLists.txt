@@ -80,6 +80,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/replace_nulls_tests.cpp
     groupby/shift_tests.cpp
     groupby/std_tests.cpp
+    groupby/structs_tests.cpp
     groupby/sum_of_squares_tests.cpp
     groupby/sum_scan_tests.cpp
     groupby/sum_tests.cpp
@@ -195,6 +196,7 @@ ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
+ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
 if(CUDF_ENABLE_ARROW_S3)
   target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
 endif()
@@ -379,6 +381,7 @@ ConfigureTest(STRINGS_TEST
 # - structs test ----------------------------------------------------------------------------------
 ConfigureTest(STRUCTS_TEST 
     structs/structs_column_tests.cpp
+    structs/utilities_tests.cpp
     )
 
 ###################################################################################################

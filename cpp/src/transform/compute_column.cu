@@ -16,7 +16,7 @@
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
-#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -78,7 +78,7 @@ __launch_bounds__(max_block_size) __global__
   }
 }
 
-std::unique_ptr<column> compute_column(table_view const table,
+std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
@@ -135,7 +135,7 @@ std::unique_ptr<column> compute_column(table_view const table,
 
 }  // namespace detail
 
-std::unique_ptr<column> compute_column(table_view const table,
+std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
                                        rmm::mr::device_memory_resource* mr)
 {

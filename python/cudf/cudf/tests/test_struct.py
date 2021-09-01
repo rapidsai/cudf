@@ -260,6 +260,18 @@ def test_struct_slice(series, start, end):
         assert sr[start:end].to_arrow() == expected.to_arrow()
 
 
+def test_struct_slice_nested_struct():
+    data = [
+        {"a": {"b": 42, "c": "abc"}},
+        {"a": {"b": 42, "c": "hello world"}},
+    ]
+
+    got = cudf.Series(data)[0:1]
+    expect = cudf.Series(data[0:1])
+    assert got.__repr__() == expect.__repr__()
+    assert got.dtype.to_arrow() == expect.dtype.to_arrow()
+
+
 @pytest.mark.parametrize(
     "data",
     [

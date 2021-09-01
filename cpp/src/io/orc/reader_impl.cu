@@ -178,7 +178,6 @@ size_t gather_stream_info(const size_t stripe_index,
                           const orc::StripeInformation* stripeinfo,
                           const orc::StripeFooter* stripefooter,
                           const std::vector<int>& orc2gdf,
-                          const std::vector<orc_column_meta>& gdf2orc,
                           const std::vector<orc::SchemaType> types,
                           bool use_index,
                           size_t* num_dictionary_entries,
@@ -271,6 +270,7 @@ class aggregate_orc_metadata {
   size_type const num_rows;
   size_type const num_columns;
   size_type const num_stripes;
+  bool row_grp_idx_present = true;
 
   /**
    * @brief Create a metadata object from each element in the source vector
@@ -370,6 +370,8 @@ class aggregate_orc_metadata {
     return per_file_metadata[source_idx].get_column_name(column_idx);
   }
 
+  auto is_row_grp_idx_present() const { return row_grp_idx_present; }
+
   std::vector<cudf::io::orc::metadata::stripe_source_mapping> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
     size_type& row_start,
@@ -459,6 +461,7 @@ class aggregate_orc_metadata {
           ProtobufReader(sf_data, sf_length)
             .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
           mapping.stripe_info[i].second = &per_file_metadata[mapping.source_idx].stripefooters[i];
+          if (stripe->indexLength == 0) { row_grp_idx_present = false; }
         }
       }
     }
@@ -1140,6 +1143,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Association between each ORC column and its cudf::column
     _col_meta.orc_col_map.emplace_back(_metadata->get_num_cols(), -1);
     std::vector<orc_column_meta> nested_col;
+    bool is_data_empty = false;
 
     // Get a list of column data types
     std::vector<data_type> column_types;
@@ -1197,6 +1201,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       const bool use_index =
         (_use_index == true) &&
+        // Do stripes have row group index
+        _metadata->is_row_grp_idx_present() &&
         // Only use if we don't have much work with complete columns & stripes
         // TODO: Consider nrows, gpu, and tune the threshold
         (num_rows > _metadata->get_row_index_stride() && !(_metadata->get_row_index_stride() & 7) &&
@@ -1236,7 +1242,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                                           stripe_info,
                                                           stripe_footer,
                                                           _col_meta.orc_col_map[level],
-                                                          selected_columns,
                                                           _metadata->get_types(),
                                                           use_index,
                                                           &num_dict_entries,
@@ -1244,13 +1249,21 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                                           stream_info,
                                                           level == 0);
 
-          CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
+          if (total_data_size == 0) {
+            CUDF_EXPECTS(stripe_info->indexLength == 0, "Invalid index rowgroup stream data");
+            // In case ROW GROUP INDEX is not present and all columns are structs with no null
+            // stream, there is nothing to read at this level.
+            auto fn_check_dtype = [](auto dtype) { return dtype.id() == type_id::STRUCT; };
+            CUDF_EXPECTS(std::all_of(column_types.begin(), column_types.end(), fn_check_dtype),
+                         "Expected streams data within stripe");
+            is_data_empty = true;
+          }
 
           stripe_data.emplace_back(total_data_size, stream);
           auto dst_base = static_cast<uint8_t*>(stripe_data.back().data());
 
           // Coalesce consecutive streams into one read
-          while (stream_count < stream_info.size()) {
+          while (not is_data_empty and stream_count < stream_info.size()) {
             const auto d_dst  = dst_base + stream_info[stream_count].dst_pos;
             const auto offset = stream_info[stream_count].offset;
             auto len          = stream_info[stream_count].length;
@@ -1332,8 +1345,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             if (chunk.type_kind == orc::TIMESTAMP) {
               chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
             }
-            for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
-              chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
+            if (not is_data_empty) {
+              for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
+                chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
+              }
             }
           }
           stripe_start_row += num_rows_per_stripe;
@@ -1367,7 +1382,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                          });
         }
         // Setup row group descriptors if using indexes
-        if (_metadata->per_file_metadata[0].ps.compression != orc::NONE) {
+        if (_metadata->per_file_metadata[0].ps.compression != orc::NONE and not is_data_empty) {
           auto decomp_data =
             decompress_stripe_data(chunks,
                                    stripe_data,
@@ -1418,19 +1433,23 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, stream, _mr);
         }
 
-        decode_stream_data(chunks,
-                           num_dict_entries,
-                           skip_rows,
-                           tz_table.view(),
-                           row_groups,
-                           _metadata->get_row_index_stride(),
-                           out_buffers[level],
-                           level,
-                           stream);
+        if (not is_data_empty) {
+          decode_stream_data(chunks,
+                             num_dict_entries,
+                             skip_rows,
+                             tz_table.view(),
+                             row_groups,
+                             _metadata->get_row_index_stride(),
+                             out_buffers[level],
+                             level,
+                             stream);
+        }
 
         // Extract information to process nested child columns
         if (nested_col.size()) {
-          scan_null_counts(chunks, null_count_prefix_sums[level], stream);
+          if (not is_data_empty) {
+            scan_null_counts(chunks, null_count_prefix_sums[level], stream);
+          }
           row_groups.device_to_host(stream, true);
           aggregate_child_meta(chunks, row_groups, out_buffers[level], nested_col, level);
         }
@@ -1476,15 +1495,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   }
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
-}
-
-// Forward to implementation
-reader::reader(std::vector<std::string> const& filepaths,
-               orc_reader_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
-{
-  _impl = std::make_unique<impl>(datasource::create(filepaths), options, mr);
 }
 
 // Forward to implementation
