@@ -20,7 +20,7 @@
 #include "compiled/binary_ops.hpp"
 #include "jit/util.hpp"
 
-#include <jit_preprocessed_files/binaryop/jit/kernel.cu.jit.hpp>
+// #include <jit_preprocessed_files/binaryop/jit/kernel.cu.jit.hpp>
 
 #include <jit/cache.hpp>
 #include <jit/parser.hpp>
@@ -134,41 +134,42 @@ void binary_operation(mutable_column_view& out,
                       OperatorType op_type,
                       rmm::cuda_stream_view stream)
 {
-  if (is_null_dependent(op)) {
-    std::string kernel_name =
-      jitify2::reflection::Template("cudf::binops::jit::kernel_v_s_with_validity")  //
-        .instantiate(cudf::jit::get_type_name(out.type()),  // list of template arguments
-                     cudf::jit::get_type_name(lhs.type()),
-                     cudf::jit::get_type_name(rhs.type()),
-                     get_operator_name(op, op_type));
+  // if (is_null_dependent(op)) {
+  //   std::string kernel_name =
+  //     jitify2::reflection::Template("cudf::binops::jit::kernel_v_s_with_validity")  //
+  //       .instantiate(cudf::jit::get_type_name(out.type()),  // list of template arguments
+  //                    cudf::jit::get_type_name(lhs.type()),
+  //                    cudf::jit::get_type_name(rhs.type()),
+  //                    get_operator_name(op, op_type));
 
-    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
-      .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
-      ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
-      ->launch(out.size(),
-               cudf::jit::get_data_ptr(out),
-               cudf::jit::get_data_ptr(lhs),
-               cudf::jit::get_data_ptr(rhs),
-               out.null_mask(),
-               lhs.null_mask(),
-               lhs.offset(),
-               rhs.is_valid());
-  } else {
-    std::string kernel_name =
-      jitify2::reflection::Template("cudf::binops::jit::kernel_v_s")  //
-        .instantiate(cudf::jit::get_type_name(out.type()),            // list of template arguments
-                     cudf::jit::get_type_name(lhs.type()),
-                     cudf::jit::get_type_name(rhs.type()),
-                     get_operator_name(op, op_type));
+  //   cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+  //     .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
+  //     ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
+  //     ->launch(out.size(),
+  //              cudf::jit::get_data_ptr(out),
+  //              cudf::jit::get_data_ptr(lhs),
+  //              cudf::jit::get_data_ptr(rhs),
+  //              out.null_mask(),
+  //              lhs.null_mask(),
+  //              lhs.offset(),
+  //              rhs.is_valid());
+  // } else {
+  //   std::string kernel_name =
+  //     jitify2::reflection::Template("cudf::binops::jit::kernel_v_s")  //
+  //       .instantiate(cudf::jit::get_type_name(out.type()),            // list of template
+  //       arguments
+  //                    cudf::jit::get_type_name(lhs.type()),
+  //                    cudf::jit::get_type_name(rhs.type()),
+  //                    get_operator_name(op, op_type));
 
-    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
-      .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
-      ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
-      ->launch(out.size(),
-               cudf::jit::get_data_ptr(out),
-               cudf::jit::get_data_ptr(lhs),
-               cudf::jit::get_data_ptr(rhs));
-  }
+  //   cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+  //     .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
+  //     ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
+  //     ->launch(out.size(),
+  //              cudf::jit::get_data_ptr(out),
+  //              cudf::jit::get_data_ptr(lhs),
+  //              cudf::jit::get_data_ptr(rhs));
+  // }
 }
 
 void binary_operation(mutable_column_view& out,
@@ -195,42 +196,43 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  if (is_null_dependent(op)) {
-    std::string kernel_name =
-      jitify2::reflection::Template("cudf::binops::jit::kernel_v_v_with_validity")  //
-        .instantiate(cudf::jit::get_type_name(out.type()),  // list of template arguments
-                     cudf::jit::get_type_name(lhs.type()),
-                     cudf::jit::get_type_name(rhs.type()),
-                     get_operator_name(op, OperatorType::Direct));
+  // if (is_null_dependent(op)) {
+  //   std::string kernel_name =
+  //     jitify2::reflection::Template("cudf::binops::jit::kernel_v_v_with_validity")  //
+  //       .instantiate(cudf::jit::get_type_name(out.type()),  // list of template arguments
+  //                    cudf::jit::get_type_name(lhs.type()),
+  //                    cudf::jit::get_type_name(rhs.type()),
+  //                    get_operator_name(op, OperatorType::Direct));
 
-    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
-      .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
-      ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
-      ->launch(out.size(),
-               cudf::jit::get_data_ptr(out),
-               cudf::jit::get_data_ptr(lhs),
-               cudf::jit::get_data_ptr(rhs),
-               out.null_mask(),
-               lhs.null_mask(),
-               rhs.offset(),
-               rhs.null_mask(),
-               rhs.offset());
-  } else {
-    std::string kernel_name =
-      jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")  //
-        .instantiate(cudf::jit::get_type_name(out.type()),            // list of template arguments
-                     cudf::jit::get_type_name(lhs.type()),
-                     cudf::jit::get_type_name(rhs.type()),
-                     get_operator_name(op, OperatorType::Direct));
+  //   cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+  //     .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
+  //     ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
+  //     ->launch(out.size(),
+  //              cudf::jit::get_data_ptr(out),
+  //              cudf::jit::get_data_ptr(lhs),
+  //              cudf::jit::get_data_ptr(rhs),
+  //              out.null_mask(),
+  //              lhs.null_mask(),
+  //              rhs.offset(),
+  //              rhs.null_mask(),
+  //              rhs.offset());
+  // } else {
+  //   std::string kernel_name =
+  //     jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")  //
+  //       .instantiate(cudf::jit::get_type_name(out.type()),            // list of template
+  //       arguments
+  //                    cudf::jit::get_type_name(lhs.type()),
+  //                    cudf::jit::get_type_name(rhs.type()),
+  //                    get_operator_name(op, OperatorType::Direct));
 
-    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
-      .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
-      ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
-      ->launch(out.size(),
-               cudf::jit::get_data_ptr(out),
-               cudf::jit::get_data_ptr(lhs),
-               cudf::jit::get_data_ptr(rhs));
-  }
+  //   cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+  //     .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
+  //     ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
+  //     ->launch(out.size(),
+  //              cudf::jit::get_data_ptr(out),
+  //              cudf::jit::get_data_ptr(lhs),
+  //              cudf::jit::get_data_ptr(rhs));
+  // }
 }
 
 void binary_operation(mutable_column_view& out,
@@ -239,28 +241,28 @@ void binary_operation(mutable_column_view& out,
                       const std::string& ptx,
                       rmm::cuda_stream_view stream)
 {
-  std::string const output_type_name = cudf::jit::get_type_name(out.type());
+  // std::string const output_type_name = cudf::jit::get_type_name(out.type());
 
-  std::string ptx_hash =
-    "prog_binop." + std::to_string(std::hash<std::string>{}(ptx + output_type_name));
-  std::string cuda_source =
-    cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name);
+  // std::string ptx_hash =
+  //   "prog_binop." + std::to_string(std::hash<std::string>{}(ptx + output_type_name));
+  // std::string cuda_source =
+  //   cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name);
 
-  std::string kernel_name =
-    jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")  //
-      .instantiate(output_type_name,                                // list of template arguments
-                   cudf::jit::get_type_name(lhs.type()),
-                   cudf::jit::get_type_name(rhs.type()),
-                   get_operator_name(binary_operator::GENERIC_BINARY, OperatorType::Direct));
+  // std::string kernel_name =
+  //   jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")  //
+  //     .instantiate(output_type_name,                                // list of template arguments
+  //                  cudf::jit::get_type_name(lhs.type()),
+  //                  cudf::jit::get_type_name(rhs.type()),
+  //                  get_operator_name(binary_operator::GENERIC_BINARY, OperatorType::Direct));
 
-  cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
-    .get_kernel(
-      kernel_name, {}, {{"binaryop/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})  //
-    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                                  //
-    ->launch(out.size(),
-             cudf::jit::get_data_ptr(out),
-             cudf::jit::get_data_ptr(lhs),
-             cudf::jit::get_data_ptr(rhs));
+  // cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+  //   .get_kernel(
+  //     kernel_name, {}, {{"binaryop/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})  //
+  //   ->configure_1d_max_occupancy(0, 0, 0, stream.value())                                  //
+  //   ->launch(out.size(),
+  //            cudf::jit::get_data_ptr(out),
+  //            cudf::jit::get_data_ptr(lhs),
+  //            cudf::jit::get_data_ptr(rhs));
 }
 }  // namespace jit
 

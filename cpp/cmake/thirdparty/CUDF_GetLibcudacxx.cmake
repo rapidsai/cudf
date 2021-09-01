@@ -17,8 +17,8 @@
 function(find_and_configure_libcudacxx VERSION)
     CPMFindPackage(NAME     libcudacxx
         VERSION             ${VERSION}
-        GIT_REPOSITORY      https://github.com/NVIDIA/libcudacxx.git
-        GIT_TAG             ${VERSION}
+        GIT_REPOSITORY      https://gitlab-master.nvidia.com/nvhpc/libcudacxx.git
+        GIT_TAG             staging/1.6.0
         GIT_SHALLOW         TRUE
         DOWNLOAD_ONLY       TRUE
     )
