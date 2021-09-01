@@ -37,7 +37,7 @@ from cudf.utils.dtypes import (
 )
 
 if TYPE_CHECKING:
-    from cudf._typing import SeriesOrIndex
+    from cudf._typing import SeriesOrIndex, SeriesOrSingleColumnIndex
     from cudf.core.column import (
         ColumnBase,
         DatetimeColumn,
@@ -104,7 +104,7 @@ class CategoricalAccessor(ColumnMethods):
 
     _column: CategoricalColumn
 
-    def __init__(self, parent: SeriesOrIndex):
+    def __init__(self, parent: SeriesOrSingleColumnIndex):
         if not is_categorical_dtype(parent.dtype):
             raise AttributeError(
                 "Can only use .cat accessor with a 'category' dtype"

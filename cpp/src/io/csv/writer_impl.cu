@@ -229,7 +229,12 @@ struct column_to_strings_fn {
       format = "\"" + format + "\"";
     }
 
-    return cudf::strings::detail::from_timestamps(column, format, stream_, mr_);
+    return cudf::strings::detail::from_timestamps(
+      column,
+      format,
+      strings_column_view(column_view{data_type{type_id::STRING}, 0, nullptr}),
+      stream_,
+      mr_);
   }
 
   template <typename column_type>
