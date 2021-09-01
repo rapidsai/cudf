@@ -17,11 +17,6 @@
 # cuCollections doesn't have a version
 
 function(find_and_configure_cucollections)
-
-    if(TARGET cuco::cuco)
-        return()
-    endif()
-
     # Find or install cuCollections
     rapids_cpm_find(cuco 0.0.1
         GLOBAL_TARGETS cuco::cuco
