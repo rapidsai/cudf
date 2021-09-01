@@ -126,15 +126,15 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
                               rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief Pushdown nulls from a parent mask into a child column, using bitwise AND.
+ * @brief Push down nulls from a parent mask into a child column, using bitwise AND.
  *
- * Rather than modify the argument column, this function constructs new equivalent column_view
- * instances, with new null mask values. This function returns both a (possibly new) column,
- * and the device_buffer instances to support any modified null masks.
+ * This function constructs a new column_view instance equivalent to the argument column_view,
+ * with possibly new child column_views, all with possibly new null mask values reflecting
+ * null rows from the parent column:
  * 1. If the specified column is not STRUCT, the column is returned unmodified, with no new
  *    supporting device_buffer instances.
  * 2. If the column is STRUCT, the null masks of the parent and child are bitwise-ANDed, and a
- *    modified column_view is returned. This applies recursively to support
+ *    modified column_view is returned. This applies recursively.
  *
  * @param parent The parent (possibly STRUCT) column whose nulls need to be pushed to its members.
  * @param stream CUDA stream used for device memory operations and kernel launches.
