@@ -752,7 +752,7 @@ def date_range(
     if closed is not None:
         raise NotImplementedError("closed is currently unsupported.")
 
-    if [start, end, periods, freq].count(None) > 1:
+    if (start, end, periods, freq).count(None) > 1:
         raise ValueError(
             "Of the four parameters: start, end, periods, and freq, exactly "
             "three must be specified"
