@@ -46,6 +46,7 @@ The following table lists all of cudf types. For methods requiring dtype argumen
 **Note: All dtypes above are Nullable**
 
 **1.1 The dtype of columns containing lists and structs can be inferred from the data. For example, the data type for the value** ``[[1, 2], [3, 4]]`` **is inferred as** ``ListDtype(int64)``
+
 **1.2 cuDF does not support string aliases for** ``list`` and ``struct`` **data types**
 
  
