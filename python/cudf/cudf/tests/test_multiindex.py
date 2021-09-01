@@ -970,23 +970,28 @@ def test_multiindex_rows_with_wildcard(pdf, gdf, pdfIndex):
         gdf.loc[(("a"), ("store")), :].sort_index(),
     )
     assert_eq(
-        pdf.loc[(("a"), ("store"), ("storm")), :],
-        gdf.loc[(("a"), ("store"), ("storm")), :],
+        pdf.loc[(("a"), ("store"), ("storm")), :].sort_index(),
+        gdf.loc[(("a"), ("store"), ("storm")), :].sort_index(),
     )
     assert_eq(
-        pdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :],
-        gdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :],
+        pdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :].sort_index(),
+        gdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :].sort_index(),
     )
     assert_eq(
-        pdf.loc[(slice(None), "store"), :], gdf.loc[(slice(None), "store"), :]
+        pdf.loc[(slice(None), "store"), :].sort_index(),
+        gdf.loc[(slice(None), "store"), :].sort_index(),
     )
     assert_eq(
-        pdf.loc[(slice(None), slice(None), "storm"), :],
-        gdf.loc[(slice(None), slice(None), "storm"), :],
+        pdf.loc[(slice(None), slice(None), "storm"), :].sort_index(),
+        gdf.loc[(slice(None), slice(None), "storm"), :].sort_index(),
     )
     assert_eq(
-        pdf.loc[(slice(None), slice(None), slice(None), "smoke"), :],
-        gdf.loc[(slice(None), slice(None), slice(None), "smoke"), :],
+        pdf.loc[
+            (slice(None), slice(None), slice(None), "smoke"), :
+        ].sort_index(),
+        gdf.loc[
+            (slice(None), slice(None), slice(None), "smoke"), :
+        ].sort_index(),
     )
 
 
