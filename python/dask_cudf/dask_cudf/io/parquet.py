@@ -259,9 +259,11 @@ def set_object_dtypes_from_pa_schema(df, schema):
     if schema:
         for name in df.columns:
             if name in schema.names and df[name].dtype == "O":
-                df[name] = df[name].astype(
-                    cudf_dtype_from_pa_type(schema.field(name).type)
-                )
+                typ = cudf_dtype_from_pa_type(schema.field(name).type)
+                if typ not in ("list", "struct"):
+                    df[name] = df[name].astype(
+                        cudf_dtype_from_pa_type(schema.field(name).type)
+                    )
 
 
 def read_parquet(
