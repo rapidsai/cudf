@@ -355,7 +355,9 @@ def test_rolling_numba_udf_with_offset():
     )
 
 
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "var", "std"]
+)
 def test_rolling_groupby_simple(agg):
     pdf = pd.DataFrame(
         {
@@ -385,7 +387,9 @@ def test_rolling_groupby_simple(agg):
         assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "var", "std"]
+)
 def test_rolling_groupby_multi(agg):
     pdf = pd.DataFrame(
         {
@@ -406,7 +410,9 @@ def test_rolling_groupby_multi(agg):
         assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "var", "std"]
+)
 @pytest.mark.parametrize(
     "window_size", ["1d", "2d", "3d", "4d", "5d", "6d", "7d"]
 )
