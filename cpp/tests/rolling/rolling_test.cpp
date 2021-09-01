@@ -411,7 +411,6 @@ TYPED_TEST_CASE(RollingVarStdTest, cudf::test::FixedWidthTypesWithoutChrono);
 class RollingtVarStdTestUntyped : public cudf::test::BaseFixture {
 };
 
-// // ------------- expected failures --------------------
 
 class RollingErrorTest : public cudf::test::BaseFixture {
 };
