@@ -1199,12 +1199,16 @@ TEST_F(OrcWriterTest, Decimal32)
 
 TEST_F(OrcStatisticsTest, Overflow)
 {
-  int num_rows = 10;
-  auto too_large_seq  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * (std::numeric_limits<int64_t>::max()/20); });
-  auto too_small_seq  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * (std::numeric_limits<int64_t>::min()/20); });
-  auto not_too_large_seq  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * (std::numeric_limits<int64_t>::max()/200); });
-  auto not_too_small_seq  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * (std::numeric_limits<int64_t>::min()/200); });
-  auto validity  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  int num_rows       = 10;
+  auto too_large_seq = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i * (std::numeric_limits<int64_t>::max() / 20); });
+  auto too_small_seq = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i * (std::numeric_limits<int64_t>::min() / 20); });
+  auto not_too_large_seq = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i * (std::numeric_limits<int64_t>::max() / 200); });
+  auto not_too_small_seq = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i * (std::numeric_limits<int64_t>::min() / 200); });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
 
   column_wrapper<int64_t, typename decltype(too_large_seq)::value_type> col1(
     too_large_seq, too_large_seq + num_rows, validity);
@@ -1224,11 +1228,11 @@ TEST_F(OrcStatisticsTest, Overflow)
 
   auto const stats = cudf_io::read_parsed_orc_statistics(cudf_io::source_info{filepath});
 
-  auto check_sum_exist = [&](int idx, bool expected){
-    auto const& s = stats.file_stats[idx];
+  auto check_sum_exist = [&](int idx, bool expected) {
+    auto const& s  = stats.file_stats[idx];
     auto const& ts = std::get<cudf_io::integer_statistics>(s.type_specific_stats);
     EXPECT_EQ(ts.sum.has_value(), expected);
-    };
+  };
   check_sum_exist(1, false);
   check_sum_exist(2, false);
   check_sum_exist(3, true);
