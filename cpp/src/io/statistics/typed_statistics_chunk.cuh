@@ -237,14 +237,22 @@ template <typename T, bool include_aggregate>
 __inline__ __device__ statistics_chunk
 get_untyped_chunk(const typed_statistics_chunk<T, include_aggregate>& chunk)
 {
+  using E = typename detail::extrema_type<T>::type;
   statistics_chunk stat;
   stat.non_nulls  = chunk.non_nulls;
   stat.null_count = chunk.num_rows - chunk.non_nulls;
   stat.has_minmax = chunk.has_minmax;
-  stat.has_sum =
-    chunk.has_minmax;  // If a valid input was encountered we assume that the sum is valid
+  stat.has_sum    = [&]() {
+    if (!chunk.has_minmax) return false;
+    if constexpr (std::is_floating_point_v<E> or std::is_integral_v<E>) {
+      return std::numeric_limits<E>::max() / chunk.non_nulls >=
+               static_cast<E>(chunk.maximum_value) and
+             std::numeric_limits<E>::lowest() / chunk.non_nulls <=
+               static_cast<E>(chunk.minimum_value);
+    }
+    return true;
+  }();
   if (chunk.has_minmax) {
-    using E = typename detail::extrema_type<T>::type;
     if constexpr (std::is_floating_point_v<E>) {
       union_member::get<E>(stat.min_value) =
         (chunk.minimum_value != 0.0) ? chunk.minimum_value : CUDART_NEG_ZERO;
