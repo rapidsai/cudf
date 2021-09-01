@@ -359,31 +359,6 @@ rmm::device_vector<double> compute_recurrence(rmm::device_vector<thrust::pair<do
 
 }
 
-rmm::device_vector<double> ewm_numerator(column_view const& input, double beta)
-{
-  rmm::device_vector<double> output(input.size());
-  rmm::device_vector<thrust::pair<double, double>> pairs(input.size());
-  thrust::transform(input.begin<double>(),
-                    input.end<double>(),
-                    pairs.begin(),
-                    [=] __host__ __device__(double input) -> thrust::pair<double, double> {
-                      return thrust::pair<double, double>(beta, input);
-                    });
-
-  rmm::device_vector<double> result = compute_recurrence(pairs);
-  return result;
-}
-
-rmm::device_vector<double> ewm_denominator(column_view const& input, double beta)
-{
-  rmm::device_vector<double> output(input.size());
-  rmm::device_vector<thrust::pair<double, double>> pairs(input.size());
-  thrust::fill(pairs.begin(), pairs.end(), thrust::pair<double, double>(beta, 1.0));
-
-  rmm::device_vector<double> result = compute_recurrence(pairs);
-  return result;
-}
-
 
 void compute_ewma_adjust(
   column_view const& input,
@@ -392,8 +367,22 @@ void compute_ewma_adjust(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr) 
 {
-  rmm::device_vector<double> denominator = ewm_denominator(input, beta);
-  rmm::device_vector<double> numerator   = ewm_numerator(input, beta);
+
+  rmm::device_vector<thrust::pair<double, double>> pairs(input.size());
+
+  // Numerator
+  thrust::transform(input.begin<double>(),
+                    input.end<double>(),
+                    pairs.begin(),
+                    [=] __host__ __device__(double input) -> thrust::pair<double, double> {
+                      return thrust::pair<double, double>(beta, input);
+                    });
+        
+  rmm::device_vector<double> numerator = compute_recurrence(pairs);
+  
+  // Denominator
+  thrust::fill(pairs.begin(), pairs.end(), thrust::pair<double, double>(beta, 1.0));
+  rmm::device_vector<double> denominator = compute_recurrence(pairs);
 
   thrust::transform(rmm::exec_policy(stream),
                     numerator.begin(),
@@ -401,7 +390,6 @@ void compute_ewma_adjust(
                     denominator.begin(),
                     output.begin<double>(),
                     thrust::divides<double>());
-
 }
 
 void compute_ewma_noadjust(
@@ -451,7 +439,6 @@ std::unique_ptr<column> ewma(column_view const& input,
   }
   return output;
 }
-
 
 
 std::unique_ptr<column> ewmvar(
