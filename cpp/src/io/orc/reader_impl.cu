@@ -955,6 +955,8 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
   });
 }
 
+std::string get_map_child_col_name(size_t idx) { return (idx == 0) ? "key" : "value"; }
+
 std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_id,
                                                           column_name_info& schema_info,
                                                           rmm::cuda_stream_view stream)
@@ -987,13 +989,14 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
     case orc::MAP: {
       schema_info.children.emplace_back("offsets");
       schema_info.children.emplace_back("struct");
-      const auto cols = _metadata->get_col_type(orc_col_id).subtypes;
+      const auto child_column_ids = _metadata->get_col_type(orc_col_id).subtypes;
       for (size_t idx = 0; idx < _metadata->get_col_type(orc_col_id).subtypes.size(); idx++) {
-        schema_info.children.back().children.emplace_back("");
-        child_columns.push_back(
-          create_empty_column(cols[idx], schema_info.children.back().children.back(), stream));
-        auto name                                      = (idx == 0) ? "key" : "value";
-        schema_info.children.back().children[idx].name = name;
+        auto& children_schema = schema_info.children.back().children;
+        children_schema.emplace_back("");
+        child_columns.push_back(create_empty_column(
+          child_column_ids[idx], schema_info.children.back().children.back(), stream));
+        auto name                 = get_map_child_col_name(idx);
+        children_schema[idx].name = name;
       }
       auto struct_col =
         make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream);
@@ -1050,7 +1053,7 @@ column_buffer&& reader::impl::assemble_buffer(const int32_t orc_col_id,
       std::vector<column_buffer> child_col_buffers;
       // Get child buffers
       for (size_t idx = 0; idx < _metadata->get_col_type(orc_col_id).subtypes.size(); idx++) {
-        auto name = (idx == 0) ? "key" : "value";
+        auto name = get_map_child_col_name(idx);
         auto col  = _metadata->get_col_type(orc_col_id).subtypes[idx];
         child_col_buffers.emplace_back(assemble_buffer(col, col_buffers, level + 1, stream));
         child_col_buffers.back().name = name;
