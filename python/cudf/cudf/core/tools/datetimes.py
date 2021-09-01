@@ -752,7 +752,7 @@ def date_range(
     if closed is not None:
         raise NotImplementedError("closed is currently unsupported.")
 
-    if (start, end, periods, freq).count(None) > 1:
+    if [start, end, periods, freq].count(None) > 1:
         raise ValueError(
             "Of the four parameters: start, end, periods, and freq, exactly "
             "three must be specified"
@@ -800,7 +800,7 @@ def date_range(
         end = (cudf.Scalar(end, dtype=dtype).value.astype("int64"),)
         arr = cp.linspace(start=start, stop=end, num=periods,)
         result = cudf.core.column.as_column(arr).astype("datetime64[ns]")
-        return cudf.DatetimeIndex._from_data({None: result})
+        return cudf.DatetimeIndex._from_data({name: result})
 
     if normalize:
         old_dtype = start.value.dtype
