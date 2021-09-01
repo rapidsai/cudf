@@ -18,6 +18,7 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -107,7 +108,7 @@ std::unique_ptr<cudf::table> unflatten_nested_columns(std::unique_ptr<cudf::tabl
                                                       table_view const& blueprint);
 
 /**
- * @brief Pushdown nulls from a parent mask into a child column, using AND.
+ * @brief Push down nulls from a parent mask into a child column, using bitwise AND.
  *
  * This function will recurse through all struct descendants. It is expected that
  * the size of `parent_null_mask` in bits is the same as `child.size()`
@@ -138,7 +139,9 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
  * @param parent The parent (possibly STRUCT) column whose nulls need to be pushed to its members.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr     Device memory resource used to allocate new device memory.
- * @return std::tuple<cudf::column_view, std::vector<rmm::device_buffer>>
+ * @return A pair of:
+ *         1. column_view with nulls pushed down to child columns, as appropriate.
+ *         2. Supporting device_buffer instances, for any newly constructed null masks.
  */
 std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_parent_nulls(
   column_view const& parent,

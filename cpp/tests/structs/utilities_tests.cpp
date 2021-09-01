@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <structs/utilities.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -26,7 +28,6 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/null_mask.hpp>
-#include <structs/utilities.hpp>
 
 namespace cudf::test {
 
@@ -47,9 +48,7 @@ void flatten_unflatten_compare(table_view const& input_table)
 }
 
 using namespace cudf;
-using iterators::no_nulls;
-using iterators::null_at;
-using iterators::nulls_at;
+using namespace iterators;
 using strings    = strings_column_wrapper;
 using dictionary = dictionary_column_wrapper<std::string>;
 using structs    = structs_column_wrapper;
