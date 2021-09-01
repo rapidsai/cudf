@@ -256,6 +256,9 @@ def set_object_dtypes_from_pa_schema(df, schema):
     # Simple utility to modify cudf DataFrame
     # "object" dtypes to agree with a specific
     # pyarrow schema.
+    #
+    # Note that this utility will NOT allow dtype
+    # casting for cudf-specific list or struct columns
     if schema:
         for name in df.columns:
             if name in schema.names and df[name].dtype == "O":
