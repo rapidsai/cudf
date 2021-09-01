@@ -14,6 +14,8 @@
 # limitations under the License.
 #=============================================================================
 
+# cuCollections doesn't have a version
+
 function(find_and_configure_cucollections)
 
     if(TARGET cuco::cuco)
@@ -21,7 +23,7 @@ function(find_and_configure_cucollections)
     endif()
 
     # Find or install cuCollections
-    CPMFindPackage(NAME   cuco
+    rapids_cpm_find(cuco 0.0.1
         GLOBAL_TARGETS cuco::cuco
         CPM_ARGS
             GITHUB_REPOSITORY PointKernel/cuCollections
