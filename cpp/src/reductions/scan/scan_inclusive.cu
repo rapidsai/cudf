@@ -384,7 +384,33 @@ rmm::device_vector<double> ewm_denominator(column_view const& input, double beta
   return result;
 }
 
-rmm::device_vector<double> ewma_noadjust(column_view const& input, double beta) {
+
+void compute_ewma_adjust(
+  column_view const& input,
+  double beta,
+  mutable_column_view output,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr) 
+{
+  rmm::device_vector<double> denominator = ewm_denominator(input, beta);
+  rmm::device_vector<double> numerator   = ewm_numerator(input, beta);
+
+  thrust::transform(rmm::exec_policy(stream),
+                    numerator.begin(),
+                    numerator.end(),
+                    denominator.begin(),
+                    output.begin<double>(),
+                    thrust::divides<double>());
+
+}
+
+void compute_ewma_noadjust(
+  column_view const& input,
+  double beta,
+  mutable_column_view output,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr) 
+{
   rmm::device_vector<thrust::pair<double, double>> pairs(input.size());
 
   thrust::transform(input.begin<double>(), input.end<double>(), pairs.begin(),  [=] __host__ __device__ (double input) -> thrust::pair<double, double> {
@@ -399,59 +425,33 @@ rmm::device_vector<double> ewma_noadjust(column_view const& input, double beta) 
   });
 
   rmm::device_vector<double> result = compute_recurrence(pairs);
-  return result;
+  // TODO: unnecessary copy
+  thrust::copy(result.begin(), result.end(), output.begin<double>());
 }
 
-std::unique_ptr<column> ewm(column_view const& input,
+std::unique_ptr<column> ewma(column_view const& input,
                             double com,
                             bool adjust,
                             rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(input.type() == cudf::data_type{cudf::type_id::FLOAT64},
-               "Column must be float64 type");
+  CUDF_EXPECTS(cudf::is_floating_point(input.type()),
+               "Column must be floating point type");
 
   double beta = 1.0 - (1.0 / (com + 1.0));
 
   auto output = make_fixed_width_column(cudf::data_type{cudf::type_id::FLOAT64}, input.size());
-  auto output_mutable_view = output->mutable_view();
+  mutable_column_view output_mutable_view = output->mutable_view();
 
-  auto begin = output_mutable_view.begin<double>();
-  auto end   = output_mutable_view.end<double>();
 
   if (adjust) {
-
-  rmm::device_vector<double> denominator = ewm_denominator(input, beta);
-  rmm::device_vector<double> numerator   = ewm_numerator(input, beta);
-
-
-  thrust::transform(rmm::exec_policy(stream),
-                    numerator.begin(),
-                    numerator.end(),
-                    denominator.begin(),
-                    output_mutable_view.begin<double>(),
-                    thrust::divides<double>());
-
-  return output;
+    compute_ewma_adjust(input, beta, output_mutable_view, stream, mr);
   } else {
-    rmm::device_vector<double> output_noadjust = ewma_noadjust(input, beta);
-    thrust::copy(output_noadjust.begin(), output_noadjust.end(), output_mutable_view.begin<double>());
-    return output;
+    compute_ewma_noadjust(input, beta, output_mutable_view, stream, mr);
   }
-
+  return output;
 }
 
-
-std::unique_ptr<column> ewma(
-  column_view const& input, 
-  double com,
-  bool adjust,
-  rmm::cuda_stream_view stream, 
-  rmm::mr::device_memory_resource* mr) 
-{
-  std::unique_ptr<column> result = ewm(input, com, adjust, stream, mr);
-  return result;
-}
 
 
 std::unique_ptr<column> ewmvar(
@@ -509,7 +509,7 @@ std::unique_ptr<column> ewmvar(
 
 
   //return means;
-  return ewm(means.get()[0].view(), com, adjust, stream, mr);
+  return ewma(means.get()[0].view(), com, adjust, stream, mr);
 }
 
 
