@@ -142,7 +142,7 @@ struct EncChunk {
 
   uint32_t* dict_index;  // dictionary index from row index
   uint32_t* decimal_offsets;
-  column_device_view const* leaf_column;
+  orc_column_device_view const* column;
 };
 
 /**
@@ -325,17 +325,6 @@ void EncodeStripeDictionaries(StripeDictionary const* stripes,
                               uint32_t num_stripes,
                               device_2dspan<encoder_chunk_streams> enc_streams,
                               rmm::cuda_stream_view stream);
-
-/**
- * @brief Set leaf column element of EncChunk
- *
- * @param[in] orc_columns Pre-order flattened device array of ORC column views
- * @param[in,out] chunks encoder chunk device array [column][rowgroup]
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- */
-void set_chunk_columns(device_span<orc_column_device_view const> orc_columns,
-                       device_2dspan<EncChunk> chunks,
-                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for compacting chunked column data prior to compression

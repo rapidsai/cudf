@@ -263,25 +263,6 @@ class writer::impl {
                              std::map<uint32_t, size_t> const& decimal_column_sizes);
 
   /**
-   * @brief Encodes the input columns into streams.
-   *
-   * @param orc_table Non-owning view of a cuDF table w/ ORC-related info
-   * @param dict_data Dictionary data memory
-   * @param dict_index Dictionary index memory
-   * @param dec_chunk_sizes Information about size of encoded decimal columns
-   * @param segmentation stripe and rowgroup ranges
-   * @param aligned_rowgroups TODO
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return Encoded data and per-chunk stream descriptors
-   */
-  encoded_data encode_columns(orc_table_view const& orc_table,
-                              string_dictionaries&& dictionaries,
-                              encoder_decimal_info&& dec_chunk_sizes,
-                              file_segmentation const& segmentation,
-                              std::vector<std::vector<rowgroup_rows>> aligned_rowgroups,
-                              orc_streams const& streams);
-
-  /**
    * @brief Returns stripe information after compacting columns' individual data
    * chunks into contiguous data streams.
    *

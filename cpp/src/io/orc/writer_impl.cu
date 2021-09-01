@@ -661,12 +661,13 @@ struct segmented_valid_cnt_input {
   std::vector<size_type> indices;
 };
 
-encoded_data writer::impl::encode_columns(orc_table_view const& orc_table,
-                                          string_dictionaries&& dictionaries,
-                                          encoder_decimal_info&& dec_chunk_sizes,
-                                          file_segmentation const& segmentation,
-                                          std::vector<std::vector<rowgroup_rows>> aligned_rowgroups,
-                                          orc_streams const& streams)
+encoded_data encode_columns(orc_table_view const& orc_table,
+                            string_dictionaries&& dictionaries,
+                            encoder_decimal_info&& dec_chunk_sizes,
+                            file_segmentation const& segmentation,
+                            std::vector<std::vector<rowgroup_rows>> aligned_rowgroups,
+                            orc_streams const& streams,
+                            rmm::cuda_stream_view stream)
 {
   auto const num_columns = orc_table.num_columns();
   hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, segmentation.num_rowgroups(), stream);
@@ -701,6 +702,17 @@ encoded_data writer::impl::encode_columns(orc_table_view const& orc_table,
       }
     }
   }
+  chunks.host_to_device(stream);
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0ul),
+    chunks.count(),
+    [chunks = device_2dspan<gpu::EncChunk>{chunks},
+     cols = device_span<orc_column_device_view const>{orc_table.d_columns}] __device__(auto& idx) {
+      auto const col_idx             = idx / chunks.size().second;
+      auto const rg_idx              = idx % chunks.size().second;
+      chunks[col_idx][rg_idx].column = &cols[col_idx];
+    });
 
   auto validity_check_indices = [&](size_t col_idx) {
     std::vector<size_type> indices;
@@ -806,11 +818,7 @@ encoded_data writer::impl::encode_columns(orc_table_view const& orc_table,
       }
     }
   }
-
-  chunks.host_to_device(stream);
   chunk_streams.host_to_device(stream);
-
-  gpu::set_chunk_columns(orc_table.d_columns, chunks, stream);
 
   if (orc_table.num_string_columns() != 0) {
     auto d_stripe_dict = orc_table.string_column(0).device_stripe_dict();
@@ -1701,7 +1709,8 @@ void writer::impl::write(table_view const& table)
                                  std::move(dec_chunk_sizes),
                                  segmentation,
                                  aligned_rowgroup_bounds,
-                                 streams);
+                                 streams,
+                                 stream);
 
   // Assemble individual disparate column chunks into contiguous data streams
   size_type const num_index_streams = (orc_table.num_columns() + 1);

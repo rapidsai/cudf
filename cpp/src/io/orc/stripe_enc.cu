@@ -617,6 +617,60 @@ inline __device__ void lengths_to_positions(volatile T* vals, uint32_t numvals, 
 static const __device__ __constant__ int32_t kTimeScale[10] = {
   1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
 
+static __device__ void encode_null_mask(orcenc_state_s* s, int t)
+{
+  auto validity_byte = [&] __device__(int row) -> uint8_t& {
+    // valid_buf is a circular buffer where validitiy of 8 rows is stored in each element
+    return s->valid_buf[(row / 8) % encode_block_size];
+  };
+  auto const& column = s->chunk.column->cudf_column;
+
+  while (s->present_out < s->chunk.null_mask_num_rows) {
+    uint32_t present_rows = s->present_rows;  // number of rows read so far
+    uint32_t nrows        =                   // number of rows read in this iteration
+      min(s->chunk.null_mask_num_rows - present_rows,
+          encode_block_size * 8 - (present_rows - (s->present_out & ~7)));
+    if (t * 8 < nrows) {
+      auto const row_in_group = present_rows + t * 8;
+      auto const row          = s->chunk.null_mask_start_row + row_in_group;
+      uint8_t valid           = 0;
+      if (row < column.size()) {
+        if (column.nullable()) {
+          size_type current_valid_offset = row + column.offset();
+          size_type next_valid_offset    = current_valid_offset + min(32, column.size());
+
+          bitmask_type mask = cudf::detail::get_mask_offset_word(
+            column.null_mask(), 0, current_valid_offset, next_valid_offset);
+          valid = 0xff & mask;
+        } else {
+          valid = 0xff;
+        }
+        if (row + 7 > column.size()) { valid = valid & ((1 << (column.size() - row)) - 1); }
+      }
+      // not guaranteed to write to a byte anymore
+      validity_byte(row_in_group) = valid;
+    }
+    __syncthreads();
+    present_rows += nrows;
+    if (!t) { s->present_rows = present_rows; }
+
+    // RLE encode the present stream
+    auto nrows_out = present_rows - s->present_out;  // number of values to encode
+    if (nrows_out > ((present_rows < s->chunk.null_mask_num_rows) ? 130 * 8 : 0)) {
+      uint32_t present_out = s->present_out;
+      if (s->stream.ids[CI_PRESENT] >= 0) {
+        auto const flush      = (present_rows < s->chunk.null_mask_num_rows) ? 0 : 7;
+        auto const nbytes_out = (nrows_out + flush) / 8;
+        nrows_out =
+          ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, present_out / 8, nbytes_out, flush, t) * 8;
+      }
+      __syncthreads();
+      if (!t) { s->present_out = min(present_out + nrows_out, present_rows); }
+    }
+    __syncthreads();
+  }
+}
+
 /**
  * @brief Encode column data
  *
@@ -659,61 +713,10 @@ __global__ void __launch_bounds__(block_size)
     s->strm_pos[CI_DICTIONARY] =
       s->chunk.encoding_kind == DICTIONARY_V2 ? s->stream.lengths[CI_DICTIONARY] : 0;
   }
-
-  auto validity_byte = [&] __device__(int row) -> uint8_t& {
-    // valid_buf is a circular buffer where validitiy of 8 rows is stored in each element
-    return s->valid_buf[(row / 8) % encode_block_size];
-  };
-
   __syncthreads();
-  // Encode valid map
-  while (s->present_out < s->chunk.null_mask_num_rows) {
-    uint32_t present_rows = s->present_rows;  // number of rows read so far
-    uint32_t nrows        =                   // number of rows read in this iteration
-      min(s->chunk.null_mask_num_rows - present_rows,
-          encode_block_size * 8 - (present_rows - (s->present_out & ~7)));
-    if (t * 8 < nrows) {
-      auto const row_in_group = present_rows + t * 8;
-      auto const row          = s->chunk.null_mask_start_row + row_in_group;
-      uint8_t valid           = 0;
-      if (row < s->chunk.leaf_column->size()) {
-        if (s->chunk.leaf_column->nullable()) {
-          size_type current_valid_offset = row + s->chunk.leaf_column->offset();
-          size_type next_valid_offset =
-            current_valid_offset + min(32, s->chunk.leaf_column->size());
-
-          bitmask_type mask = cudf::detail::get_mask_offset_word(
-            s->chunk.leaf_column->null_mask(), 0, current_valid_offset, next_valid_offset);
-          valid = 0xff & mask;
-        } else {
-          valid = 0xff;
-        }
-        if (row + 7 > s->chunk.leaf_column->size()) {
-          valid = valid & ((1 << (s->chunk.leaf_column->size() - row)) - 1);
-        }
-      }
-      // not guaranteed to write to a byte anymore
-      validity_byte(row_in_group) = valid;
-    }
-    __syncthreads();
-    present_rows += nrows;
-    if (!t) { s->present_rows = present_rows; }
-
-    // RLE encode the present stream
-    auto nrows_out = present_rows - s->present_out;  // number of values to encode
-    if (nrows_out > ((present_rows < s->chunk.null_mask_num_rows) ? 130 * 8 : 0)) {
-      uint32_t present_out = s->present_out;
-      if (s->stream.ids[CI_PRESENT] >= 0) {
-        auto const flush      = (present_rows < s->chunk.null_mask_num_rows) ? 0 : 7;
-        auto const nbytes_out = (nrows_out + flush) / 8;
-        nrows_out =
-          ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, present_out / 8, nbytes_out, flush, t) * 8;
-      }
-      __syncthreads();
-      if (!t) { s->present_out = min(present_out + nrows_out, present_rows); }
-    }
-    __syncthreads();
-  }
+  auto const& column = s->chunk.column->cudf_column;
+  // auto const use_pushdown_mask = [&]() { if (chunk.leaf_column.) }();
+  encode_null_mask(s, t);
 
   while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
     // Fetch non-null values
@@ -734,8 +737,8 @@ __global__ void __launch_bounds__(block_size)
       // TODO also check parent pushdown mask
       auto const valid = [&]() {
         if (t >= nrows) return false;
-        if (s->chunk.leaf_column->null_mask() == nullptr) return true;
-        return bit_is_set(s->chunk.leaf_column->null_mask(), row);
+        if (column.null_mask() == nullptr) return true;
+        return bit_is_set(column.null_mask(), row);
       }();
       s->buf.u32[t] = valid ? 1u : 0u;
 
@@ -747,14 +750,14 @@ __global__ void __launch_bounds__(block_size)
         switch (s->chunk.type_kind) {
           case INT:
           case DATE:
-          case FLOAT: s->vals.u32[nz_idx] = s->chunk.leaf_column->element<uint32_t>(row); break;
+          case FLOAT: s->vals.u32[nz_idx] = column.element<uint32_t>(row); break;
           case DOUBLE:
-          case LONG: s->vals.u64[nz_idx] = s->chunk.leaf_column->element<uint64_t>(row); break;
-          case SHORT: s->vals.u32[nz_idx] = s->chunk.leaf_column->element<uint16_t>(row); break;
+          case LONG: s->vals.u64[nz_idx] = column.element<uint64_t>(row); break;
+          case SHORT: s->vals.u32[nz_idx] = column.element<uint16_t>(row); break;
           case BOOLEAN:
-          case BYTE: s->vals.u8[nz_idx] = s->chunk.leaf_column->element<uint8_t>(row); break;
+          case BYTE: s->vals.u8[nz_idx] = column.element<uint8_t>(row); break;
           case TIMESTAMP: {
-            int64_t ts       = s->chunk.leaf_column->element<int64_t>(row);
+            int64_t ts       = column.element<int64_t>(row);
             int32_t ts_scale = kTimeScale[min(s->chunk.scale, 9)];
             int64_t seconds  = ts / ts_scale;
             int64_t nanos    = (ts - seconds * ts_scale);
@@ -791,7 +794,7 @@ __global__ void __launch_bounds__(block_size)
               }
               s->vals.u32[nz_idx] = dict_idx;
             } else {
-              string_view value = s->chunk.leaf_column->element<string_view>(row);
+              string_view value                       = column.element<string_view>(row);
               s->u.strenc.str_data[s->buf.u32[t] - 1] = value.data();
               s->lengths.u32[nz_idx]                  = value.size_bytes();
             }
@@ -800,8 +803,7 @@ __global__ void __launch_bounds__(block_size)
             // Note: can be written in a faster manner, given that all values are equal
           case DECIMAL: s->lengths.u32[nz_idx] = zigzag(s->chunk.scale); break;
           case LIST: {
-            auto const& offsets =
-              s->chunk.leaf_column->child(lists_column_view::offsets_column_index);
+            auto const& offsets = column.child(lists_column_view::offsets_column_index);
             // Compute list length from the offsets
             s->lengths.u32[nz_idx] =
               offsets.element<size_type>(row + 1) - offsets.element<size_type>(row);
@@ -893,9 +895,9 @@ __global__ void __launch_bounds__(block_size)
             break;
           case DECIMAL: {
             if (valid) {
-              uint64_t const zz_val = (s->chunk.leaf_column->type().id() == type_id::DECIMAL32)
-                                        ? zigzag(s->chunk.leaf_column->element<int32_t>(row))
-                                        : zigzag(s->chunk.leaf_column->element<int64_t>(row));
+              uint64_t const zz_val = (column.type().id() == type_id::DECIMAL32)
+                                        ? zigzag(column.element<int32_t>(row))
+                                        : zigzag(column.element<int64_t>(row));
               auto const offset =
                 (row == s->chunk.start_row) ? 0 : s->chunk.decimal_offsets[row - 1];
               StoreVarint(s->stream.data_ptrs[CI_DATA] + offset, zz_val);
@@ -937,8 +939,8 @@ __global__ void __launch_bounds__(block_size)
       streams[col_id][group_id].lengths[t] = s->strm_pos[t];
     if (!s->stream.data_ptrs[t]) {
       streams[col_id][group_id].data_ptrs[t] =
-        static_cast<uint8_t*>(const_cast<void*>(s->chunk.leaf_column->head())) +
-        (s->chunk.leaf_column->offset() + s->chunk.start_row) * s->chunk.dtype_len;
+        static_cast<uint8_t*>(const_cast<void*>(column.head())) +
+        (column.offset() + s->chunk.start_row) * s->chunk.dtype_len;
     }
   }
 }
@@ -1026,16 +1028,6 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
   }
   if (t == 0) { strm_ptr->lengths[cid] = s->strm_pos[cid]; }
-}
-
-__global__ void __launch_bounds__(512)
-  gpu_set_chunk_columns(device_span<orc_column_device_view const> orc_columns,
-                        device_2dspan<EncChunk> chunks)
-{
-  // Set leaf_column member of EncChunk
-  for (size_type i = threadIdx.x; i < chunks.size().second; i += blockDim.x) {
-    chunks[blockIdx.x][i].leaf_column = &orc_columns[blockIdx.x].cudf_column;
-  }
 }
 
 /**
@@ -1244,16 +1236,6 @@ void EncodeStripeDictionaries(StripeDictionary const* stripes,
   dim3 dim_grid(num_string_columns * num_stripes, 2);
   gpuEncodeStringDictionaries<512>
     <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, enc_streams);
-}
-
-void set_chunk_columns(device_span<orc_column_device_view const> orc_columns,
-                       device_2dspan<EncChunk> chunks,
-                       rmm::cuda_stream_view stream)
-{
-  dim3 dim_block(512, 1);
-  dim3 dim_grid(chunks.size().first, 1);
-
-  gpu_set_chunk_columns<<<dim_grid, dim_block, 0, stream.value()>>>(orc_columns, chunks);
 }
 
 void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
