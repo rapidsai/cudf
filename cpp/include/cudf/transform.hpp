@@ -112,7 +112,6 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-
 /**
  * @brief Encode the rows of the given table as integers
  *

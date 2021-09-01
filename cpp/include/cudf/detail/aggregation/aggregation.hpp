@@ -76,9 +76,9 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class ewma_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                          class ewmvar_aggregation const& agg);        
+                                                          class ewmvar_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                          class ewmstd_aggregation const& agg);                                    
+                                                          class ewmstd_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class rank_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
@@ -605,11 +605,14 @@ class row_number_aggregation final : public rolling_aggregation {
  * @brief Derived class for specifying an ewma aggregation
  */
 class ewma_aggregation final : public rolling_aggregation {
-
  public:
   double com;
   bool adjust;
-  ewma_aggregation(double com, bool adjust) : aggregation{EWMA} {this->com=com; this->adjust=adjust;}
+  ewma_aggregation(double com, bool adjust) : aggregation{EWMA}
+  {
+    this->com    = com;
+    this->adjust = adjust;
+  }
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -627,11 +630,14 @@ class ewma_aggregation final : public rolling_aggregation {
  * @brief Derived class for specifying an ewmvar aggregation
  */
 class ewmvar_aggregation final : public rolling_aggregation {
-
  public:
   double com;
   bool adjust;
-  ewmvar_aggregation(double com, bool adjust) : aggregation{EWMVAR} {this->com=com; this->adjust=adjust;}
+  ewmvar_aggregation(double com, bool adjust) : aggregation{EWMVAR}
+  {
+    this->com    = com;
+    this->adjust = adjust;
+  }
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -649,11 +655,14 @@ class ewmvar_aggregation final : public rolling_aggregation {
  * @brief Derived class for specifying an ewmstd aggregation
  */
 class ewmstd_aggregation final : public rolling_aggregation {
-
  public:
   double com;
   bool adjust;
-  ewmstd_aggregation(double com, bool adjust) : aggregation{EWMSTD} {this->com=com; this->adjust=adjust;}
+  ewmstd_aggregation(double com, bool adjust) : aggregation{EWMSTD}
+  {
+    this->com    = com;
+    this->adjust = adjust;
+  }
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -666,7 +675,6 @@ class ewmstd_aggregation final : public rolling_aggregation {
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
-
 
 /**
  * @brief Derived class for specifying a rank aggregation
@@ -1154,7 +1162,6 @@ template <typename Source>
 struct target_type_impl<Source, aggregation::EWMSTD> {
   using type = size_type;
 };
-
 
 // Always use size_type accumulator for RANK
 template <typename Source>

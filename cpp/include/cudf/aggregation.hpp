@@ -297,7 +297,6 @@ std::unique_ptr<Base> make_ewmvar_aggregation(double com, bool adjust);
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_ewmstd_aggregation(double com, bool adjust);
 
-
 /**
  * @brief Factory to create a RANK aggregation
  *
