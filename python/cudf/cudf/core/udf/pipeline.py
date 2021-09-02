@@ -82,26 +82,26 @@ def mask_get(mask, pos):
 
 
 def _define_function(df):
-    
-    num_vars = len(df.dtypes)
-    
+        
     start = "def _kernel(retval, "
     
-    sig = ", ".join(["input_col_" + str(i) for i in range(num_vars)])
+    sig = ", ".join(["input_col_" + str(i) for i in range(len(df.columns))])
     start += (sig + "):\n")
         
     start += "\ti = cuda.grid(1)\n"
     start += "\tret_data_arr, ret_mask_arr = retval\n"
         
-        
     fargs = []
-    for i in range(num_vars):
+    for i, col in enumerate(df._data.values()):
         ii = str(i)
         start += "\td_"+ii+","+"m_"+ii+"=input_col_"+ii+"\n"
         arg = "masked_"+ii
-        start += "\t"+arg+"="+"Masked("+"d_"+ii+"[i]"+","+"mask_get(m_"+ii+","+"i)"+")\n"
+        if col.mask is not None:
+            start += "\t"+arg+"="+"Masked("+"d_"+ii+"[i]"+","+"mask_get(m_"+ii+","+"i)"+")\n"
+        else:
+            start += "\t"+arg+"="+"Masked("+"d_"+ii+"[i]"+","+"True"+")\n"
         fargs.append(arg)
-        
+
     fargs = "(" + ",".join(fargs) + ")\n"
     start += "\tret = f_"+fargs+"\n"
     
@@ -124,20 +124,17 @@ def udf_pipeline(df, f):
     exec(_define_function(df), {'f_': f_, 'cuda': cuda, "Masked": Masked, "mask_get": mask_get},  lcl)
     _kernel = lcl['_kernel']
     # compile
-    breakpoint()
     kernel = cuda.jit(sig)(_kernel)
     ans_col = cupy.empty(len(df), dtype=retty)
     ans_mask = cudf.core.column.column_empty(len(df), dtype='bool')
-    
     launch_args = [(ans_col, ans_mask)]
     for col in df.columns:
         data = df[col]._column.data
         mask = df[col]._column.mask
         if mask is None:
-            # FIXME - this should work if there isnt a mask
-            mask = bools_to_mask(cudf.core.column.as_column(cupy.ones(len(df), dtype='bool')))
+            mask = cudf.core.buffer.Buffer()
         launch_args.append((data, mask))
 
-    kernel.forall(len(df))(*launch_args, len(df))
+    kernel[1, len(df)](*launch_args)
     result = cudf.Series(ans_col).set_mask(bools_to_mask(ans_mask))
     return result
