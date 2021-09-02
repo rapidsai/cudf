@@ -187,7 +187,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     # update the decimal precision of each column
     if meta is not None:
-        for col, col_meta in zip(df._data.names, meta["columns"]):
+        for col, col_meta in zip(column_names, meta["columns"]):
             if isinstance(df._data[col].dtype, cudf.Decimal64Dtype):
                 df._data[col].dtype.precision = (
                     col_meta["metadata"]["precision"]
