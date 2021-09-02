@@ -623,6 +623,14 @@ class ewma_aggregation final : public rolling_aggregation {
   {
     return collector.visit(col_type, *this);
   }
+  bool is_equal(aggregation const& _other) const override
+  {
+    if (!this->aggregation::is_equal(_other)) { return false; }
+    auto const& other = dynamic_cast<ewma_aggregation const&>(_other);
+    return this->com == other.com and this->adjust == other.adjust;
+  }
+
+
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
@@ -648,6 +656,12 @@ class ewmvar_aggregation final : public rolling_aggregation {
   {
     return collector.visit(col_type, *this);
   }
+  bool is_equal(aggregation const& _other) const override
+  {
+    if (!this->aggregation::is_equal(_other)) { return false; }
+    auto const& other = dynamic_cast<ewmvar_aggregation const&>(_other);
+    return this->com == other.com and this->adjust == other.adjust;
+  }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
@@ -672,6 +686,12 @@ class ewmstd_aggregation final : public rolling_aggregation {
     data_type col_type, simple_aggregations_collector& collector) const override
   {
     return collector.visit(col_type, *this);
+  }
+  bool is_equal(aggregation const& _other) const override
+  {
+    if (!this->aggregation::is_equal(_other)) { return false; }
+    auto const& other = dynamic_cast<ewmstd_aggregation const&>(_other);
+    return this->com == other.com and this->adjust == other.adjust;
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
