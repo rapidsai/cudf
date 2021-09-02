@@ -904,7 +904,7 @@ Read the file with ``cudf.read_csv``
 
 See Also
 --------
-cudf.to_csv
+cudf.io.csv.to_csv
 """.format(
     remote_data_sources=_docstring_remote_sources
 )

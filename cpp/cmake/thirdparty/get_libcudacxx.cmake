@@ -14,16 +14,18 @@
 # limitations under the License.
 #=============================================================================
 
-# Jitify doesn't have a version :/
+function(find_and_configure_libcudacxx VERSION)
+    rapids_cpm_find(libcudacxx ${VERSION}
+        GIT_REPOSITORY      https://gitlab-master.nvidia.com/nvhpc/libcudacxx.git
+        GIT_TAG             staging/1.6.0
+        GIT_SHALLOW         TRUE
+        DOWNLOAD_ONLY       TRUE
+    )
 
-function(find_and_configure_jitify)
-    CPMFindPackage(NAME     jitify
-            VERSION         2.0.0
-            GIT_REPOSITORY  https://github.com/rapidsai/jitify.git
-            GIT_TAG         cudf_0.19
-            GIT_SHALLOW     TRUE
-            DOWNLOAD_ONLY   TRUE)
-    set(JITIFY_INCLUDE_DIR "${jitify_SOURCE_DIR}" PARENT_SCOPE)
+    set(LIBCUDACXX_INCLUDE_DIR "${libcudacxx_SOURCE_DIR}/include" PARENT_SCOPE)
+    set(LIBCXX_INCLUDE_DIR "${libcudacxx_SOURCE_DIR}/libcxx/include" PARENT_SCOPE)
 endfunction()
 
-find_and_configure_jitify()
+set(CUDF_MIN_VERSION_libcudacxx 1.4.0)
+
+find_and_configure_libcudacxx(${CUDF_MIN_VERSION_libcudacxx})
