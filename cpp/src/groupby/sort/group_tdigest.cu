@@ -234,14 +234,16 @@ __global__ void generate_cluster_limits_kernel(int delta_,
   double const delta        = static_cast<double>(delta_);
   double const delta_norm   = delta / (2.0 * M_PI);
   double const total_weight = total_weight_[tid];
+  group_num_clusters[tid]   = 0;
+  // a group with nothing in it.
+  if (total_weight <= 0) { return; }
 
   // start each group of clusters at the nearest delta boundary.
   double* cluster_wl = group_cluster_wl + (tid * delta_);
 
-  double next_limit       = -1.0;
-  double cur_limit        = 0.0;
-  double cur_weight       = 0.0;
-  group_num_clusters[tid] = 0;
+  double next_limit = -1.0;
+  double cur_limit  = 0.0;
+  double cur_weight = 0.0;
   while (1) {
     // compute the weight we will be at just before closing off the current
     // cluster (because adding the next value will cross the current limit).
@@ -366,6 +368,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
   size_type total_inner_size = thrust::reduce(rmm::exec_policy(stream),
                                               group_num_clusters.begin<size_type>(),
                                               group_num_clusters.end<size_type>());
+  if (total_inner_size == 0) { return cudf::detail::make_empty_tdigest_column(stream, mr); }
   std::vector<std::unique_ptr<column>> children;
   // mean
   children.push_back(cudf::make_fixed_width_column(
@@ -503,6 +506,8 @@ std::unique_ptr<column> group_tdigest(column_view const& col,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
+  if (col.size() == 0) { return cudf::detail::make_empty_tdigest_column(stream, mr); }
+
   return cudf::type_dispatcher(col.type(),
                                typed_group_tdigest{},
                                col,
@@ -524,6 +529,10 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   cudf::detail::check_is_valid_tdigest_column(input);
+
+  if (num_groups == 0 || input.size() == 0) {
+    return cudf::detail::make_empty_tdigest_column(stream, mr);
+  }
 
   lists_column_view lcv(input);
   auto data = lcv.get_sliced_child(stream);

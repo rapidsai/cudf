@@ -42,5 +42,19 @@ constexpr size_type tdigest_weight_column_index = 1;
  */
 void check_is_valid_tdigest_column(column_view const& col);
 
+/**
+ * @brief Create an empty tdigest column.
+ *
+ * An empty tdigest column contains a single row of length 0
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ *
+ * @returns An empty tdigest column.
+ */
+std::unique_ptr<column> make_empty_tdigest_column(
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 }  // namespace detail
 }  // namespace cudf
