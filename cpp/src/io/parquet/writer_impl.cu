@@ -1285,7 +1285,8 @@ void writer::impl::write(table_view const& table)
         num_pages += ck->num_pages;
         pages_in_batch += ck->num_pages;
         rowgroup_size += ck->bfr_size;
-        ck->compressed_size = ck->page_headers_size + max_page_comp_data_size * ck->num_pages;
+        ck->compressed_size =
+          ck->ck_stat_size + ck->page_headers_size + max_page_comp_data_size * ck->num_pages;
         comp_rowgroup_size += ck->compressed_size;
         max_chunk_bfr_size =
           std::max(max_chunk_bfr_size, (size_t)std::max(ck->bfr_size, ck->compressed_size));

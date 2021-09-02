@@ -423,7 +423,6 @@ __global__ void __launch_bounds__(128)
       }
       ck_g.num_pages          = num_pages;
       ck_g.bfr_size           = page_offset;
-      ck_g.compressed_size    = comp_page_offset;
       ck_g.page_headers_size  = page_headers_size;
       ck_g.max_page_data_size = max_page_data_size;
       pagestats_g.start_chunk = ck_g.first_page + ck_g.use_dictionary;  // Exclude dictionary
