@@ -312,8 +312,8 @@ struct add_calendrical_months_functor {
                       months_column.begin<int16_t>(),
                       output.begin<Timestamp>(),
                       [] __device__(auto& timestamp, auto& months) {
-                        return add_calendrical_months_with_scale_back<Timestamp, int16_t>(timestamp,
-                                                                                          months);
+                        return add_calendrical_months_with_scale_back(
+                          timestamp, cuda::std::chrono::months{months});
                       });
   }
 };
