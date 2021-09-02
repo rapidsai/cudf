@@ -1021,6 +1021,10 @@ class GroupBy(Serializable):
         result.index = self.obj.index
         return result
 
+    def correlation(self):
+        """
+        """
+
 
 class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
     """

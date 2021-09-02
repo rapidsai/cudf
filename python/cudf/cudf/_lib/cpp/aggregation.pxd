@@ -102,3 +102,5 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         udf_type type,
         string user_defined_aggregator,
         data_type output_type) except +
+
+    cdef unique_ptr[T] make_correlation_aggregation[T]() except +
