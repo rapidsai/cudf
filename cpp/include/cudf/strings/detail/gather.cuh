@@ -339,9 +339,7 @@ std::unique_ptr<cudf::column> gather(
                              std::move(out_offsets_column),
                              std::move(out_chars_column),
                              0,
-                             rmm::device_buffer{0, stream, mr},
-                             stream,
-                             mr);
+                             rmm::device_buffer{});
 }
 
 /**

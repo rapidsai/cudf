@@ -166,9 +166,7 @@ struct column_to_strings_fn {
                                std::move(children.first),
                                std::move(children.second),
                                column_v.null_count(),
-                               cudf::detail::copy_bitmask(column_v, stream_, mr_),
-                               stream_,
-                               mr_);
+                               cudf::detail::copy_bitmask(column_v, stream_, mr_));
   }
 
   // ints:

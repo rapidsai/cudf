@@ -1197,4 +1197,46 @@ TEST_F(OrcWriterTest, Decimal32)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col64, result.tbl->view().column(0));
 }
 
+TEST_F(OrcStatisticsTest, Overflow)
+{
+  int num_rows       = 10;
+  auto too_large_seq = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i * (std::numeric_limits<int64_t>::max() / 20); });
+  auto too_small_seq = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i * (std::numeric_limits<int64_t>::min() / 20); });
+  auto not_too_large_seq = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i * (std::numeric_limits<int64_t>::max() / 200); });
+  auto not_too_small_seq = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i * (std::numeric_limits<int64_t>::min() / 200); });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+
+  column_wrapper<int64_t, typename decltype(too_large_seq)::value_type> col1(
+    too_large_seq, too_large_seq + num_rows, validity);
+  column_wrapper<int64_t, typename decltype(too_small_seq)::value_type> col2(
+    too_small_seq, too_small_seq + num_rows, validity);
+  column_wrapper<int64_t, typename decltype(not_too_large_seq)::value_type> col3(
+    not_too_large_seq, not_too_large_seq + num_rows, validity);
+  column_wrapper<int64_t, typename decltype(not_too_small_seq)::value_type> col4(
+    not_too_small_seq, not_too_small_seq + num_rows, validity);
+  table_view tbl({col1, col2, col3, col4});
+
+  auto filepath = temp_env->get_temp_filepath("OrcStatsMerge.orc");
+
+  cudf_io::orc_writer_options out_opts =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, tbl);
+  cudf_io::write_orc(out_opts);
+
+  auto const stats = cudf_io::read_parsed_orc_statistics(cudf_io::source_info{filepath});
+
+  auto check_sum_exist = [&](int idx, bool expected) {
+    auto const& s  = stats.file_stats[idx];
+    auto const& ts = std::get<cudf_io::integer_statistics>(s.type_specific_stats);
+    EXPECT_EQ(ts.sum.has_value(), expected);
+  };
+  check_sum_exist(1, false);
+  check_sum_exist(2, false);
+  check_sum_exist(3, true);
+  check_sum_exist(4, true);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
