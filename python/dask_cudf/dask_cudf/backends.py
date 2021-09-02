@@ -259,7 +259,7 @@ try:
             percentile_dispatch as percentile_lookup,
         )
 
-    @percentile_lookup.register((cudf.Series, cp.ndarray, cudf.Index))
+    @percentile_lookup.register((cudf.Series, cp.ndarray, cudf.BaseIndex))
     def percentile_cudf(a, q, interpolation="linear"):
         # Cudf dispatch to the equivalent of `np.percentile`:
         # https://numpy.org/doc/stable/reference/generated/numpy.percentile.html
