@@ -66,7 +66,7 @@ static void BM_join(state_type& state, Join JoinFunc)
   // Generate build and probe tables
   cudf::test::UniformRandomGenerator<cudf::size_type> rand_gen(0, build_table_size);
   auto build_random_null_mask = [&rand_gen](int size) {
-    // roughly 25% nulls
+    // roughly 75% nulls
     auto validity = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
       [&rand_gen](auto i) { return (rand_gen.generate() & 3) == 0; });
