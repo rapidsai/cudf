@@ -25,7 +25,6 @@ class _Resampler:
     def agg(self, func):
         result = super().agg(func)
 
-        breakpoint()
         result = result.join(
             cudf.DataFrame(
                 index=cudf.Index(
