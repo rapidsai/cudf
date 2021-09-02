@@ -752,7 +752,7 @@ def date_range(
     if closed is not None:
         raise NotImplementedError("closed is currently unsupported.")
 
-    if [start, end, periods, freq].count(None) > 1:
+    if (start, end, periods, freq).count(None) > 1:
         raise ValueError(
             "Of the four parameters: start, end, periods, and freq, exactly "
             "three must be specified"
@@ -820,25 +820,22 @@ def date_range(
             # end == start, return exactly 1 timestamp (start)
             periods = 1
 
+    # The code logic below assumes `start`, `periods`, `offset` are normalized
+    # as `cudf.Scalar`, `int` and `pd.DateOffset`
+
     if normalize:
         old_dtype = start.value.dtype
         start = cudf.Scalar(
             start.value.astype("datetime64[D]").astype(old_dtype)
         )
 
-    # The code logic below assumes `start`, `periods`, `offset` is defined.
-
     if "months" in offset.kwds or "years" in offset.kwds:
         # If `offset` is non-fixed frequency, resort to libcudf.
         res = libcudf.datetime.date_range(start.device_value, periods, offset)
     else:
+        end = (pd.Timestamp(start.value) + (periods - 1) * offset).to_numpy()
         # If `offset` is fixed frequency, we treat both timestamps as integers
         # and evenly divide the given integer range.
-        end = (
-            (pd.Timestamp(start.value) + (periods - 1) * offset).to_numpy()
-            if end is None
-            else end
-        )
         arr = cp.linspace(
             start=start.value.astype("int64"),
             stop=end.astype("int64"),
