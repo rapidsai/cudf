@@ -71,9 +71,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
                              std::move(offsets_column),
                              std::move(chars_column),
                              UNKNOWN_NULL_COUNT,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail
