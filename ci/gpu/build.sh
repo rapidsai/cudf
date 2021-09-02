@@ -84,7 +84,7 @@ gpuci_mamba_retry install -y \
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 # gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
-# gpuci_mamba_retry install -y "your-pkg=1.0.0"
+gpuci_mamba_retry install -y "pandas=1.3.2"
 
 
 gpuci_logger "Check compiler versions"
