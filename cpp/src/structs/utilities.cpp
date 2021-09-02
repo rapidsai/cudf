@@ -341,6 +341,17 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
   }
 }
 
+/**
+ * @copydoc cudf::structs::detail::contains_list
+ */
+bool contains_list(column_view const& col)
+{
+  return col.type().id() == type_id::LIST ||
+         std::any_of(col.child_begin(), col.child_end(), [](auto const& child) {
+           return contains_list(child);
+         });
+}
+
 std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_parent_nulls(
   column_view const& parent, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {

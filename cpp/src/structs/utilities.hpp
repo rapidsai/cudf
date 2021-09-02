@@ -126,6 +126,14 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
                               rmm::mr::device_memory_resource* mr);
 
 /**
+ * @brief Indicates if the column or any of its child columns are list columns.
+ *
+ * @param col column to check for lists.
+ * @return true if the column or any of it's children is a list, false otherwise.
+ */
+bool contains_list(column_view const& col);
+
+/**
  * @brief Push down nulls from a parent mask into a child column, using bitwise AND.
  *
  * This function constructs a new column_view instance equivalent to the argument column_view,

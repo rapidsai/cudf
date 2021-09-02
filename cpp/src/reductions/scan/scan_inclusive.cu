@@ -30,7 +30,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/logical.h>
+#include <structs/utilities.hpp>
+
 #include <thrust/scan.h>
 
 namespace cudf {
@@ -196,45 +197,25 @@ struct scan_dispatcher {
   }
 };
 
-template <bool has_nested_nulls>
-std::unique_ptr<column> generate_dense_ranks(column_view const& order_by,
+template <bool has_nulls>
+std::unique_ptr<column> generate_dense_ranks(table_view const& order_by,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  auto const flat_order =
-    order_by.type().id() == type_id::STRUCT
-      ? table_view{std::vector<column_view>{order_by.child_begin(), order_by.child_end()}}
-      : table_view{{order_by}};
-  auto const d_flat_order = table_device_view::create(flat_order, stream);
-  row_equality_comparator<has_nested_nulls> comparator(*d_flat_order, *d_flat_order, true);
+  auto const flattener = cudf::structs::detail::flatten_nested_columns(
+    order_by, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
+  auto const d_flat_order = table_device_view::create(std::get<0>(flattener), stream);
+  row_equality_comparator<has_nulls> comparator(*d_flat_order, *d_flat_order, true);
   auto ranks = make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, order_by.num_rows(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
 
-  if (order_by.type().id() == type_id::STRUCT && order_by.has_nulls()) {
-    auto const d_col_order = column_device_view::create(order_by, stream);
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<size_type>(),
-                     mutable_ranks.end<size_type>(),
-                     [comparator, d_col_order = *d_col_order] __device__(size_type row_index) {
-                       if (row_index == 0) { return true; }
-                       bool const lhs_is_null{d_col_order.is_null(row_index)};
-                       bool const rhs_is_null{d_col_order.is_null(row_index - 1)};
-                       if (lhs_is_null && rhs_is_null) {
-                         return false;
-                       } else if (lhs_is_null != rhs_is_null) {
-                         return true;
-                       }
-                       return !comparator(row_index, row_index - 1);
-                     });
-  } else {
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<size_type>(),
-                     mutable_ranks.end<size_type>(),
-                     [comparator] __device__(size_type row_index) {
-                       return row_index == 0 || !comparator(row_index, row_index - 1);
-                     });
-  }
+  thrust::tabulate(rmm::exec_policy(stream),
+                   mutable_ranks.begin<size_type>(),
+                   mutable_ranks.end<size_type>(),
+                   [comparator] __device__(size_type row_index) {
+                     return row_index == 0 || !comparator(row_index, row_index - 1);
+                   });
 
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          mutable_ranks.begin<size_type>(),
@@ -243,46 +224,26 @@ std::unique_ptr<column> generate_dense_ranks(column_view const& order_by,
   return ranks;
 }
 
-template <bool has_nested_nulls>
-std::unique_ptr<column> generate_ranks(column_view const& order_by,
+template <bool has_nulls>
+std::unique_ptr<column> generate_ranks(table_view const& order_by,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto const flat_order =
-    order_by.type().id() == type_id::STRUCT
-      ? table_view{std::vector<column_view>{order_by.child_begin(), order_by.child_end()}}
-      : table_view{{order_by}};
-  auto const d_flat_order = table_device_view::create(flat_order, stream);
-  row_equality_comparator<has_nested_nulls> comparator(*d_flat_order, *d_flat_order, true);
+  auto const flattener = cudf::structs::detail::flatten_nested_columns(
+    order_by, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
+  auto const d_flat_order = table_device_view::create(std::get<0>(flattener), stream);
+  row_equality_comparator<has_nulls> comparator(*d_flat_order, *d_flat_order, true);
   auto ranks = make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, order_by.num_rows(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
 
-  if (order_by.type().id() == type_id::STRUCT && order_by.has_nulls()) {
-    auto const d_col_order = column_device_view::create(order_by, stream);
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<size_type>(),
-                     mutable_ranks.end<size_type>(),
-                     [comparator, d_col_order = *d_col_order] __device__(size_type row_index) {
-                       if (row_index == 0) { return 1; }
-                       bool const lhs_is_null{d_col_order.is_null(row_index)};
-                       bool const rhs_is_null{d_col_order.is_null(row_index - 1)};
-                       if (lhs_is_null and rhs_is_null) {
-                         return 0;
-                       } else if (lhs_is_null != rhs_is_null) {
-                         return row_index + 1;
-                       }
-                       return comparator(row_index, row_index - 1) ? 0 : row_index + 1;
-                     });
-  } else {
-    thrust::tabulate(
-      rmm::exec_policy(stream),
-      mutable_ranks.begin<size_type>(),
-      mutable_ranks.end<size_type>(),
-      [comparator] __device__(size_type row_index) {
-        return row_index != 0 && comparator(row_index, row_index - 1) ? 0 : row_index + 1;
-      });
-  }
+  thrust::tabulate(rmm::exec_policy(stream),
+                   mutable_ranks.begin<size_type>(),
+                   mutable_ranks.end<size_type>(),
+                   [comparator] __device__(size_type row_index) {
+                     return row_index != 0 && comparator(row_index, row_index - 1) ? 0
+                                                                                   : row_index + 1;
+                   });
 
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          mutable_ranks.begin<size_type>(),
@@ -298,36 +259,28 @@ std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(order_by.type().id() != type_id::LIST, "Unsupported list type in dense_rank scan.");
-  CUDF_EXPECTS(std::none_of(order_by.child_begin(),
-                            order_by.child_end(),
-                            [](auto const& col) { return is_nested(col.type()); }),
-               "Unsupported nested columns in dense_rank scan.");
-  if ((order_by.type().id() == type_id::STRUCT &&
-       has_nested_nulls(
-         table_view{std::vector<column_view>{order_by.child_begin(), order_by.child_end()}})) ||
-      (order_by.type().id() != type_id::STRUCT && order_by.has_nulls())) {
-    return generate_dense_ranks<true>(order_by, stream, mr);
+  CUDF_EXPECTS(!cudf::structs::detail::contains_list(order_by),
+               "Unsupported list type in dense_rank scan.");
+  auto const superimposed = structs::detail::superimpose_parent_nulls(order_by, stream, mr);
+  table_view const order_table{{std::get<0>(superimposed)}};
+  if (has_nested_nulls(table_view{{order_by}})) {
+    return generate_dense_ranks<true>(order_table, stream, mr);
   }
-  return generate_dense_ranks<false>(order_by, stream, mr);
+  return generate_dense_ranks<false>(order_table, stream, mr);
 }
 
 std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(order_by.type().id() != type_id::LIST, "Unsupported list type in rank scan.");
-  CUDF_EXPECTS(std::none_of(order_by.child_begin(),
-                            order_by.child_end(),
-                            [](auto const& col) { return is_nested(col.type()); }),
-               "Unsupported nested columns in rank scan.");
-  if ((order_by.type().id() == type_id::STRUCT &&
-       has_nested_nulls(
-         table_view{std::vector<column_view>{order_by.child_begin(), order_by.child_end()}})) ||
-      (order_by.type().id() != type_id::STRUCT && order_by.has_nulls())) {
-    return generate_ranks<true>(order_by, stream, mr);
+  CUDF_EXPECTS(!cudf::structs::detail::contains_list(order_by),
+               "Unsupported list type in rank scan.");
+  auto const superimposed = structs::detail::superimpose_parent_nulls(order_by, stream, mr);
+  table_view const order_table{{std::get<0>(superimposed)}};
+  if (has_nested_nulls(table_view{{order_by}})) {
+    return generate_ranks<true>(order_table, stream, mr);
   }
-  return generate_ranks<false>(order_by, stream, mr);
+  return generate_ranks<false>(order_table, stream, mr);
 }
 
 std::unique_ptr<column> scan_inclusive(
