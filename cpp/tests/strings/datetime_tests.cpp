@@ -155,6 +155,118 @@ TEST_F(StringsDatetimeTest, ToTimestampTimezone)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
 }
 
+TEST_F(StringsDatetimeTest, ToTimestampSingleSpecifier)
+{
+  cudf::test::strings_column_wrapper strings{"12", "10", "09", "05"};
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::to_timestamps(
+    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, "%d");
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> expected_days{
+    11, 9, 8, 4};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_days);
+
+  results = cudf::strings::to_timestamps(
+    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, "%m");
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> expected_months{
+    334, 273, 243, 120};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_months);
+
+  results = cudf::strings::is_timestamp(strings_view, "%m");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results,
+                                 cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 1});
+}
+
+TEST_F(StringsDatetimeTest, ToTimestampVariableFractions)
+{
+  cudf::test::strings_column_wrapper strings{"01:02:03.000001000",
+                                             "01:02:03.000001",
+                                             "01:02:03.1",
+                                             "01:02:03.01",
+                                             "01:02:03.0098700",
+                                             "01:02:03.0023456"};
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::to_timestamps(
+    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS}, "%H:%M:%S.%9f");
+  auto durations =
+    cudf::cast(results->view(), cudf::data_type{cudf::type_id::DURATION_NANOSECONDS});
+
+  cudf::test::fixed_width_column_wrapper<cudf::duration_ns> expected{
+    cudf::duration_ns{3723000001000},
+    cudf::duration_ns{3723000001000},
+    cudf::duration_ns{3723100000000},
+    cudf::duration_ns{3723010000000},
+    cudf::duration_ns{3723009870000},
+    cudf::duration_ns{3723002345600}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*durations, expected);
+
+  results = cudf::strings::is_timestamp(strings_view, "%H:%M:%S.%f");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results,
+                                 cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 1, 1});
+}
+
+TEST_F(StringsDatetimeTest, ToTimestampYear)
+{
+  cudf::test::strings_column_wrapper strings{
+    "28/02/74", "17/07/68", "20/03/19", "29/02/20", "07/02/69"};
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::to_timestamps(
+    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, "%d/%m/%y");
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> expected{
+    1519, 35992, 17975, 18321, -328};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = cudf::strings::is_timestamp(strings_view, "%d/%m/%y");
+  cudf::test::fixed_width_column_wrapper<bool> is_expected({1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
+}
+
+TEST_F(StringsDatetimeTest, ToTimestampSingleDigits)
+{
+  cudf::test::strings_column_wrapper strings{"1974-2-28 01:23:45.987000123",
+                                             "2019-7-17 2:34:56.001234567",
+                                             "2019-3-20 12:34:56.100100100",
+                                             "2020-02-2 00:00:00.555777999",
+                                             "1969-12-1 00:00:01.000055000",
+                                             "1944-07-21 11:15:09.333444000"};
+  auto strings_view = cudf::strings_column_view(strings);
+
+  auto results = cudf::strings::to_timestamps(
+    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS}, "%Y-%m-%d %H:%M:%S.%9f");
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> expected_ns{
+    131246625987000123,
+    1563330896001234567,
+    1553085296100100100,
+    1580601600555777999,
+    -2678398999945000,
+    -803047490666556000};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_ns);
+
+  results = cudf::strings::is_timestamp(strings_view, "%Y-%m-%d %H:%M:%S.%6f");
+  cudf::test::fixed_width_column_wrapper<bool> is_expected({1, 1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
+}
+
+TEST_F(StringsDatetimeTest, IsTimestamp)
+{
+  cudf::test::strings_column_wrapper strings{"2020-10-07 13:02:03 1PM +0130",
+                                             "2020:10:07 01-02-03 1AM +0130",
+                                             "2020-10-7 11:02:03 11AM -1025",
+                                             "2020-13-07 01:02:03 1AM +0000",
+                                             "2020-10-32 01:32:03 1AM +0000",
+                                             "2020-10-07 25:02:03 1AM +0000",
+                                             "2020-10-07 01:62:03 1AM +0000",
+                                             "2020-10-07 01:02:63 1AM +0000",
+                                             "2020-02-29 01:32:03 1AM +0000",
+                                             "2020-02-30 01:32:03 01AM +0000",
+                                             "2020-00-31 01:32:03 1AM +0000",
+                                             "2020-02-00 02:32:03 2AM +0000",
+                                             "2020-2-9 9:12:13 9AM +1111"};
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::is_timestamp(strings_view, "%Y-%m-%d %H:%M:%S %I%p %z");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *results, cudf::test::fixed_width_column_wrapper<bool>{1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1});
+}
+
 TEST_F(StringsDatetimeTest, FromTimestamp)
 {
   std::vector<cudf::timestamp_s::rep> h_timestamps{
@@ -464,89 +576,4 @@ TEST_F(StringsDatetimeTest, Errors)
     1530705600};
   EXPECT_THROW(cudf::strings::from_timestamps(timestamps, ""), cudf::logic_error);
   EXPECT_THROW(cudf::strings::from_timestamps(timestamps, "%A %B", view), cudf::logic_error);
-}
-
-TEST_F(StringsDatetimeTest, ToTimestampSingleSpecifier)
-{
-  cudf::test::strings_column_wrapper strings{"12", "10", "09", "05"};
-  auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::to_timestamps(
-    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, "%d");
-  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> expected_days{
-    11, 9, 8, 4};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_days);
-
-  results = cudf::strings::to_timestamps(
-    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, "%m");
-  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> expected_months{
-    334, 273, 243, 120};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_months);
-
-  results = cudf::strings::is_timestamp(strings_view, "%m");
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results,
-                                 cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 1});
-}
-
-TEST_F(StringsDatetimeTest, ToTimestampVariableFractions)
-{
-  cudf::test::strings_column_wrapper strings{"01:02:03.000001000",
-                                             "01:02:03.000001",
-                                             "01:02:03.1",
-                                             "01:02:03.01",
-                                             "01:02:03.0098700",
-                                             "01:02:03.0023456"};
-  auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::to_timestamps(
-    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS}, "%H:%M:%S.%9f");
-  auto durations =
-    cudf::cast(results->view(), cudf::data_type{cudf::type_id::DURATION_NANOSECONDS});
-
-  cudf::test::fixed_width_column_wrapper<cudf::duration_ns> expected{
-    cudf::duration_ns{3723000001000},
-    cudf::duration_ns{3723000001000},
-    cudf::duration_ns{3723100000000},
-    cudf::duration_ns{3723010000000},
-    cudf::duration_ns{3723009870000},
-    cudf::duration_ns{3723002345600}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*durations, expected);
-
-  results = cudf::strings::is_timestamp(strings_view, "%H:%M:%S.%f");
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results,
-                                 cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 1, 1});
-}
-
-TEST_F(StringsDatetimeTest, IsTimestamp)
-{
-  cudf::test::strings_column_wrapper strings{"2020-10-07 01:02:03",
-                                             "2020:10:07 01-02-03",
-                                             "2020-10-7 01:02:03",
-                                             "2020-13-07 01:02:03",
-                                             "2020-10-32 01:32:03",
-                                             "2020-10-07 25:02:03",
-                                             "2020-10-07 01:62:03",
-                                             "2020-10-07 01:02:63",
-                                             "2020-02-29 01:32:03",
-                                             "2020-02-30 01:32:03",
-                                             "2020-00-31 01:32:03",
-                                             "2020-02-00 01:32:03"};
-  auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::is_timestamp(strings_view, "%Y-%m-%d %H:%M:%S");
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    *results, cudf::test::fixed_width_column_wrapper<bool>{1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0});
-}
-
-TEST_F(StringsDatetimeTest, ToTimestampYear)
-{
-  cudf::test::strings_column_wrapper strings{
-    "28/02/74", "17/07/68", "20/03/19", "29/02/20", "07/02/69"};
-  auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::to_timestamps(
-    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, "%d/%m/%y");
-  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> expected{
-    1519, 35992, 17975, 18321, -328};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-
-  results = cudf::strings::is_timestamp(strings_view, "%d/%m/%y");
-  cudf::test::fixed_width_column_wrapper<bool> is_expected({1, 1, 1, 1, 1});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
 }

@@ -160,6 +160,26 @@ struct format_compiler {
 };
 
 /**
+ * @brief Specialized function to return the value reading upto the specified
+ * bytes or until an invalid character is encountered.
+ *
+ * @param str Beginning of characters to read.
+ * @param bytes Number of bytes in str to read.
+ * @return Integer value of valid characters read and how bytes were not read.
+ */
+__device__ thrust::pair<int32_t, size_type> str2int2(const char* str, size_type bytes)
+{
+  // const char* ptr = str;
+  int32_t value = 0;
+  while (bytes-- > 0) {
+    char chr = *str++;
+    if (chr < '0' || chr > '9') break;
+    value = (value * 10) + static_cast<int32_t>(chr - '0');
+  }
+  return thrust::make_pair(value, bytes + 1);
+}
+
+/**
  * @brief This parses date/time characters into a timestamp integer
  *
  * @tparam T cudf::timestamp type
@@ -168,35 +188,22 @@ template <typename T>
 struct parse_datetime {
   column_device_view const d_strings;
   device_span<format_item const> const d_format_items;
-  int8_t subsecond_precision;
+  int8_t const subsecond_precision;
 
   /**
    * @brief Return power of ten value given an exponent.
    *
    * @return `1x10^exponent` for `0 <= exponent <= 9`
    */
-  __device__ constexpr int64_t power_of_ten(int32_t exponent)
+  __device__ constexpr int64_t power_of_ten(int32_t exponent) const
   {
     constexpr int64_t powers_of_ten[] = {
       1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
     return powers_of_ten[exponent];
   }
 
-  //
-  __device__ int32_t str2int(const char* str, size_type bytes)
-  {
-    const char* ptr = str;
-    int32_t value   = 0;
-    for (size_type idx = 0; idx < bytes; ++idx) {
-      char chr = *ptr++;
-      if (chr < '0' || chr > '9') break;
-      value = (value * 10) + static_cast<int32_t>(chr - '0');
-    }
-    return value;
-  }
-
   // Walk the format_items to parse the string into date/time components
-  __device__ timestamp_components parse_into_parts(string_view const& d_string)
+  __device__ timestamp_components parse_into_parts(string_view const& d_string) const
   {
     timestamp_components timeparts = {1970, 1, 1, 0};  // init to epoch time
 
@@ -208,32 +215,71 @@ struct parse_datetime {
 
       if (item.item_type == format_char_type::literal) {
         // static character we'll just skip;
-        // consume item.length bytes from string
+        // consume item.length bytes from the input string
         ptr += item.length;
         length -= item.length;
         continue;
       }
 
+      size_type copied = item.length;  // number of bytes processed
       // special logic for each specifier
       switch (item.value) {
-        case 'Y': timeparts.year = static_cast<int16_t>(str2int(ptr, item.length)); break;
-        case 'y': {
-          auto const year = str2int(ptr, item.length);
-          timeparts.year  = static_cast<int16_t>(year + (year < 69 ? 2000 : 1900));
+        case 'Y': {
+          auto const [year, left] = str2int2(ptr, item.length);
+          timeparts.year          = static_cast<int16_t>(year);
+          copied -= left;
           break;
         }
-        case 'm': timeparts.month = static_cast<int8_t>(str2int(ptr, item.length)); break;
-        case 'd': timeparts.day = static_cast<int8_t>(str2int(ptr, item.length)); break;
-        case 'j': timeparts.day_of_year = static_cast<int16_t>(str2int(ptr, item.length)); break;
+        case 'y': {
+          auto const [year, left] = str2int2(ptr, item.length);
+          timeparts.year          = static_cast<int16_t>(year + (year < 69 ? 2000 : 1900));
+          copied -= left;
+          break;
+        }
+        case 'm': {
+          auto const [month, left] = str2int2(ptr, item.length);
+          timeparts.month          = static_cast<int8_t>(month);
+          copied -= left;
+          break;
+        }
+        case 'd': {
+          auto const [day, left] = str2int2(ptr, item.length);
+          timeparts.day          = static_cast<int8_t>(day);
+          copied -= left;
+          break;
+        }
+        case 'j': {
+          auto const [day, left] = str2int2(ptr, item.length);
+          timeparts.day_of_year  = static_cast<int16_t>(day);
+          copied -= left;
+          break;
+        }
         case 'H':
-        case 'I': timeparts.hour = static_cast<int8_t>(str2int(ptr, item.length)); break;
-        case 'M': timeparts.minute = static_cast<int8_t>(str2int(ptr, item.length)); break;
-        case 'S': timeparts.second = static_cast<int8_t>(str2int(ptr, item.length)); break;
+        case 'I': {
+          auto const [hour, left] = str2int2(ptr, item.length);
+          timeparts.hour          = static_cast<int8_t>(hour);
+          copied -= left;
+          break;
+        }
+        case 'M': {
+          auto const [minute, left] = str2int2(ptr, item.length);
+          timeparts.minute          = static_cast<int8_t>(minute);
+          copied -= left;
+          break;
+        }
+        case 'S': {
+          auto const [second, left] = str2int2(ptr, item.length);
+          timeparts.second          = static_cast<int8_t>(second);
+          copied -= left;
+          break;
+        }
         case 'f': {
           int32_t const read_size =
             std::min(static_cast<int32_t>(item.length), static_cast<int32_t>(length));
-          int64_t const fraction = str2int(ptr, read_size) * power_of_ten(item.length - read_size);
-          timeparts.subsecond    = static_cast<int32_t>(fraction);
+          auto const [fraction, left] = str2int2(ptr, read_size);
+          timeparts.subsecond =
+            static_cast<int32_t>(fraction * power_of_ten(item.length - read_size - left));
+          copied = read_size - left;
           break;
         }
         case 'p': {
@@ -247,24 +293,23 @@ struct parse_datetime {
           break;
         }
         case 'z': {
-          auto const sign = *ptr == '-' ? 1 : -1;  // revert timezone back to UTC
-          auto const hh   = str2int(ptr + 1, 2);
-          auto const mm   = str2int(ptr + 3, 2);
-          // ignoring the rest for now
-          // item.length has how many chars we should read
+          auto const sign      = *ptr == '-' ? 1 : -1;  // revert timezone back to UTC
+          auto const [hh, lh]  = str2int2(ptr + 1, 2);
+          auto const [mm, lm]  = str2int2(ptr + 3, 2);
           timeparts.tz_minutes = sign * ((hh * 60) + mm);
+          copied -= lh + lm;
           break;
         }
         case 'Z': break;  // skip
         default: break;
       }
-      ptr += item.length;
-      length -= item.length;
+      ptr += copied;
+      length -= copied;
     }
     return timeparts;
   }
 
-  __device__ int64_t timestamp_from_parts(timestamp_components const& timeparts)
+  __device__ int64_t timestamp_from_parts(timestamp_components const& timeparts) const
   {
     auto const ymd =  // convenient chrono class handles the leap year calculations for us
       cuda::std::chrono::year_month_day(
@@ -290,7 +335,7 @@ struct parse_datetime {
     return timestamp;
   }
 
-  __device__ T operator()(size_type idx)
+  __device__ T operator()(size_type idx) const
   {
     T epoch_time{typename T::duration{0}};
     if (d_strings.is_null(idx)) return epoch_time;
@@ -386,29 +431,6 @@ struct check_datetime_format {
   }
 
   /**
-   * @brief Specialized function to return the value and check for non-decimal characters.
-   *
-   * If non-decimal characters are found within `str` and `str + bytes` then
-   * the returned result is `thrust::nullopt` (_does not contain a value_).
-   * Otherwise, the parsed integer result is returned.
-   *
-   * @param str Beginning of characters to read/check.
-   * @param bytes Number of bytes in str to read/check.
-   * @return Integer value if characters are valid.
-   */
-  __device__ thrust::optional<int32_t> str2int(const char* str, size_type bytes)
-  {
-    const char* ptr = str;
-    int32_t value   = 0;
-    for (size_type idx = 0; idx < bytes; ++idx) {
-      char chr = *ptr++;
-      if (chr < '0' || chr > '9') return thrust::nullopt;
-      value = (value * 10) + static_cast<int32_t>(chr - '0');
-    }
-    return value;
-  }
-
-  /**
    * @brief Check the specified characters are between ['0','9']
    * and the resulting integer is within [`min_value`, `max_value`].
    *
@@ -416,18 +438,23 @@ struct check_datetime_format {
    * @param bytes Number of bytes to check.
    * @param min_value Inclusive minimum value
    * @param max_value Inclusive maximum value
-   * @return true if parsed value is between `min_value` and `max_value`.
+   * @return number of bytes not successfully read
    */
-  __device__ bool check_value(const char* str, size_type bytes, int min_value, int max_value)
+  __device__ size_type check_value(const char* str,
+                                   size_type const bytes,
+                                   int const min_value,
+                                   int const max_value)
   {
-    const char* ptr = str;
+    // const char* ptr = str;
+    if (*str < '0' || *str > '9') return bytes;
     int32_t value   = 0;
-    for (size_type idx = 0; idx < bytes; ++idx) {
-      char chr = *ptr++;
-      if (chr < '0' || chr > '9') return false;
+    size_type count = bytes;
+    while (count-- > 0) {
+      char chr = *str++;
+      if (chr < '0' || chr > '9') break;  // return false;
       value = (value * 10) + static_cast<int32_t>(chr - '0');
     }
-    return value >= min_value && value <= max_value;
+    return (value >= min_value && value <= max_value) ? (count + 1) : bytes;
   }
 
   /**
@@ -459,44 +486,72 @@ struct check_datetime_format {
 
       // special logic for each specifier
       // reference: https://man7.org/linux/man-pages/man3/strptime.3.html
-      bool result = false;
+      bool result      = false;
+      size_type copied = item.length;
       switch (item.value) {
         case 'Y': {
-          if (auto value = str2int(ptr, item.length)) {
-            result         = true;
-            dateparts.year = static_cast<int16_t>(value.value());
-          }
+          auto const [year, left] = str2int2(ptr, item.length);
+          result                  = (left < item.length);
+          dateparts.year          = static_cast<int16_t>(year);
+          copied -= left;
           break;
         }
         case 'y': {
-          if (auto value = str2int(ptr, item.length)) {
-            result          = true;
-            auto const year = value.value();
-            dateparts.year  = static_cast<int16_t>(year + (year < 69 ? 2000 : 1900));
-          }
+          auto const [year, left] = str2int2(ptr, item.length);
+          result                  = (left < item.length);
+          dateparts.year          = static_cast<int16_t>(year + (year < 69 ? 2000 : 1900));
+          copied -= left;
           break;
         }
         case 'm': {
-          if (auto value = str2int(ptr, item.length)) {
-            result          = true;
-            dateparts.month = static_cast<int8_t>(value.value());
-          }
+          auto const [month, left] = str2int2(ptr, item.length);
+          result                   = (left < item.length);
+          dateparts.month          = static_cast<int8_t>(month);
+          copied -= left;
           break;
         }
         case 'd': {
-          if (auto value = str2int(ptr, item.length)) {
-            result        = true;
-            dateparts.day = static_cast<int8_t>(value.value());
-          }
+          auto const [day, left] = str2int2(ptr, item.length);
+          result                 = (left < item.length);
+          dateparts.day          = static_cast<int8_t>(day);  // value.value()
+          copied -= left;
           break;
         }
-        case 'j': result = check_value(ptr, item.length, 1, 366); break;
-        case 'H': result = check_value(ptr, item.length, 0, 23); break;
-        case 'I': result = check_value(ptr, item.length, 1, 12); break;
-        case 'M': result = check_value(ptr, item.length, 0, 59); break;
-        case 'S': result = check_value(ptr, item.length, 0, 60); break;
+        case 'j': {
+          auto const left = check_value(ptr, item.length, 1, 366);
+          result          = left < item.length;
+          copied -= left;
+          break;
+        }
+        case 'H': {
+          auto const left = check_value(ptr, item.length, 0, 23);
+          result          = left < item.length;
+          copied -= left;
+          break;
+        }
+        case 'I': {
+          auto const left = check_value(ptr, item.length, 1, 12);
+          result          = left < item.length;
+          copied -= left;
+          break;
+        }
+        case 'M': {
+          auto const left = check_value(ptr, item.length, 0, 59);
+          result          = left < item.length;
+          copied -= left;
+          break;
+        }
+        case 'S': {
+          auto const left = check_value(ptr, item.length, 0, 60);
+          result          = left < item.length;
+          copied -= left;
+          break;
+        }
         case 'f': {
-          result = check_digits(ptr, std::min(static_cast<int32_t>(item.length), length));
+          int32_t const read_size =
+            std::min(static_cast<int32_t>(item.length), static_cast<int32_t>(length));
+          result = check_digits(ptr, read_size);
+          copied = read_size;
           break;
         }
         case 'p': {
@@ -509,9 +564,10 @@ struct check_datetime_format {
         }
         case 'z': {  // timezone offset
           if (item.length == 5) {
-            result = (*ptr == '-' || *ptr == '+') &&    // sign
-                     check_value(ptr + 1, 2, 0, 23) &&  // hour
-                     check_value(ptr + 3, 2, 0, 59);    // minute
+            auto const lh = check_value(ptr + 1, 2, 0, 23);
+            auto const lm = check_value(ptr + 3, 2, 0, 59);
+            result        = (*ptr == '-' || *ptr == '+') && (lh < 2) && (lm < 2);
+            copied -= lh + lm;
           }
           break;
         }
@@ -519,8 +575,8 @@ struct check_datetime_format {
         default: break;
       }
       if (!result) return thrust::nullopt;
-      ptr += item.length;
-      length -= item.length;
+      ptr += copied;
+      length -= copied;
     }
     return dateparts;
   }
@@ -867,7 +923,7 @@ struct datetime_formatter : public from_timestamp_base<T> {
       }
 
       // Value to use for int2str call at the end of the switch-statement.
-      // This simplifies the case statements and prevents alot of extra inlining.
+      // This simplifies the case statements and prevents a lot of extra inlining.
       int32_t copy_value = -1;  // default set for non-int2str usage cases
 
       // special logic for each specifier
