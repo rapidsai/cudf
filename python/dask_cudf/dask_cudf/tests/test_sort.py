@@ -67,8 +67,7 @@ def test_sort_values_with_nulls(by):
     if isinstance(divisions, list):
         assert None in divisions
     else:
-        for col in by:
-            assert divisions[col].has_nulls
+        assert all([divisions[col].has_nulls for col in by])
 
     got = ddf.sort_values(by=by)
     expect = df.sort_values(by=by)
