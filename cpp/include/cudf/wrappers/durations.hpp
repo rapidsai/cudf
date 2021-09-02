@@ -34,6 +34,14 @@ namespace cudf {
  */
 using duration_D = cuda::std::chrono::duration<int32_t, cuda::std::chrono::days::period>;
 /**
+ * @brief Type alias representing an int32_t duration of hours.
+ */
+using duration_h = cuda::std::chrono::duration<int32_t, cuda::std::chrono::hours::period>;
+/**
+ * @brief Type alias representing an int32_t duration of minutes.
+ */
+using duration_m = cuda::std::chrono::duration<int32_t, cuda::std::chrono::minutes::period>;
+/**
  * @brief Type alias representing an int64_t duration of seconds.
  */
 using duration_s = cuda::std::chrono::duration<int64_t, cuda::std::chrono::seconds::period>;

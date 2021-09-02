@@ -1,49 +1,47 @@
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/datetime.hpp>
-#include <cudf/detail/datetime.hpp>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/traits.hpp>
+/*
+ * Copyright (c) 2021, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#pragma once
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
+#include <cuda/std/chrono>
+
 namespace cudf {
 namespace datetime {
 namespace detail {
 
-// Number of days until month indexed by leap year and month (0-based index)
-static __device__ int16_t const days_until_month[2][13] = {
-  {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365},  // For non leap years
-  {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366}   // For leap years
-};
+template <typename Timestamp, typename MonthType>
+__device__ Timestamp add_calendrical_months_with_scale_back(Timestamp time_val,
+                                                            MonthType months_val)
+{
+  using namespace cuda::std::chrono;
 
-struct add_calendrical_months_functor_impl {
-  template <typename Timestamp, typename MonthType>
-  Timestamp __device__ operator()(Timestamp time_val, MonthType months_val)
-  {
-    using namespace cuda::std::chrono;
-    using duration_m = duration<int32_t, months::period>;
+  // Get the days component from the input
+  auto const days_since_epoch = floor<days>(time_val);
 
-    // Get the days component from the input
-    auto days_since_epoch = floor<days>(time_val);
+  // Add the number of months
+  year_month_day ymd{days_since_epoch};
+  ymd += duration<int32_t, months::period>{months_val};
 
-    // Add the number of months
-    year_month_day ymd{days_since_epoch};
-    ymd += duration_m{months_val};
+  // If the new date isn't valid, scale it back to the last day of the
+  // month.
+  if (!ymd.ok()) ymd = ymd.year() / ymd.month() / last;
 
-    // If the new date isn't valid, scale it back to the last day of the
-    // month.
-    if (!ymd.ok()) ymd = ymd.year() / ymd.month() / last;
+  // Put back the time component to the date
+  return sys_days{ymd} + (time_val - days_since_epoch);
+}
 
-    // Put back the time component to the date
-    return sys_days{ymd} + (time_val - days_since_epoch);
-  }
-};
 }  // namespace detail
 }  // namespace datetime
 }  // namespace cudf

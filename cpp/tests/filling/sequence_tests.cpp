@@ -24,7 +24,6 @@
 
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
-
 #include <cudf/unary.hpp>
 
 using namespace cudf;
@@ -153,7 +152,7 @@ TEST_F(SequenceTestFixture, DateSequenceBasic)
     1640393696L,  // 2021-12-25 00:54:56 GMT
   };
 
-  auto got = date_sequence(size, init, months);
+  auto got = calendrical_month_sequence(size, init, months);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *got);
 }
@@ -173,7 +172,7 @@ TEST_F(SequenceTestFixture, DateSequenceLeapYear)
     1078106779L,  // 2004-02-29 02:06:19 GMT Leap Year
   };
 
-  auto got = date_sequence(size, init, months);
+  auto got = calendrical_month_sequence(size, init, months);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *got);
 }
@@ -184,5 +183,5 @@ TEST_F(SequenceTestFixture, DateSequenceBadTypes)
   size_type size   = 5;
   size_type months = 12;
 
-  EXPECT_THROW(date_sequence(size, init, months), cudf::logic_error);
+  EXPECT_THROW(calendrical_month_sequence(size, init, months), cudf::logic_error);
 }

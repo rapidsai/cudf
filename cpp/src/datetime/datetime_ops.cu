@@ -25,7 +25,10 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/wrappers/durations.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -42,6 +45,9 @@ enum class datetime_component {
   HOUR,
   MINUTE,
   SECOND,
+  MILLISECOND,
+  MICROSECOND,
+  NANOSECOND
 };
 
 template <datetime_component Component>
@@ -76,6 +82,41 @@ struct extract_component_operator {
       default: return 0;
     }
   }
+};
+
+template <datetime_component COMPONENT>
+struct ceil_timestamp {
+  template <typename Timestamp>
+  CUDA_DEVICE_CALLABLE Timestamp operator()(Timestamp const ts) const
+  {
+    using namespace cuda::std::chrono;
+    // want to use this with D, H, T (minute), S, L (millisecond), U
+    switch (COMPONENT) {
+      case datetime_component::DAY:
+        return time_point_cast<typename Timestamp::duration>(ceil<duration_D>(ts));
+      case datetime_component::HOUR:
+        return time_point_cast<typename Timestamp::duration>(ceil<duration_h>(ts));
+      case datetime_component::MINUTE:
+        return time_point_cast<typename Timestamp::duration>(ceil<duration_m>(ts));
+      case datetime_component::SECOND:
+        return time_point_cast<typename Timestamp::duration>(ceil<duration_s>(ts));
+      case datetime_component::MILLISECOND:
+        return time_point_cast<typename Timestamp::duration>(ceil<duration_ms>(ts));
+      case datetime_component::MICROSECOND:
+        return time_point_cast<typename Timestamp::duration>(ceil<duration_us>(ts));
+      case datetime_component::NANOSECOND:
+        return time_point_cast<typename Timestamp::duration>(ceil<duration_ns>(ts));
+      default: cudf_assert(false && "Unexpected resolution");
+    }
+
+    return {};
+  }
+};
+
+// Number of days until month indexed by leap year and month (0-based index)
+static __device__ int16_t const days_until_month[2][13] = {
+  {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365},  // For non leap years
+  {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366}   // For leap years
 };
 
 // Round up the date to the last day of the month and return the
@@ -147,6 +188,45 @@ struct is_leap_year_op {
     auto const days_since_epoch = floor<days>(ts);
     auto const date             = year_month_day(days_since_epoch);
     return date.year().is_leap();
+  }
+};
+
+// Specific function for applying ceil/floor date ops
+template <typename TransformFunctor>
+struct dispatch_ceil {
+  template <typename Timestamp>
+  std::enable_if_t<cudf::is_timestamp<Timestamp>(), std::unique_ptr<cudf::column>> operator()(
+    cudf::column_view const& column,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const
+  {
+    auto size            = column.size();
+    auto output_col_type = data_type{cudf::type_to_id<Timestamp>()};
+
+    // Return an empty column if source column is empty
+    if (size == 0) return make_empty_column(output_col_type);
+
+    auto output = make_fixed_width_column(output_col_type,
+                                          size,
+                                          cudf::detail::copy_bitmask(column, stream, mr),
+                                          column.null_count(),
+                                          stream,
+                                          mr);
+
+    thrust::transform(rmm::exec_policy(stream),
+                      column.begin<Timestamp>(),
+                      column.end<Timestamp>(),
+                      output->mutable_view().begin<Timestamp>(),
+                      TransformFunctor{});
+
+    return output;
+  }
+
+  template <typename Timestamp, typename... Args>
+  std::enable_if_t<!cudf::is_timestamp<Timestamp>(), std::unique_ptr<cudf::column>> operator()(
+    Args&&...)
+  {
+    CUDF_FAIL("Must be cudf::timestamp");
   }
 };
 
@@ -231,7 +311,10 @@ struct add_calendrical_months_functor {
                       timestamp_column.end<Timestamp>(),
                       months_column.begin<int16_t>(),
                       output.begin<Timestamp>(),
-                      add_calendrical_months_functor_impl{});
+                      [] __device__(auto& timestamp, auto& months) {
+                        return add_calendrical_months_with_scale_back<Timestamp, int16_t>(timestamp,
+                                                                                          months);
+                      });
   }
 };
 
@@ -262,6 +345,15 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
   type_dispatcher(timestamp_column.type(), launch, stream);
 
   return output;
+}
+
+template <datetime_component Component>
+std::unique_ptr<column> ceil_general(column_view const& column,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  return cudf::type_dispatcher(
+    column.type(), dispatch_ceil<detail::ceil_timestamp<Component>>{}, column, stream, mr);
 }
 
 std::unique_ptr<column> extract_year(column_view const& column,
@@ -365,6 +457,58 @@ std::unique_ptr<column> extract_quarter(column_view const& column,
 }
 
 }  // namespace detail
+
+std::unique_ptr<column> ceil_day(column_view const& column, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::ceil_general<detail::datetime_component::DAY>(
+    column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> ceil_hour(column_view const& column, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::ceil_general<detail::datetime_component::HOUR>(
+    column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> ceil_minute(column_view const& column, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::ceil_general<detail::datetime_component::MINUTE>(
+    column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> ceil_second(column_view const& column, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::ceil_general<detail::datetime_component::SECOND>(
+    column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> ceil_millisecond(column_view const& column,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::ceil_general<detail::datetime_component::MILLISECOND>(
+    column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> ceil_microsecond(column_view const& column,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::ceil_general<detail::datetime_component::MICROSECOND>(
+    column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> ceil_nanosecond(column_view const& column,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::ceil_general<detail::datetime_component::NANOSECOND>(
+    column, rmm::cuda_stream_default, mr);
+}
 
 std::unique_ptr<column> extract_year(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
