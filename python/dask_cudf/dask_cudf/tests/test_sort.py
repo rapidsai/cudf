@@ -7,6 +7,7 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
+from dask_cudf.sorting import quantile_divisions
 
 
 @pytest.mark.parametrize("by", ["a", "b", "c", "d", ["a", "b"], ["c", "d"]])
@@ -60,6 +61,14 @@ def test_sort_values_with_nulls(by):
         }
     )
     ddf = dd.from_pandas(df, npartitions=10)
+
+    # assert that quantile divisions of dataframe contains nulls
+    divisions = quantile_divisions(ddf, by, ddf.npartitions)
+    if isinstance(divisions, list):
+        assert None in divisions
+    else:
+        for col in by:
+            assert divisions[col].has_nulls
 
     got = ddf.sort_values(by=by)
     expect = df.sort_values(by=by)
