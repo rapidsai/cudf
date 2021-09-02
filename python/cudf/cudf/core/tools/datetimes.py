@@ -3,7 +3,7 @@
 import warnings
 from typing import Sequence, Union
 
-import numpy as np
+import numpy as np, pandas as pd
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
@@ -221,7 +221,11 @@ def to_datetime(
                 format=format,
             )
             return as_index(col, name=arg.name)
-        elif isinstance(arg, cudf.Series):
+        elif isinstance(arg, (cudf.Series, pd.Series)):
+            if isinstance(arg, (pd.Series)):
+                #this needs to work for a pandas series 
+                #input or else it becomes an index
+                arg = cudf.from_pandas(arg)
             col = arg._column
             col = _process_col(
                 col=col,

@@ -5465,6 +5465,61 @@ class DatetimeProperties(object):
         return Series._from_data(
             {None: res}, index=self.series._index, name=self.series.name,
         )
+    
+    def isocalendar(self):
+        """
+        Returns a DataFrame with the year, week, and day calculated according to
+        the ISO 8601 standard.
+        Returns
+        -------
+        DataFrame
+            with columns year, week and day
+        Examples
+        --------
+        >>> ser = cudf.Series(pd.date_range(start="2021-07-25", end="2021-07-30"))
+        >>> ser.dt.isocalendar()
+        year  week  day
+        0  2021    29    7
+        1  2021    30    1
+        2  2021    30    2
+        3  2021    30    3
+        4  2021    30    4
+        5  2021    30    5
+        >>> ser.dt.isocalendar().week
+        0    29
+        1    30
+        2    30
+        3    30
+        4    30
+        5    30
+        Name: week, dtype: object
+
+        >>> serIndex = cudf.to_datetime(pd.Series(["2010-01-01", pd.NaT]))
+        >>> serIndex.dt.isocalendar()
+           year  week  day
+        0  2009    53     5
+        1  <NA>  <NA>  <NA>
+        >>> serIndex.isocalendar().year
+        0    2009
+        1    <NA>
+        Name: year, dtype: object
+        """
+        
+        iso_day = self.strftime("%u").astype(np.int32)
+        iso_week = self.strftime("%V").astype(np.int32)
+        iso_year = self.strftime("%G").astype(np.int32)
+
+        @property
+        def day(self):
+            return iso_day
+        @property
+        def week(self):
+            return iso_week
+        @property
+        def year(self):
+            return iso_year
+        
+        return cudf.DataFrame({"year":iso_year,"week":iso_week,"day":iso_day})
 
     @property
     def is_month_start(self):
@@ -5762,9 +5817,8 @@ class DatetimeProperties(object):
         Notes
         -----
 
-        The following date format identifiers are not yet supported: ``%a``,
-        ``%A``, ``%w``, ``%b``, ``%B``, ``%U``, ``%W``, ``%c``, ``%x``,
-        ``%X``, ``%G``, ``%u``, ``%V``
+        The following date format identifiers are not yet supported: ``%c``, ``%x``,
+        ``%X``
 
         Examples
         --------
@@ -5803,19 +5857,9 @@ class DatetimeProperties(object):
         # once https://github.com/rapidsai/cudf/issues/5991
         # is implemented
         not_implemented_formats = {
-            "%a",
-            "%A",
-            "%w",
-            "%b",
-            "%B",
-            "%U",
-            "%W",
             "%c",
             "%x",
             "%X",
-            "%G",
-            "%u",
-            "%V",
         }
         for d_format in not_implemented_formats:
             if d_format in date_format:
@@ -5825,7 +5869,6 @@ class DatetimeProperties(object):
                     f"https://github.com/rapidsai/cudf/issues/5991 "
                     f"for tracking purposes."
                 )
-
         str_col = self.series._column.as_string_column(
             dtype="str", format=date_format
         )
