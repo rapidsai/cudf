@@ -31,7 +31,7 @@ from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
-from cudf.core.groupby.groupby import DataFrameGroupBy
+from cudf.core.groupby.groupby import DataFrameGroupBy, _get_groupby
 from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
@@ -4497,7 +4497,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 "groupby() requires either by or level to be specified."
             )
 
-        return DataFrameGroupBy(
+        return _get_groupby(
             self,
             by=by,
             level=level,
