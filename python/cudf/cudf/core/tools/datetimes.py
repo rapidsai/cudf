@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 import math
+import re
 import warnings
 from typing import Sequence, Union
 
@@ -689,9 +690,11 @@ def date_range(
     periods : int, optional
         Number of periods to generate.
 
-    freq : DateOffset
+    freq : str or DateOffset
         Frequencies to generate the datetime series. Mixed fixed-frequency and
         non-fixed frequency offset is unsupported. See notes for detail.
+        Supported offset alias: ``D``, ``h``, ``H``, ``T``, ``min``, ``S``,
+        ``U``, ``us``, ``N``, ``ns``.
 
     tz : str or tzinfo, optional
         Not Supported
@@ -775,11 +778,38 @@ def date_range(
     if isinstance(freq, DateOffset):
         offset = freq
     elif isinstance(freq, str):
+        # Map pandas `offset alias` into cudf DateOffset `CODE`, only
+        # fixed-frequency, non-anchored offset aliases are supported.
+        _map_offset_alias_to_code = {
+            "D": "D",
+            "H": "h",
+            "h": "h",
+            "T": "m",
+            "min": "m",
+            "s": "s",
+            "S": "s",
+            "U": "us",
+            "us": "us",
+            "N": "ns",
+            "ns": "ns",
+        }
+        mo = re.fullmatch(
+            rf'(-)*(\d*)({"|".join(_map_offset_alias_to_code.keys())})', freq
+        )
+        if mo is None:
+            raise ValueError(
+                f"Unrecognized or unsupported offset alias {freq}."
+            )
+
+        sign, n, offset_alias = mo.groups()
+        code = _map_offset_alias_to_code[offset_alias]
+
+        freq = "".join([n, code])
         offset = DateOffset._from_freqstr(freq)
-        if any([x in offset.kwds for x in ("weeks", "months", "years")]):
-            raise NotImplementedError(f"Unsupported offset aliases {freq}")
+        if sign:
+            offset.kwds.update({s: -i for s, i in offset.kwds.items()})
     else:
-        raise TypeError("`freq` must be a cudf.DateOffset object.")
+        raise TypeError("`freq` must be a `str` or cudf.DateOffset object.")
 
     if _check_mixed_freqeuency(offset):
         raise NotImplementedError(
@@ -809,6 +839,8 @@ def date_range(
         _periods_not_specified = True
         start = cudf.Scalar(start, dtype=dtype)
         end = cudf.Scalar(end, dtype=dtype)
+        _is_increment_sequence = end >= start
+
         periods = math.ceil(
             int(end - start) / _offset_to_nanoseconds_lower_bound(offset)
         )
@@ -830,7 +862,7 @@ def date_range(
     # overflow components are thrown before actually computing the sequence.
     # FIXME: when `end_estim` is out of bound, but the actual `end` is not,
     # we shouldn't raise but compute the sequence as is. The trailing overflow
-    # part will get trimmed at the end.
+    # part should get trimmed at the end.
     end_estim = (
         pd.Timestamp(start.value) + (periods - 1) * offset
     ).to_datetime64()
@@ -850,7 +882,7 @@ def date_range(
     if _periods_not_specified:
         # As mentioned in [1], this is a post processing step to trim extra
         # elements when `periods` is an estimated value.
-        res = res[res <= end]
+        res = res[(res <= end) if _is_increment_sequence else (res <= start)]
 
     return cudf.DatetimeIndex._from_data({name: res})
 

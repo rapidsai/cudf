@@ -1402,9 +1402,19 @@ date_range_test_periods = [1, 10, 100]
 date_range_test_freq = [
     {"months": 3, "years": 1},
     {"hours": 10, "days": 57, "nanoseconds": 3},
-    "17h",
     "83D",
+    "17h",
+    "-680T",
     "110546s",
+    pytest.param(
+        "110546789L",
+        marks=pytest.mark.xfail(
+            True,
+            reason="Pandas DateOffset ignores milliseconds. "
+            "https://github.com/pandas-dev/pandas/issues/43371",
+        ),
+    ),
+    "110546789248U",
 ]
 
 
