@@ -765,6 +765,10 @@ def date_range(
     if freq is not None:
         if isinstance(freq, DateOffset):
             offset = freq
+        elif isinstance(freq, str):
+            offset = DateOffset._from_freqstr(freq)
+            if any([x in offset.kwds for x in ("weeks", "months", "years")]):
+                raise NotImplementedError(f"Unsupported offset aliases {freq}")
         else:
             raise TypeError("`freq` must be a cudf.DateOffset object.")
 
