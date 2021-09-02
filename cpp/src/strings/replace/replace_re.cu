@@ -158,9 +158,7 @@ std::unique_ptr<column> replace_re(
                              std::move(children.first),
                              std::move(children.second),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

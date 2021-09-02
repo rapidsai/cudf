@@ -114,9 +114,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             std::unique_ptr<column> offsets_column,
                                             std::unique_ptr<column> chars_column,
                                             size_type null_count,
-                                            rmm::device_buffer&& null_mask,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_buffer&& null_mask)
 {
   CUDF_FUNC_RANGE();
 
