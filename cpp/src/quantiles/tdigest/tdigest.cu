@@ -18,6 +18,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
@@ -52,6 +53,10 @@ __global__ void compute_percentiles_kernel(offset_type const* tdigest_offsets,
 
   // size of the digest we're querying
   auto const tdigest_size = tdigest_offsets[tdigest_index + 1] - tdigest_offsets[tdigest_index];
+  if (tdigest_size == 0) {
+    // no work to do. values will be set to null
+    return;
+  }
   double const* cumulative_weight = cumulative_weight_ + tdigest_offsets[tdigest_index];
 
   // means and weights for the tdigest
@@ -115,7 +120,7 @@ __global__ void compute_percentiles_kernel(offset_type const* tdigest_offsets,
  * @param mr              Device memory resource used to allocate the returned column's device
  * memory
  *
- * @returns LIST Column containing requested percentile values.
+ * @returns Column of doubles containing requested percentile values.
  */
 std::unique_ptr<column> compute_approx_percentiles(column_view const& input,
                                                    column_view const& percentages,
@@ -179,6 +184,7 @@ void check_is_valid_tdigest_column(column_view const& col)
 {
   // sanity check that this is actually tdigest data
   CUDF_EXPECTS(col.type().id() == type_id::LIST, "Encountered invalid tdigest column");
+  CUDF_EXPECTS(col.size() > 0, "tdigest columns must have > 0 rows");
   CUDF_EXPECTS(col.offset() == 0, "Encountered a sliced tdigest column");
   CUDF_EXPECTS(col.nullable() == false, "Encountered nullable tdigest column");
   lists_column_view lcv(col);
@@ -190,6 +196,27 @@ void check_is_valid_tdigest_column(column_view const& col)
   CUDF_EXPECTS(mean.type().id() == type_id::FLOAT64, "Encountered invalid tdigest mean column");
   auto weight = data.child(tdigest_weight_column_index);
   CUDF_EXPECTS(weight.type().id() == type_id::FLOAT64, "Encountered invalid tdigest weight column");
+}
+
+std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr)
+{
+  // mean/weight columns
+  std::vector<std::unique_ptr<column>> children;
+  children.push_back(make_empty_column(data_type(type_id::FLOAT64)));
+  children.push_back(make_empty_column(data_type(type_id::FLOAT64)));
+
+  auto offsets = cudf::make_fixed_width_column(
+    data_type(type_id::INT32), 2, mask_state::UNALLOCATED, stream, mr);
+  thrust::fill(rmm::exec_policy(stream),
+               offsets->mutable_view().begin<offset_type>(),
+               offsets->mutable_view().begin<offset_type>() + 2,
+               0);
+  return make_lists_column(1,
+                           std::move(offsets),
+                           cudf::make_structs_column(0, std::move(children), 0, {}, stream, mr),
+                           0,
+                           {});
 }
 
 std::unique_ptr<column> percentile_approx(column_view const& input,
@@ -208,11 +235,33 @@ std::unique_ptr<column> percentile_approx(column_view const& input,
                          row_size_iter + input.size() + 1,
                          offsets->mutable_view().begin<offset_type>());
 
+  // if any of the input digests are empty, nullify the corresponding output rows (values will be
+  // uninitialized)
+  auto [bitmask, null_count] = [stream, mr, input]() {
+    lists_column_view lcv(input);
+    auto iter = cudf::detail::make_counting_transform_iterator(
+      0, [offsets = lcv.offsets().begin<offset_type>()] __device__(size_type index) {
+        return offsets[index + 1] - offsets[index] == 0 ? 1 : 0;
+      });
+    auto const null_count = thrust::reduce(rmm::exec_policy(stream), iter, iter + input.size(), 0);
+    if (null_count == 0) {
+      return std::pair<rmm::device_buffer, size_type>{rmm::device_buffer{}, null_count};
+    }
+    return cudf::detail::valid_if(
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(0) + input.size(),
+      [offsets = lcv.offsets().begin<offset_type>()] __device__(size_type index) {
+        return offsets[index + 1] - offsets[index] == 0 ? 0 : 1;
+      },
+      stream,
+      mr);
+  }();
+
   return cudf::make_lists_column(input.size(),
                                  std::move(offsets),
                                  compute_approx_percentiles(input, percentages, stream, mr),
-                                 0,
-                                 {},
+                                 null_count,
+                                 std::move(bitmask),
                                  stream,
                                  mr);
 }
