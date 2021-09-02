@@ -789,7 +789,7 @@ def date_range(
 
     # Depending on different combinations of `start`, `end`, `offset`,
     # `periods`, the following logic makes sure before computing the sequence,
-    # `start`, `periods`, `offset` is defined.
+    # `start`, `periods`, `offset` is defined
 
     _periods_not_specified = False
 
@@ -820,25 +820,29 @@ def date_range(
             # end == start, return exactly 1 timestamp (start)
             periods = 1
 
-    # The code logic below assumes `start`, `periods`, `offset` are normalized
-    # as `cudf.Scalar`, `int` and `pd.DateOffset`
-
     if normalize:
         old_dtype = start.value.dtype
         start = cudf.Scalar(
             start.value.astype("datetime64[D]").astype(old_dtype)
         )
 
+    # The estimated upper bound of `end` is enforced to compute to make sure
+    # overflow components are thrown before actually computing the sequence.
+    # FIXME: when `end_estim` is out of bound, but the actual `end` is not,
+    # we shouldn't raise but compute the sequence as is. The trailing overflow
+    # part will get trimmed at the end.
+    end_estim = (
+        pd.Timestamp(start.value) + (periods - 1) * offset
+    ).to_datetime64()
     if "months" in offset.kwds or "years" in offset.kwds:
         # If `offset` is non-fixed frequency, resort to libcudf.
         res = libcudf.datetime.date_range(start.device_value, periods, offset)
     else:
-        end = (pd.Timestamp(start.value) + (periods - 1) * offset).to_numpy()
         # If `offset` is fixed frequency, we treat both timestamps as integers
         # and evenly divide the given integer range.
         arr = cp.linspace(
             start=start.value.astype("int64"),
-            stop=end.astype("int64"),
+            stop=end_estim.astype("int64"),
             num=periods,
         )
         res = cudf.core.column.as_column(arr).astype("datetime64[ns]")
