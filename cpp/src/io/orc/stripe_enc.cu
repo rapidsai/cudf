@@ -645,7 +645,6 @@ static __device__ void encode_null_mask(orcenc_state_s* s, int t)
         } else {
           valid = 0xff;
         }
-        if (row + 7 > column.size()) { valid = valid & ((1 << (column.size() - row)) - 1); }
       }
       // not guaranteed to write to a byte anymore
       validity_byte(row_in_group) = valid;
@@ -671,7 +670,9 @@ static __device__ void encode_null_mask(orcenc_state_s* s, int t)
   }
 }
 
-static __device__ void encode_nested_null_mask(orcenc_state_s* s, bitmask_type const* pushdown_mask, int t)
+static __device__ void encode_nested_null_mask(orcenc_state_s* s,
+                                               bitmask_type const* pushdown_mask,
+                                               int t)
 {
   auto validity_byte = [&] __device__(int row) -> uint8_t& {
     // valid_buf is a circular buffer where validitiy of 8 rows is stored in each element
@@ -680,30 +681,32 @@ static __device__ void encode_nested_null_mask(orcenc_state_s* s, bitmask_type c
   auto const column = s->chunk.column->cudf_column;
 
   while (s->present_out < s->chunk.null_mask_num_rows) {
-    uint32_t present_rows = s->present_rows;  // number of rows read so far
-    uint32_t nrows        =                   // number of rows read in this iteration
-      min(s->chunk.null_mask_num_rows - present_rows,
-          encode_block_size * 8 - (present_rows - (s->present_out & ~7)));
-    if (t * 8 < nrows) {
-      auto const row_in_group = present_rows + t * 8;
-      auto const row          = s->chunk.null_mask_start_row + row_in_group;
-      uint8_t valid           = 0;
-      if (row < column.size()) {
-        if (column.nullable()) {
-          size_type current_valid_offset = row + column.offset();
-          size_type next_valid_offset    = current_valid_offset + min(32, column.size());
+    // number of rows read so far
+    uint32_t present_rows = s->present_rows;
+    // number of rows to read in this iteration (mess because of circular buffer?)
+    uint32_t const nrows = min(s->chunk.null_mask_num_rows - present_rows,
+                               encode_block_size * 8 - (present_rows - (s->present_out & ~7)));
 
-          bitmask_type mask = cudf::detail::get_mask_offset_word(
-            column.null_mask(), 0, current_valid_offset, next_valid_offset);
-          valid = 0xff & mask;
-        } else {
-          valid = 0xff;
-        }
-        if (row + 7 > column.size()) { valid = valid & ((1 << (column.size() - row)) - 1); }
-      }
-      // not guaranteed to write to a byte anymore
-      validity_byte(row_in_group) = valid;
-    }
+    auto const bits_to_encode = (t * 8 < nrows) ? 8 : 0;
+    auto const row_in_group   = present_rows + t * 8;
+    auto const row            = s->chunk.null_mask_start_row + row_in_group;
+    auto const mask_byte      = [&]() -> uint8_t {
+      if (row >= column.size() or bits_to_encode == 0) return 0;
+      if (!column.nullable()) return 0xff;
+
+      auto const current_valid_offset = row + column.offset();
+      auto const next_valid_offset    = current_valid_offset + min(32, column.size());
+      auto const mask                 = cudf::detail::get_mask_offset_word(
+        column.null_mask(), 0, current_valid_offset, next_valid_offset);
+      return mask & 0xff;
+    }();
+
+    // get num set bits in pd mask
+    // scan num bits to get offset
+
+    // not guaranteed to write to a byte
+    if (bits_to_encode > 0) validity_byte(row_in_group) = mask_byte;
+
     __syncthreads();
     present_rows += nrows;
     if (!t) { s->present_rows = present_rows; }
