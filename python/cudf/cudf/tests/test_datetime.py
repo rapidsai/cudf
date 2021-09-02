@@ -1143,14 +1143,7 @@ def test_datetime_strftime(data, dtype, date_format):
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "date_format",
-    [
-        "%c",
-        "%x",
-        "%X",
-    ],
-)
+@pytest.mark.parametrize("date_format", ["%c", "%x", "%X"])
 def test_datetime_strftime_not_implemented_formats(date_format):
     gsr = cudf.Series([1, 2, 3], dtype="datetime64[ms]")
 

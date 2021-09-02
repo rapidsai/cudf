@@ -5465,18 +5465,19 @@ class DatetimeProperties(object):
         return Series._from_data(
             {None: res}, index=self.series._index, name=self.series.name,
         )
-    
+
     def isocalendar(self):
         """
-        Returns a DataFrame with the year, week, and day calculated according to
-        the ISO 8601 standard.
+        Returns a DataFrame with the year, week, and day
+        calculated according to the ISO 8601 standard.
         Returns
         -------
         DataFrame
             with columns year, week and day
         Examples
         --------
-        >>> ser = cudf.Series(pd.date_range(start="2021-07-25", end="2021-07-30"))
+        >>> ser = cudf.Series(pd.date_range(start="2021-07-25",
+        ... end="2021-07-30"))
         >>> ser.dt.isocalendar()
         year  week  day
         0  2021    29    7
@@ -5504,7 +5505,7 @@ class DatetimeProperties(object):
         1    <NA>
         Name: year, dtype: object
         """
-        
+
         iso_day = self.strftime("%u").astype(np.int32)
         iso_week = self.strftime("%V").astype(np.int32)
         iso_year = self.strftime("%G").astype(np.int32)
@@ -5512,14 +5513,18 @@ class DatetimeProperties(object):
         @property
         def day(self):
             return iso_day
+
         @property
         def week(self):
             return iso_week
+
         @property
         def year(self):
             return iso_year
-        
-        return cudf.DataFrame({"year":iso_year,"week":iso_week,"day":iso_day})
+
+        return cudf.DataFrame(
+            {"year": iso_year, "week": iso_week, "day": iso_day}
+        )
 
     @property
     def is_month_start(self):
@@ -5817,8 +5822,8 @@ class DatetimeProperties(object):
         Notes
         -----
 
-        The following date format identifiers are not yet supported: ``%c``, ``%x``,
-        ``%X``
+        The following date format identifiers are not yet
+        supported: ``%c``, ``%x``,``%X``
 
         Examples
         --------
