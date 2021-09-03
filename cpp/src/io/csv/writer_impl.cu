@@ -282,10 +282,12 @@ void writer::impl::write_chunked_begin(table_view const& table,
                                        const table_metadata* metadata,
                                        rmm::cuda_stream_view stream)
 {
-  if ((metadata != nullptr) && (options_.is_enabled_include_header())) {
+  if (options_.is_enabled_include_header()) {
     auto const& column_names = metadata->column_names;
     CUDF_EXPECTS(column_names.size() == static_cast<size_t>(table.num_columns()),
                  "Mismatch between number of column headers and table columns.");
+
+    // column_names should be filled out,generated, if metadata == nullptr
 
     auto const delimiter  = options_.get_inter_column_delimiter();
     auto const terminator = options_.get_line_terminator();

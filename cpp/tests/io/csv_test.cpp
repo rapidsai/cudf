@@ -2232,7 +2232,7 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
 
   auto input_table = cudf::table_view{input_columns};
 
-  // write that dataframe to a csv using the default options to some temporary file
+  // write that dataframe to a csv using default options to some temporary file
   auto writer_options =
     cudf_io::csv_writer_options::builder(cudf_io::sink_info{"issue.csv"}, input_table);
   cudf_io::write_csv(writer_options);
