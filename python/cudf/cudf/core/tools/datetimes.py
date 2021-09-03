@@ -747,11 +747,6 @@ def date_range(
     if tz is not None:
         raise NotImplementedError("tz is currently unsupported.")
 
-    if normalize:
-        raise NotImplementedError(
-            "normalizing timestamps to midnight is unsupported."
-        )
-
     if closed is not None:
         raise NotImplementedError("closed is currently unsupported.")
 
@@ -846,17 +841,12 @@ def date_range(
         )
 
         if periods < 0:
-            # end < start, return empty column
+            # Mismatched sign between (end-start) and offset, return empty
+            # column
             periods = 0
         elif periods == 0:
             # end == start, return exactly 1 timestamp (start)
             periods = 1
-
-    if normalize:
-        old_dtype = start.value.dtype
-        start = cudf.Scalar(
-            start.value.astype("datetime64[D]").astype(old_dtype)
-        )
 
     # The estimated upper bound of `end` is enforced to be computed to make
     # sure overflow components are raised before actually computing the
@@ -867,6 +857,7 @@ def date_range(
     end_estim = (
         pd.Timestamp(start.value) + (periods - 1) * offset
     ).to_datetime64()
+
     if "months" in offset.kwds or "years" in offset.kwds:
         # If `offset` is non-fixed frequency, resort to libcudf.
         res = libcudf.datetime.date_range(start.device_value, periods, offset)
