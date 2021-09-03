@@ -2177,3 +2177,24 @@ def test_groupby_freq_min():
     expect = pdf.groupby(pd.Grouper(key="Publish date", freq="1h")).mean()
     got = gdf.groupby(cudf.Grouper(key="Publish date", freq="1h")).mean()
     assert_eq(expect, got, check_like=True, check_dtype=False)
+
+
+def test_groupby_freq_s():
+    pdf = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-01 00:00:02"),
+                pd.Timestamp("2000-01-01 00:00:07"),
+                pd.Timestamp("2000-01-01 00:00:02"),
+                pd.Timestamp("2000-01-02 00:00:15"),
+                pd.Timestamp("2000-01-01 00:00:05"),
+                pd.Timestamp("2000-01-02 00:00:09"),
+            ],
+            "ID": [0, 1, 2, 3, 4, 5],
+            "Price": [10, 20, 30, 40, 50, 60],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby(pd.Grouper(key="Publish date", freq="3s")).mean()
+    got = gdf.groupby(cudf.Grouper(key="Publish date", freq="3s")).mean()
+    assert_eq(expect, got, check_like=True, check_dtype=False)
