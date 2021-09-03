@@ -2,7 +2,7 @@ import cupy
 import numpy as np
 from numba import cuda
 from numba.np import numpy_support
-from numba.types import Tuple, boolean, void
+from numba.types import Tuple, boolean, int64, void
 from nvtx import annotate
 
 import cudf
@@ -83,34 +83,36 @@ def mask_get(mask, pos):
 
 
 kernel_template = """\
-def _kernel(retval, {input_columns}):
+def _kernel(retval, {input_columns}, size):
     i = cuda.grid(1)
     ret_data_arr, ret_mask_arr = retval
+    if i < size:
 {masked_input_initializers}
-    ret = {user_udf_call}
-    ret_data_arr[i] = {ret_value}
-    ret_mask_arr[i] = {ret_valid}
+        ret = {user_udf_call}
+        ret_data_arr[i] = {ret_value}
+        ret_mask_arr[i] = {ret_valid}
 """
 
 unmasked_input_initializer_template = """\
-    d_{idx}, m_{idx} = input_col_{idx}
-    masked_{idx} = Masked(d_{idx}[i], True)
+        d_{idx}, m_{idx} = input_col_{idx}
+        masked_{idx} = Masked(d_{idx}[i], True)
 """
 
 masked_input_initializer_template = """\
-    d_{idx}, m_{idx} = input_col_{idx}
-    masked_{idx} = Masked(d_{idx}[i], mask_get(m_{idx}, i))
+        d_{idx}, m_{idx} = input_col_{idx}
+        masked_{idx} = Masked(d_{idx}[i], mask_get(m_{idx}, i))
 """
 
 
 def _define_function(df, scalar_return=False):
     # Create argument list for kernel
-    input_columns = ", ".join([f'input_col_{i}'
-                               for i in range(len(df.columns))])
+    input_columns = ", ".join(
+        [f"input_col_{i}" for i in range(len(df.columns))]
+    )
 
     # Create argument list to pass to device function
-    args = ', '.join([f'masked_{i}' for i in range(len(df.columns))])
-    user_udf_call = f'f_({args})'
+    args = ", ".join([f"masked_{i}" for i in range(len(df.columns))])
+    user_udf_call = f"f_({args})"
 
     # Generate the initializers for each device function argument
     initializers = []
@@ -121,7 +123,7 @@ def _define_function(df, scalar_return=False):
         else:
             template = unmasked_input_initializer_template
 
-        initializer = template.format(**{'idx': idx})
+        initializer = template.format(**{"idx": idx})
 
         initializers.append(initializer)
 
@@ -130,19 +132,19 @@ def _define_function(df, scalar_return=False):
     # Generate the code to extract the return value and mask from the device
     # function's return value depending on whether it's already masked
     if scalar_return:
-        ret_value = 'ret'
-        ret_valid = 'True'
+        ret_value = "ret"
+        ret_valid = "True"
     else:
-        ret_value = 'ret.value'
-        ret_valid = 'ret.valid'
+        ret_value = "ret.value"
+        ret_valid = "ret.valid"
 
     # Incorporate all of the above into the kernel code template
     d = {
-        'input_columns': input_columns,
-        'masked_input_initializers': masked_input_initializers,
-        'user_udf_call': user_udf_call,
-        'ret_value': ret_value,
-        'ret_valid': ret_valid,
+        "input_columns": input_columns,
+        "masked_input_initializers": masked_input_initializers,
+        "user_udf_call": user_udf_call,
+        "ret_value": ret_value,
+        "ret_valid": ret_valid,
     }
 
     return kernel_template.format(**d)
@@ -158,7 +160,8 @@ def udf_pipeline(df, f):
     )
     return_type = Tuple((scalar_return_type[::1], boolean[::1]))
     sig = void(
-        return_type, *[masked_arrty_from_np_type(dtype) for dtype in df.dtypes]
+        return_type,
+        *[masked_arrty_from_np_type(dtype) for dtype in df.dtypes] + [int64],
     )
 
     f_ = cuda.jit(device=True)(f)
@@ -184,6 +187,7 @@ def udf_pipeline(df, f):
             mask = cudf.core.buffer.Buffer()
         launch_args.append((data, mask))
 
-    kernel[1, len(df)](*launch_args)
+    launch_args.append(len(df))  # size
+    kernel.forall(len(df))(*launch_args)
     result = cudf.Series(ans_col).set_mask(bools_to_mask(ans_mask))
     return result
