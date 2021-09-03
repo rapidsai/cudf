@@ -115,7 +115,7 @@ rapids_cpm_init()
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
 # find nvCOMP
-include(cmake/thirdparty/CUDF_GetnvCOMP.cmake)
+include(cmake/thirdparty/get_nvcomp.cmake)
 # find thrust/cub
 include(cmake/thirdparty/get_thrust.cmake)
 # find rmm
