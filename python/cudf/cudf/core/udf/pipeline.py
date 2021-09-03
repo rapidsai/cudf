@@ -76,6 +76,7 @@ def masked_arrty_from_np_type(dtype):
     nb_scalar_ty = numpy_support.from_dtype(dtype)
     return Tuple((nb_scalar_ty[::1], libcudf_bitmask_type[::1]))
 
+
 def construct_signature(df, return_type):
     """
     Build the signature of numba types that will be used to
@@ -89,15 +90,10 @@ def construct_signature(df, return_type):
     sig = [return_type]
     for col in df._data.values():
         sig.append(masked_arrty_from_np_type(col.dtype))
-        offsets.append(col.offset)
+        offsets.append(int64)
 
     # return_type + data,masks + offsets + size
-    #sig = void(
-    #    *(sig + offsets + [int64])
-    #)
-    sig = void(
-        *(sig + [int64])
-    )
+    sig = void(*(sig + offsets + [int64]))
 
     return sig
 
@@ -108,7 +104,7 @@ def mask_get(mask, pos):
 
 
 kernel_template = """\
-def _kernel(retval, {input_columns}, size):
+def _kernel(retval, {input_columns}, {input_offsets}, size):
     i = cuda.grid(1)
     ret_data_arr, ret_mask_arr = retval
     if i < size:
@@ -125,7 +121,7 @@ unmasked_input_initializer_template = """\
 
 masked_input_initializer_template = """\
         d_{idx}, m_{idx} = input_col_{idx}
-        masked_{idx} = Masked(d_{idx}[i], mask_get(m_{idx}, i))
+        masked_{idx} = Masked(d_{idx}[i], mask_get(m_{idx}, i + offset_{idx}))
 """
 
 
@@ -134,6 +130,8 @@ def _define_function(df, scalar_return=False):
     input_columns = ", ".join(
         [f"input_col_{i}" for i in range(len(df.columns))]
     )
+
+    input_offsets = ", ".join([f"offset_{i}" for i in range(len(df.columns))])
 
     # Create argument list to pass to device function
     args = ", ".join([f"masked_{i}" for i in range(len(df.columns))])
@@ -166,6 +164,7 @@ def _define_function(df, scalar_return=False):
     # Incorporate all of the above into the kernel code template
     d = {
         "input_columns": input_columns,
+        "input_offsets": input_offsets,
         "masked_input_initializers": masked_input_initializers,
         "user_udf_call": user_udf_call,
         "ret_value": ret_value,
@@ -202,13 +201,17 @@ def udf_pipeline(df, f):
     )
     ans_mask = cudf.core.column.column_empty(len(df), dtype="bool")
     launch_args = [(ans_col, ans_mask)]
+    offsets = []
     for col in df.columns:
         data = df[col]._column.data
         mask = df[col]._column.mask
         if mask is None:
             mask = cudf.core.buffer.Buffer()
         launch_args.append((data, mask))
+        offsets.append(df[col]._column.offset)
 
+    launch_args += offsets
+    breakpoint()
     launch_args.append(len(df))  # size
     kernel.forall(len(df))(*launch_args)
     result = cudf.Series(ans_col).set_mask(bools_to_mask(ans_mask))
