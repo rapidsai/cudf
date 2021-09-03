@@ -1570,11 +1570,12 @@ def test_error_values():
         )
     ],
 )
+@pytest.mark.parametrize("time_type", DATETIME_TYPES)
 @pytest.mark.parametrize("resolution", ["D", "H", "T", "S", "L", "U", "N"])
-def test_ceil(data, resolution):
-    for time_type in DATETIME_TYPES:
-        ps = pd.Series(data, dtype=time_type)
-        gs = cudf.from_pandas(ps)
+def test_ceil(data, time_type, resolution):
+
+    ps = pd.Series(data, dtype=time_type)
+    gs = cudf.from_pandas(ps)
 
     expect = ps.dt.ceil(resolution)
     got = gs.dt.ceil(resolution)
