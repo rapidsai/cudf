@@ -6,6 +6,7 @@ from numba.types import Tuple, boolean, int64, void
 from nvtx import annotate
 
 import cudf
+import cachetools
 from cudf._lib.transform import bools_to_mask
 from cudf.core.udf.classes import Masked
 from cudf.core.udf.typing import MaskedType
@@ -13,6 +14,7 @@ from cudf.utils import cudautils
 
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 mask_bitsize = np.dtype("int32").itemsize * 8
+_kernel_cache: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
 @annotate("NUMBA JIT", color="green", domain="cudf_python")
@@ -124,7 +126,7 @@ masked_input_initializer_template = """\
         masked_{idx} = Masked(d_{idx}[i], mask_get(m_{idx}, i + offset_{idx}))
 """
 
-
+@annotate("DEFINE", color="yellow", domain="cudf_python")
 def _define_function(df, scalar_return=False):
     # Create argument list for kernel
     input_columns = ", ".join(
@@ -174,8 +176,9 @@ def _define_function(df, scalar_return=False):
     return kernel_template.format(**d)
 
 
+@annotate("UDF PIPELINE", color="black", domain="cudf_python")
 def udf_pipeline(df, f):
-    numba_return_type, _ = compile_masked_udf(f, df.dtypes)
+    numba_return_type, ptx = compile_masked_udf(f, df.dtypes)
     _is_scalar_return = not isinstance(numba_return_type, MaskedType)
     scalar_return_type = (
         numba_return_type
@@ -194,8 +197,16 @@ def udf_pipeline(df, f):
         lcl,
     )
     _kernel = lcl["_kernel"]
-    # compile
-    kernel = cuda.jit(sig)(_kernel)
+
+    # check to see if we already compiled this function
+    kernel_cache_key = cudautils._make_cache_key(_kernel, sig)
+    kernel_cache_key = (*kernel_cache_key, ptx)
+    if _kernel_cache.get(kernel_cache_key) is None:
+        kernel = cuda.jit(sig)(_kernel)
+        _kernel_cache[kernel_cache_key] = kernel
+    else:
+        kernel = _kernel_cache[kernel_cache_key]
+
     ans_col = cupy.empty(
         len(df), dtype=numpy_support.as_dtype(scalar_return_type)
     )
@@ -211,7 +222,6 @@ def udf_pipeline(df, f):
         offsets.append(df[col]._column.offset)
 
     launch_args += offsets
-    breakpoint()
     launch_args.append(len(df))  # size
     kernel.forall(len(df))(*launch_args)
     result = cudf.Series(ans_col).set_mask(bools_to_mask(ans_mask))
