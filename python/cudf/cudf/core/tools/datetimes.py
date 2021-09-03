@@ -858,8 +858,9 @@ def date_range(
             start.value.astype("datetime64[D]").astype(old_dtype)
         )
 
-    # The estimated upper bound of `end` is enforced to compute to make sure
-    # overflow components are thrown before actually computing the sequence.
+    # The estimated upper bound of `end` is enforced to be computed to make
+    # sure overflow components are raised before actually computing the
+    # sequence.
     # FIXME: when `end_estim` is out of bound, but the actual `end` is not,
     # we shouldn't raise but compute the sequence as is. The trailing overflow
     # part should get trimmed at the end.
@@ -869,6 +870,13 @@ def date_range(
     if "months" in offset.kwds or "years" in offset.kwds:
         # If `offset` is non-fixed frequency, resort to libcudf.
         res = libcudf.datetime.date_range(start.device_value, periods, offset)
+        if _periods_not_specified:
+            # As mentioned in [1], this is a post processing step to trim extra
+            # elements when `periods` is an estimated value. Only offset
+            # specified with non fixed frequencies requires trimming.
+            res = res[
+                (res <= end) if _is_increment_sequence else (res <= start)
+            ]
     else:
         # If `offset` is fixed frequency, we treat both timestamps as integers
         # and evenly divide the given integer range.
@@ -878,11 +886,6 @@ def date_range(
             num=periods,
         )
         res = cudf.core.column.as_column(arr).astype("datetime64[ns]")
-
-    if _periods_not_specified:
-        # As mentioned in [1], this is a post processing step to trim extra
-        # elements when `periods` is an estimated value.
-        res = res[(res <= end) if _is_increment_sequence else (res <= start)]
 
     return cudf.DatetimeIndex._from_data({name: res})
 
