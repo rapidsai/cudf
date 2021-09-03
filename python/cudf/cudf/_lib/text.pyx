@@ -7,8 +7,6 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
-from cudf.core.column_accessor import ColumnAccessor
-
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.io.text cimport (
@@ -39,6 +37,7 @@ cpdef read_text(object filepaths_or_buffers,
         c_col = move(multibyte_split(dereference(datasource), delim))
 
     col = Column.from_unique_ptr(move(c_col))
-    df = cudf.DataFrame._from_data(ColumnAccessor({"col_name": col}))
+    df = cudf.DataFrame._from_data(
+        cudf.core.column_accessor.ColumnAccessor({"col_name": col}))
 
     return df
