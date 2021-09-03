@@ -1559,19 +1559,26 @@ def test_error_values():
         (
             [
                 "2020-05-31 08:00:00",
-                None,
-                "1999-12-31 18:40:00",
-                "2000-12-31 04:00:00",
-                None,
-                "1900-02-28 07:00:00",
-                "1800-03-14 07:30:00",
-                "2100-03-14 07:30:00",
-                "1970-01-01 00:00:00",
-                "1969-12-31 12:59:00",
+                "1999-12-31 18:40:10",
+                "2000-12-31 04:00:05",
+                "1900-02-28 07:00:06",
+                "1800-03-14 07:30:20",
+                "2100-03-14 07:30:20",
+                "1970-01-01 00:00:09",
+                "1969-12-31 12:59:10",
             ]
         )
     ],
 )
 def test_ceil(data):
-    # ps = pd.Series(data, dtype="datetime64[ns]")
-    return None
+    resolutions = ["D", "H", "T", "S", "L", "U", "N"]
+
+    for time_type in DATETIME_TYPES:
+        ps = pd.Series(data, dtype=time_type)
+        gs = cudf.from_pandas(ps)
+
+        for resolution in resolutions:
+            expect = ps.dt.ceil(resolution)
+            got = gs.dt.ceil(resolution)
+
+            assert_eq(expect, got)

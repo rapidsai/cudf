@@ -64,11 +64,12 @@ def ceil_datetime(Column col, object field):
     cdef column_view col_view = col.view()
 
     with nogil:
+        # https://pandas.pydata.org/pandas-docs/version/0.25.0/reference/api/pandas.Timedelta.resolution.html
         if field == "D":
             c_result = move(libcudf_datetime.ceil_day(col_view))
         elif field == "H":
             c_result = move(libcudf_datetime.ceil_hour(col_view))
-        elif field == "M":
+        elif field == "T":
             c_result = move(libcudf_datetime.ceil_minute(col_view))
         elif field == "S":
             c_result = move(libcudf_datetime.ceil_second(col_view))
@@ -76,7 +77,7 @@ def ceil_datetime(Column col, object field):
             c_result = move(libcudf_datetime.ceil_millisecond(col_view))
         elif field == "U":
             c_result = move(libcudf_datetime.ceil_microsecond(col_view))
-        elif field == "ns":
+        elif field == "N":
             c_result = move(libcudf_datetime.ceil_nanosecond(col_view))
         else:
             raise ValueError(f"Invalid resolution: '{field}'")
