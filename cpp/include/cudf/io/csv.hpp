@@ -115,8 +115,7 @@ class csv_reader_options {
   // Conversion settings
 
   // Per-column types; disables type inference on those columns
-  std::variant<std::vector<std::string>, std::vector<data_type>, std::map<std::string, data_type>>
-    _dtypes;
+  std::variant<std::vector<data_type>, std::map<std::string, data_type>> _dtypes;
   // Additional values to recognize as boolean true values
   std::vector<std::string> _true_values{"True", "TRUE", "true"};
   // Additional values to recognize as boolean false values
@@ -176,6 +175,40 @@ class csv_reader_options {
    * @brief Returns number of bytes to read.
    */
   std::size_t get_byte_range_size() const { return _byte_range_size; }
+
+  /**
+   * @brief Returns number of bytes to read with padding.
+   */
+  std::size_t get_byte_range_size_with_padding() const
+  {
+    if (_byte_range_size == 0) {
+      return 0;
+    } else {
+      return _byte_range_size + get_byte_range_padding();
+    }
+  }
+
+  /**
+   * @brief Returns number of bytes to pad when reading.
+   */
+  std::size_t get_byte_range_padding() const
+  {
+    auto const num_names   = _names.size();
+    auto const num_dtypes  = std::visit([](const auto& dtypes) { return dtypes.size(); }, _dtypes);
+    auto const num_columns = std::max(num_dtypes, num_names);
+
+    auto const max_row_bytes = 16 * 1024;  // 16KB
+    auto const column_bytes  = 64;
+    auto const base_padding  = 1024;  // 1KB
+
+    if (num_columns == 0) {
+      // Use flat size if the number of columns is not known
+      return max_row_bytes;
+    }
+
+    // Expand the size based on the number of columns, if available
+    return base_padding + num_columns * column_bytes;
+  }
 
   /**
    * @brief Returns names of the columns.
@@ -305,10 +338,7 @@ class csv_reader_options {
   /**
    * @brief Returns per-column types.
    */
-  std::variant<std::vector<std::string>,
-               std::vector<data_type>,
-               std::map<std::string, data_type>> const&
-  get_dtypes() const
+  std::variant<std::vector<data_type>, std::map<std::string, data_type>> const& get_dtypes() const
   {
     return _dtypes;
   }
@@ -607,20 +637,6 @@ class csv_reader_options {
    * @param types Vector specifying the columns' target data types.
    */
   void set_dtypes(std::vector<data_type> types) { _dtypes = std::move(types); }
-
-  /**
-   * @brief Sets per-column types, specified by the type's respective string representation.
-   *
-   * @param types Vector of dtypes in which the column needs to be read.
-   */
-  [[deprecated(
-    "The string-based interface will be deprecated."
-    "Use dtypes(std::vector<data_type>) or "
-    "dtypes(std::map<std::string, data_type>) instead.")]] void
-  set_dtypes(std::vector<std::string> types)
-  {
-    _dtypes = std::move(types);
-  }
 
   /**
    * @brief Sets additional values to recognize as boolean true values.
@@ -1068,22 +1084,6 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Sets per-column types, specified by the type's respective string representation.
-   *
-   * @param types Vector of dtypes in which the column needs to be read.
-   * @return this for chaining.
-   */
-  [[deprecated(
-    "The string-based interface will be deprecated."
-    "Use dtypes(std::vector<data_type>) or "
-    "dtypes(std::map<std::string, data_type>) instead.")]] csv_reader_options_builder&
-  dtypes(std::vector<std::string> types)
-  {
-    options._dtypes = std::move(types);
-    return *this;
-  }
-
-  /**
    * @brief Sets additional values to recognize as boolean true values.
    *
    * @param vals Vector of values to be considered to be `true`.
@@ -1197,7 +1197,7 @@ class csv_reader_options_builder {
  * @return The set of columns along with metadata.
  */
 table_with_metadata read_csv(
-  csv_reader_options const& options,
+  csv_reader_options options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

@@ -279,10 +279,8 @@ struct list_child_constructor {
     return cudf::make_strings_column(num_child_rows,
                                      std::move(string_offsets),
                                      std::move(string_chars),
-                                     child_null_mask.second,            // Null count.
-                                     std::move(child_null_mask.first),  // Null mask.
-                                     stream,
-                                     mr);
+                                     child_null_mask.second,  // Null count.
+                                     std::move(child_null_mask.first));
   }
 
   /**

@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,23 +35,23 @@ execute_process(COMMAND ${CMAKE_COMMAND} -G ${CMAKE_GENERATOR} .
 
 if(NVCOMP_CONFIG)
     message(FATAL_ERROR "Configuring nvcomp failed: " ${NVCOMP_CONFIG})
-endif(NVCOMP_CONFIG)
+endif()
 
 set(PARALLEL_BUILD -j)
 if($ENV{PARALLEL_LEVEL})
     set(NUM_JOBS $ENV{PARALLEL_LEVEL})
     set(PARALLEL_BUILD "${PARALLEL_BUILD}${NUM_JOBS}")
-endif($ENV{PARALLEL_LEVEL})
+endif()
 
 if(${NUM_JOBS})
     if(${NUM_JOBS} EQUAL 1)
         message(STATUS "NVCOMP BUILD: Enabling Sequential CMake build")
     elseif(${NUM_JOBS} GREATER 1)
         message(STATUS "NVCOMP BUILD: Enabling Parallel CMake build with ${NUM_JOBS} jobs")
-    endif(${NUM_JOBS} EQUAL 1)
+    endif()
 else()
     message(STATUS "NVCOMP BUILD: Enabling Parallel CMake build with all threads")
-endif(${NUM_JOBS})
+endif()
 
 execute_process(COMMAND ${CMAKE_COMMAND} --build .. -- ${PARALLEL_BUILD}
                 RESULT_VARIABLE NVCOMP_BUILD
@@ -59,7 +59,7 @@ execute_process(COMMAND ${CMAKE_COMMAND} --build .. -- ${PARALLEL_BUILD}
 
 if(NVCOMP_BUILD)
     message(FATAL_ERROR "Building nvcomp failed: " ${NVCOMP_BUILD})
-endif(NVCOMP_BUILD)
+endif()
 
 message(STATUS "nvcomp build completed at: " ${NVCOMP_ROOT}/build)
 
@@ -73,4 +73,7 @@ find_library(NVCOMP_LIB nvcomp
 if(NVCOMP_LIB)
     message(STATUS "nvcomp library: " ${NVCOMP_LIB})
     set(NVCOMP_FOUND TRUE)
-endif(NVCOMP_LIB)
+
+    add_library(nvcomp STATIC IMPORTED)
+    set_target_properties(nvcomp PROPERTIES IMPORTED_LOCATION "${NVCOMP_LIB}")
+endif()

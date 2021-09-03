@@ -229,9 +229,7 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
                                    std::move(children.first),
                                    std::move(children.second),
                                    strings.null_count(),
-                                   std::move(null_mask),
-                                   stream,
-                                   mr);
+                                   std::move(null_mask));
 }
 
 std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& strings,
@@ -263,9 +261,7 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& str
                                    std::move(children.first),
                                    std::move(children.second),
                                    strings.null_count(),
-                                   std::move(null_mask),
-                                   stream,
-                                   mr);
+                                   std::move(null_mask));
 }
 
 }  // namespace detail

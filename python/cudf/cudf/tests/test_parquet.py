@@ -2047,3 +2047,29 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
     got = pd.read_parquet(fname)
     nullable = True if num_rows > 0 else False
     assert_eq(gdf.to_pandas(nullable=nullable), got)
+
+
+def test_parquet_decimal_precision(tmpdir):
+    df = cudf.DataFrame({"val": ["3.5", "4.2"]}).astype(
+        cudf.Decimal64Dtype(5, 2)
+    )
+    assert df.val.dtype.precision == 5
+
+    fname = tmpdir.join("decimal_test.parquet")
+    df.to_parquet(fname)
+    df = cudf.read_parquet(fname)
+    assert df.val.dtype.precision == 5
+
+
+def test_parquet_decimal_precision_empty(tmpdir):
+    df = (
+        cudf.DataFrame({"val": ["3.5", "4.2"]})
+        .astype(cudf.Decimal64Dtype(5, 2))
+        .iloc[:0]
+    )
+    assert df.val.dtype.precision == 5
+
+    fname = tmpdir.join("decimal_test.parquet")
+    df.to_parquet(fname)
+    df = cudf.read_parquet(fname)
+    assert df.val.dtype.precision == 5
