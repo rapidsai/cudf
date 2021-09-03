@@ -78,7 +78,7 @@ def test_compare_masked_vs_masked(op):
 
 
 @pytest.mark.parametrize("op", arith_ops)
-@pytest.mark.parametrize("constant", [1, 1.5])
+@pytest.mark.parametrize("constant", [1, 1.5, True, False])
 def test_arith_masked_vs_constant(op, constant):
     def func_pdf(x):
         return op(x, constant)

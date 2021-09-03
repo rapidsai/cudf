@@ -154,9 +154,8 @@ def register_const_op(op):
     to_lower_op = make_const_op(op)
     cuda_lower(op, MaskedType, types.Number)(to_lower_op)
     cuda_lower(op, types.Number, MaskedType)(to_lower_op)
-
-    # to_lower_op_reflected = make_reflected_const_op(op)
-    # cuda_lower(op, types.Number, MaskedType)(to_lower_op_reflected)
+    cuda_lower(op, MaskedType, types.Boolean)(to_lower_op)
+    cuda_lower(op, types.Boolean, MaskedType)(to_lower_op)
 
 
 # register all lowering at init
