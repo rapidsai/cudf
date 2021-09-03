@@ -39,9 +39,9 @@ class row_contains_null {
  public:
   row_contains_null(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
 
-  __device__ __inline__ bool operator()(const pair_type& pair) const noexcept
+  __device__ __inline__ bool operator()(const size_type& i) const noexcept
   {
-    return _row_bitmask == nullptr or cudf::bit_is_set(_row_bitmask, pair.second);
+    return _row_bitmask == nullptr or cudf::bit_is_set(_row_bitmask, i);
   }
 
  private:
@@ -91,7 +91,7 @@ void build_join_hash_table(cudf::table_view const& build,
     auto const row_bitmask = cudf::detail::bitmask_and(build, stream);
     row_contains_null pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
-    hash_table.insert_if(iter, iter + build_table_num_rows, pred, stream.value());
+    hash_table.insert_if_n(iter, first, build_table_num_rows, pred, stream.value());
   }
 }
 
