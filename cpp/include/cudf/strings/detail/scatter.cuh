@@ -79,9 +79,7 @@ std::unique_ptr<column> scatter(
                              std::move(offsets_column),
                              std::move(chars_column),
                              UNKNOWN_NULL_COUNT,
-                             cudf::detail::copy_bitmask(target.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(target.parent(), stream, mr));
 }
 
 }  // namespace detail

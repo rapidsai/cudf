@@ -1069,9 +1069,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                              std::move(offsets_column),
                              std::move(chars_column),
                              timestamps.null_count(),
-                             cudf::detail::copy_bitmask(timestamps, stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(timestamps,stream,mr));
 }
 
 }  // namespace detail

@@ -182,9 +182,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
                              std::move(children.first),
                              std::move(children.second),
                              strings.null_count(),
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

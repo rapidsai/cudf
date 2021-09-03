@@ -7,7 +7,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, MutableMapping, Optional
+from typing import Any, MutableMapping, Optional, Set
 from uuid import uuid4
 
 import cupy
@@ -39,7 +39,7 @@ from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, SingleColumnFrame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
-from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
+from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.utils import cudautils, docutils
 from cudf.utils.docutils import copy_docstring
@@ -104,6 +104,8 @@ class Series(SingleColumnFrame, Serializable):
         ``null`` values.
         If ``False``, leaves ``np.nan`` values as is.
     """
+
+    _accessors: Set[Any] = set()
 
     # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property
@@ -1216,6 +1218,7 @@ class Series(SingleColumnFrame, Serializable):
         *args,
         **kwargs,
     ):
+        # Specialize binops to align indices.
         if isinstance(other, SingleColumnFrame):
             if (
                 # TODO: The can_reindex logic also needs to be applied for
@@ -1238,8 +1241,14 @@ class Series(SingleColumnFrame, Serializable):
         else:
             lhs = self
 
-        # Note that we call the super on lhs, not self.
-        return super(Series, lhs)._binaryop(other, fn, fill_value, reflect)
+        operands = lhs._make_operands_for_binop(other, fill_value, reflect)
+        return (
+            lhs._from_data(
+                data=lhs._colwise_binop(operands, fn), index=lhs._index,
+            )
+            if operands is not NotImplemented
+            else NotImplemented
+        )
 
     def add(self, other, fill_value=None, axis=0):
         """
@@ -2246,7 +2255,9 @@ class Series(SingleColumnFrame, Serializable):
             if isinstance(objs[0].index, cudf.MultiIndex):
                 index = cudf.MultiIndex._concat([o.index for o in objs])
             else:
-                index = Index._concat([o.index for o in objs])
+                index = cudf.core.index.GenericIndex._concat(
+                    [o.index for o in objs]
+                )
 
         names = {obj.name for obj in objs}
         if len(names) == 1:
