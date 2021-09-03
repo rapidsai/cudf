@@ -3669,7 +3669,7 @@ def test_one_row_head():
     "np_dtype,pd_dtype",
     [
         tuple(item)
-        for item in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes.items()
+        for item in cudf.utils.dtypes.np_dtypes_to_pandas_dtypes.items()
     ],
 )
 def test_series_astype_pandas_nullable(dtype, np_dtype, pd_dtype):
@@ -5909,17 +5909,17 @@ def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
         (
             pd.Series([random.random() for _ in range(10)], dtype="float128"),
             None,
-            NotImplementedError,
+            TypeError,
         ),
     ],
 )
 def test_from_pandas_unsupported_types(data, expected_upcast_type, error):
     pdf = pd.DataFrame({"one_col": data})
-    if error == NotImplementedError:
-        with pytest.raises(error):
+    if error is not None:
+        with pytest.raises(ValueError):
             cudf.from_pandas(data)
 
-        with pytest.raises(error):
+        with pytest.raises(ValueError):
             cudf.Series(data)
 
         with pytest.raises(error):

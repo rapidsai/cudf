@@ -8,7 +8,7 @@ from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
 
-from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -72,7 +72,7 @@ def string_to_floating(Column input_col, object out_type):
     cdef unique_ptr[column] c_result
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[out_type]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[out_type]
         )
     )
     cdef data_type c_out_type = data_type(tid)
@@ -165,7 +165,7 @@ def string_to_integer(Column input_col, object out_type):
     cdef unique_ptr[column] c_result
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[out_type]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[out_type]
         )
     )
     cdef data_type c_out_type = data_type(tid)
@@ -552,7 +552,7 @@ def timestamp2int(Column input_col, dtype, format):
     cdef column_view input_column_view = input_col.view()
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[dtype]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[dtype]
         )
     )
     cdef data_type out_type = data_type(tid)
@@ -617,7 +617,7 @@ def timedelta2int(Column input_col, dtype, format):
     cdef column_view input_column_view = input_col.view()
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[dtype]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[dtype]
         )
     )
     cdef data_type out_type = data_type(tid)
@@ -744,7 +744,9 @@ def htoi(Column input_col, **kwargs):
     cdef column_view input_column_view = input_col.view()
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[kwargs.get('dtype', cudf.dtype("int64"))]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[
+                kwargs.get('dtype', cudf.dtype("int64"))
+            ]
         )
     )
     cdef data_type c_out_type = data_type(tid)

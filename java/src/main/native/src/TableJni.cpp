@@ -755,13 +755,46 @@ bool valid_window_parameters(native_jintArray const &values,
          values.size() == preceding.size() && values.size() == following.size();
 }
 
-// Generate gather maps needed to manifest the result of an equi-join between two tables.
+// Convert a cudf gather map pair into the form that Java expects
 // The resulting Java long array contains the following at each index:
 //   0: Size of each gather map in bytes
 //   1: Device address of the gather map for the left table
 //   2: Host address of the rmm::device_buffer instance that owns the left gather map data
 //   3: Device address of the gather map for the right table
 //   4: Host address of the rmm::device_buffer instance that owns the right gather map data
+jlongArray gather_maps_to_java(JNIEnv *env,
+                               std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+                                         std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
+                                   maps) {
+  // release the underlying device buffer to Java
+  auto left_map_buffer = std::make_unique<rmm::device_buffer>(maps.first->release());
+  auto right_map_buffer = std::make_unique<rmm::device_buffer>(maps.second->release());
+  cudf::jni::native_jlongArray result(env, 5);
+  result[0] = static_cast<jlong>(left_map_buffer->size());
+  result[1] = reinterpret_cast<jlong>(left_map_buffer->data());
+  result[2] = reinterpret_cast<jlong>(left_map_buffer.release());
+  result[3] = reinterpret_cast<jlong>(right_map_buffer->data());
+  result[4] = reinterpret_cast<jlong>(right_map_buffer.release());
+  return result.get_jArray();
+}
+
+// Convert a cudf gather map into the form that Java expects
+// The resulting Java long array contains the following at each index:
+//   0: Size of the gather map in bytes
+//   1: Device address of the gather map
+//   2: Host address of the rmm::device_buffer instance that owns the gather map data
+jlongArray gather_map_to_java(JNIEnv *env,
+                              std::unique_ptr<rmm::device_uvector<cudf::size_type>> map) {
+  // release the underlying device buffer to Java
+  auto gather_map_buffer = std::make_unique<rmm::device_buffer>(map->release());
+  cudf::jni::native_jlongArray result(env, 3);
+  result[0] = static_cast<jlong>(gather_map_buffer->size());
+  result[1] = reinterpret_cast<jlong>(gather_map_buffer->data());
+  result[2] = reinterpret_cast<jlong>(gather_map_buffer.release());
+  return result.get_jArray();
+}
+
+// Generate gather maps needed to manifest the result of an equi-join between two tables.
 template <typename T>
 jlongArray join_gather_maps(JNIEnv *env, jlong j_left_keys, jlong j_right_keys,
                             jboolean compare_nulls_equal, T join_func) {
@@ -772,31 +805,29 @@ jlongArray join_gather_maps(JNIEnv *env, jlong j_left_keys, jlong j_right_keys,
     auto left_keys = reinterpret_cast<cudf::table_view const *>(j_left_keys);
     auto right_keys = reinterpret_cast<cudf::table_view const *>(j_right_keys);
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-              std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-        join_maps = join_func(*left_keys, *right_keys, nulleq);
+    return gather_maps_to_java(env, join_func(*left_keys, *right_keys, nulleq));
+  }
+  CATCH_STD(env, NULL);
+}
 
-    // release the underlying device buffer to Java
-    auto left_map_buffer = std::make_unique<rmm::device_buffer>(join_maps.first->release());
-    auto right_map_buffer = std::make_unique<rmm::device_buffer>(join_maps.second->release());
-    cudf::jni::native_jlongArray result(env, 5);
-    result[0] = static_cast<jlong>(left_map_buffer->size());
-    result[1] = reinterpret_cast<jlong>(left_map_buffer->data());
-    result[2] = reinterpret_cast<jlong>(left_map_buffer.release());
-    result[3] = reinterpret_cast<jlong>(right_map_buffer->data());
-    result[4] = reinterpret_cast<jlong>(right_map_buffer.release());
-    return result.get_jArray();
+// Generate gather maps needed to manifest the result of an equi-join between a left table and
+// a hash table built from the join's right table.
+template <typename T>
+jlongArray hash_join_gather_maps(JNIEnv *env, jlong j_left_keys, jlong j_right_hash_join,
+                                 jboolean compare_nulls_equal, T join_func) {
+  JNI_NULL_CHECK(env, j_left_keys, "left table is null", NULL);
+  JNI_NULL_CHECK(env, j_right_hash_join, "hash join is null", NULL);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_keys = reinterpret_cast<cudf::table_view const *>(j_left_keys);
+    auto hash_join = reinterpret_cast<cudf::hash_join const *>(j_right_hash_join);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    return gather_maps_to_java(env, join_func(*left_keys, *hash_join, nulleq));
   }
   CATCH_STD(env, NULL);
 }
 
 // Generate gather maps needed to manifest the result of a conditional join between two tables.
-// The resulting Java long array contains the following at each index:
-//   0: Size of each gather map in bytes
-//   1: Device address of the gather map for the left table
-//   2: Host address of the rmm::device_buffer instance that owns the left gather map data
-//   3: Device address of the gather map for the right table
-//   4: Host address of the rmm::device_buffer instance that owns the right gather map data
 template <typename T>
 jlongArray cond_join_gather_maps(JNIEnv *env, jlong j_left_table, jlong j_right_table,
                                  jlong j_condition, jboolean compare_nulls_equal, T join_func) {
@@ -809,29 +840,13 @@ jlongArray cond_join_gather_maps(JNIEnv *env, jlong j_left_table, jlong j_right_
     auto right_table = reinterpret_cast<cudf::table_view const *>(j_right_table);
     auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-              std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-        join_maps = join_func(*left_table, *right_table, condition->get_top_expression(), nulleq);
-
-    // release the underlying device buffer to Java
-    auto left_map_buffer = std::make_unique<rmm::device_buffer>(join_maps.first->release());
-    auto right_map_buffer = std::make_unique<rmm::device_buffer>(join_maps.second->release());
-    cudf::jni::native_jlongArray result(env, 5);
-    result[0] = static_cast<jlong>(left_map_buffer->size());
-    result[1] = reinterpret_cast<jlong>(left_map_buffer->data());
-    result[2] = reinterpret_cast<jlong>(left_map_buffer.release());
-    result[3] = reinterpret_cast<jlong>(right_map_buffer->data());
-    result[4] = reinterpret_cast<jlong>(right_map_buffer.release());
-    return result.get_jArray();
+    return gather_maps_to_java(
+        env, join_func(*left_table, *right_table, condition->get_top_expression(), nulleq));
   }
   CATCH_STD(env, NULL);
 }
 
 // Generate a gather map needed to manifest the result of a semi/anti join between two tables.
-// The resulting Java long array contains the following at each index:
-//   0: Size of the gather map in bytes
-//   1: Device address of the gather map
-//   2: Host address of the rmm::device_buffer instance that owns the gather map data
 template <typename T>
 jlongArray join_gather_single_map(JNIEnv *env, jlong j_left_keys, jlong j_right_keys,
                                   jboolean compare_nulls_equal, T join_func) {
@@ -842,26 +857,13 @@ jlongArray join_gather_single_map(JNIEnv *env, jlong j_left_keys, jlong j_right_
     auto left_keys = reinterpret_cast<cudf::table_view const *>(j_left_keys);
     auto right_keys = reinterpret_cast<cudf::table_view const *>(j_right_keys);
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    std::unique_ptr<rmm::device_uvector<cudf::size_type>> join_map =
-        join_func(*left_keys, *right_keys, nulleq);
-
-    // release the underlying device buffer to Java
-    auto gather_map_buffer = std::make_unique<rmm::device_buffer>(join_map->release());
-    cudf::jni::native_jlongArray result(env, 3);
-    result[0] = static_cast<jlong>(gather_map_buffer->size());
-    result[1] = reinterpret_cast<jlong>(gather_map_buffer->data());
-    result[2] = reinterpret_cast<jlong>(gather_map_buffer.release());
-    return result.get_jArray();
+    return gather_map_to_java(env, join_func(*left_keys, *right_keys, nulleq));
   }
   CATCH_STD(env, NULL);
 }
 
 // Generate a gather map needed to manifest the result of a conditional semi/anti join
 // between two tables.
-// The resulting Java long array contains the following at each index:
-//   0: Size of the gather map in bytes
-//   1: Device address of the gather map
-//   2: Host address of the rmm::device_buffer instance that owns the gather map data
 template <typename T>
 jlongArray cond_join_gather_single_map(JNIEnv *env, jlong j_left_table, jlong j_right_table,
                                        jlong j_condition, jboolean compare_nulls_equal,
@@ -875,16 +877,8 @@ jlongArray cond_join_gather_single_map(JNIEnv *env, jlong j_left_table, jlong j_
     auto right_table = reinterpret_cast<cudf::table_view const *>(j_right_table);
     auto condition = reinterpret_cast<cudf::jni::ast::compiled_expr *>(j_condition);
     auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    std::unique_ptr<rmm::device_uvector<cudf::size_type>> join_map =
-        join_func(*left_table, *right_table, condition->get_top_expression(), nulleq);
-
-    // release the underlying device buffer to Java
-    auto gather_map_buffer = std::make_unique<rmm::device_buffer>(join_map->release());
-    cudf::jni::native_jlongArray result(env, 3);
-    result[0] = static_cast<jlong>(gather_map_buffer->size());
-    result[1] = reinterpret_cast<jlong>(gather_map_buffer->data());
-    result[2] = reinterpret_cast<jlong>(gather_map_buffer.release());
-    return result.get_jArray();
+    return gather_map_to_java(
+        env, join_func(*left_table, *right_table, condition->get_top_expression(), nulleq));
   }
   CATCH_STD(env, NULL);
 }
@@ -935,12 +929,70 @@ jlongArray combine_join_results(JNIEnv *env, cudf::table &left_results,
   return combine_join_results(env, std::move(left_cols), std::move(right_cols));
 }
 
+cudf::column_view remove_validity_from_col(cudf::column_view column_view) {
+  if (!cudf::is_compound(column_view.type())) {
+    if (column_view.nullable() && column_view.null_count() == 0) {
+      // null_mask is allocated but no nulls present therefore we create a new column_view without
+      // the null_mask to avoid things blowing up in reading the parquet file
+      return cudf::column_view(column_view.type(), column_view.size(), column_view.head(), nullptr,
+                               0, column_view.offset());
+    } else {
+      return cudf::column_view(column_view);
+    }
+  } else {
+    std::unique_ptr<cudf::column_view> ret;
+    std::vector<cudf::column_view> children;
+    children.reserve(column_view.num_children());
+    for (auto it = column_view.child_begin(); it != column_view.child_end(); it++) {
+      children.push_back(remove_validity_from_col(*it));
+    }
+    if (!column_view.nullable() || column_view.null_count() != 0) {
+      ret.reset(new cudf::column_view(column_view.type(), column_view.size(), nullptr,
+                                      column_view.null_mask(), column_view.null_count(),
+                                      column_view.offset(), children));
+    } else {
+      ret.reset(new cudf::column_view(column_view.type(), column_view.size(), nullptr, nullptr, 0,
+                                      column_view.offset(), children));
+    }
+    return *ret.release();
+  }
+}
+
+cudf::table_view remove_validity_if_needed(cudf::table_view *input_table_view) {
+  std::vector<cudf::column_view> views;
+  views.reserve(input_table_view->num_columns());
+  for (auto it = input_table_view->begin(); it != input_table_view->end(); it++) {
+    views.push_back(remove_validity_from_col(*it));
+  }
+
+  return cudf::table_view(views);
+}
+
 } // namespace
 
 } // namespace jni
 } // namespace cudf
 
 extern "C" {
+
+// This is a method purely added for testing remove_validity_if_needed method
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_removeNullMasksIfNeeded(JNIEnv *env, jclass,
+                                                                               jlong j_table_view) {
+  JNI_NULL_CHECK(env, j_table_view, "table view handle is null", 0);
+  try {
+    cudf::table_view *tview = reinterpret_cast<cudf::table_view *>(j_table_view);
+    cudf::table_view result = cudf::jni::remove_validity_if_needed(tview);
+    cudf::table m_tbl(result);
+    std::vector<std::unique_ptr<cudf::column>> cols = m_tbl.release();
+    auto results = cudf::jni::native_jlongArray(env, cols.size());
+    int i = 0;
+    for (auto it = cols.begin(); it != cols.end(); it++) {
+      results[i++] = reinterpret_cast<jlong>(it->release());
+    }
+    return results.get_jArray();
+  }
+  CATCH_STD(env, 0);
+}
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_createCudfTableView(JNIEnv *env, jclass,
                                                                       jlongArray j_cudf_columns) {
@@ -1363,7 +1415,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetChunk(JNIEnv *env, 
   JNI_NULL_CHECK(env, j_state, "null state", );
 
   using namespace cudf::io;
-  cudf::table_view *tview = reinterpret_cast<cudf::table_view *>(j_table);
+  cudf::table_view *tview_with_empty_nullmask = reinterpret_cast<cudf::table_view *>(j_table);
+  cudf::table_view tview = cudf::jni::remove_validity_if_needed(tview_with_empty_nullmask);
   cudf::jni::native_parquet_writer_handle *state =
       reinterpret_cast<cudf::jni::native_parquet_writer_handle *>(j_state);
 
@@ -1373,7 +1426,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetChunk(JNIEnv *env, 
   }
   try {
     cudf::jni::auto_set_device(env);
-    state->writer->write(*tview);
+    state->writer->write(tview);
   }
   CATCH_STD(env, )
 }
@@ -1951,6 +2004,45 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoinGatherMaps(
       });
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_leftJoinRowCount(JNIEnv *env, jclass,
+                                                                   jlong j_left_table,
+                                                                   jlong j_right_hash_join,
+                                                                   jboolean compare_nulls_equal) {
+  JNI_NULL_CHECK(env, j_left_table, "left table is null", 0);
+  JNI_NULL_CHECK(env, j_right_hash_join, "right hash join is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
+    auto hash_join = reinterpret_cast<cudf::hash_join const *>(j_right_hash_join);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    auto row_count = hash_join->left_join_size(*left_table, nulleq);
+    return static_cast<jlong>(row_count);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftHashJoinGatherMaps(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join,
+    jboolean compare_nulls_equal) {
+  return cudf::jni::hash_join_gather_maps(
+      env, j_left_table, j_right_hash_join, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::hash_join const &hash, cudf::null_equality nulleq) {
+        return hash.left_join(left, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftHashJoinGatherMapsWithCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join, jboolean compare_nulls_equal,
+    jlong j_output_row_count) {
+  auto output_row_count = static_cast<std::size_t>(j_output_row_count);
+  return cudf::jni::hash_join_gather_maps(env, j_left_table, j_right_hash_join, compare_nulls_equal,
+                                          [output_row_count](cudf::table_view const &left,
+                                                             cudf::hash_join const &hash,
+                                                             cudf::null_equality nulleq) {
+                                            return hash.left_join(left, nulleq, output_row_count);
+                                          });
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalLeftJoinRowCount(
     JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
     jboolean compare_nulls_equal) {
@@ -2002,6 +2094,45 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoinGatherMaps(
       });
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_innerJoinRowCount(JNIEnv *env, jclass,
+                                                                    jlong j_left_table,
+                                                                    jlong j_right_hash_join,
+                                                                    jboolean compare_nulls_equal) {
+  JNI_NULL_CHECK(env, j_left_table, "left table is null", 0);
+  JNI_NULL_CHECK(env, j_right_hash_join, "right hash join is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
+    auto hash_join = reinterpret_cast<cudf::hash_join const *>(j_right_hash_join);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    auto row_count = hash_join->inner_join_size(*left_table, nulleq);
+    return static_cast<jlong>(row_count);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerHashJoinGatherMaps(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join,
+    jboolean compare_nulls_equal) {
+  return cudf::jni::hash_join_gather_maps(
+      env, j_left_table, j_right_hash_join, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::hash_join const &hash, cudf::null_equality nulleq) {
+        return hash.inner_join(left, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerHashJoinGatherMapsWithCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join, jboolean compare_nulls_equal,
+    jlong j_output_row_count) {
+  auto output_row_count = static_cast<std::size_t>(j_output_row_count);
+  return cudf::jni::hash_join_gather_maps(env, j_left_table, j_right_hash_join, compare_nulls_equal,
+                                          [output_row_count](cudf::table_view const &left,
+                                                             cudf::hash_join const &hash,
+                                                             cudf::null_equality nulleq) {
+                                            return hash.inner_join(left, nulleq, output_row_count);
+                                          });
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalInnerJoinRowCount(
     JNIEnv *env, jclass, jlong j_left_table, jlong j_right_table, jlong j_condition,
     jboolean compare_nulls_equal) {
@@ -2051,6 +2182,45 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_fullJoinGatherMaps(
       [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
         return cudf::full_join(left, right, nulleq);
       });
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_fullJoinRowCount(JNIEnv *env, jclass,
+                                                                   jlong j_left_table,
+                                                                   jlong j_right_hash_join,
+                                                                   jboolean compare_nulls_equal) {
+  JNI_NULL_CHECK(env, j_left_table, "left table is null", 0);
+  JNI_NULL_CHECK(env, j_right_hash_join, "right hash join is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
+    auto hash_join = reinterpret_cast<cudf::hash_join const *>(j_right_hash_join);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    auto row_count = hash_join->full_join_size(*left_table, nulleq);
+    return static_cast<jlong>(row_count);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_fullHashJoinGatherMaps(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join,
+    jboolean compare_nulls_equal) {
+  return cudf::jni::hash_join_gather_maps(
+      env, j_left_table, j_right_hash_join, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::hash_join const &hash, cudf::null_equality nulleq) {
+        return hash.full_join(left, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_fullHashJoinGatherMapsWithCount(
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join, jboolean compare_nulls_equal,
+    jlong j_output_row_count) {
+  auto output_row_count = static_cast<std::size_t>(j_output_row_count);
+  return cudf::jni::hash_join_gather_maps(env, j_left_table, j_right_hash_join, compare_nulls_equal,
+                                          [output_row_count](cudf::table_view const &left,
+                                                             cudf::hash_join const &hash,
+                                                             cudf::null_equality nulleq) {
+                                            return hash.full_join(left, nulleq, output_row_count);
+                                          });
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalFullJoinGatherMaps(

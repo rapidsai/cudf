@@ -14,25 +14,31 @@
 # limitations under the License.
 #=============================================================================
 
-function(find_and_configure_cucollections)
+function(find_and_configure_nvcomp VERSION)
 
-    if(TARGET cuco::cuco)
+    if(TARGET nvcomp::nvcomp)
         return()
     endif()
 
-    # Find or install cuCollections
-    CPMFindPackage(NAME   cuco
-        GITHUB_REPOSITORY NVIDIA/cuCollections
-        GIT_TAG           0d602ae21ea4f38d23ed816aa948453d97b2ee4e
-        OPTIONS           "BUILD_TESTS OFF"
-                          "BUILD_BENCHMARKS OFF"
-                          "BUILD_EXAMPLES OFF"
+    # Find or install nvcomp
+    CPMFindPackage(NAME nvcomp
+        GLOBAL_TARGETS     nvcomp::nvcomp
+        VERSION            ${VERSION}
+        CPM_ARGS
+            GITHUB_REPOSITORY  NVIDIA/nvcomp
+            GIT_TAG            3a12516afdeab4ace01298031757f84b8dda81b7
+            # GIT_SHALLOW        TRUE
+            OPTIONS            "BUILD_TESTS OFF"
+                               "BUILD_BENCHMARKS OFF"
+                               "BUILD_EXAMPLES OFF"
     )
 
-    set(CUCO_INCLUDE_DIR "${cuco_SOURCE_DIR}/include" PARENT_SCOPE)
+    if(NOT TARGET nvcomp::nvcomp)
+        add_library(nvcomp::nvcomp ALIAS nvcomp)
+    endif()
 
-    # Make sure consumers of cudf can also see cuco::cuco target
-    fix_cmake_global_defaults(cuco::cuco)
 endfunction()
 
-find_and_configure_cucollections()
+set(CUDF_MIN_VERSION_nvCOMP 2.1.0)
+
+find_and_configure_nvcomp(${CUDF_MIN_VERSION_nvCOMP})

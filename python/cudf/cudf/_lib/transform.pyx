@@ -20,7 +20,7 @@ from cudf.core.buffer import Buffer
 
 from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
 
-from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -103,7 +103,9 @@ def transform(Column input, op):
 
     try:
         c_tid = <type_id> (
-            <underlying_type_t_type_id> np_to_cudf_types[np_dtype]
+            <underlying_type_t_type_id> SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[
+                np_dtype
+            ]
         )
         c_dtype = data_type(c_tid)
 
@@ -131,7 +133,9 @@ def masked_udf(Table incols, op, output_type):
     cdef data_type c_dtype
 
     c_tid = <type_id> (
-        <underlying_type_t_type_id> np_to_cudf_types[output_type]
+        <underlying_type_t_type_id> SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[
+            output_type
+        ]
     )
     c_dtype = data_type(c_tid)
 

@@ -132,13 +132,8 @@ std::unique_ptr<column> shift(strings_column_view const& input,
                     shift_chars_fn{*d_input_chars, d_fill_str, shift_offset});
 
   // caller sets the null-mask
-  return make_strings_column(input.size(),
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             0,
-                             rmm::device_buffer{},
-                             stream,
-                             mr);
+  return make_strings_column(
+    input.size(), std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
 }
 
 }  // namespace cudf::strings::detail

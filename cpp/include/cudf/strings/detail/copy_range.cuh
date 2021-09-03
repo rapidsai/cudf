@@ -210,9 +210,7 @@ std::unique_ptr<column> copy_range(
                                std::move(p_offsets_column),
                                std::move(p_chars_column),
                                null_count,
-                               std::move(null_mask),
-                               stream,
-                               mr);
+                               std::move(null_mask));
   }
 }
 
