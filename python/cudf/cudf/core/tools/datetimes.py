@@ -429,9 +429,21 @@ class DateOffset:
         "years": "Y",
     }
 
-    _CODES_TO_UNITS = {v: k for k, v in _UNITS_TO_CODES.items()}
+    _CODES_TO_UNITS = {
+        "ns": "nanoseconds",
+        "us": "microseconds",
+        "ms": "milliseconds",
+        "L": "milliseconds",
+        "s": "seconds",
+        "m": "minutes",
+        "h": "hours",
+        "D": "days",
+        "W": "weeks",
+        "M": "months",
+        "Y": "years",
+    }
 
-    _FREQSTR_REGEX = re.compile("([0-9]+)([a-zA-Z]+)")
+    _FREQSTR_REGEX = re.compile("([0-9]*)([a-zA-Z]+)")
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
@@ -613,6 +625,8 @@ class DateOffset:
             raise ValueError(f"Invalid frequency string: {freqstr}")
 
         numeric_part = match.group(1)
+        if numeric_part == "":
+            numeric_part = "1"
         freq_part = match.group(2)
 
         # Pandas uses `t/T` for minute frequency,
@@ -794,12 +808,12 @@ def date_range(
 
     _periods_not_specified = False
 
-    if isinstance(freq, cudf.DateOffset):
-        offset = freq.to_pandas()
+    if isinstance(freq, pd.DateOffset):
+        offset = DateOffset.from_pandas(freq)
     elif isinstance(freq, str):
-        offset = DateOffset._from_freqstr(freq).to_pandas()
+        offset = DateOffset._from_freqstr(freq)
     else:
-        if not isinstance(freq, pd.DateOffset):
+        if not isinstance(freq, DateOffset):
             raise TypeError("`freq` must be a string or DateOffset object.")
         offset = freq
 
@@ -853,7 +867,9 @@ def date_range(
         # If `offset` is non-fixed frequency, resort to libcudf.
         res = libcudf.datetime.date_range(start.device_value, periods, offset)
     else:
-        end = (pd.Timestamp(start.value) + (periods - 1) * offset).to_numpy()
+        end = (
+            pd.Timestamp(start.value) + (periods - 1) * offset.to_pandas()
+        ).to_numpy()
         arr = cp.linspace(
             start=start.value.astype("int64"),
             stop=end.astype("int64"),
@@ -911,7 +927,6 @@ def _offset_to_nanoseconds_lower_bound(offset: DateOffset) -> int:
         kwds.get("years", 0) * (365 * nanoseconds_per_day)
         + kwds.get("months", 0) * (28 * nanoseconds_per_day)
         + kwds.get("weeks", 0) * (7 * nanoseconds_per_day)
-        + int("weekday" in kwds) * (7 * nanoseconds_per_day)
         + kwds.get("days", 0) * nanoseconds_per_day
         + kwds.get("hours", 0) * 3600 * 1e9
         + kwds.get("minutes", 0) * 60 * 1e9
