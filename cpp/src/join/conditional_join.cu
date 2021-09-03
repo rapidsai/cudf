@@ -60,6 +60,7 @@ conditional_join(table_view const& left,
       case join_kind::LEFT_SEMI_JOIN:
         return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
                               std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+      default: CUDF_FAIL("Invalid join kind."); break;
     }
   } else if (left.num_rows() == 0) {
     switch (join_type) {
@@ -75,6 +76,7 @@ conditional_join(table_view const& left,
         auto ret_flipped = get_trivial_left_join_indices(right, stream);
         return std::make_pair(std::move(ret_flipped.second), std::move(ret_flipped.first));
       }
+      default: CUDF_FAIL("Invalid join kind."); break;
     }
   }
 
@@ -210,6 +212,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
       // Inner and left semi joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN:
       case join_kind::LEFT_SEMI_JOIN: return 0;
+      default: CUDF_FAIL("Invalid join kind."); break;
     }
   } else if (left.num_rows() == 0) {
     switch (join_type) {
@@ -220,6 +223,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
       case join_kind::LEFT_SEMI_JOIN: return 0;
       // Full joins need to return the trivial complement.
       case join_kind::FULL_JOIN: return right.num_rows();
+      default: CUDF_FAIL("Invalid join kind."); break;
     }
   }
 
