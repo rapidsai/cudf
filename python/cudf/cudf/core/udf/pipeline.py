@@ -29,14 +29,14 @@ def compile_masked_udf(func, dtypes):
         for arg in (numpy_support.from_dtype(np_type) for np_type in dtypes)
     )
     # Get the inlineable PTX function
-    ptx, numba_output_type = cudautils.compile_udf(func, to_compiler_sig)
-    numpy_output_type = (
-        numpy_support.as_dtype(numba_output_type.value_type)
-        if isinstance(numba_output_type, MaskedType)
-        else np.dtype(numba_output_type)
-    )
+    ptx, output_type = cudautils.compile_udf(func, to_compiler_sig)
 
-    return numpy_output_type, ptx
+    if not isinstance(output_type, MaskedType):
+        numba_output_type = numpy_support.from_dtype(np.dtype(output_type))
+    else:
+        numba_output_type = output_type
+
+    return numba_output_type, ptx
 
 
 def nulludf(func):
@@ -130,7 +130,6 @@ def _define_function(df, scalar_return=False):
 
     fargs = "(" + ",".join(fargs) + ")\n"
     start += "\tret = f_" + fargs + "\n"
-
     if scalar_return:
         start += "\tret_data_arr[i] = ret\n"
         start += "\tret_mask_arr[i] = True\n"
@@ -142,10 +141,14 @@ def _define_function(df, scalar_return=False):
 
 
 def udf_pipeline(df, f):
-    retty = compile_masked_udf(f, df.dtypes)[0]
-    _is_scalar_return = not isinstance(retty, MaskedType)
-
-    return_type = Tuple((numpy_support.from_dtype(retty)[::1], boolean[::1]))
+    numba_return_type, _ = compile_masked_udf(f, df.dtypes)
+    _is_scalar_return = not isinstance(numba_return_type, MaskedType)
+    scalar_return_type = (
+        numba_return_type
+        if _is_scalar_return
+        else numba_return_type.value_type
+    )
+    return_type = Tuple((scalar_return_type[::1], boolean[::1]))
     sig = void(
         return_type, *[masked_arrty_from_np_type(dtype) for dtype in df.dtypes]
     )
@@ -161,7 +164,9 @@ def udf_pipeline(df, f):
     _kernel = lcl["_kernel"]
     # compile
     kernel = cuda.jit(sig)(_kernel)
-    ans_col = cupy.empty(len(df), dtype=retty)
+    ans_col = cupy.empty(
+        len(df), dtype=numpy_support.as_dtype(scalar_return_type)
+    )
     ans_mask = cudf.core.column.column_empty(len(df), dtype="bool")
     launch_args = [(ans_col, ans_mask)]
     for col in df.columns:
