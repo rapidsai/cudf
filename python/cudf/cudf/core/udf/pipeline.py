@@ -82,62 +82,70 @@ def mask_get(mask, pos):
     return (mask[pos // mask_bitsize] >> (pos % mask_bitsize)) & 1
 
 
+kernel_template = """\
+def _kernel(retval, {input_columns}):
+    i = cuda.grid(1)
+    ret_data_arr, ret_mask_arr = retval
+{masked_input_initializers}
+    ret = {user_udf_call}
+    ret_data_arr[i] = {ret_value}
+    ret_mask_arr[i] = {ret_valid}
+"""
+
+unmasked_input_initializer_template = """\
+    d_{idx}, m_{idx} = input_col_{idx}
+    masked_{idx} = Masked(d_{idx}[i], True)
+"""
+
+masked_input_initializer_template = """\
+    d_{idx}, m_{idx} = input_col_{idx}
+    masked_{idx} = Masked(d_{idx}[i], mask_get(m_{idx}, i))
+"""
+
+
 def _define_function(df, scalar_return=False):
+    # Create argument list for kernel
+    input_columns = ", ".join([f'input_col_{i}'
+                               for i in range(len(df.columns))])
 
-    start = "def _kernel(retval, "
+    # Create argument list to pass to device function
+    args = ', '.join([f'masked_{i}' for i in range(len(df.columns))])
+    user_udf_call = f'f_({args})'
 
-    sig = ", ".join(["input_col_" + str(i) for i in range(len(df.columns))])
-    start += sig + "):\n"
-
-    start += "\ti = cuda.grid(1)\n"
-    start += "\tret_data_arr, ret_mask_arr = retval\n"
-
-    fargs = []
+    # Generate the initializers for each device function argument
+    initializers = []
     for i, col in enumerate(df._data.values()):
-        ii = str(i)
-        start += "\td_" + ii + "," + "m_" + ii + "=input_col_" + ii + "\n"
-        arg = "masked_" + ii
+        idx = str(i)
         if col.mask is not None:
-            start += (
-                "\t"
-                + arg
-                + "="
-                + "Masked("
-                + "d_"
-                + ii
-                + "[i]"
-                + ","
-                + "mask_get(m_"
-                + ii
-                + ","
-                + "i)"
-                + ")\n"
-            )
+            template = masked_input_initializer_template
         else:
-            start += (
-                "\t"
-                + arg
-                + "="
-                + "Masked("
-                + "d_"
-                + ii
-                + "[i]"
-                + ","
-                + "True"
-                + ")\n"
-            )
-        fargs.append(arg)
+            template = unmasked_input_initializer_template
 
-    fargs = "(" + ",".join(fargs) + ")\n"
-    start += "\tret = f_" + fargs + "\n"
+        initializer = template.format(**{'idx': idx})
+
+        initializers.append(initializer)
+
+    masked_input_initializers = "\n".join(initializers)
+
+    # Generate the code to extract the return value and mask from the device
+    # function's return value depending on whether it's already masked
     if scalar_return:
-        start += "\tret_data_arr[i] = ret\n"
-        start += "\tret_mask_arr[i] = True\n"
+        ret_value = 'ret'
+        ret_valid = 'True'
     else:
-        start += "\tret_data_arr[i] = ret.value\n"
-        start += "\tret_mask_arr[i] = ret.valid\n"
+        ret_value = 'ret.value'
+        ret_valid = 'ret.valid'
 
-    return start
+    # Incorporate all of the above into the kernel code template
+    d = {
+        'input_columns': input_columns,
+        'masked_input_initializers': masked_input_initializers,
+        'user_udf_call': user_udf_call,
+        'ret_value': ret_value,
+        'ret_valid': ret_valid,
+    }
+
+    return kernel_template.format(**d)
 
 
 def udf_pipeline(df, f):
