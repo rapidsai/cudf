@@ -38,7 +38,7 @@ from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, SingleColumnFrame, _drop_rows_by_labels
-from cudf.core.groupby.groupby import SeriesGroupBy
+from cudf.core.groupby.groupby import SeriesGroupBy, _get_groupby
 from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
@@ -4927,9 +4927,7 @@ class Series(SingleColumnFrame, Serializable):
                 "groupby() requires either by or level to be specified."
             )
 
-        return SeriesGroupBy(
-            self, by=by, level=level, dropna=dropna, sort=sort
-        )
+        return _get_groupby(self, by=by, level=level, dropna=dropna, sort=sort)
 
     @copy_docstring(Rolling)
     def rolling(

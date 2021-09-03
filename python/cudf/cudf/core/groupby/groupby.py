@@ -1247,7 +1247,9 @@ def _get_groupby(obj, by, **kwargs):
 
 
 class Grouper(object):
-    def __init__(self, key=None, level=None, freq=None):
+    def __init__(
+        self, key=None, level=None, freq=None, closed=None, label=None
+    ):
         if key is not None and level is not None:
             raise ValueError("Grouper cannot specify both key and level")
         if (key, level) == (None, None) and not freq:

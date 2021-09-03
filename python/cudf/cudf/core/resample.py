@@ -24,16 +24,10 @@ class _Resampler:
 
     def agg(self, func):
         result = super().agg(func)
-
-        result = result.join(
-            cudf.DataFrame(
-                index=cudf.Index(
-                    self.grouping.bin_labels, name=self.grouping.names[0]
-                )
-            ),
-            how="right",
+        index = cudf.Index(
+            self.grouping.bin_labels, name=self.grouping.names[0]
         )
-        return result
+        return result._align_to_index(index, how="right")
 
 
 class DataFrameResampler(_Resampler, DataFrameGroupBy):

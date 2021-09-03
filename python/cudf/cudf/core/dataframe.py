@@ -472,6 +472,15 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             out.columns = columns
         return out
 
+    def _align_to_index(
+        self, index, how="outer", sort=True, allow_non_unique=False
+    ):
+        # TODO: support other kwargs
+        index = as_index(index)
+        if self.index.equals(index):
+            return self
+        return self.join(cudf.DataFrame(index=index), how=how)
+
     @staticmethod
     def _align_input_series_indices(data, index):
         data = data.copy()

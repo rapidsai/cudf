@@ -26,6 +26,7 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.groupby.groupby import _get_groupby
 from cudf.core.join import merge
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -4922,6 +4923,24 @@ class SingleColumnFrame(Frame):
             index=self._index,
             name=result_name,
         )
+
+    def resample(
+        self,
+        rule,
+        axis=0,
+        closed=None,
+        label=None,
+        convention="start",
+        kind=None,
+        loffset=None,
+        base=None,
+        on=None,
+        level=None,
+        origin="start_day",
+        offset=None,
+    ):
+        by = cudf.Grouper(freq=rule, closed=closed, label=label)  # TODO
+        return _get_groupby(self, by=by)
 
 
 def _get_replacement_values_for_columns(

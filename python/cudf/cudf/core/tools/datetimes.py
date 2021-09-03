@@ -794,7 +794,7 @@ def date_range(
 
     _periods_not_specified = False
 
-    if isinstance(freq, pd.DateOffset):
+    if isinstance(freq, cudf.DateOffset):
         offset = freq.to_pandas()
     elif isinstance(freq, str):
         offset = DateOffset._from_freqstr(freq).to_pandas()
