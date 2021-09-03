@@ -76,6 +76,31 @@ def masked_arrty_from_np_type(dtype):
     nb_scalar_ty = numpy_support.from_dtype(dtype)
     return Tuple((nb_scalar_ty[::1], libcudf_bitmask_type[::1]))
 
+def construct_signature(df, return_type):
+    """
+    Build the signature of numba types that will be used to
+    actually JIT the kernel itself later, accounting for types
+    and offsets
+    """
+
+    # Tuple of arrays, first the output data array, then the mask
+    return_type = Tuple((return_type[::1], boolean[::1]))
+    offsets = []
+    sig = [return_type]
+    for col in df._data.values():
+        sig.append(masked_arrty_from_np_type(col.dtype))
+        offsets.append(col.offset)
+
+    # return_type + data,masks + offsets + size
+    #sig = void(
+    #    *(sig + offsets + [int64])
+    #)
+    sig = void(
+        *(sig + [int64])
+    )
+
+    return sig
+
 
 @cuda.jit(device=True)
 def mask_get(mask, pos):
@@ -158,11 +183,8 @@ def udf_pipeline(df, f):
         if _is_scalar_return
         else numba_return_type.value_type
     )
-    return_type = Tuple((scalar_return_type[::1], boolean[::1]))
-    sig = void(
-        return_type,
-        *[masked_arrty_from_np_type(dtype) for dtype in df.dtypes] + [int64],
-    )
+
+    sig = construct_signature(df, scalar_return_type)
 
     f_ = cuda.jit(device=True)(f)
     # Set f_launch into the global namespace
