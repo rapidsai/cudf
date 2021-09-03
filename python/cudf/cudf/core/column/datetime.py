@@ -170,7 +170,7 @@ class DatetimeColumn(column.ColumnBase):
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
 
-    def ceil_datetime(self, field: str) -> ColumnBase:
+    def ceil(self, field: str) -> ColumnBase:
         return libcudf.datetime.ceil_datetime(self, field)
 
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:

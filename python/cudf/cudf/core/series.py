@@ -5924,7 +5924,7 @@ class DatetimeProperties(object):
         )
 
     def ceil(self, field):
-        out_column = self.series._column.ceil_datetime(field)
+        out_column = self.series._column.ceil(field)
 
         return Series(
             data=out_column, index=self.series._index, name=self.series.name
