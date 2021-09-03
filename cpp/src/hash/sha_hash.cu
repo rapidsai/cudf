@@ -40,9 +40,9 @@ bool sha_type_check(data_type dt)
 namespace detail {
 
 std::unique_ptr<column> sha1_hash(table_view const& input,
-                             cudaStream_t stream,
-                             rmm::mr::device_memory_resource* mr) {
-
+                                  cudaStream_t stream,
+                                  rmm::mr::device_memory_resource* mr)
+{
   if (input.num_columns() == 0 || input.num_rows() == 0) {
     const string_scalar string_160bit("da39a3ee5e6b4b0d3255bfef95601890afd80709");
     auto output = make_column_from_scalar(string_160bit, input.num_rows(), stream, mr);
@@ -50,11 +50,7 @@ std::unique_ptr<column> sha1_hash(table_view const& input,
   }
 
   CUDF_EXPECTS(
-    std::all_of(input.begin(),
-                input.end(),
-                [](auto col) {
-                  return sha_type_check(col.type());
-                }),
+    std::all_of(input.begin(), input.end(), [](auto col) { return sha_type_check(col.type()); }),
     "SHA1 unsupported column type");
 
   // Result column allocation and creation
@@ -64,10 +60,9 @@ std::unique_ptr<column> sha1_hash(table_view const& input,
   auto offsets_view  = offsets_column->view();
   auto d_new_offsets = offsets_view.data<int32_t>();
 
-  auto chars_column = strings::detail::create_chars_child_column(
-  input.num_rows() * 40, stream, mr);
-  auto chars_view = chars_column->mutable_view();
-  auto d_chars    = chars_view.data<char>();
+  auto chars_column = strings::detail::create_chars_child_column(input.num_rows() * 40, stream, mr);
+  auto chars_view   = chars_column->mutable_view();
+  auto d_chars      = chars_view.data<char>();
 
   rmm::device_buffer null_mask{0, stream, mr};
 
@@ -75,46 +70,48 @@ std::unique_ptr<column> sha1_hash(table_view const& input,
   auto const device_input = table_device_view::create(input, stream);
 
   // Hash each row, hashing each element sequentially left to right
-  thrust::for_each(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(input.num_rows()),
-    [d_chars, device_input = *device_input] __device__(auto row_index) {
-      sha1_intermediate_data hash_state;
-      SHA1Hash hasher = SHA1Hash{};
-      // for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
-      //   if (device_input.column(col_index).is_valid(row_index)) {
-      //     cudf::type_dispatcher(device_input.column(col_index).type(),
-      //                           hasher,
-      //                           device_input.column(col_index),
-      //                           row_index,
-      //                           &hash_state);
-      //   }
-      // }
-      hasher.finalize(&hash_state, d_chars + (row_index * 40));
-    });
+  thrust::for_each(rmm::exec_policy(stream),
+                   thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(input.num_rows()),
+                   [d_chars, device_input = *device_input] __device__(auto row_index) {
+                     sha1_intermediate_data hash_state;
+                     SHA1Hash hasher = SHA1Hash{};
+                     // for (int col_index = 0; col_index < device_input.num_columns(); col_index++)
+                     // {
+                     //   if (device_input.column(col_index).is_valid(row_index)) {
+                     //     cudf::type_dispatcher(device_input.column(col_index).type(),
+                     //                           hasher,
+                     //                           device_input.column(col_index),
+                     //                           row_index,
+                     //                           &hash_state);
+                     //   }
+                     // }
+                     hasher.finalize(&hash_state, d_chars + (row_index * 40));
+                   });
 
   return make_strings_column(input.num_rows(),
-                              std::move(offsets_column),
-                              std::move(chars_column),
-                              0,
-                              std::move(null_mask),
-                              stream,
-                              mr);
+                             std::move(offsets_column),
+                             std::move(chars_column),
+                             0,
+                             std::move(null_mask),
+                             stream,
+                             mr);
 }
 
 std::unique_ptr<column> sha256_hash(table_view const& input,
                                     bool truncate_output,
                                     cudaStream_t stream,
-                                    rmm::mr::device_memory_resource* mr) {
-                                      return nullptr;
+                                    rmm::mr::device_memory_resource* mr)
+{
+  return nullptr;
 }
 
 std::unique_ptr<column> sha512_hash(table_view const& input,
                                     bool truncate_output,
                                     cudaStream_t stream,
-                                    rmm::mr::device_memory_resource* mr) {
-                                      return nullptr;
+                                    rmm::mr::device_memory_resource* mr)
+{
+  return nullptr;
 }
 
 }  // namespace detail

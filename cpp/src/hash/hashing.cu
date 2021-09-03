@@ -119,11 +119,12 @@ std::unique_ptr<column> hash(table_view const& input,
       return serial_murmur_hash3_32<MurmurHash3_32>(input, seed, stream, mr);
     case (hash_id::HASH_SPARK_MURMUR3):
       return serial_murmur_hash3_32<SparkMurmurHash3_32>(input, seed, stream, mr);
-    case (hash_id::HASH_SHA1): return sha1_hash(input, stream, mr);
-    // case (hash_id::HASH_SHA224): return sha256_base(input, true, stream, mr);
-    // case (hash_id::HASH_SHA256): return sha256_base(input, false, stream, mr);
-    // case (hash_id::HASH_SHA384): return sha512_base(input, true, stream, mr);
-    // case (hash_id::HASH_SHA512): return sha512_base(input, false, stream, mr);
+    case (hash_id::HASH_SHA1):
+      return sha1_hash(input, stream, mr);
+      // case (hash_id::HASH_SHA224): return sha256_base(input, true, stream, mr);
+      // case (hash_id::HASH_SHA256): return sha256_base(input, false, stream, mr);
+      // case (hash_id::HASH_SHA384): return sha512_base(input, true, stream, mr);
+      // case (hash_id::HASH_SHA512): return sha512_base(input, false, stream, mr);
 
     default: return nullptr;
   }

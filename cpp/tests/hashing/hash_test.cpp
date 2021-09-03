@@ -714,7 +714,6 @@ TYPED_TEST(MD5HashTestFloatTyped, TestListExtremes)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), verbosity);
 }
 
-
 class SHA1HashTest : public cudf::test::BaseFixture {
 };
 
@@ -729,16 +728,16 @@ TEST_F(SHA1HashTest, MultiValue)
      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
 
   strings_column_wrapper const sha1_string_results1({"da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                    "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                    "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                    "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                    "da39a3ee5e6b4b0d3255bfef95601890afd80709"});
+                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709"});
 
   strings_column_wrapper const sha1_string_results2({"da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                    "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                    "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                    "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                    "da39a3ee5e6b4b0d3255bfef95601890afd80709"});
+                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709"});
 
   using limits = std::numeric_limits<int32_t>;
   fixed_width_column_wrapper<int32_t> const ints_col({0, 100, -100, limits::min(), limits::max()});
@@ -747,8 +746,8 @@ TEST_F(SHA1HashTest, MultiValue)
   fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
   fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
 
-  auto const string_input1      = cudf::table_view({strings_col});
-  auto const string_input2      = cudf::table_view({strings_col, strings_col});
+  auto const string_input1       = cudf::table_view({strings_col});
+  auto const string_input2       = cudf::table_view({strings_col, strings_col});
   auto const sha1_string_output1 = cudf::hash(string_input1, cudf::hash_id::HASH_SHA1);
   auto const sha1_string_output2 = cudf::hash(string_input2, cudf::hash_id::HASH_SHA1);
   EXPECT_EQ(string_input1.num_rows(), sha1_string_output1->size());
@@ -756,8 +755,8 @@ TEST_F(SHA1HashTest, MultiValue)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha1_string_output1->view(), sha1_string_results1);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha1_string_output2->view(), sha1_string_results2);
 
-  auto const input1      = cudf::table_view({strings_col, ints_col, bools_col1});
-  auto const input2      = cudf::table_view({strings_col, ints_col, bools_col2});
+  auto const input1       = cudf::table_view({strings_col, ints_col, bools_col1});
+  auto const input2       = cudf::table_view({strings_col, ints_col, bools_col2});
   auto const sha1_output1 = cudf::hash(input1, cudf::hash_id::HASH_SHA1);
   auto const sha1_output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA1);
   EXPECT_EQ(input1.num_rows(), sha1_output1->size());
@@ -770,9 +769,9 @@ TEST_F(SHA1HashTest, MultiValue)
 //   strings_column_wrapper const strings_col1(
 //     {"",
 //      "Different but null!",
-//      "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
-//      "MD5 hash function. This string needed to be longer.",
-//      "All work and no play makes Jack a dull boy",
+//      "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in
+//      the " "MD5 hash function. This string needed to be longer.", "All work and no play makes
+//      Jack a dull boy",
 //      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
 //     {1, 0, 0, 1, 0});
 //   strings_column_wrapper const strings_col2(

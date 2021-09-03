@@ -362,18 +362,17 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
 }
 
 struct SHA1Hash {
-
-
   CUDA_HOST_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
   {
     return (x << r) | (x >> (32 - r));
   }
 
   /**
-    * @brief Core SHA1 algorithm implementation. Processes a single 512-bit chunk,
-    * updating the hash value so far. Does not zero out the buffer contents.
-    */
-  void __device__ hash_step(sha1_intermediate_data* hash_state) const {
+   * @brief Core SHA1 algorithm implementation. Processes a single 512-bit chunk,
+   * updating the hash value so far. Does not zero out the buffer contents.
+   */
+  void __device__ hash_step(sha1_intermediate_data* hash_state) const
+  {
     uint32_t temp_hash[5];
     thrust::copy_n(thrust::seq, hash_state->hash_value, 5, temp_hash);
     // temp_hash[0] = hash_state->hash_value[0];
@@ -383,7 +382,7 @@ struct SHA1Hash {
     // temp_hash[4] = hash_state->hash_value[4];
 
     uint32_t words[80];
-    for(int i = 0; i < 16; i++) {
+    for (int i = 0; i < 16; i++) {
       uint32_t buffer_element_as_int;
       std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * 4), 4);
       // words[i] = buffer_element_as_int;
@@ -394,18 +393,18 @@ struct SHA1Hash {
       words[i] |= (buffer_element_as_int >> 24) & 0xff;
     }
     // std::memcpy(words, hash_state->buffer, 64);
-    for(int i = 16; i < 80; i++) {
-      uint32_t temp = words[i-3] ^ words[i-8] ^ words[i-14] ^ words[i-16];
-      words[i] = rotl32(temp, 1);
+    for (int i = 16; i < 80; i++) {
+      uint32_t temp = words[i - 3] ^ words[i - 8] ^ words[i - 14] ^ words[i - 16];
+      words[i]      = rotl32(temp, 1);
       // words[i] = __funnelshift_l(temp, temp, 1);
     }
 
-  // #pragma unroll
-    for(int i = 0; i < 80; i++) {
+    // #pragma unroll
+    for (int i = 0; i < 80; i++) {
       uint32_t F;
       uint32_t temp;
       uint32_t k;
-      switch(i/20) {
+      switch (i / 20) {
         case 0:
           // F = (temp_hash[1] & temp_hash[2]) | ((~temp_hash[1]) & temp_hash[3]);
           F = ((temp_hash[1] & (temp_hash[2] ^ temp_hash[3])) ^ temp_hash[3]);
@@ -416,15 +415,16 @@ struct SHA1Hash {
           k = 0x6ed9eba1;
           break;
         case 2:
-          F =  (temp_hash[1] & temp_hash[2]) | (temp_hash[1] & temp_hash[3]) | (temp_hash[2] & temp_hash[3]);
+          F = (temp_hash[1] & temp_hash[2]) | (temp_hash[1] & temp_hash[3]) |
+              (temp_hash[2] & temp_hash[3]);
           k = 0x8f1bbcdc;
           break;
         case 3:
-          F =  temp_hash[1] ^ temp_hash[2] ^ temp_hash[3];
+          F = temp_hash[1] ^ temp_hash[2] ^ temp_hash[3];
           k = 0xca62c1d6;
           break;
       }
-      temp = rotl32(temp_hash[0], 5) + F +  temp_hash[4] + k + words[i];
+      temp = rotl32(temp_hash[0], 5) + F + temp_hash[4] + k + words[i];
       // temp = __funnelshift_l(temp_hash[0], temp_hash[0], 5) + F +  temp_hash[4] + k + words[i];
       temp_hash[4] = temp_hash[3];
       temp_hash[3] = temp_hash[2];
@@ -434,17 +434,18 @@ struct SHA1Hash {
       temp_hash[0] = temp;
     }
 
-  #pragma unroll
-    for(int i = 0; i < 5; i++) {
+#pragma unroll
+    for (int i = 0; i < 5; i++) {
       hash_state->hash_value[i] = hash_state->hash_value[i] + temp_hash[i];
     }
   }
 
   /**
-    * @brief Core SHA1 element processing function
-    */
+   * @brief Core SHA1 element processing function
+   */
   template <typename TKey>
-  void __device__ process(TKey const& key, sha1_intermediate_data* hash_state) const {
+  void __device__ process(TKey const& key, sha1_intermediate_data* hash_state) const
+  {
     uint32_t const len  = sizeof(TKey);
     uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
     hash_state->message_length += len;
@@ -471,108 +472,102 @@ struct SHA1Hash {
     }
   }
 
+  void __device__ finalize(sha1_intermediate_data* hash_state, char* result_location) const
+  {
+    auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
+    thrust::fill_n(thrust::seq, hash_state->buffer + hash_state->buffer_length, 1, 0x80);
 
-void __device__ finalize(sha1_intermediate_data* hash_state, char* result_location) const
-{
-  auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
-  thrust::fill_n(thrust::seq, hash_state->buffer + hash_state->buffer_length, 1, 0x80);
+    // 64 bytes for the number of bytes processed in a given step
+    constexpr int sha1_chunk_size = 64;
+    // 8 bytes for the total message length, appended to the end of the last chunk processed
+    constexpr int message_length_size = 8;
+    // 1 byte for the end of the message flag
+    constexpr int end_of_message_size = 1;
+    if (hash_state->buffer_length + message_length_size + end_of_message_size <= sha1_chunk_size) {
+      thrust::fill_n(
+        thrust::seq,
+        hash_state->buffer + hash_state->buffer_length + 1,
+        (sha1_chunk_size - message_length_size - end_of_message_size - hash_state->buffer_length),
+        0x00);
+    } else {
+      thrust::fill_n(thrust::seq,
+                     hash_state->buffer + hash_state->buffer_length + 1,
+                     (sha1_chunk_size - hash_state->buffer_length),
+                     0x00);
+      hash_step(hash_state);
 
-  // 64 bytes for the number of bytes processed in a given step
-  constexpr int sha1_chunk_size = 64;
-  // 8 bytes for the total message length, appended to the end of the last chunk processed
-  constexpr int message_length_size = 8;
-  // 1 byte for the end of the message flag
-  constexpr int end_of_message_size = 1;
-  if (hash_state->buffer_length + message_length_size + end_of_message_size <= sha1_chunk_size) {
-    thrust::fill_n(
-      thrust::seq,
-      hash_state->buffer + hash_state->buffer_length + 1,
-      (sha1_chunk_size - message_length_size - end_of_message_size - hash_state->buffer_length),
-      0x00);
-  } else {
-    thrust::fill_n(thrust::seq,
-                    hash_state->buffer + hash_state->buffer_length + 1,
-                    (sha1_chunk_size - hash_state->buffer_length),
-                    0x00);
+      thrust::fill_n(thrust::seq, hash_state->buffer, sha1_chunk_size - message_length_size, 0x00);
+    }
+
+    thrust::copy_n(thrust::seq,
+                   reinterpret_cast<uint8_t const*>(&full_length),
+                   message_length_size,
+                   hash_state->buffer + sha1_chunk_size - message_length_size);
     hash_step(hash_state);
-
-    thrust::fill_n(thrust::seq, hash_state->buffer, sha1_chunk_size - message_length_size, 0x00);
-  }
-
-  thrust::copy_n(thrust::seq,
-                  reinterpret_cast<uint8_t const*>(&full_length),
-                  message_length_size,
-                  hash_state->buffer + sha1_chunk_size - message_length_size);
-  hash_step(hash_state);
-  // std::memcpy(hash_state->hash_value, hash_state->buffer, 160);
-
+    // std::memcpy(hash_state->hash_value, hash_state->buffer, 160);
 
 #pragma unroll
-  for (int i = 0; i < 5; ++i){
+    for (int i = 0; i < 5; ++i) {
+      uint32_t flipped = (hash_state->hash_value[i] << 24) & 0xff000000;
+      flipped |= (hash_state->hash_value[i] << 8) & 0xff0000;
+      flipped |= (hash_state->hash_value[i] >> 8) & 0xff00;
+      flipped |= (hash_state->hash_value[i] >> 24) & 0xff;
+      uint32ToLowercaseHexString(flipped, result_location + (8 * i));
 
+      // uint32ToLowercaseHexString(hash_state->hash_value[i], result_location + (8 * i));
 
-    uint32_t flipped = (hash_state->hash_value[i] << 24) & 0xff000000;
-    flipped |= (hash_state->hash_value[i] << 8) & 0xff0000;
-    flipped |= (hash_state->hash_value[i] >> 8) & 0xff00;
-    flipped |= (hash_state->hash_value[i] >> 24) & 0xff;
-    uint32ToLowercaseHexString(flipped, result_location + (8 * i));
-
-    // uint32ToLowercaseHexString(hash_state->hash_value[i], result_location + (8 * i));
-
-    // std::memcpy(hash_state->hash_value, hash_state->buffer + 64 + (i * 4), 4);
-    // std::memcpy(hash_state->hash_value, &full_length, 8);
-    // uint32ToLowercaseHexString(hash_state->hash_value[0], result_location + (8 * i));
+      // std::memcpy(hash_state->hash_value, hash_state->buffer + 64 + (i * 4), 4);
+      // std::memcpy(hash_state->hash_value, &full_length, 8);
+      // uint32ToLowercaseHexString(hash_state->hash_value[0], result_location + (8 * i));
+    }
   }
-}
 
-template <typename T, typename std::enable_if_t<is_chrono<T>()>* = nullptr>
-void __device__ operator()(column_device_view col,
-                            size_type row_index,
-                            sha1_intermediate_data* hash_state) const
-{
-  cudf_assert(false && "MD5 Unsupported chrono type column");
-}
-
-template <typename T, typename std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
-void __device__ operator()(column_device_view col,
-                            size_type row_index,
-                            sha1_intermediate_data* hash_state) const
-{
-  cudf_assert(false && "MD5 Unsupported non-fixed-width type column");
-}
-
-template <typename T, typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
-void __device__ operator()(column_device_view col,
-                            size_type row_index,
-                            sha1_intermediate_data* hash_state) const
-{
-  T const& key = col.element<T>(row_index);
-  if (isnan(key)) {
-    T nan = std::numeric_limits<T>::quiet_NaN();
-    process(nan, hash_state);
-  } else if (key == T{0.0}) {
-    process(T{0.0}, hash_state);
-  } else {
-    process(key, hash_state);
+  template <typename T, typename std::enable_if_t<is_chrono<T>()>* = nullptr>
+  void __device__ operator()(column_device_view col,
+                             size_type row_index,
+                             sha1_intermediate_data* hash_state) const
+  {
+    cudf_assert(false && "MD5 Unsupported chrono type column");
   }
-}
 
-template <typename T,
-          typename std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() &&
-                                    !is_chrono<T>()>* = nullptr>
-void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
-                                      size_type row_index,
-                                      sha1_intermediate_data* hash_state) const
-{
-  process(col.element<T>(row_index), hash_state);
-}
+  template <typename T, typename std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
+  void __device__ operator()(column_device_view col,
+                             size_type row_index,
+                             sha1_intermediate_data* hash_state) const
+  {
+    cudf_assert(false && "MD5 Unsupported non-fixed-width type column");
+  }
 
+  template <typename T, typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
+  void __device__ operator()(column_device_view col,
+                             size_type row_index,
+                             sha1_intermediate_data* hash_state) const
+  {
+    T const& key = col.element<T>(row_index);
+    if (isnan(key)) {
+      T nan = std::numeric_limits<T>::quiet_NaN();
+      process(nan, hash_state);
+    } else if (key == T{0.0}) {
+      process(T{0.0}, hash_state);
+    } else {
+      process(key, hash_state);
+    }
+  }
+
+  template <typename T,
+            typename std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() &&
+                                      !is_chrono<T>()>* = nullptr>
+  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
+                                       size_type row_index,
+                                       sha1_intermediate_data* hash_state) const
+  {
+    process(col.element<T>(row_index), hash_state);
+  }
 };
 
 template <>
-void CUDA_DEVICE_CALLABLE SHA1Hash::operator()<string_view>(column_device_view col,
-                                                            size_type row_index,
-                                                            sha1_intermediate_data* hash_state) const
+void CUDA_DEVICE_CALLABLE SHA1Hash::operator()<string_view>(
+  column_device_view col, size_type row_index, sha1_intermediate_data* hash_state) const
 {
   string_view key     = col.element<string_view>(row_index);
   uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
