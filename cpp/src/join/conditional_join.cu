@@ -138,7 +138,7 @@ conditional_join(table_view const& left,
     if (join_type == join_kind::FULL_JOIN) {
       auto complement_indices = detail::get_left_join_indices_complement(
         join_indices.second, left.num_rows(), right.num_rows(), stream, mr);
-      join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
+      return detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
     }
   }
 
