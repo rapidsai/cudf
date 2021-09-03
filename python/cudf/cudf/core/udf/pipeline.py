@@ -24,7 +24,7 @@ def compile_masked_udf(func, dtypes):
     )
     # Get the inlineable PTX function
     ptx, numba_output_type = cudautils.compile_udf(func, to_compiler_sig)
-    numpy_output_type = numpy_support.as_dtype(numba_output_type.value_type)
+    numpy_output_type = numpy_support.as_dtype(numba_output_type.value_type) if isinstance(numba_output_type, MaskedType) else np.dtype(numba_output_type)
 
     return numpy_output_type, ptx
 
@@ -81,7 +81,7 @@ def mask_get(mask, pos):
     return (mask[pos // mask_bitsize] >> (pos % mask_bitsize)) & 1
 
 
-def _define_function(df):
+def _define_function(df, scalar_return=False):
         
     start = "def _kernel(retval, "
     
@@ -105,13 +105,18 @@ def _define_function(df):
     fargs = "(" + ",".join(fargs) + ")\n"
     start += "\tret = f_"+fargs+"\n"
     
-    start += "\tret_data_arr[i] = ret.value\n"
-    start += "\tret_mask_arr[i] = ret.valid\n"
+    if scalar_return:
+        start += "\tret_data_arr[i] = ret\n"
+        start += "\tret_mask_arr[i] = True\n"
+    else:
+        start += "\tret_data_arr[i] = ret.value\n"
+        start += "\tret_mask_arr[i] = ret.valid\n"
 
     return start
 
 def udf_pipeline(df, f):
     retty = compile_masked_udf(f, df.dtypes)[0]
+    _is_scalar_return = not isinstance(retty, MaskedType)
 
     return_type = Tuple(
         (numpy_support.from_dtype(retty)[::1], boolean[::1])
@@ -121,7 +126,7 @@ def udf_pipeline(df, f):
     f_ = cuda.jit(device=True)(f)
     # Set f_launch into the global namespace
     lcl = {}
-    exec(_define_function(df), {'f_': f_, 'cuda': cuda, "Masked": Masked, "mask_get": mask_get},  lcl)
+    exec(_define_function(df, scalar_return=_is_scalar_return), {'f_': f_, 'cuda': cuda, "Masked": Masked, "mask_get": mask_get},  lcl)
     _kernel = lcl['_kernel']
     # compile
     kernel = cuda.jit(sig)(_kernel)

@@ -242,6 +242,17 @@ def test_apply_return_either_null_or_literal():
     gdf = cudf.DataFrame({"a": [1, 3, 6]})
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
+def test_apply_return_literal_only():
+    def func_pdf(x):
+        return 5
+
+    @nulludf
+    def func_gdf(x):
+        return 5
+
+    gdf = cudf.DataFrame({'a': [1, None, 3]})
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
+
 
 def test_apply_everything():
     def func_pdf(w, x, y, z):
