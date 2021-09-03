@@ -1,13 +1,19 @@
+import cupy
+import numpy as np
+from numba import cuda
 from numba.np import numpy_support
+from numba.types import Tuple, boolean, void
 from nvtx import annotate
 
-from cudf.core.udf.typing import MaskedType
-from cudf.core.udf.classes import Masked
-from cudf.utils import cudautils
-from numba import cuda
-import cupy
 import cudf
 from cudf._lib.transform import bools_to_mask
+from cudf.core.udf.classes import Masked
+from cudf.core.udf.typing import MaskedType
+from cudf.utils import cudautils
+
+libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
+mask_bitsize = np.dtype("int32").itemsize * 8
+
 
 @annotate("NUMBA JIT", color="green", domain="cudf_python")
 def compile_masked_udf(func, dtypes):
@@ -24,7 +30,11 @@ def compile_masked_udf(func, dtypes):
     )
     # Get the inlineable PTX function
     ptx, numba_output_type = cudautils.compile_udf(func, to_compiler_sig)
-    numpy_output_type = numpy_support.as_dtype(numba_output_type.value_type) if isinstance(numba_output_type, MaskedType) else np.dtype(numba_output_type)
+    numpy_output_type = (
+        numpy_support.as_dtype(numba_output_type.value_type)
+        if isinstance(numba_output_type, MaskedType)
+        else np.dtype(numba_output_type)
+    )
 
     return numpy_output_type, ptx
 
@@ -55,26 +65,17 @@ def nulludf(func):
 
     return wrapper
 
-from numba.types import int32, boolean, void, Tuple
-import numpy as np
-libcudf_bitmask_type = numpy_support.from_dtype(np.dtype('int32'))
 
 def masked_arrty_from_np_type(dtype):
     """
     Return a type representing a tuple of arrays,
     the first element an array of the numba type
-    corresponding to `dtype`, and the second an 
+    corresponding to `dtype`, and the second an
     array of bools represe
     """
     nb_scalar_ty = numpy_support.from_dtype(dtype)
-    return Tuple(
-        (
-            nb_scalar_ty[::1],
-            libcudf_bitmask_type[::1]
-        )
-    )
+    return Tuple((nb_scalar_ty[::1], libcudf_bitmask_type[::1]))
 
-mask_bitsize = np.dtype('int32').itemsize * 8
 
 @cuda.jit(device=True)
 def mask_get(mask, pos):
@@ -82,29 +83,54 @@ def mask_get(mask, pos):
 
 
 def _define_function(df, scalar_return=False):
-        
+
     start = "def _kernel(retval, "
-    
+
     sig = ", ".join(["input_col_" + str(i) for i in range(len(df.columns))])
-    start += (sig + "):\n")
-        
+    start += sig + "):\n"
+
     start += "\ti = cuda.grid(1)\n"
     start += "\tret_data_arr, ret_mask_arr = retval\n"
-        
+
     fargs = []
     for i, col in enumerate(df._data.values()):
         ii = str(i)
-        start += "\td_"+ii+","+"m_"+ii+"=input_col_"+ii+"\n"
-        arg = "masked_"+ii
+        start += "\td_" + ii + "," + "m_" + ii + "=input_col_" + ii + "\n"
+        arg = "masked_" + ii
         if col.mask is not None:
-            start += "\t"+arg+"="+"Masked("+"d_"+ii+"[i]"+","+"mask_get(m_"+ii+","+"i)"+")\n"
+            start += (
+                "\t"
+                + arg
+                + "="
+                + "Masked("
+                + "d_"
+                + ii
+                + "[i]"
+                + ","
+                + "mask_get(m_"
+                + ii
+                + ","
+                + "i)"
+                + ")\n"
+            )
         else:
-            start += "\t"+arg+"="+"Masked("+"d_"+ii+"[i]"+","+"True"+")\n"
+            start += (
+                "\t"
+                + arg
+                + "="
+                + "Masked("
+                + "d_"
+                + ii
+                + "[i]"
+                + ","
+                + "True"
+                + ")\n"
+            )
         fargs.append(arg)
 
     fargs = "(" + ",".join(fargs) + ")\n"
-    start += "\tret = f_"+fargs+"\n"
-    
+    start += "\tret = f_" + fargs + "\n"
+
     if scalar_return:
         start += "\tret_data_arr[i] = ret\n"
         start += "\tret_mask_arr[i] = True\n"
@@ -114,24 +140,29 @@ def _define_function(df, scalar_return=False):
 
     return start
 
+
 def udf_pipeline(df, f):
     retty = compile_masked_udf(f, df.dtypes)[0]
     _is_scalar_return = not isinstance(retty, MaskedType)
 
-    return_type = Tuple(
-        (numpy_support.from_dtype(retty)[::1], boolean[::1])
+    return_type = Tuple((numpy_support.from_dtype(retty)[::1], boolean[::1]))
+    sig = void(
+        return_type, *[masked_arrty_from_np_type(dtype) for dtype in df.dtypes]
     )
-    sig = void(return_type, *[masked_arrty_from_np_type(dtype) for dtype in df.dtypes])
-    
+
     f_ = cuda.jit(device=True)(f)
     # Set f_launch into the global namespace
     lcl = {}
-    exec(_define_function(df, scalar_return=_is_scalar_return), {'f_': f_, 'cuda': cuda, "Masked": Masked, "mask_get": mask_get},  lcl)
-    _kernel = lcl['_kernel']
+    exec(
+        _define_function(df, scalar_return=_is_scalar_return),
+        {"f_": f_, "cuda": cuda, "Masked": Masked, "mask_get": mask_get},
+        lcl,
+    )
+    _kernel = lcl["_kernel"]
     # compile
     kernel = cuda.jit(sig)(_kernel)
     ans_col = cupy.empty(len(df), dtype=retty)
-    ans_mask = cudf.core.column.column_empty(len(df), dtype='bool')
+    ans_mask = cudf.core.column.column_empty(len(df), dtype="bool")
     launch_args = [(ans_col, ans_mask)]
     for col in df.columns:
         data = df[col]._column.data
