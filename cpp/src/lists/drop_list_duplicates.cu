@@ -462,8 +462,9 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
                                              rmm::mr::device_memory_resource* mr)
 {
   if (lists_column.is_empty()) return cudf::empty_like(lists_column.parent());
-  if (cudf::is_nested(lists_column.child().type())) {
-    CUDF_FAIL("Nested types are not supported in drop_list_duplicates.");
+  if (auto const child_type = lists_column.child().type();
+      cudf::is_nested(child_type) && child_type.id() != type_id::STRUCT) {
+    CUDF_FAIL("Nested types other than STRUCT are not supported in `drop_list_duplicates`.");
   }
 
   // Flatten all entries (depth = 1) of the lists column
