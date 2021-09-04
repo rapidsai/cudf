@@ -669,12 +669,15 @@ static __device__ void encode_null_mask(orcenc_state_s* s, int t)
     __syncthreads();
   }
 }
-
+template <int block_size, typename Storage>
 static __device__ void encode_nested_null_mask(orcenc_state_s* s,
                                                bitmask_type const* pushdown_mask,
+                                               Storage& scan_storage,
                                                int t)
 {
-  auto validity_byte = [&] __device__(int row) -> uint8_t& {
+  if (s->stream.ids[CI_PRESENT] < 0) return;
+
+  auto validity_byte = [&](int row) -> uint8_t& {
     // valid_buf is a circular buffer where validitiy of 8 rows is stored in each element
     return s->valid_buf[(row / 8) % encode_block_size];
   };
@@ -685,46 +688,52 @@ static __device__ void encode_nested_null_mask(orcenc_state_s* s,
     auto present_rows             = s->present_rows;
     auto const buf_available_bits = encode_block_size * 8 - (present_rows - (s->present_out & ~7));
     auto const nrows        = min(s->chunk.null_mask_num_rows - present_rows, buf_available_bits);
-    auto const t_nrows      = (t * 8 < nrows) ? 8 : 0;
+    auto const t_nrows      = min(max(static_cast<int32_t>(nrows) - t * 8, 0), 8);
     auto const row_in_group = present_rows + t * 8;
     auto const row          = s->chunk.null_mask_start_row + row_in_group;
 
-    auto const mask_byte = [&]() -> uint8_t {
+    auto get_mask_byte = [&](bitmask_type const* mask) -> uint8_t {
       if (t_nrows == 0) return 0;
-      if (!column.nullable()) return 0xff;
+      if (mask == nullptr) return 0xff;
 
       auto const current_valid_offset = row + column.offset();
       auto const next_valid_offset    = current_valid_offset + min(32, column.size());
-      auto const mask                 = cudf::detail::get_mask_offset_word(
-        column.null_mask(), 0, current_valid_offset, next_valid_offset);
-      return mask & 0xff;
-    }();
+      auto const mask_word =
+        cudf::detail::get_mask_offset_word(mask, 0, current_valid_offset, next_valid_offset);
+      return mask_word & 0xff;
+    };
 
     // get num set bits in pd mask
+    auto const pd_byte        = get_mask_byte(pushdown_mask) & ((1 << t_nrows) - 1);
+    uint32_t const pd_set_cnt = __popc(pd_byte);
     // scan num bits to get offset
+    uint32_t dst_offset{};
+    cub::BlockScan<uint32_t, block_size>(scan_storage).ExclusiveSum(pd_set_cnt, dst_offset);
 
     // not guaranteed to write to a byte
-    if (t_nrows > 0) validity_byte(row_in_group) = mask_byte;
+    // TODO use nnz here
+    if (t_nrows > 0) validity_byte(row_in_group) = get_mask_byte(column.null_mask());
 
     __syncthreads();
     present_rows += nrows;
+    auto const nnz = s->nnz;
     if (!t) { s->present_rows = present_rows; }
+    if (t == block_size - 1) { s->nnz += dst_offset + pd_set_cnt; }
 
     // RLE encode the present stream
-    auto nrows_out = present_rows - s->present_out;  // number of values to encode
-    if (nrows_out > ((present_rows < s->chunk.null_mask_num_rows) ? 130 * 8 : 0)) {
-      uint32_t present_out = s->present_out;
-      if (s->stream.ids[CI_PRESENT] >= 0) {
-        auto const flush      = (present_rows < s->chunk.null_mask_num_rows) ? 0 : 7;
-        auto const nbytes_out = (nrows_out + flush) / 8;
-        nrows_out =
-          ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, present_out / 8, nbytes_out, flush, t) * 8;
-      }
-      __syncthreads();
-      if (!t) { s->present_out = min(present_out + nrows_out, present_rows); }
+    auto nrows_to_encode = present_rows - s->present_out;
+    if (nrows_to_encode > ((present_rows < s->chunk.null_mask_num_rows) ? 130 * 8 : 0)) {
+      auto const flush      = (present_rows < s->chunk.null_mask_num_rows) ? 0 : 7;
+      auto const nbytes_out = (nrows_to_encode + flush) / 8;
+      auto const nrows_encoded =
+        ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, s->present_out / 8, nbytes_out, flush, t) * 8;
+
+      if (!t) { s->present_out += nrows_encoded; }
     }
     __syncthreads();
   }
+  // reset nnz to be reused for values
+  if (t == 0) { s->nnz = 0; }
 }
 
 /**
@@ -741,6 +750,7 @@ __global__ void __launch_bounds__(block_size)
 {
   __shared__ __align__(16) orcenc_state_s state_g;
   __shared__ union {
+    typename cub::BlockScan<uint32_t, block_size>::TempStorage scan_u32;
     typename cub::BlockReduce<int32_t, block_size>::TempStorage i32;
     typename cub::BlockReduce<int64_t, block_size>::TempStorage i64;
     typename cub::BlockReduce<uint32_t, block_size>::TempStorage u32;
@@ -781,7 +791,7 @@ __global__ void __launch_bounds__(block_size)
     encode_null_mask(s, t);
   } else {
     // don't affect the regular code path for now
-    encode_nested_null_mask(s, pushdown_mask, t);
+    encode_nested_null_mask<block_size>(s, pushdown_mask, temp_storage.scan_u32, t);
   }
 
   auto const column = s->chunk.column->cudf_column;
