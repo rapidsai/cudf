@@ -1955,9 +1955,6 @@ def test_groupby_fillna_multi_value(nelem):
 
     got = gdf.groupby(key_col).fillna(value=fill_values)
 
-    # In this specific case, Pandas returns the rows in grouped order.
-    # Cudf returns columns in orginal order.
-    expect.index = expect.index.get_level_values(0)
     assert_groupby_results_equal(expect[value_cols], got[value_cols])
 
 
