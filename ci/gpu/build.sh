@@ -84,7 +84,7 @@ gpuci_mamba_retry install -y \
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
-gpuci_mamba_retry install -y pandas=1.3.2 arrow-cpp=5.0.0 pyarrow=5.0.0=*cuda gmock cython=0.29.24 pytest pytest-benchmark pytest-xdist pytest-cov pytest-timeout cupy==9.4.0 cachetools transformers nvtx=0.2.3 protobuf packaging mimesis=4.0.0 hypothesis rapidjson double-conversion dlpack=0.5 streamz typing_extensions mypy=0.782 pandoc=1.19.2 fsspec=2021.8.1 fastavro=1.4.4 numba=0.53.1 pyorc
+gpuci_mamba_retry install -y pandas=1.3.2 arrow-cpp=5.0.0 pyarrow=5.0.0=*cuda gmock cython=0.29.24 pytest pytest-benchmark pytest-xdist pytest-cov pytest-timeout cupy==9.4.0 cachetools transformers nvtx=0.2.3 protobuf packaging mimesis=4.0.0 hypothesis rapidjson double-conversion dlpack=0.5 streamz typing_extensions mypy=0.782 pandoc=1.19.2 fsspec=2021.8.1 fastavro=1.4.4 numba=0.53.1 pyorc python-confluent-kafka=1.6.0
 
 
 gpuci_logger "Check compiler versions"
