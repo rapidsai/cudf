@@ -352,6 +352,25 @@ def rand_dataframe(
                     dtype=dtype,
                 )
             )
+        elif dtype == "struct":
+            nesting_max_depth = meta["nesting_max_depth"]
+            nesting_depth = np.random.randint(1, nesting_max_depth)
+
+            # TODO: Fix me
+            # column_params.append(
+            #     ColumnParameters(
+            #         cardinality=cardinality,
+            #         null_frequency=null_frequency,
+            #         generator=list_generator(
+            #             dtype=value_type,
+            #             size=cardinality,
+            #             nesting_depth=nesting_depth,
+            #             lists_max_length=lists_max_length,
+            #         ),
+            #         is_sorted=False,
+            #         dtype=dtype,
+            #     )
+            # )
         elif dtype == "decimal64":
             max_precision = meta.get(
                 "max_precision", cudf.Decimal64Dtype.MAX_PRECISION
@@ -535,11 +554,15 @@ def decimal_generator(dtype, size):
     )
 
 
-def get_values_for_nested_data(dtype, lists_max_length):
+def get_values_for_nested_data(dtype, lists_max_length=None, size=None):
     """
     Returns list of values based on dtype.
     """
-    cardinality = np.random.randint(0, lists_max_length)
+    if size is None:
+        cardinality = np.random.randint(0, lists_max_length)
+    else:
+        cardinality = size
+
     dtype = cudf.dtype(dtype)
     if dtype.kind in ("i", "u"):
         values = int_generator(dtype=dtype, size=cardinality)()
@@ -563,12 +586,7 @@ def get_values_for_nested_data(dtype, lists_max_length):
     else:
         raise TypeError(f"Unsupported dtype: {dtype}")
 
-    # To ensure numpy arrays are not passed as input to
-    # list constructor, returning a python list object here.
-    if isinstance(values, np.ndarray):
-        return values.tolist()
-    else:
-        return values
+    return values
 
 
 def make_lists(dtype, lists_max_length, nesting_depth, top_level_list):
@@ -592,7 +610,24 @@ def make_lists(dtype, lists_max_length, nesting_depth, top_level_list):
         top_level_list = get_values_for_nested_data(
             dtype=dtype, lists_max_length=lists_max_length
         )
+        # To ensure numpy arrays are not passed as input to
+        # list constructor, returning a python list object here.
+        if isinstance(top_level_list, np.ndarray):
+            top_level_list = top_level_list.tolist()
+
     return top_level_list
+
+
+def make_array_for_struct(dtype, size):
+    """
+    Helper to create a pa.array with `size` and `dtype`
+    for a `StructArray`.
+    """
+
+    data = get_values_for_nested_data(
+        dtype=dtype.type.to_pandas_dtype(), size=size
+    )
+    return pa.array(data, type=dtype.type)
 
 
 def get_nested_lists(dtype, size, nesting_depth, lists_max_length):
@@ -615,6 +650,22 @@ def get_nested_lists(dtype, size, nesting_depth, lists_max_length):
     return list_of_lists
 
 
+def get_nested_structs(dtype, size):
+    """
+    Returns a list of arrays with random data
+    corresponding to the dtype provided.
+    ``dtype`` here should be a ``cudf.StructDtype``
+    """
+    list_of_arrays = []
+
+    for name, col_dtype in dtype.fields.items():
+        list_of_arrays.append(
+            make_array_for_struct(dtype=dtype._typ[name], size=size)
+        )
+
+    return list_of_arrays
+
+
 def list_generator(dtype, size, nesting_depth, lists_max_length):
     """
     Generator for list data
@@ -625,3 +676,10 @@ def list_generator(dtype, size, nesting_depth, lists_max_length):
         nesting_depth=nesting_depth,
         lists_max_length=lists_max_length,
     )
+
+
+def struct_generator(dtype, size):
+    """
+    Generator for struct data
+    """
+    return lambda: get_nested_structs(dtype=dtype, size=size,)
