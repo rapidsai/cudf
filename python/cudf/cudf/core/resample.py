@@ -45,13 +45,11 @@ class _ResampleGrouping(_Grouping):
     def _handle_freq(self, key, freq):
         import cudf._lib.labeling
 
-        # TODO fix:
         if key is None:
+            # then assume that the key is the index of `self._obj`:
             key_column = self._obj.index._column
-            # key_name = self._obj.index.name
         else:
             key_column = self._obj._data[key]
-            # key_name = key
 
         label = "left"
 
@@ -91,19 +89,17 @@ class _ResampleGrouping(_Grouping):
         )
 
         if label == "right":
-            # Pandas uses the 'right' labels for these by default
             bin_labels = bin_labels[1:]
         else:
             bin_labels = bin_labels[:-1]
 
-        binned_keys = bin_labels.take(bins)
-
         self.bin_labels = bin_labels
-        self._key_columns.append(binned_keys)
+        self._key_columns.append(bin_labels.take(bins))
         self.names.append(key)
         self._named_columns.append(key)
 
 
+# NOTE: this function is vendored from Pandas
 def _get_timestamp_range_edges(
     first, last, freq, closed="left", origin="start_day", offset=None
 ):
@@ -184,6 +180,7 @@ def _get_timestamp_range_edges(
     return first, last
 
 
+# NOTE: this function is vendored from Pandas
 def _adjust_dates_anchored(
     first, last, freq, closed="right", origin="start_day", offset=None
 ):
