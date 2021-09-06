@@ -19,6 +19,7 @@ import pytest
 
 import cudf
 from cudf.testing._utils import assert_eq
+from cudf.testing.dataset_generator import rand_dataframe
 
 
 def cudf_from_avro_util(schema, records):
@@ -207,3 +208,35 @@ def test_can_parse_no_schema():
     actual = cudf_from_avro_util(schema_root, records)
     expected = cudf.DataFrame()
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("rows", [0, 1, 10, 100000])
+def test_avro_compression(rows):
+    schema = {
+        "name": "root",
+        "type": "record",
+        "fields": [{"name": "0", "type": "string"}],
+    }
+
+    df = rand_dataframe(
+        [
+            {
+                "dtype": "str",
+                "null_frequency": 0,
+                "cardinality": 100,
+                "max_string_length": 10,
+            }
+        ],
+        rows,
+    )
+    expected_df = cudf.DataFrame.from_arrow(df)
+
+    records = df.to_pandas()["0"].tolist()
+    records = [{"0": record} for record in records]
+
+    buffer = io.BytesIO()
+    fastavro.writer(buffer, schema, records, codec="snappy")
+    buffer.seek(0)
+    got_df = cudf.read_avro(buffer)
+
+    assert_eq(expected_df, got_df)
