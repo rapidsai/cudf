@@ -223,22 +223,6 @@ cudf::size_type expression_parser::add_data_reference(detail::device_data_refere
   }
 }
 
-bool contains_null_literal(expression const* expr)
-{
-  if (literal const* cast_expr = dynamic_cast<literal const*>(expr)) {
-    return !cast_expr->is_valid();
-  } else if (dynamic_cast<column_reference const*>(expr)) {
-    return false;
-  } else if (operation const* cast_expr = dynamic_cast<operation const*>(expr)) {
-    for (auto subexpr : cast_expr->get_operands()) {
-      if (contains_null_literal(&subexpr.get())) { return true; }
-    }
-    return false;
-  }
-  CUDF_FAIL("Unknown expression type!.");
-  return false;
-}
-
 }  // namespace detail
 
 }  // namespace ast

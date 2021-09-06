@@ -188,10 +188,7 @@ class literal : public expression {
    *
    * @return bool
    */
-  bool is_valid(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
-  {
-    return scalar.is_valid(stream);
-  }
+  bool is_valid(rmm::cuda_stream_view stream) const { return scalar.is_valid(stream); }
 
  private:
   cudf::scalar const& scalar;

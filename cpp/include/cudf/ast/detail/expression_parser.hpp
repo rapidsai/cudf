@@ -337,8 +337,6 @@ class expression_parser {
   std::vector<cudf::detail::fixed_width_scalar_device_view_base> _literals;
 };
 
-bool contains_null_literal(expression const* expr);
-
 }  // namespace detail
 
 }  // namespace ast

@@ -64,15 +64,10 @@ conditional_join(table_view const& left,
     }
   }
 
-  // Prepare output column. Whether or not the output column is nullable is
-  // determined by whether any of the columns in the input table are nullable.
-  // If none of the input columns actually contain nulls, we can still use the
-  // non-nullable version of the expression evaluation code path for
-  // performance, so we capture that information as well.
-  auto const expr_has_nulls = ast::detail::contains_null_literal(&binary_predicate);
-  auto const nullable       = cudf::nullable(left) || cudf::nullable(right) || expr_has_nulls;
-  auto const has_nulls =
-    (nullable && (cudf::has_nulls(left) || cudf::has_nulls(right))) || expr_has_nulls;
+  // If evaluating the expression may produce null outputs we create a nullable
+  // output column and follow the null-supporting expression evaluation code
+  // path.
+  auto const has_nulls = binary_predicate.may_evaluate_null(left, right, stream);
 
   auto const parser =
     ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
