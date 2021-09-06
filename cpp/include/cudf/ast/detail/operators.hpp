@@ -822,10 +822,10 @@ struct operator_functor<ast_operator::NULL_EQUAL, true> {
   CUDA_DEVICE_CALLABLE auto operator()(LHS const lhs, RHS const rhs)
     -> possibly_null_value_t<decltype(NonNullOperator{}(*lhs, *rhs)), true>
   {
-    // Case 1: Two nulls compare equal.
-    if (!lhs.has_value() && !rhs.has_value()) { return {true}; }
-    // Case 2: Neither is null, so the output is given by the operation.
+    // Case 1: Neither is null, so the output is given by the operation.
     if (lhs.has_value() && rhs.has_value()) { return {NonNullOperator{}(*lhs, *rhs)}; }
+    // Case 2: Two nulls compare equal.
+    if (!lhs.has_value() && !rhs.has_value()) { return {true}; }
     // Case 3: One value is null, while the other is not, so we return false.
     return {false};
   }
@@ -843,10 +843,10 @@ struct operator_functor<ast_operator::NULL_LOGICAL_AND, true> {
   CUDA_DEVICE_CALLABLE auto operator()(LHS const lhs, RHS const rhs)
     -> possibly_null_value_t<decltype(NonNullOperator{}(*lhs, *rhs)), true>
   {
-    // Case 1: Two nulls return null.
-    if (!lhs.has_value() && !rhs.has_value()) { return {}; }
-    // Case 2: Neither is null, so the output is given by the operation.
+    // Case 1: Neither is null, so the output is given by the operation.
     if (lhs.has_value() && rhs.has_value()) { return {NonNullOperator{}(*lhs, *rhs)}; }
+    // Case 2: Two nulls return null.
+    if (!lhs.has_value() && !rhs.has_value()) { return {}; }
     // Case 3: One value is null, while the other is not. If it's true we return null, otherwise we
     // return false.
     auto const& valid_element = lhs.has_value() ? lhs : rhs;
@@ -866,10 +866,10 @@ struct operator_functor<ast_operator::NULL_LOGICAL_OR, true> {
   CUDA_DEVICE_CALLABLE auto operator()(LHS const lhs, RHS const rhs)
     -> possibly_null_value_t<decltype(NonNullOperator{}(*lhs, *rhs)), true>
   {
-    // Case 1: Two nulls return null.
-    if (!lhs.has_value() && !rhs.has_value()) { return {}; }
-    // Case 2: Neither is null, so the output is given by the operation.
+    // Case 1: Neither is null, so the output is given by the operation.
     if (lhs.has_value() && rhs.has_value()) { return {NonNullOperator{}(*lhs, *rhs)}; }
+    // Case 2: Two nulls return null.
+    if (!lhs.has_value() && !rhs.has_value()) { return {}; }
     // Case 3: One value is null, while the other is not. If it's true we return true, otherwise we
     // return null.
     auto const& valid_element = lhs.has_value() ? lhs : rhs;
@@ -939,7 +939,7 @@ struct type_dispatch_binary_op {
     // Single dispatch (assume lhs_type == rhs_type)
     type_dispatcher(
       lhs_type,
-      // Always non-null operator since this is just for the purpose of type determination.
+      // Always dispatch to the non-null operator for the purpose of type determination.
       detail::single_dispatch_binary_operator_types<operator_functor<op, false>>{},
       std::forward<F>(f),
       std::forward<Ts>(args)...);
@@ -1010,7 +1010,7 @@ struct type_dispatch_unary_op {
   {
     type_dispatcher(
       input_type,
-      // Always non-null operator since this is just for the purpose of type determination.
+      // Always dispatch to the non-null operator for the purpose of type determination.
       detail::dispatch_unary_operator_types<operator_functor<op, false>>{},
       std::forward<F>(f),
       std::forward<Ts>(args)...);

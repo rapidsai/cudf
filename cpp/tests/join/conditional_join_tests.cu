@@ -36,8 +36,6 @@
 #include <utility>
 #include <vector>
 
-// Defining expressions for AST evaluation is currently a bit tedious, so we
-// define some standard nodes here that can be easily reused elsewhere.
 namespace {
 using PairJoinReturn   = std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
                                  std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
