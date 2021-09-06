@@ -132,16 +132,15 @@ conditional_join(table_view const& left,
     join_size = size.value(stream);
   }
 
-  // If the output size will be zero, we can return immediately.
+  // The initial early exit clauses guarantee that we will not reach this point
+  // unless both the left and right tables are non-empty. Under that
+  // constraint, neither left nor full joins can return an empty result since
+  // at minimum we are guaranteed null matches for all non-matching rows. In
+  // all other cases (inner, left semi, and left anti joins) if we reach this
+  // point we can safely return an empty result.
   if (join_size == 0) {
-    auto join_indices{
-      std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
-                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr))};
-    if (join_type == join_kind::FULL_JOIN) {
-      auto complement_indices = detail::get_left_join_indices_complement(
-        join_indices.second, left.num_rows(), right.num_rows(), stream, mr);
-      return detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
-    }
+    return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                          std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
   rmm::device_scalar<size_type> write_index(0, stream);
