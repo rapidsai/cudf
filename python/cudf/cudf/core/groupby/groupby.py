@@ -1246,6 +1246,7 @@ def _get_groupby(obj, by, **kwargs):
         return DataFrameGroupBy(obj, by=by, **kwargs)
 
 
+# TODO: should we define this as a dataclass instead?
 class Grouper(object):
     def __init__(
         self, key=None, level=None, freq=None, closed=None, label=None
@@ -1257,6 +1258,8 @@ class Grouper(object):
         self.key = key
         self.level = level
         self.freq = freq
+        self.closed = closed
+        self.label = label
 
 
 class _Grouping(Serializable):
