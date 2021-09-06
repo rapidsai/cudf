@@ -3,15 +3,19 @@
 import pandas as pd
 
 import cudf
+from cudf._typing import DataFrameOrSeries
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
+    GroupBy,
     Grouper,
     SeriesGroupBy,
     _Grouping,
 )
 
 
-class _Resampler:
+# TODO: is this the best inheritance strategy to use?
+class _Resampler(GroupBy):
+
     grouping: "_ResampleGrouping"
 
     def __init__(self, obj, by, axis=None, kind=None):
@@ -28,6 +32,25 @@ class _Resampler:
             self.grouping.bin_labels, name=self.grouping.names[0]
         )
         return result._align_to_index(index, how="right")
+
+    def asfreq(self):
+        return self.obj._align_to_index(self.grouping.bin_labels, how="right")
+
+    def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
+        # TODO: can this be more efficient?
+
+        # first, compute the outer join between `self.obj` and the `bin_labels`
+        # to get the sampling "gaps":
+        upsampled = self.obj._align_to_index(
+            self.grouping.bin_labels, how="outer"
+        )
+
+        # fill the gaps:
+        filled = upsampled.fillna(method=method)
+
+        # filter the result to only include the values corresponding
+        # to the bin labels:
+        return filled._align_to_index(self.grouping.bin_labels, how="right")
 
 
 class DataFrameResampler(_Resampler, DataFrameGroupBy):
@@ -48,6 +71,7 @@ class _ResampleGrouping(_Grouping):
         if key is None:
             # then assume that the key is the index of `self._obj`:
             key_column = self._obj.index._column
+
         else:
             key_column = self._obj._data[key]
 
@@ -97,10 +121,14 @@ class _ResampleGrouping(_Grouping):
             # if we have more labels than bins:
             bin_labels = bin_labels[:-1]
 
+        key_name = key if key is not None else self._obj.index.name
+        bin_labels.name = key_name
+
+        if key is not None:
+            self._named_columns.append(key_name)
+        self.names.append(key_name)
         self.bin_labels = bin_labels
-        self._key_columns.append(bin_labels.take(bins))
-        self.names.append(key)
-        self._named_columns.append(key)
+        self._key_columns.append(bin_labels._column.take(bins))
 
 
 # NOTE: this function is vendored from Pandas

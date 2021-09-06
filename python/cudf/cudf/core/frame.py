@@ -1349,6 +1349,12 @@ class Frame(libcudf.table.Table):
 
         return self._mimic_inplace(result, inplace=inplace)
 
+    def ffill(self):
+        return self.fillna(method="ffill")
+
+    def bfill(self):
+        return self.fillna(method="bfill")
+
     def _drop_na_rows(
         self, how="any", subset=None, thresh=None, drop_nan=False
     ):
