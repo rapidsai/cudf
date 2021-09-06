@@ -38,6 +38,15 @@ class expression_parser;
 struct expression {
   virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
 
+  bool may_evaluate_null(table_view const& left, rmm::cuda_stream_view stream) const
+  {
+    return may_evaluate_null(left, left, stream);
+  }
+
+  virtual bool may_evaluate_null(table_view const& left,
+                                 table_view const& right,
+                                 rmm::cuda_stream_view stream) const = 0;
+
   virtual ~expression() {}
 };
 
@@ -167,12 +176,22 @@ class literal : public expression {
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
+  bool may_evaluate_null(table_view const& left,
+                         table_view const& right,
+                         rmm::cuda_stream_view stream) const override
+  {
+    return !is_valid(stream);
+  }
+
   /**
    * @brief Check if the underlying scalar is valid.
    *
    * @return bool
    */
-  bool is_valid() const { return scalar.is_valid(); }
+  bool is_valid(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
+  {
+    return scalar.is_valid(stream);
+  }
 
  private:
   cudf::scalar const& scalar;
@@ -251,6 +270,13 @@ class column_reference : public expression {
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
+  bool may_evaluate_null(table_view const& left,
+                         table_view const& right,
+                         rmm::cuda_stream_view stream) const override
+  {
+    return (table_source == table_reference::LEFT ? left : right).column(column_index).has_nulls();
+  }
+
  private:
   cudf::size_type column_index;
   table_reference table_source;
@@ -306,6 +332,17 @@ class operation : public expression {
    * @return cudf::size_type Index of device data reference for this instance.
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
+
+  bool may_evaluate_null(table_view const& left,
+                         table_view const& right,
+                         rmm::cuda_stream_view stream) const override
+  {
+    return std::any_of(operands.cbegin(),
+                       operands.cend(),
+                       [&left, &right, &stream](std::reference_wrapper<expression const> subexpr) {
+                         return subexpr.get().may_evaluate_null(left, right, stream);
+                       });
+  };
 
  private:
   ast_operator const op;
