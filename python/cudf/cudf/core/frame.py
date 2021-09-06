@@ -4944,7 +4944,7 @@ class SingleColumnFrame(Frame):
             "start",
             None,
             None,
-            0,
+            None,
             "start_day",
             None,
         ):
