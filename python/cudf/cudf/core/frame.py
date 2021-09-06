@@ -4939,7 +4939,27 @@ class SingleColumnFrame(Frame):
         origin="start_day",
         offset=None,
     ):
-        by = cudf.Grouper(freq=rule, closed=closed, label=label)  # TODO
+        if (axis, convention, kind, loffset, base, origin, offset) != (
+            0,
+            "start",
+            None,
+            None,
+            0,
+            "start_day",
+            None,
+        ):
+            raise NotImplementedError(
+                "The following arguments are not "
+                "currently supported by resample:\n\n"
+                "- axis\n"
+                "- convention\n"
+                "- kind\n"
+                "- loffset\n"
+                "- base\n"
+                "- origin\n"
+                "- offset"
+            )
+        by = cudf.Grouper(freq=rule, closed=closed, label=label)
         return _get_groupby(self, by=by)
 
 
