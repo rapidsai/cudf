@@ -20,7 +20,7 @@ from cudf.core._compat import PANDAS_GE_120
 from cudf.core.column import as_column, column
 from cudf.core.frame import Frame
 from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
-from cudf.utils.utils import _maybe_indices_to_slice
+from cudf.utils.utils import _maybe_indices_to_slice, cached_property
 
 
 class MultiIndex(Frame, BaseIndex):
@@ -415,7 +415,7 @@ class MultiIndex(Frame, BaseIndex):
             mi = MultiIndex(levels=levels, codes=codes, names=names, copy=deep)
             return mi
 
-        mi = MultiIndex(source_data=self._source_data.copy(deep=deep))
+        mi = MultiIndex._from_data(self._data.copy(deep=deep))
         if self._levels is not None:
             mi._levels = [s.copy(deep) for s in self._levels]
         if self._codes is not None:
@@ -448,7 +448,11 @@ class MultiIndex(Frame, BaseIndex):
         Removes n names, labels, and codes in order to build a new index
         for results.
         """
-        result = MultiIndex(source_data=self._source_data.iloc[:, n:])
+        result = MultiIndex(
+            levels=self.levels[n:],
+            codes=self.codes.iloc[:, n:],
+            names=self.names[n:],
+        )
         if self.names is not None:
             result.names = self.names[n:]
         return result
@@ -471,13 +475,9 @@ class MultiIndex(Frame, BaseIndex):
         else:
             preprocess = self.copy(deep=False)
 
-        cols_nulls = [
-            preprocess._source_data._data[col].has_nulls
-            for col in preprocess._source_data._data
-        ]
-        if any(cols_nulls):
-            preprocess_df = preprocess._source_data
-            for name, col in preprocess_df._data.items():
+        if any(col.has_nulls for col in preprocess._data.columns):
+            preprocess_df = preprocess.to_frame(index=False)
+            for name, col in preprocess._data.items():
                 if isinstance(
                     col,
                     (
@@ -488,8 +488,6 @@ class MultiIndex(Frame, BaseIndex):
                     preprocess_df[name] = col.astype("str").fillna(
                         cudf._NA_REP
                     )
-                else:
-                    preprocess_df[name] = col
 
             tuples_list = list(
                 zip(
@@ -506,18 +504,12 @@ class MultiIndex(Frame, BaseIndex):
                 # TODO: Remove this whole `if` block,
                 # this is a workaround for the following issue:
                 # https://github.com/pandas-dev/pandas/issues/39984
-                temp_df = preprocess._source_data
-
-                preprocess_pdf = pd.DataFrame()
-                for col in temp_df.columns:
-                    if temp_df[col].dtype.kind == "f":
-                        preprocess_pdf[col] = temp_df[col].to_pandas(
-                            nullable=False
-                        )
-                    else:
-                        preprocess_pdf[col] = temp_df[col].to_pandas(
-                            nullable=True
-                        )
+                preprocess_pdf = pd.DataFrame(
+                    {
+                        name: col.to_pandas(nullable=(col.dtype.kind != "f"))
+                        for name, col in preprocess._data.items()
+                    }
+                )
 
                 preprocess_pdf.columns = preprocess.names
                 preprocess = pd.MultiIndex.from_frame(preprocess_pdf)
@@ -578,7 +570,7 @@ class MultiIndex(Frame, BaseIndex):
         """
         Integer number of levels in this MultiIndex.
         """
-        return self._source_data.shape[1]
+        return len(self._data)
 
     @property
     def levels(self):
@@ -762,15 +754,14 @@ class MultiIndex(Frame, BaseIndex):
     def _compute_levels_and_codes(self):
         levels = []
 
-        codes = cudf.DataFrame()
-        for name in self._source_data.columns:
-            code, cats = self._source_data[name].factorize()
+        codes = {}
+        for name, col in self._data.items():
+            code, cats = cudf.Series._from_data({None: col}).factorize()
             codes[name] = code.astype(np.int64)
-            cats = cudf.Series(cats, name=None)
-            levels.append(cats)
+            levels.append(cudf.Series(cats, name=None))
 
         self._levels = levels
-        self._codes = codes
+        self._codes = cudf.DataFrame._from_data(codes)
 
     def _compute_validity_mask(self, index, row_tuple, max_length):
         """ Computes the valid set of indices of values in the lookup
@@ -1478,21 +1469,15 @@ class MultiIndex(Frame, BaseIndex):
         # which preserves all levels of `multiindex`.
         names = tuple(range(len(multiindex.names)))
 
-        mi = cls(
+        return cls(
             names=multiindex.names,
             source_data=multiindex.to_frame(name=names),
             nan_as_null=nan_as_null,
         )
 
-        return mi
-
-    @property
+    @cached_property
     def is_unique(self):
-        if not hasattr(self, "_is_unique"):
-            self._is_unique = len(self._source_data) == len(
-                self._source_data.drop_duplicates(ignore_index=True)
-            )
-        return self._is_unique
+        return len(self) == len(self.unique())
 
     @property
     def is_monotonic(self):
@@ -1525,14 +1510,15 @@ class MultiIndex(Frame, BaseIndex):
         )
 
     def argsort(self, ascending=True, **kwargs):
-        indices = self._source_data.argsort(ascending=ascending, **kwargs)
-        return cupy.asarray(indices)
+        return self._get_sorted_inds(ascending=ascending, **kwargs).values
 
     def sort_values(self, return_indexer=False, ascending=True, key=None):
         if key is not None:
             raise NotImplementedError("key parameter is not yet implemented.")
 
-        indices = self._source_data.argsort(ascending=ascending)
+        indices = cudf.Series._from_data(
+            {None: self._get_sorted_inds(ascending=ascending)}
+        )
         index_sorted = as_index(self.take(indices), name=self.names)
 
         if return_indexer:
@@ -1581,21 +1567,21 @@ class MultiIndex(Frame, BaseIndex):
         return super().fillna(value=value)
 
     def unique(self):
-        return MultiIndex.from_frame(self._source_data.drop_duplicates())
+        return self.drop_duplicates()
 
     def _clean_nulls_from_index(self):
         """
         Convert all na values(if any) in MultiIndex object
         to `<NA>` as a preprocessing step to `__repr__` methods.
         """
-        index_df = self._source_data
+        index_df = self.to_frame(index=False)
         return MultiIndex.from_frame(
             index_df._clean_nulls_from_dataframe(index_df), names=self.names
         )
 
     def memory_usage(self, deep=False):
         n = 0
-        for col in self._source_data._columns:
+        for col in self._data._columns:
             n += col._memory_usage(deep=deep)
         if self._levels:
             for level in self._levels:
