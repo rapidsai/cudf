@@ -1364,7 +1364,9 @@ class _Grouping(Serializable):
 
     def _handle_grouper(self, by):
         if by.freq:
-            self._handle_freq(by.key, by.freq)
+            self._handle_freq(
+                by.key, by.freq, closed=by.closed, label=by.label
+            )
         elif by.key:
             self._handle_label(by.key)
         else:

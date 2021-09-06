@@ -2116,7 +2116,9 @@ def test_groupby_apply_series():
     assert_groupby_results_equal(expect, got)
 
 
-def test_groupby_freq_week():
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_week(label, closed):
     pdf = pd.DataFrame(
         {
             "Publish date": [
@@ -2132,12 +2134,18 @@ def test_groupby_freq_week():
         }
     )
     gdf = cudf.from_pandas(pdf)
-    expect = pdf.groupby(pd.Grouper(key="Publish date", freq="1W")).mean()
-    got = gdf.groupby(cudf.Grouper(key="Publish date", freq="1W")).mean()
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="1W", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="1W", label=label, closed=closed)
+    ).mean()
     assert_eq(expect, got, check_like=True, check_dtype=False)
 
 
-def test_groupby_freq_day():
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_day(label, closed):
     pdf = pd.DataFrame(
         {
             "Publish date": [
@@ -2153,12 +2161,18 @@ def test_groupby_freq_day():
         }
     )
     gdf = cudf.from_pandas(pdf)
-    expect = pdf.groupby(pd.Grouper(key="Publish date", freq="3D")).mean()
-    got = gdf.groupby(cudf.Grouper(key="Publish date", freq="3D")).mean()
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="3D", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="3D", label=label, closed=closed)
+    ).mean()
     assert_eq(expect, got, check_like=True, check_dtype=False)
 
 
-def test_groupby_freq_min():
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_min(label, closed):
     pdf = pd.DataFrame(
         {
             "Publish date": [
@@ -2174,12 +2188,18 @@ def test_groupby_freq_min():
         }
     )
     gdf = cudf.from_pandas(pdf)
-    expect = pdf.groupby(pd.Grouper(key="Publish date", freq="1h")).mean()
-    got = gdf.groupby(cudf.Grouper(key="Publish date", freq="1h")).mean()
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="1h", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="1h", label=label, closed=closed)
+    ).mean()
     assert_eq(expect, got, check_like=True, check_dtype=False)
 
 
-def test_groupby_freq_s():
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_s(label, closed):
     pdf = pd.DataFrame(
         {
             "Publish date": [
@@ -2195,6 +2215,10 @@ def test_groupby_freq_s():
         }
     )
     gdf = cudf.from_pandas(pdf)
-    expect = pdf.groupby(pd.Grouper(key="Publish date", freq="3s")).mean()
-    got = gdf.groupby(cudf.Grouper(key="Publish date", freq="3s")).mean()
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="3s", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="3s", label=label, closed=closed)
+    ).mean()
     assert_eq(expect, got, check_like=True, check_dtype=False)

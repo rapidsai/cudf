@@ -42,7 +42,7 @@ class _ResampleGrouping(_Grouping):
 
     bin_labels: cudf.Index
 
-    def _handle_freq(self, key, freq):
+    def _handle_freq(self, key, freq, closed=None, label=None):
         import cudf._lib.labeling
 
         if key is None:
@@ -50,8 +50,6 @@ class _ResampleGrouping(_Grouping):
             key_column = self._obj.index._column
         else:
             key_column = self._obj._data[key]
-
-        label = "left"
 
         # conver freq to a pd.DateOffset:
         if isinstance(freq, str):
@@ -66,31 +64,37 @@ class _ResampleGrouping(_Grouping):
             offset = freq
 
         if offset.freqstr == "M" or offset.freqstr.startswith("W-"):
-            label = "right"
+            label = "right" if label is None else label
+            closed = "right" if closed is None else closed
+        else:
+            label = "left" if label is None else label
+            closed = "left" if closed is None else closed
 
         start, end = _get_timestamp_range_edges(
             pd.Timestamp(key_column.min()),
             pd.Timestamp(key_column.max()),
             offset,
-            closed=label,
+            closed=closed,
         )
 
-        if label == "left":
-            # add an extra time point at the end:
-            end += offset
-
+        end += offset
         bin_labels = cudf.date_range(start=start, end=end, freq=freq,)
         bins = cudf._lib.labeling.label_bins(
             key_column,
             left_edges=bin_labels[:-1]._column,
-            left_inclusive=(label == "left"),
+            left_inclusive=(closed == "left"),
             right_edges=bin_labels[1:]._column,
-            right_inclusive=(label == "right"),
+            right_inclusive=(closed == "right"),
         )
 
         if label == "right":
             bin_labels = bin_labels[1:]
         else:
+            bin_labels = bin_labels[:-1]
+
+        nbins = bins.max() + 1
+        if len(bin_labels) > nbins:
+            # if we have more labels than bins:
             bin_labels = bin_labels[:-1]
 
         self.bin_labels = bin_labels
