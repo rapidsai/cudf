@@ -629,11 +629,6 @@ class DateOffset:
             numeric_part = "1"
         freq_part = match.group(2)
 
-        # Pandas uses `t/T` for minute frequency,
-        # we expect lowercase "m"
-        if freq_part.lower() == "t":
-            freq_part = "m"
-
         if freq_part not in cls._CODES_TO_UNITS:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")
 
@@ -722,9 +717,11 @@ def date_range(
     periods : int, optional
         Number of periods to generate.
 
-    freq : DateOffset
+    freq : str or DateOffset
         Frequencies to generate the datetime series. Mixed fixed-frequency and
         non-fixed frequency offset is unsupported. See notes for detail.
+        Supported offset alias: ``D``, ``h``, ``H``, ``T``, ``min``, ``S``,
+        ``U``, ``us``, ``N``, ``ns``.
 
     tz : str or tzinfo, optional
         Not Supported
@@ -778,15 +775,10 @@ def date_range(
     if tz is not None:
         raise NotImplementedError("tz is currently unsupported.")
 
-    if normalize:
-        raise NotImplementedError(
-            "normalizing timestamps to midnight is unsupported."
-        )
-
     if closed is not None:
         raise NotImplementedError("closed is currently unsupported.")
 
-    if [start, end, periods, freq].count(None) > 1:
+    if (start, end, periods, freq).count(None) > 1:
         raise ValueError(
             "Of the four parameters: start, end, periods, and freq, exactly "
             "three must be specified"
@@ -811,11 +803,39 @@ def date_range(
     if isinstance(freq, pd.DateOffset):
         offset = DateOffset.from_pandas(freq)
     elif isinstance(freq, str):
+        # Map pandas `offset alias` into cudf DateOffset `CODE`, only
+        # fixed-frequency, non-anchored offset aliases are supported.
+        _map_offset_alias_to_code = {
+            "D": "D",
+            "H": "h",
+            "h": "h",
+            "T": "m",
+            "min": "m",
+            "s": "s",
+            "S": "s",
+            "U": "us",
+            "us": "us",
+            "N": "ns",
+            "ns": "ns",
+            "W": "W",
+        }
+        mo = re.fullmatch(
+            rf'(-)*(\d*)({"|".join(_map_offset_alias_to_code.keys())})', freq
+        )
+        if mo is None:
+            raise ValueError(
+                f"Unrecognized or unsupported offset alias {freq}."
+            )
+
+        sign, n, offset_alias = mo.groups()
+        code = _map_offset_alias_to_code[offset_alias]
+
+        freq = "".join([n, code])
         offset = DateOffset._from_freqstr(freq)
+        if sign:
+            offset.kwds.update({s: -i for s, i in offset.kwds.items()})
     else:
-        if not isinstance(freq, DateOffset):
-            raise TypeError("`freq` must be a string or DateOffset object.")
-        offset = freq
+        raise TypeError("`freq` must be a `str` or cudf.DateOffset object.")
 
     if _check_mixed_freqeuency(offset):
         raise NotImplementedError(
@@ -824,14 +844,15 @@ def date_range(
 
     # Depending on different combinations of `start`, `end`, `offset`,
     # `periods`, the following logic makes sure before computing the sequence,
-    # `start`, `periods`, `offset` is defined.
+    # `start`, `periods`, `offset` is defined
 
     _periods_not_specified = False
 
     if start is None:
         end = cudf.Scalar(end, dtype=dtype)
         start = cudf.Scalar(
-            pd.Timestamp(end.value) - (periods - 1) * offset, dtype=dtype
+            pd.Timestamp(end.value) - (periods - 1) * offset.to_pandas(),
+            dtype=dtype,
         )
     elif end is None:
         start = cudf.Scalar(start, dtype=dtype)
@@ -844,43 +865,49 @@ def date_range(
         _periods_not_specified = True
         start = cudf.Scalar(start, dtype=dtype)
         end = cudf.Scalar(end, dtype=dtype)
+        _is_increment_sequence = end >= start
+
         periods = math.ceil(
             int(end - start) / _offset_to_nanoseconds_lower_bound(offset)
         )
 
         if periods < 0:
-            # end < start, return empty column
+            # Mismatched sign between (end-start) and offset, return empty
+            # column
             periods = 0
         elif periods == 0:
             # end == start, return exactly 1 timestamp (start)
             periods = 1
 
-    if normalize:
-        old_dtype = start.value.dtype
-        start = cudf.Scalar(
-            start.value.astype("datetime64[D]").astype(old_dtype)
-        )
-
-    # The code logic below assumes `start`, `periods`, `offset` is defined.
+    # The estimated upper bound of `end` is enforced to be computed to make
+    # sure overflow components are raised before actually computing the
+    # sequence.
+    # FIXME: when `end_estim` is out of bound, but the actual `end` is not,
+    # we shouldn't raise but compute the sequence as is. The trailing overflow
+    # part should get trimmed at the end.
+    end_estim = (
+        pd.Timestamp(start.value) + (periods - 1) * offset.to_pandas()
+    ).to_datetime64()
 
     if "months" in offset.kwds or "years" in offset.kwds:
         # If `offset` is non-fixed frequency, resort to libcudf.
         res = libcudf.datetime.date_range(start.device_value, periods, offset)
+        if _periods_not_specified:
+            # As mentioned in [1], this is a post processing step to trim extra
+            # elements when `periods` is an estimated value. Only offset
+            # specified with non fixed frequencies requires trimming.
+            res = res[
+                (res <= end) if _is_increment_sequence else (res <= start)
+            ]
     else:
-        end = (
-            pd.Timestamp(start.value) + (periods - 1) * offset.to_pandas()
-        ).to_numpy()
+        # If `offset` is fixed frequency, we treat both timestamps as integers
+        # and evenly divide the given integer range.
         arr = cp.linspace(
             start=start.value.astype("int64"),
-            stop=end.astype("int64"),
+            stop=end_estim.astype("int64"),
             num=periods,
         )
         res = cudf.core.column.as_column(arr).astype("datetime64[ns]")
-
-    if _periods_not_specified:
-        # As mentioned in [1], this is a post processing step to trim extra
-        # elements when `periods` is an estimated value.
-        res = res[res <= end]
 
     return cudf.DatetimeIndex._from_data({name: res})
 

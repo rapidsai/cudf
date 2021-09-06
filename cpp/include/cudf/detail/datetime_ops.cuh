@@ -20,26 +20,21 @@
 namespace cudf {
 namespace datetime {
 namespace detail {
+using namespace cuda::std::chrono;
 
-template <typename Timestamp, typename MonthType>
-__device__ Timestamp add_calendrical_months_with_scale_back(Timestamp time_val,
-                                                            MonthType months_val)
+template <typename Timestamp>
+__device__ Timestamp add_calendrical_months_with_scale_back(Timestamp time_val, months months_val)
 {
-  using namespace cuda::std::chrono;
-
-  // Get the days component from the input
   auto const days_since_epoch = floor<days>(time_val);
 
-  // Add the number of months
-  year_month_day ymd{days_since_epoch};
-  ymd += duration<int32_t, months::period>{months_val};
+  auto const date = [&]() {
+    auto const ymd = year_month_day{days_since_epoch} + months_val;
+    return ymd.ok() ? ymd : ymd.year() / ymd.month() / last;
+  }();
 
-  // If the new date isn't valid, scale it back to the last day of the
-  // month.
-  if (!ymd.ok()) ymd = ymd.year() / ymd.month() / last;
+  auto const time = (time_val - days_since_epoch);
 
-  // Put back the time component to the date
-  return sys_days{ymd} + (time_val - days_since_epoch);
+  return sys_days{date} + time;
 }
 
 }  // namespace detail

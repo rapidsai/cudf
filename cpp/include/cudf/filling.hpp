@@ -204,11 +204,10 @@ std::unique_ptr<column> sequence(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Generate a sequence of timestamps of `n` rows, increment by calendrical months
+ * @brief Generate a sequence of timestamps beginning at `init` and incrementing by `months` for
+ * each successive element, i.e., `output[i] = init + i * months` for `i` in `[0, size)`.
  *
- * The ith row in the output column `output[i]` is i * `months` away from the `init`
- * timestamp (i is zero-indexed). If the given new date is invalid, the date is scaled
- * back to the last available day of that month.
+ * If a given date is invalid, the date is scaled back to the last available day of that month.
  *
  * Example:
  * ```

@@ -1386,7 +1386,13 @@ def test_is_month_start(data, dtype):
 #                       Date Range Tests                         #
 ##################################################################
 
-date_range_test_dates = [
+date_range_test_dates_start = [
+    "2000-02-13 08:41:06",  # leap year
+    "1996-11-21 04:05:30",  # non leap year
+    "1970-01-01 00:00:00",  # unix epoch time 0
+    "1831-05-08 15:23:21",
+]
+date_range_test_dates_end = [
     "2000-02-13 08:41:06",  # leap year
     "1996-11-21 04:05:30",  # non leap year
     "1970-01-01 00:00:00",  # unix epoch time 0
@@ -1396,18 +1402,28 @@ date_range_test_periods = [1, 10, 100]
 date_range_test_freq = [
     {"months": 3, "years": 1},
     {"hours": 10, "days": 57, "nanoseconds": 3},
-    "17h",
     "83D",
+    "17h",
+    "-680T",
     "110546s",
+    pytest.param(
+        "110546789L",
+        marks=pytest.mark.xfail(
+            True,
+            reason="Pandas DateOffset ignores milliseconds. "
+            "https://github.com/pandas-dev/pandas/issues/43371",
+        ),
+    ),
+    "110546789248U",
 ]
 
 
-@pytest.fixture(params=date_range_test_dates[:])
+@pytest.fixture(params=date_range_test_dates_start[:])
 def start(request):
     return request.param
 
 
-@pytest.fixture(params=date_range_test_dates[:])
+@pytest.fixture(params=date_range_test_dates_end[:])
 def end(request):
     return request.param
 
@@ -1478,6 +1494,22 @@ def test_date_range_end_freq_periods(end, freq, periods):
         expect.to_numpy().astype("int64"),
         got.to_pandas().to_numpy().astype("int64"),
     )
+
+
+def test_date_range_raise_overflow():
+    # Fixed offset
+    start = np.datetime64(np.iinfo("int64").max, "ns").astype("datetime64[us]")
+    periods = 2
+    freq = cudf.DateOffset(nanoseconds=1)
+    with pytest.raises(pd._libs.tslibs.np_datetime.OutOfBoundsDatetime):
+        cudf.date_range(start=start, periods=periods, freq=freq)
+
+    # Non-fixed offset
+    start = np.datetime64(np.iinfo("int64").max, "ns").astype("datetime64[us]")
+    periods = 2
+    freq = cudf.DateOffset(months=1)
+    with pytest.raises(pd._libs.tslibs.np_datetime.OutOfBoundsDatetime):
+        cudf.date_range(start=start, periods=periods, freq=freq)
 
 
 ##################################################################
