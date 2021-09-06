@@ -524,17 +524,13 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
     detail::group_merge_m2(
       get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr));
 };
+
 /**
- * @brief Perform correlation among child columns of non-nullable struct column.
- *
- * The output of this aggregation is also a non-nullable struct column. The child columns of the
- * output struct column are the corresponding correlation of each input child column.
- *
- * The correlation is done for each group of the input struct column.
+ * @brief Perform correlation betweeen two child columns of non-nullable struct column.
  *
  */
 template <>
-void aggregate_result_functor::operator()<aggregation::CORR>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) { return; }
 

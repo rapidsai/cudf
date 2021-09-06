@@ -172,7 +172,7 @@ TEST_F(groupby_corr_test, basic)
   using K  = int32_t;
   using M0 = uint8_t;
   using M1 = int16_t;
-  using R  = cudf::detail::target_type_t<M0, aggregation::CORR>;
+  using R  = cudf::detail::target_type_t<M0, aggregation::CORRELATION>;
 
   // clang-format off
   auto keys     = fwcw<K>  { 1,    2,    3,    1,    2,    2,    1,    3,    3,    2  };
@@ -186,7 +186,8 @@ TEST_F(groupby_corr_test, basic)
     {1.000000, -0.41522739926869984, std::numeric_limits<double>::quiet_NaN()}};  //, null_at(2)};
   // clang-format on
 
-  auto agg = cudf::make_corr_aggregation<groupby_aggregation>();
+  auto agg =
+    cudf::make_correlation_aggregation<groupby_aggregation>(cudf::correlation_type::PEARSON);
   std::vector<groupby::aggregation_request> requests;
   requests.emplace_back(groupby::aggregation_request());
   requests[0].values = values;

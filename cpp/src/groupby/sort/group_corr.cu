@@ -165,7 +165,8 @@ std::unique_ptr<column> group_corr(column_view const& values,
 
   using result_type = id_to_type<type_id::FLOAT64>;
   static_assert(
-    std::is_same_v<cudf::detail::target_type_t<result_type, aggregation::Kind::CORR>, result_type>);
+    std::is_same_v<cudf::detail::target_type_t<result_type, aggregation::Kind::CORRELATION>,
+                   result_type>);
 
   // check if each child type can be converted to float64.
   bool const is_convertible =

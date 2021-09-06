@@ -88,7 +88,7 @@ class aggregation {
     MERGE_LISTS,     ///< merge multiple lists values into one list
     MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
     MERGE_M2,        ///< merge partial values of M2 aggregation,
-    CORR,            ///< correlation among multiple columns
+    CORRELATION,     ///< correlation between two sets of elements
   };
 
   aggregation() = delete;
@@ -144,6 +144,7 @@ class groupby_scan_aggregation : public virtual aggregation {
 };
 
 enum class udf_type : bool { CUDA, PTX };
+enum class correlation_type : int32_t { PEARSON, KENDALL, SPEARMAN };
 
 /// Factory to create a SUM aggregation
 template <typename Base = aggregation>
@@ -490,14 +491,15 @@ template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_m2_aggregation();
 
 /**
- * @brief Factory to create a CORR aggregation
+ * @brief Factory to create a CORRELATION aggregation
  *
- * Compute correlation matrix amond the input columns.
+ * Compute correlation coefficient between two columns.
  * The input columns are child columns of a non-nullable struct columns.
  *
+ * @param[in] type: correlation_type
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_corr_aggregation();
+std::unique_ptr<Base> make_correlation_aggregation(correlation_type type);
 
 /** @} */  // end of group
 }  // namespace cudf

@@ -92,7 +92,7 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class merge_m2_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                          class corr_aggregation const& agg);
+                                                          class correlation_aggregation const& agg);
 };
 
 class aggregation_finalizer {  // Declares the interface for the finalizer
@@ -127,7 +127,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class merge_lists_aggregation const& agg);
   virtual void visit(class merge_sets_aggregation const& agg);
   virtual void visit(class merge_m2_aggregation const& agg);
-  virtual void visit(class corr_aggregation const& agg);
+  virtual void visit(class correlation_aggregation const& agg);
 };
 
 /**
@@ -888,15 +888,25 @@ class merge_m2_aggregation final : public groupby_aggregation {
 };
 
 /**
- * @brief Derived aggregation class for specifying CORR aggregation
+ * @brief Derived aggregation class for specifying CORRELATION aggregation
  */
-class corr_aggregation final : public groupby_aggregation {
+class correlation_aggregation final : public groupby_aggregation {
  public:
-  explicit corr_aggregation() : aggregation{CORR} {}
+  explicit correlation_aggregation(correlation_type type) : aggregation{CORRELATION}, _type{type} {}
+  correlation_type _type;
+
+  bool is_equal(aggregation const& _other) const override
+  {
+    if (!this->aggregation::is_equal(_other)) { return false; }
+    auto const& other = dynamic_cast<correlation_aggregation const&>(_other);
+    return (_type == other._type);
+  }
+
+  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
 
   std::unique_ptr<aggregation> clone() const override
   {
-    return std::make_unique<corr_aggregation>(*this);
+    return std::make_unique<correlation_aggregation>(*this);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
@@ -904,6 +914,9 @@ class corr_aggregation final : public groupby_aggregation {
     return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+
+ protected:
+  size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_type)); }
 };
 
 /**
@@ -1140,9 +1153,9 @@ struct target_type_impl<SourceType, aggregation::MERGE_M2> {
   using type = struct_view;
 };
 
-// Always use struct for CORR
+// Always use struct for CORRELATION
 template <typename SourceType>
-struct target_type_impl<SourceType, aggregation::CORR> {
+struct target_type_impl<SourceType, aggregation::CORRELATION> {
   using type = double;
 };
 
@@ -1250,8 +1263,8 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::MERGE_SETS>(std::forward<Ts>(args)...);
     case aggregation::MERGE_M2:
       return f.template operator()<aggregation::MERGE_M2>(std::forward<Ts>(args)...);
-    case aggregation::CORR:
-      return f.template operator()<aggregation::CORR>(std::forward<Ts>(args)...);
+    case aggregation::CORRELATION:
+      return f.template operator()<aggregation::CORRELATION>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
