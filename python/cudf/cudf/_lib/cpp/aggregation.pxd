@@ -38,11 +38,15 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
             COLLECT_SET 'cudf::aggregation::COLLECT_SET'
             PTX 'cudf::aggregation::PTX'
             CUDA 'cudf::aggregation::CUDA'
-            CORRELATION 'cudf::aggregation::CORRELATION'
-
         Kind kind
 
     cdef cppclass rolling_aggregation:
+        aggregation.Kind kind
+
+    cdef cppclass groupby_aggregation:
+        aggregation.Kind kind
+
+    cdef cppclass groupby_scan_aggregation:
         aggregation.Kind kind
 
     ctypedef enum udf_type:
