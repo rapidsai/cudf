@@ -1168,7 +1168,7 @@ def test_timedelta_index_repr(index, expected_repr):
         100,
     ],
 )
-def test_mulitIndex_repr(pmi, max_seq_items):
+def test_multiIndex_repr(pmi, max_seq_items):
     pd.set_option("display.max_seq_items", max_seq_items)
     gmi = cudf.from_pandas(pmi)
 
@@ -1413,7 +1413,7 @@ def test_mulitIndex_repr(pmi, max_seq_items):
         ),
     ],
 )
-def test_mulitIndex_null_repr(gdi, expected_repr):
+def test_multiIndex_null_repr(gdi, expected_repr):
     actual_repr = gdi.__repr__()
 
     assert actual_repr.split() == expected_repr.split()
