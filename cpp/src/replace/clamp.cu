@@ -140,9 +140,7 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
                              std::move(offsets_column),
                              std::move(chars_column),
                              input.null_count(),
-                             std::move(copy_bitmask(input.parent())),
-                             stream,
-                             mr);
+                             std::move(copy_bitmask(input.parent())));
 }
 
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>

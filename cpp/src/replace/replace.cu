@@ -431,9 +431,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
                                    std::move(offsets),
                                    std::move(output_chars),
                                    null_count,
-                                   std::move(valid_bits),
-                                   stream,
-                                   mr);
+                                   std::move(valid_bits));
 }
 
 template <>

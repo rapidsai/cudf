@@ -300,9 +300,7 @@ struct dispatch_from_fixed_point_fn {
                                std::move(offsets_column),
                                std::move(chars_column),
                                input.null_count(),
-                               cudf::detail::copy_bitmask(input, stream, mr),
-                               stream,
-                               mr);
+                               cudf::detail::copy_bitmask(input, stream, mr));
   }
 
   template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
