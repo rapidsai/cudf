@@ -1743,6 +1743,43 @@ def test_dataframe_shape_empty():
 @pytest.mark.parametrize("dtype", dtypes)
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
+    # In case of `bool` dtype: pandas <= 1.2.5 type-casts
+    # a boolean series to `float64` series if a `np.nan` is assigned to it:
+    # >>> s = pd.Series([True, False, True])
+    # >>> s
+    # 0     True
+    # 1    False
+    # 2     True
+    # dtype: bool
+    # >>> s[[2]] = np.nan
+    # >>> s
+    # 0    1.0
+    # 1    0.0
+    # 2    NaN
+    # dtype: float64
+    # In pandas >= 1.3.2 this behavior is fixed:
+    # >>> s = pd.Series([True, False, True])
+    # >>> s
+    # 0
+    # True
+    # 1
+    # False
+    # 2
+    # True
+    # dtype: bool
+    # >>> s[[2]] = np.nan
+    # >>> s
+    # 0
+    # True
+    # 1
+    # False
+    # 2
+    # NaN
+    # dtype: object
+    # In cudf we change `object` dtype to `str` type - for which there
+    # is no transpose implemented yet. Hence we need to test transpose
+    # against pandas nullable types as they are the ones that closely
+    # resemble `cudf` dtypes behavior.
     pdf = pd.DataFrame()
 
     null_rep = np.nan if dtype in ["float32", "float64"] else None
