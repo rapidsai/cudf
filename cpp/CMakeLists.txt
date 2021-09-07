@@ -735,7 +735,7 @@ rapids_export(BUILD cudf
     GLOBAL_TARGETS cudf
     NAMESPACE cudf::
     DOCUMENTATION doc_string
-    FINAL_CODE_BLOCK code_string)
+    FINAL_CODE_BLOCK build_code_string)
 
 export(EXPORT cudf-testing-exports
     FILE ${CUDF_BINARY_DIR}/cudf-testing.cmake
