@@ -510,9 +510,9 @@ target_link_libraries(cudf
            PUBLIC ZLIB::ZLIB
                   ${ARROW_LIBRARIES}
                   cudf::Thrust
-                  nvcomp::nvcomp
                   rmm::rmm
-           PRIVATE cuco::cuco)
+           PRIVATE cuco::cuco
+                   nvcomp::nvcomp)
 
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
@@ -751,7 +751,7 @@ rapids_export(BUILD cudf
     EXPORT_SET cudf-exports
     GLOBAL_TARGETS cudf
     NAMESPACE cudf::
-    FINAL_CODE_BLOCK code_string)
+    FINAL_CODE_BLOCK build_code_string)
 
 export(EXPORT cudf-testing-exports
     FILE ${CUDF_BINARY_DIR}/cudf-testing.cmake

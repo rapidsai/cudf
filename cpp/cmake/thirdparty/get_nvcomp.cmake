@@ -16,14 +16,9 @@
 
 function(find_and_configure_nvcomp VERSION)
 
-    if(TARGET nvcomp::nvcomp)
-        return()
-    endif()
-
     # Find or install nvcomp
-    CPMFindPackage(NAME nvcomp
+    rapids_cpm_find(nvcomp ${VERSION}
         GLOBAL_TARGETS     nvcomp::nvcomp
-        VERSION            ${VERSION}
         CPM_ARGS
             GITHUB_REPOSITORY  NVIDIA/nvcomp
             GIT_TAG            3a12516afdeab4ace01298031757f84b8dda81b7
