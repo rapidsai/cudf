@@ -44,11 +44,17 @@ def _parse_column_statistics(cs, column_statistics_blob):
     if cs.HasField("intStatistics"):
         column_statistics["minimum"] = cs.intStatistics.minimum
         column_statistics["maximum"] = cs.intStatistics.maximum
-        column_statistics["sum"] = cs.intStatistics.sum
+        column_statistics["sum"] = (
+            cs.intStatistics.sum if cs.intStatistics.HasField("sum") else None
+        )
     elif cs.HasField("doubleStatistics"):
         column_statistics["minimum"] = cs.doubleStatistics.minimum
         column_statistics["maximum"] = cs.doubleStatistics.maximum
-        column_statistics["sum"] = cs.doubleStatistics.sum
+        column_statistics["sum"] = (
+            cs.doubleStatistics.sum
+            if cs.doubleStatistics.HasField("sum")
+            else None
+        )
     elif cs.HasField("stringStatistics"):
         column_statistics["minimum"] = cs.stringStatistics.minimum
         column_statistics["maximum"] = cs.stringStatistics.maximum
