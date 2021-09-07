@@ -53,17 +53,17 @@ _np_pa_dtypes = {
     np.str_: pa.string(),
 }
 
-cudf_dtypes_to_pandas_dtypes = {
-    cudf.dtype("uint8"): pd.UInt8Dtype(),
-    cudf.dtype("uint16"): pd.UInt16Dtype(),
-    cudf.dtype("uint32"): pd.UInt32Dtype(),
-    cudf.dtype("uint64"): pd.UInt64Dtype(),
-    cudf.dtype("int8"): pd.Int8Dtype(),
-    cudf.dtype("int16"): pd.Int16Dtype(),
-    cudf.dtype("int32"): pd.Int32Dtype(),
-    cudf.dtype("int64"): pd.Int64Dtype(),
-    cudf.dtype("bool_"): pd.BooleanDtype(),
-    cudf.dtype("object"): pd.StringDtype(),
+np_dtypes_to_pandas_dtypes = {
+    np.dtype("uint8"): pd.UInt8Dtype(),
+    np.dtype("uint16"): pd.UInt16Dtype(),
+    np.dtype("uint32"): pd.UInt32Dtype(),
+    np.dtype("uint64"): pd.UInt64Dtype(),
+    np.dtype("int8"): pd.Int8Dtype(),
+    np.dtype("int16"): pd.Int16Dtype(),
+    np.dtype("int32"): pd.Int32Dtype(),
+    np.dtype("int64"): pd.Int64Dtype(),
+    np.dtype("bool_"): pd.BooleanDtype(),
+    np.dtype("object"): pd.StringDtype(),
 }
 
 pyarrow_dtypes_to_pandas_dtypes = {
@@ -79,17 +79,17 @@ pyarrow_dtypes_to_pandas_dtypes = {
     pa.string(): pd.StringDtype(),
 }
 
-pandas_dtypes_to_cudf_dtypes = {
-    pd.UInt8Dtype(): cudf.dtype("uint8"),
-    pd.UInt16Dtype(): cudf.dtype("uint16"),
-    pd.UInt32Dtype(): cudf.dtype("uint32"),
-    pd.UInt64Dtype(): cudf.dtype("uint64"),
-    pd.Int8Dtype(): cudf.dtype("int8"),
-    pd.Int16Dtype(): cudf.dtype("int16"),
-    pd.Int32Dtype(): cudf.dtype("int32"),
-    pd.Int64Dtype(): cudf.dtype("int64"),
-    pd.BooleanDtype(): cudf.dtype("bool_"),
-    pd.StringDtype(): cudf.dtype("object"),
+pandas_dtypes_to_np_dtypes = {
+    pd.UInt8Dtype(): np.dtype("uint8"),
+    pd.UInt16Dtype(): np.dtype("uint16"),
+    pd.UInt32Dtype(): np.dtype("uint32"),
+    pd.UInt64Dtype(): np.dtype("uint64"),
+    pd.Int8Dtype(): np.dtype("int8"),
+    pd.Int16Dtype(): np.dtype("int16"),
+    pd.Int32Dtype(): np.dtype("int32"),
+    pd.Int64Dtype(): np.dtype("int64"),
+    pd.BooleanDtype(): np.dtype("bool_"),
+    pd.StringDtype(): np.dtype("object"),
 }
 
 pandas_dtypes_alias_to_cudf_alias = {
@@ -105,10 +105,10 @@ pandas_dtypes_alias_to_cudf_alias = {
 }
 
 if PANDAS_GE_120:
-    cudf_dtypes_to_pandas_dtypes[cudf.dtype("float32")] = pd.Float32Dtype()
-    cudf_dtypes_to_pandas_dtypes[cudf.dtype("float64")] = pd.Float64Dtype()
-    pandas_dtypes_to_cudf_dtypes[pd.Float32Dtype()] = cudf.dtype("float32")
-    pandas_dtypes_to_cudf_dtypes[pd.Float64Dtype()] = cudf.dtype("float64")
+    np_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
+    np_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
+    pandas_dtypes_to_np_dtypes[pd.Float32Dtype()] = np.dtype("float32")
+    pandas_dtypes_to_np_dtypes[pd.Float64Dtype()] = np.dtype("float64")
     pandas_dtypes_alias_to_cudf_alias["Float32"] = "float32"
     pandas_dtypes_alias_to_cudf_alias["Float64"] = "float64"
 
@@ -197,7 +197,7 @@ def cudf_dtype_from_pydata_dtype(dtype):
         return cudf.core.dtypes.Decimal32Dtype
     elif is_decimal64_dtype(dtype):
         return cudf.core.dtypes.Decimal64Dtype
-    elif dtype in cudf._lib.types.np_to_cudf_types:
+    elif dtype in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
         return dtype.type
 
     return infer_dtype_from_object(dtype)
@@ -385,9 +385,7 @@ def min_column_type(x, expected_type):
         return x.dtype
 
     if np.issubdtype(x.dtype, np.floating):
-        max_bound_dtype = np.min_scalar_type(x.max())
-        min_bound_dtype = np.min_scalar_type(x.min())
-        result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
+        return get_min_float_dtype(x)
 
     elif np.issubdtype(expected_type, np.integer):
         max_bound_dtype = np.min_scalar_type(x.max())
@@ -402,7 +400,9 @@ def min_column_type(x, expected_type):
 def get_min_float_dtype(col):
     max_bound_dtype = np.min_scalar_type(float(col.max()))
     min_bound_dtype = np.min_scalar_type(float(col.min()))
-    result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
+    result_type = np.promote_types(
+        "float32", np.promote_types(max_bound_dtype, min_bound_dtype)
+    )
     return cudf.dtype(result_type)
 
 
@@ -542,6 +542,8 @@ def find_common_type(dtypes):
         dtypes.add(np.result_type(*td_dtypes))
 
     common_dtype = np.find_common_type(list(dtypes), [])
+    if common_dtype == np.dtype("float16"):
+        return cudf.dtype("float32")
     return cudf.dtype(common_dtype)
 
 

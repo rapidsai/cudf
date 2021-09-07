@@ -2114,3 +2114,52 @@ def test_groupby_apply_series():
     expect = make_frame(pd.DataFrame, 100).groupby("x").y.apply(foo)
 
     assert_groupby_results_equal(expect, got)
+
+
+@pytest.mark.parametrize(
+    "pdf, group, name, obj",
+    [
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "X",
+            "A",
+            None,
+        ),
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "X",
+            "B",
+            None,
+        ),
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "X",
+            "A",
+            pd.DataFrame({"a": [1, 2, 4, 5, 10, 11]}),
+        ),
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "Y",
+            1,
+            pd.DataFrame({"a": [1, 2, 4, 5, 10, 11]}),
+        ),
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "Y",
+            3,
+            pd.DataFrame({"a": [1, 2, 0, 11]}),
+        ),
+    ],
+)
+def test_groupby_get_group(pdf, group, name, obj):
+    gdf = cudf.from_pandas(pdf)
+
+    if isinstance(obj, pd.DataFrame):
+        gobj = cudf.from_pandas(obj)
+    else:
+        gobj = obj
+
+    expected = pdf.groupby(group).get_group(name=name, obj=obj)
+    actual = gdf.groupby(group).get_group(name=name, obj=gobj)
+
+    assert_groupby_results_equal(expected, actual)
