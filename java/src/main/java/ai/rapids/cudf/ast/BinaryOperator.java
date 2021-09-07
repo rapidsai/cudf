@@ -30,10 +30,10 @@ public enum BinaryOperator {
   TRUE_DIV(4),            // operator / after promoting type to floating point
   FLOOR_DIV(5),           // operator / after promoting to 64 bit floating point and then flooring the result
   MOD(6),                 // operator %
-  PYMOD(7),               // operator % but following python's sign rules for negatives
+  PYMOD(7),               // operator % using python's sign rules for negatives
   POW(8),                 // lhs ^ rhs
   EQUAL(9),               // operator ==
-  NULL_EQUAL(10),         // operator == but supporting Spark rules for null inputs
+  NULL_EQUAL(10),         // operator == using Spark rules for null inputs
   NOT_EQUAL(11),          // operator !=
   LESS(12),               // operator <
   GREATER(13),            // operator >
@@ -43,9 +43,9 @@ public enum BinaryOperator {
   BITWISE_OR(17),         // operator |
   BITWISE_XOR(18),        // operator ^
   LOGICAL_AND(19),        // operator &&
-  NULL_LOGICAL_AND(20),   // operator && but supporting Spark rules for null inputs
+  NULL_LOGICAL_AND(20),   // operator && using Spark rules for null inputs
   LOGICAL_OR(21),         // operator ||
-  NULL_LOGICAL_OR(22);    // operator || but supporting Spark rules for null inputs
+  NULL_LOGICAL_OR(22);    // operator || using Spark rules for null inputs
 
   private final byte nativeId;
 
