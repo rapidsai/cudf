@@ -30,7 +30,7 @@ public enum BinaryOperator {
   TRUE_DIV(4),            // operator / after promoting type to floating point
   FLOOR_DIV(5),           // operator / after promoting to 64 bit floating point and then flooring the result
   MOD(6),                 // operator %
-  PYMOD(7),               // operator % using python's sign rules for negatives
+  PYMOD(7),               // operator % using Python's sign rules for negatives
   POW(8),                 // lhs ^ rhs
   EQUAL(9),               // operator ==
   NULL_EQUAL(10),         // operator == using Spark rules for null inputs
