@@ -1241,8 +1241,7 @@ def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
     else:
         pres = pd.concat([df1, df2])
         gres = cudf.concat([cudf.from_pandas(df1), cudf.from_pandas(df2)])
-        # Pandas 1.3.2+ returns mixed `object` dtype result.
-        assert_eq(cudf.from_pandas(pres.astype(gres.dtypes)), gres)
+        assert_eq(pres, gres, check_dtype=False)
 
 
 def test_dataframe_concat_different_column_types():
