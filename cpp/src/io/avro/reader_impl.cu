@@ -31,6 +31,7 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <numeric>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
@@ -181,8 +182,10 @@ rmm::device_buffer decompress_data(datasource& source,
   } else if (meta.codec == "snappy") {
     size_t num_blocks = meta.block_list.size();
 
-    // comp_block_data contains contents of the avro file starting from the first block.
-    // Find ptrs to each compressed block in device memory.
+    // comp_block_data contains contents of the avro file starting from the first block, excluding
+    // file header. meta.block_list[i].offset refers to offset of block i in the file, including
+    // file header.
+    // Find ptrs to each compressed block in comp_block_data by removing header offset.
     hostdevice_vector<void const*> compressed_data_ptrs(num_blocks, stream);
     std::transform(meta.block_list.begin(),
                    meta.block_list.end(),
@@ -201,29 +204,21 @@ rmm::device_buffer decompress_data(datasource& source,
     compressed_data_sizes.host_to_device(stream);
 
     hostdevice_vector<size_t> uncompressed_data_sizes(num_blocks, stream);
-
     CUDF_EXPECTS(nvcompStatus_t::nvcompSuccess ==
                    nvcompBatchedSnappyGetDecompressSizeAsync(compressed_data_ptrs.device_ptr(),
                                                              compressed_data_sizes.device_ptr(),
                                                              uncompressed_data_sizes.device_ptr(),
                                                              num_blocks,
                                                              stream.value()),
-                 "Unable to get uncompressed sized for snappy compressed blocks");
+                 "Unable to get uncompressed sizes for snappy compressed blocks");
+    uncompressed_data_sizes.device_to_host(stream, true);
 
     size_t uncompressed_data_size =
-      thrust::reduce(rmm::exec_policy(stream),
-                     uncompressed_data_sizes.device_ptr(),
-                     uncompressed_data_sizes.device_ptr() + uncompressed_data_sizes.size(),
-                     0);
-    size_t max_uncomp_block_size =
-      thrust::reduce(rmm::exec_policy(stream),
-                     uncompressed_data_sizes.device_ptr(),
-                     uncompressed_data_sizes.device_ptr() + uncompressed_data_sizes.size(),
-                     0,
-                     thrust::maximum<size_t>());
+      std::reduce(uncompressed_data_sizes.begin(), uncompressed_data_sizes.end());
+    size_t max_uncomp_block_size = std::reduce(
+      uncompressed_data_sizes.begin(), uncompressed_data_sizes.end(), 0, thrust::maximum<size_t>());
 
     size_t temp_size;
-
     CUDF_EXPECTS(nvcompStatus_t::nvcompSuccess == nvcompBatchedSnappyDecompressGetTempSize(
                                                     num_blocks, max_uncomp_block_size, &temp_size),
                  "Unable to get scratch size for snappy decompression");
@@ -233,10 +228,11 @@ rmm::device_buffer decompress_data(datasource& source,
     rmm::device_uvector<void*> uncompressed_data_ptrs(num_blocks, stream);
     hostdevice_vector<size_t> uncompressed_data_offsets(num_blocks, stream);
 
-    thrust::exclusive_scan(rmm::exec_policy(stream),
-                           uncompressed_data_sizes.device_ptr(),
-                           uncompressed_data_sizes.device_ptr() + uncompressed_data_sizes.size(),
-                           uncompressed_data_offsets.device_ptr());
+    std::exclusive_scan(uncompressed_data_sizes.begin(),
+                        uncompressed_data_sizes.end(),
+                        uncompressed_data_offsets.begin(),
+                        0);
+    uncompressed_data_offsets.host_to_device(stream);
 
     thrust::tabulate(rmm::exec_policy(),
                      uncompressed_data_ptrs.begin(),
@@ -262,12 +258,11 @@ rmm::device_buffer decompress_data(datasource& source,
                                                       stream),
                  "unable to perform snappy decompression");
 
-    CUDF_EXPECTS(
-      thrust::equal(rmm::exec_policy(stream),
-                    uncompressed_data_sizes.device_ptr(),
-                    uncompressed_data_sizes.device_ptr() + uncompressed_data_sizes.size(),
-                    actual_uncompressed_data_sizes.begin()),
-      "Mismatch in expected and actual decompressed size during snappy decompression");
+    CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
+                               uncompressed_data_sizes.d_begin(),
+                               uncompressed_data_sizes.d_end(),
+                               actual_uncompressed_data_sizes.begin()),
+                 "Mismatch in expected and actual decompressed size during snappy decompression");
     CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
                                statuses.begin(),
                                statuses.end(),
@@ -275,35 +270,12 @@ rmm::device_buffer decompress_data(datasource& source,
                  "Error during snappy decompression");
 
     // Update blocks offsets & sizes to refer to uncompressed data
-    uncompressed_data_offsets.device_to_host(stream);
-    uncompressed_data_sizes.device_to_host(stream);
-    stream.synchronize();
-
     for (size_t i = 0; i < num_blocks; i++) {
       meta.block_list[i].offset = uncompressed_data_offsets[i];
       meta.block_list[i].size   = uncompressed_data_sizes[i];
     }
 
     return decomp_block_data;
-
-    // // Extract the uncompressed length from the snappy stream
-    // uncompressed_data_size = 0;
-    // for (size_t i = 0; i < meta.block_list.size(); i++) {
-    //   auto const buffer  = source.host_read(meta.block_list[i].offset, 4);
-    //   uint8_t const* blk = buffer->data();
-    //   uint32_t blk_len   = blk[0];
-    //   if (blk_len > 0x7f) {
-    //     blk_len = (blk_len & 0x7f) | (blk[1] << 7);
-    //     if (blk_len > 0x3fff) {
-    //       blk_len = (blk_len & 0x3fff) | (blk[2] << 14);
-    //       if (blk_len > 0x1fffff) { blk_len = (blk_len & 0x1fffff) | (blk[3] << 21); }
-    //     }
-    //   }
-    //   inflate_in[i].dstSize = blk_len;
-    //   std::cout << blk_len << " ";
-    //   uncompressed_data_size += blk_len;
-    // }
-    // std::cout << uncompressed_data_size << std::endl;
   } else {
     CUDF_FAIL("Unsupported compression codec\n");
   }
@@ -317,8 +289,6 @@ rmm::device_buffer decompress_data(datasource& source,
     inflate_in[i].srcDevice = static_cast<uint8_t const*>(comp_block_data.data()) + src_pos;
     inflate_in[i].srcSize   = meta.block_list[i].size;
     inflate_in[i].dstDevice = static_cast<uint8_t*>(decomp_block_data.data()) + dst_pos;
-    std::cout << "old comp src " << inflate_in[i].srcDevice << " comp siz " << inflate_in[i].srcSize
-              << " dest " << inflate_in[i].dstDevice << std::endl;
 
     // Update blocks offsets & sizes to refer to uncompressed data
     meta.block_list[i].offset = dst_pos;

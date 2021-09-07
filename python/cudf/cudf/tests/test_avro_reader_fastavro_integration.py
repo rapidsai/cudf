@@ -215,24 +215,27 @@ def test_avro_compression(rows):
     schema = {
         "name": "root",
         "type": "record",
-        "fields": [{"name": "0", "type": "string"}],
+        "fields": [
+            {"name": "0", "type": "int"},
+            {"name": "1", "type": "string"},
+        ],
     }
 
     df = rand_dataframe(
         [
+            {"dtype": "int32", "null_frequency": 0, "cardinality": 1000},
             {
                 "dtype": "str",
                 "null_frequency": 0,
                 "cardinality": 100,
                 "max_string_length": 10,
-            }
+            },
         ],
         rows,
     )
     expected_df = cudf.DataFrame.from_arrow(df)
 
-    records = df.to_pandas()["0"].tolist()
-    records = [{"0": record} for record in records]
+    records = df.to_pandas().to_dict(orient="records")
 
     buffer = io.BytesIO()
     fastavro.writer(buffer, schema, records, codec="snappy")
