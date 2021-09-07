@@ -44,6 +44,7 @@ std::unique_ptr<column> sha1_hash(table_view const& input,
                                   rmm::mr::device_memory_resource* mr)
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
+    // Return the SHA-1 hash of a zero-length input.
     const string_scalar string_160bit("da39a3ee5e6b4b0d3255bfef95601890afd80709");
     auto output = make_column_from_scalar(string_160bit, input.num_rows(), stream, mr);
     return output;
@@ -51,14 +52,12 @@ std::unique_ptr<column> sha1_hash(table_view const& input,
 
   CUDF_EXPECTS(
     std::all_of(input.begin(), input.end(), [](auto col) { return sha_type_check(col.type()); }),
-    "SHA1 unsupported column type");
+    "SHA-1 unsupported column type");
 
   // Result column allocation and creation
   auto begin = thrust::make_constant_iterator(40);
   auto offsets_column =
     cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
-  auto offsets_view  = offsets_column->view();
-  auto d_new_offsets = offsets_view.data<int32_t>();
 
   auto chars_column = strings::detail::create_chars_child_column(input.num_rows() * 40, stream, mr);
   auto chars_view   = chars_column->mutable_view();
@@ -66,7 +65,6 @@ std::unique_ptr<column> sha1_hash(table_view const& input,
 
   rmm::device_buffer null_mask{0, stream, mr};
 
-  bool const nullable     = has_nulls(input);
   auto const device_input = table_device_view::create(input, stream);
 
   // Hash each row, hashing each element sequentially left to right
@@ -76,16 +74,15 @@ std::unique_ptr<column> sha1_hash(table_view const& input,
                    [d_chars, device_input = *device_input] __device__(auto row_index) {
                      sha1_intermediate_data hash_state;
                      SHA1Hash hasher = SHA1Hash{};
-                     // for (int col_index = 0; col_index < device_input.num_columns(); col_index++)
-                     // {
-                     //   if (device_input.column(col_index).is_valid(row_index)) {
-                     //     cudf::type_dispatcher(device_input.column(col_index).type(),
-                     //                           hasher,
-                     //                           device_input.column(col_index),
-                     //                           row_index,
-                     //                           &hash_state);
-                     //   }
-                     // }
+                     for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
+                       if (device_input.column(col_index).is_valid(row_index)) {
+                         cudf::type_dispatcher(device_input.column(col_index).type(),
+                                               hasher,
+                                               device_input.column(col_index),
+                                               row_index,
+                                               &hash_state);
+                       }
+                     }
                      hasher.finalize(&hash_state, d_chars + (row_index * 40));
                    });
 

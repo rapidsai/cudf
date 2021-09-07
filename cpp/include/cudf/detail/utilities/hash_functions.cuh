@@ -368,7 +368,7 @@ struct SHA1Hash {
   }
 
   /**
-   * @brief Core SHA1 algorithm implementation. Processes a single 512-bit chunk,
+   * @brief Core SHA-1 algorithm implementation. Processes a single 512-bit chunk,
    * updating the hash value so far. Does not zero out the buffer contents.
    */
   void __device__ hash_step(sha1_intermediate_data* hash_state) const
