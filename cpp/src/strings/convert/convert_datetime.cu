@@ -160,16 +160,15 @@ struct format_compiler {
 };
 
 /**
- * @brief Specialized function to return the value reading upto the specified
+ * @brief Specialized function to return the value reading up to the specified
  * bytes or until an invalid character is encountered.
  *
  * @param str Beginning of characters to read.
  * @param bytes Number of bytes in str to read.
- * @return Integer value of valid characters read and how bytes were not read.
+ * @return Integer value of valid characters read and how many bytes were not read.
  */
-__device__ thrust::pair<int32_t, size_type> str2int2(const char* str, size_type bytes)
+__device__ thrust::pair<int32_t, size_type> parse_int(const char* str, size_type bytes)
 {
-  // const char* ptr = str;
   int32_t value = 0;
   while (bytes-- > 0) {
     char chr = *str++;
@@ -225,50 +224,50 @@ struct parse_datetime {
       // special logic for each specifier
       switch (item.value) {
         case 'Y': {
-          auto const [year, left] = str2int2(ptr, item.length);
+          auto const [year, left] = parse_int(ptr, item.length);
           timeparts.year          = static_cast<int16_t>(year);
           copied -= left;
           break;
         }
         case 'y': {
-          auto const [year, left] = str2int2(ptr, item.length);
+          auto const [year, left] = parse_int(ptr, item.length);
           timeparts.year          = static_cast<int16_t>(year + (year < 69 ? 2000 : 1900));
           copied -= left;
           break;
         }
         case 'm': {
-          auto const [month, left] = str2int2(ptr, item.length);
+          auto const [month, left] = parse_int(ptr, item.length);
           timeparts.month          = static_cast<int8_t>(month);
           copied -= left;
           break;
         }
         case 'd': {
-          auto const [day, left] = str2int2(ptr, item.length);
+          auto const [day, left] = parse_int(ptr, item.length);
           timeparts.day          = static_cast<int8_t>(day);
           copied -= left;
           break;
         }
         case 'j': {
-          auto const [day, left] = str2int2(ptr, item.length);
+          auto const [day, left] = parse_int(ptr, item.length);
           timeparts.day_of_year  = static_cast<int16_t>(day);
           copied -= left;
           break;
         }
         case 'H':
         case 'I': {
-          auto const [hour, left] = str2int2(ptr, item.length);
+          auto const [hour, left] = parse_int(ptr, item.length);
           timeparts.hour          = static_cast<int8_t>(hour);
           copied -= left;
           break;
         }
         case 'M': {
-          auto const [minute, left] = str2int2(ptr, item.length);
+          auto const [minute, left] = parse_int(ptr, item.length);
           timeparts.minute          = static_cast<int8_t>(minute);
           copied -= left;
           break;
         }
         case 'S': {
-          auto const [second, left] = str2int2(ptr, item.length);
+          auto const [second, left] = parse_int(ptr, item.length);
           timeparts.second          = static_cast<int8_t>(second);
           copied -= left;
           break;
@@ -276,7 +275,7 @@ struct parse_datetime {
         case 'f': {
           int32_t const read_size =
             std::min(static_cast<int32_t>(item.length), static_cast<int32_t>(length));
-          auto const [fraction, left] = str2int2(ptr, read_size);
+          auto const [fraction, left] = parse_int(ptr, read_size);
           timeparts.subsecond =
             static_cast<int32_t>(fraction * power_of_ten(item.length - read_size - left));
           copied = read_size - left;
@@ -293,9 +292,10 @@ struct parse_datetime {
           break;
         }
         case 'z': {
+          // 'z' format is +hh:mm -- single sign char and 2 chars each for hour and minute
           auto const sign      = *ptr == '-' ? 1 : -1;  // revert timezone back to UTC
-          auto const [hh, lh]  = str2int2(ptr + 1, 2);
-          auto const [mm, lm]  = str2int2(ptr + 3, 2);
+          auto const [hh, lh]  = parse_int(ptr + 1, 2);
+          auto const [mm, lm]  = parse_int(ptr + 3, 2);
           timeparts.tz_minutes = sign * ((hh * 60) + mm);
           copied -= lh + lm;
           break;
@@ -438,7 +438,7 @@ struct check_datetime_format {
    * @param bytes Number of bytes to check.
    * @param min_value Inclusive minimum value
    * @param max_value Inclusive maximum value
-   * @return number of bytes not successfully read
+   * @return number of bytes not successfully processed
    */
   __device__ size_type check_value(const char* str,
                                    size_type const bytes,
@@ -490,28 +490,28 @@ struct check_datetime_format {
       size_type copied = item.length;
       switch (item.value) {
         case 'Y': {
-          auto const [year, left] = str2int2(ptr, item.length);
+          auto const [year, left] = parse_int(ptr, item.length);
           result                  = (left < item.length);
           dateparts.year          = static_cast<int16_t>(year);
           copied -= left;
           break;
         }
         case 'y': {
-          auto const [year, left] = str2int2(ptr, item.length);
+          auto const [year, left] = parse_int(ptr, item.length);
           result                  = (left < item.length);
           dateparts.year          = static_cast<int16_t>(year + (year < 69 ? 2000 : 1900));
           copied -= left;
           break;
         }
         case 'm': {
-          auto const [month, left] = str2int2(ptr, item.length);
+          auto const [month, left] = parse_int(ptr, item.length);
           result                   = (left < item.length);
           dateparts.month          = static_cast<int8_t>(month);
           copied -= left;
           break;
         }
         case 'd': {
-          auto const [day, left] = str2int2(ptr, item.length);
+          auto const [day, left] = parse_int(ptr, item.length);
           result                 = (left < item.length);
           dateparts.day          = static_cast<int8_t>(day);  // value.value()
           copied -= left;
