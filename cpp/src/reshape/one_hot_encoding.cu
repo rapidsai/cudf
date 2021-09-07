@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
- #include <cudf/stream_compaction.hpp>
  #include <cudf/detail/stream_compaction.hpp>
  #include <cudf/table/table_view.hpp>
  #include <cudf/detail/binaryop.hpp>
@@ -35,7 +34,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<table>> one_hot_encoding(
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) {
 
-    auto uniques = drop_duplicates(table_view{{input_column}}, {0}, duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL, null_order::BEFORE, stream, mr);
+    auto uniques = detail::drop_duplicates(table_view{{input_column}}, {0}, duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL, null_order::BEFORE, stream, mr);
     auto uniques_column = std::move(uniques->release()[0]);
     std::vector<std::unique_ptr<column>> res;
     res.reserve(static_cast<std::size_t>(uniques_column->size()));
