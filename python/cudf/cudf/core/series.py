@@ -5512,20 +5512,20 @@ class DatetimeProperties(object):
 
         isoSeries = cudf.DataFrame(
             {"year": iso_year, "week": iso_week, "day": iso_day},
-             dtype =np.int32
+            dtype=np.int32,
         )
 
         @property
         def day(self):
-            return isoSeries['iso_day']
+            return isoSeries["iso_day"]
 
         @property
         def week(self):
-            return isoSeries['iso_week']
+            return isoSeries["iso_week"]
 
         @property
         def year(self):
-            return isoSeries['iso_year']
+            return isoSeries["iso_year"]
 
         return isoSeries
 
