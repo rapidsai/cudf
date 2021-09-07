@@ -1203,3 +1203,24 @@ def test_names_in_struct_dtype_nesting(datadir):
     edf = cudf.DataFrame(expect.to_pandas())
     # test schema
     assert edf.dtypes.equals(got.dtypes)
+
+
+def test_statistics_sum_overflow():
+    maxint64 = np.iinfo(np.int64).max
+    minint64 = np.iinfo(np.int64).min
+
+    buff = BytesIO()
+    with po.Writer(
+        buff, po.Struct(a=po.BigInt(), b=po.BigInt(), c=po.BigInt())
+    ) as writer:
+        writer.write((maxint64, minint64, minint64))
+        writer.write((1, -1, 1))
+
+    file_stats, stripe_stats = cudf.io.orc.read_orc_statistics([buff])
+    assert file_stats[0]["a"]["sum"] is None
+    assert file_stats[0]["b"]["sum"] is None
+    assert file_stats[0]["c"]["sum"] == minint64 + 1
+
+    assert stripe_stats[0]["a"]["sum"] is None
+    assert stripe_stats[0]["b"]["sum"] is None
+    assert stripe_stats[0]["c"]["sum"] == minint64 + 1
