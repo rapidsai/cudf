@@ -3237,8 +3237,9 @@ class Frame(libcudf.table.Table):
             The value to replace null values with. If ``None``, nulls are not
             filled before the operation.
         reflect : bool, default False
-            If ``True`` the operation is reflected (i.e whether to swap the
-            left and right operands).
+            If ``True``, swap the order of the operands. See
+            https://docs.python.org/3/reference/datamodel.html#object.__ror__
+            for more information on when this is necessary.
 
         Returns
         -------
@@ -3419,9 +3420,9 @@ class Frame(libcudf.table.Table):
         other : Sequence, Series, or DataFrame
             Any multiple element data structure, or list-like object.
         reflect : bool, default False
-            If ``True`` the operation is reflected (i.e ``other`` is used as
-            the left operand instead of the right). This is enabled when using
-            a binary operation with a left operand that does not implement it.
+            If ``True``, swap the order of the operands. See
+            https://docs.python.org/3/reference/datamodel.html#object.__ror__
+            for more information on when this is necessary.
 
         Returns
         -------
@@ -4989,9 +4990,9 @@ class SingleColumnFrame(Frame):
             The value to replace null values with. If ``None``, nulls are not
             filled before the operation.
         reflect : bool, default False
-            If ``True`` the operation is reflected (i.e ``other`` is used as
-            the left operand instead of the right). This is enabled when using
-            a binary operation with a left operand that does not implement it.
+            If ``True``, swap the order of the operands. See
+            https://docs.python.org/3/reference/datamodel.html#object.__ror__
+            for more information on when this is necessary.
 
         Returns
         -------
