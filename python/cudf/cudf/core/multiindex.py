@@ -1419,14 +1419,10 @@ class MultiIndex(Frame, BaseIndex):
         # which preserves all levels of `multiindex`.
         names = tuple(range(len(multiindex.names)))
 
-        return cls(
-            names=multiindex.names,
-            source_data=multiindex.to_frame(name=names),
-            nan_as_null=nan_as_null,
+        df = cudf.DataFrame.from_pandas(
+            multiindex.to_frame(index=False, name=names), nan_as_null
         )
-        # df = cudf.DataFrame.from_pandas(
-        #     multiindex.to_frame(name=names), nan_as_null)
-        # return cls.from_frame(df, names=multiindex.names)
+        return cls.from_frame(df, names=multiindex.names)
 
     @cached_property
     def is_unique(self):
