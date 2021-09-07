@@ -103,6 +103,22 @@ def test_dataframe_resample_on():
     )
     gdf = cudf.from_pandas(pdf)
     assert_resample_results_equal(
-        pdf.resample("3T", on="y").agg(["sum", "mean", "std"]),
-        gdf.resample("3T", on="y").agg(["sum", "mean", "std"]),
+        pdf.resample("3T", on="y").mean(), gdf.resample("3T", on="y").mean()
+    )
+
+
+def test_dataframe_resample_level():
+    # test resampling on a specific level of a MultIndex
+    pdf = pd.DataFrame(
+        {
+            "x": np.random.randn(1000),
+            "y": pd.date_range("1/1/2012", freq="S", periods=1000),
+        }
+    )
+    pdi = pd.MultiIndex.from_frame(pdf)
+    pdf = pd.DataFrame({"a": np.random.randn(1000)}, index=pdi)
+    gdf = cudf.from_pandas(pdf)
+    assert_resample_results_equal(
+        pdf.resample("3T", level="y").mean(),
+        gdf.resample("3T", level="y").mean(),
     )

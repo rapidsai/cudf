@@ -4573,7 +4573,9 @@ class Frame(libcudf.table.Table):
                 "- origin\n"
                 "- offset"
             )
-        by = cudf.Grouper(key=on, freq=rule, closed=closed, label=label)
+        by = cudf.Grouper(
+            key=on, freq=rule, closed=closed, label=label, level=level
+        )
         return _get_groupby(self, by=by)
 
 

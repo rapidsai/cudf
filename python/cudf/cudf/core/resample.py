@@ -65,20 +65,16 @@ class _ResampleGrouping(_Grouping):
     bin_labels: cudf.Index
 
     def _handle_frequency_grouper(self, by):
+        # if `by` is a time frequency grouper, we bin the key column
+        # using bin intervals specified by `by.freq`, then use *that*
+        # as the groupby key
         import cudf._lib.labeling
 
         freq = by.freq
-        key = by.key
         label = by.label
         closed = by.closed
 
-        if key is None:
-            # then assume that the key is the index of `self._obj`:
-            key_column = self._obj.index._column
-        else:
-            key_column = self._obj._data[key]
-
-        # conver freq to a pd.DateOffset:
+        # convert freq to a pd.DateOffset:
         if isinstance(freq, str):
             offset = pd.tseries.frequencies.to_offset(freq)
         elif isinstance(freq, cudf.DateOffset):
@@ -97,6 +93,33 @@ class _ResampleGrouping(_Grouping):
             label = "left" if label is None else label
             closed = "left" if closed is None else closed
 
+        # determine the key column
+        if by.key is None and by.level is None:
+            # then assume that the key is the index of `self._obj`:
+            if not isinstance(self._obj.index, cudf.DatetimeIndex):
+                raise TypeError(
+                    f"Can only resample with a DatetimeIndex, "
+                    f"got {type(self._obj.index).__name__}"
+                )
+            self._handle_index(self._obj.index)
+        elif by.key:
+            self._handle_label(by.key)
+        elif by.level:
+            self._handle_level(by.level)
+
+        if not len(self._key_columns) == 1:
+            raise ValueError("Must resample on exactly one column")
+
+        key_column = self._key_columns[0]
+
+        if not isinstance(key_column, cudf.core.column.DatetimeColumn):
+            raise TypeError(
+                f"Can only resample on a DatetimeIndex or datetime column, "
+                f"got column of type {key_column.dtype}"
+            )
+
+        # get the start and end values that will be used to generate
+        # the bin labels
         start, end = _get_timestamp_range_edges(
             pd.Timestamp(key_column.min()),
             pd.Timestamp(key_column.max()),
@@ -104,9 +127,16 @@ class _ResampleGrouping(_Grouping):
             closed=closed,
         )
 
+        # in some cases, an extra time stamp is required in order to
+        # bin all the values. It's OK if we generate more labels than
+        # we need, as we remove any unused labels below
         end += offset
+
+        # generate the labels for binning the key column:
         bin_labels = cudf.date_range(start=start, end=end, freq=freq,)
-        bins = cudf._lib.labeling.label_bins(
+
+        # bin the key column:
+        bin_numbers = cudf._lib.labeling.label_bins(
             key_column,
             left_edges=bin_labels[:-1]._column,
             left_inclusive=(closed == "left"),
@@ -119,19 +149,16 @@ class _ResampleGrouping(_Grouping):
         else:
             bin_labels = bin_labels[:-1]
 
-        nbins = bins.max() + 1
+        # if we have more labels than bins, remove the extras labels:
+        nbins = bin_numbers.max() + 1
         if len(bin_labels) > nbins:
-            # if we have more labels than bins:
-            bin_labels = bin_labels[:-1]
+            bin_labels = bin_labels[:nbins]
 
-        key_name = key if key is not None else self._obj.index.name
-        bin_labels.name = key_name
-
-        if key is not None:
-            self._named_columns.append(key_name)
-        self.names.append(key_name)
+        bin_labels.name = self.names[0]
         self.bin_labels = bin_labels
-        self._key_columns.append(bin_labels._column.take(bins))
+
+        # replace self._key_columns with the binned key column:
+        self._key_columns = [bin_labels._column.take(bin_numbers)]
 
 
 # NOTE: this function is vendored from Pandas
