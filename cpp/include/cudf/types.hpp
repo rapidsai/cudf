@@ -345,3 +345,15 @@ static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
 /** @} */
 }  // namespace cudf
+
+// specialization of std::hash for cudf::data_type
+namespace std {
+template <>
+struct hash<cudf::data_type> {
+  std::size_t operator()(cudf::data_type const& type) const noexcept
+  {
+    return std::hash<int32_t>{}(static_cast<int32_t>(type.id())) * 127 +
+           std::hash<int32_t>{}(type.scale());
+  }
+};
+}  // namespace std

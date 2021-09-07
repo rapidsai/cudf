@@ -22,6 +22,7 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
+#include <algorithm>
 #include <exception>
 #include <numeric>
 #include <vector>
@@ -75,6 +76,24 @@ size_type column_view_base::null_count(size_type begin, size_type end) const
   return (null_count() == 0)
            ? 0
            : cudf::count_unset_bits(null_mask(), offset() + begin, offset() + end);
+}
+
+// simple prime number multiplication algorithm.
+// Adapted from http://myeyesareblind.com/2017/02/06/Combine-hash-values/#apachecommons
+constexpr void combine_hash(size_t& h1, size_t h2) { h1 = h1 * 127 + h2; }
+
+size_t shallow_hash(column_view const& input)
+{
+  size_t hash = 0;
+  combine_hash(hash, std::hash<data_type>{}(input.type()));
+  combine_hash(hash, std::hash<size_type>{}(input.size()));
+  combine_hash(hash, std::hash<void const*>{}(input.head()));
+  combine_hash(hash, std::hash<void const*>{}(input.null_mask()));
+  combine_hash(hash, std::hash<size_type>{}(input.offset()));
+  std::for_each(input.child_begin(), input.child_end(), [&hash](auto const& child) {
+    combine_hash(hash, shallow_hash(child));
+  });
+  return hash;
 }
 }  // namespace detail
 
