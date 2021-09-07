@@ -50,6 +50,8 @@ std::unique_ptr<column> sha1_hash(table_view const& input,
     return output;
   }
 
+  // Accepts string and fixed width columns.
+  // TODO: Accept single layer list columns holding those types.
   CUDF_EXPECTS(
     std::all_of(input.begin(), input.end(), [](auto col) { return sha_type_check(col.type()); }),
     "SHA-1 unsupported column type");
@@ -76,11 +78,12 @@ std::unique_ptr<column> sha1_hash(table_view const& input,
                      SHA1Hash hasher = SHA1Hash{};
                      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
                        if (device_input.column(col_index).is_valid(row_index)) {
-                         cudf::type_dispatcher(device_input.column(col_index).type(),
-                                               hasher,
-                                               device_input.column(col_index),
-                                               row_index,
-                                               &hash_state);
+                         cudf::type_dispatcher<dispatch_storage_type>(
+                           device_input.column(col_index).type(),
+                           hasher,
+                           device_input.column(col_index),
+                           row_index,
+                           &hash_state);
                        }
                      }
                      hasher.finalize(&hash_state, d_chars + (row_index * 40));

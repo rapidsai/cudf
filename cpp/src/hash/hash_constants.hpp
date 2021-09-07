@@ -67,7 +67,6 @@ struct sha1_intermediate_data {
   uint64_t message_length = 0;
   uint32_t buffer_length  = 0;
   uint32_t hash_value[5]  = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0};
-  // uint32_t hash_value[5] = {0x01234567, 0x89abcdef, 0xfedcba98, 0x76543210, 0xf0e1d2c3};
   uint8_t buffer[64];
 };
 

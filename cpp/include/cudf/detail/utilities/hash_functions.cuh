@@ -371,12 +371,7 @@ struct SHA1Hash {
   void __device__ hash_step(sha1_intermediate_data* hash_state) const
   {
     uint32_t temp_hash[5];
-    thrust::copy_n(thrust::seq, hash_state->hash_value, 5, temp_hash);
-    // temp_hash[0] = hash_state->hash_value[0];
-    // temp_hash[1] = hash_state->hash_value[1];
-    // temp_hash[2] = hash_state->hash_value[2];
-    // temp_hash[3] = hash_state->hash_value[3];
-    // temp_hash[4] = hash_state->hash_value[4];
+    std::memcpy(temp_hash, hash_state->hash_value, 5);
 
     uint32_t words[80];
     for (int i = 0; i < 16; i++) {
@@ -450,21 +445,21 @@ struct SHA1Hash {
     // 64 bytes for the number of bytes processed in a given step
     constexpr int sha1_chunk_size = 64;
     if (hash_state->buffer_length + len < sha1_chunk_size) {
-      thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
+      std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
       hash_state->buffer_length += len;
     } else {
       uint32_t copylen = sha1_chunk_size - hash_state->buffer_length;
 
-      thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
+      std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
       hash_step(hash_state);
 
       while (len > sha1_chunk_size + copylen) {
-        thrust::copy_n(thrust::seq, data + copylen, sha1_chunk_size, hash_state->buffer);
+        std::memcpy(hash_state->buffer, data + copylen, sha1_chunk_size);
         hash_step(hash_state);
         copylen += sha1_chunk_size;
       }
 
-      thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
+      std::memcpy(hash_state->buffer, data + copylen, len - copylen);
       hash_state->buffer_length = len - copylen;
     }
   }
@@ -496,10 +491,9 @@ struct SHA1Hash {
       thrust::fill_n(thrust::seq, hash_state->buffer, sha1_chunk_size - message_length_size, 0x00);
     }
 
-    thrust::copy_n(thrust::seq,
-                   reinterpret_cast<uint8_t const*>(&full_length),
-                   message_length_size,
-                   hash_state->buffer + sha1_chunk_size - message_length_size);
+    std::memcpy(hash_state->buffer + sha1_chunk_size - message_length_size,
+                reinterpret_cast<uint8_t const*>(&full_length),
+                message_length_size);
     hash_step(hash_state);
     // std::memcpy(hash_state->hash_value, hash_state->buffer, 160);
 
@@ -573,20 +567,20 @@ void CUDA_DEVICE_CALLABLE SHA1Hash::operator()<string_view>(
   hash_state->message_length += len;
 
   if (hash_state->buffer_length + len < 64) {
-    thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
+    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
     hash_state->buffer_length += len;
   } else {
     uint32_t copylen = 64 - hash_state->buffer_length;
-    thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
+    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
     hash_step(hash_state);
 
     while (len > 64 + copylen) {
-      thrust::copy_n(thrust::seq, data + copylen, 64, hash_state->buffer);
+      std::memcpy(hash_state->buffer, data + copylen, 64);
       hash_step(hash_state);
       copylen += 64;
     }
 
-    thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
+    std::memcpy(hash_state->buffer, data + copylen, len - copylen);
     hash_state->buffer_length = len - copylen;
   }
 }
