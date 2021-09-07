@@ -4538,6 +4538,44 @@ class Frame(libcudf.table.Table):
             "prod", axis=axis, skipna=skipna, cast_to_int=True, *args, **kwargs
         )
 
+    def resample(
+        self,
+        rule,
+        axis=0,
+        closed=None,
+        label=None,
+        convention="start",
+        kind=None,
+        loffset=None,
+        base=None,
+        on=None,
+        level=None,
+        origin="start_day",
+        offset=None,
+    ):
+        if (axis, convention, kind, loffset, base, origin, offset) != (
+            0,
+            "start",
+            None,
+            None,
+            None,
+            "start_day",
+            None,
+        ):
+            raise NotImplementedError(
+                "The following arguments are not "
+                "currently supported by resample:\n\n"
+                "- axis\n"
+                "- convention\n"
+                "- kind\n"
+                "- loffset\n"
+                "- base\n"
+                "- origin\n"
+                "- offset"
+            )
+        by = cudf.Grouper(freq=rule, closed=closed, label=label)
+        return _get_groupby(self, by=by)
+
 
 class SingleColumnFrame(Frame):
     """A one-dimensional frame.
@@ -4929,44 +4967,6 @@ class SingleColumnFrame(Frame):
             index=self._index,
             name=result_name,
         )
-
-    def resample(
-        self,
-        rule,
-        axis=0,
-        closed=None,
-        label=None,
-        convention="start",
-        kind=None,
-        loffset=None,
-        base=None,
-        on=None,
-        level=None,
-        origin="start_day",
-        offset=None,
-    ):
-        if (axis, convention, kind, loffset, base, origin, offset) != (
-            0,
-            "start",
-            None,
-            None,
-            None,
-            "start_day",
-            None,
-        ):
-            raise NotImplementedError(
-                "The following arguments are not "
-                "currently supported by resample:\n\n"
-                "- axis\n"
-                "- convention\n"
-                "- kind\n"
-                "- loffset\n"
-                "- base\n"
-                "- origin\n"
-                "- offset"
-            )
-        by = cudf.Grouper(freq=rule, closed=closed, label=label)
-        return _get_groupby(self, by=by)
 
 
 def _get_replacement_values_for_columns(

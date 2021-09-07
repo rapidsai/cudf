@@ -66,3 +66,28 @@ def test_series_resample_asfreq(rule):
     assert_resample_results_equal(
         ts.resample(rule).asfreq(), gts.resample(rule).asfreq()
     )
+
+
+def test_dataframe_resample_aggregation_simple():
+    pdf = pd.DataFrame(
+        np.random.randn(1000, 3),
+        index=pd.date_range("1/1/2012", freq="S", periods=1000),
+        columns=["A", "B", "C"],
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_resample_results_equal(
+        pdf.resample("3T").mean(), gdf.resample("3T").mean()
+    )
+
+
+def test_dataframe_resample_multiagg():
+    pdf = pd.DataFrame(
+        np.random.randn(1000, 3),
+        index=pd.date_range("1/1/2012", freq="S", periods=1000),
+        columns=["A", "B", "C"],
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_resample_results_equal(
+        pdf.resample("3T").agg(["sum", "mean", "std"]),
+        gdf.resample("3T").agg(["sum", "mean", "std"]),
+    )
