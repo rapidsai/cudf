@@ -4553,6 +4553,103 @@ class Frame(libcudf.table.Table):
         origin="start_day",
         offset=None,
     ):
+        """
+        Convert the frequency of ("resample") the given time series data.
+
+        Parameters
+        ----------
+        rule: DateOffset or str
+            The offset string or object representing the frequency to
+            use
+        closed: {"right", "left"}, default None
+            Which side of bin interval is closed. The default is
+            'left' for all frequency offsets except for 'M' and 'W',
+            which have a default of 'right'.
+        label: {"right", "left"}, default None
+            Which bin edge label to label bucket with. The default is
+            'left' for all frequency offsets except for 'M' and 'W',
+            which have a default of 'right'.
+        on: str, optional
+            For a DataFrame, column to use instead of the index for
+            resampling.  Column must be a datetime-like.
+        level: str or int, optional
+            For a MultiIndex, level to use instead of the index for
+            resampling.  The level must be a datetime-like.
+
+        Returns
+        -------
+        A Resampler object
+
+        Examples
+        --------
+
+        First, we create a time series with 1 minute intervals:
+
+        >>> index = cudf.date_range(start="2001-01-01", periods=10, freq="1T")
+        >>> sr = cudf.Series(range(10), index=index)
+        >>> sr
+        2001-01-01 00:00:00    0
+        2001-01-01 00:01:00    1
+        2001-01-01 00:02:00    2
+        2001-01-01 00:03:00    3
+        2001-01-01 00:04:00    4
+        2001-01-01 00:05:00    5
+        2001-01-01 00:06:00    6
+        2001-01-01 00:07:00    7
+        2001-01-01 00:08:00    8
+        2001-01-01 00:09:00    9
+        dtype: int64
+
+        Downsampling to 3 minute intervals, followed by a "sum" aggregation:
+
+        >>> sr.resample("3T").sum()
+        2001-01-01 00:00:00     3
+        2001-01-01 00:03:00    12
+        2001-01-01 00:06:00    21
+        2001-01-01 00:09:00     9
+        dtype: int64
+
+        Use the right side of each interval to label the bins:
+
+        >>> sr.resample("3T", label="right").sum()
+        2001-01-01 00:03:00     3
+        2001-01-01 00:06:00    12
+        2001-01-01 00:09:00    21
+        2001-01-01 00:12:00     9
+        dtype: int64
+
+        Close the right side of the interval instead of the left:
+
+        >>> sr.resample("3T", closed="right").sum()
+        2000-12-31 23:57:00     0
+        2001-01-01 00:00:00     6
+        2001-01-01 00:03:00    15
+        2001-01-01 00:06:00    24
+        dtype: int64
+
+        Upsampling to 30 second intervals:
+
+        >>> sr.resample("30s").asfreq()[:5]  # show the first 5 rows
+        2001-01-01 00:00:00       0
+        2001-01-01 00:00:30    <NA>
+        2001-01-01 00:01:00       1
+        2001-01-01 00:01:30    <NA>
+        2001-01-01 00:02:00       2
+        dtype: int64
+
+        Upsample and fill nulls using the 'bfill' method:
+
+        >>> sr.resample("30s").bfill()[:5]
+        2001-01-01 00:00:00    0
+        2001-01-01 00:00:30    1
+        2001-01-01 00:01:00    1
+        2001-01-01 00:01:30    2
+        2001-01-01 00:02:00    2
+        dtype: int64
+
+        Resampling by a specified column of a Dataframe:
+        # TODO
+        """
         if (axis, convention, kind, loffset, base, origin, offset) != (
             0,
             "start",

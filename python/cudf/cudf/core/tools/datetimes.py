@@ -818,6 +818,7 @@ def date_range(
             "N": "ns",
             "ns": "ns",
             "W": "W",
+            "M": "M",
         }
         mo = re.fullmatch(
             rf'(-)*(\d*)({"|".join(_map_offset_alias_to_code.keys())})', freq
