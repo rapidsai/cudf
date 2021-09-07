@@ -187,7 +187,8 @@ def quantile_divisions(df, by, npartitions):
         divisions = divisions[columns[0]].astype("int64")
         divisions.iloc[-1] += 1
         divisions = sorted(
-            divisions.drop_duplicates().astype(dtype).values.tolist()
+            divisions.drop_duplicates().astype(dtype).to_arrow().tolist(),
+            key=lambda x: (x is None, x),
         )
     else:
         for col in columns:
