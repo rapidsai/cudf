@@ -304,6 +304,18 @@ using FixedWidthTypesWithoutFixedPoint = Concat<NumericTypes, ChronoTypes>;
 using ComparableTypes = Concat<NumericTypes, ChronoTypes, StringTypes>;
 
 /**
+ * @brief Provides a list of all compound types for use in GTest typed tests.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all compound types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::CompoundTypes);
+ * ```
+ */
+using CompoundTypes =
+  cudf::test::Types<cudf::string_view, cudf::dictionary32, cudf::list_view, cudf::struct_view>;
+
+/**
  * @brief Provides a list of all types supported in libcudf for use in a GTest
  * typed test.
  *
