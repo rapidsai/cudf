@@ -27,6 +27,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
+#include <memory>
 #include <type_traits>
 
 template <typename T>
@@ -67,6 +68,7 @@ TYPED_TEST_CASE(ColumnViewShallowTests, AllTypes);
 // Test for fixed_width, dict, string, list, struct
 // column_view, column_view = same hash.
 // column_view, make a copy = same hash.
+// column_view, copy column = diff hash
 // column_view old, update data + new column_view     = same hash.
 // column_view old, add null_mask + new column_view   = diff hash.
 // column_view old, update nulls + new column_view    = same hash.
@@ -96,6 +98,12 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash)
   {
     auto col_view_copy = col_view;
     EXPECT_EQ(shallow_hash(col_view), shallow_hash(col_view_copy));
+  }
+  // copy column = diff hash
+  {
+    auto col_new       = std::make_unique<cudf::column>(*col);
+    auto col_view_copy = col_new->view();
+    EXPECT_NE(shallow_hash(col_view), shallow_hash(col_view_copy));
   }
   // new column_view from column = same hash
   {
