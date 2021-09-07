@@ -209,6 +209,7 @@ def grouped_window_sizes_from_offset(arr, group_starts, offset):
 # closure variables to check for a hit.
 _udf_code_cache: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
+
 def _make_cache_key(func, sig):
     codebytes = func.__code__.co_code
     if func.__closure__ is not None:
@@ -219,6 +220,7 @@ def _make_cache_key(func, sig):
 
     key = (sig, codebytes, cvarbytes)
     return key
+
 
 def compile_udf(udf, type_signature):
     """Compile ``udf`` with `numba`

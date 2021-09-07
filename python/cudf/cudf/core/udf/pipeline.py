@@ -1,3 +1,4 @@
+import cachetools
 import cupy
 import numpy as np
 from numba import cuda
@@ -6,7 +7,6 @@ from numba.types import Tuple, boolean, int64, void
 from nvtx import annotate
 
 import cudf
-import cachetools
 from cudf._lib.transform import bools_to_mask
 from cudf.core.udf.classes import Masked
 from cudf.core.udf.typing import MaskedType
@@ -125,6 +125,7 @@ masked_input_initializer_template = """\
         d_{idx}, m_{idx} = input_col_{idx}
         masked_{idx} = Masked(d_{idx}[i], mask_get(m_{idx}, i + offset_{idx}))
 """
+
 
 @annotate("DEFINE", color="yellow", domain="cudf_python")
 def _define_function(df, scalar_return=False):
