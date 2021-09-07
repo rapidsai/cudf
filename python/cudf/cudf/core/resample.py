@@ -13,7 +13,6 @@ from cudf.core.groupby.groupby import (
 )
 
 
-# TODO: is this the best inheritance strategy to use?
 class _Resampler(GroupBy):
 
     grouping: "_ResampleGrouping"
@@ -76,7 +75,6 @@ class _ResampleGrouping(_Grouping):
         if key is None:
             # then assume that the key is the index of `self._obj`:
             key_column = self._obj.index._column
-
         else:
             key_column = self._obj._data[key]
 

@@ -91,3 +91,18 @@ def test_dataframe_resample_multiagg():
         pdf.resample("3T").agg(["sum", "mean", "std"]),
         gdf.resample("3T").agg(["sum", "mean", "std"]),
     )
+
+
+def test_dataframe_resample_on():
+    # test resampling on a specified column
+    pdf = pd.DataFrame(
+        {
+            "x": np.random.randn(1000),
+            "y": pd.date_range("1/1/2012", freq="S", periods=1000),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_resample_results_equal(
+        pdf.resample("3T", on="y").agg(["sum", "mean", "std"]),
+        gdf.resample("3T", on="y").agg(["sum", "mean", "std"]),
+    )
