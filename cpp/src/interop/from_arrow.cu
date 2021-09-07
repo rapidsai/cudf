@@ -285,9 +285,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
                                      std::move(offsets_column),
                                      std::move(chars_column),
                                      UNKNOWN_NULL_COUNT,
-                                     std::move(*get_mask_buffer(array, stream, mr)),
-                                     stream,
-                                     mr);
+                                     std::move(*get_mask_buffer(array, stream, mr)));
 
   return num_rows == array.length() ? std::move(out_col)
                                     : std::make_unique<column>(cudf::detail::slice(

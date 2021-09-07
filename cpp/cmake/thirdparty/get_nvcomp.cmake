@@ -16,27 +16,22 @@
 
 function(find_and_configure_nvcomp VERSION)
 
-    if(TARGET nvcomp::nvcomp)
-        return()
-    endif()
-
     # Find or install nvcomp
-    CPMFindPackage(NAME nvcomp
-        VERSION            ${VERSION}
-        GITHUB_REPOSITORY  NVIDIA/nvcomp
-        GIT_TAG            3a12516afdeab4ace01298031757f84b8dda81b7
-        GIT_SHALLOW        TRUE
-        OPTIONS            "BUILD_TESTS OFF"
-                           "BUILD_BENCHMARKS OFF"
-                           "BUILD_EXAMPLES OFF"
+    rapids_cpm_find(nvcomp ${VERSION}
+        GLOBAL_TARGETS     nvcomp::nvcomp
+        CPM_ARGS
+            GITHUB_REPOSITORY  NVIDIA/nvcomp
+            GIT_TAG            3a12516afdeab4ace01298031757f84b8dda81b7
+            # GIT_SHALLOW        TRUE
+            OPTIONS            "BUILD_TESTS OFF"
+                               "BUILD_BENCHMARKS OFF"
+                               "BUILD_EXAMPLES OFF"
     )
 
     if(NOT TARGET nvcomp::nvcomp)
         add_library(nvcomp::nvcomp ALIAS nvcomp)
     endif()
 
-    # Make sure consumers of cudf can also see nvcomp::nvcomp target
-    fix_cmake_global_defaults(nvcomp::nvcomp)
 endfunction()
 
 set(CUDF_MIN_VERSION_nvCOMP 2.1.0)
