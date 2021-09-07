@@ -92,13 +92,8 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                      hasher.finalize(&hash_state, d_chars + (row_index * 32));
                    });
 
-  return make_strings_column(input.num_rows(),
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             0,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+  return make_strings_column(
+    input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, std::move(null_mask));
 }
 
 }  // namespace detail

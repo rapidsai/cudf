@@ -125,9 +125,7 @@ std::unique_ptr<column> slice_strings(
                              std::move(children.first),
                              std::move(children.second),
                              strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
 }  // namespace detail
@@ -220,9 +218,7 @@ std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_c
                              std::move(children.first),
                              std::move(children.second),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 /**
