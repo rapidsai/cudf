@@ -728,10 +728,10 @@ TEST_F(SHA1HashTest, MultiValue)
      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
 
   strings_column_wrapper const sha1_string_results1({"da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709"});
+                                                     "76bc1090acf2b7384496da688dc542c0a971af8a",
+                                                     "5e1c9f6772fc0f874800fcbfdee7698bd1155a39",
+                                                     "a62ca720fbab830c8890044eacbeac216f1ca2e4",
+                                                     "11e16c52273b5669a41d17ec7c187475193f88b3"});
 
   strings_column_wrapper const sha1_string_results2({"da39a3ee5e6b4b0d3255bfef95601890afd80709",
                                                      "da39a3ee5e6b4b0d3255bfef95601890afd80709",
