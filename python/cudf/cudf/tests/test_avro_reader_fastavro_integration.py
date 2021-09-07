@@ -211,7 +211,8 @@ def test_can_parse_no_schema():
 
 
 @pytest.mark.parametrize("rows", [0, 1, 10, 100000])
-def test_avro_compression(rows):
+@pytest.mark.parametrize("codec", ["null", "deflate", "snappy"])
+def test_avro_compression(rows, codec):
     schema = {
         "name": "root",
         "type": "record",
@@ -238,7 +239,7 @@ def test_avro_compression(rows):
     records = df.to_pandas().to_dict(orient="records")
 
     buffer = io.BytesIO()
-    fastavro.writer(buffer, schema, records, codec="snappy")
+    fastavro.writer(buffer, schema, records, codec=codec)
     buffer.seek(0)
     got_df = cudf.read_avro(buffer)
 
