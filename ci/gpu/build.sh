@@ -86,6 +86,7 @@ gpuci_mamba_retry install -y \
 # gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
+
 gpuci_logger "Check compiler versions"
 python --version
 $CC --version
