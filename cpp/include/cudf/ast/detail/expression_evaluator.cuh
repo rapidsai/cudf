@@ -316,7 +316,14 @@ struct expression_evaluator {
         return ReturnType(table.column(data_index).element<Element>(row_index));
       }
     } else if (ref_type == detail::device_data_reference_type::LITERAL) {
-      return ReturnType(plan.literals[data_index].value<Element>());
+      if constexpr (has_nulls) {
+        return plan.literals[data_index].is_valid()
+                 ? ReturnType(plan.literals[data_index].value<Element>())
+                 : ReturnType();
+
+      } else {
+        return ReturnType(plan.literals[data_index].value<Element>());
+      }
     } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
       // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
       // Using a temporary variable ensures that the compiler knows the result is aligned
