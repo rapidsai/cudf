@@ -677,13 +677,12 @@ static __device__ void encode_nested_null_mask(orcenc_state_s* s,
 {
   if (s->stream.ids[CI_PRESENT] < 0) return;
 
-  auto validity_byte = [&](int row) -> uint8_t& {
+  auto vbuffer_idx = [&](int row) {
     // valid_buf is a circular buffer where validitiy of 8 rows is stored in each element
-    return s->valid_buf[(row / 8) % encode_block_size];
+    return row % (encode_block_size * 8);
   };
   auto const column = s->chunk.column->cudf_column;
-
-  while (s->present_out < s->chunk.null_mask_num_rows) {
+  while (s->present_rows < s->chunk.null_mask_num_rows or s->numvals > 0) {
     // number of rows read so far
     auto present_rows             = s->present_rows;
     auto const buf_available_bits = encode_block_size * 8 - (present_rows - (s->present_out & ~7));
@@ -707,33 +706,53 @@ static __device__ void encode_nested_null_mask(orcenc_state_s* s,
     auto const pd_byte        = get_mask_byte(pushdown_mask) & ((1 << t_nrows) - 1);
     uint32_t const pd_set_cnt = __popc(pd_byte);
     // scan num bits to get offset
-    uint32_t dst_offset{};
-    cub::BlockScan<uint32_t, block_size>(scan_storage).ExclusiveSum(pd_set_cnt, dst_offset);
+    uint32_t offset{};
+    cub::BlockScan<uint32_t, block_size>(scan_storage).ExclusiveSum(pd_set_cnt, offset);
 
-    // not guaranteed to write to a byte
-    // TODO use nnz here
-    if (t_nrows > 0) validity_byte(row_in_group) = get_mask_byte(column.null_mask());
+    auto const mask_byte = get_mask_byte(column.null_mask());
+    auto dst_offset      = offset + s->nnz;
+    for (auto bit_idx = 0; bit_idx < t_nrows; ++bit_idx) {
+      // skip bits where pushdown mask is not set
+      if (not(pd_byte & (1 << bit_idx))) continue;
+      if (mask_byte & (1 << bit_idx)) {
+        printf("%d\n", dst_offset);
+        set_bit(reinterpret_cast<uint32_t*>(s->valid_buf), vbuffer_idx(dst_offset++));
+      } else {
+        clear_bit(reinterpret_cast<uint32_t*>(s->valid_buf), vbuffer_idx(dst_offset++));
+      }
+    }
 
+    auto const prev_nnz = s->nnz;
     __syncthreads();
     present_rows += nrows;
-    auto const nnz = s->nnz;
     if (!t) { s->present_rows = present_rows; }
-    if (t == block_size - 1) { s->nnz += dst_offset + pd_set_cnt; }
+
+    if (t == block_size - 1) {
+      s->nnz += offset + pd_set_cnt;
+      s->numvals += offset + pd_set_cnt;
+    }
+    __syncthreads();
 
     // RLE encode the present stream
     auto nrows_to_encode = present_rows - s->present_out;
     if (nrows_to_encode > ((present_rows < s->chunk.null_mask_num_rows) ? 130 * 8 : 0)) {
       auto const flush      = (present_rows < s->chunk.null_mask_num_rows) ? 0 : 7;
-      auto const nbytes_out = (nrows_to_encode + flush) / 8;
+      auto const nbytes_out = (s->nnz - prev_nnz + flush) / 8;
       auto const nrows_encoded =
-        ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, s->present_out / 8, nbytes_out, flush, t) * 8;
+        ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, prev_nnz / 8, nbytes_out, flush, t) * 8;
 
-      if (!t) { s->present_out += nrows_encoded; }
+      if (!t) {
+        s->present_out += nrows_encoded;
+        s->numvals = s->numvals - min(s->numvals, nrows_encoded);
+      }
     }
     __syncthreads();
   }
   // reset nnz to be reused for values
-  if (t == 0) { s->nnz = 0; }
+  if (t == 0) {
+    s->nnz     = 0;
+    s->numvals = 0;
+  }
 }
 
 /**
