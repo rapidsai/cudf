@@ -5500,31 +5500,34 @@ class DatetimeProperties(object):
            year  week  day
         0  2009    53     5
         1  <NA>  <NA>  <NA>
-        >>> serIndex.isocalendar().year
+        >>> serIndex.dt.isocalendar().year
         0    2009
         1    <NA>
         Name: year, dtype: object
         """
 
-        iso_day = self.strftime("%u").astype(np.int32)
-        iso_week = self.strftime("%V").astype(np.int32)
-        iso_year = self.strftime("%G").astype(np.int32)
+        iso_day = self.strftime("%u")
+        iso_week = self.strftime("%V")
+        iso_year = self.strftime("%G")
+
+        isoSeries = cudf.DataFrame(
+            {"year": iso_year, "week": iso_week, "day": iso_day},
+             dtype =np.int32
+        )
 
         @property
         def day(self):
-            return iso_day
+            return isoSeries['iso_day']
 
         @property
         def week(self):
-            return iso_week
+            return isoSeries['iso_week']
 
         @property
         def year(self):
-            return iso_year
+            return isoSeries['iso_year']
 
-        return cudf.DataFrame(
-            {"year": iso_year, "week": iso_week, "day": iso_day}
-        )
+        return isoSeries
 
     @property
     def is_month_start(self):

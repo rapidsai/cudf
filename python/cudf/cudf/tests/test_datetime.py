@@ -1339,6 +1339,24 @@ def test_isocalendar():
 
     assert_eq(expect, got, check_dtype=False)
 
+    # Series day
+    expectday = ps.dt.isocalendar().day
+    gotday = gs.dt.isocalendar().day
+
+    assert_eq(expectday, gotday, check_dtype=False)
+
+    # Series week
+    expectweek = ps.dt.isocalendar().week
+    gotweek = gs.dt.isocalendar().week
+
+    assert_eq(expectweek, gotweek, check_dtype=False)
+
+    # Series year
+    expectyear = ps.dt.isocalendar().year
+    gotyear = gs.dt.isocalendar().year
+
+    assert_eq(expectyear, gotyear, check_dtype=False)
+
     # DatetimeIndex
     pIndex = pd.DatetimeIndex(data)
     gIndex = cudf.from_pandas(pIndex)

@@ -1633,33 +1633,32 @@ class DatetimeIndex(GenericIndex):
         2020-05-31 08:00:00  2020    22    7
         1999-12-31 18:40:00  1999    52    5
         """
-
         iso_day = self._values.as_string_column(
             self._values.dtype, "%u"
-        ).astype(np.int32)
+        )
         iso_week = self._values.as_string_column(
             self._values.dtype, "%V"
-        ).astype(np.int32)
+        )
         iso_year = self._values.as_string_column(
             self._values.dtype, "%G"
-        ).astype(np.int32)
+        )
+
+        indexSeries = cudf.DataFrame(
+            {"year": iso_year, "week": iso_week, "day": iso_day},
+            index=self._values, dtype =np.int32
+        )
 
         @property
         def day(self):
-            return iso_day
-
+            return indexSeries['iso_day']
         @property
         def week(self):
-            return iso_week
-
+            return indexSeries['iso_week']
         @property
         def year(self):
-            return iso_year
+            return indexSeries['iso_year']
 
-        return cudf.DataFrame(
-            {"year": iso_year, "week": iso_week, "day": iso_day},
-            index=self._values,
-        )
+        return indexSeries
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
