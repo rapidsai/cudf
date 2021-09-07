@@ -1364,15 +1364,13 @@ class _Grouping(Serializable):
 
     def _handle_grouper(self, by):
         if by.freq:
-            self._handle_freq(
-                by.key, by.freq, closed=by.closed, label=by.label
-            )
+            self._handle_frequency_grouper(by)
         elif by.key:
             self._handle_label(by.key)
         else:
             self._handle_level(by.level)
 
-    def _handle_freq(self, key, freq):
+    def _handle_frequency_grouper(self, by):
         raise NotImplementedError()
 
     def _handle_level(self, by):

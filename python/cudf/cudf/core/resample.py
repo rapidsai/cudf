@@ -65,8 +65,13 @@ class _ResampleGrouping(_Grouping):
 
     bin_labels: cudf.Index
 
-    def _handle_freq(self, key, freq, closed=None, label=None):
+    def _handle_frequency_grouper(self, by):
         import cudf._lib.labeling
+
+        freq = by.freq
+        key = by.key
+        label = by.label
+        closed = by.closed
 
         if key is None:
             # then assume that the key is the index of `self._obj`:
