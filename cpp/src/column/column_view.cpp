@@ -95,6 +95,20 @@ size_t shallow_hash(column_view const& input)
   });
   return hash;
 }
+
+bool is_shallow_equal(column_view const& lhs, column_view const& rhs)
+{
+  return (lhs.type() == rhs.type()) and (lhs.size() == rhs.size()) and
+         (lhs.head() == rhs.head()) and (lhs.null_mask() == rhs.null_mask()) and
+         (lhs.offset() == rhs.offset()) and
+         std::equal(lhs.child_begin(),
+                    lhs.child_end(),
+                    rhs.child_begin(),
+                    rhs.child_end(),
+                    [](auto const& lhs_child, auto const& rhs_child) {
+                      return is_shallow_equal(lhs_child, rhs_child);
+                    });
+}
 }  // namespace detail
 
 // Immutable view constructor

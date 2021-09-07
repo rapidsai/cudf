@@ -652,5 +652,22 @@ namespace detail {
  * @return The hash value
  */
 size_t shallow_hash(column_view const& input);
+
+/**
+ * @brief Equality operator for column views based on the shallow state of the column view.
+ *
+ * Only shallow states used for the hash computation are: type, size, data pointer, null_mask
+ * pointer, offset and the column_view of the children recursively. Note that `null_count` is not
+ * used.
+ *
+ * Note: This equality function will consider a column not equal to a copy of the same column with
+ * exactly same contents. It is guarenteed to return true for same column_view only, even if the
+ * underlying data changes.
+ *
+ * @param lhs The left `column_view` to compare
+ * @param rhs The right `column_view` to compare
+ * @return true if the shallow states of the two column views are equal
+ */
+bool shallow_equal(column_view const& lhs, column_view const& rhs);
 }  // namespace detail
 }  // namespace cudf
