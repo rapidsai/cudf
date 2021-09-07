@@ -1228,7 +1228,25 @@ class MultiIndex(Frame, BaseIndex):
                     ('NJ', 'Precip')],
                    names=['state', 'observation'])
         """
-        return cls(source_data=df, names=names)
+        obj = cls.__new__(cls)
+        super(cls, obj).__init__()
+
+        source_data = df.copy(deep=False)
+        source_data.reset_index(drop=True, inplace=True)
+        if isinstance(source_data, pd.DataFrame):
+            source_data = cudf.DataFrame.from_pandas(source_data)
+
+        names = names if names is not None else source_data._data.names
+        # if names are unique
+        # try using those as the source_data column names:
+        if len(dict.fromkeys(names)) == len(names):
+            source_data.columns = names
+        obj._name = None
+        obj._data = source_data._data
+        obj.names = names
+        obj._codes = None
+        obj._levels = None
+        return obj
 
     @classmethod
     def from_product(cls, arrays, names=None):
