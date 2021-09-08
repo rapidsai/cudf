@@ -377,12 +377,8 @@ struct SHA1Hash {
     for (int i = 0; i < 16; i++) {
       uint32_t buffer_element_as_int;
       std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * 4), 4);
-      // words[i] = buffer_element_as_int;
-
-      words[i] = (buffer_element_as_int << 24) & 0xff000000;
-      words[i] |= (buffer_element_as_int << 8) & 0xff0000;
-      words[i] |= (buffer_element_as_int >> 8) & 0xff00;
-      words[i] |= (buffer_element_as_int >> 24) & 0xff;
+      // Convert word representation from little-endian to big-endian
+      words[i] = __byte_perm(buffer_element_as_int, 0, 0x0123);
     }
     // std::memcpy(words, hash_state->buffer, 64);
     for (int i = 16; i < 80; i++) {
