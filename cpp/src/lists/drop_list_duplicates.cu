@@ -52,7 +52,7 @@ struct has_negative_nans {
 
 /**
  * @brief A structure to be used along with type_dispatcher to check if a
- * `column_view` has any negative NaN entry
+ * `column_view` has any negative NaN entry.
  */
 struct has_negative_nans_fn {
   template <typename Type, std::enable_if_t<cuda::std::is_floating_point_v<Type>>* = nullptr>
@@ -68,9 +68,8 @@ struct has_negative_nans_fn {
   template <typename Type, std::enable_if_t<std::is_same_v<Type, cudf::struct_view>>* = nullptr>
   bool operator()(column_view const& lists_entries, rmm::cuda_stream_view stream) const noexcept
   {
-    structs_column_view structs_view(lists_entries);
     return std::any_of(
-      structs_view.child_begin(), structs_view.child_end(), [stream](auto const& col) {
+      lists_entries.child_begin(), lists_entries.child_end(), [stream](auto const& col) {
         return type_dispatcher(col.type(), detail::has_negative_nans_fn{}, col, stream);
       });
   }
@@ -95,45 +94,70 @@ struct replace_negative_nans {
 
 /**
  * @brief A structure to be used along with type_dispatcher to replace -NaN by NaN for all entries
- * of a floating-point data column
+ * of a floating-point data column.
  */
 struct replace_negative_nans_fn {
-  template <typename Type, std::enable_if_t<not cuda::std::is_floating_point_v<Type>>* = nullptr>
-  void operator()(column_view const&, mutable_column_view const&, rmm::cuda_stream_view) const
+  template <typename Type,
+            std::enable_if_t<!cuda::std::is_floating_point_v<Type> &&
+                             !std::is_same_v<Type, cudf::struct_view>>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& lists_entries,
+                                     rmm::cuda_stream_view) const noexcept
   {
-    CUDF_FAIL("Cannot operate on a type that is not floating-point.");
+    // For non floating point type and non struct, just return a copy of the input.
+    return std::make_unique<column>(lists_entries);
   }
 
   template <typename Type, std::enable_if_t<cuda::std::is_floating_point_v<Type>>* = nullptr>
-  void operator()(column_view const& lists_entries,
-                  mutable_column_view const& new_entries,
-                  rmm::cuda_stream_view stream) const noexcept
+  std::unique_ptr<column> operator()(column_view const& lists_entries,
+                                     rmm::cuda_stream_view stream) const noexcept
   {
-    // Do not care whether an entry is null or not, just consider it as a floating-point value
+    auto new_entries = cudf::detail::allocate_like(
+      lists_entries, lists_entries.size(), cudf::mask_allocation_policy::NEVER, stream);
+    new_entries->set_null_mask(cudf::detail::copy_bitmask(lists_entries, stream),
+                               lists_entries.null_count());
+
+    // Scan and replace all values.
     thrust::transform(rmm::exec_policy(stream),
-                      lists_entries.begin<Type>(),
-                      lists_entries.end<Type>(),
-                      new_entries.begin<Type>(),
+                      lists_entries.template begin<Type>(),
+                      lists_entries.template end<Type>(),
+                      new_entries->mutable_view().template begin<Type>(),
                       detail::replace_negative_nans<Type>{});
+
+    return new_entries;
+  }
+
+  template <typename Type, std::enable_if_t<std::is_same_v<Type, cudf::struct_view>>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& lists_entries,
+                                     rmm::cuda_stream_view stream) const noexcept
+  {
+    std::vector<std::unique_ptr<cudf::column>> output_struct_members;
+    std::transform(lists_entries.child_begin(),
+                   lists_entries.child_end(),
+                   std::back_inserter(output_struct_members),
+                   [stream](auto const& col) {
+                     return type_dispatcher(
+                       col.type(), detail::replace_negative_nans_fn{}, col, stream);
+                   });
+
+    return cudf::make_structs_column(lists_entries.size(),
+                                     std::move(output_struct_members),
+                                     lists_entries.null_count(),
+                                     cudf::detail::copy_bitmask(lists_entries, stream),
+                                     stream);
   }
 };
 
 /**
  * @brief Transform a given lists column to a new lists column in which all the list entries holding
- * -NaN value are replaced by (positive) NaN
+ * -NaN value are replaced by (positive) NaN.
  */
 std::unique_ptr<column> replace_negative_nans_entries(column_view const& lists_entries,
                                                       lists_column_view const& lists_column,
                                                       rmm::cuda_stream_view stream)
 {
   auto new_offsets = std::make_unique<column>(lists_column.offsets());
-  auto new_entries = std::make_unique<column>(lists_entries);
-
-  type_dispatcher(lists_entries.type(),
-                  detail::replace_negative_nans_fn{},
-                  lists_entries,
-                  new_entries->mutable_view(),
-                  stream);
+  auto new_entries = type_dispatcher(
+    lists_entries.type(), detail::replace_negative_nans_fn{}, lists_entries, stream);
 
   return make_lists_column(
     lists_column.size(),
@@ -145,7 +169,7 @@ std::unique_ptr<column> replace_negative_nans_entries(column_view const& lists_e
 }
 
 /**
- * @brief Generate a 0-based offset column for a lists column
+ * @brief Generate a 0-based offset column for a lists column.
  *
  * Given a lists_column_view, which may have a non-zero offset, generate a new column containing
  * 0-based list offsets. This is done by subtracting each of the input list offset by the first
@@ -181,7 +205,7 @@ std::unique_ptr<column> generate_clean_offsets(lists_column_view const& lists_co
 }
 
 /**
- * @brief Populate list offsets for all list entries
+ * @brief Populate list offsets for all list entries.
  *
  * Given an `offsets` column_view containing offsets of a lists column and a number of all list
  * entries in the column, generate an array that maps from each list entry to the offset of the list
@@ -218,7 +242,7 @@ std::unique_ptr<column> generate_entry_list_offsets(size_type num_entries,
 }
 
 /**
- * @brief Performs an equality comparison between two entries in a lists column
+ * @brief Performs an equality comparison between two entries in a lists column.
  *
  * For the two elements that are in the same list in the lists column, they will always be
  * considered as different. If they are from the same list and their type is one of floating
@@ -244,7 +268,7 @@ class list_entry_comparator {
   }
 
   template <bool nans_equal_ = nans_equal>
-  std::enable_if_t<cuda::std::is_floating_point_v<Type> and nans_equal_, bool> __device__
+  std::enable_if_t<cuda::std::is_floating_point_v<Type> && nans_equal_, bool> __device__
   operator()(size_type i, size_type j) const noexcept
   {
     // Two entries are not considered for equality if they belong to different lists
@@ -270,7 +294,7 @@ class list_entry_comparator {
   }
 
   template <bool nans_equal_ = nans_equal>
-  std::enable_if_t<not cuda::std::is_floating_point_v<Type> or not nans_equal_, bool> __device__
+  std::enable_if_t<!cuda::std::is_floating_point_v<Type> || !nans_equal_, bool> __device__
   operator()(size_type i, size_type j) const noexcept
   {
     // Two entries are not considered for equality if they belong to different lists
@@ -304,7 +328,7 @@ class list_entry_comparator {
  * ignoring duplicates
  */
 struct get_unique_entries_fn {
-  template <class Type, std::enable_if_t<not cudf::is_equality_comparable<Type, Type>()>* = nullptr>
+  template <class Type, std::enable_if_t<!cudf::is_equality_comparable<Type, Type>()>* = nullptr>
   offset_type* operator()(offset_type const*,
                           column_device_view&,
                           size_type,
