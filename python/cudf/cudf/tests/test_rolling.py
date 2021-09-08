@@ -1,6 +1,7 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 import math
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
@@ -131,52 +132,76 @@ def test_rolling_with_offset(agg):
     )
 
 
+def generate_large_dataframe_for_var(size, window_size, nulls_prob, seed):
+    np.random.seed(seed)
+
+    iupper_bound = math.sqrt(np.iinfo(np.int64).max / window_size)
+    ilower_bound = -math.sqrt(abs(np.iinfo(np.int64).min) / window_size)
+
+    fupper_bound = math.sqrt(np.finfo(np.float64).max / window_size)
+    flower_bound = -math.sqrt(abs(np.finfo(np.float64).min) / window_size)
+
+    intcol = [int(np.random.randint(ilower_bound, iupper_bound))]
+    floatcol = [
+        np.random.uniform(flower_bound, fupper_bound)
+        if np.random.uniform(0, 1) > nulls_prob
+        else np.nan
+        for _ in range(size)
+    ]
+    deccol = [
+        Decimal(np.random.randint(ilower_bound, iupper_bound))
+        if np.random.uniform(0, 1) > nulls_prob
+        else None
+        for _ in range(size)
+    ]
+
+    pdf = pd.DataFrame()
+    pdf["int"] = pd.Series(intcol).astype("int64")
+    pdf["float"] = pd.Series(floatcol).astype("float64")
+    pdf["decimal"] = pd.Series(deccol)
+
+    return pdf
+
+
 @pytest.mark.parametrize("agg", ["std", "var"])
+@pytest.mark.parametrize("ddof", [0, 1])
 @pytest.mark.parametrize("center", [True, False])
 @pytest.mark.parametrize("seed", [100, 1000, 10000])
 @pytest.mark.parametrize("window_size", [2, 10, 100, 1000])
-def test_rolling_var_std_large(agg, center, seed, window_size):
+def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
+
     if PANDAS_GE_110:
         kwargs = {"check_freq": False}
     else:
         kwargs = {}
 
     n_rows = 1_000
-    data = dataset_generator.rand_dataframe(
-        dtypes_meta=[
-            {"dtype": "i4", "null_frequency": 0.4, "cardinality": 100},
-            {"dtype": "f8", "null_frequency": 0.4, "cardinality": 100},
-            {"dtype": "decimal64", "null_frequency": 0.4, "cardinality": 100},
-            {"dtype": "decimal32", "null_frequency": 0.4, "cardinality": 100},
-        ],
-        rows=n_rows,
-        use_threads=False,
-        seed=seed,
+    pdf = generate_large_dataframe_for_var(
+        n_rows, window_size, nulls_prob=0.4, seed=seed
     )
-
-    pdf = data.to_pandas()
     gdf = cudf.from_pandas(pdf)
 
-    expect = getattr(pdf.rolling(window_size, 1, center), agg)().fillna(-1)
-    got = getattr(gdf.rolling(window_size, 1, center), agg)().fillna(-1)
-
-    # Pandas adopts an online variance calculation algorithm. Each window has a
-    # numeric error from the previous window. This makes the variance of a
-    # uniform window has a small residue. Taking the square root of a very
-    # small number may result in a non-trival number.
-    #
-    # In cudf, each window is computed independently from the previous window,
-    # this gives better numeric precision.
-    #
-    # For quantitative analysis:
-    # https://gist.github.com/isVoid/4984552da6ef5545348399c22d72cffb
-    #
-    # To make up this difference, we skip comparing uniform windows by coercing
-    # pandas result of these windows to 0.
-    for col in ["1", "2", "3"]:
-        expect[col][(got[col] == 0.0).to_pandas()] = 0.0
+    expect = getattr(pdf.rolling(window_size, 1, center), agg)(ddof=ddof)
+    got = getattr(gdf.rolling(window_size, 1, center), agg)(ddof=ddof)
 
     assert_eq(expect, got, **kwargs)
+
+
+@pytest.mark.xfail
+def test_rolling_var_uniform_window():
+    """
+    Pandas adopts an online variance calculation algorithm. This gives a
+    floating point artifact.
+
+    In cudf, each window is computed independently from the previous window,
+    this gives better numeric precision.
+    """
+
+    s = pd.Series([1e8, 5, 5, 5])
+    expected = s.rolling(3).var()
+    got = cudf.from_pandas(s).rolling(3).var()
+
+    assert_eq(expected, got)
 
 
 def test_rolling_count_with_offset():

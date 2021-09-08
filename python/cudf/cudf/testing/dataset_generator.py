@@ -368,22 +368,6 @@ def rand_dataframe(
                     dtype=dtype,
                 )
             )
-        elif dtype == "decimal32":
-            max_precision = meta.get(
-                "max_precision", cudf.Decimal32Dtype.MAX_PRECISION
-            )
-            precision = np.random.randint(1, max_precision)
-            scale = np.random.randint(0, precision)
-            dtype = cudf.Decimal32Dtype(precision=precision, scale=scale)
-            column_params.append(
-                ColumnParameters(
-                    cardinality=cardinality,
-                    null_frequency=null_frequency,
-                    generator=decimal_generator(dtype=dtype, size=cardinality),
-                    is_sorted=False,
-                    dtype=dtype,
-                )
-            )
         elif dtype == "category":
             column_params.append(
                 ColumnParameters(
@@ -490,11 +474,8 @@ def int_generator(dtype, size):
     Generator for int data
     """
     iinfo = np.iinfo(dtype)
-    # return lambda: np.random.randint(
-    #     low=iinfo.min, high=iinfo.max, size=size, dtype=dtype,
-    # )
     return lambda: np.random.randint(
-        low=-100, high=100, size=size, dtype=dtype,
+        low=iinfo.min, high=iinfo.max, size=size, dtype=dtype,
     )
 
 
@@ -504,11 +485,9 @@ def float_generator(dtype, size):
     """
     finfo = np.finfo(dtype)
     return (
-        # lambda: np.random.uniform(
-        #     low=finfo.min / 2, high=finfo.max / 2, size=size,
-        # )
-        # * 2
-        lambda: np.random.uniform(low=-100, high=100, size=size,)
+        lambda: np.random.uniform(
+            low=finfo.min / 2, high=finfo.max / 2, size=size,
+        )
         * 2
     )
 
