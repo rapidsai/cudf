@@ -43,7 +43,7 @@ _np_pa_dtypes = {
     np.int32: pa.int32(),
     np.int16: pa.int16(),
     np.int8: pa.int8(),
-    np.bool_: pa.int8(),
+    np.bool_: pa.bool_(),
     np.uint64: pa.uint64(),
     np.uint32: pa.uint32(),
     np.uint16: pa.uint16(),

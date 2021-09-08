@@ -2084,10 +2084,7 @@ def as_column(
                             data
                         )
                     np_type = np.dtype(dtype).type
-                    if np_type == np.bool_:
-                        pa_type = pa.bool_()
-                    else:
-                        pa_type = np_to_pa_dtype(np.dtype(dtype))
+                    pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(
                     pa.array(
                         arbitrary,
