@@ -6,8 +6,8 @@ import numpy as np
 
 from cudf.core.column import as_column
 from cudf.core.frame import Frame
-from cudf.core.index import RangeIndex
-from cudf.core.series import Index, Series
+from cudf.core.index import Index, RangeIndex
+from cudf.core.series import Series
 
 
 def factorize(values, sort=False, na_sentinel=-1, size_hint=None):

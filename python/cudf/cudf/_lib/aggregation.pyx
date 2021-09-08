@@ -11,7 +11,11 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.types import NullHandling, cudf_to_np_types, np_to_cudf_types
+from cudf._lib.types import (
+    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
+    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES,
+    NullHandling,
+)
 from cudf.utils import cudautils
 
 from cudf._lib.types cimport (
@@ -303,7 +307,7 @@ cdef class Aggregation:
         compiled_op = cudautils.compile_udf(op, type_signature)
         output_np_dtype = cudf.dtype(compiled_op[1])
         cpp_str = compiled_op[0].encode('UTF-8')
-        if output_np_dtype not in np_to_cudf_types:
+        if output_np_dtype not in SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
             raise TypeError(
                 "Result of window function has unsupported dtype {}"
                 .format(op[1])
@@ -311,7 +315,7 @@ cdef class Aggregation:
         tid = (
             <libcudf_types.type_id> (
                 <underlying_type_t_type_id> (
-                    np_to_cudf_types[output_np_dtype]
+                    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[output_np_dtype]
                 )
             )
         )
@@ -448,7 +452,7 @@ cdef class RollingAggregation:
         compiled_op = cudautils.compile_udf(op, type_signature)
         output_np_dtype = cudf.dtype(compiled_op[1])
         cpp_str = compiled_op[0].encode('UTF-8')
-        if output_np_dtype not in np_to_cudf_types:
+        if output_np_dtype not in SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
             raise TypeError(
                 "Result of window function has unsupported dtype {}"
                 .format(op[1])
@@ -456,7 +460,7 @@ cdef class RollingAggregation:
         tid = (
             <libcudf_types.type_id> (
                 <underlying_type_t_type_id> (
-                    np_to_cudf_types[output_np_dtype]
+                    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[output_np_dtype]
                 )
             )
         )

@@ -37,6 +37,30 @@ namespace text {
 
 namespace {
 
+class device_span_data_chunk : public device_data_chunk {
+ public:
+  device_span_data_chunk(device_span<char const> data) : _data(data) {}
+
+  char const* data() const override { return _data.data(); }
+  std::size_t size() const override { return _data.size(); }
+  operator device_span<char const>() const override { return _data; }
+
+ private:
+  device_span<char const> _data;
+};
+
+class device_uvector_data_chunk : public device_data_chunk {
+ public:
+  device_uvector_data_chunk(rmm::device_uvector<char>&& data) : _data(std::move(data)) {}
+
+  char const* data() const override { return _data.data(); }
+  std::size_t size() const override { return _data.size(); }
+  operator device_span<char const>() const override { return _data; }
+
+ private:
+  rmm::device_uvector<char> _data;
+};
+
 /**
  * @brief a reader which produces views of device memory which contain a copy of the data from an
  * istream.
@@ -50,7 +74,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
 
  public:
   istream_data_chunk_reader(std::unique_ptr<std::istream> datastream)
-    : _datastream(std::move(datastream)), _buffers(), _tickets(2)
+    : _datastream(std::move(datastream)), _tickets(2)
   {
     // create an event to track the completion of the last device-to-host copy.
     for (std::size_t i = 0; i < _tickets.size(); i++) {
@@ -65,19 +89,8 @@ class istream_data_chunk_reader : public data_chunk_reader {
     }
   }
 
-  device_span<char> find_or_create_data(std::size_t size, rmm::cuda_stream_view stream)
-  {
-    auto search = _buffers.find(stream.value());
-
-    if (search == _buffers.end() || search->second.size() < size) {
-      _buffers[stream.value()] = rmm::device_buffer(size, stream);
-    }
-
-    return device_span<char>(static_cast<char*>(_buffers[stream.value()].data()), size);
-  }
-
-  device_span<char const> get_next_chunk(std::size_t read_size,
-                                         rmm::cuda_stream_view stream) override
+  std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
+                                                    rmm::cuda_stream_view stream) override
   {
     CUDF_FUNC_RANGE();
 
@@ -98,11 +111,11 @@ class istream_data_chunk_reader : public data_chunk_reader {
     read_size = _datastream->gcount();
 
     // get a view over some device memory we can use to buffer the read data on to device.
-    auto chunk_span = find_or_create_data(read_size, stream);
+    auto chunk = rmm::device_uvector<char>(read_size, stream);
 
     // copy the host-pinned data on to device
     CUDA_TRY(cudaMemcpyAsync(  //
-      chunk_span.data(),
+      chunk.data(),
       h_ticket.buffer.data(),
       read_size,
       cudaMemcpyHostToDevice,
@@ -112,13 +125,12 @@ class istream_data_chunk_reader : public data_chunk_reader {
     CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
 
     // return the view over device memory so it can be processed.
-    return chunk_span;
+    return std::make_unique<device_uvector_data_chunk>(std::move(chunk));
   }
 
  private:
   std::size_t _next_ticket_idx = 0;
   std::unique_ptr<std::istream> _datastream;
-  std::unordered_map<cudaStream_t, rmm::device_buffer> _buffers;
   std::vector<host_ticket> _tickets;
 };
 
@@ -131,8 +143,8 @@ class device_span_data_chunk_reader : public data_chunk_reader {
  public:
   device_span_data_chunk_reader(device_span<char const> data) : _data(data) {}
 
-  device_span<char const> get_next_chunk(std::size_t read_size,
-                                         rmm::cuda_stream_view stream) override
+  std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
+                                                    rmm::cuda_stream_view stream) override
   {
     // limit the read size to the number of bytes remaining in the device_span.
     if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
@@ -144,7 +156,7 @@ class device_span_data_chunk_reader : public data_chunk_reader {
     _position += read_size;
 
     // return the view over device memory so it can be processed.
-    return chunk_span;
+    return std::make_unique<device_span_data_chunk>(chunk_span);
   }
 
  private:

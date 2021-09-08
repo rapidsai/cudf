@@ -208,13 +208,8 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                            stream,
                            mr);
 
-  return make_strings_column(num_rows,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+  return make_strings_column(
+    num_rows, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
 }
 
 namespace {
@@ -288,13 +283,8 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                            stream,
                            mr);
 
-  return make_strings_column(num_rows,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+  return make_strings_column(
+    num_rows, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
 }
 
 }  // namespace detail
