@@ -38,6 +38,8 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
             COLLECT_SET 'cudf::aggregation::COLLECT_SET'
             PTX 'cudf::aggregation::PTX'
             CUDA 'cudf::aggregation::CUDA'
+            CORRELATION 'cudf::aggregation::CORRELATION'
+
         Kind kind
 
     cdef cppclass rolling_aggregation:
@@ -106,3 +108,5 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         udf_type type,
         string user_defined_aggregator,
         data_type output_type) except +
+
+    cdef unique_ptr[T] make_correlation_aggregation[T]() except +

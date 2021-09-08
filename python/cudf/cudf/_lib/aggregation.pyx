@@ -321,6 +321,13 @@ cdef class Aggregation:
             ))
         return agg
 
+    @classmethod
+    def correlation(cls):
+        cdef Aggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.make_correlation_aggregation[aggregation]())
+        return agg
+
 cdef class RollingAggregation:
     """A Cython wrapper for rolling window aggregations.
 
@@ -672,6 +679,14 @@ cdef class GroupbyAggregation:
                 )
             )
         )
+        return agg
+
+    @classmethod
+    def correlation(cls):
+        cdef GroupbyAggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.
+            make_correlation_aggregation[groupby_aggregation]())
         return agg
 
 cdef class GroupbyScanAggregation:
