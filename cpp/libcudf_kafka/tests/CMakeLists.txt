@@ -17,22 +17,16 @@
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
-function(ConfigureTest CMAKE_TEST_NAME )
-    add_executable(${CMAKE_TEST_NAME} ${ARGN})
-    set_target_properties(${CMAKE_TEST_NAME}
+function(ConfigureTest test_name )
+    add_executable(${test_name} ${ARGN})
+    set_target_properties(${test_name}
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDA_KAFKA_BINARY_DIR}/gtests>")
-    target_link_libraries(${CMAKE_TEST_NAME} PRIVATE GTest::gmock_main GTest::gtest_main cudf_kafka)
-    target_include_directories(${CMAKE_TEST_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../include)
-    add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
+    target_link_libraries(${test_name} PRIVATE GTest::gmock_main GTest::gtest_main cudf_kafka)
+
+    add_test(NAME ${test_name} COMMAND ${test_name})
 endfunction()
 
 ###################################################################################################
 # - Kafka host tests ----------------------------------------------------------------------------------
 ConfigureTest(KAFKA_HOST_TEST
     kafka_consumer_tests.cpp)
-
-###################################################################################################
-### enable testing ################################################################################
-###################################################################################################
-
-enable_testing()
