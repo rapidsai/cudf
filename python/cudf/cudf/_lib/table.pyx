@@ -71,28 +71,6 @@ cdef class Table:
         """
         return self._data.columns
 
-    cdef table_view view(self) except *:
-        """
-        Return a cudf::table_view of all columns (including index columns)
-        of this Table.
-        """
-        if self._index is None:
-            return table_view_from_columns(
-                self._data.columns
-            )
-        return table_view_from_columns(
-            self._index._data.columns + self._data.columns
-        )
-
-    cdef table_view data_view(self) except *:
-        """
-        Return a cudf::table_view of just the data columns
-        of this Table.
-        """
-        return table_view_from_columns(
-            self._data.columns
-        )
-
 
 cdef table_view table_view_from_columns(columns) except*:
     """Create a cudf::table_view from an iterable of Columns."""
