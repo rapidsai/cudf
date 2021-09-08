@@ -32,6 +32,7 @@ from cudf.api.types import (
     is_categorical_dtype,
     is_datetime_dtype,
     is_dict_like,
+    is_dtype_equal,
     is_list_dtype,
     is_list_like,
     is_numeric_dtype,

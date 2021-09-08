@@ -28,7 +28,6 @@ from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.table import Table
-from cudf.core._base_index import BaseIndex
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -36,6 +35,7 @@ from cudf.api.types import (
     is_interval_dtype,
     is_string_dtype,
 )
+from cudf.core._base_index import BaseIndex
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -52,9 +52,8 @@ from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame, SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.utils import cached_property, search_range
 from cudf.utils.dtypes import find_common_type
-
+from cudf.utils.utils import cached_property, search_range
 
 T = TypeVar("T", bound="Frame")
 

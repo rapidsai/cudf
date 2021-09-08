@@ -28,12 +28,9 @@ from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
-    is_categorical_dtype,
     is_decimal_dtype,
     is_dict_like,
-    is_dtype_equal,
     is_integer_dtype,
-    is_numeric_dtype,
     is_scalar,
     issubdtype,
 )
@@ -48,7 +45,7 @@ from cudf.core.join import merge
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import find_common_type, is_column_like, min_scalar_type
+from cudf.utils.dtypes import is_column_like
 
 T = TypeVar("T", bound="Frame")
 
