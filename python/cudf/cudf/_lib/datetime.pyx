@@ -59,6 +59,33 @@ def extract_datetime_component(Column col, object field):
     return result
 
 
+def ceil_datetime(Column col, object field):
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        # https://pandas.pydata.org/pandas-docs/version/0.25.0/reference/api/pandas.Timedelta.resolution.html
+        if field == "D":
+            c_result = move(libcudf_datetime.ceil_day(col_view))
+        elif field == "H":
+            c_result = move(libcudf_datetime.ceil_hour(col_view))
+        elif field == "T":
+            c_result = move(libcudf_datetime.ceil_minute(col_view))
+        elif field == "S":
+            c_result = move(libcudf_datetime.ceil_second(col_view))
+        elif field == "L":
+            c_result = move(libcudf_datetime.ceil_millisecond(col_view))
+        elif field == "U":
+            c_result = move(libcudf_datetime.ceil_microsecond(col_view))
+        elif field == "N":
+            c_result = move(libcudf_datetime.ceil_nanosecond(col_view))
+        else:
+            raise ValueError(f"Invalid resolution: '{field}'")
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result
+
+
 def is_leap_year(Column col):
     """Returns a boolean indicator whether the year of the date is a leap year
     """

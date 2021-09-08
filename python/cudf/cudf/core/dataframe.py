@@ -6561,8 +6561,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         ]
 
         if len(mode_results) == 0:
-            df = DataFrame(index=self.index)
-            return df
+            return DataFrame()
 
         df = cudf.concat(mode_results, axis=1)
         if isinstance(df, Series):

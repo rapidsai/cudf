@@ -343,7 +343,7 @@ class TimeDeltaColumn(column.ColumnBase):
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DatetimeColumn":
         raise TypeError(
-            f"cannot astype a timedelta from [{self.dtype}] to [{dtype}]"
+            f"cannot astype a timedelta from {self.dtype} to {dtype}"
         )
 
     def as_string_column(
