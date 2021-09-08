@@ -40,7 +40,7 @@ from cudf._lib.io.utils cimport (
     update_column_struct_field_names,
     update_struct_field_names,
 )
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, table_view_from_table
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
@@ -154,8 +154,9 @@ cpdef write_orc(Table table,
         metadata_.column_names.push_back(str.encode(col_name))
 
     cdef orc_writer_options c_orc_writer_options = move(
-        orc_writer_options.builder(sink_info_c, table.data_view())
-        .metadata(&metadata_)
+        orc_writer_options.builder(
+            sink_info_c, table_view_from_table(table, True)
+        ).metadata(&metadata_)
         .compression(compression_)
         .enable_statistics(<bool> (True if enable_statistics else False))
         .build()
@@ -244,13 +245,11 @@ cdef class ORCWriter:
         if not self.initialized:
             self._initialize_chunked_state(table)
 
-        cdef table_view tv
-        if self.index is not False and (
+        keep_index = self.index is not False and (
             table._index.name is not None or
-                isinstance(table._index, cudf.core.multiindex.MultiIndex)):
-            tv = table.view()
-        else:
-            tv = table.data_view()
+            isinstance(table._index, cudf.core.multiindex.MultiIndex)
+        )
+        tv = table_view_from_table(table, keep_index)
 
         with nogil:
             self.writer.get()[0].write(tv)

@@ -13,3 +13,4 @@ cdef class Table:
     cdef table_view data_view(self) except *
 
 cdef table_view table_view_from_columns(columns) except *
+cdef table_view table_view_from_table(Table tbl, ignore_index=*) except*

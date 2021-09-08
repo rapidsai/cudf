@@ -81,10 +81,7 @@ cdef class Table:
                 self._data.columns
             )
         return table_view_from_columns(
-            itertools.chain(
-                self._index._data.columns,
-                self._data.columns,
-            )
+            self._index._data.columns + self._data.columns
         )
 
     cdef table_view data_view(self) except *:
@@ -98,10 +95,7 @@ cdef class Table:
 
 
 cdef table_view table_view_from_columns(columns) except*:
-    """
-    Helper function to create a cudf::table_view from
-    a list of Columns
-    """
+    """Create a cudf::table_view from an iterable of Columns."""
     cdef vector[column_view] column_views
 
     cdef Column col
@@ -109,3 +103,18 @@ cdef table_view table_view_from_columns(columns) except*:
         column_views.push_back(col.view())
 
     return table_view(column_views)
+
+
+cdef table_view table_view_from_table(Table tbl, ignore_index=False) except*:
+    """Create a cudf::table_view from a Table.
+
+    Parameters
+    ----------
+    ignore_index : bool, default False
+        If True, don't include the index in the columns.
+    """
+    return table_view_from_columns(
+        tbl._index._data.columns + tbl._data.columns
+        if not ignore_index and tbl._index is not None
+        else tbl._data.columns
+    )

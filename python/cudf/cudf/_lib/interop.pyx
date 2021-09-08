@@ -20,7 +20,7 @@ from cudf._lib.cpp.interop cimport (
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, table_view_from_table
 from cudf._lib.utils cimport data_from_unique_ptr
 
 
@@ -63,7 +63,9 @@ def to_dlpack(Table source_table):
             )
 
     cdef DLManagedTensor *dlpack_tensor
-    cdef table_view source_table_view = source_table.data_view()
+    cdef table_view source_table_view = table_view_from_table(
+        source_table, True
+    )
 
     with nogil:
         dlpack_tensor = cpp_to_dlpack(
@@ -128,7 +130,7 @@ def to_arrow(Table input_table,
 
     cdef vector[column_metadata] cpp_metadata = gather_metadata(metadata)
     cdef table_view input_table_view = (
-        input_table.view() if keep_index else input_table.data_view()
+        table_view_from_table(input_table, not keep_index)
     )
 
     cdef shared_ptr[CTable] cpp_arrow_table

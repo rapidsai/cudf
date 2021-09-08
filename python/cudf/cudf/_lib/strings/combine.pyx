@@ -18,7 +18,7 @@ from cudf._lib.cpp.strings.combine cimport (
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, table_view_from_table
 
 
 def concatenate(Table source_strings,
@@ -33,7 +33,7 @@ def concatenate(Table source_strings,
     cdef DeviceScalar narep = na_rep.device_value
 
     cdef unique_ptr[column] c_result
-    cdef table_view source_view = source_strings.data_view()
+    cdef table_view source_view = table_view_from_table(source_strings, True)
 
     cdef const string_scalar* scalar_separator = \
         <const string_scalar*>(separator.get_raw_ptr())
