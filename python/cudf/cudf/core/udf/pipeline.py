@@ -14,7 +14,7 @@ from cudf.utils import cudautils
 
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 mask_bitsize = np.dtype("int32").itemsize * 8
-_kernel_cache: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
+precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
 @annotate("NUMBA JIT", color="green", domain="cudf_python")
@@ -189,41 +189,45 @@ def udf_pipeline(df, f):
 
     sig = construct_signature(df, scalar_return_type)
 
+    # Create a device version of the
     f_ = cuda.jit(device=True)(f)
-    # Set f_launch into the global namespace
+
     lcl = {}
     exec(
+        # Defines a kernel named "_kernel" in the lcl dict
         _define_function(df, scalar_return=_is_scalar_return),
         {"f_": f_, "cuda": cuda, "Masked": Masked, "mask_get": mask_get},
         lcl,
     )
+    # The python function definition representing the kernel
     _kernel = lcl["_kernel"]
 
     # check to see if we already compiled this function
-    kernel_cache_key = cudautils._make_cache_key(_kernel, sig)
-    kernel_cache_key = (*kernel_cache_key, ptx)
-    if _kernel_cache.get(kernel_cache_key) is None:
+    cache_key = cudautils._make_cache_key(_kernel, sig)
+    cache_key = (*cache_key, ptx)
+    if precompiled.get(cache_key) is None:
         kernel = cuda.jit(sig)(_kernel)
-        _kernel_cache[kernel_cache_key] = kernel
+        precompiled[cache_key] = kernel
     else:
-        kernel = _kernel_cache[kernel_cache_key]
+        kernel = precompiled[cache_key]
 
+    # Mask and data column preallocated
     ans_col = cupy.empty(
         len(df), dtype=numpy_support.as_dtype(scalar_return_type)
     )
     ans_mask = cudf.core.column.column_empty(len(df), dtype="bool")
     launch_args = [(ans_col, ans_mask)]
     offsets = []
-    for col in df.columns:
-        data = df[col]._column.data
-        mask = df[col]._column.mask
+    for col in df._data.values():
+        data = col.data
+        mask = col.mask
         if mask is None:
             mask = cudf.core.buffer.Buffer()
         launch_args.append((data, mask))
-        offsets.append(df[col]._column.offset)
-
+        offsets.append(col.offset)
     launch_args += offsets
     launch_args.append(len(df))  # size
     kernel.forall(len(df))(*launch_args)
+
     result = cudf.Series(ans_col).set_mask(bools_to_mask(ans_mask))
     return result
