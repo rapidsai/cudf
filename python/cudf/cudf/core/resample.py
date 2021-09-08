@@ -27,10 +27,14 @@ class _Resampler(GroupBy):
 
     def agg(self, func):
         result = super().agg(func)
-        index = cudf.Index(
-            self.grouping.bin_labels, name=self.grouping.names[0]
-        )
-        return result._align_to_index(index, how="right")
+        if len(self.grouping.bin_labels) != len(result):
+            index = cudf.Index(
+                self.grouping.bin_labels, name=self.grouping.names[0]
+            )
+            return result._align_to_index(index, how="right")
+        else:
+            return result.sort_index()
+        return result
 
     def asfreq(self):
         return self.obj._align_to_index(self.grouping.bin_labels, how="right")
