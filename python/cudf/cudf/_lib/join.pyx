@@ -16,7 +16,7 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type, type_id
-from cudf._lib.table cimport Table, columns_from_ptr
+from cudf._lib.table cimport Table
 
 # The functions below return the *gathermaps* that represent
 # the join result when joining on the keys `lhs` and `rhs`.

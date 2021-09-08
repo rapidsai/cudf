@@ -109,22 +109,3 @@ cdef table_view make_table_view(columns) except*:
         column_views.push_back(col.view())
 
     return table_view(column_views)
-
-cdef columns_from_ptr(unique_ptr[table] c_tbl):
-    """
-    Return a list of table columns from a unique pointer
-
-    Parameters
-    ----------
-    c_tbl : unique_ptr[cudf::table]
-    """
-    num_columns = c_tbl.get().num_columns()
-    cdef vector[unique_ptr[column]] columns
-    columns = move(c_tbl.get()[0].release())
-    cdef vector[unique_ptr[column]].iterator it = columns.begin()
-
-    result = [None] * num_columns
-    for i in range(num_columns):
-        result[i] = Column.from_unique_ptr(move(dereference(it)))
-        it += 1
-    return result
