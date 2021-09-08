@@ -272,7 +272,10 @@ if(USE_GDS)
                    CXX_STANDARD                        17
                    CXX_STANDARD_REQUIRED               ON
     )
-    target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
+    target_include_directories(cufilejni
+        PUBLIC  "${LIBCUDACXX_INCLUDE}"
+                "${CUDF_INCLUDE}"
+        PRIVATE "${cuFile_INCLUDE_DIRS}")
     target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
 endif()
 

@@ -131,9 +131,7 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 /**
@@ -189,9 +187,7 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail
