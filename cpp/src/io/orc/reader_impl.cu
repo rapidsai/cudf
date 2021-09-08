@@ -955,7 +955,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
   });
 }
 
-std::string get_map_child_col_name(size_t idx) { return (idx == 0) ? "key" : "value"; }
+std::string get_map_child_col_name(size_t const idx) { return (idx == 0) ? "key" : "value"; }
 
 std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_id,
                                                           column_name_info& schema_info,
