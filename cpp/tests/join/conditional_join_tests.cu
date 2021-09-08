@@ -304,6 +304,11 @@ TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnOneRowAllEqual)
   this->test({{0}}, {{0}}, left_zero_eq_right_zero, {{0, 0}});
 };
 
+TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnLeftEmpty)
+{
+  this->test({{}}, {{3, 4, 5}}, left_zero_eq_right_zero, {});
+};
+
 TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoRowAllEqual)
 {
   this->test({{0, 1}}, {{0, 0}}, left_zero_eq_right_zero, {{0, 0}, {0, 1}});
@@ -489,6 +494,11 @@ TYPED_TEST(ConditionalLeftJoinTest, TestTwoColumnThreeRowSomeEqual)
              {{0, 0}, {1, 1}, {2, JoinNoneValue}});
 };
 
+TYPED_TEST(ConditionalLeftJoinTest, TestOneColumnLeftEmpty)
+{
+  this->test({{}}, {{3, 4, 5}}, left_zero_eq_right_zero, {});
+};
+
 TYPED_TEST(ConditionalLeftJoinTest, TestCompareRandomToHash)
 {
   // Generate columns of 10 repeats of the integer range [0, 10), then merge
@@ -558,6 +568,14 @@ TYPED_TEST(ConditionalFullJoinTest, TestOneColumnNoneEqual)
               {JoinNoneValue, 0},
               {JoinNoneValue, 1},
               {JoinNoneValue, 2}});
+};
+
+TYPED_TEST(ConditionalFullJoinTest, TestOneColumnLeftEmpty)
+{
+  this->test({{}},
+             {{3, 4, 5}},
+             left_zero_eq_right_zero,
+             {{JoinNoneValue, 0}, {JoinNoneValue, 1}, {JoinNoneValue, 2}});
 };
 
 TYPED_TEST(ConditionalFullJoinTest, TestTwoColumnThreeRowSomeEqual)
