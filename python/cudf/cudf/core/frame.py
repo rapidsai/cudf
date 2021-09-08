@@ -4563,12 +4563,12 @@ class Frame(libcudf.table.Table):
             use
         closed: {"right", "left"}, default None
             Which side of bin interval is closed. The default is
-            'left' for all frequency offsets except for 'M' and 'W',
-            which have a default of 'right'.
+            "left" for all frequency offsets except for "M" and "W",
+            which have a default of "right".
         label: {"right", "left"}, default None
             Which bin edge label to label bucket with. The default is
-            'left' for all frequency offsets except for 'M' and 'W',
-            which have a default of 'right'.
+            "left" for all frequency offsets except for "M" and "W",
+            which have a default of "right".
         on: str, optional
             For a DataFrame, column to use instead of the index for
             resampling.  Column must be a datetime-like.
@@ -4637,7 +4637,7 @@ class Frame(libcudf.table.Table):
         2001-01-01 00:02:00       2
         dtype: int64
 
-        Upsample and fill nulls using the 'bfill' method:
+        Upsample and fill nulls using the "bfill" method:
 
         >>> sr.resample("30s").bfill()[:5]
         2001-01-01 00:00:00    0
@@ -4648,7 +4648,29 @@ class Frame(libcudf.table.Table):
         dtype: int64
 
         Resampling by a specified column of a Dataframe:
-        # TODO
+
+        >>> df = cudf.DataFrame({
+        ...     "price": [10, 11, 9, 13, 14, 18, 17, 19],
+        ...     "volume": [50, 60, 40, 100, 50, 100, 40, 50],
+        ...     "week_starting": cudf.date_range(
+        ...         "2018-01-01", periods=8, freq="7D"
+        ...     )
+        ... })
+        >>> df
+        price  volume week_starting
+        0     10      50    2018-01-01
+        1     11      60    2018-01-08
+        2      9      40    2018-01-15
+        3     13     100    2018-01-22
+        4     14      50    2018-01-29
+        5     18     100    2018-02-05
+        6     17      40    2018-02-12
+        7     19      50    2018-02-19
+        >>> df.resample("M", on="week_starting").mean()
+                       price     volume
+        week_starting
+        2018-01-31      11.4  60.000000
+        2018-02-28      18.0  63.333333
         """
         if (axis, convention, kind, loffset, base, origin, offset) != (
             0,
