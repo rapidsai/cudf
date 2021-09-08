@@ -470,9 +470,10 @@ struct column_gatherer_impl<struct_view> {
                                                                          mr);
                    });
 
-    auto const nullable = std::any_of(structs_column.child_begin(),
-                                      structs_column.child_end(),
-                                      [](auto const& col) { return col.nullable(); });
+    auto const nullable =
+      nullify_out_of_bounds || std::any_of(structs_column.child_begin(),
+                                           structs_column.child_end(),
+                                           [](auto const& col) { return col.nullable(); });
     if (nullable) {
       gather_bitmask(
         // Table view of struct column.
