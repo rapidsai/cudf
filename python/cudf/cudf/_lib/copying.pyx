@@ -19,7 +19,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table, make_table_view
+from cudf._lib.table cimport Table, table_view_from_columns
 
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
@@ -200,7 +200,8 @@ def scatter(object source, Column scatter_map, Column target_column,
     """
 
     cdef column_view scatter_map_view = scatter_map.view()
-    cdef table_view target_table_view = make_table_view((target_column,))
+    cdef table_view target_table_view = table_view_from_columns(
+        (target_column,))
     cdef bool c_bounds_check = bounds_check
     cdef unique_ptr[table] c_result
 
@@ -212,7 +213,7 @@ def scatter(object source, Column scatter_map, Column target_column,
     cdef DeviceScalar slr
 
     if isinstance(source, Column):
-        source_table_view = make_table_view((<Column> source,))
+        source_table_view = table_view_from_columns((<Column> source,))
 
         with nogil:
             c_result = move(

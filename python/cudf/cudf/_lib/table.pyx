@@ -77,10 +77,10 @@ cdef class Table:
         of this Table.
         """
         if self._index is None:
-            return make_table_view(
+            return table_view_from_columns(
                 self._data.columns
             )
-        return make_table_view(
+        return table_view_from_columns(
             itertools.chain(
                 self._index._data.columns,
                 self._data.columns,
@@ -92,12 +92,12 @@ cdef class Table:
         Return a cudf::table_view of just the data columns
         of this Table.
         """
-        return make_table_view(
+        return table_view_from_columns(
             self._data.columns
         )
 
 
-cdef table_view make_table_view(columns) except*:
+cdef table_view table_view_from_columns(columns) except*:
     """
     Helper function to create a cudf::table_view from
     a list of Columns

@@ -12,4 +12,4 @@ cdef class Table:
     cdef table_view view(self) except *
     cdef table_view data_view(self) except *
 
-cdef table_view make_table_view(columns) except *
+cdef table_view table_view_from_columns(columns) except *
