@@ -22,6 +22,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/detail/sorting.hpp>
 #include <cudf/lists/drop_list_duplicates.hpp>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -64,10 +65,22 @@ struct has_negative_nans_fn {
                             detail::has_negative_nans<Type>{*d_entries, lists_entries.has_nulls()});
   }
 
-  template <typename Type, std::enable_if_t<not cuda::std::is_floating_point_v<Type>>* = nullptr>
+  template <typename Type, std::enable_if_t<std::is_same_v<Type, cudf::struct_view>>* = nullptr>
+  bool operator()(column_view const& lists_entries, rmm::cuda_stream_view stream) const noexcept
+  {
+    structs_column_view structs_view(lists_entries);
+    return std::any_of(
+      structs_view.child_begin(), structs_view.child_end(), [stream](auto const& col) {
+        return type_dispatcher(col.type(), detail::has_negative_nans_fn{}, col, stream);
+      });
+  }
+
+  template <typename Type,
+            std::enable_if_t<!cuda::std::is_floating_point_v<Type> &&
+                             !std::is_same_v<Type, cudf::struct_view>>* = nullptr>
   bool operator()(column_view const&, rmm::cuda_stream_view) const noexcept
   {
-    // Columns of non floating-point data will never contain NaN
+    // Only floating-point types and structs type are supported.
     return false;
   }
 };
