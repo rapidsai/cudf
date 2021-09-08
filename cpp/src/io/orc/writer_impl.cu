@@ -1545,10 +1545,6 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
   gpu::per_rowgroup_valid_counts(
     orc_table.d_columns, segmentation.rowgroups, d_valid_counts_view, stream);
 
-  // D: thread per stripe; scan to find number of bits to borrow
-  // in: stripes, rgs, counts
-  // out: row offsets [rg][col]
-  // need to move to the next rg if not enough!!
   auto aligned_rowgroups = hostdevice_2dvector<rowgroup_rows>(
     segmentation.num_rowgroups(), orc_table.num_columns(), stream);
   CUDA_TRY(cudaMemcpyAsync(aligned_rowgroups.base_device_ptr(),
@@ -1578,6 +1574,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
       auto const parent_column  = columns[parent_col_idx];
       auto const stripe_end     = stripe.first + stripe.size;
 
+      int previously_borrowed = 0;
       for (auto rg_idx = stripe.first; rg_idx + 1 < stripe_end; ++rg_idx) {
         auto& rg      = out_rowgroups[rg_idx][col_idx];
         auto& rg_next = out_rowgroups[rg_idx + 1][col_idx];
@@ -1588,8 +1585,8 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
             rg.end += bits_to_borrow;
             rg_next.begin += bits_to_borrow;
           }
-        } else if (vcounts[rg_idx][parent_col_idx] % 8) {
-          auto bits_to_borrow = 8 - vcounts[rg_idx][parent_col_idx] % 8;
+        } else if ((vcounts[rg_idx][parent_col_idx] - previously_borrowed) % 8) {
+          auto bits_to_borrow = 8 - (vcounts[rg_idx][parent_col_idx] - previously_borrowed) % 8;
           auto curr_rg        = rg_idx + 1;
           // find rg
           while (curr_rg < stripe_end and vcounts[curr_rg][parent_col_idx] <= bits_to_borrow) {
@@ -1602,6 +1599,9 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
             break;
           } else {
             auto curr_bit = out_rowgroups[curr_rg][col_idx].begin;
+
+            // update to adjust the number of bits to borrow in the next rowgroup
+            previously_borrowed = bits_to_borrow;
 
             // find word
             while (bits_to_borrow != 0) {
