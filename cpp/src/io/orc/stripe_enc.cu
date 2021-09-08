@@ -825,18 +825,21 @@ __global__ void __launch_bounds__(block_size)
             encode_block_size);
       auto const row_in_group = s->cur_row + t;
       auto const row          = s->chunk.start_row + row_in_group;
-      // TODO also check parent pushdown mask
-      auto const valid = [&]() {
+
+      auto bit_is_set_or = [](bitmask_type const* mask, uint32_t row, bool def_val = true) {
+        if (mask == nullptr) return def_val;
+        return bit_is_set(mask, row);
+      };
+      auto const is_value_valid = [&]() {
         if (t >= nrows) return false;
-        if (column.null_mask() == nullptr) return true;
-        return bit_is_set(column.null_mask(), row);
+        return bit_is_set_or(pushdown_mask, row) and bit_is_set_or(column.null_mask(), row);
       }();
-      s->buf.u32[t] = valid ? 1u : 0u;
+      s->buf.u32[t] = is_value_valid ? 1u : 0u;
 
       // TODO: Could use a faster reduction relying on _popc() for the initial phase
       lengths_to_positions(s->buf.u32, encode_block_size, t);
       __syncthreads();
-      if (valid) {
+      if (is_value_valid) {
         int nz_idx = (s->nnz + s->buf.u32[t] - 1) & (maxnumvals - 1);
         switch (s->chunk.type_kind) {
           case INT:
@@ -985,7 +988,7 @@ __global__ void __launch_bounds__(block_size)
             }
             break;
           case DECIMAL: {
-            if (valid) {
+            if (is_value_valid) {
               uint64_t const zz_val = (column.type().id() == type_id::DECIMAL32)
                                         ? zigzag(column.element<int32_t>(row))
                                         : zigzag(column.element<int64_t>(row));
