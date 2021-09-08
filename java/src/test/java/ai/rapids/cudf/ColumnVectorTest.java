@@ -4194,6 +4194,27 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testDropListDuplicates() {
+    // Note this is checking for equality, but dropping duplicates does not have any ordering
+    // guarantee.
+    List<Integer> list1 = Arrays.asList(1, 2);
+    List<Integer> list2 = Arrays.asList(3, 4, 5);
+    List<Integer> list3 = Arrays.asList(null, 0, 6, 6, 0);
+    List<Integer> dedupeList3 = Arrays.asList(0, 6, null);
+    List<Integer> list4 = Arrays.asList(null, 6, 7, null, 7);
+    List<Integer> dedupeList4 = Arrays.asList(6, 7, null);
+    List<Integer> list5 = null;
+
+    HostColumnVector.DataType listType = new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32));
+    try (ColumnVector v = ColumnVector.fromLists(listType, list1, list2, list3, list4, list5);
+         ColumnVector expected = ColumnVector.fromLists(listType, list1, list2, dedupeList3, dedupeList4, list5);
+         ColumnVector result = v.dropListDuplicates()) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void testListContainsString() {
     List<String> list1 = Arrays.asList("Héllo there", "thésé");
     List<String> list2 = Arrays.asList("", "ARé some", "test strings");
