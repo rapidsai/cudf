@@ -4782,7 +4782,6 @@ class Series(SingleColumnFrame, Serializable):
             self, by=by, level=level, dropna=dropna, sort=sort
         )
 
-<<<<<<< HEAD
     def ewm(
         self,
         com=None,
@@ -4806,41 +4805,7 @@ class Series(SingleColumnFrame, Serializable):
             axis=0,
         )
 
-    @copy_docstring(Rolling)
-    def rolling(
-        self, window, min_periods=None, center=False, axis=0, win_type=None
-    ):
-        return Rolling(
-            self,
-            window,
-            min_periods=min_periods,
-            center=center,
-            axis=axis,
-            win_type=win_type,
-        )
 
-    @ioutils.doc_to_json()
-    def to_json(self, path_or_buf=None, *args, **kwargs):
-        """{docstring}"""
-
-        return cudf.io.json.to_json(
-            self, path_or_buf=path_or_buf, *args, **kwargs
-        )
-
-    @ioutils.doc_to_hdf()
-    def to_hdf(self, path_or_buf, key, *args, **kwargs):
-        """{docstring}"""
-
-        cudf.io.hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
-
-    @ioutils.doc_to_dlpack()
-    def to_dlpack(self):
-        """{docstring}"""
-
-        return cudf.io.dlpack.to_dlpack(self)
-
-=======
->>>>>>> branch-21.10
     def rename(self, index=None, copy=True):
         """
         Alter Series name

@@ -4640,20 +4640,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             sort=sort,
         )
 
-<<<<<<< HEAD
-    @copy_docstring(Rolling)
-    def rolling(
-        self, window, min_periods=None, center=False, axis=0, win_type=None
-    ):
-        return Rolling(
-            self,
-            window,
-            min_periods=min_periods,
-            center=center,
-            axis=axis,
-            win_type=win_type,
-        )
-
     def ewm(
         self,
         com=None,
@@ -4677,8 +4663,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             axis=0,
         )
 
-=======
->>>>>>> branch-21.10
     def query(self, expr, local_dict=None):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
