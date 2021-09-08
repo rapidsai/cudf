@@ -26,22 +26,17 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/lists/detail/drop_list_duplicates.hpp>
-#include <cudf/rolling.hpp>
-#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
@@ -57,13 +52,8 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>
-#include <thrust/detail/execution_policy.h>
-#include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
-#include <thrust/transform.h>
 
 #include <cuda/std/limits>
 
@@ -289,8 +279,8 @@ struct DeviceRollingCountAll {
  */
 template <typename InputType>
 struct DeviceRollingVariance {
-  size_type min_periods;
-  size_type ddof;
+  size_type const min_periods;
+  size_type const ddof;
 
   // what operations do we support
   template <typename T = InputType, aggregation::Kind O = aggregation::VARIANCE>
@@ -310,7 +300,7 @@ struct DeviceRollingVariance {
                              mutable_column_device_view& output,
                              size_type start_index,
                              size_type end_index,
-                             size_type current_index)
+                             size_type current_index) const
   {
     using DeviceInputType = device_storage_type_t<InputType>;
 

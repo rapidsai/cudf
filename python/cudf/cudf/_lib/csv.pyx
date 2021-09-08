@@ -112,7 +112,7 @@ cdef csv_reader_options make_csv_reader_options(
     bool na_filter,
     object prefix,
     object index_col,
-) except +:
+) except *:
     cdef source_info c_source_info = make_source_info([datasource])
     cdef compression_type c_compression
     cdef size_type c_header

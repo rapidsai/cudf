@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,8 +44,6 @@ constexpr cudf::size_type JoinNoneValue =
 // Common column references.
 const auto col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
 const auto col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-const auto col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
-const auto col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
 
 // Common expressions.
 auto left_zero_eq_right_zero =
@@ -306,6 +304,11 @@ TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnOneRowAllEqual)
   this->test({{0}}, {{0}}, left_zero_eq_right_zero, {{0, 0}});
 };
 
+TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnLeftEmpty)
+{
+  this->test({{}}, {{3, 4, 5}}, left_zero_eq_right_zero, {});
+};
+
 TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoRowAllEqual)
 {
   this->test({{0, 1}}, {{0, 0}}, left_zero_eq_right_zero, {{0, 0}, {0, 1}});
@@ -491,6 +494,11 @@ TYPED_TEST(ConditionalLeftJoinTest, TestTwoColumnThreeRowSomeEqual)
              {{0, 0}, {1, 1}, {2, JoinNoneValue}});
 };
 
+TYPED_TEST(ConditionalLeftJoinTest, TestOneColumnLeftEmpty)
+{
+  this->test({{}}, {{3, 4, 5}}, left_zero_eq_right_zero, {});
+};
+
 TYPED_TEST(ConditionalLeftJoinTest, TestCompareRandomToHash)
 {
   // Generate columns of 10 repeats of the integer range [0, 10), then merge
@@ -560,6 +568,14 @@ TYPED_TEST(ConditionalFullJoinTest, TestOneColumnNoneEqual)
               {JoinNoneValue, 0},
               {JoinNoneValue, 1},
               {JoinNoneValue, 2}});
+};
+
+TYPED_TEST(ConditionalFullJoinTest, TestOneColumnLeftEmpty)
+{
+  this->test({{}},
+             {{3, 4, 5}},
+             left_zero_eq_right_zero,
+             {{JoinNoneValue, 0}, {JoinNoneValue, 1}, {JoinNoneValue, 2}});
 };
 
 TYPED_TEST(ConditionalFullJoinTest, TestTwoColumnThreeRowSomeEqual)

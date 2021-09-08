@@ -455,24 +455,6 @@ cudf::size_type count_all_from_set(const char* h_data,
                                    rmm::cuda_stream_view stream);
 
 /**
- * @brief Infer file compression type based on user supplied arguments.
- *
- * If the user specifies a valid compression_type for compression arg,
- * compression type will be computed based on that.  Otherwise the filename
- * and ext_to_comp_map will be used.
- *
- * @param[in] compression_arg User specified compression type (if any)
- * @param[in] filename Filename to base compression type (by extension) on
- * @param[in] ext_to_comp_map User supplied mapping of file extension to compression type
- *
- * @return string representing compression type ("gzip, "bz2", etc)
- */
-std::string infer_compression_type(
-  const compression_type& compression_arg,
-  const std::string& filename,
-  const std::vector<std::pair<std::string, std::string>>& ext_to_comp_map);
-
-/**
  * @brief Checks whether the given character is a whitespace character.
  *
  * @param[in] ch The character to check

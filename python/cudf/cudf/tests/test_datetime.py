@@ -717,6 +717,7 @@ def test_to_datetime_units(data, unit):
         (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], "%m/%d/%Y"),
         (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], "%d/%m/%Y"),
         (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], None),
+        (["2021-04-13 12:30:04.123456789"], "%Y-%m-%d %H:%M:%S.%f"),
         (pd.Series([2015, 2020, 2021]), "%Y"),
         pytest.param(
             pd.Series(["1", "2", "1"]),
@@ -1550,3 +1551,32 @@ def test_error_values():
         match="DateTime Arrays is not yet implemented in cudf",
     ):
         s.values
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        (
+            [
+                "2020-05-31 08:00:00",
+                "1999-12-31 18:40:10",
+                "2000-12-31 04:00:05",
+                "1900-02-28 07:00:06",
+                "1800-03-14 07:30:20",
+                "2100-03-14 07:30:20",
+                "1970-01-01 00:00:09",
+                "1969-12-31 12:59:10",
+            ]
+        )
+    ],
+)
+@pytest.mark.parametrize("time_type", DATETIME_TYPES)
+@pytest.mark.parametrize("resolution", ["D", "H", "T", "S", "L", "U", "N"])
+def test_ceil(data, time_type, resolution):
+
+    ps = pd.Series(data, dtype=time_type)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.ceil(resolution)
+    got = gs.dt.ceil(resolution)
+    assert_eq(expect, got)
