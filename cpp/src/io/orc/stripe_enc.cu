@@ -687,12 +687,10 @@ __global__ void __launch_bounds__(block_size)
         uint8_t valid           = 0;
         if (row < s->chunk.leaf_column->size()) {
           if (s->chunk.leaf_column->nullable()) {
-            size_type current_valid_offset = row + s->chunk.leaf_column->offset();
-            size_type next_valid_offset =
-              current_valid_offset + min(32, s->chunk.leaf_column->size());
-
-            bitmask_type mask = cudf::detail::get_mask_offset_word(
-              s->chunk.leaf_column->null_mask(), 0, current_valid_offset, next_valid_offset);
+            auto const current_valid_offset = row + s->chunk.leaf_column->offset();
+            auto const last_offset = s->chunk.leaf_column->offset() + s->chunk.leaf_column->size();
+            auto const mask        = cudf::detail::get_mask_offset_word(
+              s->chunk.leaf_column->null_mask(), 0, current_valid_offset, last_offset);
             valid = 0xff & mask;
           } else {
             valid = 0xff;
