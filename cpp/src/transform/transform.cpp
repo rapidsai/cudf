@@ -64,7 +64,6 @@ void unary_operation(mutable_column_view output,
              cudf::jit::get_data_ptr(input));
 }
 
-
 }  // namespace jit
 }  // namespace transformation
 
@@ -102,6 +101,5 @@ std::unique_ptr<column> transform(column_view const& input,
   CUDF_FUNC_RANGE();
   return detail::transform(input, unary_udf, output_type, is_ptx, rmm::cuda_stream_default, mr);
 }
-
 
 }  // namespace cudf

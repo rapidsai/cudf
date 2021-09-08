@@ -76,7 +76,14 @@ def test_compare_masked_vs_masked(op):
     )
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
-test_arith_masked_vs_constant_skip_cases = {(False, operator.truediv), (False, operator.floordiv), (False, operator.mod), (False, operator.pow)}
+
+test_arith_masked_vs_constant_skip_cases = {
+    (False, operator.truediv),
+    (False, operator.floordiv),
+    (False, operator.mod),
+    (False, operator.pow),
+}
+
 
 @pytest.mark.parametrize("op", arith_ops)
 @pytest.mark.parametrize("constant", [1, 1.5, True, False])
@@ -94,14 +101,19 @@ def test_arith_masked_vs_constant(op, constant):
     if (constant, op) in test_arith_masked_vs_constant_skip_cases:
         # The following tests cases yield undefined behavior:
         # - truediv(x, False) because its dividing by zero
-        # - floordiv(x, False) because its dividing by zero 
+        # - floordiv(x, False) because its dividing by zero
         # - mod(x, False) because its mod by zero,
         # - pow(x, False) because we have an NA in the series and pandas
         #   insists that (NA**0 == 1) where we do not
         pytest.skip()
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
-test_arith_masked_vs_constant_reflected_skip_cases = {(True, operator.pow), (1, operator.pow)}
+
+test_arith_masked_vs_constant_reflected_skip_cases = {
+    (True, operator.pow),
+    (1, operator.pow),
+}
+
 
 @pytest.mark.parametrize("op", arith_ops)
 @pytest.mark.parametrize("constant", [1, 1.5, True, False])
@@ -125,7 +137,9 @@ def test_arith_masked_vs_constant_reflected(op, constant):
 
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
+
 test_arith_masked_vs_null_skip_cases = {operator.pow}
+
 
 @pytest.mark.parametrize("op", arith_ops)
 def test_arith_masked_vs_null(op):
