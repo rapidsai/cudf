@@ -542,11 +542,7 @@ std::pair<rmm::device_uvector<size_type>, size_type> extract_populated_keys(
 {
   rmm::device_uvector<size_type> populated_keys(num_keys, stream);
 
-  auto get_key = [] __device__(auto const& element) {
-    size_type key, value;
-    thrust::tie(key, value) = element;
-    return key;
-  };
+  auto get_key = [] __device__(auto const& element) { return element.first; };  // first = key
 
   auto end_it = thrust::copy_if(
     rmm::exec_policy(stream),
@@ -555,7 +551,7 @@ std::pair<rmm::device_uvector<size_type>, size_type> extract_populated_keys(
     populated_keys.begin(),
     [unused_key = map.get_unused_key()] __device__(size_type key) { return key != unused_key; });
 
-  size_type map_size = end_it - populated_keys.begin();
+  size_type const map_size = end_it - populated_keys.begin();
 
   return std::make_pair(std::move(populated_keys), map_size);
 }
@@ -594,8 +590,8 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  auto d_keys = table_device_view::create(keys, stream);
-  auto map    = create_hash_map<keys_have_nulls>(*d_keys, include_null_keys, stream);
+  auto d_keys   = table_device_view::create(keys, stream);
+  auto hash_map = create_hash_map<keys_have_nulls>(*d_keys, include_null_keys, stream);
 
   // Cache of sparse results where the location of aggregate value in each
   // column is indexed by the hash map
@@ -603,13 +599,12 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
 
   // Compute all single pass aggs first
   compute_single_pass_aggs<keys_have_nulls>(
-    keys, requests, &sparse_results, *map, include_null_keys, stream);
+    keys, requests, &sparse_results, *hash_map, include_null_keys, stream);
 
   // Extract the populated indices from the hash map and create a gather map.
   // Gathering using this map from sparse results will give dense results.
-  auto map_and_size = extract_populated_keys(*map, keys.num_rows(), stream);
-  rmm::device_uvector<size_type> gather_map{std::move(map_and_size.first)};
-  size_type const map_size = map_and_size.second;
+  auto [map, map_size] = extract_populated_keys(*hash_map, keys.num_rows(), stream);
+  auto gather_map      = rmm::device_uvector{std::move(map)};
 
   // Compact all results from sparse_results and insert into cache
   sparse_to_dense_results(keys,
@@ -618,7 +613,7 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
                           cache,
                           gather_map,
                           map_size,
-                          *map,
+                          *hash_map,
                           keys_have_nulls,
                           include_null_keys,
                           stream,
