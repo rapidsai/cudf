@@ -160,7 +160,7 @@ struct format_compiler {
 };
 
 /**
- * @brief Specialized function to return the value reading up to the specified
+ * @brief Specialized function to return the integer value reading up to the specified
  * bytes or until an invalid character is encountered.
  *
  * @param str Beginning of characters to read.
@@ -220,56 +220,56 @@ struct parse_datetime {
         continue;
       }
 
-      size_type copied = item.length;  // number of bytes processed
+      size_type bytes_read = item.length;  // number of bytes processed
       // special logic for each specifier
       switch (item.value) {
         case 'Y': {
           auto const [year, left] = parse_int(ptr, item.length);
           timeparts.year          = static_cast<int16_t>(year);
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'y': {
           auto const [year, left] = parse_int(ptr, item.length);
           timeparts.year          = static_cast<int16_t>(year + (year < 69 ? 2000 : 1900));
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'm': {
           auto const [month, left] = parse_int(ptr, item.length);
           timeparts.month          = static_cast<int8_t>(month);
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'd': {
           auto const [day, left] = parse_int(ptr, item.length);
           timeparts.day          = static_cast<int8_t>(day);
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'j': {
           auto const [day, left] = parse_int(ptr, item.length);
           timeparts.day_of_year  = static_cast<int16_t>(day);
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'H':
         case 'I': {
           auto const [hour, left] = parse_int(ptr, item.length);
           timeparts.hour          = static_cast<int8_t>(hour);
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'M': {
           auto const [minute, left] = parse_int(ptr, item.length);
           timeparts.minute          = static_cast<int8_t>(minute);
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'S': {
           auto const [second, left] = parse_int(ptr, item.length);
           timeparts.second          = static_cast<int8_t>(second);
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'f': {
@@ -278,7 +278,7 @@ struct parse_datetime {
           auto const [fraction, left] = parse_int(ptr, read_size);
           timeparts.subsecond =
             static_cast<int32_t>(fraction * power_of_ten(item.length - read_size - left));
-          copied = read_size - left;
+          bytes_read = read_size - left;
           break;
         }
         case 'p': {
@@ -293,18 +293,19 @@ struct parse_datetime {
         }
         case 'z': {
           // 'z' format is +hh:mm -- single sign char and 2 chars each for hour and minute
-          auto const sign      = *ptr == '-' ? 1 : -1;  // revert timezone back to UTC
-          auto const [hh, lh]  = parse_int(ptr + 1, 2);
-          auto const [mm, lm]  = parse_int(ptr + 3, 2);
+          auto const sign     = *ptr == '-' ? 1 : -1;
+          auto const [hh, lh] = parse_int(ptr + 1, 2);
+          auto const [mm, lm] = parse_int(ptr + 3, 2);
+          // revert timezone back to UTC
           timeparts.tz_minutes = sign * ((hh * 60) + mm);
-          copied -= lh + lm;
+          bytes_read -= lh + lm;
           break;
         }
         case 'Z': break;  // skip
         default: break;
       }
-      ptr += copied;
-      length -= copied;
+      ptr += bytes_read;
+      length -= bytes_read;
     }
     return timeparts;
   }
@@ -486,72 +487,72 @@ struct check_datetime_format {
 
       // special logic for each specifier
       // reference: https://man7.org/linux/man-pages/man3/strptime.3.html
-      bool result      = false;
-      size_type copied = item.length;
+      bool result          = false;
+      size_type bytes_read = item.length;
       switch (item.value) {
         case 'Y': {
           auto const [year, left] = parse_int(ptr, item.length);
           result                  = (left < item.length);
           dateparts.year          = static_cast<int16_t>(year);
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'y': {
           auto const [year, left] = parse_int(ptr, item.length);
           result                  = (left < item.length);
           dateparts.year          = static_cast<int16_t>(year + (year < 69 ? 2000 : 1900));
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'm': {
           auto const [month, left] = parse_int(ptr, item.length);
           result                   = (left < item.length);
           dateparts.month          = static_cast<int8_t>(month);
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'd': {
           auto const [day, left] = parse_int(ptr, item.length);
           result                 = (left < item.length);
           dateparts.day          = static_cast<int8_t>(day);  // value.value()
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'j': {
           auto const left = check_value(ptr, item.length, 1, 366);
           result          = left < item.length;
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'H': {
           auto const left = check_value(ptr, item.length, 0, 23);
           result          = left < item.length;
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'I': {
           auto const left = check_value(ptr, item.length, 1, 12);
           result          = left < item.length;
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'M': {
           auto const left = check_value(ptr, item.length, 0, 59);
           result          = left < item.length;
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'S': {
           auto const left = check_value(ptr, item.length, 0, 60);
           result          = left < item.length;
-          copied -= left;
+          bytes_read -= left;
           break;
         }
         case 'f': {
           int32_t const read_size =
             std::min(static_cast<int32_t>(item.length), static_cast<int32_t>(length));
-          result = check_digits(ptr, read_size);
-          copied = read_size;
+          result     = check_digits(ptr, read_size);
+          bytes_read = read_size;
           break;
         }
         case 'p': {
@@ -567,7 +568,7 @@ struct check_datetime_format {
             auto const lh = check_value(ptr + 1, 2, 0, 23);
             auto const lm = check_value(ptr + 3, 2, 0, 59);
             result        = (*ptr == '-' || *ptr == '+') && (lh < 2) && (lm < 2);
-            copied -= lh + lm;
+            bytes_read -= lh + lm;
           }
           break;
         }
@@ -575,8 +576,8 @@ struct check_datetime_format {
         default: break;
       }
       if (!result) return thrust::nullopt;
-      ptr += copied;
-      length -= copied;
+      ptr += bytes_read;
+      length -= bytes_read;
     }
     return dateparts;
   }

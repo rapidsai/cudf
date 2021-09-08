@@ -227,7 +227,8 @@ TEST_F(StringsDatetimeTest, ToTimestampSingleDigits)
                                              "2019-3-20 12:34:56.100100100",
                                              "2020-02-2 00:00:00.555777999",
                                              "1969-12-1 00:00:01.000055000",
-                                             "1944-07-21 11:15:09.333444000"};
+                                             "1944-07-21 11:15:09.333444000",
+                                             "2021-9-8 12:07:30.000000000"};
   auto strings_view = cudf::strings_column_view(strings);
 
   auto results = cudf::strings::to_timestamps(
@@ -238,11 +239,12 @@ TEST_F(StringsDatetimeTest, ToTimestampSingleDigits)
     1553085296100100100,
     1580601600555777999,
     -2678398999945000,
-    -803047490666556000};
+    -803047490666556000,
+    1631102850000000000};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_ns);
 
   results = cudf::strings::is_timestamp(strings_view, "%Y-%m-%d %H:%M:%S.%6f");
-  cudf::test::fixed_width_column_wrapper<bool> is_expected({1, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> is_expected({1, 1, 1, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
 }
 
