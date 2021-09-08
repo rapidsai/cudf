@@ -23,7 +23,7 @@ def read_text(
         **kwargs,
     )
 
-    df = cudf.DataFrame._from_table(
+    df = cudf.DataFrame._from_data(
         libtext.read_text(filepath_or_buffer, delimiter=delimiter,)
     )
 

@@ -17,8 +17,8 @@ from cudf._lib.cpp.io.text cimport (
 )
 
 
-cpdef read_text(object filepaths_or_buffers,
-                object delimiter=None):
+def read_text(object filepaths_or_buffers,
+              object delimiter=None):
     """
     Cython function to call into libcudf API, see `read_text`.
 
@@ -37,7 +37,4 @@ cpdef read_text(object filepaths_or_buffers,
         c_col = move(multibyte_split(dereference(datasource), delim))
 
     col = Column.from_unique_ptr(move(c_col))
-    df = cudf.DataFrame._from_data(
-        cudf.core.column_accessor.ColumnAccessor({"col_name": col}))
-
-    return df
+    return {None: col}
