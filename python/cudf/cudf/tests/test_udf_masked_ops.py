@@ -87,7 +87,8 @@ test_arith_masked_vs_constant_skip_cases = {
 
 @pytest.mark.parametrize("op", arith_ops)
 @pytest.mark.parametrize("constant", [1, 1.5, True, False])
-def test_arith_masked_vs_constant(op, constant):
+@pytest.mark.parametrize("data", [[1, 2, cudf.NA]])
+def test_arith_masked_vs_constant(op, constant, data):
     def func_pdf(x):
         return op(x, constant)
 
@@ -95,29 +96,30 @@ def test_arith_masked_vs_constant(op, constant):
     def func_gdf(x):
         return op(x, constant)
 
-    # Just a single column -> result will be all NA
-    gdf = cudf.DataFrame({"data": [1, 2, None]})
+    gdf = cudf.DataFrame({"data": data})
 
-    if (constant, op) in test_arith_masked_vs_constant_skip_cases:
-        # The following tests cases yield undefined behavior:
-        # - truediv(x, False) because its dividing by zero
-        # - floordiv(x, False) because its dividing by zero
-        # - mod(x, False) because its mod by zero,
-        # - pow(x, False) because we have an NA in the series and pandas
-        #   insists that (NA**0 == 1) where we do not
-        pytest.skip()
+    if constant is False and op in {
+        operator.mod,
+        operator.pow,
+        operator.truediv,
+        operator.floordiv,
+    }:
+        with pytest.xfail():
+            # The following tests cases yield undefined behavior:
+            # - truediv(x, False) because its dividing by zero
+            # - floordiv(x, False) because its dividing by zero
+            # - mod(x, False) because its mod by zero,
+            # - pow(x, False) because we have an NA in the series and pandas
+            #   insists that (NA**0 == 1) where we do not
+            run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
+        return
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
-
-
-test_arith_masked_vs_constant_reflected_skip_cases = {
-    (True, operator.pow),
-    (1, operator.pow),
-}
 
 
 @pytest.mark.parametrize("op", arith_ops)
 @pytest.mark.parametrize("constant", [1, 1.5, True, False])
-def test_arith_masked_vs_constant_reflected(op, constant):
+@pytest.mark.parametrize("data", [[2, 3, cudf.NA], [1, cudf.NA, 1]])
+def test_arith_masked_vs_constant_reflected(op, constant, data):
     def func_pdf(x):
         return op(constant, x)
 
@@ -126,23 +128,22 @@ def test_arith_masked_vs_constant_reflected(op, constant):
         return op(constant, x)
 
     # Just a single column -> result will be all NA
-    gdf = cudf.DataFrame({"data": [1, 2, None]})
+    gdf = cudf.DataFrame({"data": data})
 
-    if (constant, op) in test_arith_masked_vs_constant_reflected_skip_cases:
-        # The following tests cases yield differing results from pandas:
-        # - 1**NA
-        # - True**NA
-        # both due to pandas insisting that this is equal to 1.
-        pytest.skip()
-
+    if constant == 1 and op is operator.pow:
+        with pytest.xfail():
+            # The following tests cases yield differing results from pandas:
+            # - 1**NA
+            # - True**NA
+            # both due to pandas insisting that this is equal to 1.
+            run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
+        return
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
-test_arith_masked_vs_null_skip_cases = {operator.pow}
-
-
 @pytest.mark.parametrize("op", arith_ops)
-def test_arith_masked_vs_null(op):
+@pytest.mark.parametrize("data", [[1, cudf.NA, 3], [2, 3, cudf.NA]])
+def test_arith_masked_vs_null(op, data):
     def func_pdf(x):
         return op(x, pd.NA)
 
@@ -150,12 +151,13 @@ def test_arith_masked_vs_null(op):
     def func_gdf(x):
         return op(x, cudf.NA)
 
-    if op in test_arith_masked_vs_null_skip_cases:
-        # Pow will fail, because pandas says 1**NA == 1
-        # so our result will be different
-        pytest.skip()
+    gdf = cudf.DataFrame({"data": data})
 
-    gdf = cudf.DataFrame({"data": [1, None, 3]})
+    if 1 in gdf["data"] and op is operator.pow:
+        with pytest.xfail():
+            # In pandas, 1**NA == 1.
+            run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
+        return
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
