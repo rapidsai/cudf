@@ -101,27 +101,6 @@ class MultiIndex(Frame, BaseIndex):
         if labels and not codes:
             codes = labels
 
-        # early termination enables lazy evaluation of codes
-        if "source_data" in kwargs:
-            source_data = kwargs["source_data"].copy(deep=False)
-            source_data.reset_index(drop=True, inplace=True)
-
-            if isinstance(source_data, pd.DataFrame):
-                nan_as_null = kwargs.get("nan_as_null", None)
-                source_data = cudf.DataFrame.from_pandas(
-                    source_data, nan_as_null=nan_as_null
-                )
-            names = names if names is not None else source_data._data.names
-            # if names are unique
-            # try using those as the source_data column names:
-            if len(dict.fromkeys(names)) == len(names):
-                source_data.columns = names
-            self._data = source_data._data
-            self.names = names
-            self._codes = codes
-            self._levels = levels
-            return
-
         if len(levels) == 0:
             raise ValueError("Must pass non-zero number of levels/codes")
 
@@ -133,7 +112,6 @@ class MultiIndex(Frame, BaseIndex):
         if isinstance(codes, cudf.DataFrame):
             self._codes = codes
         elif len(levels) == len(codes):
-            self._codes = cudf.DataFrame()
             self._codes = cudf.DataFrame._from_data(
                 {
                     i: column.as_column(code).astype(np.int64)
@@ -293,15 +271,6 @@ class MultiIndex(Frame, BaseIndex):
     @property
     def shape(self):
         return (self._data.nrows, len(self._data.names))
-
-    @property
-    def _source_data(self):
-        return cudf.DataFrame._from_data(data=self._data)
-
-    @_source_data.setter
-    def _source_data(self, value):
-        self._data = value._data
-        self._compute_levels_and_codes()
 
     @property
     def name(self):
@@ -990,7 +959,6 @@ class MultiIndex(Frame, BaseIndex):
         header["type-serialized"] = pickle.dumps(type(self))
         header["names"] = pickle.dumps(self.names)
 
-        # header["source_data"], frames = self._source_data.serialize()
         header["columns"], frames = column.serialize_columns(self._columns)
 
         return header, frames
