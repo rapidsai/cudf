@@ -17,8 +17,14 @@ from cudf._lib.cpp.rolling cimport rolling_window as cpp_rolling_window
 from cudf._lib.cpp.types cimport size_type
 
 
-def rolling(Column source_column, Column pre_column_window,
-            Column fwd_column_window, window, min_periods, center, op, agg_params):
+def rolling(Column source_column,
+            Column pre_column_window,
+            Column fwd_column_window,
+            window,
+            min_periods,
+            center,
+            op,
+            agg_params):
     """
     Rolling on input executing operation within the given window for each row
 

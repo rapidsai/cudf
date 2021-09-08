@@ -8,7 +8,6 @@ import pandas as pd
 import pytest
 
 import cudf
-import cudf.testing.dataset_generator as dataset_generator
 from cudf.core._compat import PANDAS_GE_110
 from cudf.testing._utils import assert_eq
 
