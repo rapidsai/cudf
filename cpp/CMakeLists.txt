@@ -505,6 +505,8 @@ target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_L
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
 
+set_target_properties(nvcomp PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # Specify the target module library dependencies
 target_link_libraries(cudf
            PUBLIC ZLIB::ZLIB
