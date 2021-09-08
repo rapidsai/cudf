@@ -99,6 +99,10 @@ cpdef generate_pandas_metadata(Table table, index):
         ):
             types.append(col.dtype.to_arrow())
         else:
+            # A boolean element takes 8 bits in cudf and 1 bit in
+            # pyarrow. To make sure the cudf format is interperable
+            # in arrow, we use `int8` type when converting from a
+            # cudf boolean array.
             if col.dtype.type == np.bool_:
                 types.append(pa.int8())
             else:
@@ -146,6 +150,10 @@ cpdef generate_pandas_metadata(Table table, index):
                 elif is_list_dtype(idx):
                     types.append(col.dtype.to_arrow())
                 else:
+                    # A boolean element takes 8 bits in cudf and 1 bit in
+                    # pyarrow. To make sure the cudf format is interperable
+                    # in arrow, we use `int8` type when converting from a
+                    # cudf boolean array.
                     if idx.dtype.type == np.bool_:
                         types.append(pa.int8())
                     else:

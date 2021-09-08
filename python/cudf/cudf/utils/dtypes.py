@@ -35,6 +35,11 @@ from cudf.api.types import (  # noqa: F401
 from cudf.core._compat import PANDAS_GE_120
 
 _NA_REP = "<NA>"
+
+"""Map numpy dtype to pyarrow types.
+Note that np.bool_ bitwidth (8) is different from pa.bool_ (1). Special
+handling is required when converting a Boolean column into arrow.
+"""
 _np_pa_dtypes = {
     np.float64: pa.float64(),
     np.float32: pa.float32(),
