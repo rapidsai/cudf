@@ -852,8 +852,13 @@ class ColumnBase(Column, Serializable):
         side : {'left', 'right'}
         kind : {'ix', 'loc', 'getitem'}
         """
-        assert kind in ["ix", "loc", "getitem", None]
-        if side not in ("left", "right"):
+        if kind not in {"ix", "loc", "getitem", None}:
+            raise ValueError(
+                f"Invalid value for ``kind`` parameter,"
+                f" must be either one of the following: "
+                f"{'ix', 'loc', 'getitem', None}, but found: {kind}"
+            )
+        if side not in {"left", "right"}:
             raise ValueError(
                 "Invalid value for side kwarg,"
                 " must be either 'left' or 'right': %s" % (side,)
