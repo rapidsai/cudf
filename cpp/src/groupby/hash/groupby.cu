@@ -542,14 +542,15 @@ std::pair<rmm::device_uvector<size_type>, size_type> extract_populated_keys(
 {
   rmm::device_uvector<size_type> populated_keys(num_keys, stream);
 
-  auto get_key = [] __device__(auto const& element) { return element.first; };  // first = key
+  auto get_key    = [] __device__(auto const& element) { return element.first; };  // first = key
+  auto get_key_it = thrust::make_transform_iterator(map.data(), get_key);
+  auto key_used   = [unused = map.get_unused_key()] __device__(auto key) { return key != unused; };
 
-  auto end_it = thrust::copy_if(
-    rmm::exec_policy(stream),
-    thrust::make_transform_iterator(map.data(), get_key),
-    thrust::make_transform_iterator(map.data() + map.capacity(), get_key),
-    populated_keys.begin(),
-    [unused_key = map.get_unused_key()] __device__(size_type key) { return key != unused_key; });
+  auto end_it = thrust::copy_if(rmm::exec_policy(stream),
+                                get_key_it,
+                                get_key_it + map.capacity(),
+                                populated_keys.begin(),
+                                key_used);
 
   size_type const map_size = end_it - populated_keys.begin();
 
@@ -590,8 +591,8 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  auto d_keys   = table_device_view::create(keys, stream);
-  auto hash_map = create_hash_map<keys_have_nulls>(*d_keys, include_null_keys, stream);
+  auto d_keys_ptr = table_device_view::create(keys, stream);
+  auto hash_map   = create_hash_map<keys_have_nulls>(*d_keys_ptr, include_null_keys, stream);
 
   // Cache of sparse results where the location of aggregate value in each
   // column is indexed by the hash map
