@@ -636,11 +636,10 @@ static __device__ void encode_null_mask(orcenc_state_s* s, int t)
       uint8_t valid           = 0;
       if (row < column.size()) {
         if (column.nullable()) {
-          size_type current_valid_offset = row + column.offset();
-          size_type next_valid_offset    = current_valid_offset + min(32, column.size());
-
-          bitmask_type mask = cudf::detail::get_mask_offset_word(
-            column.null_mask(), 0, current_valid_offset, next_valid_offset);
+          auto const begin_offset = row + column.offset();
+          auto const end_offset   = min(begin_offset + 8, column.offset() + column.size());
+          auto const mask =
+            cudf::detail::get_mask_offset_word(column.null_mask(), 0, begin_offset, end_offset);
           valid = 0xff & mask;
         } else {
           valid = 0xff;
@@ -695,10 +694,9 @@ static __device__ void encode_nested_null_mask(orcenc_state_s* s,
       if (t_nrows == 0) return 0;
       if (mask == nullptr) return 0xff;
 
-      auto const current_valid_offset = row + column.offset();
-      auto const next_valid_offset    = current_valid_offset + min(32, column.size());
-      auto const mask_word =
-        cudf::detail::get_mask_offset_word(mask, 0, current_valid_offset, next_valid_offset);
+      auto const begin_offset = row + column.offset();
+      auto const end_offset   = min(begin_offset + 8, column.offset() + column.size());
+      auto const mask_word = cudf::detail::get_mask_offset_word(mask, 0, begin_offset, end_offset);
       return mask_word & 0xff;
     };
 
