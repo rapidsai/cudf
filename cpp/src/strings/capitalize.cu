@@ -199,9 +199,7 @@ std::unique_ptr<column> capitalizer(CapitalFn cfn,
                              std::move(children.first),
                              std::move(children.second),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace

@@ -164,9 +164,7 @@ std::unique_ptr<column> replace_with_backrefs(
                              std::move(offsets),
                              std::move(chars),
                              strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
 }  // namespace detail

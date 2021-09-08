@@ -83,19 +83,15 @@ std::unique_ptr<column> compute_column(table_view const& table,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  // Prepare output column. Whether or not the output column is nullable is
-  // determined by whether any of the columns in the input table are nullable.
-  // If none of the input columns actually contain nulls, we can still use the
-  // non-nullable version of the expression evaluation code path for
-  // performance, so we capture that information as well.
-  auto const nullable  = cudf::nullable(table);
-  auto const has_nulls = nullable && cudf::has_nulls(table);
+  // If evaluating the expression may produce null outputs we create a nullable
+  // output column and follow the null-supporting expression evaluation code
+  // path.
+  auto const has_nulls = expr.may_evaluate_null(table, stream);
 
   auto const parser = ast::detail::expression_parser{expr, table, has_nulls, stream, mr};
 
   auto const output_column_mask_state =
-    nullable ? (has_nulls ? mask_state::UNINITIALIZED : mask_state::ALL_VALID)
-             : mask_state::UNALLOCATED;
+    has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;
 
   auto output_column = cudf::make_fixed_width_column(
     parser.output_type(), table.num_rows(), output_column_mask_state, stream, mr);

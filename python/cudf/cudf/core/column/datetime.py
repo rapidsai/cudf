@@ -170,6 +170,9 @@ class DatetimeColumn(column.ColumnBase):
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
 
+    def ceil(self, field: str) -> ColumnBase:
+        return libcudf.datetime.ceil_datetime(self, field)
+
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
         if isinstance(other, cudf.Scalar):
             return other
@@ -258,7 +261,7 @@ class DatetimeColumn(column.ColumnBase):
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.TimeDeltaColumn":
         raise TypeError(
-            f"cannot astype a datetimelike from [{self.dtype}] to [{dtype}]"
+            f"cannot astype a datetimelike from {self.dtype} to {dtype}"
         )
 
     def as_numerical_column(

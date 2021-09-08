@@ -76,6 +76,23 @@ TEST_F(TransformTest, Literal)
   cudf::test::expect_columns_equal(expected, result->view(), verbosity);
 }
 
+TEST_F(TransformTest, NullLiteral)
+{
+  auto c_0   = column_wrapper<int32_t>{0, 0, 0, 0};
+  auto table = cudf::table_view{{c_0}};
+
+  auto literal_value = cudf::numeric_scalar<int32_t>(-123);
+  literal_value.set_valid_async(false);
+  auto literal = cudf::ast::literal(literal_value);
+
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::IDENTITY, literal);
+
+  auto result   = cudf::compute_column(table, expression);
+  auto expected = column_wrapper<int32_t>({-123, -123, -123, -123}, {0, 0, 0, 0});
+
+  cudf::test::expect_columns_equal(expected, result->view(), verbosity);
+}
+
 TEST_F(TransformTest, BasicAddition)
 {
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};

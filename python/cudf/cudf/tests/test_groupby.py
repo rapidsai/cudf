@@ -14,7 +14,7 @@ import rmm
 
 import cudf
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_130, PANDAS_LT_140
 from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
@@ -369,6 +369,10 @@ def test_groupby_2keys_agg(nelem, func):
     # TODO: Replace the above line with the one below once
     # https://github.com/pandas-dev/pandas/issues/40685 is resolved.
     # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
+)
+@pytest.mark.xfail(
+    condition=PANDAS_GE_130 and PANDAS_LT_140,
+    reason="https://github.com/pandas-dev/pandas/issues/43209",
 )
 def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     # The number of digits after the decimal to use.
@@ -1303,6 +1307,10 @@ def test_groupby_nth(n, by):
     assert_groupby_results_equal(expect, got, check_dtype=False)
 
 
+@pytest.mark.xfail(
+    condition=PANDAS_GE_130 and PANDAS_LT_140,
+    reason="https://github.com/pandas-dev/pandas/issues/43209",
+)
 def test_raise_data_error():
 
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
@@ -1650,6 +1658,7 @@ def test_groupby_apply_no_keys(pdf):
     assert_groupby_results_equal(
         pdf.groupby([]).apply(lambda x: x.max()),
         gdf.groupby([]).apply(lambda x: x.max()),
+        check_index_type=False,  # Int64Index v/s Float64Index
     )
 
 
@@ -1946,9 +1955,6 @@ def test_groupby_fillna_multi_value(nelem):
 
     got = gdf.groupby(key_col).fillna(value=fill_values)
 
-    # In this specific case, Pandas returns the rows in grouped order.
-    # Cudf returns columns in orginal order.
-    expect.index = expect.index.get_level_values(1)
     assert_groupby_results_equal(expect[value_cols], got[value_cols])
 
 
@@ -2114,3 +2120,52 @@ def test_groupby_apply_series():
     expect = make_frame(pd.DataFrame, 100).groupby("x").y.apply(foo)
 
     assert_groupby_results_equal(expect, got)
+
+
+@pytest.mark.parametrize(
+    "pdf, group, name, obj",
+    [
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "X",
+            "A",
+            None,
+        ),
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "X",
+            "B",
+            None,
+        ),
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "X",
+            "A",
+            pd.DataFrame({"a": [1, 2, 4, 5, 10, 11]}),
+        ),
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "Y",
+            1,
+            pd.DataFrame({"a": [1, 2, 4, 5, 10, 11]}),
+        ),
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "Y",
+            3,
+            pd.DataFrame({"a": [1, 2, 0, 11]}),
+        ),
+    ],
+)
+def test_groupby_get_group(pdf, group, name, obj):
+    gdf = cudf.from_pandas(pdf)
+
+    if isinstance(obj, pd.DataFrame):
+        gobj = cudf.from_pandas(obj)
+    else:
+        gobj = obj
+
+    expected = pdf.groupby(group).get_group(name=name, obj=obj)
+    actual = gdf.groupby(group).get_group(name=name, obj=gobj)
+
+    assert_groupby_results_equal(expected, actual)
