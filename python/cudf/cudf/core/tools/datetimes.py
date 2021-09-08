@@ -634,7 +634,16 @@ class DateOffset:
 
         return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
 
-    def to_pandas(self):
+    def _maybe_as_fast_pandas_offset(self):
+        if (
+            len(self.kwds) == 1
+            and _has_fixed_frequency(self)
+            and not _has_non_fixed_frequency(self)
+        ):
+            # Pandas computation between `n*offsets.Minute()` is faster than
+            # `n*DateOffset`. If only single offset unit is in use, we return
+            # the base offset for faster binary ops.
+            return pd.tseries.frequencies.to_offset(pd.Timedelta(**self.kwds))
         return pd.DateOffset(**self.kwds, n=1)
 
     def name(self):
@@ -796,7 +805,7 @@ def date_range(
         return cudf.DatetimeIndex._from_data({name: result})
 
     # The code logic below assumes `freq` is defined. It is first normalized
-    # into pd.DateOffset for further computation with timestamps.
+    # into `DateOffset` for further computation with timestamps.
 
     _periods_not_specified = False
 
@@ -838,7 +847,7 @@ def date_range(
     else:
         raise TypeError("`freq` must be a `str` or cudf.DateOffset object.")
 
-    if _check_mixed_freqeuency(offset):
+    if _has_mixed_freqeuency(offset):
         raise NotImplementedError(
             "Mixing fixed and non-fixed frequency offset is unsupported."
         )
@@ -852,7 +861,8 @@ def date_range(
     if start is None:
         end = cudf.Scalar(end, dtype=dtype)
         start = cudf.Scalar(
-            pd.Timestamp(end.value) - (periods - 1) * offset.to_pandas(),
+            pd.Timestamp(end.value)
+            - (periods - 1) * offset._maybe_as_fast_pandas_offset(),
             dtype=dtype,
         )
     elif end is None:
@@ -887,7 +897,8 @@ def date_range(
     # we shouldn't raise but compute the sequence as is. The trailing overflow
     # part should get trimmed at the end.
     end_estim = (
-        pd.Timestamp(start.value) + (periods - 1) * offset.to_pandas()
+        pd.Timestamp(start.value)
+        + (periods - 1) * offset._maybe_as_fast_pandas_offset()
     ).to_datetime64()
 
     if "months" in offset.kwds or "years" in offset.kwds:
@@ -913,11 +924,9 @@ def date_range(
     return cudf.DatetimeIndex._from_data({name: res})
 
 
-def _check_mixed_freqeuency(freq: DateOffset) -> bool:
-    """Utility to determine if `freq` contains mixed fixed and non-fixed
-    frequency offset. e.g. {months=1, days=5}
+def _has_fixed_frequency(freq: DateOffset) -> bool:
+    """Utility to determine if `freq` contains fixed frequency offset
     """
-
     fixed_frequencies = {
         "weeks",
         "days",
@@ -928,12 +937,23 @@ def _check_mixed_freqeuency(freq: DateOffset) -> bool:
         "microseconds",
         "nanoseconds",
     }
-    non_fixed_frequencies = {"years", "months"}
 
-    return (
-        len(freq.kwds.keys() & fixed_frequencies) > 0
-        and len(freq.kwds.keys() & non_fixed_frequencies) > 0
-    )
+    return len(freq.kwds.keys() & fixed_frequencies) > 0
+
+
+def _has_non_fixed_frequency(freq: DateOffset) -> bool:
+    """Utility to determine if `freq` contains non-fixed frequency offset
+    """
+    non_fixed_frequencies = {"years", "months"}
+    return len(freq.kwds.keys() & non_fixed_frequencies) > 0
+
+
+def _has_mixed_freqeuency(freq: DateOffset) -> bool:
+    """Utility to determine if `freq` contains mixed fixed and non-fixed
+    frequency offset. e.g. {months=1, days=5}
+    """
+
+    return _has_fixed_frequency(freq) and _has_non_fixed_frequency(freq)
 
 
 def _offset_to_nanoseconds_lower_bound(offset: DateOffset) -> int:
