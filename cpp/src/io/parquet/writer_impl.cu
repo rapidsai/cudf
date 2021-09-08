@@ -988,9 +988,15 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   device_span<gpu_inflate_status_s> comp_stat{compression_status.data(), compression_status.size()};
 
   gpu::EncodePages(batch_pages, comp_in, comp_stat, stream);
+  auto env_use_nvcomp = std::getenv("LIBCUDF_USE_NVCOMP");
+  bool use_nvcomp     = env_use_nvcomp != nullptr ? std::atoi(env_use_nvcomp) : 0;
   switch (compression_) {
     case parquet::Compression::SNAPPY:
-      snappy_compress(comp_in, comp_stat, max_page_uncomp_data_size, stream);
+      if (use_nvcomp) {
+        snappy_compress(comp_in, comp_stat, max_page_uncomp_data_size, stream);
+      } else {
+        CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
+      }
       break;
     default: break;
   }
