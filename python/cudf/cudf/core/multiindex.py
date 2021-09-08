@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import itertools
@@ -1422,7 +1423,7 @@ class MultiIndex(Frame, BaseIndex):
         if hasattr(self, "_source_data"):
             result = self._source_data.to_pandas(nullable=nullable)
             result.columns = self.names
-            return pd.MultiIndex.from_frame(result)
+            return pd.MultiIndex.from_frame(result, names=self.names)
 
         pandas_codes = []
         for code in self.codes.columns:
