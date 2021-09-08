@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import collections
 import pickle
 import warnings
@@ -501,7 +502,7 @@ class GroupBy(Serializable):
         chunk_results = [function(chk) for chk in chunks]
 
         if not len(chunk_results):
-            return self.obj.__class__()
+            return self.obj.head(0)
 
         if cudf.utils.dtypes.is_scalar(chunk_results[0]):
             result = cudf.Series(chunk_results, index=group_names)
@@ -630,7 +631,7 @@ class GroupBy(Serializable):
         .. code-block:: python
 
             Results:
-                 cat  val                 avg
+               cat  val                 avg
             0    1   16
             1    1   45
             2    1   62                41.0
@@ -713,8 +714,8 @@ class GroupBy(Serializable):
         2   24.0     90
         3   26.0     80
         >>> gdf.groupby('Score').describe()
-            Speed
-            count   mean   std    min    25%    50%    75%     max
+             Speed
+             count   mean   std    min    25%    50%    75%     max
         Score
         30        1  370.0  <NA>  370.0  370.0  370.0  370.0  370.0
         50        1  380.0  <NA>  380.0  380.0  380.0  380.0  380.0
@@ -946,13 +947,13 @@ class GroupBy(Serializable):
                 >>> df = pd.DataFrame({'k': [1, 1, 2], 'v': [2, None, 4]})
                 >>> gdf = cudf.from_pandas(df)
                 >>> df.groupby('k').fillna({'v': 4}) # pandas
-                        v
+                       v
                 k
                 1 0  2.0
-                    1  4.0
+                  1  4.0
                 2 2  4.0
                 >>> gdf.groupby('k').fillna({'v': 4}) # cudf
-                        v
+                     v
                 0  2.0
                 1  4.0
                 2  4.0
@@ -1127,9 +1128,9 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
                     Max Speed
     Animal Type
     Falcon Captive      390.0
-        Wild         350.0
+           Wild         350.0
     Parrot Captive       30.0
-        Wild          20.0
+           Wild          20.0
     >>> df.groupby(level=0).mean()
             Max Speed
     Animal

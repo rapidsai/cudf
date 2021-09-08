@@ -990,7 +990,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             end += 1
         return begin, end
 
-    def get_slice_bound(self, label, side, kind):
+    def get_slice_bound(self, label, side, kind=None):
         return self._values.get_slice_bound(label, side, kind)
 
 
