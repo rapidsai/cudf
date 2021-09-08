@@ -1498,14 +1498,14 @@ def test_date_range_end_freq_periods(end, freq, periods):
 
 def test_date_range_raise_overflow():
     # Fixed offset
-    start = np.datetime64(np.iinfo("int64").max, "ns").astype("datetime64[us]")
+    start = np.datetime64(np.iinfo("int64").max, "ns")
     periods = 2
     freq = cudf.DateOffset(nanoseconds=1)
     with pytest.raises(pd._libs.tslibs.np_datetime.OutOfBoundsDatetime):
         cudf.date_range(start=start, periods=periods, freq=freq)
 
     # Non-fixed offset
-    start = np.datetime64(np.iinfo("int64").max, "ns").astype("datetime64[us]")
+    start = np.datetime64(np.iinfo("int64").max, "ns")
     periods = 2
     freq = cudf.DateOffset(months=1)
     with pytest.raises(pd._libs.tslibs.np_datetime.OutOfBoundsDatetime):
