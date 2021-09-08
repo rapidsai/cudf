@@ -114,6 +114,26 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
             meta["value_type"] = random.choice(
                 list(cudf.utils.dtypes.ALL_TYPES - {"category"})
             )
+        elif dtype == "struct":
+            if obj._max_lists_nesting_depth is None:
+                meta["nesting_max_depth"] = np.random.randint(2, 10)
+            else:
+                meta["nesting_max_depth"] = obj._max_lists_nesting_depth
+
+            if obj._max_struct_null_frequency is None:
+                meta["max_null_frequency"] = random.uniform(0, 1)
+            else:
+                meta["max_null_frequency"] = obj._max_struct_null_frequency
+
+            if obj._max_struct_types_at_each_level is None:
+                meta["max_types_at_each_level"] = np.random.randint(
+                    low=1, high=10
+                )
+            else:
+                meta[
+                    "max_types_at_each_level"
+                ] = obj._max_struct_types_at_each_level
+
         elif dtype == "decimal64":
             meta["max_precision"] = cudf.Decimal64Dtype.MAX_PRECISION
 

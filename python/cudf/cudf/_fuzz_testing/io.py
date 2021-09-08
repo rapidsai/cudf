@@ -25,6 +25,9 @@ class IOFuzz(object):
         max_string_length=None,
         max_lists_length=None,
         max_lists_nesting_depth=None,
+        max_structs_nesting_depth=None,
+        max_struct_null_frequency=None,
+        max_struct_types_at_each_level=None,
     ):
         dirs = [] if dirs is None else dirs
         self._inputs = []
@@ -33,6 +36,9 @@ class IOFuzz(object):
         self._max_string_length = max_string_length
         self._max_lists_length = max_lists_length
         self._max_lists_nesting_depth = max_lists_nesting_depth
+        self._max_structs_nesting_depth = max_structs_nesting_depth
+        self._max_struct_null_frequency = max_struct_null_frequency
+        self._max_struct_types_at_each_level = max_struct_types_at_each_level
 
         for i, path in enumerate(dirs):
             if i == 0 and not os.path.exists(path):
