@@ -374,13 +374,16 @@ struct SHA1Hash {
     std::memcpy(temp_hash, hash_state->hash_value, 5);
 
     uint32_t words[80];
+
+    // The 512-bit message buffer fills the first 16 words.
     for (int i = 0; i < 16; i++) {
       uint32_t buffer_element_as_int;
       std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * 4), 4);
-      // Convert word representation from little-endian to big-endian
+      // Convert word representation from little-endian to big-endian.
       words[i] = __byte_perm(buffer_element_as_int, 0, 0x0123);
     }
-    // std::memcpy(words, hash_state->buffer, 64);
+
+    // The rest of the 80 words are generated from the first 16 words.
     for (int i = 16; i < 80; i++) {
       uint32_t temp = words[i - 3] ^ words[i - 8] ^ words[i - 14] ^ words[i - 16];
       words[i]      = rotl32(temp, 1);
