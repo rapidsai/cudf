@@ -87,37 +87,12 @@ cdef class Table:
             )
         )
 
-    cdef mutable_table_view mutable_view(self) except *:
-        """
-        Return a cudf::mutable_table_view of all columns
-        (including index columns) of this Table.
-        """
-        if self._index is None:
-            return make_mutable_table_view(
-                self._data.columns
-            )
-        return make_mutable_table_view(
-            itertools.chain(
-                self._index._data.columns,
-                self._data.columns,
-            )
-        )
-
     cdef table_view data_view(self) except *:
         """
         Return a cudf::table_view of just the data columns
         of this Table.
         """
         return make_table_view(
-            self._data.columns
-        )
-
-    cdef mutable_table_view mutable_data_view(self) except *:
-        """
-        Return a cudf::mutable_table_view of just the data columns
-        of this Table.
-        """
-        return make_mutable_table_view(
             self._data.columns
         )
 
@@ -133,18 +108,6 @@ cdef class Table:
             self._index.values()
         )
 
-    cdef mutable_table_view mutable_index_view(self) except *:
-        """
-        Return a cudf::mutable_table_view of just the index columns
-        of this Table.
-        """
-        if self._index is None:
-            raise ValueError("Cannot get mutable_index_view of a Table "
-                             "that has no index")
-        return make_mutable_table_view(
-            self._index._data.columns
-        )
-
 
 cdef table_view make_table_view(columns) except*:
     """
@@ -158,19 +121,6 @@ cdef table_view make_table_view(columns) except*:
         column_views.push_back(col.view())
 
     return table_view(column_views)
-
-cdef mutable_table_view make_mutable_table_view(columns) except*:
-    """
-    Helper function to create a cudf::mutable_table_view from
-    a list of Columns
-    """
-    cdef vector[mutable_column_view] mutable_column_views
-
-    cdef Column col
-    for col in columns:
-        mutable_column_views.push_back(col.mutable_view())
-
-    return mutable_table_view(mutable_column_views)
 
 cdef columns_from_ptr(unique_ptr[table] c_tbl):
     """
