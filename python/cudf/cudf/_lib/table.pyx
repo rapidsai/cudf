@@ -96,18 +96,6 @@ cdef class Table:
             self._data.columns
         )
 
-    cdef table_view index_view(self) except *:
-        """
-        Return a cudf::table_view of just the index columns
-        of this Table.
-        """
-        if self._index is None:
-            raise ValueError("Cannot get index_view of a Table "
-                             "that has no index")
-        return make_table_view(
-            self._index.values()
-        )
-
 
 cdef table_view make_table_view(columns) except*:
     """
