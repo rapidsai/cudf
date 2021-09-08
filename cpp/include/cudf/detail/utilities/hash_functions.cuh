@@ -359,9 +359,10 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
 }
 
 struct SHA1Hash {
-  CUDA_HOST_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
+  CUDA_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
   {
-    return (x << r) | (x >> (32 - r));
+    // return (x << r) | (x >> (32 - r));
+    return __funnelshift_l(x, x, r);
   }
 
   /**
@@ -387,7 +388,6 @@ struct SHA1Hash {
     for (int i = 16; i < 80; i++) {
       uint32_t temp = words[i - 3] ^ words[i - 8] ^ words[i - 14] ^ words[i - 16];
       words[i]      = rotl32(temp, 1);
-      // words[i] = __funnelshift_l(temp, temp, 1);
     }
 
     // #pragma unroll
