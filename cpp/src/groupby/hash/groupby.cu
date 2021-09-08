@@ -604,7 +604,7 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
   // Extract the populated indices from the hash map and create a gather map.
   // Gathering using this map from sparse results will give dense results.
   auto [map, map_size] = extract_populated_keys(*hash_map, keys.num_rows(), stream);
-  auto gather_map      = rmm::device_uvector{std::move(map)};
+  rmm::device_uvector gather_map{std::move(map)};
 
   // Compact all results from sparse_results and insert into cache
   sparse_to_dense_results(keys,
