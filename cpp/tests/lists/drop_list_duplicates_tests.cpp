@@ -29,25 +29,14 @@ using namespace cudf::test::iterators;
 using float_type    = float;
 using FloatListsCol = cudf::test::lists_column_wrapper<float_type>;
 using StrListsCol   = cudf::test::lists_column_wrapper<cudf::string_view>;
+using StringsCol    = cudf::test::strings_column_wrapper;
+using StructsCol    = cudf::test::structs_column_wrapper;
+using IntsCol       = cudf::test::fixed_width_column_wrapper<int32_t>;
 
 auto constexpr neg_NaN = -std::numeric_limits<float_type>::quiet_NaN();
 auto constexpr neg_Inf = -std::numeric_limits<float_type>::infinity();
 auto constexpr NaN     = std::numeric_limits<float_type>::quiet_NaN();
 auto constexpr Inf     = std::numeric_limits<float_type>::infinity();
-
-template <class LCW>
-void test_once(cudf::column_view const& input,
-               LCW const& expected,
-               cudf::null_equality nulls_equal = cudf::null_equality::EQUAL)
-{
-  auto const results =
-    cudf::lists::drop_list_duplicates(cudf::lists_column_view{input}, nulls_equal);
-  if (cudf::is_floating_point(input.type())) {
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
-  } else {
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
-  }
-}
 
 struct DropListDuplicatesTest : public cudf::test::BaseFixture {
 };
@@ -338,4 +327,96 @@ TYPED_TEST(DropListDuplicatesTypedTest, WithNullInputTests)
                                                            cudf::null_equality::UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
+}
+
+TYPED_TEST(DropListDuplicatesTypedTest, NonNullInputStructsTests)
+{
+  using ListsCol = cudf::test::lists_column_wrapper<TypeParam>;
+
+  {
+    auto const lists =
+      ListsCol{{1, 1, 1, 1, 1, 1, 1, 1}, {1, 1, 1, 1, 1, 2, 2, 2}, {2, 2, 2, 2, 3, 3, 3, 3}};
+    auto const expected = ListsCol{{1}, {1, 2}, {2, 3}};
+    auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+  }
+}
+
+TYPED_TEST(DropListDuplicatesTypedTest, InputListsOfStructsNoNull)
+{
+  using ColWrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  auto structs = [] {
+    auto child1 = ColWrapper{
+      1, 1, 1, 1, 1, 1, 1, 1,  // list1
+      1, 1, 1, 1, 2, 1, 2, 2,  // list2
+      2, 2, 2, 2, 3, 2, 3, 3   // list3
+    };
+    auto child2 = StringsCol{
+      // begin list1
+      "Banana",
+      "Mango",
+      "Apple",
+      "Cherry",
+      "Kiwi",
+      "Banana",
+      "Cherry",
+      "Kiwi",  // end list1
+               // begin list2
+      "Bear",
+      "Duck",
+      "Cat",
+      "Dog",
+      "Panda",
+      "Bear",
+      "Cat",
+      "Panda",  // end list2
+                // begin list3
+      "ÁÁÁ",
+      "ÉÉÉÉÉ",
+      "ÍÍÍÍÍ",
+      "ÁBC",
+      "XYZ",
+      "ÁÁÁ",
+      "ÁBC",
+      "XYZ"  // end list3
+    };
+    return StructsCol{{child1, child2}};
+  }();
+
+  auto structs_expected = [] {
+    auto child1 = ColWrapper{1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3};
+    auto child2 = StringsCol{
+      // begin list1
+      "Apple",
+      "Banana",
+      "Cherry",
+      "Kiwi",
+      "Mango",  // end list1
+      // begin list2
+      "Bear",
+      "Cat",
+      "Dog",
+      "Duck",
+      "Cat",
+      "Panda",  // end list2
+      // begin list3
+      "ÁBC",
+      "ÁÁÁ",
+      "ÉÉÉÉÉ",
+      "ÍÍÍÍÍ",
+      "XYZ",
+      "ÁBC"  // end list3
+    };
+    return StructsCol{{child1, child2}};
+  }();
+
+  auto const lists =
+    cudf::make_lists_column(3, IntsCol{0, 8, 16, 24}.release(), structs.release(), 0, {});
+  auto const expected =
+    cudf::make_lists_column(3, IntsCol{0, 5, 11, 17}.release(), structs_expected.release(), 0, {});
+  auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists->view()});
+  cudf::test::print(results->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    results->view(), expected->view(), cudf::test::debug_output_level::ALL_ERRORS);
 }
