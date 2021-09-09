@@ -113,8 +113,9 @@ class ListColumn(ColumnBase):
             for lists concatenation functions
 
         reflect : boolean, default False
-            If ``reflect`` is ``True``, swap the order of
-            the operands.
+            If ``True``, swap the order of the operands. See
+            https://docs.python.org/3/reference/datamodel.html#object.__ror__
+            for more information on when this is necessary.
 
         Returns
         -------

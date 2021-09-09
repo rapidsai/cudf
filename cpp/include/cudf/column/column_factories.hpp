@@ -420,27 +420,21 @@ std::unique_ptr<column> make_strings_column(
  *
  * The columns and mask are moved into the resulting strings column.
  *
- * @param[in] num_strings The number of strings the column represents.
- * @param[in] offsets_column The column of offset values for this column. The number of elements is
+ * @param num_strings The number of strings the column represents.
+ * @param offsets_column The column of offset values for this column. The number of elements is
  *  one more than the total number of strings so the `offset[last] - offset[0]` is the total number
  *  of bytes in the strings vector.
- * @param[in] chars_column The column of char bytes for all the strings for this column. Individual
+ * @param chars_column The column of char bytes for all the strings for this column. Individual
  *  strings are identified by the offsets and the nullmask.
- * @param[in] null_count The number of null string entries.
- * @param[in] null_mask The bits specifying the null strings in device memory. Arrow format for
+ * @param null_count The number of null string entries.
+ * @param null_mask The bits specifying the null strings in device memory. Arrow format for
  *  nulls is used for interpreting this bitmask.
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr Device memory resource used for allocation of the column's `null_mask` and children
- * columns' device memory.
  */
-std::unique_ptr<column> make_strings_column(
-  size_type num_strings,
-  std::unique_ptr<column> offsets_column,
-  std::unique_ptr<column> chars_column,
-  size_type null_count,
-  rmm::device_buffer&& null_mask,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> make_strings_column(size_type num_strings,
+                                            std::unique_ptr<column> offsets_column,
+                                            std::unique_ptr<column> chars_column,
+                                            size_type null_count,
+                                            rmm::device_buffer&& null_mask);
 
 /**
  * @brief Construct a STRING type column given offsets, columns, and optional null count and null

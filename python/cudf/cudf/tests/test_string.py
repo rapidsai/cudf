@@ -775,13 +775,8 @@ def test_string_index_duplicate_str_cat(data, others, sep, na_rep, name):
     # in `.str.cat`
     # https://github.com/rapidsai/cudf/issues/5862
 
-    # TODO: Replace ``pd.Index(expect.to_series().sort_values())`` with
-    # ``expect.sort_values()`` once the below issue is fixed
-    # https://github.com/pandas-dev/pandas/issues/35584
     assert_eq(
-        pd.Index(expect.to_series().sort_values())
-        if not isinstance(expect, str)
-        else expect,
+        expect.sort_values() if not isinstance(expect, str) else expect,
         got.sort_values() if not isinstance(got, str) else got,
         exact=False,
     )
