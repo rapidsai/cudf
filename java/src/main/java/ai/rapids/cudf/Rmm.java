@@ -214,9 +214,9 @@ public class Rmm {
       throw new IllegalStateException("RMM is already initialized");
     }
     if (maxPoolSize > 0) {
-      if (allocationMode != RmmAllocationMode.POOL &&
-          allocationMode != RmmAllocationMode.ARENA &&
-          allocationMode != RmmAllocationMode.CUDA_ASYNC) {
+      if ((allocationMode & RmmAllocationMode.POOL) == 0 &&
+          (allocationMode & RmmAllocationMode.ARENA) == 0 &&
+          (allocationMode & RmmAllocationMode.CUDA_ASYNC) == 0) {
         throw new IllegalArgumentException(
             "Pool limit only supported in POOL or ARENA or CUDA_ASYNC allocation mode");
       }

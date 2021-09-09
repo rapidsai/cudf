@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 public class RmmTest {
   private static final long TOO_MUCH_MEMORY = 3L * 1024 * 1024 * 1024 * 1024 * 1024 * 1024;
@@ -51,18 +52,24 @@ public class RmmTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {RmmAllocationMode.CUDA_DEFAULT, RmmAllocationMode.POOL})
+  @ValueSource(ints = {
+      RmmAllocationMode.CUDA_DEFAULT,
+      RmmAllocationMode.POOL,
+      RmmAllocationMode.ARENA})
   public void testTotalAllocated(int rmmAllocMode) {
     Rmm.initialize(rmmAllocMode, false, 512 * 1024 * 1024);
     assertEquals(0, Rmm.getTotalBytesAllocated());
-    try (DeviceMemoryBuffer addr = Rmm.alloc(1024)) {
+    try (DeviceMemoryBuffer ignored = Rmm.alloc(1024)) {
       assertEquals(1024, Rmm.getTotalBytesAllocated());
     }
     assertEquals(0, Rmm.getTotalBytesAllocated());
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {RmmAllocationMode.CUDA_DEFAULT, RmmAllocationMode.POOL})
+  @ValueSource(ints = {
+      RmmAllocationMode.CUDA_DEFAULT,
+      RmmAllocationMode.POOL,
+      RmmAllocationMode.ARENA})
   public void testEventHandler(int rmmAllocMode) {
     AtomicInteger invokedCount = new AtomicInteger();
     AtomicLong amountRequested = new AtomicLong();
@@ -328,7 +335,7 @@ public class RmmTest {
 
     Rmm.setEventHandler(handler);
     DeviceMemoryBuffer addr = Rmm.alloc(6 * 1024);
-    assertThrows(DeallocThresholdException.class, () -> addr.close());
+    assertThrows(DeallocThresholdException.class, addr::close);
     assertThrows(AllocThresholdException.class, () -> Rmm.alloc(12 * 1024));
     assertThrows(AllocFailException.class, () -> Rmm.alloc(TOO_MUCH_MEMORY));
   }
@@ -356,7 +363,10 @@ public class RmmTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {RmmAllocationMode.CUDA_DEFAULT, RmmAllocationMode.POOL})
+  @ValueSource(ints = {
+      RmmAllocationMode.CUDA_DEFAULT,
+      RmmAllocationMode.POOL,
+      RmmAllocationMode.ARENA})
   public void testSetDeviceThrowsAfterRmmInit(int rmmAllocMode) {
     Rmm.initialize(rmmAllocMode, false, 1024 * 1024);
     assertThrows(CudfException.class, () -> Cuda.setDevice(Cuda.getDevice() + 1));
@@ -399,9 +409,28 @@ public class RmmTest {
         () -> Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, false, 1024, 2048));
   }
 
-  private static class AllocFailException extends RuntimeException {}
-  private static class AllocThresholdException extends RuntimeException {}
-  private static class DeallocThresholdException extends RuntimeException {}
+  @Test
+  public void testCudaAsyncMemoryResource() {
+    try {
+      Rmm.initialize(RmmAllocationMode.CUDA_ASYNC, false, 1024 * 1024L, 1024 * 1024L);
+    } catch (CudfException e) {
+      assumeFalse(e.getMessage().contains("cudaMallocAsync not supported"));
+      throw e;
+    }
+    DeviceMemoryBuffer buff = Rmm.alloc(1024);
+    buff.close();
+    buff = Rmm.alloc(2048);
+    buff.close();
+  }
+
+  private static class AllocFailException extends RuntimeException {
+  }
+
+  private static class AllocThresholdException extends RuntimeException {
+  }
+
+  private static class DeallocThresholdException extends RuntimeException {
+  }
 
   private static abstract class BaseRmmEventHandler implements RmmEventHandler {
     @Override

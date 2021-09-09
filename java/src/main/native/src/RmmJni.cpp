@@ -370,8 +370,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(
     } else if (use_cuda_async_alloc) {
       auto pool_limit = (max_pool_size > 0) ? thrust::optional<std::size_t>{max_pool_size} :
                                               thrust::optional<std::size_t>{};
-      Initialized_resource = std::make_shared<rmm::mr::cuda_async_memory_resource>(
-            thrust::optional<std::size_t>{pool_size}, pool_limit);
+      Initialized_resource =
+          std::make_shared<rmm::mr::cuda_async_memory_resource>(pool_size, pool_limit);
     } else if (use_managed_mem) {
       Initialized_resource = std::make_shared<rmm::mr::managed_memory_resource>();
     } else {
