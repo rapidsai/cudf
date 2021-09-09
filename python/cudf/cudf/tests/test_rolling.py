@@ -134,6 +134,11 @@ def test_rolling_with_offset(agg):
 
 
 def generate_large_dataframe_for_var(size, window_size, nulls_prob, seed):
+    """Generates a random number filled dataframe with nulls to evaluate
+    correctness of variance and std. The range of the numbers are clamped
+    to avoid overflows. Three dtypes were tested: `np.int64` (non-nullable
+    integer), `np.float64` and `Decimal`.
+    """
     rng = np.random.default_rng(seed)
 
     iupper_bound = math.sqrt(np.iinfo(np.int64).max / window_size)
