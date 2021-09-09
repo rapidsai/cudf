@@ -29,6 +29,21 @@ namespace cudf {
 namespace groupby {
 namespace detail {
 namespace {
+/**
+ * @brief generate grouped row ranks or dense ranks using a row comparison then scan the results
+ *
+ * @tparam has_nulls if the order_by column has nulls
+ * @tparam value_resolver flag value resolver function with boolean first and row number arguments
+ * @tparam scan_operator scan function ran on the flag values
+ * @param order_by input column to generate ranks for
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param group_offsets group index offsets with group ID indices
+ * @param resolver flag value resolver
+ * @param scan_op scan operation ran on the flag results
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return std::unique_ptr<column> rank values
+ */
 template <bool has_nulls, typename value_resolver, typename scan_operator>
 std::unique_ptr<column> rank_generator(column_view const& order_by,
                                        device_span<size_type const> group_labels,
