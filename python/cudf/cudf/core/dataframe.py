@@ -4640,28 +4640,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             sort=sort,
         )
 
-    def ewm(
-        self,
-        com=None,
-        span=None,
-        halflife=None,
-        alpha=None,
-        min_periods=0,
-        adjust=True,
-        ignore_na=False,
-        axis=0,
-    ):
-        return ExponentialMovingWindow(
-            self,
-            com=com,
-            span=span,
-            halflife=halflife,
-            alpha=alpha,
-            min_periods=min_periods,
-            adjust=adjust,
-            ignore_na=False,
-            axis=0,
-        )
 
     def query(self, expr, local_dict=None):
         """

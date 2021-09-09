@@ -4513,6 +4513,29 @@ class Frame(libcudf.table.Table):
             win_type=win_type,
         )
 
+    def ewm(
+        self,
+        com=None,
+        span=None,
+        halflife=None,
+        alpha=None,
+        min_periods=0,
+        adjust=True,
+        ignore_na=False,
+        axis=0,
+    ):
+        return ExponentialMovingWindow(
+            self,
+            com=com,
+            span=span,
+            halflife=halflife,
+            alpha=alpha,
+            min_periods=min_periods,
+            adjust=adjust,
+            ignore_na=False,
+            axis=0,
+        )
+
     def nans_to_nulls(self):
         """
         Convert nans (if any) to nulls
