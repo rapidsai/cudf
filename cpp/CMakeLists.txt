@@ -663,8 +663,6 @@ rapids_export_write_dependencies(INSTALL cudf-testing-exports
 
 set(doc_string
     [=[
-#[=======================================================================[
-
 Provide targets for the cudf library.
 
 Built based on the Apache Arrow columnar memory format, cuDF is a GPU DataFrame
@@ -688,19 +686,6 @@ This module offers an optional testing component which defines the
 following IMPORTED GLOBAL  targets:
 
  cudf::cudftestutil     - The main cudf testing library
-
-Result Variables
-^^^^^^^^^^^^^^^^
-
-This module will set the following variables in your project::
-
-  CUDF_FOUND
-  CUDF_VERSION
-  CUDF_VERSION_MAJOR
-  CUDF_VERSION_MINOR
-  CUDF_VERSION_PATCH
-
-#]=======================================================================]
     ]=])
 
 
@@ -727,6 +712,7 @@ rapids_export(INSTALL cudf
     EXPORT_SET cudf-exports
     GLOBAL_TARGETS cudf
     NAMESPACE cudf::
+    DOCUMENTATION doc_string
     FINAL_CODE_BLOCK install_code_string)
 
 ################################################################################################
@@ -749,10 +735,11 @@ rapids_export(BUILD cudf
     EXPORT_SET cudf-exports
     GLOBAL_TARGETS cudf
     NAMESPACE cudf::
-    FINAL_CODE_BLOCK code_string)
+    DOCUMENTATION doc_string
+    FINAL_CODE_BLOCK build_code_string)
 
 export(EXPORT cudf-testing-exports
-    FILE ${CUDF_BINARY_DIR}/cudf-testing.cmake
+    FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
     NAMESPACE   cudf::)
 rapids_export_write_dependencies(BUILD cudf-testing-exports
     "${CUDF_BINARY_DIR}/cudf-testing-dependencies.cmake")
