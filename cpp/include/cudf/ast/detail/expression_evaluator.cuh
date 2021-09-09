@@ -76,9 +76,9 @@ struct expression_result {
     subclass().template set_value<Element>(index, result);
   }
 
-  __device__ bool is_valid() const { subclass().is_valid(); }
+  __device__ bool is_valid() const { return subclass().is_valid(); }
 
-  __device__ T value() const { subclass()->value(); }
+  __device__ T value() const { return subclass()->value(); }
 };
 
 /**
@@ -179,6 +179,8 @@ struct mutable_column_expression_result
     // Not implemented since it would require modifying the API in the parent class to accept an
     // index.
     cudf_assert(false && "This method is not implemented.");
+    // Unreachable return used to silence compiler warnings.
+    return {};
   }
 
   /**
