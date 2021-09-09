@@ -517,7 +517,7 @@ class BaseIndex(Serializable):
             if self.dtype != other.dtype:
                 difference = difference.astype(self.dtype)
 
-        if sort is None:
+        if sort is None and len(other):
             return difference.sort_values()
 
         return difference
@@ -821,7 +821,7 @@ class BaseIndex(Serializable):
             name=self.name if name is None else name,
         )
 
-    def get_slice_bound(self, label, side, kind):
+    def get_slice_bound(self, label, side, kind=None):
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
