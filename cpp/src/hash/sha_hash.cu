@@ -52,8 +52,11 @@ struct SHA1Hash {
    */
   void __device__ hash_step(sha1_intermediate_data* hash_state) const
   {
-    uint32_t temp_hash[5];
-    std::memcpy(temp_hash, hash_state->hash_value, 5);
+    uint32_t A = hash_state->hash_value[0];
+    uint32_t B = hash_state->hash_value[1];
+    uint32_t C = hash_state->hash_value[2];
+    uint32_t D = hash_state->hash_value[3];
+    uint32_t E = hash_state->hash_value[4];
 
     uint32_t words[80];
 
@@ -71,47 +74,43 @@ struct SHA1Hash {
       words[i]      = rotl32(temp, 1);
     }
 
-    // printf("Thread %i, word 0 = %08x\n\n", threadIdx.x, words[0]);
-
-    // #pragma unroll
+#pragma unroll
     for (int i = 0; i < 80; i++) {
       uint32_t F;
       uint32_t temp;
       uint32_t k;
       switch (i / 20) {
         case 0:
-          // F = (temp_hash[1] & temp_hash[2]) | ((~temp_hash[1]) & temp_hash[3]);
-          F = ((temp_hash[1] & (temp_hash[2] ^ temp_hash[3])) ^ temp_hash[3]);
+          F = D ^ (B & (C ^ D));
           k = 0x5a827999;
           break;
         case 1:
-          F = temp_hash[1] ^ temp_hash[2] ^ temp_hash[3];
+          F = B ^ C ^ D;
           k = 0x6ed9eba1;
           break;
         case 2:
-          F = (temp_hash[1] & temp_hash[2]) | (temp_hash[1] & temp_hash[3]) |
-              (temp_hash[2] & temp_hash[3]);
+          F = (B & C) | (B & D) | (C & D);
           k = 0x8f1bbcdc;
           break;
         case 3:
-          F = temp_hash[1] ^ temp_hash[2] ^ temp_hash[3];
+          F = B ^ C ^ D;
           k = 0xca62c1d6;
           break;
       }
-      temp = rotl32(temp_hash[0], 5) + F + temp_hash[4] + k + words[i];
-      // temp = __funnelshift_l(temp_hash[0], temp_hash[0], 5) + F +  temp_hash[4] + k + words[i];
-      temp_hash[4] = temp_hash[3];
-      temp_hash[3] = temp_hash[2];
-      // temp_hash[2] = __funnelshift_l(temp_hash[1], temp_hash[1], 30);
-      temp_hash[2] = rotl32(temp_hash[1], 30);
-      temp_hash[1] = temp_hash[0];
-      temp_hash[0] = temp;
+      temp = rotl32(A, 5) + F + E + k + words[i];
+      E    = D;
+      D    = C;
+      C    = rotl32(B, 30);
+      B    = A;
+      A    = temp;
     }
 
-#pragma unroll
-    for (int i = 0; i < 5; i++) {
-      hash_state->hash_value[i] = hash_state->hash_value[i] + temp_hash[i];
-    }
+    hash_state->hash_value[0] += A;
+    hash_state->hash_value[1] += B;
+    hash_state->hash_value[2] += C;
+    hash_state->hash_value[3] += D;
+    hash_state->hash_value[4] += E;
+    hash_state->buffer_length = 0;
   }
 
   /**
