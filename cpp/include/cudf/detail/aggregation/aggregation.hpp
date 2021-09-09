@@ -951,10 +951,12 @@ struct target_type_impl<Source, aggregation::ALL> {
 // Except for chrono types where result is chrono. (Use FloorDiv)
 // TODO: MEAN should be only be enabled for duration types - not for timestamps
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<
-  Source,
-  k,
-  std::enable_if_t<is_fixed_width<Source>() && !is_chrono<Source>() && (k == aggregation::MEAN)>> {
+struct target_type_impl<Source,
+                        k,
+                        std::enable_if_t<is_fixed_width<Source>()        //
+                                         and not is_chrono<Source>()     //
+                                         and not is_fixed_point<Source>  //
+                                         and (k == aggregation::MEAN)>> {
   using type = double;
 };
 
