@@ -98,8 +98,10 @@ std::unique_ptr<column> byte_cast(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 
-std::pair<std::unique_ptr<column>, std::unique_ptr<table>> one_hot_encoding(
+std::unique_ptr<table> one_hot_encoding(
   column_view const& input_column,
+  column_view const& categories,
+  data_type const& output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()
 );
 

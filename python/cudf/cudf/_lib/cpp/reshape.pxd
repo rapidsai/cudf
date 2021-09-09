@@ -1,8 +1,8 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport pair
 
+from cudf._lib.cpp.types cimport data_type
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
@@ -17,7 +17,9 @@ cdef extern from "cudf/reshape.hpp" namespace "cudf" nogil:
     cdef unique_ptr[table] tile(
         table_view source_table, size_type count
     ) except +
-    cdef pair[unique_ptr[column], unique_ptr[table]] one_hot_encoding(
-        column_view input_column
+    cdef unique_ptr[table] one_hot_encoding(
+        column_view input_column,
+        column_view categories,
+        data_type output_type
     ) except +
     

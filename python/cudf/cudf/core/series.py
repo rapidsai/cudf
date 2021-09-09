@@ -3681,6 +3681,17 @@ class Series(SingleColumnFrame, Serializable):
             cats = pd.Series(cats, dtype="object")
         dtype = cudf.dtype(dtype)
 
+        if cats is not None and can_convert_to_column(cats):
+            if is_categorical_dtype(self.dtype):
+                col = self._column._get_decategorized_column()
+            else:
+                col = self._column
+            col = col.nans_to_nulls()
+            res = libcudf.reshape.one_hot_encoding(
+                col, as_column(cats), dtype
+            )
+            return list(res[0].values())
+
         def encode(cat):
             if cat is None:
                 if self.dtype.kind == "f":
@@ -3694,7 +3705,7 @@ class Series(SingleColumnFrame, Serializable):
             elif np.issubdtype(type(cat), np.floating) and np.isnan(cat):
                 return self.__class__(libcudf.unary.is_nan(self._column))
             else:
-                return (self == cat).fillna(False)
+                raise ValueError("Unsupported cat type.")
 
         return [encode(cat).astype(dtype) for cat in cats]
 
