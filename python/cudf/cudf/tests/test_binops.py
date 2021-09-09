@@ -2915,3 +2915,43 @@ def test_empty_column(binop, data, scalar):
     expected = binop(pdf, scalar)
 
     utils.assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame([[1, 2, 3, 4], [5, 6, 7, 8]]),
+        pytest.param(
+            cudf.DataFrame([[1, None, None, 4], [5, 6, 7, None]]),
+            marks=pytest.mark.xfail(
+                reason="Cannot access Frame.values if frame contains nulls"
+            ),
+        ),
+        cudf.DataFrame([[1.2, 2.3, 3.4, 4.5], [5.6, 6.7, 7.8, 8.9]]),
+        cudf.Series([14, 15, 16, 17]),
+        cudf.Series([14.15, 15.16, 16.17, 17.18]),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        cudf.DataFrame([[9, 10], [11, 12], [13, 14], [15, 16]]),
+        cudf.DataFrame(
+            [[9.4, 10.5], [11.6, 12.7], [13.8, 14.9], [15.1, 16.2]]
+        ),
+        cudf.Series([5, 6, 7, 8]),
+        cudf.Series([5.6, 6.7, 7.8, 8.9]),
+        pd.DataFrame([[9, 10], [11, 12], [13, 14], [15, 16]]),
+        pd.Series([5, 6, 7, 8]),
+        np.array([5, 6, 7, 8]),
+        [25.5, 26.6, 27.7, 28.8],
+    ],
+)
+def test_binops_dot(df, other):
+    pdf = df.to_pandas()
+    host_other = other.to_pandas() if hasattr(other, "to_pandas") else other
+
+    expected = pdf @ host_other
+    got = df @ other
+
+    utils.assert_eq(expected, got)

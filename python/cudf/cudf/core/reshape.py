@@ -386,7 +386,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, cudf.Index):
-        return cudf.Index._concat(objs)
+        return cudf.core.index.GenericIndex._concat(objs)
     else:
         raise TypeError(f"cannot concatenate object of type {typ}")
 

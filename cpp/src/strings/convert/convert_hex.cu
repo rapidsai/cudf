@@ -188,9 +188,7 @@ struct dispatch_integers_to_hex_fn {
                                std::move(children.first),
                                std::move(children.second),
                                input.null_count(),
-                               cudf::detail::copy_bitmask(input, stream, mr),
-                               stream,
-                               mr);
+                               cudf::detail::copy_bitmask(input, stream, mr));
   }
   // non-integral types throw an exception
   template <typename T, typename... Args>
