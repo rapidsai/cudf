@@ -32,4 +32,8 @@ public class RmmAllocationMode {
    * Use arena suballocation strategy
    */
   public static final int ARENA = 0x00000004;
+  /**
+   * Use CUDA async suballocation strategy
+   */
+  public static final int CUDA_ASYNC = 0x00000008;
 }

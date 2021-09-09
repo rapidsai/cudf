@@ -85,7 +85,8 @@ public class Rmm {
    * @param allocationMode Allocation strategy to use. Bit set using
    *                       {@link RmmAllocationMode#CUDA_DEFAULT},
    *                       {@link RmmAllocationMode#POOL},
-   *                       {@link RmmAllocationMode#ARENA} and
+   *                       {@link RmmAllocationMode#ARENA},
+   *                       {@link RmmAllocationMode#CUDA_ASYNC} and
    *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
    * @param enableLogging  Enable logging memory manager events
    * @param poolSize       The initial pool size in bytes
@@ -106,7 +107,8 @@ public class Rmm {
    * @param allocationMode Allocation strategy to use. Bit set using
    *                       {@link RmmAllocationMode#CUDA_DEFAULT},
    *                       {@link RmmAllocationMode#POOL},
-   *                       {@link RmmAllocationMode#ARENA} and
+   *                       {@link RmmAllocationMode#ARENA},
+   *                       {@link RmmAllocationMode#CUDA_ASYNC} and
    *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
    * @param enableLogging  Enable logging memory manager events
    * @param poolSize       The initial pool size in bytes
@@ -138,7 +140,8 @@ public class Rmm {
    * @param allocationMode Allocation strategy to use. Bit set using
    *                       {@link RmmAllocationMode#CUDA_DEFAULT},
    *                       {@link RmmAllocationMode#POOL},
-   *                       {@link RmmAllocationMode#ARENA} and
+   *                       {@link RmmAllocationMode#ARENA},
+   *                       {@link RmmAllocationMode#CUDA_ASYNC} and
    *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
    * @param logConf        How to do logging or null if you don't want to
    * @param poolSize       The initial pool size in bytes
@@ -159,7 +162,8 @@ public class Rmm {
    * @param allocationMode Allocation strategy to use. Bit set using
    *                       {@link RmmAllocationMode#CUDA_DEFAULT},
    *                       {@link RmmAllocationMode#POOL},
-   *                       {@link RmmAllocationMode#ARENA} and
+   *                       {@link RmmAllocationMode#ARENA},
+   *                       {@link RmmAllocationMode#CUDA_ASYNC} and
    *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
    * @param logConf        How to do logging or null if you don't want to
    * @param poolSize       The initial pool size in bytes
@@ -168,8 +172,9 @@ public class Rmm {
    * @throws IllegalStateException if RMM has already been initialized
    * @throws IllegalArgumentException if a max pool size is specified but the allocation mode
    *                                  is not {@link RmmAllocationMode#POOL} or
-   *                                  {@link RmmAllocationMode#ARENA}, or the maximum pool size is
-   *                                  below the initial size.
+   *                                  {@link RmmAllocationMode#ARENA} or
+   *                                  {@link RmmAllocationMode#CUDA_ASYNC}, or the maximum pool
+   *                                  size is below the initial size.
    */
   public static synchronized void initialize(int allocationMode, LogConf logConf, long poolSize,
       long maxPoolSize) throws RmmException {
@@ -186,7 +191,8 @@ public class Rmm {
    * @param allocationMode Allocation strategy to use. Bit set using
    *                       {@link RmmAllocationMode#CUDA_DEFAULT},
    *                       {@link RmmAllocationMode#POOL},
-   *                       {@link RmmAllocationMode#ARENA} and
+   *                       {@link RmmAllocationMode#ARENA},
+   *                       {@link RmmAllocationMode#CUDA_ASYNC} and
    *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
    * @param logConf        How to do logging or null if you don't want to
    * @param poolSize       The initial pool size in bytes
@@ -198,8 +204,9 @@ public class Rmm {
    * @throws IllegalStateException if RMM has already been initialized
    * @throws IllegalArgumentException if a max pool size is specified but the allocation mode
    *                                  is not {@link RmmAllocationMode#POOL} or
-   *                                  {@link RmmAllocationMode#ARENA}, or the maximum pool size is
-   *                                  below the initial size.
+   *                                  {@link RmmAllocationMode#ARENA} or
+   *                                  {@link RmmAllocationMode#CUDA_ASYNC}, or the maximum pool
+   *                                  size is below the initial size.
    */
   public static synchronized void initialize(int allocationMode, LogConf logConf, long poolSize,
       long maxPoolSize, long allocationAlignment, long alignmentThreshold) throws RmmException {
@@ -207,9 +214,11 @@ public class Rmm {
       throw new IllegalStateException("RMM is already initialized");
     }
     if (maxPoolSize > 0) {
-      if (allocationMode != RmmAllocationMode.POOL && allocationMode != RmmAllocationMode.ARENA) {
+      if (allocationMode != RmmAllocationMode.POOL &&
+          allocationMode != RmmAllocationMode.ARENA &&
+          allocationMode != RmmAllocationMode.CUDA_ASYNC) {
         throw new IllegalArgumentException(
-                "Pool limit only supported in POOL or ARENA allocation mode");
+            "Pool limit only supported in POOL or ARENA or CUDA_ASYNC allocation mode");
       }
       if (maxPoolSize < poolSize) {
         throw new IllegalArgumentException("Pool limit of " + maxPoolSize
