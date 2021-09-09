@@ -183,22 +183,13 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     update_struct_field_names(df, c_out_table.metadata.schema_info)
 
-    if df.empty and meta is not None:
-        cols_dtype_map = {}
-        for col in meta['columns']:
-            cols_dtype_map[col['name']] = col['numpy_type']
-
-        if not column_names:
-            column_names = [o['name'] for o in meta['columns']]
-            if not is_range_index and index_col in cols_dtype_map:
-                column_names.remove(index_col)
-
-        for col in column_names:
-            meta_dtype = cols_dtype_map.get(col, None)
-            df._data[col] = cudf.core.column.column_empty(
-                row_count=0,
-                dtype=cudf.dtype(meta_dtype)
-            )
+    # update the decimal precision of each column
+    if meta is not None:
+        for col, col_meta in zip(column_names, meta["columns"]):
+            if isinstance(df._data[col].dtype, cudf.Decimal64Dtype):
+                df._data[col].dtype.precision = (
+                    col_meta["metadata"]["precision"]
+                )
 
     # Set the index column
     if index_col is not None and len(index_col) > 0:

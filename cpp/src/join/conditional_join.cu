@@ -50,9 +50,8 @@ conditional_join(table_view const& left,
   // null index for the right table; in others, we return an empty output.
   if (right.num_rows() == 0) {
     switch (join_type) {
-      // Left, left anti, and full (which are effectively left because we are
-      // guaranteed that left has more rows than right) all return a all the
-      // row indices from left with a corresponding NULL from the right.
+      // Left, left anti, and full all return all the row indices from left
+      // with a corresponding NULL from the right.
       case join_kind::LEFT_JOIN:
       case join_kind::LEFT_ANTI_JOIN:
       case join_kind::FULL_JOIN: return get_trivial_left_join_indices(left, stream);
@@ -61,16 +60,30 @@ conditional_join(table_view const& left,
       case join_kind::LEFT_SEMI_JOIN:
         return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
                               std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+      default: CUDF_FAIL("Invalid join kind."); break;
+    }
+  } else if (left.num_rows() == 0) {
+    switch (join_type) {
+      // Left, left anti, left semi, and inner joins all return empty sets.
+      case join_kind::LEFT_JOIN:
+      case join_kind::LEFT_ANTI_JOIN:
+      case join_kind::INNER_JOIN:
+      case join_kind::LEFT_SEMI_JOIN:
+        return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                              std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+      // Full joins need to return the trivial complement.
+      case join_kind::FULL_JOIN: {
+        auto ret_flipped = get_trivial_left_join_indices(right, stream);
+        return std::make_pair(std::move(ret_flipped.second), std::move(ret_flipped.first));
+      }
+      default: CUDF_FAIL("Invalid join kind."); break;
     }
   }
 
-  // Prepare output column. Whether or not the output column is nullable is
-  // determined by whether any of the columns in the input table are nullable.
-  // If none of the input columns actually contain nulls, we can still use the
-  // non-nullable version of the expression evaluation code path for
-  // performance, so we capture that information as well.
-  auto const nullable  = cudf::nullable(left) || cudf::nullable(right);
-  auto const has_nulls = nullable && (cudf::has_nulls(left) || cudf::has_nulls(right));
+  // If evaluating the expression may produce null outputs we create a nullable
+  // output column and follow the null-supporting expression evaluation code
+  // path.
+  auto const has_nulls = binary_predicate.may_evaluate_null(left, right, stream);
 
   auto const parser =
     ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
@@ -116,7 +129,12 @@ conditional_join(table_view const& left,
     join_size = size.value(stream);
   }
 
-  // If the output size will be zero, we can return immediately.
+  // The initial early exit clauses guarantee that we will not reach this point
+  // unless both the left and right tables are non-empty. Under that
+  // constraint, neither left nor full joins can return an empty result since
+  // at minimum we are guaranteed null matches for all non-matching rows. In
+  // all other cases (inner, left semi, and left anti joins) if we reach this
+  // point we can safely return an empty result.
   if (join_size == 0) {
     return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
                           std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
@@ -177,20 +195,31 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
-  // We can immediately filter out cases where the right table is empty. In
-  // some cases, we return all the rows of the left table with a corresponding
-  // null index for the right table; in others, we return an empty output.
+  // We can immediately filter out cases where one table is empty. In
+  // some cases, we return all the rows of the other table with a corresponding
+  // null index for the empty table; in others, we return an empty output.
   if (right.num_rows() == 0) {
     switch (join_type) {
-      // Left, left anti, and full (which are effectively left because we are
-      // guaranteed that left has more rows than right) all return a all the
-      // row indices from left with a corresponding NULL from the right.
+      // Left, left anti, and full all return all the row indices from left
+      // with a corresponding NULL from the right.
       case join_kind::LEFT_JOIN:
       case join_kind::LEFT_ANTI_JOIN:
       case join_kind::FULL_JOIN: return left.num_rows();
       // Inner and left semi joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN:
       case join_kind::LEFT_SEMI_JOIN: return 0;
+      default: CUDF_FAIL("Invalid join kind."); break;
+    }
+  } else if (left.num_rows() == 0) {
+    switch (join_type) {
+      // Left, left anti, left semi, and inner joins all return empty sets.
+      case join_kind::LEFT_JOIN:
+      case join_kind::LEFT_ANTI_JOIN:
+      case join_kind::INNER_JOIN:
+      case join_kind::LEFT_SEMI_JOIN: return 0;
+      // Full joins need to return the trivial complement.
+      case join_kind::FULL_JOIN: return right.num_rows();
+      default: CUDF_FAIL("Invalid join kind."); break;
     }
   }
 

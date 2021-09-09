@@ -207,9 +207,7 @@ struct interleave_columns_impl<T, typename std::enable_if_t<std::is_same_v<T, cu
                                std::move(offsets_column),
                                std::move(chars_column),
                                null_count,
-                               std::move(valid_mask.first),
-                               stream,
-                               mr);
+                               std::move(valid_mask.first));
   }
 };
 

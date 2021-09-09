@@ -79,6 +79,8 @@ constexpr type_id to_type_id(const orc::SchemaType& schema,
       // There isn't a (DAYS -> np.dtype) mapping
       return (use_np_dtypes) ? type_id::TIMESTAMP_MILLISECONDS : type_id::TIMESTAMP_DAYS;
     case orc::DECIMAL: return (decimals_as_float64) ? type_id::FLOAT64 : type_id::DECIMAL64;
+    // Need to update once cuDF plans to support map type
+    case orc::MAP:
     case orc::LIST: return type_id::LIST;
     case orc::STRUCT: return type_id::STRUCT;
     default: break;
@@ -176,7 +178,6 @@ size_t gather_stream_info(const size_t stripe_index,
                           const orc::StripeInformation* stripeinfo,
                           const orc::StripeFooter* stripefooter,
                           const std::vector<int>& orc2gdf,
-                          const std::vector<orc_column_meta>& gdf2orc,
                           const std::vector<orc::SchemaType> types,
                           bool use_index,
                           size_t* num_dictionary_entries,
@@ -491,20 +492,15 @@ class aggregate_orc_metadata {
     const int col_id = selection[level].size() - 1;
     if (types[id].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
 
-    switch (types[id].kind) {
-      case orc::LIST:
-      case orc::STRUCT: {
-        has_nested_column = true;
-        for (const auto child_id : types[id].subtypes) {
-          // Since nested column needs to be processed before its child can be processed,
-          // child column is being added to next level
-          add_column(
-            selection, types, level + 1, child_id, has_timestamp_column, has_nested_column);
-        }
-        selection[level][col_id].num_children = types[id].subtypes.size();
-      } break;
-
-      default: break;
+    if (types[id].kind == orc::MAP or types[id].kind == orc::LIST or
+        types[id].kind == orc::STRUCT) {
+      has_nested_column = true;
+      for (const auto child_id : types[id].subtypes) {
+        // Since nested column needs to be processed before its child can be processed,
+        // child column is being added to next level
+        add_column(selection, types, level + 1, child_id, has_timestamp_column, has_nested_column);
+      }
+      selection[level][col_id].num_children = types[id].subtypes.size();
     }
   }
 
@@ -959,6 +955,8 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
   });
 }
 
+std::string get_map_child_col_name(size_t const idx) { return (idx == 0) ? "key" : "value"; }
+
 std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_id,
                                                           column_name_info& schema_info,
                                                           rmm::cuda_stream_view stream)
@@ -973,9 +971,10 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
   int32_t scale = 0;
   std::vector<std::unique_ptr<column>> child_columns;
   std::unique_ptr<column> out_col = nullptr;
+  auto kind                       = _metadata->get_col_type(orc_col_id).kind;
 
-  switch (type) {
-    case type_id::LIST:
+  switch (kind) {
+    case orc::LIST:
       schema_info.children.emplace_back("offsets");
       schema_info.children.emplace_back("");
       out_col = make_lists_column(
@@ -986,10 +985,30 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
         0,
         rmm::device_buffer{0, stream},
         stream);
-
       break;
+    case orc::MAP: {
+      schema_info.children.emplace_back("offsets");
+      schema_info.children.emplace_back("struct");
+      const auto child_column_ids = _metadata->get_col_type(orc_col_id).subtypes;
+      for (size_t idx = 0; idx < _metadata->get_col_type(orc_col_id).subtypes.size(); idx++) {
+        auto& children_schema = schema_info.children.back().children;
+        children_schema.emplace_back("");
+        child_columns.push_back(create_empty_column(
+          child_column_ids[idx], schema_info.children.back().children.back(), stream));
+        auto name                 = get_map_child_col_name(idx);
+        children_schema[idx].name = name;
+      }
+      auto struct_col =
+        make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream);
+      out_col = make_lists_column(0,
+                                  make_empty_column(data_type(type_id::INT32)),
+                                  std::move(struct_col),
+                                  0,
+                                  rmm::device_buffer{0, stream},
+                                  stream);
+    } break;
 
-    case type_id::STRUCT:
+    case orc::STRUCT:
       for (const auto col : _metadata->get_col_type(orc_col_id).subtypes) {
         schema_info.children.emplace_back("");
         child_columns.push_back(create_empty_column(col, schema_info.children.back(), stream));
@@ -998,8 +1017,10 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
         make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream);
       break;
 
-    case type_id::DECIMAL64:
-      scale   = -static_cast<int32_t>(_metadata->get_types()[orc_col_id].scale.value_or(0));
+    case orc::DECIMAL:
+      if (type == type_id::DECIMAL64) {
+        scale = -static_cast<int32_t>(_metadata->get_types()[orc_col_id].scale.value_or(0));
+      }
       out_col = make_empty_column(data_type(type, scale));
       break;
 
@@ -1012,20 +1033,40 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
 // Adds child column buffers to parent column
 column_buffer&& reader::impl::assemble_buffer(const int32_t orc_col_id,
                                               std::vector<std::vector<column_buffer>>& col_buffers,
-                                              const size_t level)
+                                              const size_t level,
+                                              rmm::cuda_stream_view stream)
 {
   auto const col_id = _col_meta.orc_col_map[level][orc_col_id];
   auto& col_buffer  = col_buffers[level][col_id];
 
   col_buffer.name = _metadata->get_column_name(0, orc_col_id);
-  switch (col_buffer.type.id()) {
-    case type_id::LIST:
-    case type_id::STRUCT:
+  auto kind       = _metadata->get_col_type(orc_col_id).kind;
+  switch (kind) {
+    case orc::LIST:
+    case orc::STRUCT:
       for (auto const& col : _metadata->get_col_type(orc_col_id).subtypes) {
-        col_buffer.children.emplace_back(assemble_buffer(col, col_buffers, level + 1));
+        col_buffer.children.emplace_back(assemble_buffer(col, col_buffers, level + 1, stream));
       }
 
       break;
+    case orc::MAP: {
+      std::vector<column_buffer> child_col_buffers;
+      // Get child buffers
+      for (size_t idx = 0; idx < _metadata->get_col_type(orc_col_id).subtypes.size(); idx++) {
+        auto name = get_map_child_col_name(idx);
+        auto col  = _metadata->get_col_type(orc_col_id).subtypes[idx];
+        child_col_buffers.emplace_back(assemble_buffer(col, col_buffers, level + 1, stream));
+        child_col_buffers.back().name = name;
+      }
+      // Create a struct buffer
+      auto num_rows = child_col_buffers[0].size;
+      auto struct_buffer =
+        column_buffer(cudf::data_type(type_id::STRUCT), num_rows, false, stream, _mr);
+      struct_buffer.children = std::move(child_col_buffers);
+      struct_buffer.name     = "struct";
+
+      col_buffer.children.emplace_back(std::move(struct_buffer));
+    } break;
 
     default: break;
   }
@@ -1044,7 +1085,7 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>>&& col_
                  std::back_inserter(out_columns),
                  [&](auto const col_meta) {
                    schema_info.emplace_back("");
-                   auto col_buffer = assemble_buffer(col_meta.id, col_buffers, 0);
+                   auto col_buffer = assemble_buffer(col_meta.id, col_buffers, 0, stream);
                    return make_column(col_buffer, &schema_info.back(), stream, _mr);
                  });
 }
@@ -1133,6 +1174,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       // Map each ORC column to its column
       _col_meta.orc_col_map[level][col.id] = column_types.size() - 1;
+      // TODO: Once MAP type is supported in cuDF, update this for MAP as well
       if (col_type == type_id::LIST or col_type == type_id::STRUCT) nested_col.emplace_back(col);
     }
 
@@ -1203,7 +1245,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                                           stripe_info,
                                                           stripe_footer,
                                                           _col_meta.orc_col_map[level],
-                                                          selected_columns,
                                                           _metadata->get_types(),
                                                           use_index,
                                                           &num_dict_entries,

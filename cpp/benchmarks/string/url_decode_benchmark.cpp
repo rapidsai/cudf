@@ -92,8 +92,9 @@ void BM_url_decode(benchmark::State& state)
   BENCHMARK_TEMPLATE_DEFINE_F(UrlDecode, name, esc_seq_pct)           \
   (::benchmark::State & state) { BM_url_decode<esc_seq_pct>(state); } \
   BENCHMARK_REGISTER_F(UrlDecode, name)                               \
-    ->RangeMultiplier(10)                                             \
-    ->Ranges({{100, 100000}, {10, 10000}})                            \
+    ->Args({100000000, 10})                                           \
+    ->Args({10000000, 100})                                           \
+    ->Args({1000000, 1000})                                           \
     ->Unit(benchmark::kMillisecond)                                   \
     ->UseManualTime();
 

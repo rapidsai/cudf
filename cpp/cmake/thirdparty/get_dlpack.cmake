@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,21 +14,24 @@
 # limitations under the License.
 #=============================================================================
 
-# NVBench doesn't have a public release yet
+function(find_and_configure_dlpack VERSION)
 
-function(find_and_configure_nvbench)
+    rapids_find_generate_module( DLPACK
+        HEADER_NAMES dlpack.h)
 
-    if(TARGET nvbench::main)
-        return()
-    endif()
-
-    CPMFindPackage(NAME nvbench
-        GIT_REPOSITORY  https://github.com/NVIDIA/nvbench.git
-        GIT_TAG         main
+    rapids_cpm_find(dlpack ${VERSION}
+        GIT_REPOSITORY  https://github.com/dmlc/dlpack.git
+        GIT_TAG         v${VERSION}
         GIT_SHALLOW     TRUE
-        OPTIONS         "NVBench_ENABLE_EXAMPLES OFF"
-                        "NVBench_ENABLE_TESTING OFF")
+        DOWNLOAD_ONLY   TRUE
+        OPTIONS         "BUILD_MOCK OFF")
 
+    if(DEFINED dlpack_SOURCE_DIR)
+        #otherwise find_package(DLPACK) will set this variable
+        set(DLPACK_INCLUDE_DIR "${dlpack_SOURCE_DIR}/include" PARENT_SCOPE)
+    endif()
 endfunction()
 
-find_and_configure_nvbench()
+set(CUDF_MIN_VERSION_dlpack 0.5)
+
+find_and_configure_dlpack(${CUDF_MIN_VERSION_dlpack})
