@@ -123,7 +123,7 @@ struct SHA1Hash {
     uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
     hash_state->message_length += len;
 
-    // 64 bytes for the number of bytes processed in a given step
+    // 64 bytes are processed in each hash step
     constexpr int sha1_chunk_size = 64;
     if (hash_state->buffer_length + len < sha1_chunk_size) {
       std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
@@ -153,13 +153,14 @@ struct SHA1Hash {
     // Add a one bit flag to signal the end of the message
     thrust::fill_n(thrust::seq, hash_state->buffer + hash_state->buffer_length, 1, 0x80);
 
-    // 64 bytes for the number of bytes processed in a given step
+    // 64 bytes are processed in each hash step
     constexpr int sha1_chunk_size = 64;
     // 8 bytes for the total message length, appended to the end of the last chunk processed
     constexpr int message_length_size = 8;
     // 1 byte for the end of the message flag
     constexpr int end_of_message_size = 1;
     if (hash_state->buffer_length + message_length_size + end_of_message_size <= sha1_chunk_size) {
+      // Fill the remainder of the buffer with zeros
       thrust::fill_n(
         thrust::seq,
         hash_state->buffer + hash_state->buffer_length + 1,
@@ -253,7 +254,7 @@ void CUDA_DEVICE_CALLABLE SHA1Hash::operator()<string_view>(
   uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
   hash_state->message_length += len;
 
-  // 64 bytes for the number of bytes processed in a given step
+  // 64 bytes are processed in each hash step
   constexpr int sha1_chunk_size = 64;
   if (hash_state->buffer_length + len < sha1_chunk_size) {
     // If the buffer will not be filled by this data, we copy the new data into
