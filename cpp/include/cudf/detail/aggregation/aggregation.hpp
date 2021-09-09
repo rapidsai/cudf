@@ -953,10 +953,8 @@ struct target_type_impl<Source, aggregation::ALL> {
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<Source,
                         k,
-                        std::enable_if_t<is_fixed_width<Source>()        //
-                                         and not is_chrono<Source>()     //
-                                         and not is_fixed_point<Source>  //
-                                         and (k == aggregation::MEAN)>> {
+                        std::enable_if_t<is_fixed_width<Source>() and not is_chrono<Source>() and
+                                         (k == aggregation::MEAN)>> {
   using type = double;
 };
 
