@@ -264,7 +264,7 @@ struct expression_evaluator {
    */
   CUDA_DEVICE_CALLABLE expression_evaluator(table_device_view const& table,
                                             expression_device_view const& plan)
-    : left(table), right(table), plan(plan)
+    : expression_evaluator(table, table, plan)
   {
   }
 
@@ -709,9 +709,6 @@ struct expression_evaluator {
   table_device_view const& right;  ///< The right table to operate on.
   expression_device_view const&
     plan;  ///< The container of device data representing the expression to evaluate.
-  IntermediateDataType<has_nulls>*
-    thread_intermediate_storage;  ///< The shared memory store of intermediates produced during
-                                  ///< evaluation.
 };
 
 }  // namespace detail
