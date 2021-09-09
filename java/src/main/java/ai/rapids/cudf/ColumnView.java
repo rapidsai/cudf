@@ -2160,6 +2160,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(extractListElement(getNativeView(), index));
   }
 
+  public final ColumnVector dropListDuplicates() {
+    return new ColumnVector(dropListDuplicates(getNativeView()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // STRINGS
   /////////////////////////////////////////////////////////////////////////////
@@ -3488,6 +3492,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long byteCount(long viewHandle) throws CudfException;
 
   private static native long extractListElement(long nativeView, int index);
+
+  private static native long dropListDuplicates(long nativeView);
 
   /**
    * Native method for list lookup
