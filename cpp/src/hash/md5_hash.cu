@@ -134,7 +134,6 @@ T CUDA_DEVICE_CALLABLE normalize_nans_and_zeros_helper(T key)
     return key;
   }
 }
-}  // namespace
 
 struct MD5ListHasher {
   template <typename T, std::enable_if_t<is_chrono<T>()>* = nullptr>
@@ -346,6 +345,8 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
                         offsets.element<size_type>(row_index + 1),
                         hash_state);
 }
+
+}  // namespace
 
 std::unique_ptr<column> md5_hash(table_view const& input,
                                  rmm::cuda_stream_view stream,
