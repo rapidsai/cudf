@@ -40,26 +40,28 @@ function(find_and_configure_thrust VERSION)
         thrust_create_target(cudf::Thrust FROM_OPTIONS)
     endif()
 
-    include(GNUInstallDirs)
-    install(DIRECTORY "${Thrust_SOURCE_DIR}/thrust"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/"
-        FILES_MATCHING
-            PATTERN "*.h"
-            PATTERN "*.inl")
-    install(DIRECTORY "${Thrust_SOURCE_DIR}/dependencies/cub/cub"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/dependencies/"
-        FILES_MATCHING
-            PATTERN "*.cuh")
+    if(Thrust_SOURCE_DIR) # only install thrust when we have an in-source version
+        include(GNUInstallDirs)
+        install(DIRECTORY "${Thrust_SOURCE_DIR}/thrust"
+            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/"
+            FILES_MATCHING
+                PATTERN "*.h"
+                PATTERN "*.inl")
+        install(DIRECTORY "${Thrust_SOURCE_DIR}/dependencies/cub/cub"
+            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/dependencies/"
+            FILES_MATCHING
+                PATTERN "*.cuh")
 
-    install(DIRECTORY "${Thrust_SOURCE_DIR}/thrust/cmake"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/thrust/")
-    install(DIRECTORY "${Thrust_SOURCE_DIR}/dependencies/cub/cub/cmake"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/dependencies/cub/")
+        install(DIRECTORY "${Thrust_SOURCE_DIR}/thrust/cmake"
+            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/thrust/")
+        install(DIRECTORY "${Thrust_SOURCE_DIR}/dependencies/cub/cub/cmake"
+            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/dependencies/cub/")
 
 
-    # Store where CMake can find our custom Thrust install
-    include("${rapids-cmake-dir}/export/find_package_root.cmake")
-    rapids_export_find_package_root(INSTALL Thrust [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/Thrust/]=] cudf-exports)
+        # Store where CMake can find our custom Thrust install
+        include("${rapids-cmake-dir}/export/find_package_root.cmake")
+        rapids_export_find_package_root(INSTALL Thrust [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/Thrust/]=] cudf-exports)
+    endif()
 endfunction()
 
 set(CUDF_MIN_VERSION_Thrust 1.12.0)
