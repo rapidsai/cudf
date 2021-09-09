@@ -847,14 +847,16 @@ jlongArray cond_join_gather_maps(JNIEnv *env, jlong j_left_table, jlong j_right_
 
 // Generate a gather map needed to manifest the result of a semi/anti join between two tables.
 template <typename T>
-jlongArray join_gather_single_map(JNIEnv *env, jlong j_left_keys, jlong j_right_keys, T join_func) {
+jlongArray join_gather_single_map(JNIEnv *env, jlong j_left_keys, jlong j_right_keys,
+                                  jboolean compare_nulls_equal, T join_func) {
   JNI_NULL_CHECK(env, j_left_keys, "left_table is null", NULL);
   JNI_NULL_CHECK(env, j_right_keys, "right_table is null", NULL);
   try {
     cudf::jni::auto_set_device(env);
     auto left_keys = reinterpret_cast<cudf::table_view const *>(j_left_keys);
     auto right_keys = reinterpret_cast<cudf::table_view const *>(j_right_keys);
-    return gather_map_to_java(env, join_func(*left_keys, *right_keys));
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    return gather_map_to_java(env, join_func(*left_keys, *right_keys, nulleq));
   }
   CATCH_STD(env, NULL);
 }
@@ -2226,13 +2228,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalFullJoinGather
       });
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoinGatherMap(JNIEnv *env, jclass,
-                                                                             jlong j_left_keys,
-                                                                             jlong j_right_keys) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoinGatherMap(
+    JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal) {
   return cudf::jni::join_gather_single_map(
-      env, j_left_keys, j_right_keys,
-      [](cudf::table_view const &left, cudf::table_view const &right) {
-        return cudf::left_semi_join(left, right);
+      env, j_left_keys, j_right_keys, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
+        return cudf::left_semi_join(left, right, nulleq);
       });
 }
 
@@ -2275,13 +2276,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftSemiJoinGa
       });
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoinGatherMap(JNIEnv *env, jclass,
-                                                                             jlong j_left_keys,
-                                                                             jlong j_right_keys) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoinGatherMap(
+    JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal) {
   return cudf::jni::join_gather_single_map(
-      env, j_left_keys, j_right_keys,
-      [](cudf::table_view const &left, cudf::table_view const &right) {
-        return cudf::left_anti_join(left, right);
+      env, j_left_keys, j_right_keys, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
+        return cudf::left_anti_join(left, right, nulleq);
       });
 }
 
