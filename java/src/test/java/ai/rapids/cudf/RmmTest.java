@@ -404,6 +404,15 @@ public class RmmTest {
         () -> Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, false, 1024, 2048));
   }
 
+  @Test
+  public void testAsyncAllocManagedFails() {
+    assertThrows(IllegalArgumentException.class,
+      () -> Rmm.initialize(
+        RmmAllocationMode.ASYNC | RmmAllocationMode.CUDA_MANAGED_MEMORY, 
+          false, 1024, 2048));
+  }
+
+
   private static class AllocFailException extends RuntimeException {}
   private static class AllocThresholdException extends RuntimeException {}
   private static class DeallocThresholdException extends RuntimeException {}
