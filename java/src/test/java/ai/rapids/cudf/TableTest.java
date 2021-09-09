@@ -3456,6 +3456,29 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByApproxPercentileReproCase() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "b", "c", "d")
+            .column(1084.0, 1719.0, 15948.0, 148029.0, 1269761.0)
+            .build();
+         Table t2 = t1
+            .groupBy(0)
+            .aggregate(GroupByAggregation.createTDigest(100).onColumn(1));
+         Table sorted = t2.orderBy(OrderByArg.asc(0));
+         ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+         ColumnVector expected = ColumnVector.fromLists(
+             new ListType(false, new BasicType(false, DType.FLOAT64)),
+             Arrays.asList(1084.0, 1084.0, 1719.0),
+             Arrays.asList(15948.0, 15948.0, 15948.0),
+             Arrays.asList(148029.0, 148029.0, 148029.0),
+             Arrays.asList(1269761.0, 1269761.0, 1269761.0)
+         )) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
   void testGroupByApproxPercentile() {
     double[] percentiles = {0.25, 0.50, 0.75};
     try (Table t1 = new Table.TestBuilder()
