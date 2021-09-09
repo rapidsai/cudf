@@ -1387,7 +1387,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * a t-digest aggregation.
    *
    * @param percentiles Column containing percentiles [0,1]
-   * @return the percentiles as doubles, in the same order passed in
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
    */
   public final ColumnVector approxPercentile(ColumnVector percentiles) {
     return new ColumnVector(approxPercentile(getNativeView(), percentiles.getNativeView()));
@@ -1398,7 +1399,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * in the desired order.
    * @param method   the method used to calculate the quantiles
    * @param quantiles the quantile values [0,1]
-   * @return the quantiles as doubles, in the same order passed in. The type can be changed in future
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
    */
   public final ColumnVector quantile(QuantileMethod method, double[] quantiles) {
     return new ColumnVector(quantile(getNativeView(), method.nativeId, quantiles));
