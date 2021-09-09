@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <structs/utilities.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
@@ -23,6 +25,7 @@
 #include <cudf/lists/detail/sorting.hpp>
 #include <cudf/lists/drop_list_duplicates.hpp>
 #include <cudf/structs/struct_view.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -256,54 +259,50 @@ std::unique_ptr<column> generate_entry_list_offsets(size_type num_entries,
  * @tparam nans_equal Flag to specify whether NaN entries should be considered as equal value (only
  * applicable for floating-point data column)
  */
-template <class Type, bool nans_equal>
-class list_entry_comparator {
- public:
-  list_entry_comparator(offset_type const* list_offsets,
-                        column_device_view d_view,
-                        null_equality nulls_equal,
-                        bool has_nulls)
-    : list_offsets(list_offsets), d_view{d_view}, nulls_equal{nulls_equal}, has_nulls(has_nulls)
+template <class Type>
+struct column_row_comparator {
+  // public:
+  //  column_row_comparator(offset_type const* list_offsets,
+  //                        column_device_view const& lhs,
+  //                        column_device_view const& rhs,
+  //                        null_equality nulls_equal,
+  //                        bool has_nulls,
+  //                        bool nans_equal)
+  //    : list_offsets{list_offsets},
+  //      lhs{lhs},
+  //      rhs{rhs},
+  //      nulls_equal{nulls_equal},
+  //      has_nulls(has_nulls),
+  //      nans_equal(nans_equal)
+  //  {
+  //  }
+
+  template <typename T, std::enable_if_t<!cuda::std::is_floating_point_v<T>>* = nullptr>
+  bool __device__ compare(T const& lhs_val, T const& rhs_val) const noexcept
   {
+    return lhs_val == rhs_val;
   }
 
-  template <bool nans_equal_ = nans_equal>
-  std::enable_if_t<cuda::std::is_floating_point_v<Type> && nans_equal_, bool> __device__
-  operator()(size_type i, size_type j) const noexcept
+  template <typename T, std::enable_if_t<cuda::std::is_floating_point_v<T>>* = nullptr>
+  bool __device__ compare(T const& lhs_val, T const& rhs_val) const noexcept
   {
-    // Two entries are not considered for equality if they belong to different lists
-    if (list_offsets[i] != list_offsets[j]) { return false; }
-
-    if (has_nulls) {
-      bool const nullable = d_view.nullable();
-      bool const lhs_is_null{nullable and d_view.is_null_nocheck(i)};
-      bool const rhs_is_null{nullable and d_view.is_null_nocheck(j)};
-      if (lhs_is_null and rhs_is_null) {
-        return nulls_equal == null_equality::EQUAL;
-      } else if (lhs_is_null != rhs_is_null) {
-        return false;
-      }
-    }
-
-    // For floating-point types, if both element(i) and element(j) are NaNs then this comparison
+    // If both element(i) and element(j) are NaNs then this comparison
     // will return `true`. This is the desired behavior in Pandas.
-    auto const lhs = d_view.element<Type>(i);
-    auto const rhs = d_view.element<Type>(j);
-    if (std::isnan(lhs) and std::isnan(rhs)) { return true; }
-    return lhs == rhs;
+    if (nans_equal && std::isnan(lhs_val) and std::isnan(rhs_val)) { return true; }
+
+    // If both element(i) and element(j) are NaNs then this comparison
+    // will return `false`. This is the desired behavior in Apache Spark.
+    return lhs_val == rhs_val;
   }
 
-  template <bool nans_equal_ = nans_equal>
-  std::enable_if_t<!cuda::std::is_floating_point_v<Type> || !nans_equal_, bool> __device__
-  operator()(size_type i, size_type j) const noexcept
+  bool __device__ operator()(size_type i, size_type j) const noexcept
   {
-    // Two entries are not considered for equality if they belong to different lists
+    // Two entries are not considered for equality if they belong to different lists.
     if (list_offsets[i] != list_offsets[j]) { return false; }
 
     if (has_nulls) {
-      bool const nullable = d_view.nullable();
-      bool const lhs_is_null{nullable and d_view.is_null_nocheck(i)};
-      bool const rhs_is_null{nullable and d_view.is_null_nocheck(j)};
+      bool const lhs_is_null{lhs.nullable() and lhs.is_null_nocheck(i)};
+      bool const rhs_is_null{rhs.nullable() and rhs.is_null_nocheck(j)};
       if (lhs_is_null and rhs_is_null) {
         return nulls_equal == null_equality::EQUAL;
       } else if (lhs_is_null != rhs_is_null) {
@@ -311,16 +310,100 @@ class list_entry_comparator {
       }
     }
 
-    // For floating-point types, if both element(i) and element(j) are NaNs then this comparison
-    // will return `false`. This is the desired behavior in Apache Spark.
-    return d_view.element<Type>(i) == d_view.element<Type>(j);
+    return compare<Type>(lhs.element<Type>(i), lhs.element<Type>(j));
+  }
+
+  // private:
+  offset_type const* const list_offsets;
+  column_device_view const lhs;
+  column_device_view const rhs;
+  null_equality const nulls_equal;
+  bool const has_nulls;
+  bool const nans_equal;
+};
+
+/**
+ * @brief Struct used in type_dispatcher for column_row_comparator.
+ */
+struct column_row_comparator_dispatch {
+  //  column_row_comparator_dispatch(offset_type const* list_offsets,
+  //                                 column_device_view const& lhs,
+  //                                 column_device_view const& rhs,
+  //                                 null_equality nulls_equal,
+  //                                 bool has_nulls,
+  //                                 bool nans_equal)
+  //    : list_offsets{list_offsets},
+  //      lhs{lhs},
+  //      rhs{rhs},
+  //      nulls_equal{nulls_equal},
+  //      has_nulls(has_nulls),
+  //      nans_equal(nans_equal)
+  //  {
+  //  }
+
+  template <class Type, std::enable_if_t<cudf::is_equality_comparable<Type, Type>()>* = nullptr>
+  bool __device__ operator()(size_type i, size_type j) const noexcept
+  {
+    return column_row_comparator<Type>{list_offsets, lhs, rhs, nulls_equal, has_nulls, nans_equal}(
+      i, j);
+  }
+
+  template <class Type, std::enable_if_t<!cudf::is_equality_comparable<Type, Type>()>* = nullptr>
+  bool operator()(size_type i, size_type j) const
+  {
+    CUDF_FAIL("Cannot operate on types that are not equally comparable.");
+  }
+
+  // private:
+  offset_type const* const list_offsets;
+  column_device_view const lhs;
+  column_device_view const rhs;
+  null_equality const nulls_equal;
+  bool const has_nulls;
+  bool const nans_equal;
+};
+
+/**
+ * @brief Performs an equality comparison between rows of two tables using `column_row_comparator`
+ * to compare rows of their corresponding columns.
+ */
+class table_row_comparator {
+ public:
+  table_row_comparator(offset_type const* list_offsets,
+                       table_device_view const& lhs,
+                       table_device_view const& rhs,
+                       null_equality nulls_equal,
+                       bool has_nulls,
+                       bool nans_equal)
+    : list_offsets{list_offsets},
+      lhs{lhs},
+      rhs{rhs},
+      nulls_equal{nulls_equal},
+      has_nulls(has_nulls),
+      nans_equal(nans_equal)
+  {
+  }
+
+  bool __device__ operator()(size_type i, size_type j) const noexcept
+  {
+    auto column_comp = [=](column_device_view const& lhs, column_device_view const& rhs) {
+      return type_dispatcher(
+        lhs.type(),
+        column_row_comparator_dispatch{list_offsets, lhs, rhs, nulls_equal, has_nulls, nans_equal},
+        i,
+        j);
+    };
+
+    return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), column_comp);
   }
 
  private:
-  offset_type const* list_offsets;
-  column_device_view d_view;
-  null_equality nulls_equal;
-  bool has_nulls;
+  offset_type const* const list_offsets;
+  table_device_view const lhs;
+  table_device_view const rhs;
+  null_equality const nulls_equal;
+  bool const has_nulls;
+  bool const nans_equal;
 };
 
 /**
@@ -328,9 +411,11 @@ class list_entry_comparator {
  * ignoring duplicates
  */
 struct get_unique_entries_fn {
-  template <class Type, std::enable_if_t<!cudf::is_equality_comparable<Type, Type>()>* = nullptr>
+  template <class Type,
+            std::enable_if_t<!cudf::is_equality_comparable<Type, Type>() &&
+                             !std::is_same_v<Type, cudf::struct_view>>* = nullptr>
   offset_type* operator()(offset_type const*,
-                          column_device_view&,
+                          column_view const&,
                           size_type,
                           offset_type*,
                           null_equality,
@@ -343,7 +428,7 @@ struct get_unique_entries_fn {
 
   template <class Type, std::enable_if_t<cudf::is_equality_comparable<Type, Type>()>* = nullptr>
   offset_type* operator()(offset_type const* list_offsets,
-                          column_device_view& d_view,
+                          column_view const& all_lists_entries,
                           size_type num_entries,
                           offset_type* output_begin,
                           null_equality nulls_equal,
@@ -351,21 +436,50 @@ struct get_unique_entries_fn {
                           bool has_nulls,
                           rmm::cuda_stream_view stream) const noexcept
   {
-    if (nans_equal == nan_equality::ALL_EQUAL) {
-      list_entry_comparator<Type, true> const comp{list_offsets, d_view, nulls_equal, has_nulls};
-      return thrust::unique_copy(rmm::exec_policy(stream),
-                                 thrust::make_counting_iterator(0),
-                                 thrust::make_counting_iterator(num_entries),
-                                 output_begin,
-                                 comp);
-    } else {
-      list_entry_comparator<Type, false> const comp{list_offsets, d_view, nulls_equal, has_nulls};
-      return thrust::unique_copy(rmm::exec_policy(stream),
-                                 thrust::make_counting_iterator(0),
-                                 thrust::make_counting_iterator(num_entries),
-                                 output_begin,
-                                 comp);
-    }
+    auto const d_view = column_device_view::create(all_lists_entries, stream);
+    auto const comp   = column_row_comparator<Type>{list_offsets,
+                                                  *d_view,
+                                                  *d_view,
+                                                  nulls_equal,
+                                                  has_nulls,
+                                                  nans_equal == nan_equality::ALL_EQUAL};
+    return thrust::unique_copy(rmm::exec_policy(stream),
+                               thrust::make_counting_iterator(0),
+                               thrust::make_counting_iterator(num_entries),
+                               output_begin,
+                               comp);
+  }
+
+  template <class Type, std::enable_if_t<std::is_same_v<Type, cudf::struct_view>>* = nullptr>
+  offset_type* operator()(offset_type const* list_offsets,
+                          column_view const& all_lists_entries,
+                          size_type num_entries,
+                          offset_type* output_begin,
+                          null_equality nulls_equal,
+                          nan_equality nans_equal,
+                          bool has_nulls,
+                          rmm::cuda_stream_view stream) const noexcept
+  {
+    auto const entries_tview       = table_view{{all_lists_entries}};
+    auto const flatten_nullability = has_nested_nulls(entries_tview)
+                                       ? structs::detail::column_nullability::FORCE
+                                       : structs::detail::column_nullability::MATCH_INCOMING;
+    auto const entries_flattened   = cudf::structs::detail::flatten_nested_columns(
+      entries_tview, {order::ASCENDING}, {null_order::AFTER}, flatten_nullability);
+    auto const d_view = table_device_view::create(std::get<0>(entries_flattened), stream);
+
+    auto const comp = table_row_comparator{list_offsets,
+                                           *d_view,
+                                           *d_view,
+                                           nulls_equal,
+                                           has_nulls,
+                                           nans_equal == nan_equality::ALL_EQUAL};
+
+    return thrust::unique_copy(rmm::exec_policy(stream),
+                               thrust::make_counting_iterator(0),
+                               thrust::make_counting_iterator(num_entries),
+                               output_begin,
+                               comp);
   }
 };
 
@@ -395,8 +509,7 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto const num_entries    = all_lists_entries.size();
-  auto const d_view_entries = column_device_view::create(all_lists_entries, stream);
+  auto const num_entries = all_lists_entries.size();
 
   // Allocate memory to store the indices of the unique entries
   auto unique_indices     = rmm::device_uvector<offset_type>(num_entries, stream);
@@ -404,7 +517,7 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
   auto const output_end   = type_dispatcher(all_lists_entries.type(),
                                           get_unique_entries_fn{},
                                           entries_list_offsets.begin<offset_type>(),
-                                          *d_view_entries,
+                                          all_lists_entries,
                                           num_entries,
                                           output_begin,
                                           nulls_equal,
