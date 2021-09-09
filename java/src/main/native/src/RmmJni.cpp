@@ -22,13 +22,15 @@
 
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/cuda_async_memory_resource.hpp>
+#include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/limiting_resource_adaptor.hpp>
 #include <rmm/mr/device/logging_resource_adaptor.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/device/thread_safe_resource_adaptor.hpp>
 
 #include "cudf_jni_apis.hpp"
 
@@ -358,14 +360,20 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(
             std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_limit);
       }
     } else if (use_async_alloc) {
-      // the cuda_async_memory_resource uses cudaMemPool_t internally. This pool is different than others:
-      // - pool_size: is used to prime the pool rather than allocate and keep (see the second argument)
-      // - max_pool_size: is not really a limit, it is instead the maximum that can be cached, where
-      //   when going above this number, the allocator releases memory to the OS (see
-      //   `cudaMemPoolAttrReleaseThreshold`). Note this threshold doesn't mean that the process
-      //   can't allocate the whole GPU.
-      Initialized_resource = std::make_shared<rmm::mr::cuda_async_memory_resource>(
-          pool_size, max_pool_size);
+      // The cuda_async_memory_resource (cudaMemPool) resource does not have a limit, so it is 
+      // different than other resources. Its two arguments are: minimum pool size (which is used 
+      // to "prime" the cudaMemPool), and a threshold (a number in Bytes that hints to the pool 
+      // how much it is allowed to cache before returning free memory to the OS) 
+      // (see cudaMemPoolAttrReleaseThreshold). In this instance, we pair the cuda_async_memory_resource
+      // with a limiting_resource_adaptor, to institute a hard limit to the pool, as expected
+      // by the RmmJni api (thus far).
+      // Note that we specify the threshold parameter to be max_pool_size, as the intentions are the
+      // same (don't use more than X bytes), in addition to using it as the limit.
+      Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::limiting_resource_adaptor>(
+         std::make_shared<rmm::mr::cuda_async_memory_resource>(
+           pool_size /* minimum size*/, 
+           max_pool_size /* threshold */), 
+         max_pool_size);
     } else if (use_arena_alloc) {
       std::size_t pool_limit = (max_pool_size > 0) ? static_cast<std::size_t>(max_pool_size) :
                                                      std::numeric_limits<std::size_t>::max();
