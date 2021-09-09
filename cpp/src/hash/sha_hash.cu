@@ -42,7 +42,7 @@ bool sha_type_check(data_type dt)
 struct SHA1Hash {
   CUDA_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
   {
-    // return (x << r) | (x >> (32 - r));
+    // Equivalent to (x << r) | (x >> (32 - r))
     return __funnelshift_l(x, x, r);
   }
 
@@ -147,7 +147,10 @@ struct SHA1Hash {
 
   void __device__ finalize(sha1_intermediate_data* hash_state, char* result_location) const
   {
+    // Message length in bits
     auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
+
+    // Add a one bit flag to signal the end of the message
     thrust::fill_n(thrust::seq, hash_state->buffer + hash_state->buffer_length, 1, 0x80);
 
     // 64 bytes for the number of bytes processed in a given step
@@ -172,8 +175,20 @@ struct SHA1Hash {
       thrust::fill_n(thrust::seq, hash_state->buffer, sha1_chunk_size - message_length_size, 0x00);
     }
 
+    // Convert the 64-bit message length from little-endian to big-endian.
+    // There is currently no CUDA intrinsic for permuting bytes in 64 bit integers.
+    auto uint64_swap_endian = [](uint64_t x) -> uint64_t {
+      // Reverse the endianness of each 32 bit section
+      uint32_t low_bits  = __byte_perm(x, 0, 0x123);
+      uint32_t high_bits = __byte_perm(x >> 32, 0, 0x123);
+      // Reassemble a 64 bit result
+      uint64_t y = (static_cast<uint64_t>(low_bits) << 32) | (static_cast<uint64_t>(high_bits));
+      return y;
+    };
+
+    auto const full_length_flipped = uint64_swap_endian(full_length);
     std::memcpy(hash_state->buffer + sha1_chunk_size - message_length_size,
-                reinterpret_cast<uint8_t const*>(&full_length),
+                reinterpret_cast<uint8_t const*>(&full_length_flipped),
                 message_length_size);
     hash_step(hash_state);
     // std::memcpy(hash_state->hash_value, hash_state->buffer, 160);
@@ -183,12 +198,6 @@ struct SHA1Hash {
       // Convert word representation from big-endian to little-endian.
       uint32_t flipped = __byte_perm(hash_state->hash_value[i], 0, 0x0123);
       uint32ToLowercaseHexString(flipped, result_location + (8 * i));
-
-      // uint32ToLowercaseHexString(hash_state->hash_value[i], result_location + (8 * i));
-
-      // std::memcpy(hash_state->hash_value, hash_state->buffer + 64 + (i * 4), 4);
-      // std::memcpy(hash_state->hash_value, &full_length, 8);
-      // uint32ToLowercaseHexString(hash_state->hash_value[0], result_location + (8 * i));
     }
   }
 
@@ -242,23 +251,31 @@ void CUDA_DEVICE_CALLABLE SHA1Hash::operator()<string_view>(
   string_view key     = col.element<string_view>(row_index);
   uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
   uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
-
   hash_state->message_length += len;
 
-  if (hash_state->buffer_length + len < 64) {
+  // 64 bytes for the number of bytes processed in a given step
+  constexpr int sha1_chunk_size = 64;
+  if (hash_state->buffer_length + len < sha1_chunk_size) {
+    // If the buffer will not be filled by this data, we copy the new data into
+    // the buffer but do not trigger a hash step yet.
     std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
     hash_state->buffer_length += len;
   } else {
-    uint32_t copylen = 64 - hash_state->buffer_length;
+    // The buffer will be filled by this data. Copy a chunk of the data to fill
+    // the buffer and trigger a hash step.
+    uint32_t copylen = sha1_chunk_size - hash_state->buffer_length;
     std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
     hash_step(hash_state);
 
-    while (len > 64 + copylen) {
-      std::memcpy(hash_state->buffer, data + copylen, 64);
+    // Take buffer-sized chunks of the data and do a hash step on each chunk.
+    while (len > sha1_chunk_size + copylen) {
+      std::memcpy(hash_state->buffer, data + copylen, sha1_chunk_size);
       hash_step(hash_state);
-      copylen += 64;
+      copylen += sha1_chunk_size;
     }
 
+    // The remaining data chunk does not fill the buffer. We copy the data into
+    // the buffer but do not trigger a hash step yet.
     std::memcpy(hash_state->buffer, data + copylen, len - copylen);
     hash_state->buffer_length = len - copylen;
   }
