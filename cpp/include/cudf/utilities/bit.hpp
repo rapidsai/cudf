@@ -115,6 +115,22 @@ CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(bitmask_type const* bitmask, size_type
 }
 
 /**
+ * @brief optional-like interface to check if a specified bit of a bitmask is set.
+ *
+ * @param bit_index Index of the bit to test
+ * @return true The specified bit is `1`
+ * @return false  The specified bit is `0`
+ * @return `default_value` if `bitmask` is nullptr
+ */
+CUDA_HOST_DEVICE_CALLABLE bool bit_is_set_or(bitmask_type const* bitmask,
+                                             size_type bit_index,
+                                             bool default_value)
+{
+  if (bitmask == nullptr) return default_value;
+  return bit_is_set(bitmask, bit_index);
+}
+
+/**
  * @brief Returns a bitmask word with the `n` least significant bits set.
  *
  * Behavior is undefined if `n < 0` or if `n >= size_in_bits<bitmask_type>()`

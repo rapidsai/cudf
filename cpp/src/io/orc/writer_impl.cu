@@ -1412,8 +1412,14 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
                        current_sizes.end(),
                        [d_cols  = device_span<orc_column_device_view const>{orc_table.d_columns},
                         col_idx = orc_col.index()] __device__(auto idx) {
-                         auto const& col = d_cols[col_idx].cudf_column;
-                         if (col.is_null(idx)) return 0u;
+                         auto const& col          = d_cols[col_idx].cudf_column;
+                         auto const pushdown_mask = [&]() -> cudf::bitmask_type const* {
+                           auto const parent_index = d_cols[col_idx].parent_index;
+                           if (!parent_index.has_value()) return nullptr;
+                           return d_cols[parent_index.value()].pushdown_mask;
+                         }();
+                         if (col.is_null(idx) or not bit_is_set_or(pushdown_mask, idx, true))
+                           return 0u;
                          int64_t const element   = (col.type().id() == type_id::DECIMAL32)
                                                      ? col.element<int32_t>(idx)
                                                      : col.element<int64_t>(idx);
@@ -1533,7 +1539,6 @@ string_dictionaries allocate_dictionaries(orc_table_view const& orc_table,
 std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
   orc_table_view const& orc_table,
   file_segmentation const& segmentation,
-  pushdown_null_masks const& pd_masks,
   rmm::cuda_stream_view stream)
 {
   if (segmentation.num_rowgroups() == 0) return {};
@@ -1685,7 +1690,7 @@ void writer::impl::write(table_view const& table)
     calculate_segmentation(orc_table.columns, std::move(rowgroup_bounds), max_stripe_size_);
 
   auto const aligned_rowgroup_bounds =
-    calculate_aligned_rowgroup_bounds(orc_table, segmentation, pd_masks, stream);
+    calculate_aligned_rowgroup_bounds(orc_table, segmentation, stream);
 
   // Build stripe-level dictionaries
   hostdevice_2dvector<gpu::StripeDictionary> stripe_dict(
@@ -1699,8 +1704,7 @@ void writer::impl::write(table_view const& table)
                        stripe_dict);
   }
 
-  auto dec_chunk_sizes =
-    decimal_chunk_sizes(orc_table, segmentation, stream);  // TODO include pushdown buffer here
+  auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
 
   auto streams =
     create_streams(orc_table.columns, segmentation, decimal_column_sizes(dec_chunk_sizes.rg_sizes));

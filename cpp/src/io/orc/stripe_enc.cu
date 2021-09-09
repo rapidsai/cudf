@@ -826,13 +826,10 @@ __global__ void __launch_bounds__(block_size)
       auto const row_in_group = s->cur_row + t;
       auto const row          = s->chunk.start_row + row_in_group;
 
-      auto bit_is_set_or = [](bitmask_type const* mask, uint32_t row, bool def_val = true) {
-        if (mask == nullptr) return def_val;
-        return bit_is_set(mask, row);
-      };
       auto const is_value_valid = [&]() {
         if (t >= nrows) return false;
-        return bit_is_set_or(pushdown_mask, row) and bit_is_set_or(column.null_mask(), row);
+        return bit_is_set_or(pushdown_mask, row, true) and
+               bit_is_set_or(column.null_mask(), row, true);
       }();
       s->buf.u32[t] = is_value_valid ? 1u : 0u;
 
