@@ -620,12 +620,8 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
                           stream,
                           mr);
 
-  return cudf::detail::gather(keys,
-                              gather_map.begin(),
-                              gather_map.begin() + gather_map.size(),
-                              out_of_bounds_policy::DONT_CHECK,
-                              stream,
-                              mr);
+  return cudf::detail::gather(
+    keys, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 
 }  // namespace
