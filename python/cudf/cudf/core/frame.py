@@ -34,7 +34,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
-from cudf.core.window import Rolling
+from cudf.core.window import Rolling, ExponentialMovingWindow
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
