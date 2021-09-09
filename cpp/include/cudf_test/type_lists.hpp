@@ -288,10 +288,22 @@ using FixedWidthTypes = Concat<NumericTypes, ChronoTypes, FixedPointTypes>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all fixed-width types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypes);
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
  * ```
  */
 using FixedWidthTypesWithoutFixedPoint = Concat<NumericTypes, ChronoTypes>;
+
+/**
+ * @brief Provides a list of all fixed-width element types except for the
+ * chrono types for use in GTest typed tests.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all fixed-width types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypesWithoutChrono);
+ * ```
+ */
+using FixedWidthTypesWithoutChrono = Concat<NumericTypes, FixedPointTypes>;
 
 /**
  * @brief Provides a list of sortable types for use in GTest typed tests.

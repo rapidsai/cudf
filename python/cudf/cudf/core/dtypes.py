@@ -112,15 +112,15 @@ class CategoricalDtype(_BaseDtype):
         )
 
     def to_pandas(self) -> pd.CategoricalDtype:
-        if self.categories is None:
+        if self._categories is None:
             categories = None
         else:
             if isinstance(
-                self.categories, (cudf.Float32Index, cudf.Float64Index)
+                self._categories, (cudf.Float32Index, cudf.Float64Index)
             ):
-                categories = self.categories.dropna().to_pandas()
+                categories = self._categories.dropna().to_pandas()
             else:
-                categories = self.categories.to_pandas()
+                categories = self._categories.to_pandas()
         return pd.CategoricalDtype(categories=categories, ordered=self.ordered)
 
     def _init_categories(self, categories: Any):

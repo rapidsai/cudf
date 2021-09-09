@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 """
 Test related to MultiIndex
@@ -13,6 +13,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_130, PANDAS_LT_140
 from cudf.core.column import as_column
 from cudf.core.index import as_index
 from cudf.testing._utils import assert_eq, assert_exceptions_equal, assert_neq
@@ -1007,6 +1008,10 @@ def test_multicolumn_loc(pdf, pdfIndex):
     assert_eq(pdf.loc[:, ["a", "b"]], gdf.loc[:, ["a", "b"]])
 
 
+@pytest.mark.xfail(
+    condition=PANDAS_GE_130 and PANDAS_LT_140,
+    reason="https://github.com/pandas-dev/pandas/issues/43351",
+)
 def test_multicolumn_set_item(pdf, pdfIndex):
     pdf = pdf.T
     pdf.columns = pdfIndex
@@ -1061,42 +1066,42 @@ def test_multiindex_values_host():
 
 
 @pytest.mark.parametrize(
-    "pdi, fill_value, expected",
+    "gdi, fill_value, expected",
     [
         (
-            pd.MultiIndex(
+            cudf.MultiIndex(
                 levels=[[1, 3, 4, None], [1, 2, 5]],
                 codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                 names=["x", "y"],
             ),
             5,
-            pd.MultiIndex(
+            cudf.MultiIndex(
                 levels=[[1, 3, 4, 5], [1, 2, 5]],
                 codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                 names=["x", "y"],
             ),
         ),
         (
-            pd.MultiIndex(
+            cudf.MultiIndex(
                 levels=[[1, 3, 4, None], [1, None, 5]],
                 codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                 names=["x", "y"],
             ),
             100,
-            pd.MultiIndex(
+            cudf.MultiIndex(
                 levels=[[1, 3, 4, 100], [1, 100, 5]],
                 codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                 names=["x", "y"],
             ),
         ),
         (
-            pd.MultiIndex(
+            cudf.MultiIndex(
                 levels=[["a", "b", "c", None], ["1", None, "5"]],
                 codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                 names=["x", "y"],
             ),
             "100",
-            pd.MultiIndex(
+            cudf.MultiIndex(
                 levels=[["a", "b", "c", "100"], ["1", "100", "5"]],
                 codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                 names=["x", "y"],
@@ -1104,9 +1109,7 @@ def test_multiindex_values_host():
         ),
     ],
 )
-def test_multiIndex_fillna(pdi, fill_value, expected):
-    gdi = cudf.from_pandas(pdi)
-
+def test_multiIndex_fillna(gdi, fill_value, expected):
     assert_eq(expected, gdi.fillna(fill_value))
 
 
