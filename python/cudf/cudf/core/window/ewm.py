@@ -2,7 +2,7 @@ from pandas.core.window.ewm import get_center_of_mass
 
 from cudf._lib.reduce import scan
 from cudf.core.window.rolling import _RollingBase
-
+from cudf.api.types import is_numeric_dtype
 
 class ExponentialMovingWindow(_RollingBase):
     def __init__(
@@ -39,4 +39,8 @@ class ExponentialMovingWindow(_RollingBase):
         raise NotImplementedError("cov not yet supported.")
 
     def _apply_agg_series(self, sr, agg_name):
-        return scan(agg_name, sr._column, True, com=self.com, adjust=self.adjust)
+
+        if not is_numeric_dtype(sr.dtype):
+            raise TypeError("No numeric types to aggregate")
+
+        return scan(agg_name, sr._column.astype('float64'), True, com=self.com, adjust=self.adjust)
