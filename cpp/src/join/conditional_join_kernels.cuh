@@ -41,7 +41,6 @@ namespace detail {
  * @param[in] left_table The left table
  * @param[in] right_table The right table
  * @param[in] join_type The type of join to be performed
- * @param[in] compare_nulls Controls whether null join-key values should match or not.
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
  * @param[out] output_size The resulting output size
@@ -51,7 +50,6 @@ __global__ void compute_conditional_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
   join_kind join_type,
-  null_equality compare_nulls,
   ast::detail::expression_device_view device_expression_data,
   std::size_t* output_size)
 {
@@ -72,7 +70,7 @@ __global__ void compute_conditional_join_output_size(
   cudf::size_type const right_num_rows = right_table.num_rows();
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data, thread_intermediate_storage, compare_nulls);
+    left_table, right_table, device_expression_data, thread_intermediate_storage);
 
   for (cudf::size_type left_row_index = left_start_idx; left_row_index < left_num_rows;
        left_row_index += left_stride) {
@@ -116,7 +114,6 @@ __global__ void compute_conditional_join_output_size(
  * @param[in] left_table The left table
  * @param[in] right_table The right table
  * @param[in] join_type The type of join to be performed
- * @param compare_nulls Controls whether null join-key values should match or not.
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
  * @param[in,out] current_idx A global counter used by threads to coordinate
@@ -129,7 +126,6 @@ template <cudf::size_type block_size, cudf::size_type output_cache_size, bool ha
 __global__ void conditional_join(table_device_view left_table,
                                  table_device_view right_table,
                                  join_kind join_type,
-                                 null_equality compare_nulls,
                                  cudf::size_type* join_output_l,
                                  cudf::size_type* join_output_r,
                                  cudf::size_type* current_idx,
@@ -165,7 +161,7 @@ __global__ void conditional_join(table_device_view left_table,
   unsigned int const activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data, thread_intermediate_storage, compare_nulls);
+    left_table, right_table, device_expression_data, thread_intermediate_storage);
 
   if (left_row_index < left_num_rows) {
     bool found_match = false;
