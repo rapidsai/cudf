@@ -562,7 +562,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
 
 def _normalize_dtypes(df):
-    if len(df.columns) > 0:
+    if df._num_columns > 0:
         dtypes = df.dtypes.values.tolist()
         normalized_dtype = np.result_type(*dtypes)
         for name, col in df._data.items():

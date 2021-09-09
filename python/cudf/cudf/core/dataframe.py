@@ -1140,10 +1140,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         # If any of the input frames have a non-empty index, include these
         # columns in the list of columns to concatenate, even if the input
         # frames are empty and `ignore_index=True`.
+        # import pdb;pdb.set_trace()
         columns = [
             (
                 []
                 if (ignore_index and not empty_has_index)
+                else [f._index]
+                if isinstance(f._index, cudf.RangeIndex)
                 else list(f._index._data.columns)
             )
             + [f._data[name] if name in f._data else None for name in names]
@@ -7568,7 +7571,12 @@ def _get_non_null_cols_and_dtypes(col_idxs, list_of_columns):
             # non-null Column with the same name is found.
             if idx not in dtypes:
                 dtypes[idx] = cols[idx].dtype
-            if cols[idx].valid_count > 0:
+            if (
+                isinstance(cols[idx], cudf.RangeIndex) and len(cols[idx]) > 0
+            ) or (
+                not isinstance(cols[idx], cudf.RangeIndex)
+                and cols[idx].valid_count > 0
+            ):
                 if idx not in non_null_columns:
                     non_null_columns[idx] = [cols[idx]]
                 else:
