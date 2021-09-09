@@ -180,10 +180,8 @@ struct SHA1Hash {
 
 #pragma unroll
     for (int i = 0; i < 5; ++i) {
-      uint32_t flipped = (hash_state->hash_value[i] << 24) & 0xff000000;
-      flipped |= (hash_state->hash_value[i] << 8) & 0xff0000;
-      flipped |= (hash_state->hash_value[i] >> 8) & 0xff00;
-      flipped |= (hash_state->hash_value[i] >> 24) & 0xff;
+      // Convert word representation from big-endian to little-endian.
+      uint32_t flipped = __byte_perm(hash_state->hash_value[i], 0, 0x0123);
       uint32ToLowercaseHexString(flipped, result_location + (8 * i));
 
       // uint32ToLowercaseHexString(hash_state->hash_value[i], result_location + (8 * i));
