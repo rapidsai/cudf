@@ -27,16 +27,17 @@ from cudf.testing._utils import assert_eq
 @pytest.mark.parametrize("nulls", ["none", "one", "some", "all"])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_series_basic(data, index, agg, nulls, center):
+    rng = np.random.default_rng(1)
     if PANDAS_GE_110:
         kwargs = {"check_freq": False}
     else:
         kwargs = {}
     if len(data) > 0:
         if nulls == "one":
-            p = np.random.randint(0, len(data))
+            p = rng.integers(0, len(data))
             data[p] = np.nan
         elif nulls == "some":
-            p1, p2 = np.random.randint(0, len(data), (2,))
+            p1, p2 = rng.integers(0, len(data), (2,))
             data[p1] = np.nan
             data[p2] = np.nan
         elif nulls == "all":
@@ -73,15 +74,16 @@ def test_rolling_series_basic(data, index, agg, nulls, center):
 @pytest.mark.parametrize("nulls", ["none", "one", "some", "all"])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_dataframe_basic(data, agg, nulls, center):
+    rng = np.random.default_rng(0)
     pdf = pd.DataFrame(data)
 
     if len(pdf) > 0:
         for col_name in pdf.columns:
             if nulls == "one":
-                p = np.random.randint(0, len(data))
+                p = rng.integers(0, len(data))
                 pdf[col_name][p] = np.nan
             elif nulls == "some":
-                p1, p2 = np.random.randint(0, len(data), (2,))
+                p1, p2 = rng.integers(0, len(data), (2,))
                 pdf[col_name][p1] = np.nan
                 pdf[col_name][p2] = np.nan
             elif nulls == "all":
@@ -132,7 +134,7 @@ def test_rolling_with_offset(agg):
 
 
 def generate_large_dataframe_for_var(size, window_size, nulls_prob, seed):
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed)
 
     iupper_bound = math.sqrt(np.iinfo(np.int64).max / window_size)
     ilower_bound = -math.sqrt(abs(np.iinfo(np.int64).min) / window_size)
@@ -140,16 +142,17 @@ def generate_large_dataframe_for_var(size, window_size, nulls_prob, seed):
     fupper_bound = math.sqrt(np.finfo(np.float64).max / window_size)
     flower_bound = -math.sqrt(abs(np.finfo(np.float64).min) / window_size)
 
-    intcol = [int(np.random.randint(ilower_bound, iupper_bound))]
+    # Nullable integer type rolling agg is unsupported in pandas
+    intcol = rng.integers(ilower_bound, iupper_bound, size)
     floatcol = [
-        np.random.uniform(flower_bound, fupper_bound)
-        if np.random.uniform(0, 1) > nulls_prob
+        rng.uniform(flower_bound, fupper_bound)
+        if rng.uniform(0, 1) > nulls_prob
         else np.nan
         for _ in range(size)
     ]
     deccol = [
-        Decimal(np.random.randint(ilower_bound, iupper_bound))
-        if np.random.uniform(0, 1) > nulls_prob
+        Decimal(int(rng.integers(ilower_bound, iupper_bound)))
+        if rng.uniform(0, 1) > nulls_prob
         else None
         for _ in range(size)
     ]
@@ -168,7 +171,6 @@ def generate_large_dataframe_for_var(size, window_size, nulls_prob, seed):
 @pytest.mark.parametrize("seed", [100, 1000, 10000])
 @pytest.mark.parametrize("window_size", [2, 10, 100, 1000])
 def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
-
     if PANDAS_GE_110:
         kwargs = {"check_freq": False}
     else:
@@ -191,6 +193,7 @@ def test_rolling_var_uniform_window():
     """
     Pandas adopts an online variance calculation algorithm. This gives a
     floating point artifact.
+    https://github.com/pandas-dev/pandas/issues/37051
 
     In cudf, each window is computed independently from the previous window,
     this gives better numeric precision.
