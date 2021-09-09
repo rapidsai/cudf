@@ -188,10 +188,12 @@ public class Rmm {
     if (initialized) {
       throw new IllegalStateException("RMM is already initialized");
     }
-    bool isPool = allocationMode & RmmAllocationMode.POOL;
-    bool isArena = allocationMode & RmmAllocationMode.ARENA;
-    bool isAsync = allocationMode & RmmAllocationMode.ASYNC;
-    bool isManaged = allocationMode & RmmAllocationMode.CUDA_MANAGED_MEMORY;
+
+    boolean isPool = (allocationMode & RmmAllocationMode.POOL) != 0;
+    boolean isArena = (allocationMode & RmmAllocationMode.ARENA) != 0;
+    boolean isAsync = (allocationMode & RmmAllocationMode.ASYNC) != 0;
+    boolean isManaged = (allocationMode & RmmAllocationMode.CUDA_MANAGED_MEMORY) != 0;
+
     if (maxPoolSize > 0) {
       if (!isPool && !isArena && !isAsync) { 
         throw new IllegalArgumentException(

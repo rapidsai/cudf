@@ -376,14 +376,19 @@ public class RmmTest {
 
   @Test
   public void testPoolLimit() {
-    Rmm.initialize(RmmAllocationMode.POOL, false, 1024, 2048);
-    try (DeviceMemoryBuffer ignored1 = Rmm.alloc(512);
-         DeviceMemoryBuffer ignored2 = Rmm.alloc(1024)) {
-      assertThrows(OutOfMemoryError.class,
-          () -> {
-            DeviceMemoryBuffer ignored3 = Rmm.alloc(1024);
-            ignored3.close();
-      });
+    int[] modes = {
+      RmmAllocationMode.POOL, RmmAllocationMode.ASYNC};
+    for (int mode : modes) {
+      Rmm.initialize(mode, false, 1024, 2048);
+      try (DeviceMemoryBuffer ignored1 = Rmm.alloc(512);
+           DeviceMemoryBuffer ignored2 = Rmm.alloc(1024)) {
+        assertThrows(OutOfMemoryError.class,
+            () -> {
+              DeviceMemoryBuffer ignored3 = Rmm.alloc(1024);
+              ignored3.close();
+        });
+      }
+      Rmm.shutdown();
     }
   }
 
