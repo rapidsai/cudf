@@ -721,30 +721,40 @@ TEST_F(SHA1HashTest, MultiValue)
 {
   strings_column_wrapper const strings_col(
     {"",
-     "A 60 character string to test SHA1's message padding algorithm",
+     "0",
+     "A 56 character string to test message padding algorithm.",
+     "A 63 character string to test message padding algorithm, again.",
+     "A 64 character string to test message padding algorithm, again!!",
      "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
      "SHA1 hash function. This string needed to be longer.",
      "All work and no play makes Jack a dull boy",
      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
 
   strings_column_wrapper const sha1_string_results1({"da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                     "76bc1090acf2b7384496da688dc542c0a971af8a",
+                                                     "b6589fc6ab0dc82cf12099d1c2d40ab994e8410c",
+                                                     "cb73203438ab46ea54491c53e288a2703c440c4a",
+                                                     "c595ebd13a785c1c2659e010a42e2ff9987ef51f",
+                                                     "4ffaf61804c55b8c2171be548bef2e1d0baca17a",
                                                      "5e1c9f6772fc0f874800fcbfdee7698bd1155a39",
                                                      "a62ca720fbab830c8890044eacbeac216f1ca2e4",
                                                      "11e16c52273b5669a41d17ec7c187475193f88b3"});
 
   strings_column_wrapper const sha1_string_results2({"da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                     "da39a3ee5e6b4b0d3255bfef95601890afd80709"});
+                                                     "fb96549631c835eb239cd614cc6b5cb7d295121a",
+                                                     "e3977ee0ea7f238134ec93c79988fa84b7c5d79e",
+                                                     "f6f75b6fa3c3d8d86b44fcb2c98c9ad4b37dcdd0",
+                                                     "c7abd431a775c604edf41a62f7f215e7258dc16a",
+                                                     "9adb7e67efcc8b55ed0cc2597478fab31876c898",
+                                                     "8c3656f7cb37898f9296c1965000d6da13fed64e",
+                                                     "b4a848399375ec842c2cb445d98b5f80a4dce94f"});
 
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col({0, 100, -100, limits::min(), limits::max()});
+  fixed_width_column_wrapper<int32_t> const ints_col(
+    {0, 100, -100, limits::min(), limits::max(), 1, 2, 3});
 
   // Different truth values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
+  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0, 1, 1, 1});
+  fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0, 1, 2, 255});
 
   auto const string_input1       = cudf::table_view({strings_col});
   auto const string_input2       = cudf::table_view({strings_col, strings_col});

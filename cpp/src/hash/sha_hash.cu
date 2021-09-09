@@ -110,6 +110,7 @@ struct SHA1Hash {
     hash_state->hash_value[2] += C;
     hash_state->hash_value[3] += D;
     hash_state->hash_value[4] += E;
+
     hash_state->buffer_length = 0;
   }
 
