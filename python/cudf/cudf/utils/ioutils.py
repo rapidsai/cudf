@@ -3,12 +3,16 @@
 import datetime
 import os
 import urllib
+import warnings
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 
 import fsspec
 import fsspec.implementations.local
 import pandas as pd
+import pyarrow.fs as pa_fs
 from fsspec.core import get_fs_token_paths
+from pyarrow._fs import LocalFileSystem
+from pyarrow.lib import ArrowInvalid, NativeFile
 
 from cudf.utils.docutils import docfmt_partial
 
@@ -1057,7 +1061,9 @@ def is_file_like(obj):
 
 
 def _is_local_filesystem(fs):
-    return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
+    return isinstance(
+        fs, (fsspec.implementations.local.LocalFileSystem, LocalFileSystem),
+    )
 
 
 def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
@@ -1107,8 +1113,81 @@ def is_directory(path_or_data, **kwargs):
     return False
 
 
+def _get_filesystem_and_paths(path_or_data, **kwargs):
+    # Returns a filesystem object and the filesystem-normalized
+    # paths. If `path_or_data` does not correspond to a path or
+    # list of paths (or if the protocol is not supported), the
+    # return will be `None` for the fs and `[]` for the paths.
+    fs = None
+    return_paths = path_or_data
+    if isinstance(path_or_data, str) or (
+        isinstance(path_or_data, list) and isinstance(path_or_data[0], str)
+    ):
+        # Ensure we are always working with a list
+        storage_options = kwargs.get("storage_options")
+        if isinstance(path_or_data, list):
+            path_or_data = [
+                os.path.expanduser(stringify_pathlike(source))
+                for source in path_or_data
+            ]
+        else:
+            path_or_data = [path_or_data]
+
+        # Try infering a pyarrow-backed filesystem
+        arrow_protocol_supported = True
+        arrow_options_supported = True
+        try:
+            fs, fs_paths = pa_fs.FileSystem.from_uri(path_or_data[0])
+            fs_paths = [fs_paths]
+            for source in path_or_data[1:]:
+                fs_paths.append(pa_fs.FileSystem.from_uri(source)[1])
+            if storage_options:
+                fs = type(fs)(**storage_options)
+            return_paths = fs_paths
+        except ArrowInvalid:
+            # The uri protocol is not supported by pyarrow
+            fs = None
+            arrow_protocol_supported = False
+        except TypeError:
+            # The `storage_options` are not supported by pyarrow
+            fs = None
+            arrow_options_supported = False
+
+        if fs is None:
+            # Pyarrow did not support the protocol or storage options.
+            # Fall back to fsspec
+            try:
+                fs, _, fs_paths = fsspec.get_fs_token_paths(
+                    path_or_data, mode="rb", storage_options=storage_options
+                )
+                return_paths = fs_paths
+            except ValueError as e:
+                if str(e).startswith("Protocol not known"):
+                    return None, []
+                else:
+                    raise e
+
+            # Warn the user if they are not using an available pyarrow
+            # filesystem class due to incompatible `storage_options`
+            if arrow_protocol_supported and not arrow_options_supported:
+                warnings.warn(
+                    f"Using an fsspec filesystem object ({fs}) for IO, even "
+                    f"though the protocol is supported by a native pyarrow "
+                    f"FileSystem class. IO performance will likely improve "
+                    f"by passing `storage_options` that are compatible "
+                    f"with the appropriate pyarrow FileSystem."
+                )
+
+    return fs, return_paths
+
+
 def get_filepath_or_buffer(
-    path_or_data, compression, mode="rb", iotypes=(BytesIO), **kwargs,
+    path_or_data,
+    compression,
+    mode="rb",
+    fs=None,
+    iotypes=(BytesIO, NativeFile),
+    **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
@@ -1136,19 +1215,11 @@ def get_filepath_or_buffer(
     path_or_data = stringify_pathlike(path_or_data)
 
     if isinstance(path_or_data, str):
-        storage_options = kwargs.get("storage_options")
-        # fsspec does not expanduser so handle here
-        path_or_data = os.path.expanduser(path_or_data)
 
-        try:
-            fs, _, paths = fsspec.get_fs_token_paths(
-                path_or_data, mode=mode, storage_options=storage_options
-            )
-        except ValueError as e:
-            if str(e).startswith("Protocol not known"):
-                return path_or_data, compression
-            else:
-                raise e
+        # Get a filesystem object if one isn't already available
+        paths = [path_or_data]
+        if fs is None:
+            fs, paths = _get_filesystem_and_paths(path_or_data, **kwargs)
 
         if len(paths) == 0:
             raise FileNotFoundError(
@@ -1162,7 +1233,13 @@ def get_filepath_or_buffer(
                 path_or_data = paths if len(paths) > 1 else paths[0]
 
         else:
-            path_or_data = [BytesIO(fs.open(fpath).read()) for fpath in paths]
+            if isinstance(fs, pa_fs.FileSystem):
+                # We do not want to
+                path_or_data = [fs.open_input_file(fpath) for fpath in paths]
+            else:
+                path_or_data = [
+                    BytesIO(fs.open(fpath).read()) for fpath in paths
+                ]
             if len(path_or_data) == 1:
                 path_or_data = path_or_data[0]
 

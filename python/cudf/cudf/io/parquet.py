@@ -1,10 +1,11 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
+import io
 import warnings
 from collections import defaultdict
 from uuid import uuid4
 
-from pyarrow import dataset as ds, parquet as pq
+from pyarrow import dataset as ds, fs as pa_fs, parquet as pq
 
 import cudf
 from cudf._lib import parquet as libparquet
@@ -160,6 +161,97 @@ def read_parquet_metadata(path):
     return num_rows, num_row_groups, col_names
 
 
+def _filter_row_groups(paths, fs, filters=None, row_groups=None):
+
+    # Deal with case that the user passed in a directory name
+    file_list = paths
+    if len(paths) == 1 and ioutils.is_directory(paths[0]):
+        paths = ioutils.stringify_pathlike(paths[0])
+
+    # Convert filters to ds.Expression
+    if filters:
+        filters = pq._filters_to_expression(filters)
+
+    # Initialize ds.FilesystemDataset
+    dataset = ds.dataset(
+        paths, filesystem=fs, format="parquet", partitioning="hive",
+    )
+    file_list = dataset.files
+
+    # Load IDs of filtered row groups for each file in dataset
+    filtered_rg_ids = defaultdict(list)
+    for fragment in dataset.get_fragments(filter=filters):
+        for rg_fragment in fragment.split_by_row_group(filters):
+            for rg_info in rg_fragment.row_groups:
+                filtered_rg_ids[rg_fragment.path].append(rg_info.id)
+
+    # Initialize row_groups to be selected
+    if row_groups is None:
+        row_groups = [None for _ in dataset.files]
+
+    # Store IDs of selected row groups for each file
+    for i, file in enumerate(dataset.files):
+        if row_groups[i] is None:
+            row_groups[i] = filtered_rg_ids[file]
+        else:
+            row_groups[i] = filter(
+                lambda id: id in row_groups[i], filtered_rg_ids[file]
+            )
+
+    return file_list, row_groups
+
+
+def _get_byte_ranges(file_list, row_groups, columns, fs):
+
+    if row_groups is None:
+        if columns is None:
+            return None, None  # No reason to construct this
+        row_groups = [None for path in file_list]
+
+    # Construct a list of required byte-ranges for every file
+    all_byte_ranges = []
+    for path, rgs in zip(file_list, row_groups):
+
+        # Step 0 - Get size of file
+        file_size = fs.size(path)
+
+        # Step 1 - Get 32 KB from tail of file.
+        #
+        # This "sample size" can be tunable, but should
+        # always be >= 8 bytes (so we can read the footer size)
+        tail_size = 32_000
+        footer_sample = fs.tail(path, tail_size)
+
+        # Step 2 - Read the footer size and re-read a larger
+        #          tail if necessary
+        footer_size = int.from_bytes(footer_sample[-8:-4], "little")
+        if tail_size < (footer_size + 8):
+            footer_sample = fs.tail(path, footer_size + 8)
+
+        # Step 3 - Collect required byte ranges
+        byte_ranges = []
+        md = pq.ParquetFile(io.BytesIO(footer_sample)).metadata
+        for r in range(md.num_row_groups):
+            # Skip this row-group if we are targetting
+            # specific row-groups
+            if row_groups is None or r in rgs:
+                row_group = md.row_group(r)
+                for c in range(row_group.num_columns):
+                    column = row_group.column(c)
+                    name = column.path_in_schema
+                    # Skip this column if we are targetting a
+                    # specific columns
+                    if columns is None or name in columns:
+                        file_offset0 = column.dictionary_page_offset
+                        if file_offset0 is None:
+                            file_offset0 = column.data_page_offset
+                        num_bytes = column.total_uncompressed_size
+                        byte_ranges.append((file_offset0, num_bytes))
+
+        all_byte_ranges.append(byte_ranges)
+    return file_size, all_byte_ranges
+
+
 @ioutils.doc_read_parquet()
 def read_parquet(
     filepath_or_buffer,
@@ -189,17 +281,52 @@ def read_parquet(
         elif not is_list_like(row_groups[0]):
             row_groups = [row_groups]
 
+    # Check columns input
+    if columns is not None:
+        if not is_list_like(columns):
+            raise ValueError("Expected list like for columns")
+
+    # Start by trying construct a filesystem object, so we
+    # can apply filters on remote file-systems
+    fs, paths = ioutils._get_filesystem_and_paths(filepath_or_buffer, **kwargs)
+    filepath_or_buffer = paths if paths else filepath_or_buffer
+    if fs is None and filters is not None:
+        raise ValueError("cudf cannot apply filters to open file objects.")
+
+    # Check if we should calculate the specific byte-ranges
+    # needed for each parquet file. We do this when we have
+    # a file-system object to work with and it is not a local
+    # or pyarrow-backed filesystem object.
+    need_fs_blocks = fs is not None and not (
+        ioutils._is_local_filesystem(fs) or isinstance(fs, pa_fs.FileSystem)
+    )
+
+    # Apply filters now (before converting non-local paths to buffers)
+    if fs is not None and filters is not None:
+        filepath_or_buffer, row_groups = _filter_row_groups(
+            filepath_or_buffer, fs, filters=filters, row_groups=row_groups,
+        )
+
+    # Get required byte ranges (used with non-local fsspec filesystems)
+    fs_blocks = None
+    if need_fs_blocks:
+        fs_blocks = _get_byte_ranges(
+            filepath_or_buffer, row_groups, columns, fs,
+        )
+    print(fs_blocks)
+
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
+
         if ioutils.is_directory(source, **kwargs):
-            fs = ioutils._ensure_filesystem(
+            fsspec_fs = ioutils._ensure_filesystem(
                 passed_filesystem=None, path=source
             )
             source = ioutils.stringify_pathlike(source)
-            source = fs.sep.join([source, "*.parquet"])
+            source = fsspec_fs.sep.join([source, "*.parquet"])
 
         tmp_source, compression = ioutils.get_filepath_or_buffer(
-            path_or_data=source, compression=None, **kwargs,
+            path_or_data=source, compression=None, fs=fs, **kwargs,
         )
         if compression is not None:
             raise ValueError(
@@ -209,39 +336,6 @@ def read_parquet(
             filepath_or_buffer.extend(tmp_source)
         else:
             filepaths_or_buffers.append(tmp_source)
-
-    if columns is not None:
-        if not is_list_like(columns):
-            raise ValueError("Expected list like for columns")
-
-    if filters is not None:
-        # Convert filters to ds.Expression
-        filters = pq._filters_to_expression(filters)
-
-        # Initialize ds.FilesystemDataset
-        dataset = ds.dataset(
-            filepaths_or_buffers, format="parquet", partitioning="hive"
-        )
-
-        # Load IDs of filtered row groups for each file in dataset
-        filtered_rg_ids = defaultdict(list)
-        for fragment in dataset.get_fragments(filter=filters):
-            for rg_fragment in fragment.split_by_row_group(filters):
-                for rg_info in rg_fragment.row_groups:
-                    filtered_rg_ids[rg_fragment.path].append(rg_info.id)
-
-        # Initialize row_groups to be selected
-        if row_groups is None:
-            row_groups = [None for _ in dataset.files]
-
-        # Store IDs of selected row groups for each file
-        for i, file in enumerate(dataset.files):
-            if row_groups[i] is None:
-                row_groups[i] = filtered_rg_ids[file]
-            else:
-                row_groups[i] = filter(
-                    lambda id: id in row_groups[i], filtered_rg_ids[file]
-                )
 
     if engine == "cudf":
         return libparquet.read_parquet(
