@@ -630,7 +630,6 @@ class ewma_aggregation final : public rolling_aggregation {
     return this->com == other.com and this->adjust == other.adjust;
   }
 
-
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 

@@ -343,21 +343,15 @@ class blelloch_functor {
   }
 };
 
-rmm::device_vector<double> compute_recurrence(
-  rmm::device_vector<thrust::pair<double, double>> input)
+/**
+ * @brief Solve a recurrence relation using a blelloch scan
+ * The second elements of the pairs will contain the result
+ */
+void compute_recurrence(rmm::device_vector<thrust::pair<double, double>>& input,
+                        rmm::cuda_stream_view stream)
 {
-  // final result
-  rmm::device_vector<double> result(input.size());
-
   blelloch_functor op;
-  thrust::inclusive_scan(input.begin(), input.end(), input.begin(), op);
-  thrust::transform(input.begin(),
-                    input.end(),
-                    result.begin(),
-                    [=] __host__ __device__(thrust::pair<double, double> input) -> double {
-                      return thrust::get<1>(input);
-                    });
-  return result;
+  thrust::inclusive_scan(rmm::exec_policy(stream), input.begin(), input.end(), input.begin(), op);
 }
 
 void compute_ewma_adjust(column_view const& input,
@@ -369,6 +363,7 @@ void compute_ewma_adjust(column_view const& input,
   rmm::device_vector<thrust::pair<double, double>> pairs(input.size());
 
   // Numerator
+  // Fill with pairs
   thrust::transform(input.begin<double>(),
                     input.end<double>(),
                     pairs.begin(),
@@ -376,18 +371,30 @@ void compute_ewma_adjust(column_view const& input,
                       return thrust::pair<double, double>(beta, input);
                     });
 
-  rmm::device_vector<double> numerator = compute_recurrence(pairs);
+  compute_recurrence(pairs, stream);
+
+  // copy the second elements to the output for now
+  thrust::transform(pairs.begin(),
+                    pairs.end(),
+                    output.begin<double>(),
+                    [=] __host__ __device__(thrust::pair<double, double> pair) -> double {
+                      return thrust::get<1>(pair);
+                    });
 
   // Denominator
+  // Fill with pairs
   thrust::fill(pairs.begin(), pairs.end(), thrust::pair<double, double>(beta, 1.0));
-  rmm::device_vector<double> denominator = compute_recurrence(pairs);
+  compute_recurrence(pairs, stream);
 
-  thrust::transform(rmm::exec_policy(stream),
-                    numerator.begin(),
-                    numerator.end(),
-                    denominator.begin(),
-                    output.begin<double>(),
-                    thrust::divides<double>());
+  thrust::transform(
+    rmm::exec_policy(stream),
+    pairs.begin(),
+    pairs.end(),
+    output.begin<double>(),
+    output.begin<double>(),
+    [=] __host__ __device__(thrust::pair<double, double> pair, double numerator) -> double {
+      return numerator / thrust::get<1>(pair);
+    });
 }
 
 void compute_ewma_noadjust(column_view const& input,
@@ -414,9 +421,14 @@ void compute_ewma_noadjust(column_view const& input,
                       return thrust::pair<double, double>(beta, input);
                     });
 
-  rmm::device_vector<double> result = compute_recurrence(pairs);
-  // TODO: unnecessary copy
-  thrust::copy(result.begin(), result.end(), output.begin<double>());
+  compute_recurrence(pairs, stream);
+  // copy the second elements to the output for now
+  thrust::transform(pairs.begin(),
+                    pairs.end(),
+                    output.begin<double>(),
+                    [=] __host__ __device__(thrust::pair<double, double> pair) -> double {
+                      return thrust::get<1>(pair);
+                    });
 }
 
 std::unique_ptr<column> ewma(column_view const& input,
@@ -495,9 +507,7 @@ std::unique_ptr<column> ewmstd(column_view const& input,
                     var_view.begin<double>(),
                     var_view.end<double>(),
                     var_view.begin<double>(),
-                    [=] __host__ __device__(double input) -> double {
-                      return sqrt(input);
-                    });
+                    [=] __host__ __device__(double input) -> double { return sqrt(input); });
 
   return var;
 }
