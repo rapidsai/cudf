@@ -464,8 +464,8 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
  * @param num_groups Number of groups.
  * @param delta Parameter controlling the level of compression of the tdigest. Higher
  * values result in a larger, more precise tdigest.
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns tdigest column, with 1 tdigest per row
  */
@@ -499,8 +499,8 @@ std::unique_ptr<column> group_tdigest(column_view const& values,
  * @param num_groups Number of groups.
  * @param delta Parameter controlling the level of compression of the tdigest. Higher
  * values result in a larger, more precise tdigest.
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns tdigest column, with 1 tdigest per row
  */
