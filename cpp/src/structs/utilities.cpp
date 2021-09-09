@@ -341,9 +341,6 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
   }
 }
 
-/**
- * @copydoc cudf::structs::detail::contains_list
- */
 bool contains_list(column_view const& col)
 {
   return col.type().id() == type_id::LIST ||

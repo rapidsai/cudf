@@ -197,59 +197,39 @@ struct scan_dispatcher {
   }
 };
 
-template <bool has_nulls>
-std::unique_ptr<column> generate_dense_ranks(table_view const& order_by,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
-{
-  auto const flattener = cudf::structs::detail::flatten_nested_columns(
-    order_by, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
-  auto const d_flat_order = table_device_view::create(std::get<0>(flattener), stream);
-  row_equality_comparator<has_nulls> comparator(*d_flat_order, *d_flat_order, true);
-  auto ranks = make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, order_by.num_rows(), mask_state::UNALLOCATED, stream, mr);
-  auto mutable_ranks = ranks->mutable_view();
-
-  thrust::tabulate(rmm::exec_policy(stream),
-                   mutable_ranks.begin<size_type>(),
-                   mutable_ranks.end<size_type>(),
-                   [comparator] __device__(size_type row_index) {
-                     return row_index == 0 || !comparator(row_index, row_index - 1);
-                   });
-
-  thrust::inclusive_scan(rmm::exec_policy(stream),
-                         mutable_ranks.begin<size_type>(),
-                         mutable_ranks.end<size_type>(),
-                         mutable_ranks.begin<size_type>());
-  return ranks;
-}
-
-template <bool has_nulls>
-std::unique_ptr<column> generate_ranks(table_view const& order_by,
+template <bool has_nulls, typename value_resolver, typename scan_operator>
+std::unique_ptr<column> rank_generator(column_view const& order_by,
+                                       value_resolver resolver,
+                                       scan_operator scan_op,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
+  auto const superimposed = structs::detail::superimpose_parent_nulls(order_by, stream, mr);
+  table_view const order_table{{std::get<0>(superimposed)}};
   auto const flattener = cudf::structs::detail::flatten_nested_columns(
-    order_by, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
+    order_table, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
   auto const d_flat_order = table_device_view::create(std::get<0>(flattener), stream);
   row_equality_comparator<has_nulls> comparator(*d_flat_order, *d_flat_order, true);
-  auto ranks = make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, order_by.num_rows(), mask_state::UNALLOCATED, stream, mr);
+  auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
+                                       order_table.num_rows(),
+                                       mask_state::UNALLOCATED,
+                                       stream,
+                                       mr);
   auto mutable_ranks = ranks->mutable_view();
 
   thrust::tabulate(rmm::exec_policy(stream),
                    mutable_ranks.begin<size_type>(),
                    mutable_ranks.end<size_type>(),
-                   [comparator] __device__(size_type row_index) {
-                     return row_index != 0 && comparator(row_index, row_index - 1) ? 0
-                                                                                   : row_index + 1;
+                   [comparator, resolver] __device__(size_type row_index) {
+                     return resolver(row_index == 0 || !comparator(row_index, row_index - 1),
+                                     row_index);
                    });
 
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          mutable_ranks.begin<size_type>(),
                          mutable_ranks.end<size_type>(),
                          mutable_ranks.begin<size_type>(),
-                         DeviceMax{});
+                         scan_op);
   return ranks;
 }
 
@@ -261,12 +241,20 @@ std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
 {
   CUDF_EXPECTS(!cudf::structs::detail::contains_list(order_by),
                "Unsupported list type in dense_rank scan.");
-  auto const superimposed = structs::detail::superimpose_parent_nulls(order_by, stream, mr);
-  table_view const order_table{{std::get<0>(superimposed)}};
   if (has_nested_nulls(table_view{{order_by}})) {
-    return generate_dense_ranks<true>(order_table, stream, mr);
+    return rank_generator<true>(
+      order_by,
+      [] __device__(bool equality, auto row_index) { return equality; },
+      DeviceSum{},
+      stream,
+      mr);
   }
-  return generate_dense_ranks<false>(order_table, stream, mr);
+  return rank_generator<false>(
+    order_by,
+    [] __device__(bool equality, auto row_index) { return equality; },
+    DeviceSum{},
+    stream,
+    mr);
 }
 
 std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
@@ -275,12 +263,20 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
 {
   CUDF_EXPECTS(!cudf::structs::detail::contains_list(order_by),
                "Unsupported list type in rank scan.");
-  auto const superimposed = structs::detail::superimpose_parent_nulls(order_by, stream, mr);
-  table_view const order_table{{std::get<0>(superimposed)}};
   if (has_nested_nulls(table_view{{order_by}})) {
-    return generate_ranks<true>(order_table, stream, mr);
+    return rank_generator<true>(
+      order_by,
+      [] __device__(bool equality, auto row_index) { return equality ? row_index + 1 : 0; },
+      DeviceMax{},
+      stream,
+      mr);
   }
-  return generate_ranks<false>(order_table, stream, mr);
+  return rank_generator<false>(
+    order_by,
+    [] __device__(bool equality, auto row_index) { return equality ? row_index + 1 : 0; },
+    DeviceMax{},
+    stream,
+    mr);
 }
 
 std::unique_ptr<column> scan_inclusive(
