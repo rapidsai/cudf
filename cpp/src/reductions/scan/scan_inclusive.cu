@@ -156,7 +156,7 @@ struct scan_dispatcher {
     auto d_input = column_device_view::create(input_view, stream);
 
     // build indices of the scan operation results
-    rmm::device_uvector<size_type> result(input_view.size(), stream);
+    rmm::device_uvector<size_type> result(input_view.size(), stream, mr);
     thrust::inclusive_scan(rmm::exec_policy(stream),
                            thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(input_view.size()),
@@ -347,7 +347,7 @@ class blelloch_functor {
  * @brief Solve a recurrence relation using a blelloch scan
  * The second elements of the pairs will contain the result
  */
-void compute_recurrence(rmm::device_vector<thrust::pair<double, double>>& input,
+void compute_recurrence(rmm::device_uvector<thrust::pair<double, double>>& input,
                         rmm::cuda_stream_view stream)
 {
   blelloch_functor op;
@@ -360,11 +360,12 @@ void compute_ewma_adjust(column_view const& input,
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource* mr)
 {
-  rmm::device_vector<thrust::pair<double, double>> pairs(input.size());
+  rmm::device_uvector<thrust::pair<double, double>> pairs(input.size(), stream, mr);
 
   // Numerator
   // Fill with pairs
-  thrust::transform(input.begin<double>(),
+  thrust::transform(rmm::exec_policy(stream),
+                    input.begin<double>(),
                     input.end<double>(),
                     pairs.begin(),
                     [=] __host__ __device__(double input) -> thrust::pair<double, double> {
@@ -374,7 +375,8 @@ void compute_ewma_adjust(column_view const& input,
   compute_recurrence(pairs, stream);
 
   // copy the second elements to the output for now
-  thrust::transform(pairs.begin(),
+  thrust::transform(rmm::exec_policy(stream),
+                    pairs.begin(),
                     pairs.end(),
                     output.begin<double>(),
                     [=] __host__ __device__(thrust::pair<double, double> pair) -> double {
@@ -383,7 +385,8 @@ void compute_ewma_adjust(column_view const& input,
 
   // Denominator
   // Fill with pairs
-  thrust::fill(pairs.begin(), pairs.end(), thrust::pair<double, double>(beta, 1.0));
+  thrust::fill(
+    rmm::exec_policy(stream), pairs.begin(), pairs.end(), thrust::pair<double, double>(beta, 1.0));
   compute_recurrence(pairs, stream);
 
   thrust::transform(
@@ -403,9 +406,10 @@ void compute_ewma_noadjust(column_view const& input,
                            rmm::cuda_stream_view stream,
                            rmm::mr::device_memory_resource* mr)
 {
-  rmm::device_vector<thrust::pair<double, double>> pairs(input.size());
+  rmm::device_uvector<thrust::pair<double, double>> pairs(input.size(), stream, mr);
 
-  thrust::transform(input.begin<double>(),
+  thrust::transform(rmm::exec_policy(stream),
+                    input.begin<double>(),
                     input.end<double>(),
                     pairs.begin(),
                     [=] __host__ __device__(double input) -> thrust::pair<double, double> {
@@ -414,7 +418,8 @@ void compute_ewma_noadjust(column_view const& input,
 
   // TODO: the first pair is WRONG using the above. Reset just that pair
 
-  thrust::transform(input.begin<double>(),
+  thrust::transform(rmm::exec_policy(stream),
+                    input.begin<double>(),
                     input.begin<double>() + 1,
                     pairs.begin(),
                     [=] __host__ __device__(double input) -> thrust::pair<double, double> {
@@ -423,7 +428,8 @@ void compute_ewma_noadjust(column_view const& input,
 
   compute_recurrence(pairs, stream);
   // copy the second elements to the output for now
-  thrust::transform(pairs.begin(),
+  thrust::transform(rmm::exec_policy(stream),
+                    pairs.begin(),
                     pairs.end(),
                     output.begin<double>(),
                     [=] __host__ __device__(thrust::pair<double, double> pair) -> double {
@@ -463,8 +469,8 @@ std::unique_ptr<column> ewmvar(column_view const& input,
   auto means_view               = means.get()[0].mutable_view();
 
   // construct deltas: (x_i - mu_i)(x_i - mu_{i-1})
-  rmm::device_vector<double> d_this(input.size());
-  rmm::device_vector<double> d_last(input.size());
+  rmm::device_uvector<double> d_this(input.size(), stream, mr);
+  rmm::device_uvector<double> d_last(input.size(), stream, mr);
 
   // x_i - mu_i
   thrust::transform(rmm::exec_policy(stream),
