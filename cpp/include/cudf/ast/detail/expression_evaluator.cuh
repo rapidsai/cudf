@@ -466,9 +466,9 @@ struct expression_evaluator {
       auto const arity = ast_operator_arity(op);
       if (arity == 1) {
         // Unary operator
-        detail::device_data_reference const& input =
+        auto const& input =
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        detail::device_data_reference const& output =
+        auto const& output =
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto input_row_index =
           input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
@@ -483,11 +483,11 @@ struct expression_evaluator {
                         thread_intermediate_storage);
       } else if (arity == 2) {
         // Binary operator
-        detail::device_data_reference const& lhs =
+        auto const& lhs =
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        detail::device_data_reference const& rhs =
+        auto const& rhs =
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        detail::device_data_reference const& output =
+        auto const& output =
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
         type_dispatcher(lhs.data_type,
                         detail::single_dispatch_binary_operator{},
