@@ -410,17 +410,30 @@ public class RmmTest {
   }
 
   @Test
-  public void testCudaAsyncMemoryResource() {
+  public void testCudaAsyncMemoryResourceLimit() {
     try {
-      Rmm.initialize(RmmAllocationMode.CUDA_ASYNC, false, 1024 * 1024L, 1024 * 1024L);
+      Rmm.initialize(RmmAllocationMode.CUDA_ASYNC, false, 1024, 2048);
     } catch (CudfException e) {
+      // CUDA 11.2 introduced cudaMallocAsync, older CUDA Toolkit will skip this test.
       assumeFalse(e.getMessage().contains("cudaMallocAsync not supported"));
       throw e;
     }
-    DeviceMemoryBuffer buff = Rmm.alloc(1024);
-    buff.close();
-    buff = Rmm.alloc(2048);
-    buff.close();
+    try (DeviceMemoryBuffer ignored1 = Rmm.alloc(512);
+         DeviceMemoryBuffer ignored2 = Rmm.alloc(1024)) {
+      assertThrows(OutOfMemoryError.class,
+          () -> {
+            DeviceMemoryBuffer ignored3 = Rmm.alloc(1024);
+            ignored3.close();
+          });
+    }
+  }
+
+  @Test
+  public void testCudaAsyncIsIncompatibleWithManaged() {
+    assertThrows(IllegalArgumentException.class,
+        () -> Rmm.initialize(
+            RmmAllocationMode.CUDA_ASYNC | RmmAllocationMode.CUDA_MANAGED_MEMORY,
+            false, 1024, 2048));
   }
 
   private static class AllocFailException extends RuntimeException {

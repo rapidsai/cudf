@@ -213,17 +213,25 @@ public class Rmm {
     if (initialized) {
       throw new IllegalStateException("RMM is already initialized");
     }
+
+    boolean isPool = (allocationMode & RmmAllocationMode.POOL) != 0;
+    boolean isArena = (allocationMode & RmmAllocationMode.ARENA) != 0;
+    boolean isAsync = (allocationMode & RmmAllocationMode.CUDA_ASYNC) != 0;
+    boolean isManaged = (allocationMode & RmmAllocationMode.CUDA_MANAGED_MEMORY) != 0;
+
     if (maxPoolSize > 0) {
-      if ((allocationMode & RmmAllocationMode.POOL) == 0 &&
-          (allocationMode & RmmAllocationMode.ARENA) == 0 &&
-          (allocationMode & RmmAllocationMode.CUDA_ASYNC) == 0) {
+      if (!isPool && !isArena && !isAsync) {
         throw new IllegalArgumentException(
-            "Pool limit only supported in POOL or ARENA or CUDA_ASYNC allocation mode");
+            "Pool limit only supported in POOL, ARENA, or CUDA_ASYNC allocation mode");
       }
       if (maxPoolSize < poolSize) {
         throw new IllegalArgumentException("Pool limit of " + maxPoolSize
             + " is less than initial pool size of " + poolSize);
       }
+    }
+    if (isAsync && isManaged) {
+      throw new IllegalArgumentException(
+          "CUDA Unified Memory is not supported in CUDA_ASYNC allocation mode");
     }
     LogLoc loc = LogLoc.NONE;
     String path = null;
