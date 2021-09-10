@@ -1619,6 +1619,21 @@ def _read_byte_ranges(
     path_or_fob, ranges, local_buffer, fs=None, num_threads=None, **kwargs,
 ):
 
+    # If we have a fs object that supports `cat_ranges`,
+    # the ranges should be collected concurrently
+    if fs is not None and hasattr(fs, "cat_ranges"):
+        paths, starts, ends = [], [], []
+        for offset, nbytes in ranges:
+            paths.append(path_or_fob)
+            starts.append(offset)
+            ends.append(offset + nbytes)
+        blocks = fs.cat_ranges(paths, starts, ends)
+        for block, (offset, nbytes) in zip(blocks, ranges):
+            local_buffer[offset : offset + nbytes] = np.frombuffer(
+                block, dtype="b",
+            )
+        return
+
     # No reason to generate more threads than byte-ranges
     if num_threads is None:
         num_threads = len(ranges)
