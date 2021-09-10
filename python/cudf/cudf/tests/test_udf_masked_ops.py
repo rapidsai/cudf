@@ -41,13 +41,6 @@ def run_masked_udf_test(func_pdf, func_gdf, data, **kwargs):
 
 
 def run_masked_udf_series(func_psr, func_gsr, data, **kwargs):
-
-    # Skip testing CUDA 11.0
-    runtime = cuda.cudadrv.runtime.Runtime()
-    mjr, mnr = runtime.get_version()
-    if mjr < 11 or (mjr == 11 and mnr < 1):
-        pytest.skip("Skip testing for CUDA 11.0")
-
     gsr = data
     psr = data.to_pandas(nullable=True)
 

@@ -131,13 +131,13 @@ masked_input_initializer_template = """\
 def _define_function(df, scalar_return=False):
     # Create argument list for kernel
     input_columns = ", ".join(
-        [f"input_col_{i}" for i in range(len(df.columns))]
+        [f"input_col_{i}" for i in range(len(df._data.items()))]
     )
 
-    input_offsets = ", ".join([f"offset_{i}" for i in range(len(df.columns))])
+    input_offsets = ", ".join([f"offset_{i}" for i in range(len(df._data.items()))])
 
     # Create argument list to pass to device function
-    args = ", ".join([f"masked_{i}" for i in range(len(df.columns))])
+    args = ", ".join([f"masked_{i}" for i in range(len(df._data.items()))])
     user_udf_call = f"f_({args})"
 
     # Generate the initializers for each device function argument
