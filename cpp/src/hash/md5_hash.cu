@@ -27,6 +27,9 @@
 #include <thrust/iterator/constant_iterator.h>
 
 namespace cudf {
+
+namespace detail {
+
 namespace {
 
 // MD5 supported leaf data type check
@@ -36,8 +39,6 @@ bool md5_type_check(data_type dt)
 }
 
 }  // namespace
-
-namespace detail {
 
 std::unique_ptr<column> md5_hash(table_view const& input,
                                  rmm::cuda_stream_view stream,
