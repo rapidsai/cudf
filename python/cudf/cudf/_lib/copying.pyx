@@ -146,12 +146,13 @@ def gather(
     Table source_table,
     Column gather_map,
     bool keep_index=True,
-    bool nullify=False
+    bool nullify=False,
+    bool boundscheck=True
 ):
     if not pd.api.types.is_integer_dtype(gather_map.dtype):
         raise ValueError("Gather map is not integer dtype.")
 
-    if len(gather_map) > 0 and not nullify:
+    if boundscheck and len(gather_map) > 0 and not nullify:
         gm_min, gm_max = minmax(gather_map)
         if gm_min < -len(source_table) or gm_max >= len(source_table):
             raise IndexError(f"Gather map index with min {gm_min},"

@@ -31,13 +31,20 @@ class _Resampler(GroupBy):
             index = cudf.Index(
                 self.grouping.bin_labels, name=self.grouping.names[0]
             )
-            return result._align_to_index(index, how="right")
+            return result._align_to_index(
+                index, how="right", sort=False, allow_non_unique=True
+            )
         else:
             return result.sort_index()
         return result
 
     def asfreq(self):
-        return self.obj._align_to_index(self.grouping.bin_labels, how="right")
+        return self.obj._align_to_index(
+            self.grouping.bin_labels,
+            how="right",
+            sort=False,
+            allow_non_unique=True,
+        )
 
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
         # TODO: can this be more efficient?
@@ -45,7 +52,10 @@ class _Resampler(GroupBy):
         # first, compute the outer join between `self.obj` and the `bin_labels`
         # to get the sampling "gaps":
         upsampled = self.obj._align_to_index(
-            self.grouping.bin_labels, how="outer"
+            self.grouping.bin_labels,
+            how="outer",
+            sort=True,
+            allow_non_unique=True,
         )
 
         # fill the gaps:
@@ -53,7 +63,12 @@ class _Resampler(GroupBy):
 
         # filter the result to only include the values corresponding
         # to the bin labels:
-        return filled._align_to_index(self.grouping.bin_labels, how="right")
+        return filled._align_to_index(
+            self.grouping.bin_labels,
+            how="right",
+            sort=False,
+            allow_non_unique=True,
+        )
 
 
 class DataFrameResampler(_Resampler, DataFrameGroupBy):
@@ -162,7 +177,9 @@ class _ResampleGrouping(_Grouping):
         self.bin_labels = bin_labels
 
         # replace self._key_columns with the binned key column:
-        self._key_columns = [bin_labels._column.take(bin_numbers)]
+        self._key_columns = [
+            bin_labels._gather(bin_numbers, boundscheck=False)._column
+        ]
 
 
 # NOTE: this function is vendored from Pandas

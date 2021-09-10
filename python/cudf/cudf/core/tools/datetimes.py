@@ -845,7 +845,9 @@ def date_range(
         if sign:
             offset.kwds.update({s: -i for s, i in offset.kwds.items()})
     else:
-        raise TypeError("`freq` must be a `str` or cudf.DateOffset object.")
+        if not isinstance(freq, cudf.DateOffset):
+            raise TypeError("`freq` must be a `str` or DateOffset object.")
+        offset = freq
 
     if _has_mixed_freqeuency(offset):
         raise NotImplementedError(

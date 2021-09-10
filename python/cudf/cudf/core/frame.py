@@ -650,7 +650,9 @@ class Frame(libcudf.table.Table):
             data, columns=data.to_pandas_index(), index=self.index
         )
 
-    def _gather(self, gather_map, keep_index=True, nullify=False):
+    def _gather(
+        self, gather_map, keep_index=True, nullify=False, boundscheck=True
+    ):
         if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_data(
@@ -659,6 +661,7 @@ class Frame(libcudf.table.Table):
                 as_column(gather_map),
                 keep_index=keep_index,
                 nullify=nullify,
+                boundscheck=boundscheck,
             )
         )
 

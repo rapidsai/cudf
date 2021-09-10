@@ -4,6 +4,7 @@ import collections
 import pickle
 import warnings
 
+import numpy as np
 import pandas as pd
 from nvtx import annotate
 
@@ -67,6 +68,7 @@ class GroupBy(Serializable):
         dropna : bool, optional
             If True (default), do not include the "null" group.
         """
+        self.obj = obj
         self._as_index = as_index
         self._sort = sort
         self._dropna = dropna
@@ -75,10 +77,6 @@ class GroupBy(Serializable):
             self.grouping = by
         else:
             self.grouping = _Grouping(obj, by, level)
-
-    @property
-    def obj(self):
-        return self.grouping._obj
 
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
@@ -205,22 +203,20 @@ class GroupBy(Serializable):
             result = result.sort_index()
 
         if not _is_multi_agg(func):
-            if result.columns.nlevels == 1:
+            if result._data.nlevels <= 1:  # 0 or 1 levels
                 # make sure it's a flat index:
-                result.columns = result.columns.get_level_values(0)
+                result._data.multiindex = False
 
-            if result.columns.nlevels > 1:
-                try:
-                    # drop the last level
-                    result.columns = result.columns.droplevel(-1)
-                except IndexError:
-                    # Pandas raises an IndexError if we are left
-                    # with an all-nan MultiIndex when dropping
-                    # the last level
-                    if result.shape[1] == 1:
-                        result.columns = [None]
-                    else:
-                        raise
+            if result._data.nlevels > 1:
+                result._data.droplevel(-1)
+
+                # if, after dropping the last level, the only
+                # remaining key is `NaN`, we need to convert to `None`
+                # for Pandas compat:
+                if result._data.names == (np.nan,):
+                    result._data = result._data.rename_levels(
+                        {np.nan: None}, level=0
+                    )
 
         if libgroupby._is_all_scan_aggregate(normalized_aggs):
             # Scan aggregations return rows in original index order

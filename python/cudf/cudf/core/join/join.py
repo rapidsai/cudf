@@ -181,11 +181,17 @@ class Merge(object):
         gather_index = self.left_index or self.right_index
         if left_rows is not None:
             left_result = lhs._gather(
-                left_rows, nullify=True, keep_index=gather_index
+                left_rows,
+                nullify=True,
+                keep_index=gather_index,
+                boundscheck=False,
             )
         if right_rows is not None:
             right_result = rhs._gather(
-                right_rows, nullify=True, keep_index=gather_index
+                right_rows,
+                nullify=True,
+                keep_index=gather_index,
+                boundscheck=False,
             )
 
         result = self._merge_results(left_result, right_result)
@@ -374,7 +380,9 @@ class Merge(object):
                 sort_order = result._get_sorted_inds(
                     list(_coerce_to_tuple(self.on))
                 )
-            return result._gather(sort_order, keep_index=False)
+            return result._gather(
+                sort_order, keep_index=False, boundscheck=False
+            )
         by = []
         if self.left_index and self.right_index:
             if result._index is not None:
@@ -390,7 +398,7 @@ class Merge(object):
         if by:
             to_sort = cudf.DataFrame._from_columns(by)
             sort_order = to_sort.argsort()
-            result = result._gather(sort_order)
+            result = result._gather(sort_order, boundscheck=False)
         return result
 
     @staticmethod
