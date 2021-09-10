@@ -234,9 +234,6 @@ MD5ListHasher::operator()<string_view>(column_device_view data_col,
 }
 
 struct MD5Hash {
-  MD5Hash() = default;
-  constexpr MD5Hash(uint32_t seed) {}
-
   void __device__ finalize(md5_intermediate_data* hash_state, char* result_location) const
   {
     auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
