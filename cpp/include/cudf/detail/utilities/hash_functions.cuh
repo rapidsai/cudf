@@ -235,7 +235,7 @@ MD5ListHasher::operator()<string_view>(column_device_view data_col,
 
 struct MD5Hash {
   MD5Hash() = default;
-  constexpr MD5Hash(uint32_t seed) : m_seed(seed) {}
+  constexpr MD5Hash(uint32_t seed) {}
 
   void __device__ finalize(md5_intermediate_data* hash_state, char* result_location) const
   {
@@ -307,9 +307,6 @@ struct MD5Hash {
   {
     md5_process(col.element<T>(row_index), hash_state);
   }
-
- private:
-  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
 template <>
