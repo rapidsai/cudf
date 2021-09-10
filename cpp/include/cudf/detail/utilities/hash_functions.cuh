@@ -88,7 +88,7 @@ void CUDA_DEVICE_CALLABLE md5_process(TKey const& key, md5_intermediate_data* ha
   uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
   hash_state->message_length += len;
 
-  // 64 bytes for the number of byt es processed in a given step
+  // 64 bytes are processed in each hash step
   constexpr int md5_chunk_size = 64;
   if (hash_state->buffer_length + len < md5_chunk_size) {
     std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
@@ -210,18 +210,20 @@ MD5ListHasher::operator()<string_view>(column_device_view data_col,
 
       hash_state->message_length += len;
 
-      if (hash_state->buffer_length + len < 64) {
+      // 64 bytes are processed in each hash step
+      constexpr int md5_chunk_size = 64;
+      if (hash_state->buffer_length + len < md5_chunk_size) {
         std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
         hash_state->buffer_length += len;
       } else {
-        uint32_t copylen = 64 - hash_state->buffer_length;
+        uint32_t copylen = md5_chunk_size - hash_state->buffer_length;
         std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
         md5_hash_step(hash_state);
 
-        while (len > 64 + copylen) {
-          std::memcpy(hash_state->buffer, data + copylen, 64);
+        while (len > md5_chunk_size + copylen) {
+          std::memcpy(hash_state->buffer, data + copylen, md5_chunk_size);
           md5_hash_step(hash_state);
-          copylen += 64;
+          copylen += md5_chunk_size;
         }
 
         std::memcpy(hash_state->buffer, data + copylen, len - copylen);
@@ -240,7 +242,7 @@ struct MD5Hash {
     auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
     thrust::fill_n(thrust::seq, hash_state->buffer + hash_state->buffer_length, 1, 0x80);
 
-    // 64 bytes for the number of bytes processed in a given step
+    // 64 bytes are processed in each hash step
     constexpr int md5_chunk_size = 64;
     // 8 bytes for the total message length, appended to the end of the last chunk processed
     constexpr int message_length_size = 8;

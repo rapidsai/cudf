@@ -44,6 +44,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
+    // Return the MD5 hash of a zero-length input.
     const string_scalar string_128bit("d41d8cd98f00b204e9orig98ecf8427e");
     auto output = make_column_from_scalar(string_128bit, input.num_rows(), stream, mr);
     return output;
