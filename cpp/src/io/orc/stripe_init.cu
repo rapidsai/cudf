@@ -468,12 +468,12 @@ extern "C" __global__ void __launch_bounds__(128, 8)
   }
 }
 template <int block_size>
-__global__ void __launch_bounds__(block_size, 2)
+__global__ void __launch_bounds__(block_size)
   gpu_per_rowgroup_valid_counts(device_span<orc_column_device_view const> columns,
                                 device_2dspan<rowgroup_rows const> rowgroups,
                                 device_2dspan<size_type> valid_counts)
 {
-  typedef cub::BlockReduce<size_type, 128> BlockReduce;
+  typedef cub::BlockReduce<size_type, block_size> BlockReduce;
   __shared__ typename BlockReduce::TempStorage temp_storage;
 
   auto const column_id = blockIdx.x;
@@ -490,13 +490,15 @@ __global__ void __launch_bounds__(block_size, 2)
     auto const begin_bit = row;
     auto const end_bit   = min(static_cast<size_type>(row + bits_per_word), rg.end);
     auto const mask_len  = end_bit - begin_bit;
-    auto const mask =
-      cudf::detail::get_mask_offset_word(column.cudf_column.null_mask(), 0, row, end_bit) &
-      ((1 << mask_len) - 1);
-    count += __popc(mask);
+    auto const mask_word = [row, end_bit, mask = column.cudf_column.null_mask()]() {
+      if (mask == nullptr) return static_cast<bitmask_type>(0xffffffff);
+      return cudf::detail::get_mask_offset_word(mask, 0, row, end_bit);
+    }();
+    count += __popc(mask_word & ((1 << mask_len) - 1));
   }
-  auto const total_count = BlockReduce(temp_storage).Sum(count);
-  if (t == 0) { valid_counts[rowgroup_id][column_id] = total_count; }
+
+  count = BlockReduce(temp_storage).Sum(count);
+  if (t == 0) { valid_counts[rowgroup_id][column_id] = count; }
 }
 
 void __host__ ParseCompressedStripeData(CompressedStreamInfo* strm_info,
