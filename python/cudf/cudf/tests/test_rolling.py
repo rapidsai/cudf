@@ -10,6 +10,7 @@ import pytest
 import cudf
 from cudf.core._compat import PANDAS_GE_110
 from cudf.testing._utils import assert_eq
+from cudf.testing.dataset_generator import rand_dataframe
 
 
 @pytest.mark.parametrize(
@@ -133,13 +134,16 @@ def test_rolling_with_offset(agg):
     )
 
 
-def generate_large_dataframe_for_var(size, window_size, nulls_prob, seed):
-    """Generates a random number filled dataframe with nulls to evaluate
-    correctness of variance and std. The range of the numbers are clamped
-    to avoid overflows. Three dtypes were tested: `np.int64` (non-nullable
-    integer), `np.float64` and `Decimal`.
-    """
-    rng = np.random.default_rng(seed)
+@pytest.mark.parametrize("agg", ["std", "var"])
+@pytest.mark.parametrize("ddof", [0, 1])
+@pytest.mark.parametrize("center", [True, False])
+@pytest.mark.parametrize("seed", [100, 2000])
+@pytest.mark.parametrize("window_size", [2, 10, 100])
+def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
+    if PANDAS_GE_110:
+        kwargs = {"check_freq": False}
+    else:
+        kwargs = {}
 
     iupper_bound = math.sqrt(np.iinfo(np.int64).max / window_size)
     ilower_bound = -math.sqrt(abs(np.iinfo(np.int64).min) / window_size)
@@ -147,44 +151,36 @@ def generate_large_dataframe_for_var(size, window_size, nulls_prob, seed):
     fupper_bound = math.sqrt(np.finfo(np.float64).max / window_size)
     flower_bound = -math.sqrt(abs(np.finfo(np.float64).min) / window_size)
 
-    # Nullable integer type rolling agg is unsupported in pandas
-    intcol = rng.integers(ilower_bound, iupper_bound, size)
-    floatcol = [
-        rng.uniform(flower_bound, fupper_bound)
-        if rng.uniform(0, 1) > nulls_prob
-        else np.nan
-        for _ in range(size)
-    ]
-    deccol = [
-        Decimal(int(rng.integers(ilower_bound, iupper_bound)))
-        if rng.uniform(0, 1) > nulls_prob
-        else None
-        for _ in range(size)
-    ]
-
-    pdf = pd.DataFrame()
-    pdf["int"] = pd.Series(intcol).astype("int64")
-    pdf["float"] = pd.Series(floatcol).astype("float64")
-    pdf["decimal"] = pd.Series(deccol)
-
-    return pdf
-
-
-@pytest.mark.parametrize("agg", ["std", "var"])
-@pytest.mark.parametrize("ddof", [0, 1])
-@pytest.mark.parametrize("center", [True, False])
-@pytest.mark.parametrize("seed", [100, 1000, 10000])
-@pytest.mark.parametrize("window_size", [2, 10, 100, 1000])
-def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
-
     n_rows = 1_000
-    pdf = generate_large_dataframe_for_var(
-        n_rows, window_size, nulls_prob=0.4, seed=seed
+    data = rand_dataframe(
+        dtypes_meta=[
+            {
+                "dtype": "int64",
+                "null_frequency": 0.4,
+                "cardinality": n_rows,
+                "min_bound": ilower_bound,
+                "max_bound": iupper_bound,
+            },
+            {
+                "dtype": "float64",
+                "null_frequency": 0.4,
+                "cardinality": n_rows,
+                "min_bound": flower_bound,
+                "max_bound": fupper_bound,
+            },
+            {
+                "dtype": "decimal64",
+                "null_frequency": 0.4,
+                "cardinality": n_rows,
+                "min_bound": ilower_bound,
+                "max_bound": iupper_bound,
+            },
+        ],
+        rows=n_rows,
+        use_threads=False,
+        seed=seed,
     )
+    pdf = data.to_pandas()
     gdf = cudf.from_pandas(pdf)
 
     expect = getattr(pdf.rolling(window_size, 1, center), agg)(ddof=ddof)
