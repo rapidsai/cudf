@@ -530,11 +530,19 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
  *
  * The tdigest column produced is of the following structure:
  *
- * list {
- *   struct {
- *     double    // mean
- *     double    // weight
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    }
  *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
  * }
  *
  * Each output row is a single tdigest.  The length of the row is the "size" of the
@@ -568,11 +576,19 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
  *
  * The tdigest column produced is of the following structure:
  *
- * list {
- *   struct {
- *     double    // mean
- *     double    // weight
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    }
  *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
  * }
  *
  * Each output row is a single tdigest.  The length of the row is the "size" of the

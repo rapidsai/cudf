@@ -1171,7 +1171,7 @@ template <typename Source, aggregation::Kind k>
 struct target_type_impl<Source,
                         k,
                         std::enable_if_t<is_numeric<Source>() && k == aggregation::TDIGEST>> {
-  using type = list_view;
+  using type = struct_view;
 };
 
 // TDIGEST_MERGE. The root column type for a tdigest column is a list_view. Strictly
@@ -1181,8 +1181,8 @@ template <typename Source, aggregation::Kind k>
 struct target_type_impl<
   Source,
   k,
-  std::enable_if_t<std::is_same_v<Source, cudf::list_view> && k == aggregation::MERGE_TDIGEST>> {
-  using type = list_view;
+  std::enable_if_t<std::is_same_v<Source, cudf::struct_view> && k == aggregation::MERGE_TDIGEST>> {
+  using type = struct_view;
 };
 
 /**
