@@ -1,7 +1,6 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 import math
-from decimal import Decimal
 
 import numpy as np
 import pandas as pd
