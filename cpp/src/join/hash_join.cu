@@ -72,19 +72,19 @@ void build_join_hash_table(cudf::table_view const& build,
                            null_equality compare_nulls,
                            rmm::cuda_stream_view stream)
 {
-  auto build_device_table = cudf::table_device_view::create(build, stream);
+  auto build_table_ptr = cudf::table_device_view::create(build, stream);
 
-  CUDF_EXPECTS(0 != build_device_table->num_columns(), "Selected build dataset is empty");
-  CUDF_EXPECTS(0 != build_device_table->num_rows(), "Build side table has no rows");
+  CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
+  CUDF_EXPECTS(0 != build_table_ptr->num_rows(), "Build side table has no rows");
 
-  row_hash hash_build{*build_device_table};
+  row_hash hash_build{*build_table_ptr};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_build, empty_key_sentinel};
 
   thrust::counting_iterator<size_type> first(0);
   auto iter = thrust::make_transform_iterator(first, pair_func);
 
-  size_type const build_table_num_rows{build_device_table->num_rows()};
+  size_type const build_table_num_rows{build_table_ptr->num_rows()};
   if ((compare_nulls == null_equality::EQUAL) or (not nullable(build))) {
     hash_table.insert(iter, iter + build_table_num_rows, stream.value());
   } else {
@@ -282,7 +282,7 @@ hash_join::hash_join_impl::~hash_join_impl() = default;
 hash_join::hash_join_impl::hash_join_impl(cudf::table_view const& build,
                                           null_equality compare_nulls,
                                           rmm::cuda_stream_view stream)
-  : _empty{!build.num_rows()},
+  : _is_empty{build.num_rows() == 0},
     _hash_table{compute_hash_table_size(build.num_rows()),
                 std::numeric_limits<hash_value_type>::max(),
                 cudf::detail::JoinNoneValue,
@@ -299,7 +299,7 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const& build,
   // need to store off the owning structures for some of the views in _build
   _created_null_columns = std::move(std::get<3>(flattened_build));
 
-  if (_empty) { return; }
+  if (_is_empty) { return; }
 
   build_join_hash_table(_build, _hash_table, compare_nulls, stream);
 }
@@ -350,7 +350,7 @@ std::size_t hash_join::hash_join_impl::inner_join_size(cudf::table_view const& p
   CUDF_FUNC_RANGE();
 
   // Return directly if build table is empty
-  if (_empty) { return 0; }
+  if (_is_empty) { return 0; }
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
     probe, {}, {}, structs::detail::column_nullability::FORCE);
@@ -370,7 +370,7 @@ std::size_t hash_join::hash_join_impl::left_join_size(cudf::table_view const& pr
   CUDF_FUNC_RANGE();
 
   // Trivial left join case - exit early
-  if (_empty) { return probe.num_rows(); }
+  if (_is_empty) { return probe.num_rows(); }
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
     probe, {}, {}, structs::detail::column_nullability::FORCE);
@@ -391,7 +391,7 @@ std::size_t hash_join::hash_join_impl::full_join_size(cudf::table_view const& pr
   CUDF_FUNC_RANGE();
 
   // Trivial left join case - exit early
-  if (_empty) { return probe.num_rows(); }
+  if (_is_empty) { return probe.num_rows(); }
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
     probe, {}, {}, structs::detail::column_nullability::FORCE);
@@ -450,17 +450,17 @@ hash_join::hash_join_impl::probe_join_indices(cudf::table_view const& probe,
                                               rmm::mr::device_memory_resource* mr) const
 {
   // Trivial left join case - exit early
-  if (_empty and JoinKind != cudf::detail::join_kind::INNER_JOIN) {
+  if (_is_empty and JoinKind != cudf::detail::join_kind::INNER_JOIN) {
     return get_trivial_left_join_indices(probe, stream, mr);
   }
 
-  CUDF_EXPECTS(!_empty, "Hash table of hash join is null.");
+  CUDF_EXPECTS(!_is_empty, "Hash table of hash join is null.");
 
-  auto build_table = cudf::table_device_view::create(_build, stream);
-  auto probe_table = cudf::table_device_view::create(probe, stream);
+  auto build_table_ptr = cudf::table_device_view::create(_build, stream);
+  auto probe_table_ptr = cudf::table_device_view::create(probe, stream);
 
   auto join_indices = cudf::detail::probe_join_hash_table<JoinKind>(
-    *build_table, *probe_table, _hash_table, compare_nulls, output_size, stream, mr);
+    *build_table_ptr, *probe_table_ptr, _hash_table, compare_nulls, output_size, stream, mr);
 
   if constexpr (JoinKind == cudf::detail::join_kind::FULL_JOIN) {
     auto complement_indices = detail::get_left_join_indices_complement(

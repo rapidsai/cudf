@@ -153,9 +153,9 @@ struct hash_join::hash_join_impl {
   hash_join_impl& operator=(hash_join_impl&&) = delete;
 
  private:
+  bool _is_empty;
   cudf::table_view _build;
   std::vector<std::unique_ptr<cudf::column>> _created_null_columns;
-  bool _empty;
   cudf::detail::multimap_type _hash_table;
 
  public:
