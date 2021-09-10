@@ -1169,17 +1169,17 @@ struct target_type_impl<Source, aggregation::ROW_NUMBER> {
 
 template <typename Source>
 struct target_type_impl<Source, aggregation::EWMA> {
-  using type = size_type;
+  using type = double;
 };
 
 template <typename Source>
 struct target_type_impl<Source, aggregation::EWMVAR> {
-  using type = size_type;
+  using type = double;
 };
 
 template <typename Source>
 struct target_type_impl<Source, aggregation::EWMSTD> {
-  using type = size_type;
+  using type = double;
 };
 
 // Always use size_type accumulator for RANK
