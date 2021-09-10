@@ -249,7 +249,7 @@ cdef class ORCWriter:
             table._index.name is not None or
             isinstance(table._index, cudf.core.multiindex.MultiIndex)
         )
-        tv = table_view_from_table(table, keep_index)
+        tv = table_view_from_table(table, not keep_index)
 
         with nogil:
             self.writer.get()[0].write(tv)
