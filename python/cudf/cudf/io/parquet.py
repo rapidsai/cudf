@@ -5,6 +5,7 @@ import warnings
 from collections import defaultdict
 from uuid import uuid4
 
+import fsspec
 from pyarrow import dataset as ds, fs as pa_fs, parquet as pq
 
 import cudf
@@ -178,25 +179,26 @@ def _filter_row_groups(paths, fs, filters=None, row_groups=None):
     )
     file_list = dataset.files
 
-    # Load IDs of filtered row groups for each file in dataset
-    filtered_rg_ids = defaultdict(list)
-    for fragment in dataset.get_fragments(filter=filters):
-        for rg_fragment in fragment.split_by_row_group(filters):
-            for rg_info in rg_fragment.row_groups:
-                filtered_rg_ids[rg_fragment.path].append(rg_info.id)
+    if filters:
+        # Load IDs of filtered row groups for each file in dataset
+        filtered_rg_ids = defaultdict(list)
+        for fragment in dataset.get_fragments(filter=filters):
+            for rg_fragment in fragment.split_by_row_group(filters):
+                for rg_info in rg_fragment.row_groups:
+                    filtered_rg_ids[rg_fragment.path].append(rg_info.id)
 
-    # Initialize row_groups to be selected
-    if row_groups is None:
-        row_groups = [None for _ in dataset.files]
+        # Initialize row_groups to be selected
+        if row_groups is None:
+            row_groups = [None for _ in dataset.files]
 
-    # Store IDs of selected row groups for each file
-    for i, file in enumerate(dataset.files):
-        if row_groups[i] is None:
-            row_groups[i] = filtered_rg_ids[file]
-        else:
-            row_groups[i] = filter(
-                lambda id: id in row_groups[i], filtered_rg_ids[file]
-            )
+        # Store IDs of selected row groups for each file
+        for i, file in enumerate(dataset.files):
+            if row_groups[i] is None:
+                row_groups[i] = filtered_rg_ids[file]
+            else:
+                row_groups[i] = filter(
+                    lambda id: id in row_groups[i], filtered_rg_ids[file]
+                )
 
     return file_list, row_groups
 
@@ -209,24 +211,35 @@ def _get_byte_ranges(file_list, row_groups, columns, fs):
         row_groups = [None for path in file_list]
 
     # Construct a list of required byte-ranges for every file
-    all_byte_ranges = []
+    all_byte_ranges, all_footers, all_sizes = [], [], []
     for path, rgs in zip(file_list, row_groups):
 
         # Step 0 - Get size of file
-        file_size = fs.size(path)
+        if fs is None:
+            file_size = path.size
+        else:
+            file_size = fs.size(path)
 
         # Step 1 - Get 32 KB from tail of file.
         #
         # This "sample size" can be tunable, but should
         # always be >= 8 bytes (so we can read the footer size)
         tail_size = 32_000
-        footer_sample = fs.tail(path, tail_size)
+        if fs is None:
+            path.seek(file_size - tail_size)
+            footer_sample = path.read(tail_size)
+        else:
+            footer_sample = fs.tail(path, tail_size)
 
         # Step 2 - Read the footer size and re-read a larger
         #          tail if necessary
         footer_size = int.from_bytes(footer_sample[-8:-4], "little")
         if tail_size < (footer_size + 8):
-            footer_sample = fs.tail(path, footer_size + 8)
+            if fs is None:
+                path.seek(file_size - (footer_size + 8))
+                footer_sample = path.read(footer_size + 8)
+            else:
+                footer_sample = fs.tail(path, footer_size + 8)
 
         # Step 3 - Collect required byte ranges
         byte_ranges = []
@@ -234,7 +247,7 @@ def _get_byte_ranges(file_list, row_groups, columns, fs):
         for r in range(md.num_row_groups):
             # Skip this row-group if we are targetting
             # specific row-groups
-            if row_groups is None or r in rgs:
+            if rgs is None or r in rgs:
                 row_group = md.row_group(r)
                 for c in range(row_group.num_columns):
                     column = row_group.column(c)
@@ -249,7 +262,9 @@ def _get_byte_ranges(file_list, row_groups, columns, fs):
                         byte_ranges.append((file_offset0, num_bytes))
 
         all_byte_ranges.append(byte_ranges)
-    return file_size, all_byte_ranges
+        all_footers.append(footer_sample)
+        all_sizes.append(file_size)
+    return all_byte_ranges, all_footers, all_sizes
 
 
 @ioutils.doc_read_parquet()
@@ -297,26 +312,30 @@ def read_parquet(
     # needed for each parquet file. We do this when we have
     # a file-system object to work with and it is not a local
     # or pyarrow-backed filesystem object.
-    need_fs_blocks = fs is not None and not (
+    need_byte_ranges = fs is not None and not (
         ioutils._is_local_filesystem(fs) or isinstance(fs, pa_fs.FileSystem)
     )
 
     # Apply filters now (before converting non-local paths to buffers)
-    if fs is not None and filters is not None:
+    if fs is not None and (filters or need_byte_ranges):
         filepath_or_buffer, row_groups = _filter_row_groups(
             filepath_or_buffer, fs, filters=filters, row_groups=row_groups,
         )
 
     # Get required byte ranges (used with non-local fsspec filesystems)
-    fs_blocks = None
-    if need_fs_blocks:
-        fs_blocks = _get_byte_ranges(
+    byte_ranges, footers, file_sizes = None, None, None
+    if need_byte_ranges or (
+        filepath_or_buffer
+        and isinstance(
+            filepath_or_buffer[0], fsspec.spec.AbstractBufferedFile,
+        )
+    ):
+        byte_ranges, footers, file_sizes = _get_byte_ranges(
             filepath_or_buffer, row_groups, columns, fs,
         )
-    print(fs_blocks)
 
     filepaths_or_buffers = []
-    for source in filepath_or_buffer:
+    for i, source in enumerate(filepath_or_buffer):
 
         if ioutils.is_directory(source, **kwargs):
             fsspec_fs = ioutils._ensure_filesystem(
@@ -326,7 +345,14 @@ def read_parquet(
             source = fsspec_fs.sep.join([source, "*.parquet"])
 
         tmp_source, compression = ioutils.get_filepath_or_buffer(
-            path_or_data=source, compression=None, fs=fs, **kwargs,
+            path_or_data=source,
+            compression=None,
+            fs=fs,
+            byte_ranges=byte_ranges[i] if byte_ranges else None,
+            footer=footers[i] if footers else None,
+            file_size=file_sizes[i] if file_sizes else None,
+            add_par1_magic=True,
+            **kwargs,
         )
         if compression is not None:
             raise ValueError(
