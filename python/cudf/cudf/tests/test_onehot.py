@@ -31,7 +31,7 @@ def test_onehot_simple():
     assert df2.columns[0] == "vals"
     for i in range(1, len(df2.columns)):
         assert df2.columns[i] == "vals_%s" % (i - 1)
-    got = df2.as_matrix(columns=df2.columns[1:])
+    got = df2[df2.columns[1:]].values_host
     expect = np.identity(got.shape[0])
     np.testing.assert_equal(got, expect)
 
@@ -45,7 +45,7 @@ def test_onehot_random():
     df2 = df.one_hot_encoding(
         column="src", prefix="out_", cats=tuple(range(10, 17))
     )
-    mat = df2.as_matrix(columns=df2.columns[1:])
+    mat = df2[df2.columns[1:]].values_host
 
     for val in range(low, high):
         colidx = val - low

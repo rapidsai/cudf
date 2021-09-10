@@ -291,7 +291,7 @@ def test_dataframe_basic():
     np.testing.assert_equal(df["vals"].to_array(), hvals)
 
     # As matrix
-    mat = df.as_matrix()
+    mat = df.values_host
 
     expect = np.vstack([hkeys, hvals]).T
 
@@ -1150,7 +1150,7 @@ def test_dataframe_hash_partition(nrows, nparts, nkeys):
     for p in got:
         if len(p):
             # Take rows of the keycolumns and build a set of the key-values
-            unique_keys = set(map(tuple, p.as_matrix(columns=keycols)))
+            unique_keys = set(map(tuple, p[keycols].values_host))
             # Ensure that none of the key-values have occurred in other groups
             assert not (unique_keys & part_unique_keys)
             part_unique_keys |= unique_keys

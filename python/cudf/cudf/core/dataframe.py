@@ -1005,6 +1005,18 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         """
         return cupy.asarray(self.as_gpu_matrix())
 
+    @property
+    def values_host(self):
+        """
+        Return a NumPy representation of the data.
+
+        Returns
+        -------
+        out : numpy.ndarray
+            A host representation of the underlying data.
+        """
+        return self.values.get()
+
     def __array__(self, dtype=None):
         raise TypeError(
             "Implicit conversion to a host NumPy array via __array__ is not "
