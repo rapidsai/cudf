@@ -1337,7 +1337,7 @@ class _Grouping(Serializable):
         elif nkeys > 1:
             return cudf.MultiIndex._from_data(
                 dict(zip(range(nkeys), self._key_columns))
-            ).set_names(self.names)
+            )._set_names(self.names)
         else:
             return cudf.core.index.as_index(
                 self._key_columns[0], name=self.names[0]
