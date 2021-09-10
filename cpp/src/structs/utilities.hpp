@@ -19,6 +19,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace structs {
 namespace detail {
@@ -106,7 +108,7 @@ std::unique_ptr<cudf::table> unflatten_nested_columns(std::unique_ptr<cudf::tabl
                                                       table_view const& blueprint);
 
 /**
- * @brief Pushdown nulls from a parent mask into a child column, using AND.
+ * @brief Push down nulls from a parent mask into a child column, using bitwise AND.
  *
  * This function will recurse through all struct descendants. It is expected that
  * the size of `parent_null_mask` in bits is the same as `child.size()`
@@ -122,6 +124,29 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
                               column& child,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Push down nulls from a parent mask into a child column, using bitwise AND.
+ *
+ * This function constructs a new column_view instance equivalent to the argument column_view,
+ * with possibly new child column_views, all with possibly new null mask values reflecting
+ * null rows from the parent column:
+ * 1. If the specified column is not STRUCT, the column is returned unmodified, with no new
+ *    supporting device_buffer instances.
+ * 2. If the column is STRUCT, the null masks of the parent and child are bitwise-ANDed, and a
+ *    modified column_view is returned. This applies recursively.
+ *
+ * @param parent The parent (possibly STRUCT) column whose nulls need to be pushed to its members.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr     Device memory resource used to allocate new device memory.
+ * @return A pair of:
+ *         1. column_view with nulls pushed down to child columns, as appropriate.
+ *         2. Supporting device_buffer instances, for any newly constructed null masks.
+ */
+std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_parent_nulls(
+  column_view const& parent,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace structs

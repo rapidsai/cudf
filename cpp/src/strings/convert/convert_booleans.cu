@@ -140,9 +140,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                              std::move(offsets_column),
                              std::move(chars_column),
                              booleans.null_count(),
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

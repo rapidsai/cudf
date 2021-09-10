@@ -441,9 +441,7 @@ struct dispatch_from_durations_fn {
                                std::move(offsets_column),
                                std::move(chars_column),
                                durations.null_count(),
-                               std::move(null_mask),
-                               stream,
-                               mr);
+                               std::move(null_mask));
   }
 
   // non-duration types throw an exception

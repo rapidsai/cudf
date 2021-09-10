@@ -247,10 +247,10 @@ class MaskedScalarScalarOp(AbstractTemplate):
         # In the case of op(Masked, scalar), we resolve the type between
         # the Masked value_type and the scalar's type directly
         if isinstance(args[0], MaskedType) and isinstance(
-            args[1], types.Number
+            args[1], (types.Number, types.Boolean)
         ):
             to_resolve_types = (args[0].value_type, args[1])
-        elif isinstance(args[0], types.Number) and isinstance(
+        elif isinstance(args[0], (types.Number, types.Boolean)) and isinstance(
             args[1], MaskedType
         ):
             to_resolve_types = (args[1].value_type, args[0])
