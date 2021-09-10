@@ -37,15 +37,33 @@ bool sha_type_check(data_type dt)
   return !is_chrono(dt) && (is_fixed_width(dt) || (dt.id() == type_id::STRING));
 }
 
+CUDA_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
+{
+  // Equivalent to (x << r) | (x >> (32 - r))
+  return __funnelshift_l(x, x, r);
+}
+
+// Swap the endianness of a 32 bit value
+CUDA_DEVICE_CALLABLE uint32_t swap_endian_32(uint32_t x)
+{
+  // The selector 0x0123 reverses the byte order
+  return __byte_perm(x, 0, 0x0123);
+}
+
+// Swap the endianness of a 64 bit value
+// There is no CUDA intrinsic for permuting bytes in 64 bit integers
+CUDA_DEVICE_CALLABLE uint64_t swap_endian_64(uint64_t x)
+{
+  // Reverse the endianness of each 32 bit section
+  uint32_t low_bits  = swap_endian_32(x);
+  uint32_t high_bits = swap_endian_32(x >> 32);
+  // Reassemble a 64 bit result, swapping the low bits and high bits
+  return (static_cast<uint64_t>(low_bits) << 32) | (static_cast<uint64_t>(high_bits));
+};
+
 }  // namespace
 
 struct SHA1Hash {
-  CUDA_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
-  {
-    // Equivalent to (x << r) | (x >> (32 - r))
-    return __funnelshift_l(x, x, r);
-  }
-
   /**
    * @brief Core SHA-1 algorithm implementation. Processes a single 512-bit chunk,
    * updating the hash value so far. Does not zero out the buffer contents.
@@ -65,7 +83,7 @@ struct SHA1Hash {
       uint32_t buffer_element_as_int;
       std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * 4), 4);
       // Convert word representation from little-endian to big-endian.
-      words[i] = __byte_perm(buffer_element_as_int, 0, 0x0123);
+      words[i] = swap_endian_32(buffer_element_as_int);
     }
 
     // The rest of the 80 words are generated from the first 16 words.
@@ -178,17 +196,7 @@ struct SHA1Hash {
     }
 
     // Convert the 64-bit message length from little-endian to big-endian.
-    // There is currently no CUDA intrinsic for permuting bytes in 64 bit integers.
-    auto uint64_swap_endian = [](uint64_t x) -> uint64_t {
-      // Reverse the endianness of each 32 bit section
-      uint32_t low_bits  = __byte_perm(x, 0, 0x123);
-      uint32_t high_bits = __byte_perm(x >> 32, 0, 0x123);
-      // Reassemble a 64 bit result
-      uint64_t y = (static_cast<uint64_t>(low_bits) << 32) | (static_cast<uint64_t>(high_bits));
-      return y;
-    };
-
-    auto const full_length_flipped = uint64_swap_endian(full_length);
+    auto const full_length_flipped = swap_endian_64(full_length);
     std::memcpy(hash_state->buffer + sha1_chunk_size - message_length_size,
                 reinterpret_cast<uint8_t const*>(&full_length_flipped),
                 message_length_size);
@@ -198,7 +206,7 @@ struct SHA1Hash {
 #pragma unroll
     for (int i = 0; i < 5; ++i) {
       // Convert word representation from big-endian to little-endian.
-      uint32_t flipped = __byte_perm(hash_state->hash_value[i], 0, 0x0123);
+      uint32_t flipped = swap_endian_32(hash_state->hash_value[i]);
       uint32ToLowercaseHexString(flipped, result_location + (8 * i));
     }
   }
