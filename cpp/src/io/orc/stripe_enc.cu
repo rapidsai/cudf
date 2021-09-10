@@ -645,9 +645,9 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
       return mask_word & 0xff;
     };
 
-    uint8_t pd_byte     = 0xff;
-    uint32_t pd_set_cnt = 8;
-    uint32_t offset     = t * 8;
+    uint8_t pd_byte     = (1 << t_nrows) - 1;
+    uint32_t pd_set_cnt = t_nrows;
+    uint32_t offset     = t_nrows != 0 ? t * 8 : nrows;
     if (pushdown_mask != nullptr) {
       pd_byte    = get_mask_byte(pushdown_mask) & ((1 << t_nrows) - 1);
       pd_set_cnt = __popc(pd_byte);
@@ -674,11 +674,12 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
         }
       }
     }
+
+    __syncthreads();
     if (t == block_size - 1) {
       s->numvals += offset + pd_set_cnt;
       s->nnz += offset + pd_set_cnt;
     }
-
     present_rows += nrows;
     if (!t) { s->present_rows = present_rows; }
     __syncthreads();
@@ -694,11 +695,11 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
         s->present_out += nrows_encoded;
         s->numvals -= min(s->numvals, nrows_encoded);
       }
+      __syncthreads();
     }
-    __syncthreads();
   }
 
-  // reset nnz to be reused for values
+  // reset shared state
   if (t == 0) {
     s->nnz     = 0;
     s->numvals = 0;
