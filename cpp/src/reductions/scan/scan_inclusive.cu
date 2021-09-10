@@ -362,6 +362,19 @@ void compute_ewma_adjust(column_view const& input,
 {
   rmm::device_uvector<thrust::pair<double, double>> pairs(input.size(), stream, mr);
 
+  if (input.has_nulls()) {
+    rmm::device_vector<double> null_cnt(input.size());
+
+    auto device_view = *column_device_view::create(input);
+
+    thrust::inclusive_scan_by_key(cudf::detail::make_validity_iterator(device_view),
+                                  cudf::detail::make_validity_iterator(device_view) + input.size(),
+                                  cudf::detail::make_validity_iterator(device_view),
+                                  null_cnt.begin());
+                            
+
+  }
+
   // Numerator
   // Fill with pairs
   thrust::transform(rmm::exec_policy(stream),
