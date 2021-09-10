@@ -1492,7 +1492,7 @@ def _fsspec_data_transfer(
     bytes_per_thread=128_000_000,
     **kwargs,
 ):
-
+    # return fs.open(path_or_fob).read()
     if is_file_like(path_or_fob):
         file_size = path_or_fob.size
 
@@ -1522,7 +1522,6 @@ def _fsspec_data_transfer(
                 buf[-4:] = np.frombuffer(b"PAR1", dtype="b")
 
     else:
-        # return fs.open(path_or_fob).read()
         byte_ranges = [
             (b, min(bytes_per_thread, file_size - b))
             for b in range(0, file_size, bytes_per_thread)

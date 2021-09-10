@@ -207,7 +207,7 @@ def _get_byte_ranges(file_list, row_groups, columns, fs):
 
     if row_groups is None:
         if columns is None:
-            return None, None  # No reason to construct this
+            return None, None, None  # No reason to construct this
         row_groups = [None for path in file_list]
 
     # Construct a list of required byte-ranges for every file
