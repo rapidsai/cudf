@@ -24,6 +24,13 @@ function(find_and_configure_thrust VERSION)
         set(cpm_thrust_disconnect_update "")
     endif()
 
+    # We currently require cuDF to always build with a custom
+    # version of thrust. This is needed so that build times of
+    # of cudf are kept reasonable, without this CI builds
+    # of cudf will be killed as some source file can take
+    # over 45 minutes to build
+    #
+    set(CPM_DOWNLOAD_ALL TRUE)
     rapids_cpm_find(
         Thrust ${VERSION}
         BUILD_EXPORT_SET cudf-exports
