@@ -453,7 +453,8 @@ struct column_gatherer_impl<struct_view> {
     auto const gather_map_size = std::distance(gather_map_begin, gather_map_end);
     if (gather_map_size == 0) { return empty_like(column); }
 
-    // Gathering needs to operate on the sliced children to properly handle the column offset.
+    // Gathering needs to operate on the sliced children since they need to take into account the
+    // offset of the parent structs column.
     std::vector<cudf::column_view> sliced_children;
     std::transform(thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(column.num_children()),
