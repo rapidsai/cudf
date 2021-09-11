@@ -619,7 +619,10 @@ def test_orc_write_statistics(tmpdir, datadir, nrows):
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)
-    (file_stats, stripes_stats,) = cudf.io.orc.read_orc_statistics([fname])
+    (
+        file_stats,
+        stripes_stats,
+    ) = cudf.io.orc.read_orc_statistics([fname])
 
     # check file stats
     for col in gdf:
@@ -660,7 +663,10 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)
-    (file_stats, stripes_stats,) = cudf.io.orc.read_orc_statistics([fname])
+    (
+        file_stats,
+        stripes_stats,
+    ) = cudf.io.orc.read_orc_statistics([fname])
 
     # check file stats
     col = "col_bool"
@@ -966,7 +972,9 @@ list_struct_buff = generate_list_struct_buff()
 @pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100_000])
 @pytest.mark.parametrize("use_index", [True, False])
 def test_lists_struct_nests(
-    columns, num_rows, use_index,
+    columns,
+    num_rows,
+    use_index,
 ):
 
     gdf = cudf.read_orc(
@@ -996,7 +1004,10 @@ def test_skip_rows_for_nested_types(columns):
         RuntimeError, match="skip_rows is not supported by nested column"
     ):
         cudf.read_orc(
-            list_struct_buff, columns=columns, use_index=True, skiprows=5,
+            list_struct_buff,
+            columns=columns,
+            use_index=True,
+            skiprows=5,
         )
 
 
@@ -1301,7 +1312,7 @@ def test_orc_writer_lists(data):
     buffer = BytesIO()
     cudf_in = cudf.from_pandas(pdf_in)
     print(cudf_in)
-    
+
     cudf_in.to_orc(buffer)
 
     pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
@@ -1379,3 +1390,14 @@ def test_names_in_struct_dtype_nesting(datadir):
     edf = cudf.DataFrame(expect.to_pandas())
     # test schema
     assert edf.dtypes.equals(got.dtypes)
+
+
+def test_lists_struct_nests():
+    df_in = cudf.read_orc(list_struct_buff)
+
+    buff = BytesIO()
+    df_in.to_orc(buff)
+
+    pyarrow_tbl = pyarrow.orc.ORCFile(buff).read()
+
+    assert pyarrow_tbl.equals(df_in.to_arrow())
