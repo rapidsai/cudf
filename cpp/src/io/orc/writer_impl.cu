@@ -1568,7 +1568,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
      vcounts   = d_valid_counts_view,
      rowgroups = device_2dspan<rowgroup_rows const>{segmentation.rowgroups},  // maybe not needed
      out_rowgroups = device_2dspan<rowgroup_rows>{aligned_rowgroups}] __device__(auto& idx) {
-      auto const col_idx = idx / stripes.size();
+      uint32_t const col_idx = idx / stripes.size();
       // no alignment needed for root columns
       if (not columns[col_idx].parent_index.has_value()) return;
 
@@ -1590,45 +1590,51 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
             rg.end += bits_to_borrow;
             rg_next.begin += bits_to_borrow;
           }
-        } else if ((vcounts[rg_idx][parent_col_idx] - previously_borrowed) % 8) {
-          auto bits_to_borrow = 8 - (vcounts[rg_idx][parent_col_idx] - previously_borrowed) % 8;
-          auto curr_rg        = rg_idx + 1;
-          // find rg
-          while (curr_rg < stripe_end and vcounts[curr_rg][parent_col_idx] <= bits_to_borrow) {
-            out_rowgroups[curr_rg][col_idx].begin = out_rowgroups[curr_rg][col_idx].end;  // empty
-            bits_to_borrow -= vcounts[curr_rg][parent_col_idx];
-            ++curr_rg;
+          continue;
+        }
+
+        if ((vcounts[rg_idx][parent_col_idx] - previously_borrowed) % 8 == 0) {
+          previously_borrowed = 0;
+          continue;
+        }
+
+        auto bits_to_borrow = 8 - (vcounts[rg_idx][parent_col_idx] - previously_borrowed) % 8;
+        auto curr_rg        = rg_idx + 1;
+        // find rg
+        while (curr_rg < stripe_end and vcounts[curr_rg][parent_col_idx] <= bits_to_borrow) {
+          out_rowgroups[curr_rg][col_idx].begin = out_rowgroups[curr_rg][col_idx].end;  // empty
+          bits_to_borrow -= vcounts[curr_rg][parent_col_idx];
+          ++curr_rg;
+        }
+        if (curr_rg == stripe_end) {
+          rg.end = out_rowgroups[stripe_end - 1][col_idx].end;
+          break;
+        } else {
+          auto curr_bit = out_rowgroups[curr_rg][col_idx].begin;
+
+          // update to adjust the number of bits to borrow in the next rowgroup
+          previously_borrowed = bits_to_borrow;
+
+          // find word
+          while (bits_to_borrow != 0) {
+            auto const mask = cudf::detail::get_mask_offset_word(
+              parent_column.pushdown_mask, 0, curr_bit, curr_bit + 32);
+            auto const valid_in_word = __popc(mask);
+
+            if (valid_in_word > bits_to_borrow) break;
+            bits_to_borrow -= valid_in_word;
+            curr_bit += 32;
           }
-          if (curr_rg == stripe_end) {
-            rg.end = out_rowgroups[stripe_end - 1][col_idx].end;
-            break;
-          } else {
-            auto curr_bit = out_rowgroups[curr_rg][col_idx].begin;
 
-            // update to adjust the number of bits to borrow in the next rowgroup
-            previously_borrowed = bits_to_borrow;
-
-            // find word
-            while (bits_to_borrow != 0) {
-              auto const mask = cudf::detail::get_mask_offset_word(
-                parent_column.pushdown_mask, 0, curr_bit, curr_bit + 32);
-              auto const valid_in_word = __popc(mask);
-
-              if (valid_in_word > bits_to_borrow) break;
-              bits_to_borrow -= valid_in_word;
-              curr_bit += 32;
-            }
-
-            // find bit
-            while (bits_to_borrow != 0) {
-              if (bit_is_set(parent_column.pushdown_mask, curr_bit)) { --bits_to_borrow; };
-              ++curr_bit;
-            }
-
-            out_rowgroups[curr_rg][col_idx].begin = curr_bit;
-            rg.end                                = curr_bit;
-            rg_idx                                = curr_rg - 1;
+          // find bit
+          while (bits_to_borrow != 0) {
+            if (bit_is_set(parent_column.pushdown_mask, curr_bit)) { --bits_to_borrow; };
+            ++curr_bit;
           }
+
+          out_rowgroups[curr_rg][col_idx].begin = curr_bit;
+          rg.end                                = curr_bit;
+          rg_idx                                = curr_rg - 1;
         }
       }
     });
