@@ -59,7 +59,6 @@ cdef extern from "cudf/io/types.hpp" \
         unique_ptr[table] tbl
         table_metadata metadata
 
-
     cdef cppclass column_in_metadata:
         column_in_metadata& set_name(const string& name)
         column_in_metadata& set_nullability(bool nullable)

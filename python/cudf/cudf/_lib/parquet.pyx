@@ -418,11 +418,13 @@ cdef class ParquetWriter:
 
         # Set the table_metadata
         num_index_cols_meta = 0
-        self.tbl_meta = make_unique[cudf_io_types.table_input_metadata](table.data_view())
+        self.tbl_meta =
+        make_unique[cudf_io_types.table_input_metadata](table.data_view())
         if self.index is not False:
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
                 tv = table.view()
-                self.tbl_meta = make_unique[cudf_io_types.table_input_metadata](tv)
+                self.tbl_meta =
+                make_unique[cudf_io_types.table_input_metadata](tv)
                 for level, idx_name in enumerate(table._index.names):
                     self.tbl_meta.get().column_metadata[level].set_name(
                         (str.encode(idx_name))
@@ -431,7 +433,8 @@ cdef class ParquetWriter:
             else:
                 if table._index.name is not None:
                     tv = table.view()
-                    self.tbl_meta = make_unique[cudf_io_types.table_input_metadata](tv)
+                    self.tbl_meta =
+                    make_unique[cudf_io_types.table_input_metadata](tv)
                     self.tbl_meta.get().column_metadata[0].set_name(
                         str.encode(table._index.name)
                     )

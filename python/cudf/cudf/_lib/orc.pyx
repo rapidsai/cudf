@@ -53,7 +53,7 @@ from cudf._lib.utils cimport data_from_unique_ptr, get_column_names
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
 from cudf.utils.dtypes import (
-    is_list_dtype, 
+    is_list_dtype,
     is_struct_dtype
 )
 
