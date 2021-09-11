@@ -1,16 +1,16 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.pair cimport pair
-from libc.stdint cimport uint8_t
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from pyarrow.includes.libarrow cimport CRandomAccessFile
 
-from cudf._lib.cpp.table.table cimport table
 cimport cudf._lib.cpp.table.table_view as cudf_table_view
+from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.types cimport size_type
 
 

@@ -23,12 +23,12 @@ from cudf._lib.cpp.io.orc_metadata cimport (
     read_raw_orc_statistics as libcudf_read_raw_orc_statistics,
 )
 from cudf._lib.cpp.io.types cimport (
+    column_in_metadata,
     column_name_info,
     compression_type,
     data_sink,
     sink_info,
     source_info,
-    column_in_metadata,
     table_input_metadata,
     table_with_metadata,
 )
@@ -51,11 +51,8 @@ import numpy as np
 from cudf._lib.utils cimport data_from_unique_ptr, get_column_names
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
+from cudf.utils.dtypes import is_list_dtype, is_struct_dtype
 
-from cudf.utils.dtypes import (
-    is_list_dtype,
-    is_struct_dtype
-)
 
 cpdef read_raw_orc_statistics(filepath_or_buffer):
     """
