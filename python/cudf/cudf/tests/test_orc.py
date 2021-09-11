@@ -1009,6 +1009,180 @@ def test_pyspark_struct(datadir):
     assert_eq(pdf, gdf)
 
 
+def gen_map_buff(size=10000):
+    from string import ascii_letters as al
+
+    rd = random.Random(1)
+    np.random.seed(seed=1)
+
+    buff = BytesIO()
+
+    schema = {
+        "lvl1_map": po.Map(key=po.String(), value=po.BigInt()),
+        "lvl2_map": po.Map(key=po.String(), value=po.Array(po.BigInt())),
+        "lvl2_struct_map": po.Map(
+            key=po.String(),
+            value=po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}),
+        ),
+    }
+
+    schema = po.Struct(**schema)
+
+    lvl1_map = [
+        rd.choice(
+            [
+                None,
+                [
+                    (
+                        rd.choice(al),
+                        rd.choice([None, np.random.randint(1, 1500)]),
+                    )
+                    for y in range(2)
+                ],
+            ]
+        )
+        for x in range(size)
+    ]
+    lvl2_map = [
+        rd.choice(
+            [
+                None,
+                [
+                    (
+                        rd.choice(al),
+                        rd.choice(
+                            [
+                                None,
+                                [
+                                    rd.choice(
+                                        [None, np.random.randint(1, 1500)]
+                                    )
+                                    for z in range(5)
+                                ],
+                            ]
+                        ),
+                    )
+                    for y in range(2)
+                ],
+            ]
+        )
+        for x in range(size)
+    ]
+    lvl2_struct_map = [
+        rd.choice(
+            [
+                None,
+                [
+                    (
+                        rd.choice(al),
+                        rd.choice(
+                            [
+                                None,
+                                (
+                                    rd.choice(
+                                        [None, np.random.randint(1, 1500)]
+                                    ),
+                                    rd.choice(
+                                        [None, np.random.randint(1, 1500)]
+                                    ),
+                                ),
+                            ]
+                        ),
+                    )
+                    for y in range(2)
+                ],
+            ]
+        )
+        for x in range(size)
+    ]
+
+    pdf = pd.DataFrame(
+        {
+            "lvl1_map": lvl1_map,
+            "lvl2_map": lvl2_map,
+            "lvl2_struct_map": lvl2_struct_map,
+        }
+    )
+    writer = po.Writer(
+        buff, schema, stripe_size=1024, compression=po.CompressionKind.NONE
+    )
+    tuples = list(
+        map(
+            lambda x: (None,) if x[0] is pd.NA else x,
+            list(pdf.itertuples(index=False, name=None)),
+        )
+    )
+
+    writer.writerows(tuples)
+    writer.close()
+
+    return buff
+
+
+map_buff = gen_map_buff(size=100000)
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [None, ["lvl1_map", "lvl2_struct_map"], ["lvl2_struct_map", "lvl2_map"]],
+)
+@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100000])
+@pytest.mark.parametrize("use_index", [True, False])
+def test_map_type_read(columns, num_rows, use_index):
+    tbl = pa.orc.ORCFile(map_buff).read()
+
+    lvl1_map = (
+        tbl["lvl1_map"]
+        .combine_chunks()
+        .view(pa.list_(pa.struct({"key": pa.string(), "value": pa.int64()})))
+    )
+    lvl2_map = (
+        tbl["lvl2_map"]
+        .combine_chunks()
+        .view(
+            pa.list_(
+                pa.struct({"key": pa.string(), "value": pa.list_(pa.int64())})
+            )
+        )
+    )
+    lvl2_struct_map = (
+        tbl["lvl2_struct_map"]
+        .combine_chunks()
+        .view(
+            pa.list_(
+                pa.struct(
+                    {
+                        "key": pa.string(),
+                        "value": pa.struct({"a": pa.int64(), "b": pa.int64()}),
+                    }
+                )
+            )
+        )
+    )
+
+    expected_tbl = pa.table(
+        {
+            "lvl1_map": lvl1_map,
+            "lvl2_map": lvl2_map,
+            "lvl2_struct_map": lvl2_struct_map,
+        }
+    )
+    gdf = cudf.read_orc(
+        map_buff, columns=columns, num_rows=num_rows, use_index=use_index
+    )
+
+    expected_tbl = (
+        expected_tbl[:num_rows]
+        if columns is None
+        else expected_tbl.select(columns)[:num_rows]
+    )
+
+    if num_rows > 0:
+        assert expected_tbl.equals(gdf.to_arrow())
+    else:
+        assert_eq(expected_tbl.to_pandas(), gdf)
+
+
 @pytest.mark.parametrize(
     "data", [["_col0"], ["FakeName", "_col0", "TerriblyFakeColumnName"]]
 )
