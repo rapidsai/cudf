@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
@@ -176,6 +177,71 @@ TYPED_TEST(TypedStructGatherTest, TestSimpleStructGather)
     structs_column_wrapper{std::move(expected_columns), std::vector<bool>{0, 1, 1, 1, 1}}.release();
 
   expect_columns_equivalent(*expected_struct_column, gathered_struct_col);
+}
+
+TYPED_TEST(TypedStructGatherTest, TestSlicedStructsColumnGatherNoNulls)
+{
+  using namespace cudf::test;
+
+  auto const structs_original = [] {
+    auto child1 =
+      cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    auto child2 = strings_column_wrapper{
+      "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"};
+    return structs_column_wrapper{{child1, child2}};
+  }();
+
+  auto const expected = [] {
+    auto child1 = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{6, 10, 8};
+    auto child2 = strings_column_wrapper{"Six", "Ten", "Eight"};
+    return structs_column_wrapper{{child1, child2}};
+  }();
+
+  auto const structs    = cudf::slice(structs_original, {4, 10})[0];
+  auto const gather_map = cudf::test::fixed_width_column_wrapper<int32_t>{1, 5, 3};
+  auto const result     = cudf::gather(cudf::table_view{{structs}}, gather_map)->get_column(0);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.view(), expected);
+}
+
+TYPED_TEST(TypedStructGatherTest, TestSlicedStructsColumnGatherWithNulls)
+{
+  using namespace cudf::test;
+  using namespace cudf::test::iterators;
+  auto constexpr null = int32_t{0};  // null at child
+  auto constexpr XXX  = int32_t{0};  // null at parent
+
+  auto const structs_original = [] {
+    auto child1 = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{
+      {null, XXX, 3, null, null, 6, XXX, null, null, 10}, nulls_at({0, 3, 4, 7, 8})};
+    auto child2 = strings_column_wrapper{{"One",
+                                          "" /*NULL at both parent and child*/,
+                                          "Three",
+                                          "" /*NULL*/,
+                                          "Five",
+                                          "" /*NULL*/,
+                                          "" /*NULL at parent*/,
+                                          "" /*NULL*/,
+                                          "Nine",
+                                          "" /*NULL*/},
+                                         nulls_at({1, 3, 5, 7, 9})};
+    return structs_column_wrapper{{child1, child2}, nulls_at({1, 6})};
+  }();
+
+  auto const expected = [] {
+    auto child1 =
+      cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{{6, 10, null, XXX}, null_at(2)};
+    auto child2 = strings_column_wrapper{{
+                                           "" /*NULL*/, "" /*NULL*/, "Nine", "" /*NULL at parent*/
+                                         },
+                                         nulls_at({0, 1})};
+    return structs_column_wrapper{{child1, child2}, null_at(3)};
+  }();
+
+  auto const structs    = cudf::slice(structs_original, {4, 10})[0];
+  auto const gather_map = cudf::test::fixed_width_column_wrapper<int32_t>{1, 5, 4, 2};
+  auto const result     = cudf::gather(cudf::table_view{{structs}}, gather_map)->get_column(0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.view(), expected);
 }
 
 TYPED_TEST(TypedStructGatherTest, TestGatherStructOfLists)
