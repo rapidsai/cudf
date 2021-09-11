@@ -476,25 +476,31 @@ __global__ void __launch_bounds__(block_size)
   typedef cub::BlockReduce<size_type, block_size> BlockReduce;
   __shared__ typename BlockReduce::TempStorage temp_storage;
 
-  auto const column_id = blockIdx.x;
-  auto const& column   = columns[column_id];
-  if (column.pushdown_mask == nullptr) return;
+  auto const column_id  = blockIdx.x;
+  auto const orc_column = columns[column_id];
 
   auto const rowgroup_id = blockIdx.y;
   auto const t           = threadIdx.x;
 
-  auto const rg                            = rowgroups[rowgroup_id][column_id];
+  auto const column       = orc_column.cudf_column;
+  auto const use_child_rg = column.type().id() == type_id::LIST;
+  auto const rg           = rowgroups[rowgroup_id][column_id + (use_child_rg ? 1 : 0)];
+
+  if (orc_column.pushdown_mask == nullptr) {
+    if (t == 0) { valid_counts[rowgroup_id][column_id] = rg.size(); }
+    return;
+  };
+
   size_type count                          = 0;
   static constexpr size_type bits_per_word = sizeof(bitmask_type) * 8;
   for (auto row = t * bits_per_word + rg.begin; row < rg.end; row += block_size * bits_per_word) {
     auto const begin_bit = row;
     auto const end_bit   = min(static_cast<size_type>(row + bits_per_word), rg.end);
     auto const mask_len  = end_bit - begin_bit;
-    auto const mask_word = [row, end_bit, mask = column.cudf_column.null_mask()]() {
-      if (mask == nullptr) return static_cast<bitmask_type>(0xffffffff);
-      return cudf::detail::get_mask_offset_word(mask, 0, row, end_bit);
-    }();
-    count += __popc(mask_word & ((1 << mask_len) - 1));
+    auto const mask_word =
+      cudf::detail::get_mask_offset_word(orc_column.pushdown_mask, 0, row, end_bit) &
+      ((1 << mask_len) - 1);
+    count += __popc(mask_word);
   }
 
   count = BlockReduce(temp_storage).Sum(count);
