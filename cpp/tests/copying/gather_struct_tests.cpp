@@ -200,7 +200,6 @@ TYPED_TEST(TypedStructGatherTest, TestSlicedStructsColumnGatherNoNulls)
   auto const structs    = cudf::slice(structs_original, {4, 10})[0];
   auto const gather_map = cudf::test::fixed_width_column_wrapper<int32_t>{1, 5, 3};
   auto const result     = cudf::gather(cudf::table_view{{structs}}, gather_map)->get_column(0);
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.view(), expected);
 }
 
