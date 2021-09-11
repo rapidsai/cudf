@@ -1392,7 +1392,7 @@ def test_names_in_struct_dtype_nesting(datadir):
     assert edf.dtypes.equals(got.dtypes)
 
 
-def test_lists_struct_nests():
+def test_writer_lists_structs():
     df_in = cudf.read_orc(list_struct_buff)
 
     buff = BytesIO()
