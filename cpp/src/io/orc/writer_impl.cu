@@ -243,8 +243,8 @@ class orc_column_view {
   int32_t _precision = 0;
 
   // ORC-related members
-  TypeKind _type_kind;
-  ColumnEncodingKind _encoding_kind;
+  TypeKind _type_kind               = INVALID_TYPE_KIND;
+  ColumnEncodingKind _encoding_kind = INVALID_ENCODING_KIND;
   std::string name;
 
   // String dictionary-related members
