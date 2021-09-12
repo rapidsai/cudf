@@ -505,7 +505,7 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
         raise ValueError("Unsupported `compression` type")
 
 
-cdef _set_col_metadata(Column col, cudf_io_types.column_in_metadata& col_meta):
+cdef _set_col_metadata(Column col, column_in_metadata& col_meta):
     if is_struct_dtype(col):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
