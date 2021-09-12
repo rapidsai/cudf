@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <cudf/copying.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
@@ -33,10 +35,11 @@ using StringsCol    = cudf::test::strings_column_wrapper;
 using StructsCol    = cudf::test::structs_column_wrapper;
 using IntsCol       = cudf::test::fixed_width_column_wrapper<int32_t>;
 
-auto constexpr neg_NaN = -std::numeric_limits<float_type>::quiet_NaN();
-auto constexpr neg_Inf = -std::numeric_limits<float_type>::infinity();
-auto constexpr NaN     = std::numeric_limits<float_type>::quiet_NaN();
-auto constexpr Inf     = std::numeric_limits<float_type>::infinity();
+auto constexpr neg_NaN   = -std::numeric_limits<float_type>::quiet_NaN();
+auto constexpr neg_Inf   = -std::numeric_limits<float_type>::infinity();
+auto constexpr NaN       = std::numeric_limits<float_type>::quiet_NaN();
+auto constexpr Inf       = std::numeric_limits<float_type>::infinity();
+auto constexpr verbosity = cudf::test::debug_output_level::FIRST_ERROR;
 
 struct DropListDuplicatesTest : public cudf::test::BaseFixture {
 };
@@ -47,7 +50,7 @@ TEST_F(DropListDuplicatesTest, FloatingPointTestsWithSignedZero)
   auto const lists    = FloatListsCol{0.0, 1, 2, -0.0, 1, 2, 0.0, 1, 2, -0.0, -0.0, 0.0, 0.0};
   auto const expected = FloatListsCol{0, 1, 2};
   auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
 }
 
 TEST_F(DropListDuplicatesTest, FloatingPointTestsWithInf)
@@ -57,13 +60,13 @@ TEST_F(DropListDuplicatesTest, FloatingPointTestsWithInf)
     auto const lists    = FloatListsCol{0, 1, 2, 0, 1, 2, 0, 1, 2, Inf, Inf, Inf};
     auto const expected = FloatListsCol{0, 1, 2, Inf};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
   {
     auto const lists    = FloatListsCol{Inf, 0, neg_Inf, 0, Inf, 0, neg_Inf, 0, Inf, 0, neg_Inf};
     auto const expected = FloatListsCol{neg_Inf, 0, Inf};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 }
 
@@ -130,13 +133,13 @@ TEST_F(DropListDuplicatesTest, StringTestsNonNull)
     auto const lists    = StrListsCol{{}};
     auto const expected = StrListsCol{{}};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
   {
     auto const lists    = StrListsCol{"this", "is", "a", "string"};
     auto const expected = StrListsCol{"a", "is", "string", "this"};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 
   // One list column.
@@ -144,7 +147,7 @@ TEST_F(DropListDuplicatesTest, StringTestsNonNull)
     auto const lists    = StrListsCol{"this", "is", "is", "is", "a", "string", "string"};
     auto const expected = StrListsCol{"a", "is", "string", "this"};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 
   // Multiple lists column.
@@ -159,7 +162,7 @@ TEST_F(DropListDuplicatesTest, StringTestsNonNull)
                                       StrListsCol{"a", "is", "string", "this", "two duplicates"},
                                       StrListsCol{"a", "is", "string", "this", "three duplicates"}};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 }
 
@@ -173,7 +176,7 @@ TEST_F(DropListDuplicatesTest, StringTestsWithNulls)
       {"this", null, "is", "is", "is", "a", null, "string", null, "string"}, nulls_at({1, 6, 8})};
     auto const expected = StrListsCol{{"a", "is", "string", "this", null}, null_at(4)};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 
   // Multiple lists column with null lists and null entries
@@ -190,7 +193,7 @@ TEST_F(DropListDuplicatesTest, StringTestsWithNulls)
                    StrListsCol{"a", "is", "one duplicate", "string", "this"}},
                   null_at(1)};
     auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 }
 
@@ -221,7 +224,7 @@ TYPED_TEST(DropListDuplicatesTypedTest, TrivialInputTests)
     auto const lists    = ListsCol{{}};
     auto const expected = ListsCol{{}};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 
   // Trivial cases.
@@ -229,7 +232,7 @@ TYPED_TEST(DropListDuplicatesTypedTest, TrivialInputTests)
     auto const lists    = ListsCol{0, 1, 2, 3, 4, 5};
     auto const expected = ListsCol{0, 1, 2, 3, 4, 5};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 
   // Multiple empty lists.
@@ -237,7 +240,7 @@ TYPED_TEST(DropListDuplicatesTypedTest, TrivialInputTests)
     auto const lists    = ListsCol{{}, {}, {5, 4, 3, 2, 1, 0}, {}, {6}, {}};
     auto const expected = ListsCol{{}, {}, {0, 1, 2, 3, 4, 5}, {}, {6}, {}};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 }
 
@@ -251,7 +254,7 @@ TYPED_TEST(DropListDuplicatesTypedTest, NonNullInputTests)
       ListsCol{{1, 1, 1, 1, 1, 1, 1, 1}, {1, 1, 1, 1, 1, 2, 2, 2}, {2, 2, 2, 2, 3, 3, 3, 3}};
     auto const expected = ListsCol{{1}, {1, 2}, {2, 3}};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 
   // Sliced list column.
@@ -265,31 +268,31 @@ TYPED_TEST(DropListDuplicatesTypedTest, NonNullInputTests)
   {
     auto const expected = ListsCol{{1, 2, 3}, {1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}};
     auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists_original});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 
   {
     auto const expected = ListsCol{{1, 2, 3}, {1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists1});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 
   {
     auto const expected = ListsCol{{1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists2});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 
   {
     auto const expected = ListsCol{{1, 2, 3, 4}, {5}};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists3});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 
   {
     auto const expected = ListsCol{{1, 2, 3}, {1, 2, 3, 4}, {5}};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists4});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 }
 
@@ -305,7 +308,7 @@ TYPED_TEST(DropListDuplicatesTypedTest, WithNullInputTests)
     auto const expected =
       ListsCol{{{1, 2, 3, 4}, {5}, {} /*NULL*/, {} /*NULL*/, {8, 9, 10}, {6, 7}}, nulls_at({2, 3})};
     auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 
   // null entries are equal.
@@ -314,7 +317,7 @@ TYPED_TEST(DropListDuplicatesTypedTest, WithNullInputTests)
     auto const expected =
       ListsCol{std::initializer_list<TypeParam>{1, 3, 5, 7, 9, null}, null_at(5)};
     auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 
   // nulls entries are not equal.
@@ -325,20 +328,7 @@ TYPED_TEST(DropListDuplicatesTypedTest, WithNullInputTests)
                nulls_at({5, 6, 7, 8, 9})};
     auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists},
                                                            cudf::null_equality::UNEQUAL);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
-  }
-}
-
-TYPED_TEST(DropListDuplicatesTypedTest, NonNullInputStructsTests)
-{
-  using ListsCol = cudf::test::lists_column_wrapper<TypeParam>;
-
-  {
-    auto const lists =
-      ListsCol{{1, 1, 1, 1, 1, 1, 1, 1}, {1, 1, 1, 1, 1, 2, 2, 2}, {2, 2, 2, 2, 3, 3, 3, 3}};
-    auto const expected = ListsCol{{1}, {1, 2}, {2, 3}};
-    auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 }
 
@@ -346,7 +336,7 @@ TYPED_TEST(DropListDuplicatesTypedTest, InputListsOfStructsNoNull)
 {
   using ColWrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
-  auto structs = [] {
+  auto const get_structs = [] {
     auto child1 = ColWrapper{
       1, 1, 1, 1, 1, 1, 1, 1,  // list1
       1, 1, 1, 1, 2, 1, 2, 2,  // list2
@@ -362,7 +352,7 @@ TYPED_TEST(DropListDuplicatesTypedTest, InputListsOfStructsNoNull)
       "Banana",
       "Cherry",
       "Kiwi",  // end list1
-               // begin list2
+      // begin list2
       "Bear",
       "Duck",
       "Cat",
@@ -371,7 +361,7 @@ TYPED_TEST(DropListDuplicatesTypedTest, InputListsOfStructsNoNull)
       "Bear",
       "Cat",
       "Panda",  // end list2
-                // begin list3
+      // begin list3
       "ÁÁÁ",
       "ÉÉÉÉÉ",
       "ÍÍÍÍÍ",
@@ -382,9 +372,9 @@ TYPED_TEST(DropListDuplicatesTypedTest, InputListsOfStructsNoNull)
       "XYZ"  // end list3
     };
     return StructsCol{{child1, child2}};
-  }();
+  };
 
-  auto structs_expected = [] {
+  auto const get_structs_expected = [] {
     auto child1 = ColWrapper{1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3};
     auto child2 = StringsCol{
       // begin list1
@@ -409,14 +399,129 @@ TYPED_TEST(DropListDuplicatesTypedTest, InputListsOfStructsNoNull)
       "ÁBC"  // end list3
     };
     return StructsCol{{child1, child2}};
-  }();
+  };
 
-  auto const lists =
-    cudf::make_lists_column(3, IntsCol{0, 8, 16, 24}.release(), structs.release(), 0, {});
-  auto const expected =
-    cudf::make_lists_column(3, IntsCol{0, 5, 11, 17}.release(), structs_expected.release(), 0, {});
-  auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists->view()});
-  cudf::test::print(results->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    results->view(), expected->view(), cudf::test::debug_output_level::ALL_ERRORS);
+  // Test full columns.
+  {
+    auto const lists =
+      cudf::make_lists_column(3, IntsCol{0, 8, 16, 24}.release(), get_structs().release(), 0, {});
+    auto const expected = cudf::make_lists_column(
+      3, IntsCol{0, 5, 11, 17}.release(), get_structs_expected().release(), 0, {});
+    auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists->view()});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected->view(), verbosity);
+  }
+
+  // Test sliced columns.
+  {
+    auto const lists_original =
+      cudf::make_lists_column(3, IntsCol{0, 8, 16, 24}.release(), get_structs().release(), 0, {});
+    auto const expected_original = cudf::make_lists_column(
+      3, IntsCol{0, 5, 11, 17}.release(), get_structs_expected().release(), 0, {});
+    auto const lists    = cudf::slice(lists_original->view(), {1, 3})[0];
+    auto const expected = cudf::slice(expected_original->view(), {1, 3})[0];
+    auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+  }
+}
+
+TYPED_TEST(DropListDuplicatesTypedTest, InputListsOfStructsHaveNull)
+{
+  using ColWrapper    = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+  auto constexpr XXX  = int32_t{0};  // nulls at the parent structs column level
+  auto constexpr null = int32_t{0};  // nulls at the children columns level
+
+  auto const get_structs = [] {
+    auto child1 = ColWrapper{{
+                               1,    1,    null, XXX, XXX, 1, 1,    1,  // list1
+                               1,    1,    1,    1,   2,   1, null, 2,  // list2
+                               null, null, 2,    2,   3,   2, 3,    3   // list3
+                             },
+                             nulls_at({2, 14, 16, 17})};
+    auto child2 = StringsCol{{
+                               // begin list1
+                               "Banana",
+                               "Mango",
+                               "Apple",
+                               "XXX", /*NULL*/
+                               "XXX", /*NULL*/
+                               "Banana",
+                               "Cherry",
+                               "Kiwi",  // end list1
+                                        // begin list2
+                               "Bear",
+                               "Duck",
+                               "Cat",
+                               "Dog",
+                               "Panda",
+                               "Bear",
+                               "" /*NULL*/,
+                               "Panda",  // end list2
+                                         // begin list3
+                               "ÁÁÁ",
+                               "ÉÉÉÉÉ",
+                               "ÍÍÍÍÍ",
+                               "ÁBC",
+                               "" /*NULL*/,
+                               "ÁÁÁ",
+                               "ÁBC",
+                               "XYZ"  // end list3
+                             },
+                             nulls_at({14, 20})};
+    return StructsCol{{child1, child2}, nulls_at({3, 4})};
+  };
+
+  auto const get_structs_expected = [] {
+    auto child1 =
+      ColWrapper{{1, 1, 1, 1, null, XXX, 1, 1, 1, 1, 2, null, 2, 2, 2, 3, 3, 3, null, null},
+                 nulls_at({4, 5, 11, 18, 19})};
+    auto child2 = StringsCol{{
+                               // begin list1
+                               "Banana",
+                               "Cherry",
+                               "Kiwi",
+                               "Mango",
+                               "Apple",
+                               "XXX" /*NULL*/,  // end list1
+                                                // begin list2
+                               "Bear",
+                               "Cat",
+                               "Dog",
+                               "Duck",
+                               "Panda",
+                               "" /*NULL*/,  // end list2
+                                             // begin list3
+                               "ÁBC",
+                               "ÁÁÁ",
+                               "ÍÍÍÍÍ",
+                               "XYZ",
+                               "ÁBC",
+                               "" /*NULL*/,
+                               "ÁÁÁ",
+                               "ÉÉÉÉÉ"  // end list3
+                             },
+                             nulls_at({5, 11, 17})};
+    return StructsCol{{child1, child2}, null_at(5)};
+  };
+
+  // Test full columns.
+  {
+    auto const lists =
+      cudf::make_lists_column(3, IntsCol{0, 8, 16, 24}.release(), get_structs().release(), 0, {});
+    auto const expected = cudf::make_lists_column(
+      3, IntsCol{0, 6, 12, 20}.release(), get_structs_expected().release(), 0, {});
+    auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists->view()});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected->view(), verbosity);
+  }
+
+  // Test sliced columns.
+  {
+    auto const lists_original =
+      cudf::make_lists_column(3, IntsCol{0, 8, 16, 24}.release(), get_structs().release(), 0, {});
+    auto const expected_original = cudf::make_lists_column(
+      3, IntsCol{0, 6, 12, 20}.release(), get_structs_expected().release(), 0, {});
+    auto const lists    = cudf::slice(lists_original->view(), {1, 3})[0];
+    auto const expected = cudf::slice(expected_original->view(), {1, 3})[0];
+    auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+  }
 }
