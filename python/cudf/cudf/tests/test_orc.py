@@ -1298,11 +1298,9 @@ def dec(num):
 )
 def test_orc_writer_lists(data):
     pdf_in = pd.DataFrame(data)
-    buffer = BytesIO()
-    cudf_in = cudf.from_pandas(pdf_in)
-    print(cudf_in)
 
-    cudf_in.to_orc(buffer)
+    buffer = BytesIO()
+    cudf.from_pandas(pdf_in).to_orc(buffer)
 
     pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
     assert_eq(pdf_out, pdf_in)

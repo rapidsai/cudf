@@ -52,6 +52,7 @@ from cudf._lib.cpp.io.parquet cimport (
     read_parquet as parquet_reader,
     write_parquet as parquet_writer,
 )
+from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
@@ -272,7 +273,7 @@ cpdef write_parquet(
     """
 
     # Create the write options
-    cdef unique_ptr[cudf_io_types.table_input_metadata] tbl_meta
+    cdef unique_ptr[table_input_metadata] tbl_meta
 
     cdef map[string, string] user_data
     cdef table_view tv
@@ -283,7 +284,7 @@ cpdef write_parquet(
         index is None and not isinstance(table._index, cudf.RangeIndex)
     ):
         tv = table.view()
-        tbl_meta = make_unique[cudf_io_types.table_input_metadata](tv)
+        tbl_meta = make_unique[table_input_metadata](tv)
         for level, idx_name in enumerate(table._index.names):
             tbl_meta.get().column_metadata[level].set_name(
                 str.encode(
@@ -293,7 +294,7 @@ cpdef write_parquet(
         num_index_cols_meta = len(table._index.names)
     else:
         tv = table.data_view()
-        tbl_meta = make_unique[cudf_io_types.table_input_metadata](tv)
+        tbl_meta = make_unique[table_input_metadata](tv)
         num_index_cols_meta = 0
 
     for i, name in enumerate(table._column_names, num_index_cols_meta):
@@ -354,7 +355,7 @@ cdef class ParquetWriter:
     """
     cdef bool initialized
     cdef unique_ptr[cpp_parquet_chunked_writer] writer
-    cdef unique_ptr[cudf_io_types.table_input_metadata] tbl_meta
+    cdef unique_ptr[table_input_metadata] tbl_meta
     cdef cudf_io_types.sink_info sink
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
     cdef cudf_io_types.statistics_freq stat_freq
@@ -418,13 +419,11 @@ cdef class ParquetWriter:
 
         # Set the table_metadata
         num_index_cols_meta = 0
-        self.tbl_meta =
-        make_unique[cudf_io_types.table_input_metadata](table.data_view())
+        self.tbl_meta = make_unique[table_input_metadata](table.data_view())
         if self.index is not False:
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
                 tv = table.view()
-                self.tbl_meta =
-                make_unique[cudf_io_types.table_input_metadata](tv)
+                self.tbl_meta = make_unique[table_input_metadata](tv)
                 for level, idx_name in enumerate(table._index.names):
                     self.tbl_meta.get().column_metadata[level].set_name(
                         (str.encode(idx_name))
@@ -433,8 +432,7 @@ cdef class ParquetWriter:
             else:
                 if table._index.name is not None:
                     tv = table.view()
-                    self.tbl_meta =
-                    make_unique[cudf_io_types.table_input_metadata](tv)
+                    self.tbl_meta = make_unique[table_input_metadata](tv)
                     self.tbl_meta.get().column_metadata[0].set_name(
                         str.encode(table._index.name)
                     )
