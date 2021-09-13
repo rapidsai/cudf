@@ -170,7 +170,7 @@ def _filter_row_groups(paths, fs, filters=None, row_groups=None):
         paths = ioutils.stringify_pathlike(paths[0])
 
     # Convert filters to ds.Expression
-    if filters:
+    if filters is not None:
         filters = pq._filters_to_expression(filters)
 
     # Initialize ds.FilesystemDataset
@@ -179,7 +179,7 @@ def _filter_row_groups(paths, fs, filters=None, row_groups=None):
     )
     file_list = dataset.files
 
-    if filters:
+    if filters is not None:
         # Load IDs of filtered row groups for each file in dataset
         filtered_rg_ids = defaultdict(list)
         for fragment in dataset.get_fragments(filter=filters):
@@ -278,6 +278,7 @@ def read_parquet(
     num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
+    legacy_transfer=False,
     *args,
     **kwargs,
 ):
@@ -329,6 +330,7 @@ def read_parquet(
         and isinstance(
             filepath_or_buffer[0], fsspec.spec.AbstractBufferedFile,
         )
+        and not legacy_transfer
     ):
         byte_ranges, footers, file_sizes = _get_byte_ranges(
             filepath_or_buffer, row_groups, columns, fs,
@@ -352,6 +354,7 @@ def read_parquet(
             footer=footers[i] if footers else None,
             file_size=file_sizes[i] if file_sizes else None,
             add_par1_magic=True,
+            legacy_transfer=legacy_transfer,
             **kwargs,
         )
         if compression is not None:

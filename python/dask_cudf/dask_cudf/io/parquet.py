@@ -1,5 +1,6 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import warnings
+from contextlib import ExitStack
 from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
 
@@ -73,30 +74,38 @@ class CudfEngine(ArrowDatasetEngine):
         if row_groups == [None for path in paths]:
             row_groups = None
 
-        # Non-local filesystem handling
-        paths_or_fobs = paths
-        if not cudf.utils.ioutils._is_local_filesystem(fs):
-            # Convert paths to file objects for remote data
-            if arrow_filesystem:
-                paths_or_fobs = [
-                    arrow_filesystem.open_input_file(path) for path in paths
-                ]
-            else:
-                cache_type = "none" if columns or row_groups else "bytes"
-                paths_or_fobs = [
-                    fs.open(path, mode="rb", cache_type=cache_type)
-                    for path in paths
-                ]
+        with ExitStack() as stack:
 
-        # Use cudf to read in data
-        df = cudf.read_parquet(
-            paths_or_fobs,
-            engine="cudf",
-            columns=columns,
-            row_groups=row_groups if row_groups else None,
-            strings_to_categorical=strings_to_categorical,
-            **kwargs,
-        )
+            # Non-local filesystem handling
+            paths_or_fobs = paths
+            if not cudf.utils.ioutils._is_local_filesystem(fs):
+
+                # Convert paths to file objects for remote data
+                if arrow_filesystem:
+                    paths_or_fobs = [
+                        stack.enter_context(
+                            arrow_filesystem.open_input_file(path)
+                        )
+                        for path in paths
+                    ]
+                else:
+                    cache_type = "none" if columns or row_groups else "bytes"
+                    paths_or_fobs = [
+                        stack.enter_context(
+                            fs.open(path, mode="rb", cache_type=cache_type)
+                        )
+                        for path in paths
+                    ]
+
+            # Use cudf to read in data
+            df = cudf.read_parquet(
+                paths_or_fobs,
+                engine="cudf",
+                columns=columns,
+                row_groups=row_groups if row_groups else None,
+                strings_to_categorical=strings_to_categorical,
+                **kwargs,
+            )
 
         if partitions and partition_keys is None:
 
@@ -155,12 +164,21 @@ class CudfEngine(ArrowDatasetEngine):
         categories=(),
         partitions=(),
         partitioning=None,
+        schema=None,
         **kwargs,
     ):
+
         if columns is not None:
             columns = [c for c in columns]
         if isinstance(index, list):
             columns += index
+
+        # Check if we are actually selecting any columns
+        read_columns = columns
+        if schema and columns:
+            ignored = set(schema.names) - set(columns)
+            if not ignored:
+                read_columns = None
 
         if not isinstance(pieces, list):
             pieces = [pieces]
@@ -183,7 +201,7 @@ class CudfEngine(ArrowDatasetEngine):
                     cls._read_paths(
                         paths,
                         fs,
-                        columns=columns,
+                        columns=read_columns,
                         row_groups=rgs if rgs else None,
                         strings_to_categorical=strings_to_cats,
                         partitions=partitions,
@@ -206,7 +224,7 @@ class CudfEngine(ArrowDatasetEngine):
             cls._read_paths(
                 paths,
                 fs,
-                columns=columns,
+                columns=read_columns,
                 row_groups=rgs if rgs else None,
                 strings_to_categorical=strings_to_cats,
                 partitions=partitions,
@@ -336,8 +354,9 @@ def read_parquet(
     columns=None,
     split_row_groups=None,
     row_groups_per_part=None,
+    arrow_filesystem=False,
+    legacy_transfer=False,
     read=None,
-    arrow_filesystem=None,
     **kwargs,
 ):
     """ Read parquet files into a Dask DataFrame
@@ -370,20 +389,25 @@ def read_parquet(
 
     # Check if we should use an arrow-backed filesystem
     # on the workers (at IO time)
-    if arrow_filesystem is not False:
+    read_kwargs = (read or {}).copy()
+    if arrow_filesystem:
         arrow_filesystem = cudf.utils.ioutils._try_pyarrow_filesystem(
             path, kwargs.get("storage_options", {}),
         )[0]
-    if arrow_filesystem:
-        read_kwargs = (read or {}).copy()
-        read_kwargs["arrow_filesystem"] = arrow_filesystem
-        kwargs["read"] = read_kwargs
+        if arrow_filesystem:
+            read_kwargs["arrow_filesystem"] = arrow_filesystem
+
+    # Check if we are using legacy approach to remote
+    # data transfer (single `read` call into host memory)
+    if legacy_transfer:
+        read_kwargs["legacy_transfer"] = legacy_transfer
 
     return dd.read_parquet(
         path,
         columns=columns,
         split_row_groups=split_row_groups,
         engine=CudfEngine,
+        read=read_kwargs,
         **kwargs,
     )
 
