@@ -812,7 +812,7 @@ class MultiIndex(Frame, BaseIndex):
             out_index.insert(
                 len(out_index.columns),
                 name,
-                cudf.Series._from_data({None: index._data[index.names[k]]}),
+                cudf.Series._from_data({None: index._data.columns[k]}),
             )
 
         if len(result) == 1 and size == 0 and slice_access is False:
@@ -824,17 +824,17 @@ class MultiIndex(Frame, BaseIndex):
             # Pandas returns an empty Series with a tuple as name
             # the one expected result column
             series_name = []
-            for code in index.names:
-                series_name.append(index._data[code][0])
+            for col in index._data.columns:
+                series_name.append(col[0])
             result = cudf.Series([])
             result.name = tuple(series_name)
         elif len(out_index.columns) == 1:
             # If there's only one column remaining in the output index, convert
             # it into an Index and name the final index values according
             # to that column's name.
-            last_column_name = index.names[-1]
-            out_index = as_index(index._data[last_column_name])
-            out_index.name = last_column_name
+            *_, last_column = index._data.columns
+            out_index = as_index(last_column)
+            out_index.name = index.names[-1]
             index = out_index
         elif len(out_index.columns) > 1:
             # Otherwise pop the leftmost levels, names, and codes from the
