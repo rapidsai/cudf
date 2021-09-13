@@ -20,7 +20,8 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/row_conversion.hpp>
-#include "cudf_test/column_utilities.hpp"
+#include <cudf/lists/lists_column_view.hpp>
+#include <cudf_test/column_utilities.hpp>
 
 class RowConversion : public cudf::benchmark {
 };
@@ -39,9 +40,6 @@ static void BM_old_to_row(benchmark::State& state)
                                           cudf::type_id::UINT64},
                                          212,
                                          row_count{n_rows});
-  /*  auto const table = create_random_table({cudf::type_id::INT32},
-    64,
-    row_count{n_rows});*/
 
   cudf::size_type total_bytes = 0;
   for (int i = 0; i < table->num_columns(); ++i) {
@@ -52,7 +50,7 @@ static void BM_old_to_row(benchmark::State& state)
   for (auto _ : state) {
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);
 
-    auto rows = cudf::convert_to_rows(table->view());
+    auto rows = cudf::old_convert_to_rows(table->view());
   }
 
   state.SetBytesProcessed(state.iterations() * total_bytes * 2 * table->num_rows());
@@ -72,9 +70,6 @@ static void BM_new_to_row(benchmark::State& state)
                                           cudf::type_id::UINT64},
                                          212,
                                          row_count{n_rows});
-  /*  auto const table = create_random_table({cudf::type_id::INT32},
-    64,
-    row_count{n_rows});*/
 
   cudf::size_type total_bytes = 0;
   for (int i = 0; i < table->num_columns(); ++i) {
@@ -85,7 +80,7 @@ static void BM_new_to_row(benchmark::State& state)
   for (auto _ : state) {
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);
 
-    auto new_rows = cudf::convert_to_rows2(table->view());
+    auto new_rows = cudf::convert_to_rows(table->view());
   }
 
   state.SetBytesProcessed(state.iterations() * total_bytes * 2 * table->num_rows());
@@ -114,12 +109,13 @@ static void BM_old_from_row(benchmark::State& state)
     total_bytes += cudf::size_of(t);
   }
 
-  auto rows = cudf::convert_to_rows(table->view());
+  auto rows = cudf::old_convert_to_rows(table->view());
+  cudf::lists_column_view const first_list(rows.front()->view());
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);
 
-    auto out = cudf::convert_from_rows(rows, schema);
+    auto out = cudf::old_convert_from_rows(first_list, schema);
   }
 
   state.SetBytesProcessed(state.iterations() * total_bytes * 2 * table->num_rows());
@@ -148,36 +144,37 @@ static void BM_new_from_row(benchmark::State& state)
     total_bytes += cudf::size_of(t);
   }
 
-  auto rows = cudf::convert_to_rows(table->view());
+  auto rows = cudf::old_convert_to_rows(table->view());
+  cudf::lists_column_view const first_list(rows.front()->view());
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);
 
-    auto out = cudf::convert_from_rows2(rows, schema);
+    auto out = cudf::convert_from_rows(first_list, schema);
   }
 
   state.SetBytesProcessed(state.iterations() * total_bytes * 2 * table->num_rows());
 }
 
 #define TO_ROW_CONVERSION_BENCHMARK_DEFINE(name, f) \
-  BENCHMARK_DEFINE_F(RowConversion, name)               \
-  (::benchmark::State & st) { f(st); }                  \
-  BENCHMARK_REGISTER_F(RowConversion, name)             \
-    ->RangeMultiplier(8)                                \
-    ->Ranges({{1 << 6, 1 << 20}})                       \
-    ->UseManualTime()                                   \
+  BENCHMARK_DEFINE_F(RowConversion, name)           \
+  (::benchmark::State & st) { f(st); }              \
+  BENCHMARK_REGISTER_F(RowConversion, name)         \
+    ->RangeMultiplier(8)                            \
+    ->Ranges({{1 << 6, 1 << 20}})                   \
+    ->UseManualTime()                               \
     ->Unit(benchmark::kMillisecond);
 
 TO_ROW_CONVERSION_BENCHMARK_DEFINE(old_to_row_conversion, BM_old_to_row)
 TO_ROW_CONVERSION_BENCHMARK_DEFINE(new_to_row_conversion, BM_new_to_row)
 
 #define FROM_ROW_CONVERSION_BENCHMARK_DEFINE(name, f) \
-  BENCHMARK_DEFINE_F(RowConversion, name)          \
-  (::benchmark::State & st) { f(st); }   \
-  BENCHMARK_REGISTER_F(RowConversion, name)        \
-    ->RangeMultiplier(8)                           \
-    ->Ranges({{1 << 6, 1 << 20}})                  \
-    ->UseManualTime()                              \
+  BENCHMARK_DEFINE_F(RowConversion, name)             \
+  (::benchmark::State & st) { f(st); }                \
+  BENCHMARK_REGISTER_F(RowConversion, name)           \
+    ->RangeMultiplier(8)                              \
+    ->Ranges({{1 << 6, 1 << 20}})                     \
+    ->UseManualTime()                                 \
     ->Unit(benchmark::kMillisecond);
 
 FROM_ROW_CONVERSION_BENCHMARK_DEFINE(old_from_row_conversion, BM_old_from_row)
