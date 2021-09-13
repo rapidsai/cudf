@@ -1163,6 +1163,10 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                sizeof(decltype(inflate_out)::value_type) * (argc - start_pos),
                                cudaMemcpyHostToDevice,
                                stream.value()));
+
+      auto env_use_nvcomp = std::getenv("LIBCUDF_USE_NVCOMP");
+      bool use_nvcomp     = env_use_nvcomp != nullptr ? std::atoi(env_use_nvcomp) : 0;
+
       switch (codec.compression_type) {
         case parquet::GZIP:
           CUDA_TRY(gpuinflate(inflate_in.device_ptr(start_pos),
@@ -1172,10 +1176,17 @@ rmm::device_buffer reader::impl::decompress_page_data(
                               stream))
           break;
         case parquet::SNAPPY:
-          snappy_decompress(inflate_in_view.subspan(start_pos, argc - start_pos),
-                            inflate_out_view.subspan(start_pos, argc - start_pos),
-                            codec.max_decompressed_size,
-                            stream);
+          if (use_nvcomp) {
+            snappy_decompress(inflate_in_view.subspan(start_pos, argc - start_pos),
+                              inflate_out_view.subspan(start_pos, argc - start_pos),
+                              codec.max_decompressed_size,
+                              stream);
+          } else {
+            CUDA_TRY(gpu_unsnap(inflate_in.device_ptr(start_pos),
+                                inflate_out.device_ptr(start_pos),
+                                argc - start_pos,
+                                stream));
+          }
           break;
         case parquet::BROTLI:
           CUDA_TRY(gpu_debrotli(inflate_in.device_ptr(start_pos),
