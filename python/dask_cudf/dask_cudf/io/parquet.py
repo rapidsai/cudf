@@ -337,12 +337,12 @@ def set_object_dtypes_from_pa_schema(df, schema):
     # "object" dtypes to agree with a specific
     # pyarrow schema.
     if schema:
-        for name in df._data.names:
-            if name in schema.names and isinstance(
-                df._data[name], cudf.core.column.StringColumn
+        for col_name, col in df._data.items():
+            if col_name in schema.names and isinstance(
+                col, cudf.core.column.StringColumn
             ):
-                df._data[name] = df._data[name].astype(
-                    cudf_dtype_from_pa_type(schema.field(name).type)
+                df._data[col_name] = col.astype(
+                    cudf_dtype_from_pa_type(schema.field(col_name).type)
                 )
 
 
