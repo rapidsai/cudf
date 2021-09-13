@@ -40,7 +40,7 @@ namespace lists {
 namespace detail {
 namespace {
 template <typename Type>
-struct has_negative_nans {
+struct has_negative_nans_fn {
   column_device_view const d_entries;
   bool const has_nulls;
 
@@ -54,41 +54,43 @@ struct has_negative_nans {
 };
 
 /**
- * @brief A structure to be used along with type_dispatcher to check if a
- * `column_view` has any negative NaN entry.
+ * @brief A structure to be used along with type_dispatcher to check if a column has any
+ * negative NaN value.
  */
-struct has_negative_nans_fn {
+struct has_negative_nans_dispatch {
   template <typename Type, std::enable_if_t<cuda::std::is_floating_point_v<Type>>* = nullptr>
   bool operator()(column_view const& lists_entries, rmm::cuda_stream_view stream) const noexcept
   {
     auto const d_entries = column_device_view::create(lists_entries, stream);
-    return thrust::count_if(rmm::exec_policy(stream),
-                            thrust::make_counting_iterator(0),
-                            thrust::make_counting_iterator(lists_entries.size()),
-                            detail::has_negative_nans<Type>{*d_entries, lists_entries.has_nulls()});
+    return thrust::count_if(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(lists_entries.size()),
+      detail::has_negative_nans_fn<Type>{*d_entries, lists_entries.has_nulls()});
   }
 
   template <typename Type, std::enable_if_t<std::is_same_v<Type, cudf::struct_view>>* = nullptr>
   bool operator()(column_view const& lists_entries, rmm::cuda_stream_view stream) const noexcept
   {
+    // Recursively check negative NaN on the children columns.
     return std::any_of(
       lists_entries.child_begin(), lists_entries.child_end(), [stream](auto const& col) {
-        return type_dispatcher(col.type(), detail::has_negative_nans_fn{}, col, stream);
+        return type_dispatcher(col.type(), detail::has_negative_nans_dispatch{}, col, stream);
       });
   }
 
   template <typename Type,
             std::enable_if_t<!cuda::std::is_floating_point_v<Type> &&
                              !std::is_same_v<Type, cudf::struct_view>>* = nullptr>
-  bool operator()(column_view const&, rmm::cuda_stream_view) const noexcept
+  bool operator()(column_view const&, rmm::cuda_stream_view) const
   {
-    // Only floating-point types and structs type are supported.
-    return false;
+    CUDF_FAIL(
+      "Only floating-point types and structs type are supported in `has_negative_nans_dispatch`.");
   }
 };
 
 template <typename Type>
-struct replace_negative_nans {
+struct replace_negative_nans_fn {
   __device__ Type operator()(Type val) const noexcept
   {
     return std::isnan(val) ? std::numeric_limits<Type>::quiet_NaN() : val;
@@ -96,10 +98,10 @@ struct replace_negative_nans {
 };
 
 /**
- * @brief A structure to be used along with type_dispatcher to replace -NaN by NaN for all entries
- * of a floating-point data column.
+ * @brief A structure to be used along with type_dispatcher to replace -NaN by NaN for all rows
+ * in a floating-point data column.
  */
-struct replace_negative_nans_fn {
+struct replace_negative_nans_dispatch {
   template <typename Type,
             std::enable_if_t<!cuda::std::is_floating_point_v<Type> &&
                              !std::is_same_v<Type, cudf::struct_view>>* = nullptr>
@@ -124,7 +126,7 @@ struct replace_negative_nans_fn {
                       lists_entries.template begin<Type>(),
                       lists_entries.template end<Type>(),
                       new_entries->mutable_view().template begin<Type>(),
-                      detail::replace_negative_nans<Type>{});
+                      detail::replace_negative_nans_fn<Type>{});
 
     return new_entries;
   }
@@ -139,7 +141,7 @@ struct replace_negative_nans_fn {
                    std::back_inserter(output_struct_members),
                    [stream](auto const& col) {
                      return type_dispatcher(
-                       col.type(), detail::replace_negative_nans_fn{}, col, stream);
+                       col.type(), detail::replace_negative_nans_dispatch{}, col, stream);
                    });
 
     return cudf::make_structs_column(lists_entries.size(),
@@ -160,7 +162,7 @@ std::unique_ptr<column> replace_negative_nans_entries(column_view const& lists_e
 {
   auto new_offsets = std::make_unique<column>(lists_column.offsets());
   auto new_entries = type_dispatcher(
-    lists_entries.type(), detail::replace_negative_nans_fn{}, lists_entries, stream);
+    lists_entries.type(), detail::replace_negative_nans_dispatch{}, lists_entries, stream);
 
   return make_lists_column(
     lists_column.size(),
@@ -626,7 +628,8 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
     // we need to replace -NaN by NaN before sorting
     auto const replace_negative_nan =
       nans_equal == nan_equality::ALL_EQUAL and
-      type_dispatcher(lists_entries.type(), detail::has_negative_nans_fn{}, lists_entries, stream);
+      type_dispatcher(
+        lists_entries.type(), detail::has_negative_nans_dispatch{}, lists_entries, stream);
     if (replace_negative_nan) {
       // The column new_lists_column is temporary, thus we will not pass in `mr`
       auto const new_lists_column =
