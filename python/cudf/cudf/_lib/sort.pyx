@@ -226,7 +226,7 @@ def rank_columns(Table source_table, object method, str na_option,
     Compute numerical data ranks (1 through n) of each column in the dataframe
     """
     cdef table_view source_table_view = table_view_from_table(
-        source_table, True
+        source_table, ignore_index=True
     )
 
     cdef rank_method c_rank_method = < rank_method > (
