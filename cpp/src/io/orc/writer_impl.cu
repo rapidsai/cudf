@@ -1165,18 +1165,34 @@ void writer::impl::init_state()
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
-void splatter_null_mask(device_span<orc_column_device_view> d_columns,
-                        uint32_t col_idx,
-                        bitmask_type const* null_mask,
-                        bitmask_type const* parent_null_mask,
-                        device_span<bitmask_type> out_mask,
-                        rmm::cuda_stream_view stream)
+void pushdown_lists_null_mask(orc_column_view const& col,
+                              device_span<orc_column_device_view> d_columns,
+                              bitmask_type const* parent_pd_mask,
+                              device_span<bitmask_type> out_mask,
+                              rmm::cuda_stream_view stream)
 {
+  // Set all bits - correct unless there's a mismatch between offsets and null mask
   CUDA_TRY(cudaMemsetAsync(static_cast<void*>(out_mask.data()),
                            255,
                            out_mask.size() * sizeof(bitmask_type),
                            stream.value()));
-  // TODO: reset bits where offsets are set but elem is null
+
+  // Reset bits where a null list element has rows in the child column
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0u),
+    col.size(),
+    [d_columns, col_idx = col.index(), parent_pd_mask, out_mask] __device__(auto& idx) {
+      auto const d_col        = d_columns[col_idx].cudf_column;
+      auto const is_row_valid = d_col.is_valid(idx) and bit_is_set_or(parent_pd_mask, idx, true);
+      if (not is_row_valid) {
+        auto offsets                = d_col.child(lists_column_view::offsets_column_index);
+        auto const child_rows_begin = offsets.element<size_type>(idx);
+        auto const child_rows_end   = offsets.element<size_type>(idx + 1);
+        for (auto child_row = child_rows_begin; child_row < child_rows_end; ++child_row)
+          clear_bit(out_mask.data(), child_row);
+      }
+    });
 }
 
 struct pushdown_null_masks {
@@ -1231,8 +1247,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
       auto const child_col = orc_table.column(col.child_begin()[0]);
       pd_masks.emplace_back(num_bitmask_words(child_col.size()), stream);
       mask_ptrs.emplace_back(pd_masks.back().data());
-      splatter_null_mask(
-        orc_table.d_columns, col.index(), null_mask, parent_pd_mask, pd_masks.back(), stream);
+      pushdown_lists_null_mask(col, orc_table.d_columns, parent_pd_mask, pd_masks.back(), stream);
     }
   }
 
