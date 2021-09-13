@@ -967,6 +967,18 @@ class MultiIndex(Frame, BaseIndex):
     @classmethod
     def deserialize(cls, header, frames):
         names = pickle.loads(header["names"])
+        if "source_data" in header:
+            warnings.warn(
+                "MultiIndex objects serialized in cudf version "
+                "21.08 or older will no longer be deserializable "
+                "after version 21.10. Please load and resave any "
+                "pickles before upgrading to version 21.12.",
+                DeprecationWarning,
+            )
+            df = cudf.DataFrame.deserialize(header["source_data"], frames)
+            obj = cls.from_frame(df)
+            obj._set_names(names)
+            return obj
         columns = column.deserialize_columns(header["columns"], frames)
         return cls._from_data(dict(zip(names, columns)))
 
