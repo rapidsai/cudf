@@ -317,7 +317,8 @@ struct expression_evaluator {
       } else {
         return ReturnType(plan.literals[input_reference.data_index].value<Element>());
       }
-    } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
+    } else {  // Assumes input_reference.data_index ==
+              // detail::device_data_reference_type::INTERMEDIATE
       // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
       // Using a temporary variable ensures that the compiler knows the result is aligned
       IntermediateDataType<has_nulls> intermediate =
@@ -549,7 +550,8 @@ struct expression_evaluator {
     {
       if (device_data_reference.reference_type == detail::device_data_reference_type::COLUMN) {
         output_object.template set_value<Element>(row_index, result);
-      } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
+      } else {  // Assumes input_reference.data_index ==
+                // detail::device_data_reference_type::INTERMEDIATE
         // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
         // Using a temporary variable ensures that the compiler knows the result is aligned.
         IntermediateDataType<has_nulls> tmp;
