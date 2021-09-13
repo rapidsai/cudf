@@ -21,8 +21,7 @@ function(find_and_configure_nvcomp VERSION)
         GLOBAL_TARGETS     nvcomp::nvcomp
         CPM_ARGS
             GITHUB_REPOSITORY  NVIDIA/nvcomp
-            GIT_TAG            3a12516afdeab4ace01298031757f84b8dda81b7
-            # GIT_SHALLOW        TRUE
+            GIT_TAG            4f4e5713e69473be6e0c8ae483a932f666ae3c2f
             OPTIONS            "BUILD_STATIC ON"
                                "BUILD_TESTS OFF"
                                "BUILD_BENCHMARKS OFF"
