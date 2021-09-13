@@ -28,11 +28,7 @@ from cudf.api.types import (
     is_list_dtype,
     is_struct_dtype,
 )
-from cudf.utils.dtypes import (
-    cudf_dtypes_to_pandas_dtypes,
-    np_dtypes_to_pandas_dtypes,
-    np_to_pa_dtype,
-)
+from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes, np_to_pa_dtype
 
 PARQUET_META_TYPE_MAP = {
     str(cudf_dtype): str(pandas_dtype)

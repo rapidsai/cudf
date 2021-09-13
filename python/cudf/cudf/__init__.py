@@ -8,6 +8,7 @@ from numba import cuda
 
 import rmm
 
+import api
 from cudf.api.types import dtype
 from cudf import core, datasets, testing
 from cudf._version import get_versions
