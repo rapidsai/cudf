@@ -635,23 +635,22 @@ mutable_column_view bit_cast(mutable_column_view const& input, data_type type);
 
 namespace detail {
 /**
- * @brief Computes a hash value on the specified column view based on the shallow state of the
- * column view.
+ * @brief Computes a hash value from the shallow state of the specified column
  *
- * Only the shallow states (i.e pointers instead of data pointed by the pointer) of the column view
- * are used in the hash computation. The hash value is computed  recursively on the children of the
- * column view.
- * The states used for the hash computation are: type, size, data pointer, null_mask pointer,
- * offset, and the hash value of the children. Note that `null_count` is not used.
+ * Two `column_view`s, `c1` and `c2`, that view the exact same physical column will produce equal
+ * `shallow_hash()` values, i.e., `is_shallow_equal(c0, c1)` implies `shallow_hash(c0) ==
+ * shallow_hash(c1)`.
  *
- * Note: This hash function may result in different hash for a copy of the same column with exactly
- * same contents. It is guarenteed to give same hash value for same column_view only, even if the
- * underlying data changes.
+ * The complexity of computing the hash value of `input` is `O( count_descendants(input) )`, i.e.,
+ * it is independent of the number of elements in the column.
+ *
+ * This function does _not_ inspect the elements of `input` nor access any device memory or launch
+ * any kernels.
  *
  * @param input The `column_view` to compute hash
  * @return The hash value
  */
-size_t shallow_hash(column_view const& input);
+std::size_t shallow_hash(column_view const& input);
 
 /**
  * @brief Equality operator for column views based on the shallow state of the column view.
