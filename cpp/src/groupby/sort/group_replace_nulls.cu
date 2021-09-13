@@ -40,7 +40,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
 {
   cudf::size_type size = grouped_value.size();
 
-  auto device_in = cudf::column_device_view::create(grouped_value);
+  auto device_in = cudf::column_device_view::create(grouped_value, stream);
   auto index     = thrust::make_counting_iterator<cudf::size_type>(0);
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
   auto in_begin  = thrust::make_zip_iterator(thrust::make_tuple(index, valid_it));
