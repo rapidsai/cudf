@@ -92,16 +92,16 @@ fi
 
 if [ "$BUILD_CUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for cudf"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON_VER $CONDA_BUILD_ARGS $CONDA_CHANNEL
 
   gpuci_logger "Build conda pkg for dask-cudf"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON_VER $CONDA_BUILD_ARGS $CONDA_CHANNEL
 
   gpuci_logger "Build conda pkg for cudf_kafka"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON_VER $CONDA_BUILD_ARGS $CONDA_CHANNEL
 
   gpuci_logger "Build conda pkg for custreamz"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON_VER $CONDA_BUILD_ARGS $CONDA_CHANNEL
 fi
 ################################################################################
 # UPLOAD - Conda packages
