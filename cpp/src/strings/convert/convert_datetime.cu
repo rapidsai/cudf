@@ -167,7 +167,7 @@ struct format_compiler {
  * @param bytes Number of bytes in str to read.
  * @return Integer value of valid characters read and how many bytes were not read.
  */
-__device__ thrust::pair<int32_t, size_type> parse_int(const char* str, size_type bytes)
+__device__ thrust::pair<int32_t, size_type> parse_int(char const* str, size_type bytes)
 {
   int32_t value = 0;
   while (bytes-- > 0) {
@@ -194,7 +194,7 @@ struct parse_datetime {
    *
    * @return `1x10^exponent` for `0 <= exponent <= 9`
    */
-  __device__ constexpr int64_t power_of_ten(int32_t exponent) const
+  __device__ constexpr int64_t power_of_ten(int32_t const exponent) const
   {
     constexpr int64_t powers_of_ten[] = {
       1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
@@ -439,23 +439,23 @@ struct check_datetime_format {
    * @param bytes Number of bytes to check.
    * @param min_value Inclusive minimum value
    * @param max_value Inclusive maximum value
-   * @return number of bytes not successfully processed
+   * @return If value is valid and number of bytes not successfully processed
    */
-  __device__ size_type check_value(const char* str,
-                                   size_type const bytes,
-                                   int const min_value,
-                                   int const max_value)
+  __device__ thrust::pair<bool, size_type> check_value(char const* str,
+                                                       size_type const bytes,
+                                                       int const min_value,
+                                                       int const max_value)
   {
-    // const char* ptr = str;
-    if (*str < '0' || *str > '9') return bytes;
+    if (*str < '0' || *str > '9') { return thrust::make_pair(false, bytes); }
     int32_t value   = 0;
     size_type count = bytes;
     while (count-- > 0) {
       char chr = *str++;
-      if (chr < '0' || chr > '9') break;  // return false;
+      if (chr < '0' || chr > '9') break;
       value = (value * 10) + static_cast<int32_t>(chr - '0');
     }
-    return (value >= min_value && value <= max_value) ? (count + 1) : bytes;
+    return (value >= min_value && value <= max_value) ? thrust::make_pair(true, count + 1)
+                                                      : thrust::make_pair(false, bytes);
   }
 
   /**
@@ -519,33 +519,33 @@ struct check_datetime_format {
           break;
         }
         case 'j': {
-          auto const left = check_value(ptr, item.length, 1, 366);
-          result          = left < item.length;
-          bytes_read -= left;
+          auto const cv = check_value(ptr, item.length, 1, 366);
+          result        = cv.first;
+          bytes_read -= cv.second;
           break;
         }
         case 'H': {
-          auto const left = check_value(ptr, item.length, 0, 23);
-          result          = left < item.length;
-          bytes_read -= left;
+          auto const cv = check_value(ptr, item.length, 0, 23);
+          result        = cv.first;
+          bytes_read -= cv.second;
           break;
         }
         case 'I': {
-          auto const left = check_value(ptr, item.length, 1, 12);
-          result          = left < item.length;
-          bytes_read -= left;
+          auto const cv = check_value(ptr, item.length, 1, 12);
+          result        = cv.first;
+          bytes_read -= cv.second;
           break;
         }
         case 'M': {
-          auto const left = check_value(ptr, item.length, 0, 59);
-          result          = left < item.length;
-          bytes_read -= left;
+          auto const cv = check_value(ptr, item.length, 0, 59);
+          result        = cv.first;
+          bytes_read -= cv.second;
           break;
         }
         case 'S': {
-          auto const left = check_value(ptr, item.length, 0, 60);
-          result          = left < item.length;
-          bytes_read -= left;
+          auto const cv = check_value(ptr, item.length, 0, 60);
+          result        = cv.first;
+          bytes_read -= cv.second;
           break;
         }
         case 'f': {
@@ -565,10 +565,10 @@ struct check_datetime_format {
         }
         case 'z': {  // timezone offset
           if (item.length == 5) {
-            auto const lh = check_value(ptr + 1, 2, 0, 23);
-            auto const lm = check_value(ptr + 3, 2, 0, 59);
-            result        = (*ptr == '-' || *ptr == '+') && (lh < 2) && (lm < 2);
-            bytes_read -= lh + lm;
+            auto const cvh = check_value(ptr + 1, 2, 0, 23);
+            auto const cvm = check_value(ptr + 3, 2, 0, 59);
+            result         = (*ptr == '-' || *ptr == '+') && cvh.first && cvm.first;
+            bytes_read -= cvh.second + cvm.second;
           }
           break;
         }
