@@ -106,6 +106,28 @@ struct shallow_hash_impl {
 };
 
 std::size_t shallow_hash(column_view const& input) { return shallow_hash_impl{}(input); }
+
+struct shallow_equal_impl {
+  bool operator()(column_view const& lhs, column_view const& rhs, bool is_parent_empty = false)
+  {
+    bool const is_empty = (lhs.is_empty() and rhs.is_empty()) or is_parent_empty;
+    return (lhs.type() == rhs.type()) and
+           (is_empty or
+            ((lhs.size() == rhs.size()) and (lhs.head() == rhs.head()) and
+             (lhs.null_mask() == rhs.null_mask()) and (lhs.offset() == rhs.offset()))) and
+           std::equal(lhs.child_begin(),
+                      lhs.child_end(),
+                      rhs.child_begin(),
+                      rhs.child_end(),
+                      [is_empty](auto const& lhs_child, auto const& rhs_child) {
+                        return shallow_equal_impl{}(lhs_child, rhs_child, is_empty);
+                      });
+  }
+};
+bool is_shallow_equal(column_view const& lhs, column_view const& rhs)
+{
+  return shallow_equal_impl{}(lhs, rhs);
+}
 }  // namespace detail
 
 // Immutable view constructor

@@ -667,6 +667,6 @@ std::size_t shallow_hash(column_view const& input);
  * @param rhs The right `column_view` to compare
  * @return true if the shallow states of the two column views are equal
  */
-bool shallow_equal(column_view const& lhs, column_view const& rhs);
+bool is_shallow_equal(column_view const& lhs, column_view const& rhs);
 }  // namespace detail
 }  // namespace cudf
