@@ -38,7 +38,7 @@ def compile_masked_udf(func, dtypes):
     else:
         numba_output_type = output_type
 
-    return numba_output_type, ptx
+    return numba_output_type
 
 
 def nulludf(func):
@@ -179,7 +179,7 @@ def compile_or_get(df, f):
 
     """
 
-    numba_return_type, ptx = compile_masked_udf(f, df.dtypes)
+    numba_return_type = compile_masked_udf(f, df.dtypes)
     _is_scalar_return = not isinstance(numba_return_type, MaskedType)
     scalar_return_type = (
         numba_return_type
