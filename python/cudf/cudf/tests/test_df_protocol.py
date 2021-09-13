@@ -6,7 +6,9 @@ from cudf.core.df_protocol import (
     _from_dataframe, 
     _DtypeKind,
     __dataframe__,
-    _CuDFDataFrame
+    _CuDFDataFrame,
+    _CuDFColumn,
+    _CuDFBuffer
 )
 
 import cudf
@@ -21,11 +23,44 @@ from cudf.testing._utils import (
     gen_rand,
 )
 import pandas as pd
+from typing import Any, Tuple
+
+DataFrameObject = Any
+
+def assert_buffer_equal(buffer_dtype: Tuple[_CuDFBuffer, Any], cudfcol:cudf.Series):
+    buf, dtype = buffer_dtype
+    assert buf.__dlpack_device__() == (2, 0)
+
+def assert_column_equal(col: _CuDFColumn, cudfcol:cudf.Series):
+    assert col.size == cudfcol.size 
+    assert col.offset == 0
+    assert col.null_count == cudfcol.isna().sum() 
+    assert col.num_chunks() == 1
+    if col.null_count == 0 :
+        pytest.raises(RuntimeError, col._get_validity_buffer)
+    assert_buffer_equal(col._get_data_buffer(), cudfcol)
+    null_kind, null_value = col.describe_null
+    if col.null_count == 0:
+        assert null_kind == 0
+        assert null_value == None
+    else:
+        assert null_kind == 3
+        assert null_value == 0
+
+
+def assert_dataframe_equal(dfo: DataFrameObject, df:cudf.DataFrame):
+    assert dfo.num_columns() == len(df.columns)
+    assert dfo.num_rows() == len(df)
+    assert dfo.num_chunks() == 1
+    assert dfo.column_names() == list(df.columns)
+    for col in df.columns:
+        assert_column_equal(dfo.get_column_by_name(col), df[col])
 
 
 def _test_from_dataframe_equals(dfobj, copy=False):
     df2 = _from_dataframe(dfobj, copy=copy)
 
+    assert_dataframe_equal(dfobj, df2)
     if isinstance(dfobj._df, cudf.DataFrame):
         assert_eq(dfobj._df, df2)
 
@@ -68,28 +103,44 @@ def test_mixed_intfloat_dtype():
     _test_datatype(data_intfloat)
 
 def test_categorical_dtype():
-
-    def test__dataframe__(df):
-        # Some detailed testing for correctness of dtype:
-        col = df.__dataframe__().get_column_by_name('A')
-        assert col.dtype[0] == _DtypeKind.CATEGORICAL
-        assert col.null_count == 0
-        assert col.num_chunks() == 1
-        assert col.describe_categorical == (False, True, {0: 1, 1: 2, 2: 5})
-
     cdf = cudf.DataFrame({"A": [1, 2, 5, 1]})
     cdf["A"] = cdf["A"].astype("category")
-    test__dataframe__(cdf)
+    col = cdf.__dataframe__().get_column_by_name('A')
+    assert col.dtype[0] == _DtypeKind.CATEGORICAL
+    assert col.describe_categorical == (False, True, {0: 1, 1: 2, 2: 5})
     _test_from_dataframe_equals(cdf.__dataframe__(), copy=False)
     _test_from_dataframe_equals(cdf.__dataframe__(), copy=True)
 
 def test_NA_int_dtype():
-    data_int = dict(a=[1, None, 3], b=[9, 10, None])
+    data_int = dict(a=[1, None, 3, None, 5], 
+                    b=[9, 10, None, 7, 8],
+                    c= [6, 19, 20, 100, 1000] )
     _test_datatype(data_int)
 
-# def test_NA2_int_dtype():
-#     data_int = dict(a=[1, None, 3, None, 5], b=[9, 10, None, 7, 8])
-#     _test_datatype(data_int)
+def test_NA_float_dtype():
+    data_float = dict(a=[1.4, None, 3.6, None, 5.2], 
+                    b=[9.7, 10.9, None, 7.8, 8.2],
+                    c= [6.1, 19.2, 20.3, 100.4, 1000.5] )
+    _test_datatype(data_float)
+
+def test_NA_categorical_dtype():
+    df = cudf.DataFrame({"A": [1, 2, 5, 1]})
+    df["B"] = df["A"].astype("category")
+    df.at[[1, 3], 'B'] = None  # Set two items to null
+
+    # Some detailed testing for correctness of dtype and null handling:
+    col = df.__dataframe__().get_column_by_name('B')
+    assert col.dtype[0] == _DtypeKind.CATEGORICAL
+    assert col.null_count == 2
+    assert col.describe_null == (3, 0)  # sentinel value -1
+    assert col.num_chunks() == 1
+    assert col.describe_categorical == (False, True, {0: 1, 1: 2, 2: 5})
+    _test_from_dataframe_equals(df.__dataframe__(), copy=True)
+    _test_from_dataframe_equals(df.__dataframe__(), copy=False)
+
+    # df2 = _from_dataframe(df.__dataframe__())
+    # assert_dataframe_equal(df.__dataframe__(), df)
+    # tm.assert_frame_equal(df, df2)
 
 
 # def test_bool_dtype():

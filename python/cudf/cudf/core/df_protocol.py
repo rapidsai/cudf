@@ -26,6 +26,7 @@ from typing import Any, Optional, Tuple, Dict, Iterable, Sequence
 import cudf
 import numpy as np
 import cupy as cp
+from cupy import _core
 import pandas._testing as tm
 import cudf.testing as testcase
 import pytest
@@ -37,7 +38,7 @@ DataFrameObject = Any
 ColumnObject = Any
 
 
-def from_dataframe(df : DataFrameObject, copy: bool = False) :
+def from_dataframe(df : DataFrameObject, allow_copy: bool = False) :
     """
     Construct a cudf DataFrame from ``df`` if it supports ``__dataframe__``
     """
@@ -47,14 +48,12 @@ def from_dataframe(df : DataFrameObject, copy: bool = False) :
     if not hasattr(df, '__dataframe__'):
         raise ValueError("`df` does not support __dataframe__")
 
-    return _from_dataframe(df.__dataframe__(), copy=copy)
+    return _from_dataframe(df.__dataframe__(allow_copy=allow_copy))
 
 
 def _from_dataframe(df : DataFrameObject, copy: bool = False) :
     """
-    Note: not all cases are handled yet, only ones that can be implemented with
-    only Pandas. Later, we need to implement/test support for categoricals,
-    bit/byte masks, chunk handling, etc.
+    Create a cudf DataFrame object from DataFrameObject Interface.
     """
     # Check number of chunks, if there's more than one we need to iterate
     if df.num_chunks() > 1:
@@ -64,18 +63,22 @@ def _from_dataframe(df : DataFrameObject, copy: bool = False) :
     # least for now, deal with non-numpy dtypes later).
     columns = dict()
     _k = _DtypeKind
+    _buffers = []  # hold on to buffers, keeps memory alive
     for name in df.column_names():
         col = df.get_column_by_name(name)
         if col.dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.BOOL):
             # Simple numerical or bool dtype, turn into numpy array
-            columns[name] = convert_column_to_cupy_ndarray(col, copy=copy)
+            columns[name], _buf = convert_column_to_cupy_ndarray(col, copy=copy)
         elif col.dtype[0] == _k.CATEGORICAL:
-            columns[name] = convert_categorical_column(col, copy=copy)
-            names = df.column_names()
+            columns[name], _buf = convert_categorical_column(col, copy=copy)
         else:
             raise NotImplementedError(f"Data type {col.dtype[0]} not handled yet")
-    
-    return cudf.DataFrame(columns)
+        
+        _buffers.append(_buf)
+
+    df_new = cudf.DataFrame(columns)
+    df_new._buffers = _buffers
+    return df_new
 
 
 
@@ -88,6 +91,16 @@ class _DtypeKind(enum.IntEnum):
     DATETIME = 22
     CATEGORICAL = 23
 
+def set_missing_values(col, col_array):
+    series = cudf.Series(col_array)
+    null_kind, null_value = col.describe_null
+    if  null_kind != 0:
+        assert null_kind == 3, f"cudf supports only bit mask, null_kind should be 3 ." 
+        _mask_buffer, _mask_dtype = col.get_buffers()["validity"]
+        bitmask = buffer_to_cupy_ndarray(_mask_buffer, _mask_dtype)
+        series[bitmask==null_value] = None
+
+    return series
 
 def convert_column_to_cupy_ndarray(col : ColumnObject, copy : bool = False) -> np.ndarray:
     """
@@ -96,15 +109,20 @@ def convert_column_to_cupy_ndarray(col : ColumnObject, copy : bool = False) -> n
     if col.offset != 0:
         raise NotImplementedError("column.offset > 0 not handled yet")
 
-    # if col.describe_null[0] not in (0, 1):
-    #     raise NotImplementedError("Null values represented as masks or "
-    #                               "sentinel values not handled yet")
-
     _buffer, _dtype = col.get_buffers()['data']
-    _mask_buffer = col.get_buffers()['validity']
-    return buffer_to_cupy_ndarray(_buffer, _dtype, _mask_buffer, copy=copy)
+    if _buffer.__dlpack_device__()[0] == 2: # dataframe is on GPU/CUDA
+        x = cp.fromDlpack(_buffer.__dlpack__())
 
-def buffer_to_cupy_ndarray(_buffer, _dtype, _mask_buffer = None, copy : bool = False) -> cp.ndarray:
+    elif copy == False:
+        raise TypeError("This operation must copy data from CPU to GPU. Set `copy=True` to allow it.")
+
+    else:
+        x = _copy_buffer_to_gpu(_buffer, _dtype)
+
+    return set_missing_values(col, x), _buffer
+
+
+def buffer_to_cupy_ndarray(_buffer, _dtype, copy : bool = False) -> cp.ndarray:
     if _buffer.__dlpack_device__()[0] == 2: # dataframe is on GPU/CUDA
         x = cp.fromDlpack(_buffer.__dlpack__())
 
@@ -148,8 +166,6 @@ def convert_categorical_column(col : ColumnObject, copy:bool=False) :
     """
     Convert a categorical column to a Series instance
     """
-    
-
     ordered, is_dict, mapping = col.describe_categorical
     if not is_dict:
         raise NotImplementedError('Non-dictionary categoricals not supported yet')
@@ -159,28 +175,13 @@ def convert_categorical_column(col : ColumnObject, copy:bool=False) :
     #    codes = col._col.values.codes
     categories = cp.asarray(list(mapping.values()))
     codes_buffer, codes_dtype = col.get_buffers()['data']
-    _mask_buffer = col.get_buffers()['validity']
-    codes = buffer_to_cupy_ndarray(codes_buffer, codes_dtype, _mask_buffer, copy=copy)
+    codes = buffer_to_cupy_ndarray(codes_buffer, codes_dtype, copy=copy)
     values = categories[codes]
 
-    # Seems like Pandas can only construct with non-null values, so need to
+    # Seems like cudf can only construct with non-null values, so need to
     # null out the nulls later
     cat = cudf.CategoricalIndex(values, categories=categories, ordered=ordered)
-    series = cudf.Series(cat)
-
-    null_kind = col.describe_null[0]
-    if null_kind != 0:
-        print(null_kind)
-        if null_kind == 2:  # sentinel value
-            sentinel = col.describe_null[1]
-            series[codes == sentinel] = None
-        elif null_kind == 3:
-            pass
-        else:
-            raise NotImplementedError("Only categorical columns with sentinel "
-                                    "value supported at the moment")
-
-    return series
+    return set_missing_values(col, cat), codes_buffer
 
 
 def __dataframe__(self, nan_as_null : bool = False) -> dict:
@@ -243,7 +244,6 @@ class _CuDFBuffer:
         Buffer size in bytes.
         """
         return self._x.data.mem.size
-        # return self._x.size * self._x.dtype.itemsize
 
     @property
     def ptr(self) -> int:
@@ -572,7 +572,7 @@ class _CuDFColumn:
 
         return buffer, dtype
 
-    def unpackbits(myarray, bitorder="big"):
+    def _unpackbits(self, myarray, bitorder="big"):
     
         bitorder_op = {"big": '(myarray[i / 8] >> (7 - i % 8)) & 1;', 
                         "little": '(myarray[i / 8] >> (i % 8)) & 1;'}
@@ -585,10 +585,10 @@ class _CuDFColumn:
         'unpackbits_kernel'
         )
 
-        if myarray.dtype != cupy.uint8:
+        if myarray.dtype != cp.uint8:
             raise TypeError('Expected an input array of unsigned byte data type')
 
-        unpacked = cupy.ndarray((myarray.size * 8), dtype=cupy.uint8)
+        unpacked = cp.ndarray((myarray.size * 8), dtype=cp.uint8)
         return _unpackbits_kernel(myarray, unpacked)
 
     def _get_validity_buffer(self) -> Tuple[_CuDFBuffer, Any]:
@@ -602,7 +602,7 @@ class _CuDFColumn:
         null, invalid = self.describe_null
         if null == 3:
             _k = _DtypeKind
-            bitmask = unpackbits(cp.array(self._col._column.mask, copy=False), bitorder='little')[:len(self._col)]
+            bitmask = self._unpackbits(cp.array(self._col._column.mask, copy=False), bitorder='little')[:len(self._col)]
             buffer = _CuDFBuffer(bitmask)
             dtype = (_k.UINT, 8, "C", "=")
             return buffer, dtype
