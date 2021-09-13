@@ -1165,7 +1165,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             + [f._data[name] if name in f._data else None for name in names]
             for f in objs
         ]
-        # import pdb;pdb.set_trace()
 
         # Get a list of the combined index and table column indices
         indices = list(range(functools.reduce(max, map(len, columns))))
