@@ -46,7 +46,8 @@ def transpose(Table source):
         raise ValueError('Columns must all have the same dtype')
 
     cdef pair[unique_ptr[column], table_view] c_result
-    cdef table_view c_input = table_view_from_table(source, True)
+    cdef table_view c_input = table_view_from_table(
+        source, ignore_index=True)
 
     with nogil:
         c_result = move(cpp_transpose(c_input))

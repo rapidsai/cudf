@@ -155,7 +155,7 @@ cpdef write_orc(Table table,
 
     cdef orc_writer_options c_orc_writer_options = move(
         orc_writer_options.builder(
-            sink_info_c, table_view_from_table(table, True)
+            sink_info_c, table_view_from_table(table, ignore_index=True)
         ).metadata(&metadata_)
         .compression(compression_)
         .enable_statistics(<bool> (True if enable_statistics else False))

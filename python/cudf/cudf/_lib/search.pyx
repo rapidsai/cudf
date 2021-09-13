@@ -33,8 +33,10 @@ def search_sorted(
     cdef vector[libcudf_types.null_order] c_null_precedence
     cdef libcudf_types.order c_order
     cdef libcudf_types.null_order c_null_order
-    cdef table_view c_table_data = table_view_from_table(table, True)
-    cdef table_view c_values_data = table_view_from_table(values, True)
+    cdef table_view c_table_data = table_view_from_table(
+        table, ignore_index=True)
+    cdef table_view c_values_data = table_view_from_table(
+        values, ignore_index=True)
 
     # Note: We are ignoring index columns here
     c_order = (libcudf_types.order.ASCENDING

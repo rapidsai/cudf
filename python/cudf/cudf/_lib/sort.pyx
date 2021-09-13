@@ -130,7 +130,7 @@ def order_by(Table source_table, object ascending, bool na_position):
     """
 
     cdef table_view source_table_view = table_view_from_table(
-        source_table, True
+        source_table, ignore_index=True
     )
     cdef vector[order] column_order
     column_order.reserve(len(ascending))

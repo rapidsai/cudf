@@ -64,7 +64,7 @@ def to_dlpack(Table source_table):
 
     cdef DLManagedTensor *dlpack_tensor
     cdef table_view source_table_view = table_view_from_table(
-        source_table, True
+        source_table, ignore_index=True
     )
 
     with nogil:

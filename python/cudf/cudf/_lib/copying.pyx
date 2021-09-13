@@ -762,7 +762,8 @@ cdef class _CPackedColumns:
             input_table_view = table_view_from_table(input_table)
             p.index_names = input_table._index_names
         else:
-            input_table_view = table_view_from_table(input_table, True)
+            input_table_view = table_view_from_table(
+                input_table, ignore_index=True)
 
         p.column_names = input_table._column_names
         p.column_dtypes = {}

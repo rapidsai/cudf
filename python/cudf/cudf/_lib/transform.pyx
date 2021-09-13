@@ -127,7 +127,8 @@ def transform(Column input, op):
 
 
 def masked_udf(Table incols, op, output_type):
-    cdef table_view data_view = table_view_from_table(incols, True)
+    cdef table_view data_view = table_view_from_table(
+        incols, ignore_index=True)
     cdef string c_str = op.encode("UTF-8")
     cdef type_id c_tid
     cdef data_type c_dtype
@@ -150,7 +151,8 @@ def masked_udf(Table incols, op, output_type):
 
 
 def table_encode(Table input):
-    cdef table_view c_input = table_view_from_table(input, True)
+    cdef table_view c_input = table_view_from_table(
+        input, ignore_index=True)
     cdef pair[unique_ptr[table], unique_ptr[column]] c_result
 
     with nogil:

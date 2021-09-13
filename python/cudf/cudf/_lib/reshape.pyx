@@ -17,7 +17,8 @@ from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def interleave_columns(Table source_table):
-    cdef table_view c_view = table_view_from_table(source_table, True)
+    cdef table_view c_view = table_view_from_table(
+        source_table, ignore_index=True)
     cdef unique_ptr[column] c_result
 
     with nogil:

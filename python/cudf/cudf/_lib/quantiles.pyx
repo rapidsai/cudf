@@ -81,7 +81,8 @@ def quantiles(Table source_table,
               object is_input_sorted,
               list column_order,
               list null_precedence):
-    cdef table_view c_input = table_view_from_table(source_table, True)
+    cdef table_view c_input = table_view_from_table(
+        source_table, ignore_index=True)
     cdef vector[double] c_q = q
     cdef interpolation c_interp = <interpolation>(
         <underlying_type_t_interpolation> interp

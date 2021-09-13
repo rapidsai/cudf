@@ -33,7 +33,8 @@ def concatenate(Table source_strings,
     cdef DeviceScalar narep = na_rep.device_value
 
     cdef unique_ptr[column] c_result
-    cdef table_view source_view = table_view_from_table(source_strings, True)
+    cdef table_view source_view = table_view_from_table(
+        source_strings, ignore_index=True)
 
     cdef const string_scalar* scalar_separator = \
         <const string_scalar*>(separator.get_raw_ptr())

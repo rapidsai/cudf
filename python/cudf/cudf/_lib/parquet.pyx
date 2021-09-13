@@ -294,7 +294,7 @@ cpdef write_parquet(
             )
         num_index_cols_meta = len(table._index.names)
     else:
-        tv = table_view_from_table(table, True)
+        tv = table_view_from_table(table, ignore_index=True)
         tbl_meta = make_unique[table_input_metadata](tv)
         num_index_cols_meta = 0
 
@@ -382,7 +382,7 @@ cdef class ParquetWriter:
                 isinstance(table._index, cudf.core.multiindex.MultiIndex)):
             tv = table_view_from_table(table)
         else:
-            tv = table_view_from_table(table, True)
+            tv = table_view_from_table(table, ignore_index=True)
 
         with nogil:
             self.writer.get()[0].write(tv)
@@ -421,7 +421,7 @@ cdef class ParquetWriter:
         # Set the table_metadata
         num_index_cols_meta = 0
         self.tbl_meta = make_unique[table_input_metadata](
-            table_view_from_table(table, True))
+            table_view_from_table(table, ignore_index=True))
         if self.index is not False:
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
                 tv = table_view_from_table(table)
