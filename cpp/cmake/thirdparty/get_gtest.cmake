@@ -14,25 +14,24 @@
 # limitations under the License.
 #=============================================================================
 
-function(find_and_configure_cudf VERSION)
-    CPMFindPackage(NAME cudf
-        VERSION         ${VERSION}
-        GIT_REPOSITORY  https://github.com/rapidsai/cudf.git
-        GIT_TAG         branch-${VERSION}
-        GIT_SHALLOW     TRUE
-        SOURCE_SUBDIR   cpp
-        OPTIONS         "BUILD_TESTS OFF"
-                        "BUILD_BENCHMARKS OFF")
-    if(cudf_ADDED)
-        set(cudf_ADDED TRUE PARENT_SCOPE)
+function(find_and_configure_gtest)
+    include(${rapids-cmake-dir}/cpm/gtest.cmake)
+
+    # Find or install GoogleTest
+    rapids_cpm_gtest(BUILD_EXPORT_SET cudf-testing-exports
+                     INSTALL_EXPORT_SET cudf-testing-exports)
+
+    if(GTest_ADDED)
+        rapids_export(BUILD GTest
+          VERSION ${GTest_VERSION}
+          EXPORT_SET GTestTargets
+          GLOBAL_TARGETS gtest gmock gtest_main gmock_main
+          NAMESPACE GTest::)
+
+        include("${rapids-cmake-dir}/export/find_package_root.cmake")
+        rapids_export_find_package_root(BUILD GTest [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-testing-exports)
     endif()
+
 endfunction()
 
-set(CUDA_KAFKA_MIN_VERSION_cudf "${CUDA_KAFKA_VERSION_MAJOR}.${CUDA_KAFKA_VERSION_MINOR}.${CUDA_KAFKA_VERSION_PATCH}")
-find_and_configure_cudf(${CUDA_KAFKA_MIN_VERSION_cudf})
-
-if(cudf_ADDED)
-    # Since we are building cudf as part of ourselves we need
-    # to enable the CUDA language in the top-most scope
-    enable_language(CUDA)
-endif()
+find_and_configure_gtest()

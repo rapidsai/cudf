@@ -334,7 +334,7 @@ class m2_aggregation : public groupby_aggregation {
 /**
  * @brief Derived class for specifying a standard deviation/variance aggregation
  */
-class std_var_aggregation : public groupby_aggregation {
+class std_var_aggregation : public rolling_aggregation, public groupby_aggregation {
  public:
   size_type _ddof;  ///< Delta degrees of freedom
 
@@ -348,7 +348,7 @@ class std_var_aggregation : public groupby_aggregation {
   size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
 
  protected:
-  std_var_aggregation(aggregation::Kind k, size_type ddof) : aggregation(k), _ddof{ddof}
+  std_var_aggregation(aggregation::Kind k, size_type ddof) : rolling_aggregation(k), _ddof{ddof}
   {
     CUDF_EXPECTS(k == aggregation::STD or k == aggregation::VARIANCE,
                  "std_var_aggregation can accept only STD, VARIANCE");
@@ -1171,7 +1171,7 @@ template <typename Source, aggregation::Kind k>
 struct target_type_impl<Source,
                         k,
                         std::enable_if_t<is_numeric<Source>() && k == aggregation::TDIGEST>> {
-  using type = list_view;
+  using type = struct_view;
 };
 
 // TDIGEST_MERGE. The root column type for a tdigest column is a list_view. Strictly
@@ -1181,8 +1181,8 @@ template <typename Source, aggregation::Kind k>
 struct target_type_impl<
   Source,
   k,
-  std::enable_if_t<std::is_same_v<Source, cudf::list_view> && k == aggregation::MERGE_TDIGEST>> {
-  using type = list_view;
+  std::enable_if_t<std::is_same_v<Source, cudf::struct_view> && k == aggregation::MERGE_TDIGEST>> {
+  using type = struct_view;
 };
 
 /**

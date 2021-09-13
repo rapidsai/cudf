@@ -26,6 +26,7 @@
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/count_elements.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
+#include <cudf/lists/drop_list_duplicates.hpp>
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/sorting.hpp>
@@ -405,6 +406,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractListElement(JNIEnv
     cudf::lists_column_view lcv(*cv);
 
     std::unique_ptr<cudf::column> ret = cudf::lists::extract_list_element(lcv, index);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicates(JNIEnv *env, jclass,
+                                                                          jlong column_view) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view const *cv = reinterpret_cast<cudf::column_view const *>(column_view);
+    cudf::lists_column_view lcv(*cv);
+
+    std::unique_ptr<cudf::column> ret = cudf::lists::drop_list_duplicates(lcv);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);

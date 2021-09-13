@@ -27,6 +27,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/lists/detail/drop_list_duplicates.hpp>
 #include <cudf/table/table.hpp>
@@ -146,7 +147,10 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
   if (cache.has_result(col_idx, agg)) return;
 
   auto result = [&]() {
-    if (cudf::is_fixed_width(values.type())) {
+    auto values_type = cudf::is_dictionary(values.type())
+                         ? dictionary_column_view(values).keys().type()
+                         : values.type();
+    if (cudf::is_fixed_width(values_type)) {
       return detail::group_min(
         get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr);
     } else {
@@ -183,7 +187,10 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
   if (cache.has_result(col_idx, agg)) return;
 
   auto result = [&]() {
-    if (cudf::is_fixed_width(values.type())) {
+    auto values_type = cudf::is_dictionary(values.type())
+                         ? dictionary_column_view(values).keys().type()
+                         : values.type();
+    if (cudf::is_fixed_width(values_type)) {
       return detail::group_max(
         get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr);
     } else {
@@ -523,11 +530,19 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
  *
  * The tdigest column produced is of the following structure:
  *
- * list {
- *   struct {
- *     double    // mean
- *     double    // weight
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    }
  *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
  * }
  *
  * Each output row is a single tdigest.  The length of the row is the "size" of the
@@ -561,11 +576,19 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
  *
  * The tdigest column produced is of the following structure:
  *
- * list {
- *   struct {
- *     double    // mean
- *     double    // weight
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    }
  *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
  * }
  *
  * Each output row is a single tdigest.  The length of the row is the "size" of the
