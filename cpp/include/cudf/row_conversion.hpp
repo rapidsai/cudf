@@ -24,40 +24,28 @@
 
 namespace cudf {
 
+std::vector<std::unique_ptr<cudf::column>> old_convert_to_rows(
+  cudf::table_view const& tbl,
+  // TODO need something for validity
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 std::vector<std::unique_ptr<cudf::column>> convert_to_rows(
-  cudf::table_view const &tbl,
+  cudf::table_view const& tbl,
   // TODO need something for validity
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(
-  cudf::table_view const &tbl,
-  // TODO need something for validity
+std::unique_ptr<cudf::table> old_convert_from_rows(
+  cudf::lists_column_view const& input,
+  std::vector<cudf::data_type> const& schema,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
-
-std::unique_ptr<cudf::table> convert_from_rows(
-  cudf::lists_column_view const &input,
-  std::vector<cudf::data_type> const &schema,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<cudf::table> convert_from_rows(
-  std::vector<std::unique_ptr<cudf::column>> const &input,
-  std::vector<cudf::data_type> const &schema,
+  cudf::lists_column_view const& input,
+  std::vector<cudf::data_type> const& schema,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
-
-std::unique_ptr<cudf::table> convert_from_rows2(
-  cudf::lists_column_view const &input,
-  std::vector<cudf::data_type> const &schema,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
-
-std::unique_ptr<cudf::table> convert_from_rows2(
-  std::vector<std::unique_ptr<cudf::column>> const &input,
-  std::vector<cudf::data_type> const &schema,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace cudf
