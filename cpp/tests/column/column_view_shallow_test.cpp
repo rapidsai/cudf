@@ -30,32 +30,48 @@
 #include <memory>
 #include <type_traits>
 
-template <typename T>
+// fixed_width, dict, string, list, struct
+template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
 std::unique_ptr<cudf::column> example_column()
 {
-  // fixed_width, dict, string, list, struct
-  if constexpr (cudf::is_fixed_width<T>()) {
-    auto begin = thrust::make_counting_iterator(1);
-    auto end   = thrust::make_counting_iterator(16);
-    return cudf::test::fixed_width_column_wrapper<T>(begin, end).release();
-  } else if constexpr (cudf::is_dictionary<T>()) {
-    return cudf::test::dictionary_column_wrapper<std::string>(
-             {"fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "", ""}, {1, 1, 1, 1, 1, 1, 1, 1, 0})
-      .release();
-  } else if constexpr (std::is_same_v<T, std::string> or std::is_same_v<T, cudf::string_view>) {
-    return cudf::test::strings_column_wrapper(
-             {"fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "", ""})
-      .release();
-  } else if constexpr (std::is_same_v<T, cudf::list_view>) {
-    return cudf::test::lists_column_wrapper<int>({{1, 2, 3}, {4, 5}, {}, {6, 7, 8}}).release();
-  } else if constexpr (std::is_same_v<T, cudf::struct_view>) {
-    auto begin    = thrust::make_counting_iterator(1);
-    auto end      = thrust::make_counting_iterator(16);
-    auto member_0 = cudf::test::fixed_width_column_wrapper<int32_t>(begin, end);
-    auto member_1 = cudf::test::fixed_width_column_wrapper<int32_t>(begin + 10, end + 10);
-    return cudf::test::structs_column_wrapper({member_0, member_1}).release();
-  }
-  return {};
+  auto begin = thrust::make_counting_iterator(1);
+  auto end   = thrust::make_counting_iterator(16);
+  return cudf::test::fixed_width_column_wrapper<T>(begin, end).release();
+}
+
+template <typename T, std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
+std::unique_ptr<cudf::column> example_column()
+{
+  return cudf::test::dictionary_column_wrapper<std::string>(
+           {"fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "", ""}, {1, 1, 1, 1, 1, 1, 1, 1, 0})
+    .release();
+}
+
+template <typename T,
+          std::enable_if_t<std::is_same_v<T, std::string> or
+                           std::is_same_v<T, cudf::string_view>>* = nullptr>
+std::unique_ptr<cudf::column> example_column()
+
+{
+  return cudf::test::strings_column_wrapper(
+           {"fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "", ""})
+    .release();
+}
+
+template <typename T, std::enable_if_t<std::is_same_v<T, cudf::list_view>>* = nullptr>
+std::unique_ptr<cudf::column> example_column()
+{
+  return cudf::test::lists_column_wrapper<int>({{1, 2, 3}, {4, 5}, {}, {6, 7, 8}}).release();
+}
+
+template <typename T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>* = nullptr>
+std::unique_ptr<cudf::column> example_column()
+{
+  auto begin    = thrust::make_counting_iterator(1);
+  auto end      = thrust::make_counting_iterator(16);
+  auto member_0 = cudf::test::fixed_width_column_wrapper<int32_t>(begin, end);
+  auto member_1 = cudf::test::fixed_width_column_wrapper<int32_t>(begin + 10, end + 10);
+  return cudf::test::structs_column_wrapper({member_0, member_1}).release();
 }
 
 template <typename T>
@@ -68,13 +84,15 @@ TYPED_TEST_CASE(ColumnViewShallowTests, AllTypes);
 // Test for fixed_width, dict, string, list, struct
 // column_view, column_view = same hash.
 // column_view, make a copy = same hash.
+// new column_view from colmn = same hash
 // column_view, copy column = diff hash
+// column_view, diff column = diff hash.
+//
 // column_view old, update data + new column_view     = same hash.
 // column_view old, add null_mask + new column_view   = diff hash.
 // column_view old, update nulls + new column_view    = same hash.
 // column_view old, set_null_count + new column_view  = same hash.
 //
-// column_view, diff column     = diff hash.
 // column_view, sliced[0, size) = same hash (for split too)
 // column_view, sliced[n:)      = diff hash (for split too)
 // column_view, bit_cast        = diff hash
@@ -85,7 +103,7 @@ TYPED_TEST_CASE(ColumnViewShallowTests, AllTypes);
 // update the children column data  = same hash
 // update the children column_views = diff hash
 
-TYPED_TEST(ColumnViewShallowTests, shallow_hash)
+TYPED_TEST(ColumnViewShallowTests, shallow_hash_basic)
 {
   using namespace cudf::detail;
   auto col      = example_column<TypeParam>();
@@ -99,17 +117,32 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash)
     auto col_view_copy = col_view;
     EXPECT_EQ(shallow_hash(col_view), shallow_hash(col_view_copy));
   }
+
+  // new column_view from column = same hash
+  {
+    auto col_view_new = cudf::column_view{*col};
+    EXPECT_EQ(shallow_hash(col_view), shallow_hash(col_view_new));
+  }
+
   // copy column = diff hash
   {
     auto col_new       = std::make_unique<cudf::column>(*col);
     auto col_view_copy = col_new->view();
     EXPECT_NE(shallow_hash(col_view), shallow_hash(col_view_copy));
   }
-  // new column_view from column = same hash
+
+  // column_view, diff column = diff hash.
   {
-    auto col_view_new = cudf::column_view{*col};
-    EXPECT_EQ(shallow_hash(col_view), shallow_hash(col_view_new));
+    auto col_diff      = example_column<TypeParam>();
+    auto col_view_diff = cudf::column_view{*col_diff};
+    EXPECT_NE(shallow_hash(col_view), shallow_hash(col_view_diff));
   }
+}
+TYPED_TEST(ColumnViewShallowTests, shallow_hash_update_data)
+{
+  using namespace cudf::detail;
+  auto col      = example_column<TypeParam>();
+  auto col_view = cudf::column_view{*col};
   // update data + new column_view = same hash.
   {
     // update data by modifying some bits: fixed_width, string, dict, list, struct
@@ -151,14 +184,14 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash)
     auto col_view_new2 = cudf::column_view{*col};
     EXPECT_EQ(shallow_hash(col_view), shallow_hash(col_view_new2));
   }
+}
 
-  // column_view, diff column = diff hash.
-  {
-    auto col_diff      = example_column<TypeParam>();
-    auto col_view_diff = cudf::column_view{*col_diff};
-    EXPECT_NE(shallow_hash(col_view), shallow_hash(col_view_diff));
-  }
-  // column_view, sliced[0, size]  = same hash (for split too)
+TYPED_TEST(ColumnViewShallowTests, shallow_hash_slice)
+{
+  using namespace cudf::detail;
+  auto col      = example_column<TypeParam>();
+  auto col_view = cudf::column_view{*col};
+  // column_view, sliced[0, size)  = same hash (for split too)
   {
     auto col_sliced = cudf::slice(col_view, {0, col_view.size()});
     EXPECT_EQ(shallow_hash(col_view), shallow_hash(col_sliced[0]));
@@ -174,6 +207,20 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash)
     EXPECT_NE(shallow_hash(col_view), shallow_hash(col_split[0]));
     EXPECT_NE(shallow_hash(col_view), shallow_hash(col_split[1]));
   }
+  // column_view, col copy sliced[0, 0)  = same hash (empty column)
+  {
+    auto col_new        = std::make_unique<cudf::column>(*col);
+    auto col_new_view   = col_new->view();
+    auto col_sliced     = cudf::slice(col_view, {0, 0, 1, 1, col_view.size(), col_view.size()});
+    auto col_new_sliced = cudf::slice(col_new_view, {0, 0, 1, 1, col_view.size(), col_view.size()});
+
+    EXPECT_EQ(shallow_hash(col_sliced[0]), shallow_hash(col_sliced[1]));
+    EXPECT_EQ(shallow_hash(col_sliced[1]), shallow_hash(col_sliced[2]));
+    EXPECT_EQ(shallow_hash(col_sliced[0]), shallow_hash(col_new_sliced[0]));
+    EXPECT_EQ(shallow_hash(col_sliced[1]), shallow_hash(col_new_sliced[1]));
+    EXPECT_EQ(shallow_hash(col_sliced[2]), shallow_hash(col_new_sliced[2]));
+  }
+
   // column_view, bit_cast         = diff hash
   {
     if constexpr (std::is_integral_v<TypeParam> and not std::is_same_v<TypeParam, bool>) {
@@ -185,6 +232,13 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash)
       EXPECT_NE(shallow_hash(col_view), shallow_hash(col_bitcast));
     }
   }
+}
+
+TYPED_TEST(ColumnViewShallowTests, shallow_hash_mutable)
+{
+  using namespace cudf::detail;
+  auto col      = example_column<TypeParam>();
+  auto col_view = cudf::column_view{*col};
   // mutable_column_view, column_view = same hash
   {
     auto col_mutable = cudf::mutable_column_view{*col};

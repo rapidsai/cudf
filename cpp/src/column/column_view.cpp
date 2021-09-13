@@ -80,21 +80,32 @@ size_type column_view_base::null_count(size_type begin, size_type end) const
 
 // simple prime number multiplication algorithm.
 // Adapted from http://myeyesareblind.com/2017/02/06/Combine-hash-values/#apachecommons
-constexpr void combine_hash(size_t& h1, size_t h2) { h1 = h1 * 127 + h2; }
+constexpr void combine_hash(std::size_t& h1, std::size_t h2) { h1 = h1 * 127 + h2; }
 
-size_t shallow_hash(column_view const& input)
-{
-  size_t hash = 0;
-  combine_hash(hash, std::hash<data_type>{}(input.type()));
-  combine_hash(hash, std::hash<size_type>{}(input.size()));
-  combine_hash(hash, std::hash<void const*>{}(input.head()));
-  combine_hash(hash, std::hash<void const*>{}(input.null_mask()));
-  combine_hash(hash, std::hash<size_type>{}(input.offset()));
-  std::for_each(input.child_begin(), input.child_end(), [&hash](auto const& child) {
-    combine_hash(hash, shallow_hash(child));
-  });
-  return hash;
-}
+struct shallow_hash_impl {
+  std::size_t operator()(column_view const& input, bool is_parent_empty = false)
+  {
+    std::size_t hash = 0;
+    combine_hash(hash, std::hash<data_type>{}(input.type()));
+    combine_hash(hash, std::hash<size_type>{}(input.size()));
+    if (not(input.is_empty() or is_parent_empty)) {
+      combine_hash(hash, std::hash<void const*>{}(input.head()));
+      combine_hash(hash, std::hash<void const*>{}(input.null_mask()));
+      combine_hash(hash, std::hash<size_type>{}(input.offset()));
+    }
+    hash = std::accumulate(
+      input.child_begin(),
+      input.child_end(),
+      hash,
+      [&input, is_parent_empty](std::size_t hash, auto const& child) {
+        combine_hash(hash, shallow_hash_impl{}(child, input.is_empty() or is_parent_empty));
+        return hash;
+      });
+    return hash;
+  }
+};
+
+std::size_t shallow_hash(column_view const& input) { return shallow_hash_impl{}(input); }
 }  // namespace detail
 
 // Immutable view constructor
