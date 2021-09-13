@@ -77,14 +77,6 @@ def test_compare_masked_vs_masked(op):
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
-test_arith_masked_vs_constant_skip_cases = {
-    (False, operator.truediv),
-    (False, operator.floordiv),
-    (False, operator.mod),
-    (False, operator.pow),
-}
-
-
 @pytest.mark.parametrize("op", arith_ops)
 @pytest.mark.parametrize("constant", [1, 1.5, True, False])
 @pytest.mark.parametrize("data", [[1, 2, cudf.NA]])
