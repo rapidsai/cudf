@@ -178,6 +178,8 @@ def _filter_row_groups(paths, fs, filters=None, row_groups=None):
         paths, filesystem=fs, format="parquet", partitioning="hive",
     )
     file_list = dataset.files
+    if len(file_list) == 0:
+        raise FileNotFoundError(f"{paths} could not be resolved to any files")
 
     if filters is not None:
         # Load IDs of filtered row groups for each file in dataset
@@ -318,7 +320,8 @@ def read_parquet(
     )
 
     # Apply filters now (before converting non-local paths to buffers)
-    if fs is not None and (filters or need_byte_ranges):
+    # if fs is not None and (filters is not None or need_byte_ranges):
+    if fs is not None:
         filepath_or_buffer, row_groups = _filter_row_groups(
             filepath_or_buffer, fs, filters=filters, row_groups=row_groups,
         )
