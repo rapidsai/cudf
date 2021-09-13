@@ -103,9 +103,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

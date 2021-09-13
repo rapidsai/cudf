@@ -87,7 +87,7 @@ class StructColumn(ColumnBase):
                 field: value
                 for field, value in zip(self.dtype.fields, result.values())
             }
-        return result._rename_fields(self.dtype.fields.keys())
+        return result
 
     def __setitem__(self, key, value):
         if isinstance(value, dict):

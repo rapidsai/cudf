@@ -235,19 +235,13 @@ struct expression_evaluator {
    * @param plan The collection of device references representing the expression to evaluate.
    * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
    * storing intermediates.
-   * @param compare_nulls Whether the equality operator returns true or false for two nulls.
 
    */
   __device__ expression_evaluator(table_device_view const& left,
                                   table_device_view const& right,
                                   expression_device_view const& plan,
-                                  IntermediateDataType<has_nulls>* thread_intermediate_storage,
-                                  null_equality compare_nulls = null_equality::EQUAL)
-    : left(left),
-      right(right),
-      plan(plan),
-      thread_intermediate_storage(thread_intermediate_storage),
-      compare_nulls(compare_nulls)
+                                  IntermediateDataType<has_nulls>* thread_intermediate_storage)
+    : left(left), right(right), plan(plan), thread_intermediate_storage(thread_intermediate_storage)
   {
   }
 
@@ -258,17 +252,14 @@ struct expression_evaluator {
    * @param plan The collection of device references representing the expression to evaluate.
    * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
    * storing intermediates.
-   * @param compare_nulls Whether the equality operator returns true or false for two nulls.
    */
   __device__ expression_evaluator(table_device_view const& table,
                                   expression_device_view const& plan,
-                                  IntermediateDataType<has_nulls>* thread_intermediate_storage,
-                                  null_equality compare_nulls = null_equality::EQUAL)
+                                  IntermediateDataType<has_nulls>* thread_intermediate_storage)
     : left(table),
       right(table),
       plan(plan),
-      thread_intermediate_storage(thread_intermediate_storage),
-      compare_nulls(compare_nulls)
+      thread_intermediate_storage(thread_intermediate_storage)
   {
   }
 
@@ -316,7 +307,14 @@ struct expression_evaluator {
         return ReturnType(table.column(data_index).element<Element>(row_index));
       }
     } else if (ref_type == detail::device_data_reference_type::LITERAL) {
-      return ReturnType(plan.literals[data_index].value<Element>());
+      if constexpr (has_nulls) {
+        return plan.literals[data_index].is_valid()
+                 ? ReturnType(plan.literals[data_index].value<Element>())
+                 : ReturnType();
+
+      } else {
+        return ReturnType(plan.literals[data_index].value<Element>());
+      }
     } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
       // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
       // Using a temporary variable ensures that the compiler knows the result is aligned
@@ -596,32 +594,28 @@ struct expression_evaluator {
      * @param input Input to the operation.
      * @param output Output data reference.
      */
-    template <
-      ast_operator op,
-      typename OutputType,
-      std::enable_if_t<detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
+    template <ast_operator op,
+              typename OutputType,
+              std::enable_if_t<
+                detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
+                                          possibly_null_value_t<Input, has_nulls>>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
                                possibly_null_value_t<Input, has_nulls> const input,
                                detail::device_data_reference const output) const
     {
-      using OperatorFunctor = detail::operator_functor<op>;
-      using Out             = cuda::std::invoke_result_t<OperatorFunctor, Input>;
-      if constexpr (has_nulls) {
-        auto const result = input.has_value()
-                              ? possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*input))
-                              : possibly_null_value_t<Out, has_nulls>();
-        this->template resolve_output<Out>(output_object, output, output_row_index, result);
-      } else {
-        this->template resolve_output<Out>(
-          output_object, output, output_row_index, OperatorFunctor{}(input));
-      }
+      // The output data type is the same whether or not nulls are present, so
+      // pull from the non-nullable operator.
+      using Out = cuda::std::invoke_result_t<detail::operator_functor<op, false>, Input>;
+      this->template resolve_output<Out>(
+        output_object, output, output_row_index, detail::operator_functor<op, has_nulls>{}(input));
     }
 
-    template <
-      ast_operator op,
-      typename OutputType,
-      std::enable_if_t<!detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
+    template <ast_operator op,
+              typename OutputType,
+              std::enable_if_t<
+                !detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
+                                           possibly_null_value_t<Input, has_nulls>>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
                                possibly_null_value_t<Input, has_nulls> const input,
@@ -658,50 +652,31 @@ struct expression_evaluator {
      */
     template <ast_operator op,
               typename OutputType,
-              std::enable_if_t<
-                detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
+              std::enable_if_t<detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
+                                                          possibly_null_value_t<LHS, has_nulls>,
+                                                          possibly_null_value_t<RHS, has_nulls>>>* =
+                nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
                                possibly_null_value_t<LHS, has_nulls> const lhs,
                                possibly_null_value_t<RHS, has_nulls> const rhs,
                                detail::device_data_reference const output) const
     {
-      using OperatorFunctor = detail::operator_functor<op>;
-      using Out             = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
-      if constexpr (has_nulls) {
-        if constexpr (op == ast_operator::EQUAL) {
-          // Special handling of the equality operator based on what kind
-          // of null handling was requested.
-          possibly_null_value_t<Out, has_nulls> result;
-          if (!lhs.has_value() && !rhs.has_value()) {
-            // Case 1: Both null, so the output is based on compare_nulls.
-            result = possibly_null_value_t<Out, has_nulls>(this->evaluator.compare_nulls ==
-                                                           null_equality::EQUAL);
-          } else if (lhs.has_value() && rhs.has_value()) {
-            // Case 2: Neither is null, so the output is given by the operation.
-            result = possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*lhs, *rhs));
-          } else {
-            // Case 3: One value is null, while the other is not, so we simply propagate nulls.
-            result = possibly_null_value_t<Out, has_nulls>();
-          }
-          this->template resolve_output<Out>(output_object, output, output_row_index, result);
-        } else {
-          // Default behavior for all other operators is to propagate nulls.
-          auto result = (lhs.has_value() && rhs.has_value())
-                          ? possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*lhs, *rhs))
-                          : possibly_null_value_t<Out, has_nulls>();
-          this->template resolve_output<Out>(output_object, output, output_row_index, result);
-        }
-      } else {
-        this->template resolve_output<Out>(
-          output_object, output, output_row_index, OperatorFunctor{}(lhs, rhs));
-      }
+      // The output data type is the same whether or not nulls are present, so
+      // pull from the non-nullable operator.
+      using Out = cuda::std::invoke_result_t<detail::operator_functor<op, false>, LHS, RHS>;
+      this->template resolve_output<Out>(output_object,
+                                         output,
+                                         output_row_index,
+                                         detail::operator_functor<op, has_nulls>{}(lhs, rhs));
     }
 
     template <ast_operator op,
               typename OutputType,
               std::enable_if_t<
-                !detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
+                !detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
+                                            possibly_null_value_t<LHS, has_nulls>,
+                                            possibly_null_value_t<RHS, has_nulls>>>* = nullptr>
     __device__ void operator()(OutputType& output_object,
                                cudf::size_type const output_row_index,
                                possibly_null_value_t<LHS, has_nulls> const lhs,
@@ -719,8 +694,6 @@ struct expression_evaluator {
   IntermediateDataType<has_nulls>*
     thread_intermediate_storage;  ///< The shared memory store of intermediates produced during
                                   ///< evaluation.
-  null_equality
-    compare_nulls;  ///< Whether the equality operator returns true or false for two nulls.
 };
 
 }  // namespace detail

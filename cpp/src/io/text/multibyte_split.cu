@@ -279,10 +279,10 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
     auto chunk_stream  = streams[i % streams.size()];
     auto chunk         = reader->get_next_chunk(ITEMS_PER_CHUNK, chunk_stream);
 
-    if (chunk.size() == 0) { break; }
+    if (chunk->size() == 0) { break; }
 
     auto tiles_in_launch =
-      cudf::util::div_rounding_up_safe(chunk.size(), static_cast<std::size_t>(ITEMS_PER_TILE));
+      cudf::util::div_rounding_up_safe(chunk->size(), static_cast<std::size_t>(ITEMS_PER_TILE));
 
     // reset the next chunk of tile state
     multibyte_split_init_kernel<<<tiles_in_launch, THREADS_PER_TILE, 0, chunk_stream>>>(  //
@@ -299,13 +299,13 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
       tile_offsets,
       trie.view(),
       chunk_offset,
-      chunk,
+      *chunk,
       output_buffer,
       output_char_buffer);
 
     cudaEventRecord(last_launch_event, chunk_stream);
 
-    chunk_offset += chunk.size();
+    chunk_offset += chunk->size();
   }
 
   cudaEventDestroy(last_launch_event);
