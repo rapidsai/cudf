@@ -16,14 +16,16 @@ def read_text(
 ):
     """{docstring}"""
 
-    filepath_or_buffer = ioutils.get_filepath_or_buffer(
+    filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         compression=None,
         iotypes=(BytesIO, StringIO),
         **kwargs,
     )
 
-    df = cudf.DataFrame._from_data(
+    print(type(filepath_or_buffer))
+
+    df = cudf.Series._from_data(
         libtext.read_text(filepath_or_buffer, delimiter=delimiter,)
     )
 

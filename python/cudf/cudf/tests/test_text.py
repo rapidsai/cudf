@@ -8,6 +8,11 @@ import cudf
 from cudf.testing._utils import assert_eq
 
 
+@pytest.fixture(scope="module")
+def datadir(datadir):
+    return datadir / "text"
+
+
 def test_tokenize():
     strings = cudf.Series(
         [
@@ -875,5 +880,26 @@ def test_is_vowel_consonant():
         [False, False, True, True, False, True, False, False, None, False]
     )
     actual = strings.str.is_consonant(indices)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+
+def test_read_text(datadir):
+    chess_file = str(datadir) + "/chess.pgn"
+    delimiter = "1."
+
+    f = open(chess_file, "r")
+    content = f.read().split(delimiter)
+    f.close()
+
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    for i in range(len(content) - 1):
+        content[i] = content[i] + delimiter
+
+    expected = cudf.Series(content)
+
+    actual = cudf.read_text(chess_file, delimiter=delimiter)
+
     assert type(expected) == type(actual)
     assert_eq(expected, actual)
