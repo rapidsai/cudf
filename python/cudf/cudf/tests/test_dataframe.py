@@ -1241,7 +1241,7 @@ def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
     else:
         pres = pd.concat([df1, df2])
         gres = cudf.concat([cudf.from_pandas(df1), cudf.from_pandas(df2)])
-        assert_eq(pres, gres, check_dtype=False)
+        assert_eq(pres, gres, check_dtype=False, check_index_type=True)
 
 
 def test_dataframe_concat_different_column_types():
@@ -1269,7 +1269,7 @@ def test_concat_empty_dataframe(df_1, df_2):
     # ignoring dtypes as pandas upcasts int to float
     # on concatenation with empty dataframes
 
-    assert_eq(got, expect, check_dtype=False)
+    assert_eq(got, expect, check_dtype=False, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -1307,7 +1307,7 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
     for col in numeric_cols:
         got[col] = got[col].astype(np.float64).fillna(np.nan)
 
-    assert_eq(got, expect, check_dtype=False)
+    assert_eq(got, expect, check_dtype=False, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -1318,7 +1318,7 @@ def test_concat_empty_series(ser_1, ser_2):
     got = cudf.concat([cudf.Series(ser_1), cudf.Series(ser_2)])
     expect = pd.concat([ser_1, ser_2])
 
-    assert_eq(got, expect)
+    assert_eq(got, expect, check_index_type=True)
 
 
 def test_concat_with_axis():
@@ -1331,7 +1331,7 @@ def test_concat_with_axis():
 
     # concat only dataframes
     concat_cdf = cudf.concat([cdf1, cdf2], axis=1)
-    assert_eq(concat_cdf, concat_df)
+    assert_eq(concat_cdf, concat_df, check_index_type=True)
 
     # concat only series
     concat_s = pd.concat([df1.x, df1.y], axis=1)
@@ -1339,7 +1339,7 @@ def test_concat_with_axis():
     cs2 = cudf.Series.from_pandas(df1.y)
     concat_cdf_s = cudf.concat([cs1, cs2], axis=1)
 
-    assert_eq(concat_cdf_s, concat_s)
+    assert_eq(concat_cdf_s, concat_s, check_index_type=True)
 
     # concat series and dataframes
     s3 = pd.Series(np.random.random(5))
@@ -1347,7 +1347,7 @@ def test_concat_with_axis():
 
     concat_cdf_all = cudf.concat([cdf1, cs3, cdf2], axis=1)
     concat_df_all = pd.concat([df1, s3, df2], axis=1)
-    assert_eq(concat_cdf_all, concat_df_all)
+    assert_eq(concat_cdf_all, concat_df_all, check_index_type=True)
 
     # concat manual multi index
     midf1 = cudf.from_pandas(df1)
@@ -1361,10 +1361,20 @@ def test_concat_with_axis():
     mipdf1 = midf1.to_pandas()
     mipdf2 = midf2.to_pandas()
 
-    assert_eq(cudf.concat([midf1, midf2]), pd.concat([mipdf1, mipdf2]))
-    assert_eq(cudf.concat([midf2, midf1]), pd.concat([mipdf2, mipdf1]))
     assert_eq(
-        cudf.concat([midf1, midf2, midf1]), pd.concat([mipdf1, mipdf2, mipdf1])
+        cudf.concat([midf1, midf2]),
+        pd.concat([mipdf1, mipdf2]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([midf2, midf1]),
+        pd.concat([mipdf2, mipdf1]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([midf1, midf2, midf1]),
+        pd.concat([mipdf1, mipdf2, mipdf1]),
+        check_index_type=True,
     )
 
     # concat groupby multi index
@@ -1382,8 +1392,16 @@ def test_concat_with_axis():
     pdg1 = gdg1.to_pandas()
     pdg2 = gdg2.to_pandas()
 
-    assert_eq(cudf.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]))
-    assert_eq(cudf.concat([gdg2, gdg1]), pd.concat([pdg2, pdg1]))
+    assert_eq(
+        cudf.concat([gdg1, gdg2]),
+        pd.concat([pdg1, pdg2]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([gdg2, gdg1]),
+        pd.concat([pdg2, pdg1]),
+        check_index_type=True,
+    )
 
     # series multi index concat
     gdgz1 = gdg1.z
@@ -1391,8 +1409,16 @@ def test_concat_with_axis():
     pdgz1 = gdgz1.to_pandas()
     pdgz2 = gdgz2.to_pandas()
 
-    assert_eq(cudf.concat([gdgz1, gdgz2]), pd.concat([pdgz1, pdgz2]))
-    assert_eq(cudf.concat([gdgz2, gdgz1]), pd.concat([pdgz2, pdgz1]))
+    assert_eq(
+        cudf.concat([gdgz1, gdgz2]),
+        pd.concat([pdgz1, pdgz2]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([gdgz2, gdgz1]),
+        pd.concat([pdgz2, pdgz1]),
+        check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize("nrows", [0, 3, 10, 100, 1000])
