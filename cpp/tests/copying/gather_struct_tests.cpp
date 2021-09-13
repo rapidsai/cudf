@@ -36,23 +36,25 @@
 
 #include <memory>
 
-using namespace cudf;
-using namespace cudf::test;
-using namespace cudf::test::iterators;
-using vector_of_columns = std::vector<std::unique_ptr<column>>;
-using gather_map_t      = std::vector<offset_type>;
-using offsets           = fixed_width_column_wrapper<int32_t>;
-using structs           = structs_column_wrapper;
-using strings           = strings_column_wrapper;
-using bools             = fixed_width_column_wrapper<bool, int32_t>;
+using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
+using gather_map_t      = std::vector<cudf::offset_type>;
+using offsets           = cudf::test::fixed_width_column_wrapper<int32_t>;
+using structs           = cudf::test::structs_column_wrapper;
+using strings           = cudf::test::strings_column_wrapper;
+using bools             = cudf::test::fixed_width_column_wrapper<bool, int32_t>;
+
+// Test validity iterator utilities.
+using cudf::test::iterators::no_nulls;
+using cudf::test::iterators::null_at;
+using cudf::test::iterators::nulls_at;
 
 template <typename T>
-using numerics = fixed_width_column_wrapper<T, int32_t>;
+using numerics = cudf::test::fixed_width_column_wrapper<T, int32_t>;
 
 template <typename T>
-using lists = lists_column_wrapper<T, int32_t>;
+using lists = cudf::test::lists_column_wrapper<T, int32_t>;
 
-auto constexpr null_index = std::numeric_limits<offset_type>::max();
+auto constexpr null_index = std::numeric_limits<cudf::offset_type>::max();
 
 namespace cudf::test {
 struct StructGatherTest : public BaseFixture {

@@ -471,7 +471,7 @@ struct column_gatherer_impl<struct_view> {
                    });
 
     auto const nullable =
-      nullify_out_of_bounds || std::any_of(structs_column.child_begin(),
+      nullify_out_of_bounds or std::any_of(structs_column.child_begin(),
                                            structs_column.child_end(),
                                            [](auto const& col) { return col.nullable(); });
     if (nullable) {
