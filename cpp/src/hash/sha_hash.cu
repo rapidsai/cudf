@@ -22,6 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <type_traits>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -37,14 +38,14 @@ bool sha_type_check(data_type dt)
   return !is_chrono(dt) && (is_fixed_width(dt) || (dt.id() == type_id::STRING));
 }
 
-CUDA_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
+CUDA_DEVICE_CALLABLE uint32_t rotate_bits_left(uint32_t x, int8_t r)
 {
   // Equivalent to (x << r) | (x >> (32 - r))
   return __funnelshift_l(x, x, r);
 }
 
 // Swap the endianness of a 32 bit value
-CUDA_DEVICE_CALLABLE uint32_t swap_endian_32(uint32_t x)
+CUDA_DEVICE_CALLABLE uint32_t swap_endian(uint32_t x)
 {
   // The selector 0x0123 reverses the byte order
   return __byte_perm(x, 0, 0x0123);
@@ -52,51 +53,237 @@ CUDA_DEVICE_CALLABLE uint32_t swap_endian_32(uint32_t x)
 
 // Swap the endianness of a 64 bit value
 // There is no CUDA intrinsic for permuting bytes in 64 bit integers
-CUDA_DEVICE_CALLABLE uint64_t swap_endian_64(uint64_t x)
+CUDA_DEVICE_CALLABLE uint64_t swap_endian(uint64_t x)
 {
   // Reverse the endianness of each 32 bit section
-  uint32_t low_bits  = swap_endian_32(x);
-  uint32_t high_bits = swap_endian_32(x >> 32);
+  uint32_t low_bits  = swap_endian(static_cast<uint32_t>(x));
+  uint32_t high_bits = swap_endian(static_cast<uint32_t>(x >> 32));
   // Reassemble a 64 bit result, swapping the low bits and high bits
   return (static_cast<uint64_t>(low_bits) << 32) | (static_cast<uint64_t>(high_bits));
 };
 
 }  // namespace
 
-struct SHA1Hash {
+template <typename IntermediateType, typename WordType, uint32_t MessageChunkSize>
+struct SHAHash {
+  // Number of bytes processed in each hash step
+  static constexpr auto message_chunk_size = MessageChunkSize;
+  // Number of bytes used for the message length
+  static constexpr auto message_length_size = 8;
+  using sha_intermediate_data               = IntermediateType;
+  using sha_word_type                       = WordType;
+
+  virtual void __device__ hash_step(sha_intermediate_data* hash_state) const = 0;
+
+  /**
+   * @brief Execute SHA on input data chunks.
+   *
+   * This accepts arbitrary data, handles it as bytes, and calls the hash step
+   * when the buffer is filled up to message_chunk_size bytes.
+   */
+  template <typename TKey>
+  void CUDA_DEVICE_CALLABLE process(TKey const& key, sha_intermediate_data* hash_state) const
+  {
+    uint32_t const len  = sizeof(TKey);
+    uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
+    hash_state->message_length += len;
+
+    if (hash_state->buffer_length + len < message_chunk_size) {
+      std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
+      hash_state->buffer_length += len;
+    } else {
+      uint32_t copylen = message_chunk_size - hash_state->buffer_length;
+
+      std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
+      hash_step(hash_state);
+
+      while (len > message_chunk_size + copylen) {
+        std::memcpy(hash_state->buffer, data + copylen, message_chunk_size);
+        hash_step(hash_state);
+        copylen += message_chunk_size;
+      }
+
+      std::memcpy(hash_state->buffer, data + copylen, len - copylen);
+      hash_state->buffer_length = len - copylen;
+    }
+  }
+
+  /**
+   * @brief Finalize SHA element processing.
+   *
+   * This method fills the remainder of the message buffer with zeros, appends
+   * the message length (in another step of the hash, if needed), and performs
+   * the final hash step.
+   */
+  void CUDA_DEVICE_CALLABLE finalize(sha_intermediate_data* hash_state, char* result_location)
+  {
+    // Message length in bits.
+    uint64_t const message_length_in_bits = (static_cast<uint64_t>(hash_state->message_length))
+                                            << 3;
+
+    // Add a one bit flag to signal the end of the message
+    constexpr uint8_t end_of_message = 0x80;
+    // 1 byte for the end of the message flag
+    constexpr int end_of_message_size = 1;
+
+    thrust::fill_n(thrust::seq,
+                   hash_state->buffer + hash_state->buffer_length,
+                   end_of_message_size,
+                   end_of_message);
+
+    // SHA-512 uses a 128-bit message length instead of a 64-bit message length
+    // but this code does not support messages with lengths exceeding UINT64_MAX
+    // bits. We always pad the upper 64 bits with zeros.
+    constexpr auto message_length_supported_size = sizeof(message_length_in_bits);
+
+    if (hash_state->buffer_length + message_length_size + end_of_message_size <=
+        message_chunk_size) {
+      // Fill the remainder of the buffer with zeros up to the space reserved
+      // for the message length. The message length fits in this hash step.
+      thrust::fill_n(thrust::seq,
+                     hash_state->buffer + hash_state->buffer_length + 1,
+                     (message_chunk_size - message_length_supported_size - end_of_message_size -
+                      hash_state->buffer_length),
+                     0x00);
+    } else {
+      // Fill the remainder of the buffer with zeros. The message length doesn't
+      // fit and will be processed in a subsequent hash step comprised of only
+      // zeros followed by the message length.
+      thrust::fill_n(thrust::seq,
+                     hash_state->buffer + hash_state->buffer_length + end_of_message_size,
+                     (message_chunk_size - hash_state->buffer_length),
+                     0x00);
+      hash_step(hash_state);
+
+      thrust::fill_n(
+        thrust::seq, hash_state->buffer, message_chunk_size - message_length_size, 0x00);
+    }
+
+    // Convert the 64-bit message length from little-endian to big-endian.
+    uint64_t const full_length_flipped = swap_endian(message_length_in_bits);
+    std::memcpy(hash_state->buffer + message_chunk_size - message_length_supported_size,
+                reinterpret_cast<uint8_t const*>(&full_length_flipped),
+                message_length_supported_size);
+    hash_step(hash_state);
+  };
+
+  template <typename T, typename std::enable_if_t<is_chrono<T>()>* = nullptr>
+  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
+                                       size_type row_index,
+                                       sha_intermediate_data* hash_state) const
+  {
+    cudf_assert(false && "SHA Unsupported chrono type column");
+  }
+
+  template <
+    typename T,
+    typename std::enable_if_t<!is_fixed_width<T>() && !std::is_same_v<T, string_view>>* = nullptr>
+  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
+                                       size_type row_index,
+                                       sha_intermediate_data* hash_state) const
+  {
+    cudf_assert(false && "SHA Unsupported non-fixed-width type column");
+  }
+
+  template <typename T, typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
+  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
+                                       size_type row_index,
+                                       sha_intermediate_data* hash_state) const
+  {
+    T const& key = col.element<T>(row_index);
+    if (isnan(key)) {
+      T nan = std::numeric_limits<T>::quiet_NaN();
+      process(nan, hash_state);
+    } else if (key == T{0.0}) {
+      process(T{0.0}, hash_state);
+    } else {
+      process(key, hash_state);
+    }
+  }
+
+  template <typename T,
+            typename std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() &&
+                                      !is_chrono<T>()>* = nullptr>
+  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
+                                       size_type row_index,
+                                       sha_intermediate_data* hash_state) const
+  {
+    process(col.element<T>(row_index), hash_state);
+  }
+
+  template <typename T, typename std::enable_if_t<std::is_same_v<T, string_view>>* = nullptr>
+  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
+                                       size_type row_index,
+                                       sha_intermediate_data* hash_state) const
+  {
+    string_view key     = col.element<string_view>(row_index);
+    uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
+    uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
+    hash_state->message_length += len;
+
+    if (hash_state->buffer_length + len < message_chunk_size) {
+      // If the buffer will not be filled by this data, we copy the new data into
+      // the buffer but do not trigger a hash step yet.
+      std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
+      hash_state->buffer_length += len;
+    } else {
+      // The buffer will be filled by this data. Copy a chunk of the data to fill
+      // the buffer and trigger a hash step.
+      uint32_t copylen = message_chunk_size - hash_state->buffer_length;
+      std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
+      hash_step(hash_state);
+
+      // Take buffer-sized chunks of the data and do a hash step on each chunk.
+      while (len > message_chunk_size + copylen) {
+        std::memcpy(hash_state->buffer, data + copylen, message_chunk_size);
+        hash_step(hash_state);
+        copylen += message_chunk_size;
+      }
+
+      // The remaining data chunk does not fill the buffer. We copy the data into
+      // the buffer but do not trigger a hash step yet.
+      std::memcpy(hash_state->buffer, data + copylen, len - copylen);
+      hash_state->buffer_length = len - copylen;
+    }
+  }
+};
+
+struct SHA1Hash : SHAHash<sha1_intermediate_data, sha1_word_type, 64> {
   /**
    * @brief Core SHA-1 algorithm implementation. Processes a single 512-bit chunk,
    * updating the hash value so far. Does not zero out the buffer contents.
    */
-  void __device__ hash_step(sha1_intermediate_data* hash_state) const
+  virtual void __device__ hash_step(sha_intermediate_data* hash_state) const
   {
-    uint32_t A = hash_state->hash_value[0];
-    uint32_t B = hash_state->hash_value[1];
-    uint32_t C = hash_state->hash_value[2];
-    uint32_t D = hash_state->hash_value[3];
-    uint32_t E = hash_state->hash_value[4];
+    sha_word_type A = hash_state->hash_value[0];
+    sha_word_type B = hash_state->hash_value[1];
+    sha_word_type C = hash_state->hash_value[2];
+    sha_word_type D = hash_state->hash_value[3];
+    sha_word_type E = hash_state->hash_value[4];
 
-    uint32_t words[80];
+    sha_word_type words[80];
+
+    // Word size in bytes
+    constexpr auto word_size = sizeof(sha_word_type);
 
     // The 512-bit message buffer fills the first 16 words.
     for (int i = 0; i < 16; i++) {
-      uint32_t buffer_element_as_int;
-      std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * 4), 4);
+      sha_word_type buffer_element_as_int;
+      std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * word_size), word_size);
       // Convert word representation from little-endian to big-endian.
-      words[i] = swap_endian_32(buffer_element_as_int);
+      words[i] = swap_endian(buffer_element_as_int);
     }
 
     // The rest of the 80 words are generated from the first 16 words.
     for (int i = 16; i < 80; i++) {
-      uint32_t temp = words[i - 3] ^ words[i - 8] ^ words[i - 14] ^ words[i - 16];
-      words[i]      = rotl32(temp, 1);
+      sha_word_type temp = words[i - 3] ^ words[i - 8] ^ words[i - 14] ^ words[i - 16];
+      words[i]           = rotate_bits_left(temp, 1);
     }
 
-#pragma unroll
     for (int i = 0; i < 80; i++) {
-      uint32_t F;
-      uint32_t temp;
-      uint32_t k;
+      sha_word_type F;
+      sha_word_type temp;
+      sha_word_type k;
       switch (i / 20) {
         case 0:
           F = D ^ (B & (C ^ D));
@@ -115,10 +302,10 @@ struct SHA1Hash {
           k = 0xca62c1d6;
           break;
       }
-      temp = rotl32(A, 5) + F + E + k + words[i];
+      temp = rotate_bits_left(A, 5) + F + E + k + words[i];
       E    = D;
       D    = C;
-      C    = rotl32(B, 30);
+      C    = rotate_bits_left(B, 30);
       B    = A;
       A    = temp;
     }
@@ -131,165 +318,7 @@ struct SHA1Hash {
 
     hash_state->buffer_length = 0;
   }
-
-  /**
-   * @brief Core SHA1 element processing function
-   */
-  template <typename TKey>
-  void __device__ process(TKey const& key, sha1_intermediate_data* hash_state) const
-  {
-    uint32_t const len  = sizeof(TKey);
-    uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
-    hash_state->message_length += len;
-
-    // 64 bytes are processed in each hash step
-    constexpr int sha1_chunk_size = 64;
-    if (hash_state->buffer_length + len < sha1_chunk_size) {
-      std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
-      hash_state->buffer_length += len;
-    } else {
-      uint32_t copylen = sha1_chunk_size - hash_state->buffer_length;
-
-      std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
-      hash_step(hash_state);
-
-      while (len > sha1_chunk_size + copylen) {
-        std::memcpy(hash_state->buffer, data + copylen, sha1_chunk_size);
-        hash_step(hash_state);
-        copylen += sha1_chunk_size;
-      }
-
-      std::memcpy(hash_state->buffer, data + copylen, len - copylen);
-      hash_state->buffer_length = len - copylen;
-    }
-  }
-
-  void __device__ finalize(sha1_intermediate_data* hash_state, char* result_location) const
-  {
-    // Message length in bits
-    auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
-
-    // Add a one bit flag to signal the end of the message
-    thrust::fill_n(thrust::seq, hash_state->buffer + hash_state->buffer_length, 1, 0x80);
-
-    // 64 bytes are processed in each hash step
-    constexpr int sha1_chunk_size = 64;
-    // 8 bytes for the total message length, appended to the end of the last chunk processed
-    constexpr int message_length_size = 8;
-    // 1 byte for the end of the message flag
-    constexpr int end_of_message_size = 1;
-    if (hash_state->buffer_length + message_length_size + end_of_message_size <= sha1_chunk_size) {
-      // Fill the remainder of the buffer with zeros
-      thrust::fill_n(
-        thrust::seq,
-        hash_state->buffer + hash_state->buffer_length + 1,
-        (sha1_chunk_size - message_length_size - end_of_message_size - hash_state->buffer_length),
-        0x00);
-    } else {
-      thrust::fill_n(thrust::seq,
-                     hash_state->buffer + hash_state->buffer_length + 1,
-                     (sha1_chunk_size - hash_state->buffer_length),
-                     0x00);
-      hash_step(hash_state);
-
-      thrust::fill_n(thrust::seq, hash_state->buffer, sha1_chunk_size - message_length_size, 0x00);
-    }
-
-    // Convert the 64-bit message length from little-endian to big-endian.
-    auto const full_length_flipped = swap_endian_64(full_length);
-    std::memcpy(hash_state->buffer + sha1_chunk_size - message_length_size,
-                reinterpret_cast<uint8_t const*>(&full_length_flipped),
-                message_length_size);
-    hash_step(hash_state);
-    // std::memcpy(hash_state->hash_value, hash_state->buffer, 160);
-
-#pragma unroll
-    for (int i = 0; i < 5; ++i) {
-      // Convert word representation from big-endian to little-endian.
-      uint32_t flipped = swap_endian_32(hash_state->hash_value[i]);
-      uint32ToLowercaseHexString(flipped, result_location + (8 * i));
-    }
-  }
-
-  template <typename T, typename std::enable_if_t<is_chrono<T>()>* = nullptr>
-  void __device__ operator()(column_device_view col,
-                             size_type row_index,
-                             sha1_intermediate_data* hash_state) const
-  {
-    cudf_assert(false && "SHA-1 Unsupported chrono type column");
-  }
-
-  template <typename T, typename std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
-  void __device__ operator()(column_device_view col,
-                             size_type row_index,
-                             sha1_intermediate_data* hash_state) const
-  {
-    cudf_assert(false && "SHA-1 Unsupported non-fixed-width type column");
-  }
-
-  template <typename T, typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
-  void __device__ operator()(column_device_view col,
-                             size_type row_index,
-                             sha1_intermediate_data* hash_state) const
-  {
-    T const& key = col.element<T>(row_index);
-    if (isnan(key)) {
-      T nan = std::numeric_limits<T>::quiet_NaN();
-      process(nan, hash_state);
-    } else if (key == T{0.0}) {
-      process(T{0.0}, hash_state);
-    } else {
-      process(key, hash_state);
-    }
-  }
-
-  template <typename T,
-            typename std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() &&
-                                      !is_chrono<T>()>* = nullptr>
-  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
-                                       size_type row_index,
-                                       sha1_intermediate_data* hash_state) const
-  {
-    process(col.element<T>(row_index), hash_state);
-  }
 };
-
-template <>
-void CUDA_DEVICE_CALLABLE SHA1Hash::operator()<string_view>(
-  column_device_view col, size_type row_index, sha1_intermediate_data* hash_state) const
-{
-  string_view key     = col.element<string_view>(row_index);
-  uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
-  uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
-  hash_state->message_length += len;
-
-  // 64 bytes are processed in each hash step
-  constexpr int sha1_chunk_size = 64;
-  if (hash_state->buffer_length + len < sha1_chunk_size) {
-    // If the buffer will not be filled by this data, we copy the new data into
-    // the buffer but do not trigger a hash step yet.
-    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
-    hash_state->buffer_length += len;
-  } else {
-    // The buffer will be filled by this data. Copy a chunk of the data to fill
-    // the buffer and trigger a hash step.
-    uint32_t copylen = sha1_chunk_size - hash_state->buffer_length;
-    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
-    hash_step(hash_state);
-
-    // Take buffer-sized chunks of the data and do a hash step on each chunk.
-    while (len > sha1_chunk_size + copylen) {
-      std::memcpy(hash_state->buffer, data + copylen, sha1_chunk_size);
-      hash_step(hash_state);
-      copylen += sha1_chunk_size;
-    }
-
-    // The remaining data chunk does not fill the buffer. We copy the data into
-    // the buffer but do not trigger a hash step yet.
-    std::memcpy(hash_state->buffer, data + copylen, len - copylen);
-    hash_state->buffer_length = len - copylen;
-  }
-}
 
 std::unique_ptr<column> sha1_hash(table_view const& input,
                                   cudaStream_t stream,
