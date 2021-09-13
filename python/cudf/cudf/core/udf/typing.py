@@ -287,6 +287,31 @@ class MaskedScalarTruth(AbstractTemplate):
             return nb_signature(types.boolean, MaskedType(types.boolean))
 
 
+def pack_return(masked_or_scalar):
+    # Blank function to give us something for the typing and
+    # lowering to grab onto. Just a dummy function for us to
+    # call within kernels that will get replaced later by the
+    # lowered implementation
+    pass
+
+
+@cuda_decl_registry.register_global(pack_return)
+class UnpackReturnToMasked(AbstractTemplate):
+    """
+    Turn a returned MaskedType into its value and validity
+    or turn a scalar into the tuple (scalar, True).
+    """
+
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType):
+            # MaskedType(dtype, valid) -> MaskedType(dtype, valid)
+            return nb_signature(args[0], args[0])
+        elif isinstance(args[0], (types.Number, types.Boolean)):
+            # scalar_type -> MaskedType(scalar_type, True)
+            return_type = MaskedType(args[0])
+            return nb_signature(return_type, args[0])
+
+
 for op in arith_ops + comparison_ops:
     # Every op shares the same typing class
     cuda_decl_registry.register_global(op)(MaskedScalarArithOp)

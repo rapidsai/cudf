@@ -34,7 +34,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
-from cudf.core.udf import pipeline
+from cudf.core.udf.pipeline import compile_or_get
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
@@ -1346,7 +1346,28 @@ class Frame(libcudf.table.Table):
         """
         Apply `func` across the rows of the frame.
         """
-        result = cudf.core.udf.pipeline.udf_pipeline(self, func)
+        kernel, retty = compile_or_get(self, func)
+
+        # Mask and data column preallocated
+        ans_col = cupy.empty(len(self), dtype=retty)
+        ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
+        launch_args = [(ans_col, ans_mask)]
+        offsets = []
+        for col in self._data.values():
+            data = col.data
+            mask = col.mask
+            if mask is None:
+                mask = cudf.core.buffer.Buffer()
+            launch_args.append((data, mask))
+            offsets.append(col.offset)
+        launch_args += offsets
+        launch_args.append(len(self))  # size
+        kernel.forall(len(self))(*launch_args)
+
+        result = cudf.Series(ans_col).set_mask(
+            libcudf.transform.bools_to_mask(ans_mask)
+        )
+
         return result
 
     def rank(
