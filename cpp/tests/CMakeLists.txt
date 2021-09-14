@@ -322,6 +322,7 @@ ConfigureTest(SEARCH_TEST
 ###################################################################################################
 # - reshape test ----------------------------------------------------------------------------------
 ConfigureTest(RESHAPE_TEST
+    reshape/one_hot_encoding_tests.cpp
     reshape/byte_cast_tests.cpp
     reshape/interleave_columns_tests.cpp
     reshape/tile_tests.cpp)

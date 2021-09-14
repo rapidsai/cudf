@@ -14,59 +14,119 @@
  * limitations under the License.
  */
 
- #include <cudf/detail/stream_compaction.hpp>
- #include <cudf/table/table_view.hpp>
- #include <cudf/detail/binaryop.hpp>
- #include <cudf/detail/unary.hpp>
- #include <cudf/detail/interop.hpp>
- #include <cudf/detail/copy.hpp>
- #include <cudf/detail/replace.hpp>
- #include <cudf/scalar/scalar_factories.hpp>
- #include <cudf/types.hpp>
- 
- #include <rmm/cuda_stream_view.hpp>
- #include <rmm/exec_policy.hpp>
- 
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <cuda/std/cmath>
+
 namespace cudf {
 namespace detail {
-std::unique_ptr<table> one_hot_encoding (
-                    column_view const& input_column,
-                    column_view const& categories,
-                    data_type const& output_type,
-                    rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr) {
-    
-    std::vector<std::unique_ptr<column>> res;
-    res.reserve(static_cast<std::size_t>(categories.size()));
-    auto false_scalar = make_fixed_width_scalar(false, stream, mr);
 
-    std::transform(thrust::make_counting_iterator(0), 
-                    thrust::make_counting_iterator(categories.size()), 
-                    std::back_inserter(res), 
-                    [&categories, &input_column, &false_scalar, &output_type, &stream, &mr](auto i){
-                        auto element = detail::get_element(categories, i);
-                        auto comp = detail::binary_operation(
-                            input_column, *element, binary_operator::NULL_EQUALS, data_type{type_id::BOOL8}, stream);
-                        if (output_type.id() == type_id::BOOL8) {
-                            return replace_nulls(*comp, *false_scalar, stream, mr);
-                        } else {
-                            auto comp_filled = replace_nulls(*comp, *false_scalar, stream);
-                            return detail::cast(*comp_filled, output_type, stream, mr);
-                        }
-    });
+namespace {
 
-    return std::make_unique<table>(std::move(res));
+template <typename InputType>
+struct one_hot_encoding_functor {
+  one_hot_encoding_functor(column_device_view input, column_device_view category)
+    : d_input(input), d_category(category)
+  {
+  }
+
+  bool __device__ operator()(size_type i)
+  {
+    auto element_index  = i % d_input.size();
+    auto category_index = i / d_input.size();
+
+    if (d_category.is_valid(category_index) and d_input.is_valid(element_index)) {
+      if constexpr (is_floating_point<InputType>()) {
+        if (cuda::std::isnan(d_category.element<InputType>(category_index)) and
+            cuda::std::isnan(d_input.element<InputType>(element_index)))
+          return true;
+      }
+      return d_category.element<InputType>(category_index) ==
+             d_input.element<InputType>(element_index);
+    }
+    return !d_category.is_valid(category_index) and !d_input.is_valid(element_index);
+  }
+
+ private:
+  column_device_view d_input, d_category;
+};
+
+}  // anonymous namespace
+
+struct one_hot_encoding_launcher {
+  template <typename InputType, CUDF_ENABLE_IF(is_numeric<InputType>())>
+  std::pair<std::unique_ptr<column>, table_view> operator()(column_view const& input_column,
+                                                            column_view const& categories,
+                                                            rmm::cuda_stream_view stream,
+                                                            rmm::mr::device_memory_resource* mr)
+  {
+    auto total_size    = input_column.size() * categories.size();
+    auto all_encodings = make_numeric_column(
+      data_type{type_id::BOOL8}, total_size, mask_state::UNALLOCATED, stream, mr);
+
+    auto d_input_column    = column_device_view::create(input_column, stream);
+    auto d_category_column = column_device_view::create(categories, stream);
+
+    one_hot_encoding_functor<InputType> one_hot_encoding_compute_f(*d_input_column,
+                                                                   *d_category_column);
+
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(total_size),
+                      all_encodings->mutable_view().begin<bool>(),
+                      one_hot_encoding_compute_f);
+
+    auto split_iter = make_counting_transform_iterator(
+      1, [&input_column](auto i) { return i * input_column.size(); });
+    std::vector<size_type> split_indices(split_iter, split_iter + categories.size() - 1);
+
+    // TODO: use detail interface, gh9226
+    auto views = cudf::split(all_encodings->view(), split_indices);
+    table_view encodings_view{views};
+
+    return std::make_pair(std::move(all_encodings), encodings_view);
+  }
+
+  template <typename InputType, typename... Arg, CUDF_ENABLE_IF(not is_numeric<InputType>())>
+  std::pair<std::unique_ptr<column>, table_view> operator()(Arg&&...)
+  {
+    CUDF_FAIL(
+      "One-hot encoding for variable length column is not supported. Consider encoding the column "
+      "with dictionary::encode.");
+  }
+};
+
+std::pair<std::unique_ptr<column>, table_view> one_hot_encoding(column_view const& input_column,
+                                                                column_view const& categories,
+                                                                rmm::cuda_stream_view stream,
+                                                                rmm::mr::device_memory_resource* mr)
+{
+  return type_dispatcher(
+    input_column.type(), one_hot_encoding_launcher{}, input_column, categories, stream, mr);
 }
 
 }  // namespace detail
- 
- std::unique_ptr<table> one_hot_encoding(
-    column_view const& input_column,
-    column_view const& categories,
-    data_type const& output_type,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()
-) {
-    return detail::one_hot_encoding(input_column, categories, output_type, rmm::cuda_stream_default, mr);
+
+std::pair<std::unique_ptr<column>, table_view> one_hot_encoding(
+  column_view const& input_column,
+  column_view const& categories,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  CUDF_EXPECTS(input_column.type() == categories.type(),
+               "Mismatch type between input and categories.");
+  return detail::one_hot_encoding(input_column, categories, rmm::cuda_stream_default, mr);
 }
 }  // namespace cudf
- 
