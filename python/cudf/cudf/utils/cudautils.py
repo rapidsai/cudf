@@ -210,14 +210,14 @@ def grouped_window_sizes_from_offset(arr, group_starts, offset):
 _udf_code_cache: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
-def _make_partial_cache_key(udf):
+def make_cache_key(udf, sig):
     codebytes = udf.__code__.co_code
     if udf.__closure__ is not None:
         cvars = tuple([x.cell_contents for x in udf.__closure__])
         cvarbytes = dumps(cvars)
     else:
         cvarbytes = b""
-    return codebytes, cvarbytes
+    return codebytes, cvarbytes, sig
 
 
 def compile_udf(udf, type_signature):
@@ -254,8 +254,7 @@ def compile_udf(udf, type_signature):
 
     # Check if we've already compiled a similar (but possibly distinct)
     # function before
-    partial_key = _make_partial_cache_key(udf)
-    key = (type_signature, *partial_key)
+    key = make_cache_key(udf, type_signature)
     res = _udf_code_cache.get(key)
     if res:
         return res

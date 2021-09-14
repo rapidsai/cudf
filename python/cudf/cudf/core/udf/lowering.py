@@ -9,9 +9,9 @@ from numba.cuda.cudaimpl import (
 )
 from numba.extending import lower_builtin, types
 
-from cudf.core.udf.typing import MaskedType, NAType, pack_return
+from cudf.core.udf.typing import MaskedType, NAType
 
-from . import classes
+from . import api
 from ._ops import arith_ops, comparison_ops
 
 
@@ -196,24 +196,19 @@ def masked_scalar_is_null_impl(context, builder, sig, args):
 # Main kernel always calls `pack_return` on whatever the user defined
 # function returned. This returns the same data if its already a `Masked`
 # else packs it up into a new one that is valid from the get go
-@cuda_lower(pack_return, MaskedType)
+@cuda_lower(api.pack_return, MaskedType)
 def pack_return_masked_impl(context, builder, sig, args):
-    outdata = cgutils.create_struct_proxy(sig.return_type)(
-        context, builder, value=args[0]
-    )
-    return outdata._getvalue()
+    return args[0]
 
 
+@cuda_lower(api.pack_return, types.Boolean)
+@cuda_lower(api.pack_return, types.Number)
 def pack_return_scalar_impl(context, builder, sig, args):
     outdata = cgutils.create_struct_proxy(sig.return_type)(context, builder)
     outdata.value = args[0]
     outdata.valid = context.get_constant(types.boolean, 1)
 
     return outdata._getvalue()
-
-
-cuda_lower(pack_return, types.Number)(pack_return_scalar_impl)
-cuda_lower(pack_return, types.Boolean)(pack_return_scalar_impl)
 
 
 @cuda_lower(operator.truth, MaskedType)
@@ -275,7 +270,7 @@ def cast_masked_to_masked(context, builder, fromty, toty, val):
 
 
 # Masked constructor for use in a kernel for testing
-@lower_builtin(classes.Masked, types.Number, types.boolean)
+@lower_builtin(api.Masked, types.Number, types.boolean)
 def masked_constructor(context, builder, sig, args):
     ty = sig.return_type
     value, valid = args
