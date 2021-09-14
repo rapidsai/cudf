@@ -4899,37 +4899,6 @@ class SingleColumnFrame(Frame):
     to_list = tolist
 
     def to_gpu_array(self, fillna=None):
-        """Get a dense numba device array for the data.
-
-        Parameters
-        ----------
-        fillna : str or None
-            See *fillna* in ``.to_array``.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-
-        Returns
-        -------
-        numba.DeviceNDArray
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([10, 20, 30, 40, 50])
-        >>> s
-        0    10
-        1    20
-        2    30
-        3    40
-        4    50
-        dtype: int64
-        >>> s.to_gpu_array()
-        <numba.cuda.cudadrv.devicearray.DeviceNDArray object at 0x7f1840858890>
-        """
         warnings.warn(
             "The to_gpu_array method will be remove in a future cuDF "
             "release. Consider using `to_cupy` instead.",

@@ -3659,21 +3659,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             return out.copy(deep=copy)
 
     def as_gpu_matrix(self, columns=None, order="F"):
-        """Convert to a matrix in device memory.
-
-        Parameters
-        ----------
-        columns : sequence of str
-            List of a column names to be extracted.  The order is preserved.
-            If None is specified, all columns are used.
-        order : 'F' or 'C'
-            Optional argument to determine whether to return a column major
-            (Fortran) matrix or a row major (C) matrix.
-
-        Returns
-        -------
-        A (nrow x ncol) numba device ndarray
-        """
         warnings.warn(
             "The as_gpu_matrix method will be remove in a future cuDF "
             "release. Consider using `to_cupy` instead.",
@@ -3722,18 +3707,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         return cuda.as_cuda_array(matrix).view(dtype)
 
     def as_matrix(self, columns=None):
-        """Convert to a matrix in host memory.
-
-        Parameters
-        ----------
-        columns : sequence of str
-            List of a column names to be extracted.  The order is preserved.
-            If None is specified, all columns are used.
-
-        Returns
-        -------
-        A (nrow x ncol) numpy ndarray in "F" order.
-        """
         warnings.warn(
             "The as_matrix method will be remove in a future cuDF "
             "release. Consider using `to_numpy` instead.",
