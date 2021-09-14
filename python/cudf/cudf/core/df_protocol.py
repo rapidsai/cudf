@@ -110,21 +110,37 @@ def convert_column_to_cupy_ndarray(col : ColumnObject, copy : bool = False) -> n
         raise NotImplementedError("column.offset > 0 not handled yet")
 
     _buffer, _dtype = col.get_buffers()['data']
-    if _buffer.__dlpack_device__()[0] == 2: # dataframe is on GPU/CUDA
-        x = cp.fromDlpack(_buffer.__dlpack__())
+    x = buffer_to_cupy_ndarray(_buffer, _dtype, copy=copy)
+    # if _buffer.__dlpack_device__()[0] == 2: # dataframe is on GPU/CUDA
+    #     _k = _DtypeKind
+    #     print(f'buffer dtype: {_dtype[0]}')
+    #     if _dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.CATEGORICAL, _k.BOOL):
+    #         x = cp.fromDlpack(_buffer.__dlpack__())
+    #         if _dtype[0] == _k.BOOL: 
+    #             print(f'before booleanizing: {x}')
+    #             x = x.astype(cp.bool_)
+    #             print(f'after booleanizing: {x}')
 
-    elif copy == False:
-        raise TypeError("This operation must copy data from CPU to GPU. Set `copy=True` to allow it.")
 
-    else:
-        x = _copy_buffer_to_gpu(_buffer, _dtype)
+    # elif copy == False:
+    #     raise TypeError("This operation must copy data from CPU to GPU. Set `copy=True` to allow it.")
+
+    # else:
+    #     x = _copy_buffer_to_gpu(_buffer, _dtype)
 
     return set_missing_values(col, x), _buffer
 
 
 def buffer_to_cupy_ndarray(_buffer, _dtype, copy : bool = False) -> cp.ndarray:
     if _buffer.__dlpack_device__()[0] == 2: # dataframe is on GPU/CUDA
-        x = cp.fromDlpack(_buffer.__dlpack__())
+        _k = _DtypeKind
+        print(f'buffer dtype: {_dtype[0]}')
+        if _dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.CATEGORICAL):
+            x = cp.fromDlpack(_buffer.__dlpack__())
+        elif _dtype[0] == _k.BOOL: 
+            x = cp.fromDlpack(_buffer.__dlpack__()).astype(cp.bool_)
+        else:
+            raise TypeError(f"dtype {_dtype[0]} not supported yet !")
 
     elif copy == False:
         raise TypeError("This operation must copy data from CPU to GPU. Set `copy=True` to allow it.")
@@ -464,7 +480,7 @@ class _CuDFColumn:
             kind = self.dtype[0]
             # bit mask is universally used in cudf for missing
             if kind in (_k.INT, _k.UINT, _k.FLOAT, _k.CATEGORICAL,
-                        _k.STRING, _k.DATETIME):
+                        _k.BOOL, _k.STRING, _k.DATETIME):
                 null = 3
                 value = 0
             else:
@@ -541,9 +557,15 @@ class _CuDFColumn:
         """
         _k = _DtypeKind
         invalid = self.describe_null[1]
-        if self.dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.BOOL):
+        if self.dtype[0] in (_k.INT, _k.UINT, _k.FLOAT):
             buffer = _CuDFBuffer(
                 cp.array(self._col.fillna(invalid).to_gpu_array(), copy=False),
+                allow_copy=self._allow_copy)
+            dtype = self.dtype
+        elif self.dtype[0] == _k.BOOL:
+            # convert bool to uint8 as dlpack does not support bool natively.
+            buffer = _CuDFBuffer(
+                cp.array(self._col.fillna(invalid).to_gpu_array(), dtype=cp.uint8, copy=False),
                 allow_copy=self._allow_copy)
             dtype = self.dtype
         elif self.dtype[0] == _k.CATEGORICAL:

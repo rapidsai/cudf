@@ -143,6 +143,10 @@ def test_NA_categorical_dtype():
     # tm.assert_frame_equal(df, df2)
 
 
-# def test_bool_dtype():
-#     data_bool = dict(a=[True, True, False], b=[False, True, False])
-#     _datatype(data_bool)
+def test_bool_dtype():
+    data_bool = dict(a=[True, True, False], b=[False, True, False])
+    _test_datatype(data_bool)
+
+def test_NA_bool_dtype():
+    data_bool = dict(a=[None, True, False], b=[False, None, None])
+    _test_datatype(data_bool)
