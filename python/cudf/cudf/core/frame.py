@@ -7,6 +7,7 @@ import warnings
 from collections import abc
 from typing import (
     Any,
+    Callable,
     Dict,
     MutableMapping,
     Optional,
@@ -541,11 +542,43 @@ class Frame(libcudf.table.Table):
             "is not allowed. Consider using .to_arrow()"
         )
 
+    def _to_array(
+        self,
+        get_column_values: Callable,
+        make_empty_matrix: Callable,
+        dtype: Union[Dtype, None] = None,
+        na_value=None,
+    ) -> Union[cupy.ndarray, np.ndarray]:
+        # Internal function to implement to_cupy and to_numpy, which are nearly
+        # identical except for the attribute they access to generate values.
+        if na_value is not None:
+            raise NotImplementedError(
+                "The na_value parameter is not yet supported."
+            )
+
+        # Early exit for an empty Frame.
+        ncol = self._num_columns
+        if ncol == 0:
+            return make_empty_matrix(shape=(0, 0), dtype=np.dtype("float64"))
+
+        if dtype is None:
+            dtype = find_common_type(
+                [col.dtype for col in self._data.values()]
+            )
+
+        matrix = make_empty_matrix(shape=(len(self), ncol), dtype=dtype)
+        for i, col in enumerate(self._data.values()):
+            # TODO: col.values may fail if there is nullable data or an
+            # unsupported dtype. We may want to catch and provide a more
+            # suitable error.
+            matrix[:, i] = get_column_values(col)
+        return matrix
+
     def to_cupy(
         self,
         dtype: Union[Dtype, None] = None,
         copy: bool = False,
-        # na_value=lib.no_default,
+        na_value=None,
     ) -> cupy.ndarray:
         """Convert the Frame to a CuPy array.
 
@@ -562,65 +595,55 @@ class Frame(libcudf.table.Table):
         Returns
         -------
         cupy.ndarray
+
+        Notes
+        -----
+        The na_value parameter is not currently supported.
         """
-        # Early exit for an empty Frame.
-        ncol = self._num_columns
-        if ncol == 0:
-            return cupy.empty(shape=(0, 0), dtype=np.dtype("float64"))
-
-        if dtype is None:
-            dtype = find_common_type(
-                [col.dtype for col in self._data.values()]
-            )
-
-        matrix = cupy.empty(shape=(len(self), ncol), dtype=dtype)
-        for i, col in enumerate(self._data.values()):
-            # TODO: col.values may fail if there is nullable data or an
-            # unsupported dtype. We may want to catch and provide a more
-            # suitable error.
-            matrix[:, i] = col.values
-            # TODO: Figure out if the astype is necessary in cases like
-            # coercing datetime to int.
-            # matrix[:, i] = col.values.astype(dtype)
-        return matrix
+        return self._to_array(
+            (lambda col: col.values.copy())
+            if copy
+            else (lambda col: col.values),
+            cupy.empty,
+            dtype,
+            na_value,
+        )
 
     def to_numpy(
         self,
         dtype: Union[Dtype, None] = None,
-        copy: bool = False,
-        # na_value=lib.no_default,
+        copy: bool = True,
+        na_value=None,
     ) -> np.ndarray:
-        # TODO: Figure out a good way to integrate this behavior with to_cupy
-        # that doesn't duplicate all this code.
-        # Support data types that aren't supported by cupy. For now, that's
-        # just datetime objects.
-        # dtype = find_common_type([col.dtype for col in self._data.values()])
-        # cupy_dtype = (
-        #     np.dtype("int64") if np.issubdtype(dtype, np.datetime64) else
-        #     dtype
-        # )
-        # ret = self.to_cupy(dtype=cupy_dtype).get()
-        # return ret if dtype == cupy_dtype else ret.astype(dtype)
+        """Convert the Frame to a NumPy array.
 
-        ncol = self._num_columns
-        if ncol == 0:
-            return np.empty(shape=(0, 0), dtype=np.dtype("float64"))
+        Parameters
+        ----------
+        dtype : str or numpy.dtype, optional
+            The dtype to pass to :meth:`numpy.asarray`.
+        copy : bool, default False
+            Whether to ensure that the returned value is not a view on
+            another array. Note that ``copy=False`` does not *ensure* that
+            ``to_cupy()`` is no-copy. Rather, ``copy=True`` ensure that
+            a copy is made, even if not strictly necessary.
 
-        if dtype is None:
-            dtype = find_common_type(
-                [col.dtype for col in self._data.values()]
+        Returns
+        -------
+        numpy.ndarray
+
+        Notes
+        -----
+        The na_value parameter is not currently supported.
+        """
+        if not copy:
+            raise ValueError(
+                "copy=False is not supported because conversion to a numpy "
+                "array always copies the data."
             )
 
-        matrix = np.empty(shape=(len(self), ncol), dtype=dtype)
-        for i, col in enumerate(self._data.values()):
-            # TODO: col.values may fail if there is nullable data or an
-            # unsupported dtype. We may want to catch and provide a more
-            # suitable error.
-            matrix[:, i] = col.values_host
-            # TODO: Figure out if the astype is necessary in cases like
-            # coercing datetime to int.
-            # matrix[:, i] = col.values.astype(dtype)
-        return matrix
+        return self._to_array(
+            lambda col: col.values_host, np.empty, dtype, na_value
+        )
 
     def clip(self, lower=None, upper=None, inplace=False, axis=1):
         """
