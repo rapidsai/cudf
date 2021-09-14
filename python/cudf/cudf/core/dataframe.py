@@ -1022,7 +1022,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             "Implicit conversion to a host NumPy array via __array__ is not "
             "allowed, To explicitly construct a GPU matrix, consider using "
             ".as_gpu_matrix()\nTo explicitly construct a host "
-            "matrix, consider using .as_matrix()"
+            "matrix, consider using .to_numpy()"
         )
 
     def __arrow_array__(self, type=None):
@@ -3771,6 +3771,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         -------
         A (nrow x ncol) numpy ndarray in "F" order.
         """
+        warnings.warn(
+            "The as_matrix method will be remove in a future cuDF "
+            "release. Consider using `to_numpy` instead.",
+            DeprecationWarning,
+        )
         return self.as_gpu_matrix(columns=columns).copy_to_host()
 
     def one_hot_encoding(

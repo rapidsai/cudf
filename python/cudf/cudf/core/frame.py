@@ -546,7 +546,8 @@ class Frame(libcudf.table.Table):
         copy: bool = False,
         # na_value=lib.no_default,
     ) -> np.ndarray:
-        # Support data types that aren't supported by cupy.
+        # Support data types that aren't supported by cupy. For now, that's
+        # just datetime objects.
         dtype = find_common_type([col.dtype for col in self._data.values()])
         cupy_dtype = (
             np.dtype("int64") if np.issubdtype(dtype, np.datetime64) else dtype
