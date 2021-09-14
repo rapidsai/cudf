@@ -2577,6 +2577,11 @@ class Series(SingleColumnFrame, Serializable):
         >>> type(array)
         <class 'numpy.ndarray'>
         """
+        warnings.warn(
+            "The to_array method will be remove in a future cuDF "
+            "release. Consider using `to_numpy` instead.",
+            DeprecationWarning,
+        )
         return self._column.to_array(fillna=fillna)
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
