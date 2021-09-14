@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/table/row_operators.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -26,48 +27,37 @@
 #include <thrust/transform.h>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
-
-#include <cuda/std/cmath>
 
 namespace cudf {
 namespace detail {
 
 namespace {
 
-template <typename InputType>
+template <typename InputType, bool has_nulls>
 struct one_hot_encoding_functor {
   one_hot_encoding_functor(column_device_view input, column_device_view category)
-    : d_input(input), d_category(category)
+    : _equality_comparator{input, category}, _input_size{input.size()}
   {
   }
 
   bool __device__ operator()(size_type i)
   {
-    auto element_index  = i % d_input.size();
-    auto category_index = i / d_input.size();
-
-    if (d_category.is_valid(category_index) and d_input.is_valid(element_index)) {
-      if constexpr (is_floating_point<InputType>()) {
-        if (cuda::std::isnan(d_category.element<InputType>(category_index)) and
-            cuda::std::isnan(d_input.element<InputType>(element_index)))
-          return true;
-      }
-      return d_category.element<InputType>(category_index) ==
-             d_input.element<InputType>(element_index);
-    }
-    return !d_category.is_valid(category_index) and !d_input.is_valid(element_index);
+    size_type element_index  = i % _input_size;
+    size_type category_index = i / _input_size;
+    return _equality_comparator.template operator()<InputType>(element_index, category_index);
   }
 
  private:
-  column_device_view d_input, d_category;
+  element_equality_comparator<has_nulls> _equality_comparator;
+  size_type _input_size;
 };
 
 }  // anonymous namespace
 
+template <bool has_nulls>
 struct one_hot_encoding_launcher {
-  template <typename InputType, CUDF_ENABLE_IF(is_numeric<InputType>())>
+  template <typename InputType, CUDF_ENABLE_IF(is_equality_comparable<InputType, InputType>())>
   std::pair<std::unique_ptr<column>, table_view> operator()(column_view const& input_column,
                                                             column_view const& categories,
                                                             rmm::cuda_stream_view stream,
@@ -79,9 +69,8 @@ struct one_hot_encoding_launcher {
 
     auto d_input_column    = column_device_view::create(input_column, stream);
     auto d_category_column = column_device_view::create(categories, stream);
-
-    one_hot_encoding_functor<InputType> one_hot_encoding_compute_f(*d_input_column,
-                                                                   *d_category_column);
+    one_hot_encoding_functor<InputType, has_nulls> one_hot_encoding_compute_f(*d_input_column,
+                                                                              *d_category_column);
 
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator(0),
@@ -100,12 +89,12 @@ struct one_hot_encoding_launcher {
     return std::make_pair(std::move(all_encodings), encodings_view);
   }
 
-  template <typename InputType, typename... Arg, CUDF_ENABLE_IF(not is_numeric<InputType>())>
+  template <typename InputType,
+            typename... Arg,
+            CUDF_ENABLE_IF(not is_equality_comparable<InputType, InputType>())>
   std::pair<std::unique_ptr<column>, table_view> operator()(Arg&&...)
   {
-    CUDF_FAIL(
-      "One-hot encoding for variable length column is not supported. Consider encoding the column "
-      "with dictionary::encode.");
+    CUDF_FAIL("Cannot encode column type without well-defined equality operator.");
   }
 };
 
@@ -114,8 +103,19 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encoding(column_view cons
                                                                 rmm::cuda_stream_view stream,
                                                                 rmm::mr::device_memory_resource* mr)
 {
-  return type_dispatcher(
-    input_column.type(), one_hot_encoding_launcher{}, input_column, categories, stream, mr);
+  return (!input_column.nullable() and !categories.nullable())
+           ? type_dispatcher(input_column.type(),
+                             one_hot_encoding_launcher<false>{},
+                             input_column,
+                             categories,
+                             stream,
+                             mr)
+           : type_dispatcher(input_column.type(),
+                             one_hot_encoding_launcher<true>{},
+                             input_column,
+                             categories,
+                             stream,
+                             mr);
 }
 
 }  // namespace detail
