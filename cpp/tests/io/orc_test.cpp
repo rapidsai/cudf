@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -34,25 +35,6 @@
 #include <type_traits>
 
 namespace cudf_io = cudf::io;
-
-void compare_metadata_equality(cudf::io::table_input_metadata in_meta,
-                               cudf::io::table_metadata out_meta)
-{
-  std::function<void(cudf::io::column_name_info, cudf::io::column_in_metadata)> compare_names =
-    [&](cudf::io::column_name_info out_col, cudf::io::column_in_metadata in_col) {
-      if (not in_col.get_name().empty()) { EXPECT_EQ(out_col.name, in_col.get_name()); }
-      ASSERT_EQ(out_col.children.size(), in_col.num_children());
-      for (size_t i = 0; i < out_col.children.size(); ++i) {
-        compare_names(out_col.children[i], in_col.child(i));
-      }
-    };
-
-  ASSERT_EQ(out_meta.schema_info.size(), in_meta.column_metadata.size());
-
-  for (size_t i = 0; i < out_meta.schema_info.size(); ++i) {
-    compare_names(out_meta.schema_info[i], in_meta.column_metadata[i]);
-  }
-}
 
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
@@ -372,7 +354,7 @@ TEST_F(OrcWriterTest, MultiColumn)
   auto result = cudf_io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-  compare_metadata_equality(expected_metadata, result.metadata);
+  cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
 TEST_F(OrcWriterTest, MultiColumnWithNulls)
@@ -432,7 +414,7 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   auto result = cudf_io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-  compare_metadata_equality(expected_metadata, result.metadata);
+  cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
 TEST_F(OrcWriterTest, ReadZeroRows)
@@ -492,7 +474,7 @@ TEST_F(OrcWriterTest, Strings)
   auto result = cudf_io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-  compare_metadata_equality(expected_metadata, result.metadata);
+  cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
 TEST_F(OrcWriterTest, SlicedTable)
@@ -537,7 +519,7 @@ TEST_F(OrcWriterTest, SlicedTable)
   auto result = cudf_io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
-  compare_metadata_equality(expected_metadata, result.metadata);
+  cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
 TEST_F(OrcWriterTest, HostBuffer)
@@ -565,7 +547,7 @@ TEST_F(OrcWriterTest, HostBuffer)
   const auto result = cudf_io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-  compare_metadata_equality(expected_metadata, result.metadata);
+  cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
 TEST_F(OrcWriterTest, negTimestampsNano)
@@ -735,7 +717,7 @@ TEST_F(OrcChunkedWriterTest, Metadata)
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
   auto result = cudf_io::read_orc(read_opts);
 
-  compare_metadata_equality(expected_metadata, result.metadata);
+  cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
 TEST_F(OrcChunkedWriterTest, Strings)
@@ -1046,7 +1028,7 @@ TEST_F(OrcWriterTest, SlicedValidMask)
   auto result = cudf_io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(tbl, result.tbl->view());
-  compare_metadata_equality(expected_metadata, result.metadata);
+  cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
 TEST_F(OrcReaderTest, SingleInputs)
