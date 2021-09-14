@@ -17,7 +17,7 @@ from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 from pandas._libs.missing import NAType as _NAType
 
-from . import classes
+from . import api
 from ._ops import arith_ops, comparison_ops
 
 
@@ -101,7 +101,7 @@ class MaskedType(types.Type):
 
 # For typing a Masked constant value defined outside a kernel (e.g. captured in
 # a closure).
-@typeof_impl.register(classes.Masked)
+@typeof_impl.register(api.Masked)
 def typeof_masked(val, c):
     return MaskedType(typeof(val.value))
 
@@ -110,7 +110,7 @@ def typeof_masked(val, c):
 # type in a kernel.
 @cuda_decl_registry.register
 class MaskedConstructor(ConcreteTemplate):
-    key = classes.Masked
+    key = api.Masked
 
     cases = [
         nb_signature(MaskedType(t), t, types.boolean)
@@ -123,20 +123,20 @@ make_attribute_wrapper(MaskedType, "value", "value")
 make_attribute_wrapper(MaskedType, "valid", "valid")
 
 
-# Typing for `classes.Masked`
+# Typing for `api.Masked`
 @cuda_decl_registry.register_attr
 class ClassesTemplate(AttributeTemplate):
-    key = types.Module(classes)
+    key = types.Module(api)
 
     def resolve_Masked(self, mod):
         return types.Function(MaskedConstructor)
 
 
-# Registration of the global is also needed for Numba to type classes.Masked
-cuda_decl_registry.register_global(classes, types.Module(classes))
-# For typing bare Masked (as in `from .classes import Masked`
+# Registration of the global is also needed for Numba to type api.Masked
+cuda_decl_registry.register_global(api, types.Module(api))
+# For typing bare Masked (as in `from .api import Masked`
 cuda_decl_registry.register_global(
-    classes.Masked, types.Function(MaskedConstructor)
+    api.Masked, types.Function(MaskedConstructor)
 )
 
 
@@ -287,15 +287,7 @@ class MaskedScalarTruth(AbstractTemplate):
             return nb_signature(types.boolean, MaskedType(types.boolean))
 
 
-def pack_return(masked_or_scalar):
-    # Blank function to give us something for the typing and
-    # lowering to grab onto. Just a dummy function for us to
-    # call within kernels that will get replaced later by the
-    # lowered implementation
-    pass
-
-
-@cuda_decl_registry.register_global(pack_return)
+@cuda_decl_registry.register_global(api.pack_return)
 class UnpackReturnToMasked(AbstractTemplate):
     """
     Turn a returned MaskedType into its value and validity

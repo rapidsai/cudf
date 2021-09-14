@@ -5,8 +5,8 @@ from numba.np import numpy_support
 from numba.types import Tuple, boolean, int64, void
 from nvtx import annotate
 
-from cudf.core.udf.classes import Masked
-from cudf.core.udf.typing import MaskedType, pack_return
+from cudf.core.udf.api import Masked, pack_return
+from cudf.core.udf.typing import MaskedType
 from cudf.utils import cudautils
 
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
@@ -17,7 +17,7 @@ cuda.jit(device=True)(pack_return)
 
 
 @annotate("NUMBA JIT", color="green", domain="cudf_python")
-def compile_masked_udf(func, dtypes):
+def get_udf_return_type(func, dtypes):
     """
     Get the return type of a masked UDF for a given set of argument dtypes. It
     is assumed that a `MaskedType(dtype)` is passed to the function for each
@@ -177,22 +177,24 @@ def compile_or_get(df, f):
 
     """
 
-    numba_return_type = compile_masked_udf(f, df.dtypes)
-    _is_scalar_return = not isinstance(numba_return_type, MaskedType)
-    scalar_return_type = (
-        numba_return_type
-        if _is_scalar_return
-        else numba_return_type.value_type
-    )
-
-    sig = construct_signature(df, scalar_return_type)
-
     # check to see if we already compiled this function
-    cache_key = cudautils._make_partial_cache_key(f)
-    cache_key = (*cache_key, sig)
+    cache_key = (
+        *cudautils.make_cache_key(f, tuple(df.dtypes)),
+        *(col.mask is None for col in df._data.values()),
+    )
     if precompiled.get(cache_key) is not None:
-        kernel = precompiled[cache_key]
+        kernel, scalar_return_type = precompiled[cache_key]
     else:
+
+        numba_return_type = get_udf_return_type(f, df.dtypes)
+        _is_scalar_return = not isinstance(numba_return_type, MaskedType)
+        scalar_return_type = (
+            numba_return_type
+            if _is_scalar_return
+            else numba_return_type.value_type
+        )
+
+        sig = construct_signature(df, scalar_return_type)
         f_ = cuda.jit(device=True)(f)
 
         lcl = {}
@@ -211,6 +213,6 @@ def compile_or_get(df, f):
         # The python function definition representing the kernel
         _kernel = lcl["_kernel"]
         kernel = cuda.jit(sig)(_kernel)
-        precompiled[cache_key] = kernel
+        precompiled[cache_key] = (kernel, scalar_return_type)
 
     return kernel, numpy_support.as_dtype(scalar_return_type)
