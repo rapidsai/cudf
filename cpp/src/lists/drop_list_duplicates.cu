@@ -74,7 +74,10 @@ struct has_negative_nans_dispatch {
   {
     // Recursively check negative NaN on the children columns.
     return std::any_of(
-      lists_entries.child_begin(), lists_entries.child_end(), [stream](auto const& col) {
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(lists_entries.num_children()),
+      [structs_view = structs_column_view{lists_entries}, stream](auto const child_idx) {
+        auto const col = structs_view.get_sliced_child(child_idx);
         return type_dispatcher(col.type(), detail::has_negative_nans_dispatch{}, col, stream);
       });
   }
@@ -136,13 +139,14 @@ struct replace_negative_nans_dispatch {
                                      rmm::cuda_stream_view stream) const noexcept
   {
     std::vector<std::unique_ptr<cudf::column>> output_struct_members;
-    std::transform(lists_entries.child_begin(),
-                   lists_entries.child_end(),
-                   std::back_inserter(output_struct_members),
-                   [stream](auto const& col) {
-                     return type_dispatcher(
-                       col.type(), detail::replace_negative_nans_dispatch{}, col, stream);
-                   });
+    std::transform(
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(lists_entries.num_children()),
+      std::back_inserter(output_struct_members),
+      [structs_view = structs_column_view{lists_entries}, stream](auto const child_idx) {
+        auto const col = structs_view.get_sliced_child(child_idx);
+        return type_dispatcher(col.type(), detail::replace_negative_nans_dispatch{}, col, stream);
+      });
 
     return cudf::make_structs_column(lists_entries.size(),
                                      std::move(output_struct_members),
