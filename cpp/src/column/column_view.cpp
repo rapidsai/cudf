@@ -80,28 +80,44 @@ size_type column_view_base::null_count(size_type begin, size_type end) const
 
 // simple prime number multiplication algorithm.
 // Adapted from http://myeyesareblind.com/2017/02/06/Combine-hash-values/#apachecommons
-constexpr void combine_hash(std::size_t& h1, std::size_t h2) { h1 = h1 * 127 + h2; }
+constexpr std::size_t combine_hash(std::size_t h1, std::size_t h2) { return h1 * 127 + h2; }
+// 32/64-bit boost hash_combine https://stackoverflow.com/a/4948967/1550940
+constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
+{
+  constexpr std::size_t const magic = sizeof(std::size_t) == 8 ? 0x9e3779b97f4a7c15 : 0x9e3779b9;
+  lhs ^= rhs + magic + (lhs << 6) + (lhs >> 2);
+  return lhs;
+}
+
+// Struct to use custom combine hash and fold expression
+struct HashValue {
+  std::size_t hash;
+  HashValue(std::size_t h) : hash{h} {}
+  HashValue operator^(HashValue const& other) const
+  {
+    return HashValue{combine_hash(hash, other.hash)};
+  }
+};
+
+template <typename... Ts>
+constexpr auto hash(Ts&&... ts)
+{
+  return (... ^ HashValue(std::hash<Ts>{}(ts))).hash;
+}
 
 struct shallow_hash_impl {
-  std::size_t operator()(column_view const& input, bool is_parent_empty = false)
+  std::size_t operator()(column_view const& c, bool is_parent_empty = false)
   {
-    std::size_t hash = 0;
-    combine_hash(hash, std::hash<data_type>{}(input.type()));
-    combine_hash(hash, std::hash<size_type>{}(input.size()));
-    if (not(input.is_empty() or is_parent_empty)) {
-      combine_hash(hash, std::hash<void const*>{}(input.head()));
-      combine_hash(hash, std::hash<void const*>{}(input.null_mask()));
-      combine_hash(hash, std::hash<size_type>{}(input.offset()));
-    }
-    hash = std::accumulate(
-      input.child_begin(),
-      input.child_end(),
-      hash,
-      [&input, is_parent_empty](std::size_t hash, auto const& child) {
-        combine_hash(hash, shallow_hash_impl{}(child, input.is_empty() or is_parent_empty));
-        return hash;
-      });
-    return hash;
+    std::size_t const init = (c.is_empty() or is_parent_empty)
+                               ? hash(c.type(), c.size())
+                               : hash(c.type(), c.size(), c.head(), c.null_mask(), c.offset());
+    return std::accumulate(c.child_begin(),
+                           c.child_end(),
+                           init,
+                           [&c, is_parent_empty](std::size_t hash, auto const& child) {
+                             return combine_hash(
+                               hash, shallow_hash_impl{}(child, c.is_empty() or is_parent_empty));
+                           });
   }
 };
 
