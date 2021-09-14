@@ -1352,6 +1352,8 @@ class Frame(libcudf.table.Table):
         for col in self._data.values():
             data = col.data
             mask = col.mask
+            if mask is None:
+                mask = cudf.core.buffer.Buffer()
             launch_args.append((data, mask))
             offsets.append(col.offset)
         launch_args += offsets
