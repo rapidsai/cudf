@@ -11,7 +11,7 @@ from hypothesis import given, settings, strategies as st
 import cudf
 from cudf.core._compat import PANDAS_GE_110
 from cudf.testing import _utils as utils
-from cudf.utils.dtypes import cudf_dtypes_to_pandas_dtypes
+from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
 repr_categories = utils.NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
 
@@ -24,11 +24,11 @@ def test_null_series(nrows, dtype):
     data = cudf.Series(np.random.randint(1, 9, size))
     column = data.set_mask(mask)
     sr = cudf.Series(column).astype(dtype)
-    if dtype != "category" and np.dtype(dtype).kind in {"u", "i"}:
+    if dtype != "category" and cudf.dtype(dtype).kind in {"u", "i"}:
         ps = pd.Series(
             sr._column.data_array_view.copy_to_host(),
-            dtype=cudf_dtypes_to_pandas_dtypes.get(
-                np.dtype(dtype), np.dtype(dtype)
+            dtype=np_dtypes_to_pandas_dtypes.get(
+                cudf.dtype(dtype), cudf.dtype(dtype)
             ),
         )
         ps[sr.isnull().to_pandas()] = pd.NA
@@ -1152,22 +1152,7 @@ def test_timedelta_index_repr(index, expected_repr):
         ),
     ],
 )
-@pytest.mark.parametrize(
-    "max_seq_items",
-    [
-        None,
-        pytest.param(
-            1,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/38415"
-            ),
-        ),
-        2,
-        5,
-        10,
-        100,
-    ],
-)
+@pytest.mark.parametrize("max_seq_items", [None, 1, 2, 5, 10, 100])
 def test_mulitIndex_repr(pmi, max_seq_items):
     pd.set_option("display.max_seq_items", max_seq_items)
     gmi = cudf.from_pandas(pmi)

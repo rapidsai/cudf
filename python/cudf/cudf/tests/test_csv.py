@@ -320,7 +320,6 @@ def test_csv_reader_dtype_dict(use_names):
     dtypes = df.dtypes.to_dict()
     gdf_names = list(gdf_dtypes.keys()) if use_names else None
     pdf_names = list(pdf_dtypes.keys()) if use_names else None
-
     gdf = read_csv(StringIO(buffer), dtype=dtypes, names=gdf_names)
     pdf = pd.read_csv(StringIO(buffer), dtype=dtypes, names=pdf_names)
 
@@ -1763,18 +1762,7 @@ def test_csv_write_empty_column_name(df, index, columns):
         cudf.DataFrame(index=cudf.Index([], name="index name")),
     ],
 )
-@pytest.mark.parametrize(
-    "index",
-    [
-        True,
-        pytest.param(
-            False,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/6691"
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("index", [True, False])
 def test_csv_write_empty_dataframe(df, index):
     pdf = df.to_pandas()
 

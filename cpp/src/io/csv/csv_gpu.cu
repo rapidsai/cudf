@@ -193,7 +193,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   int actual_col  = 0;
 
   // Going through all the columns of a given record
-  while (col < column_flags.size() && field_start <= row_end) {
+  while (col < column_flags.size() && field_start < row_end) {
     auto next_delimiter = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
 
     // Checking if this is a column that the user wants --- user can filter columns
@@ -579,7 +579,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   int col         = 0;
   int actual_col  = 0;
 
-  while (col < column_flags.size() && field_start <= row_end) {
+  while (col < column_flags.size() && field_start < row_end) {
     auto next_delimiter = cudf::io::gpu::seek_field_end(next_field, row_end, options);
 
     if (column_flags[col] & column_parse::enabled) {

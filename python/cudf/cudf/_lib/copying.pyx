@@ -19,7 +19,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, make_table_view
 
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
@@ -192,92 +192,59 @@ def gather(
     )
 
 
-def _scatter_table(Table source_table, Column scatter_map,
-                   Table target_table, bool bounds_check=True):
-
-    cdef table_view source_table_view = source_table.data_view()
-    cdef column_view scatter_map_view = scatter_map.view()
-    cdef table_view target_table_view = target_table.data_view()
-    cdef bool c_bounds_check = bounds_check
-
-    cdef unique_ptr[table] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.scatter(
-                source_table_view,
-                scatter_map_view,
-                target_table_view,
-                c_bounds_check
-            )
-        )
-
-    data, _ = data_from_unique_ptr(
-        move(c_result),
-        column_names=target_table._column_names,
-        index_names=None
-    )
-
-    return data, (
-        None if target_table._index is None else target_table._index.copy(
-            deep=False)
-    )
-
-
-def _scatter_scalar(scalars, Column scatter_map,
-                    Table target_table, bool bounds_check=True):
-
-    cdef vector[reference_wrapper[constscalar]] source_scalars
-    source_scalars.reserve(len(scalars))
-    cdef bool c_bounds_check = bounds_check
-    cdef DeviceScalar slr
-    for val, col in zip(scalars, target_table._columns):
-        slr = as_device_scalar(val, col.dtype)
-        source_scalars.push_back(reference_wrapper[constscalar](
-            slr.get_raw_ptr()[0]))
-    cdef column_view scatter_map_view = scatter_map.view()
-    cdef table_view target_table_view = target_table.data_view()
-
-    cdef unique_ptr[table] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.scatter(
-                source_scalars,
-                scatter_map_view,
-                target_table_view,
-                c_bounds_check
-            )
-        )
-
-    data, _ = data_from_unique_ptr(
-        move(c_result),
-        column_names=target_table._column_names,
-        index_names=None
-    )
-
-    return data, (
-        None if target_table._index is None else target_table._index.copy(
-            deep=False)
-    )
-
-
-def scatter(object input, object scatter_map, Table target,
+def scatter(object source, Column scatter_map, Column target_column,
             bool bounds_check=True):
     """
     Scattering input into target as per the scatter map,
     input can be a list of scalars or can be a table
     """
 
-    from cudf.core.column.column import as_column
+    cdef column_view scatter_map_view = scatter_map.view()
+    cdef table_view target_table_view = make_table_view((target_column,))
+    cdef bool c_bounds_check = bounds_check
+    cdef unique_ptr[table] c_result
 
-    if not isinstance(scatter_map, Column):
-        scatter_map = as_column(scatter_map)
+    # Needed for the table branch
+    cdef table_view source_table_view
 
-    if isinstance(input, Table):
-        return _scatter_table(input, scatter_map, target, bounds_check)
+    # Needed for the scalar branch
+    cdef vector[reference_wrapper[constscalar]] source_scalars
+    cdef DeviceScalar slr
+
+    if isinstance(source, Column):
+        source_table_view = make_table_view((<Column> source,))
+
+        with nogil:
+            c_result = move(
+                cpp_copying.scatter(
+                    source_table_view,
+                    scatter_map_view,
+                    target_table_view,
+                    c_bounds_check
+                )
+            )
     else:
-        return _scatter_scalar(input, scatter_map, target, bounds_check)
+        slr = as_device_scalar(source, target_column.dtype)
+        source_scalars.push_back(reference_wrapper[constscalar](
+            slr.get_raw_ptr()[0]))
+
+        with nogil:
+            c_result = move(
+                cpp_copying.scatter(
+                    source_scalars,
+                    scatter_map_view,
+                    target_table_view,
+                    c_bounds_check
+                )
+            )
+
+    data, _ = data_from_unique_ptr(
+        move(c_result),
+        column_names=(None,),
+        index_names=None
+    )
+
+    return next(iter(data.values()))
 
 
 def _reverse_column(Column source_column):
@@ -787,12 +754,12 @@ cdef class _CPackedColumns:
         """
         Construct a ``PackedColumns`` object from a ``cudf.DataFrame``.
         """
-        from cudf.core import RangeIndex, dtypes
+        import cudf.core.dtypes
 
         cdef _CPackedColumns p = _CPackedColumns.__new__(_CPackedColumns)
 
         if keep_index and (
-            not isinstance(input_table.index, RangeIndex)
+            not isinstance(input_table.index, cudf.RangeIndex)
             or input_table.index.start != 0
             or input_table.index.stop != len(input_table)
             or input_table.index.step != 1
@@ -805,7 +772,7 @@ cdef class _CPackedColumns:
         p.column_names = input_table._column_names
         p.column_dtypes = {}
         for name, col in input_table._data.items():
-            if isinstance(col.dtype, dtypes._BaseDtype):
+            if isinstance(col.dtype, cudf.core.dtypes._BaseDtype):
                 p.column_dtypes[name] = col.dtype
 
         p.c_obj = move(cpp_copying.pack(input_table_view))

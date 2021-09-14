@@ -67,9 +67,6 @@ TYPED_TEST(EncodeNumericTests, SimpleWithNulls)
   cudf::test::fixed_width_column_wrapper<TypeParam> expect_keys{{1, 2, 3, 0}, {1, 1, 1, 0}};
   auto const result = cudf::encode(cudf::table_view({input}));
 
-  cudf::test::print(result.first->view().column(0));
-  cudf::test::print(expect_keys);
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.first->view().column(0), expect_keys);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.second->view(), expect);
 }

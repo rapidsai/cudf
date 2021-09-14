@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import itertools
@@ -6,7 +7,7 @@ import numbers
 import pickle
 import warnings
 from collections.abc import Sequence
-from typing import Any, List, Mapping, Tuple, Union
+from typing import Any, List, MutableMapping, Optional, Tuple, Union
 
 import cupy
 import numpy as np
@@ -18,12 +19,12 @@ from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.column import as_column, column
-from cudf.core.frame import SingleColumnFrame
-from cudf.core.index import BaseIndex, as_index
+from cudf.core.frame import Frame
+from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
 from cudf.utils.utils import _maybe_indices_to_slice
 
 
-class MultiIndex(BaseIndex):
+class MultiIndex(Frame, BaseIndex):
     """A multi-level or hierarchical index.
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
@@ -93,7 +94,6 @@ class MultiIndex(BaseIndex):
 
         self._name = None
 
-        column_names = []
         if labels:
             warnings.warn(
                 "the 'labels' keyword is deprecated, use 'codes' " "instead",
@@ -123,17 +123,6 @@ class MultiIndex(BaseIndex):
             self._levels = levels
             return
 
-        # name setup
-        if isinstance(names, (Sequence, pd.core.indexes.frozen.FrozenList,),):
-            if sum(x is None for x in names) > 1:
-                column_names = list(range(len(codes)))
-            else:
-                column_names = names
-        elif names is None:
-            column_names = list(range(len(codes)))
-        else:
-            column_names = names
-
         if len(levels) == 0:
             raise ValueError("Must pass non-zero number of levels/codes")
 
@@ -146,10 +135,12 @@ class MultiIndex(BaseIndex):
             self._codes = codes
         elif len(levels) == len(codes):
             self._codes = cudf.DataFrame()
-            for i, codes in enumerate(codes):
-                name = column_names[i] or i
-                codes = column.as_column(codes)
-                self._codes[name] = codes.astype(np.int64)
+            self._codes = cudf.DataFrame._from_data(
+                {
+                    i: column.as_column(code).astype(np.int64)
+                    for i, code in enumerate(codes)
+                }
+            )
         else:
             raise ValueError(
                 "MultiIndex has unequal number of levels and "
@@ -160,20 +151,20 @@ class MultiIndex(BaseIndex):
         self._validate_levels_and_codes(self._levels, self._codes)
 
         source_data = cudf.DataFrame()
-        for i, name in enumerate(self._codes.columns):
-            codes = as_index(self._codes[name]._column)
-            if -1 in self._codes[name].values:
+        for i, n in enumerate(self._codes.columns):
+            codes = as_index(self._codes[n]._column)
+            if -1 in self._codes[n].values:
                 # Must account for null(s) in _source_data column
                 level = cudf.DataFrame(
-                    {name: [None] + list(self._levels[i])},
+                    {n: [None] + list(self._levels[i])},
                     index=range(-1, len(self._levels[i])),
                 )
             else:
-                level = cudf.DataFrame({name: self._levels[i]})
+                level = cudf.DataFrame({n: self._levels[i]})
 
-            source_data[name] = libcudf.copying.gather(
+            source_data[n] = libcudf.copying.gather(
                 level, codes._data.columns[0]
-            )[0][name]
+            )[0][n]
 
         self._data = source_data._data
         self.names = names
@@ -200,11 +191,6 @@ class MultiIndex(BaseIndex):
                 level_names=self._data.level_names,
             )
         self._names = pd.core.indexes.frozen.FrozenList(value)
-
-    @property
-    def _num_columns(self):
-        # MultiIndex is not a single-columned frame.
-        return super(SingleColumnFrame, self)._num_columns
 
     def rename(self, names, inplace=False):
         """
@@ -293,14 +279,18 @@ class MultiIndex(BaseIndex):
 
         return self._set_names(names=names, inplace=inplace)
 
-    # TODO: This type ignore is indicating a real problem, which is that
-    # MultiIndex should not be inheriting from SingleColumnFrame, but fixing
-    # that will have to wait until we reshuffle the Index hierarchy.
     @classmethod
-    def _from_data(  # type: ignore
-        cls, data: Mapping, index=None
+    def _from_data(
+        cls,
+        data: MutableMapping,
+        index: Optional[cudf.core.index.BaseIndex] = None,
+        name: Any = None,
     ) -> MultiIndex:
-        return cls.from_frame(cudf.DataFrame._from_data(data))
+        assert index is None
+        obj = cls.from_frame(cudf.DataFrame._from_data(data))
+        if name is not None:
+            obj.name = name
+        return obj
 
     @property
     def shape(self):
@@ -444,6 +434,15 @@ class MultiIndex(BaseIndex):
     def __copy__(self):
         return self.copy(deep=True)
 
+    def __iter__(self):
+        """
+        Iterating over a GPU object is not effecient and hence not supported.
+
+        Consider using ``.to_arrow()``, ``.to_pandas()`` or ``.values_host``
+        if you wish to iterate over the values.
+        """
+        cudf.utils.utils.raise_iteration_error(obj=self)
+
     def _popn(self, n):
         """ Returns a copy of this index without the left-most n values.
 
@@ -544,68 +543,6 @@ class MultiIndex(BaseIndex):
 
         data_output = "\n".join(lines)
         return output_prefix + data_output
-
-    @classmethod
-    def from_arrow(cls, table):
-        """
-        Convert PyArrow Table to MultiIndex
-
-        Parameters
-        ----------
-        table : PyArrow Table
-            PyArrow Object which has to be converted to MultiIndex
-
-        Returns
-        -------
-        cudf MultiIndex
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> tbl = pa.table({"a":[1, 2, 3], "b":["a", "b", "c"]})
-        >>> cudf.MultiIndex.from_arrow(tbl)
-        MultiIndex([(1, 'a'),
-                    (2, 'b'),
-                    (3, 'c')],
-                   names=['a', 'b'])
-        """
-
-        return super(SingleColumnFrame, cls).from_arrow(table)
-
-    def to_arrow(self):
-        """Convert MultiIndex to PyArrow Table
-
-        Returns
-        -------
-        PyArrow Table
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":[2, 3, 4]})
-        >>> mindex = cudf.Index(df)
-        >>> mindex
-        MultiIndex([(1, 2),
-                    (2, 3),
-                    (3, 4)],
-                   names=['a', 'b'])
-        >>> mindex.to_arrow()
-        pyarrow.Table
-        a: int64
-        b: int64
-        >>> mindex.to_arrow()['a']
-        <pyarrow.lib.ChunkedArray object at 0x7f5c6b71fad0>
-        [
-            [
-                1,
-                2,
-                3
-            ]
-        ]
-        """
-
-        return super(SingleColumnFrame, self).to_arrow()
 
     @property
     def codes(self):
@@ -1106,10 +1043,12 @@ class MultiIndex(BaseIndex):
         match = self.take(index)
         if isinstance(index, slice):
             return match
-        result = []
-        for level, item in enumerate(match.codes):
-            result.append(match.levels[level][match.codes[item].iloc[0]])
-        return tuple(result)
+        if isinstance(index, int):
+            # we are indexing into a single row of the MultiIndex,
+            # return that row as a tuple:
+            return match.to_pandas()[0]
+        else:
+            return match
 
     def to_frame(self, index=True, name=None):
         df = self._source_data
@@ -1409,7 +1348,7 @@ class MultiIndex(BaseIndex):
             popped_data[n] = self._data.pop(n)
 
         # construct the popped result
-        popped = cudf.Index._from_data(popped_data)
+        popped = cudf.core.index._index_from_data(popped_data)
         popped.names = popped_names
 
         # update self
@@ -1484,7 +1423,7 @@ class MultiIndex(BaseIndex):
         if hasattr(self, "_source_data"):
             result = self._source_data.to_pandas(nullable=nullable)
             result.columns = self.names
-            return pd.MultiIndex.from_frame(result)
+            return pd.MultiIndex.from_frame(result, names=self.names)
 
         pandas_codes = []
         for code in self.codes.columns:
@@ -1532,9 +1471,17 @@ class MultiIndex(BaseIndex):
         if not isinstance(multiindex, pd.MultiIndex):
             raise TypeError("not a pandas.MultiIndex")
 
+        # if `multiindex` has two or more levels that
+        # have the same name, then `multiindex.to_frame()`
+        # results in a DataFrame containing only one of those
+        # levels. Thus, set `names` to some tuple of unique values
+        # and then call `multiindex.to_frame(name=names)`,
+        # which preserves all levels of `multiindex`.
+        names = tuple(range(len(multiindex.names)))
+
         mi = cls(
             names=multiindex.names,
-            source_data=multiindex.to_frame(),
+            source_data=multiindex.to_frame(name=names),
             nan_as_null=nan_as_null,
         )
 
@@ -1547,6 +1494,18 @@ class MultiIndex(BaseIndex):
                 self._source_data.drop_duplicates(ignore_index=True)
             )
         return self._is_unique
+
+    @property
+    def is_monotonic(self):
+        """Return boolean if values in the object are monotonic_increasing.
+
+        This property is an alias for :attr:`is_monotonic_increasing`.
+
+        Returns
+        -------
+        bool
+        """
+        return self.is_monotonic_increasing
 
     @property
     def is_monotonic_increasing(self):
@@ -1853,11 +1812,9 @@ class MultiIndex(BaseIndex):
         partial_index = self.__class__._from_data(
             data=self._data.select_by_index(slice(key_as_table._num_columns))
         )
-        (
-            lower_bound,
-            upper_bound,
-            sort_inds,
-        ) = partial_index._lexsorted_equal_range(key_as_table, is_sorted)
+        (lower_bound, upper_bound, sort_inds,) = _lexsorted_equal_range(
+            partial_index, key_as_table, is_sorted
+        )
 
         if lower_bound == upper_bound:
             raise KeyError(key)

@@ -19,6 +19,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace structs {
 namespace detail {
@@ -55,6 +57,14 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
   host_span<column_view const> struct_cols);
 
 /**
+ * @brief Check whether the specified column is of type LIST, or any LISTs in its descendent
+ * columns.
+ * @param col column to check for lists.
+ * @return true if the column or any of it's children is a list, false otherwise.
+ */
+bool is_or_has_nested_lists(cudf::column_view const& col);
+
+/**
  * @brief Flatten table with struct columns to table with constituent columns of struct columns.
  *
  * If a table does not have struct columns, same input arguments are returned.
@@ -77,7 +87,36 @@ flatten_nested_columns(table_view const& input,
                        column_nullability nullability = column_nullability::MATCH_INCOMING);
 
 /**
- * @brief Pushdown nulls from a parent mask into a child column, using AND.
+ * @brief Unflatten columns flattened as by `flatten_nested_columns()`,
+ *        based on the provided `blueprint`.
+ *
+ * cudf::flatten_nested_columns() executes depth first, and serializes the struct null vector
+ * before the child/member columns.
+ * E.g. STRUCT_1< STRUCT_2< A, B >, C > is flattened to:
+ *      1. Null Vector for STRUCT_1
+ *      2. Null Vector for STRUCT_2
+ *      3. Member STRUCT_2::A
+ *      4. Member STRUCT_2::B
+ *      5. Member STRUCT_1::C
+ *
+ * `unflatten_nested_columns()` reconstructs nested columns from flattened input that follows
+ * the convention above.
+ *
+ * Note: This function requires a null-mask vector for each STRUCT column, including for nested
+ * STRUCT members.
+ *
+ * @param flattened "Flattened" `table` of input columns, following the conventions in
+ * `flatten_nested_columns()`.
+ * @param blueprint The exemplar `table_view` with nested columns intact, whose structure defines
+ * the nesting of the reconstructed output table.
+ * @return std::unique_ptr<cudf::table> Unflattened table (with nested STRUCT columns) reconstructed
+ * based on `blueprint`.
+ */
+std::unique_ptr<cudf::table> unflatten_nested_columns(std::unique_ptr<cudf::table>&& flattened,
+                                                      table_view const& blueprint);
+
+/**
+ * @brief Push down nulls from a parent mask into a child column, using bitwise AND.
  *
  * This function will recurse through all struct descendants. It is expected that
  * the size of `parent_null_mask` in bits is the same as `child.size()`
@@ -93,6 +132,29 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
                               column& child,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Push down nulls from a parent mask into a child column, using bitwise AND.
+ *
+ * This function constructs a new column_view instance equivalent to the argument column_view,
+ * with possibly new child column_views, all with possibly new null mask values reflecting
+ * null rows from the parent column:
+ * 1. If the specified column is not STRUCT, the column is returned unmodified, with no new
+ *    supporting device_buffer instances.
+ * 2. If the column is STRUCT, the null masks of the parent and child are bitwise-ANDed, and a
+ *    modified column_view is returned. This applies recursively.
+ *
+ * @param parent The parent (possibly STRUCT) column whose nulls need to be pushed to its members.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr     Device memory resource used to allocate new device memory.
+ * @return A pair of:
+ *         1. column_view with nulls pushed down to child columns, as appropriate.
+ *         2. Supporting device_buffer instances, for any newly constructed null masks.
+ */
+std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_parent_nulls(
+  column_view const& parent,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace structs

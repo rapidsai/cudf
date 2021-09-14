@@ -214,13 +214,8 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   auto chars_column = std::make_unique<cudf::column>(chars_view, stream, mr);
 
   // return new strings column
-  return cudf::make_strings_column(num_characters,
-                                   std::move(offsets_column),
-                                   std::move(chars_column),
-                                   0,
-                                   rmm::device_buffer{},
-                                   stream,
-                                   mr);
+  return cudf::make_strings_column(
+    num_characters, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

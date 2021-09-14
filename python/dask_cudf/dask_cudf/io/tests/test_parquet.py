@@ -288,6 +288,15 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
             if not fn.startswith("_"):
                 assert "part" in fn
 
+    if parse_version(dask.__version__) > parse_version("2021.07.0"):
+        # This version of Dask supports `aggregate_files=True`.
+        # Check that we can aggregate by a partition name.
+        df_read = dd.read_parquet(
+            tmpdir, engine="pyarrow", aggregate_files="year"
+        )
+        gdf_read = dask_cudf.read_parquet(tmpdir, aggregate_files="year")
+        dd.assert_eq(df_read, gdf_read)
+
 
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
@@ -327,6 +336,7 @@ def test_chunksize(tmpdir, chunksize, metadata):
         split_row_groups=True,
         gather_statistics=True,
     )
+    ddf2.compute(scheduler="synchronous")
 
     dd.assert_eq(ddf1, ddf2, check_divisions=False)
 
@@ -455,17 +465,24 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     p1 = os.path.join(tmpdir, "part.1.parquet")
     df1.to_parquet(p1, engine="pyarrow")
 
-    with pytest.raises(RuntimeError):
-        # Pyarrow will fail to aggregate metadata
-        # if gather_statistics=True
-        dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()
+    # New pyarrow-dataset base can handle an inconsistent
+    # schema (even without a _metadata file), but computing
+    # and dtype validation may fail
+    ddf1 = dask_cudf.read_parquet(str(tmpdir), gather_statistics=True)
 
     # Add global metadata file.
     # Dask-CuDF can do this without requiring schema
-    # consistency.  Once the _metadata file is avaible,
-    # parsing metadata should no longer be a problem
+    # consistency.
     dask_cudf.io.parquet.create_metadata_file([p0, p1])
 
-    # Check that we can now read the ddf
+    # Check that we can still read the ddf
     # with the _metadata file present
-    dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()
+    ddf2 = dask_cudf.read_parquet(str(tmpdir), gather_statistics=True)
+
+    # Check that the result is the same with and
+    # without the _metadata file.  Note that we must
+    # call `compute` on `ddf1`, because the dtype of
+    # the inconsistent column ("a") may be "object"
+    # before computing, and "int" after
+    dd.assert_eq(ddf1.compute(), ddf2)
+    dd.assert_eq(ddf1.compute(), ddf2.compute())

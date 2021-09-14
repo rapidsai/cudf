@@ -386,7 +386,7 @@ class _CuDFColumn:
         if kind is None:
             # Not a NumPy/CuPy dtype. Check if it's a categorical maybe
             if isinstance(dtype, cudf.CategoricalDtype):
-                kind = 23
+                kind = _k.CATEGORICAL
                 # Codes and categorical values dtypes are different.
                 # We use codes' dtype as these are stored in the buffer. 
                 dtype = self._col.cat.codes.dtype
@@ -403,7 +403,7 @@ class _CuDFColumn:
         return (kind, bitwidth, format_str, endianness)
 
     @property
-    def describe_categorical(self) -> Dict[str, Any]:
+    def describe_categorical(self) -> Tuple[Any, bool, Dict[int, Any]]:
         """
         If the dtype is categorical, there are two options:
 

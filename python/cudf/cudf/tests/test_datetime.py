@@ -13,7 +13,7 @@ import pytest
 
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
-from cudf.core import DataFrame, Series
+from cudf import DataFrame, Series
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -717,6 +717,7 @@ def test_to_datetime_units(data, unit):
         (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], "%m/%d/%Y"),
         (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], "%d/%m/%Y"),
         (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], None),
+        (["2021-04-13 12:30:04.123456789"], "%Y-%m-%d %H:%M:%S.%f"),
         (pd.Series([2015, 2020, 2021]), "%Y"),
         pytest.param(
             pd.Series(["1", "2", "1"]),
@@ -1408,4 +1409,174 @@ def test_is_month_end(data, dtype):
     expect = ps.dt.is_month_end
     got = gs.dt.is_month_end
 
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-05-31",
+            None,
+            "1999-12-01",
+            "2000-12-21",
+            None,
+            "1900-01-01",
+            "1800-03-14",
+            "2100-03-10",
+            "1970-01-01",
+            "1969-12-11",
+            "2017-12-30",
+            "2017-12-31",
+            "2018-01-01",
+        ]
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]"])
+def test_is_year_start(data, dtype):
+    ps = pd.Series(data, dtype=dtype)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.is_year_start
+    got = gs.dt.is_year_start
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-05-31",
+            None,
+            "1999-12-01",
+            "2000-12-21",
+            None,
+            "1900-12-31",
+            "1800-03-14",
+            "2017-12-30",
+            "2017-12-31",
+            "2020-12-31 08:00:00",
+            None,
+            "1999-12-31 18:40:00",
+            "2000-12-31 04:00:00",
+            None,
+            "1800-12-14 07:30:00",
+            "2100-12-14 07:30:00",
+            "2020-05-31",
+        ]
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]"])
+def test_is_year_end(data, dtype):
+    ps = pd.Series(data, dtype=dtype)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.is_year_end
+    got = gs.dt.is_year_end
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-05-01",
+            "2020-05-31",
+            "2020-02-29",
+            None,
+            "1999-12-01",
+            "2000-12-21",
+            None,
+            "1900-02-28",
+            "1800-03-14",
+            "2100-03-10",
+            "1970-04-1",
+            "1970-01-01",
+            "1969-12-11",
+            "2020-12-31",
+        ]
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]"])
+def test_is_quarter_start(data, dtype):
+    # Series
+    ps = pd.Series(data, dtype=dtype)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.is_quarter_start
+    got = gs.dt.is_quarter_start
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-05-01",
+            "2020-05-31",
+            "2020-02-29",
+            None,
+            "1999-12-01",
+            "2000-12-21",
+            None,
+            "1900-02-28",
+            "1800-03-14",
+            "2100-03-10",
+            "1970-04-1",
+            "1970-01-01",
+            "1969-12-11",
+            "2020-12-31",
+        ]
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]"])
+def test_is_quarter_end(data, dtype):
+    # Series
+    ps = pd.Series(data, dtype=dtype)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.is_quarter_end
+    got = gs.dt.is_quarter_end
+
+    assert_eq(expect, got)
+
+
+def test_error_values():
+    s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    with pytest.raises(
+        NotImplementedError,
+        match="DateTime Arrays is not yet implemented in cudf",
+    ):
+        s.values
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        (
+            [
+                "2020-05-31 08:00:00",
+                "1999-12-31 18:40:10",
+                "2000-12-31 04:00:05",
+                "1900-02-28 07:00:06",
+                "1800-03-14 07:30:20",
+                "2100-03-14 07:30:20",
+                "1970-01-01 00:00:09",
+                "1969-12-31 12:59:10",
+            ]
+        )
+    ],
+)
+@pytest.mark.parametrize("time_type", DATETIME_TYPES)
+@pytest.mark.parametrize("resolution", ["D", "H", "T", "S", "L", "U", "N"])
+def test_ceil(data, time_type, resolution):
+
+    ps = pd.Series(data, dtype=time_type)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.ceil(resolution)
+    got = gs.dt.ceil(resolution)
     assert_eq(expect, got)

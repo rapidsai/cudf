@@ -106,8 +106,7 @@ class aggregation {
 };
 
 /**
- * @brief Derived class intended for enforcing operation-specific restrictions
- * when calling various cudf functions.
+ * @brief Derived class intended for rolling_window specific aggregation usage.
  *
  * As an example, rolling_window will only accept rolling_aggregation inputs,
  * and the appropriate derived classes (sum_aggregation, mean_aggregation, etc)
@@ -119,6 +118,29 @@ class rolling_aggregation : public virtual aggregation {
 
  protected:
   rolling_aggregation() {}
+  rolling_aggregation(aggregation::Kind a) : aggregation{a} {}
+};
+
+/**
+ * @brief Derived class intended for groupby specific aggregation usage.
+ */
+class groupby_aggregation : public virtual aggregation {
+ public:
+  ~groupby_aggregation() = default;
+
+ protected:
+  groupby_aggregation() {}
+};
+
+/**
+ * @brief Derived class intended for groupby specific scan usage.
+ */
+class groupby_scan_aggregation : public virtual aggregation {
+ public:
+  ~groupby_scan_aggregation() = default;
+
+ protected:
+  groupby_scan_aggregation() {}
 };
 
 enum class udf_type : bool { CUDA, PTX };
@@ -182,6 +204,8 @@ std::unique_ptr<Base> make_m2_aggregation();
  *
  * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `variance` is `N - ddof`, where `N` is the population size.
+ *
+ * @throw cudf::logic_error if input type is chrono or compound types.
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_variance_aggregation(size_type ddof = 1);
@@ -191,6 +215,8 @@ std::unique_ptr<Base> make_variance_aggregation(size_type ddof = 1);
  *
  * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `std` is `N - ddof`, where `N` is the population size.
+ *
+ * @throw cudf::logic_error if input type is chrono or compound types.
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_std_aggregation(size_type ddof = 1);
