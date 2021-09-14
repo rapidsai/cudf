@@ -1058,6 +1058,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         # the number of empty input frames
         num_empty_input_frames = 0
 
+        # flag to indicate if all DataFrame's have
+        # RangeIndex as their index
+        are_all_range_index = False
+
         for i, obj in enumerate(objs):
             # shallow-copy the input DFs in case the same DF instance
             # is concatenated with itself
@@ -1075,6 +1079,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 num_empty_input_frames += 1
                 result_index_length += len(obj)
                 empty_has_index = empty_has_index or len(obj) > 0
+
+            are_all_range_index = (
+                True if i == 0 else are_all_range_index
+            ) and isinstance(obj.index, cudf.RangeIndex)
 
         if join == "inner":
             sets_of_column_names = [set(obj._column_names) for obj in objs]
@@ -1150,7 +1158,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         columns = [
             (
                 []
-                if (ignore_index and not empty_has_index)
+                if are_all_range_index
+                or (ignore_index and not empty_has_index)
                 else list(f._index._data.columns)
             )
             + [f._data[name] if name in f._data else None for name in names]
@@ -1205,7 +1214,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         # Concatenate the Tables
         out = cls._from_data(
-            *libcudf.concat.concat_tables(tables, ignore_index)
+            *libcudf.concat.concat_tables(
+                tables, ignore_index=ignore_index or are_all_range_index
+            )
         )
 
         # If ignore_index is True, all input frames are empty, and at
@@ -1213,6 +1224,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         # to the result frame.
         if empty_has_index and num_empty_input_frames == len(objs):
             out._index = cudf.RangeIndex(result_index_length)
+        elif are_all_range_index and not ignore_index:
+            out._index = cudf.core.index.GenericIndex._concat(
+                [o._index for o in objs]
+            )
+
         # Reassign the categories for any categorical table cols
         _reassign_categories(
             categories, out._data, indices[first_data_column_position:]

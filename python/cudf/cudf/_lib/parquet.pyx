@@ -235,7 +235,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     idx = idx[skiprows:]
                 if num_rows is not None:
                     idx = idx[:num_rows]
-            df.index = idx
+            df._index = idx
         elif set(index_col).issubset(column_names):
             index_data = df[index_col]
             actual_index_names = list(index_col_names.values())
@@ -250,7 +250,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     names=actual_index_names
                 )
             df.drop(columns=index_col, inplace=True)
-            df.index = idx
+            df._index = idx
         else:
             if use_pandas_metadata:
                 df.index.names = index_col

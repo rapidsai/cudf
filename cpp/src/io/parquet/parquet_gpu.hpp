@@ -307,6 +307,8 @@ struct EncColumnChunk {
   statistics_chunk const* stats;  //!< Fragment statistics
   uint32_t bfr_size;              //!< Uncompressed buffer size
   uint32_t compressed_size;       //!< Compressed buffer size
+  uint32_t max_page_data_size;    //!< Max data size (excuding header) of any page in this chunk
+  uint32_t page_headers_size;     //!< Sum of size of all page headers
   uint32_t start_row;             //!< First row of chunk
   uint32_t num_rows;              //!< Number of rows in chunk
   size_type num_values;     //!< Number of values in chunk. Different from num_rows for nested types
@@ -538,15 +540,17 @@ void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
  * @param[in] num_columns Number of columns
  * @param[in] page_grstats Setup for page-level stats
  * @param[in] chunk_grstats Setup for chunk-level stats
+ * @param[in] max_page_comp_data_size Calculated maximum compressed data size of pages
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       device_span<gpu::EncPage> pages,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
-                      statistics_merge_group* page_grstats  = nullptr,
-                      statistics_merge_group* chunk_grstats = nullptr,
-                      rmm::cuda_stream_view stream          = rmm::cuda_stream_default);
+                      statistics_merge_group* page_grstats,
+                      statistics_merge_group* chunk_grstats,
+                      size_t max_page_comp_data_size,
+                      rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for packing column data into parquet pages
@@ -557,9 +561,9 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePages(device_span<EncPage> pages,
-                 device_span<gpu_inflate_input_s> comp_in   = {},
-                 device_span<gpu_inflate_status_s> comp_out = {},
-                 rmm::cuda_stream_view stream               = rmm::cuda_stream_default);
+                 device_span<gpu_inflate_input_s> comp_in,
+                 device_span<gpu_inflate_status_s> comp_out,
+                 rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
@@ -567,8 +571,7 @@ void EncodePages(device_span<EncPage> pages,
  * @param[in,out] chunks Column chunks (updated with actual compressed/uncompressed sizes)
  * @param[in] stream CUDA stream to use, default 0
  */
-void DecideCompression(device_span<EncColumnChunk> chunks,
-                       rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel to encode page headers
@@ -580,10 +583,10 @@ void DecideCompression(device_span<EncColumnChunk> chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePageHeaders(device_span<EncPage> pages,
-                       device_span<gpu_inflate_status_s const> comp_out = {},
-                       device_span<statistics_chunk const> page_stats   = {},
-                       const statistics_chunk* chunk_stats              = nullptr,
-                       rmm::cuda_stream_view stream                     = rmm::cuda_stream_default);
+                       device_span<gpu_inflate_status_s const> comp_out,
+                       device_span<statistics_chunk const> page_stats,
+                       const statistics_chunk* chunk_stats,
+                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel to gather pages to a single contiguous block per chunk

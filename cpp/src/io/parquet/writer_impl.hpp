@@ -164,6 +164,9 @@ class writer::impl {
    * @param chunks column chunk array
    * @param col_desc column description array
    * @param pages encoder pages array
+   * @param page_stats page statistics array
+   * @param frag_stats fragment statistics array
+   * @param max_page_comp_data_size max compressed
    * @param num_columns Total number of columns
    * @param num_pages Total number of pages
    * @param num_stats_bfr Number of statistics buffers
@@ -173,6 +176,7 @@ class writer::impl {
                           device_span<gpu::EncPage> pages,
                           statistics_chunk* page_stats,
                           statistics_chunk* frag_stats,
+                          size_t max_page_comp_data_size,
                           uint32_t num_columns,
                           uint32_t num_pages,
                           uint32_t num_stats_bfr);
@@ -181,6 +185,7 @@ class writer::impl {
    *
    * @param chunks column chunk array
    * @param pages encoder pages array
+   * @param max_page_uncomp_data_size maximum uncompressed size of any page's data
    * @param pages_in_batch number of pages in this batch
    * @param first_page_in_batch first page in batch
    * @param rowgroups_in_batch number of rowgroups in this batch
@@ -190,6 +195,7 @@ class writer::impl {
    */
   void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                     device_span<gpu::EncPage> pages,
+                    size_t max_page_uncomp_data_size,
                     uint32_t pages_in_batch,
                     uint32_t first_page_in_batch,
                     uint32_t rowgroups_in_batch,
