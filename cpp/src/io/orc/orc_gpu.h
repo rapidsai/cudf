@@ -427,6 +427,7 @@ void orc_init_statistics_buffersize(statistics_merge_group* groups,
  * @param[in,out] groups Statistics merge groups
  * @param[in,out] chunks Statistics data
  * @param[in] statistics_count Number of statistics buffers
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void orc_encode_statistics(uint8_t* blob_bfr,
                            statistics_merge_group* groups,
@@ -434,10 +435,18 @@ void orc_encode_statistics(uint8_t* blob_bfr,
                            uint32_t statistics_count,
                            rmm::cuda_stream_view stream);
 
-void per_rowgroup_valid_counts(device_span<orc_column_device_view const> columns,
-                               device_2dspan<rowgroup_rows const> rowgroups,
-                               device_2dspan<cudf::size_type> valid_counts,
-                               rmm::cuda_stream_view stream);
+/**
+ * @brief Number of set bits in pushdown masks, per rowgroup.
+ *
+ * @param[in] orc_columns Pre-order flattened device array of ORC column views
+ * @param[in] rowgroup_bounds Ranges of rows in each rowgroup [rowgroup][column]
+ * @param[out] set_counts Per rowgroup number of set bits
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ */
+void reduce_pushdown_masks(device_span<orc_column_device_view const> orc_columns,
+                           device_2dspan<rowgroup_rows const> rowgroup_bounds,
+                           device_2dspan<cudf::size_type> set_counts,
+                           rmm::cuda_stream_view stream);
 
 }  // namespace gpu
 }  // namespace orc

@@ -1562,7 +1562,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
     orc_table.num_columns() * segmentation.num_rowgroups(), stream);
   auto const d_valid_counts_view = device_2dspan<cudf::size_type>{
     d_valid_counts.data(), segmentation.num_rowgroups(), orc_table.num_columns()};
-  gpu::per_rowgroup_valid_counts(
+  gpu::reduce_pushdown_masks(
     orc_table.d_columns, segmentation.rowgroups, d_valid_counts_view, stream);
 
   auto aligned_rowgroups = hostdevice_2dvector<rowgroup_rows>(

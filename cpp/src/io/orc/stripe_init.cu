@@ -467,27 +467,28 @@ extern "C" __global__ void __launch_bounds__(128, 8)
     __syncthreads();
   }
 }
+
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpu_per_rowgroup_valid_counts(device_span<orc_column_device_view const> columns,
-                                device_2dspan<rowgroup_rows const> rowgroups,
-                                device_2dspan<size_type> valid_counts)
+  gpu_reduce_pushdown_masks(device_span<orc_column_device_view const> orc_columns,
+                            device_2dspan<rowgroup_rows const> rowgroup_bounds,
+                            device_2dspan<size_type> set_counts)
 {
   typedef cub::BlockReduce<size_type, block_size> BlockReduce;
   __shared__ typename BlockReduce::TempStorage temp_storage;
 
-  auto const column_id  = blockIdx.x;
-  auto const orc_column = columns[column_id];
-
+  auto const column_id   = blockIdx.x;
   auto const rowgroup_id = blockIdx.y;
+  auto const orc_column  = orc_columns[column_id];
   auto const t           = threadIdx.x;
 
   auto const column       = orc_column.cudf_column;
   auto const use_child_rg = column.type().id() == type_id::LIST;
-  auto const rg           = rowgroups[rowgroup_id][column_id + (use_child_rg ? 1 : 0)];
+  auto const rg           = rowgroup_bounds[rowgroup_id][column_id + (use_child_rg ? 1 : 0)];
 
   if (orc_column.pushdown_mask == nullptr) {
-    if (t == 0) { valid_counts[rowgroup_id][column_id] = rg.size(); }
+    // All elements are valid if the null mask is not present
+    if (t == 0) { set_counts[rowgroup_id][column_id] = rg.size(); }
     return;
   };
 
@@ -504,7 +505,7 @@ __global__ void __launch_bounds__(block_size)
   }
 
   count = BlockReduce(temp_storage).Sum(count);
-  if (t == 0) { valid_counts[rowgroup_id][column_id] = count; }
+  if (t == 0) { set_counts[rowgroup_id][column_id] = count; }
 }
 
 void __host__ ParseCompressedStripeData(CompressedStreamInfo* strm_info,
@@ -564,14 +565,14 @@ void __host__ ParseRowGroupIndex(RowGroup* row_groups,
                                                                     use_base_stride);
 }
 
-void __host__ per_rowgroup_valid_counts(device_span<orc_column_device_view const> columns,
-                                        device_2dspan<rowgroup_rows const> rowgroups,
-                                        device_2dspan<cudf::size_type> valid_counts,
-                                        rmm::cuda_stream_view stream)
+void __host__ reduce_pushdown_masks(device_span<orc_column_device_view const> columns,
+                                    device_2dspan<rowgroup_rows const> rowgroups,
+                                    device_2dspan<cudf::size_type> valid_counts,
+                                    rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid(columns.size(), rowgroups.size().first);  // 1 rowgroup per block
-  gpu_per_rowgroup_valid_counts<128>
+  gpu_reduce_pushdown_masks<128>
     <<<dim_grid, dim_block, 0, stream.value()>>>(columns, rowgroups, valid_counts);
 }
 
