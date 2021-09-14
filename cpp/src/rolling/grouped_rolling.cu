@@ -407,7 +407,7 @@ get_null_bounds_for_orderby_column(column_view const& orderby_column,
     auto null_start = rmm::device_uvector<size_type>(num_groups, stream);
     auto null_end   = rmm::device_uvector<size_type>(num_groups, stream);
 
-    auto p_orderby_device_view = column_device_view::create(orderby_column);
+    auto p_orderby_device_view = column_device_view::create(orderby_column, stream);
 
     // Null timestamps exist. Find null bounds, per group.
     thrust::for_each(

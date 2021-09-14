@@ -389,11 +389,11 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   auto sizes_view   = sizes->mutable_view();
   auto indices_view = indices->mutable_view();
 
-  auto device_in                = cudf::column_device_view::create(input_col);
-  auto device_values_to_replace = cudf::column_device_view::create(values_to_replace);
-  auto device_replacement       = cudf::column_device_view::create(replacement_values);
-  auto device_sizes             = cudf::mutable_column_device_view::create(sizes_view);
-  auto device_indices           = cudf::mutable_column_device_view::create(indices_view);
+  auto device_in                = cudf::column_device_view::create(input_col, stream);
+  auto device_values_to_replace = cudf::column_device_view::create(values_to_replace, stream);
+  auto device_replacement       = cudf::column_device_view::create(replacement_values, stream);
+  auto device_sizes             = cudf::mutable_column_device_view::create(sizes_view, stream);
+  auto device_indices           = cudf::mutable_column_device_view::create(indices_view, stream);
 
   rmm::device_buffer valid_bits =
     cudf::detail::create_null_mask(input_col.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
