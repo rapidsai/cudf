@@ -627,13 +627,15 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
 
   auto const column = s->chunk.column->cudf_column;
   while (s->present_rows < s->chunk.null_mask_num_rows or s->numvals > 0) {
-    // number of rows read so far
-    auto present_rows             = s->present_rows;
+    // Number of rows read so far
+    auto present_rows = s->present_rows;
+    // valid_buf capacity is byte per thread in block
     auto const buf_available_bits = encode_block_size * 8 - s->numvals;
-    auto const nrows        = min(s->chunk.null_mask_num_rows - present_rows, buf_available_bits);
-    auto const t_nrows      = min(max(static_cast<int32_t>(nrows) - t * 8, 0), 8);
-    auto const row_in_group = present_rows + t * 8;
-    auto const row          = s->chunk.null_mask_start_row + row_in_group;
+    // Number of rows for the block to process in this iteration
+    auto const nrows = min(s->chunk.null_mask_num_rows - present_rows, buf_available_bits);
+    // Number of rows for this thread to process in this iteration
+    auto const t_nrows = min(max(static_cast<int32_t>(nrows) - t * 8, 0), 8);
+    auto const row     = s->chunk.null_mask_start_row + present_rows + t * 8;
 
     auto get_mask_byte = [&](bitmask_type const* mask) -> uint8_t {
       if (t_nrows == 0) return 0;
@@ -651,14 +653,14 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
     if (pushdown_mask != nullptr) {
       pd_byte    = get_mask_byte(pushdown_mask) & ((1 << t_nrows) - 1);
       pd_set_cnt = __popc(pd_byte);
-      // scan num bits to get offset
+      // Scan the number of valid bits to get dst offset for each thread
       cub::BlockScan<uint32_t, block_size>(scan_storage).ExclusiveSum(pd_set_cnt, offset);
     }
 
     auto const mask_byte = get_mask_byte(column.null_mask());
     auto dst_offset      = offset + s->nnz;
     auto vbuf_bit_idx    = [](int row) {
-      // circular buffer with validitiy of 8 rows in each element
+      // valid_buf is a circular buffer with validitiy of 8 rows in each element
       return row % (encode_block_size * 8);
     };
     if (dst_offset % 8 == 0 and pd_set_cnt == 8) {
@@ -677,7 +679,9 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
 
     __syncthreads();
     if (t == block_size - 1) {
+      // Number of loaded rows, available for encode
       s->numvals += offset + pd_set_cnt;
+      // Number of loaded rows (different from present_rows because of pushdown masks)
       s->nnz += offset + pd_set_cnt;
     }
     present_rows += nrows;
@@ -692,6 +696,7 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
         ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, s->present_out / 8, nbytes_out, flush, t) * 8;
 
       if (!t) {
+        // Number of rows enocoded so far
         s->present_out += nrows_encoded;
         s->numvals -= min(s->numvals, nrows_encoded);
       }
@@ -758,6 +763,7 @@ __global__ void __launch_bounds__(block_size)
   }();
 
   encode_null_mask<block_size>(s, pushdown_mask, temp_storage.scan_u32, t);
+  __syncthreads();
 
   auto const column = s->chunk.column->cudf_column;
   while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
@@ -765,7 +771,7 @@ __global__ void __launch_bounds__(block_size)
     if (s->chunk.type_kind != LIST && !s->stream.data_ptrs[CI_DATA]) {
       // Pass-through
       __syncthreads();
-      if (!t) {  // can this be done once after the loop?
+      if (!t) {
         s->cur_row           = s->chunk.num_rows;
         s->strm_pos[CI_DATA] = s->chunk.num_rows * s->chunk.dtype_len;
       }
@@ -774,8 +780,7 @@ __global__ void __launch_bounds__(block_size)
       uint32_t nrows =
         min(min(s->chunk.num_rows - s->cur_row, maxnumvals - max(s->numvals, s->numlengths)),
             encode_block_size);
-      auto const row_in_group = s->cur_row + t;
-      auto const row          = s->chunk.start_row + row_in_group;
+      auto const row = s->chunk.start_row + s->cur_row + t;
 
       auto const is_value_valid = [&]() {
         if (t >= nrows) return false;
