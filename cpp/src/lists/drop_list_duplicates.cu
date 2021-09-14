@@ -157,36 +157,6 @@ struct replace_negative_nans_dispatch {
 };
 
 /**
- * @brief Transform a given lists column to a new lists column in which all the list entries holding
- * -NaN value are replaced by (positive) NaN.
- *
- * Replacing -NaN by NaN is necessary before sorting (individual) lists because the sorting API is
- * using radix sort, which compares bits of the number thus it may separate -NaN by NaN to the two
- * ends of the result column.
- */
-std::unique_ptr<column> replace_negative_nans_entries(column_view const& lists_entries,
-                                                      lists_column_view const& lists_column,
-                                                      rmm::cuda_stream_view stream)
-{
-  // We need to copy the offsets column of the input lists_column. Since the input lists_column may
-  // be sliced, we need to access its offsets column through `offsets_begin` which take into account
-  // lists_column's offset.
-  auto const offsets_view = column_view(
-    data_type{type_to_id<offset_type>()}, lists_column.size() + 1, lists_column.offsets_begin());
-  auto new_offsets = std::make_unique<column>(offsets_view);
-  auto new_entries = type_dispatcher(
-    lists_entries.type(), detail::replace_negative_nans_dispatch{}, lists_entries, stream);
-
-  return make_lists_column(
-    lists_column.size(),
-    std::move(new_offsets),
-    std::move(new_entries),
-    lists_column.null_count(),
-    cudf::detail::copy_bitmask(
-      lists_column.parent(), stream, rmm::mr::get_current_device_resource()));
-}
-
-/**
  * @brief Generate a 0-based offset column for a lists column.
  *
  * Given a lists_column_view, which may have a non-zero offset, generate a new column containing
@@ -219,6 +189,34 @@ std::unique_ptr<column> generate_clean_offsets(lists_column_view const& lists_co
     output_offsets->mutable_view().begin<offset_type>(),
     [first = lists_column.offsets_begin()] __device__(auto offset) { return offset - *first; });
   return output_offsets;
+}
+
+/**
+ * @brief Transform a given lists column to a new lists column in which all the list entries holding
+ * -NaN value are replaced by (positive) NaN.
+ *
+ * Replacing -NaN by NaN is necessary before sorting (individual) lists because the sorting API is
+ * using radix sort, which compares bits of the number thus it may separate -NaN by NaN to the two
+ * ends of the result column.
+ */
+std::unique_ptr<column> replace_negative_nans_entries(column_view const& lists_entries,
+                                                      lists_column_view const& lists_column,
+                                                      rmm::cuda_stream_view stream)
+{
+  // We need to copy the offsets column of the input lists_column. Since the input lists_column may
+  // be sliced, we need to generate clean offsets (i.e., offsets starting from zero).
+  auto new_offsets =
+    generate_clean_offsets(lists_column, stream, rmm::mr::get_current_device_resource());
+  auto new_entries = type_dispatcher(
+    lists_entries.type(), detail::replace_negative_nans_dispatch{}, lists_entries, stream);
+
+  return make_lists_column(
+    lists_column.size(),
+    std::move(new_offsets),
+    std::move(new_entries),
+    lists_column.null_count(),
+    cudf::detail::copy_bitmask(
+      lists_column.parent(), stream, rmm::mr::get_current_device_resource()));
 }
 
 /**
