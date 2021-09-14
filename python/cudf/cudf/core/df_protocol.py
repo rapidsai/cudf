@@ -91,6 +91,30 @@ class _DtypeKind(enum.IntEnum):
     DATETIME = 22
     CATEGORICAL = 23
 
+
+def convert_column_to_cupy_ndarray(col : ColumnObject, copy : bool = False) -> np.ndarray:
+    """
+    Convert an int, uint, float or bool column to a numpy array
+    """
+    if col.offset != 0:
+        raise NotImplementedError("column.offset > 0 not handled yet")
+
+    _buffer, _dtype = col.get_buffers()['data']
+    x = buffer_to_cupy_ndarray(_buffer, _dtype, copy=copy)
+
+    return set_missing_values(col, x), _buffer
+
+
+def buffer_to_cupy_ndarray(_buffer, _dtype, copy : bool = False) -> cp.ndarray:
+    if _buffer.__dlpack_device__()[0] == 2: # dataframe is on GPU/CUDA
+        x = _gpu_buffer_to_cupy(_buffer, _dtype)
+    else:
+        if not copy:
+            raise TypeError("This operation must copy data from CPU to GPU. Set `copy=True` to allow it.")
+        x = _cpu_buffer_to_cupy(_buffer, _dtype)
+
+    return x
+
 def set_missing_values(col, col_array):
     series = cudf.Series(col_array)
     null_kind, null_value = col.describe_null
@@ -102,56 +126,18 @@ def set_missing_values(col, col_array):
 
     return series
 
-def convert_column_to_cupy_ndarray(col : ColumnObject, copy : bool = False) -> np.ndarray:
-    """
-    Convert an int, uint, float or bool column to a numpy array
-    """
-    if col.offset != 0:
-        raise NotImplementedError("column.offset > 0 not handled yet")
-
-    _buffer, _dtype = col.get_buffers()['data']
-    x = buffer_to_cupy_ndarray(_buffer, _dtype, copy=copy)
-    # if _buffer.__dlpack_device__()[0] == 2: # dataframe is on GPU/CUDA
-    #     _k = _DtypeKind
-    #     print(f'buffer dtype: {_dtype[0]}')
-    #     if _dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.CATEGORICAL, _k.BOOL):
-    #         x = cp.fromDlpack(_buffer.__dlpack__())
-    #         if _dtype[0] == _k.BOOL: 
-    #             print(f'before booleanizing: {x}')
-    #             x = x.astype(cp.bool_)
-    #             print(f'after booleanizing: {x}')
-
-
-    # elif copy == False:
-    #     raise TypeError("This operation must copy data from CPU to GPU. Set `copy=True` to allow it.")
-
-    # else:
-    #     x = _copy_buffer_to_gpu(_buffer, _dtype)
-
-    return set_missing_values(col, x), _buffer
-
-
-def buffer_to_cupy_ndarray(_buffer, _dtype, copy : bool = False) -> cp.ndarray:
-    if _buffer.__dlpack_device__()[0] == 2: # dataframe is on GPU/CUDA
-        _k = _DtypeKind
-        print(f'buffer dtype: {_dtype[0]}')
-        if _dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.CATEGORICAL):
-            x = cp.fromDlpack(_buffer.__dlpack__())
-        elif _dtype[0] == _k.BOOL: 
-            x = cp.fromDlpack(_buffer.__dlpack__()).astype(cp.bool_)
-        else:
-            raise TypeError(f"dtype {_dtype[0]} not supported yet !")
-
-    elif copy == False:
-        raise TypeError("This operation must copy data from CPU to GPU. Set `copy=True` to allow it.")
-
+def _gpu_buffer_to_cupy(_buffer, _dtype):
+    _k = _DtypeKind
+    print(f'buffer dtype: {_dtype[0]}')
+    if _dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.CATEGORICAL):
+        x = cp.fromDlpack(_buffer.__dlpack__())
+    elif _dtype[0] == _k.BOOL: 
+        x = cp.fromDlpack(_buffer.__dlpack__()).astype(cp.bool_)
     else:
-        x = _copy_buffer_to_gpu(_buffer, _dtype)
-
+        raise NotImplementedError(f"Data type {_dtype[0]} not handled yet")
     return x
 
-
-def _copy_buffer_to_gpu(_buffer, _dtype):
+def _cpu_buffer_to_cupy(_buffer, _dtype):
     # Handle the dtype
     kind = _dtype[0]
     bitwidth = _dtype[1]
@@ -175,7 +161,7 @@ def _copy_buffer_to_gpu(_buffer, _dtype):
     #       buffer! (not done yet, this is pretty awful ...)
     x = np.ctypeslib.as_array(data_pointer,
                               shape=(_buffer.bufsize // (bitwidth//8),))
-    return cp.array(x, dtype=column_dtype)
+    return cp.asarray(x, dtype=column_dtype)
 
 
 def convert_categorical_column(col : ColumnObject, copy:bool=False) :
@@ -200,12 +186,12 @@ def convert_categorical_column(col : ColumnObject, copy:bool=False) :
     return set_missing_values(col, cat), codes_buffer
 
 
-def __dataframe__(self, nan_as_null : bool = False) -> dict:
+def __dataframe__(self, nan_as_null : bool = False,
+                  allow_copy : bool = True) -> dict:
     """
-    , target_device:str = 'gpu'
-    The public method to attach to cudf.DataFrame
+    The public method to attach to cudf.DataFrame.
 
-    We'll attach it via monkeypatching here for demo purposes. If Pandas adopt
+    We'll attach it via monkey-patching here for demo purposes. If Pandas adopts
     the protocol, this will be a regular method on pandas.DataFrame.
 
     ``nan_as_null`` is a keyword intended for the consumer to tell the
@@ -213,20 +199,15 @@ def __dataframe__(self, nan_as_null : bool = False) -> dict:
     This currently has no effect; once support for nullable extension
     dtypes is added, this value should be propagated to columns.
 
-    ``target_device`` specifies the device where the returned dataframe protocol
-    object will live. Only `cpu` and `gpu` are supported for now.
+    ``allow_copy`` is a keyword that defines whether or not the library is
+    allowed to make a copy of the data. For example, copying data would be
+    necessary if a library supports strided buffers, given that this protocol
+    specifies contiguous buffers.
+    Currently, if the flag is set to ``False`` and a copy is needed, a
+    ``RuntimeError`` will be raised.
     """
-    # if target_device not in ['cpu', 'gpu']:
-    #     raise TypeError (f'Device {device} support not handle.')
-
-    # if device == 'cpu':
-    #     raise TypeError("This operation will copy data from GPU to CPU. Set `copy=True` to allow it.")
-
-
-    return _CuDFDataFrame(self, nan_as_null=nan_as_null)
-
-# Monkeypatch the Pandas DataFrame class to support the interchange protocol
-# cudf.DataFrame.__dataframe__ = __dataframe__
+    return _CuDFDataFrame(
+        self, nan_as_null=nan_as_null, allow_copy=allow_copy)
 
 
 # Implementation of interchange protocol
@@ -401,7 +382,7 @@ class _CuDFColumn:
                      "M": _k.DATETIME, "m": _k.DATETIME}
         kind = _np_kinds.get(dtype.kind, None)
         if kind is None:
-            # Not a NumPy dtype. Check if it's a categorical maybe
+            # Not a NumPy/CuPy dtype. Check if it's a categorical maybe
             if isinstance(dtype, cudf.CategoricalDtype):
                 kind = 23
                 # Codes and categorical values dtypes are different.
@@ -559,19 +540,19 @@ class _CuDFColumn:
         invalid = self.describe_null[1]
         if self.dtype[0] in (_k.INT, _k.UINT, _k.FLOAT):
             buffer = _CuDFBuffer(
-                cp.array(self._col.fillna(invalid).to_gpu_array(), copy=False),
+                cp.asarray(self._col.fillna(invalid).to_gpu_array()),
                 allow_copy=self._allow_copy)
             dtype = self.dtype
         elif self.dtype[0] == _k.BOOL:
             # convert bool to uint8 as dlpack does not support bool natively.
             buffer = _CuDFBuffer(
-                cp.array(self._col.fillna(invalid).to_gpu_array(), dtype=cp.uint8, copy=False),
+                cp.asarray(self._col.fillna(invalid).to_gpu_array(), dtype=cp.uint8),
                 allow_copy=self._allow_copy)
             dtype = self.dtype
         elif self.dtype[0] == _k.CATEGORICAL:
             codes = self._col.cat.codes
             buffer = _CuDFBuffer(
-                cp.array(codes.fillna(invalid), copy=False),
+                cp.asarray(codes.fillna(invalid)),
                 allow_copy=self._allow_copy)
             dtype = self._dtype_from_cudfdtype(codes.dtype)
         # elif self.dtype[0] == _k.STRING:
@@ -624,7 +605,7 @@ class _CuDFColumn:
         null, invalid = self.describe_null
         if null == 3:
             _k = _DtypeKind
-            bitmask = self._unpackbits(cp.array(self._col._column.mask, copy=False), bitorder='little')[:len(self._col)]
+            bitmask = self._unpackbits(cp.asarray(self._col._column.mask), bitorder='little')[:len(self._col)]
             buffer = _CuDFBuffer(bitmask)
             dtype = (_k.UINT, 8, "C", "=")
             return buffer, dtype
