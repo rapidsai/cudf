@@ -81,7 +81,7 @@ struct expression_result {
 
   CUDA_DEVICE_CALLABLE bool is_valid() const { return subclass().is_valid(); }
 
-  CUDA_DEVICE_CALLABLE T value() const { return subclass()->value(); }
+  CUDA_DEVICE_CALLABLE T value() const { return subclass().value(); }
 };
 
 /**
