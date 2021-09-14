@@ -34,6 +34,7 @@ using StrListsCol   = cudf::test::lists_column_wrapper<cudf::string_view>;
 using StringsCol    = cudf::test::strings_column_wrapper;
 using StructsCol    = cudf::test::structs_column_wrapper;
 using IntsCol       = cudf::test::fixed_width_column_wrapper<int32_t>;
+using FloatsCol     = cudf::test::fixed_width_column_wrapper<float_type>;
 
 auto constexpr neg_NaN   = -std::numeric_limits<float_type>::quiet_NaN();
 auto constexpr neg_Inf   = -std::numeric_limits<float_type>::infinity();
@@ -523,5 +524,71 @@ TYPED_TEST(DropListDuplicatesTypedTest, InputListsOfStructsHaveNull)
     auto const expected = cudf::slice(expected_original->view(), {1, 3})[0];
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+  }
+}
+
+TEST_F(DropListDuplicatesTest, SlicedInputListsOfStructsWithNaNs)
+{
+  auto const h_child = std::vector<float_type>{
+    0, -1, 1, 0, 2, 0, 1, 1, -2, 2, 0, 1, 2, neg_NaN, NaN, NaN, NaN, neg_NaN};
+
+  auto const get_structs = [&] {
+    // Two children are just identical.
+    auto child1 = FloatsCol(h_child.begin(), h_child.end());
+    auto child2 = FloatsCol(h_child.begin(), h_child.end());
+    return StructsCol{{child1, child2}};
+  };
+
+  // The first list does not have any NaN or -NaN, while the second list has both.
+  // `drop_list_duplicates` is expected to operate properly on this second list.
+  auto const lists_original =
+    cudf::make_lists_column(2, IntsCol{0, 10, 18}.release(), get_structs().release(), 0, {});
+  auto const lists2 = cudf::slice(lists_original->view(), {1, 2})[0];  // test on the second list
+
+  // Contain expected values excluding NaN.
+  auto const results_children_expected = std::unordered_set<float_type>{0, 1, 2};
+
+  // Test for cudf::nan_equality::UNEQUAL.
+  {
+    auto const results_col = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists2});
+    auto const child       = cudf::lists_column_view(results_col->view()).child();
+    auto const results_arr = cudf::test::to_host<float_type>(child.child(0)).first;
+
+    std::size_t const num_NaNs =
+      std::count_if(h_child.begin(), h_child.end(), [](auto x) { return std::isnan(x); });
+    EXPECT_EQ(results_arr.size(), results_children_expected.size() + num_NaNs);
+
+    std::size_t NaN_count{0};
+    std::unordered_set<float_type> results;
+    for (auto const x : results_arr) {
+      if (std::isnan(x)) {
+        ++NaN_count;
+      } else {
+        results.insert(x);
+      }
+    }
+    EXPECT_TRUE(results_children_expected.size() == results.size() && NaN_count == num_NaNs);
+  }
+
+  // Test for cudf::nan_equality::ALL_EQUAL.
+  {
+    auto const results_col = cudf::lists::drop_list_duplicates(
+      cudf::lists_column_view{lists2}, cudf::null_equality::EQUAL, cudf::nan_equality::ALL_EQUAL);
+    auto const child       = cudf::lists_column_view(results_col->view()).child();
+    auto const results_arr = cudf::test::to_host<float_type>(child.child(0)).first;
+
+    std::size_t const num_NaNs = 1;
+    EXPECT_EQ(results_arr.size(), results_children_expected.size() + num_NaNs);
+
+    std::size_t NaN_count{0};
+    std::unordered_set<float_type> results;
+    for (auto const x : results_arr) {
+      if (std::isnan(x)) {
+        ++NaN_count;
+      } else {
+        results.insert(x);
+      }
+    }
+    EXPECT_TRUE(results_children_expected.size() == results.size() && NaN_count == num_NaNs);
   }
 }
