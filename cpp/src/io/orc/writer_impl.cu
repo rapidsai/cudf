@@ -155,7 +155,7 @@ class orc_column_view {
       _type_kind{to_orc_type(col.type().id())},
       name{metadata.get_name()}
   {
-    if (metadata.is_nullability_defined()) { metadata_nullable = metadata.nullable(); }
+    if (metadata.is_nullability_defined()) { nullable_from_metadata = metadata.nullable(); }
     if (parent != nullptr) {
       parent->add_child(_index);
       _parent_index = parent->index();
@@ -219,7 +219,7 @@ class orc_column_view {
   auto null_count() const noexcept { return cudf_column.null_count(); }
   auto null_mask() const noexcept { return cudf_column.null_mask(); }
   bool nullable() const noexcept { return null_mask() != nullptr; }
-  auto user_defined_nullable() const noexcept { return metadata_nullable; }
+  auto user_defined_nullable() const noexcept { return nullable_from_metadata; }
 
   auto scale() const noexcept { return _scale; }
   auto precision() const noexcept { return _precision; }
@@ -258,7 +258,7 @@ class orc_column_view {
   // into the output stream.
   uint32_t* d_decimal_offsets = nullptr;
 
-  std::optional<bool> metadata_nullable;
+  std::optional<bool> nullable_from_metadata;
   std::vector<uint32_t> children;
   std::optional<uint32_t> _parent_index;
 };
@@ -522,7 +522,6 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
     };
 
     if (is_nullable) { add_RLE_stream(gpu::CI_PRESENT, PRESENT, TypeKind::BOOLEAN); }
-
     switch (kind) {
       case TypeKind::BOOLEAN:
       case TypeKind::BYTE:
@@ -656,6 +655,137 @@ orc_streams::orc_stream_offsets orc_streams::compute_offsets(
   return {std::move(strm_offsets), non_rle_data_size, rle_data_size};
 }
 
+std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
+  orc_table_view const& orc_table,
+  file_segmentation const& segmentation,
+  rmm::cuda_stream_view stream)
+{
+  if (segmentation.num_rowgroups() == 0) return {};
+
+  auto d_pd_set_counts_data = rmm::device_uvector<cudf::size_type>(
+    orc_table.num_columns() * segmentation.num_rowgroups(), stream);
+  auto const d_pd_set_counts = device_2dspan<cudf::size_type>{
+    d_pd_set_counts_data.data(), segmentation.num_rowgroups(), orc_table.num_columns()};
+  gpu::reduce_pushdown_masks(orc_table.d_columns, segmentation.rowgroups, d_pd_set_counts, stream);
+
+  auto aligned_rgs = hostdevice_2dvector<rowgroup_rows>(
+    segmentation.num_rowgroups(), orc_table.num_columns(), stream);
+  CUDA_TRY(cudaMemcpyAsync(aligned_rgs.base_device_ptr(),
+                           segmentation.rowgroups.base_device_ptr(),
+                           aligned_rgs.count() * sizeof(rowgroup_rows),
+                           cudaMemcpyDefault,
+                           stream.value()));
+  auto const d_stripes = cudf::detail::make_device_uvector_async(segmentation.stripes, stream);
+
+  // One thread per column, per stripe
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    orc_table.num_columns() * segmentation.num_stripes(),
+    [columns = device_span<orc_column_device_view const>{orc_table.d_columns},
+     stripes = device_span<stripe_rowgroups const>{d_stripes},
+     d_pd_set_counts,
+     out_rowgroups = device_2dspan<rowgroup_rows>{aligned_rgs}] __device__(auto& idx) {
+      uint32_t const col_idx = idx / stripes.size();
+      // No alignment needed for root columns
+      if (not columns[col_idx].parent_index.has_value()) return;
+
+      auto const stripe_idx     = idx % stripes.size();
+      auto const stripe         = stripes[stripe_idx];
+      auto const parent_col_idx = columns[col_idx].parent_index.value();
+      auto const parent_column  = columns[parent_col_idx];
+      auto const stripe_end     = stripe.first + stripe.size;
+
+      int previously_borrowed = 0;
+      for (auto rg_idx = stripe.first; rg_idx + 1 < stripe_end; ++rg_idx) {
+        auto& rg = out_rowgroups[rg_idx][col_idx];
+        if (parent_column.pushdown_mask == nullptr) {
+          // No pushdown mask, all null mask bits will be encoded
+          // Align on rowgroup size (can be misaligned for list children)
+          if (rg.size() % 8) {
+            auto& next_rg = out_rowgroups[rg_idx + 1][col_idx];
+            // Comparison only needed to borrow from the last rowgroup in stripe
+            auto const bits_to_borrow = std::min(8 - rg.size() % 8, next_rg.size());
+            rg.end += bits_to_borrow;
+            next_rg.begin += bits_to_borrow;
+          }
+          continue;
+        }
+
+        // pushdown mask present; null mask bits w/ set pushdown mask bits will be encoded
+        // Use the number of set bits in pushdown mask as size
+        auto bits_to_borrow =
+          8 - (d_pd_set_counts[rg_idx][parent_col_idx] - previously_borrowed) % 8;
+        if (bits_to_borrow == 0) {
+          // Didn't borrow any bits for this rowgroup
+          previously_borrowed = 0;
+          continue;
+        }
+
+        // Find rowgroup in which we finish the search for missing bits
+        auto const last_borrow_rg_idx = [&]() {
+          auto curr = rg_idx + 1;
+          while (curr < stripe_end and d_pd_set_counts[curr][parent_col_idx] <= bits_to_borrow) {
+            // All bits from rowgroup borrowed, make the rowgroup empty
+            out_rowgroups[curr][col_idx].begin = out_rowgroups[curr][col_idx].end;
+            bits_to_borrow -= d_pd_set_counts[curr][parent_col_idx];
+            ++curr;
+          }
+          return curr;
+        }();
+        auto& last_borrow_rg = out_rowgroups[last_borrow_rg_idx][col_idx];
+
+        if (last_borrow_rg_idx == stripe_end) {
+          // Didn't find enough bits to borrow, move the rowgroup end to the stripe end
+          rg.end = out_rowgroups[stripe_end - 1][col_idx].end;
+          // Done with this stripe
+          break;
+        } else {
+          // First row that does not need to be borrowed
+          auto borrow_end = last_borrow_rg.begin;
+
+          // Adjust the number of bits to borrow in the next iteration
+          previously_borrowed = bits_to_borrow;
+
+          // Find word in which we finish the search for missing bits (guaranteed to be available)
+          while (bits_to_borrow != 0) {
+            auto const mask = cudf::detail::get_mask_offset_word(
+              parent_column.pushdown_mask, 0, borrow_end, borrow_end + 32);
+            auto const valid_in_word = __popc(mask);
+
+            if (valid_in_word > bits_to_borrow) break;
+            bits_to_borrow -= valid_in_word;
+            borrow_end += 32;
+          }
+
+          // Find the last of the missing bits (guaranteed to be available)
+          while (bits_to_borrow != 0) {
+            if (bit_is_set(parent_column.pushdown_mask, borrow_end)) { --bits_to_borrow; };
+            ++borrow_end;
+          }
+
+          last_borrow_rg.begin = borrow_end;
+          rg.end               = borrow_end;
+          // Skip the rowgroups we emptied in the loop
+          rg_idx = last_borrow_rg_idx - 1;
+        }
+      }
+    });
+
+  aligned_rgs.device_to_host(stream, true);
+
+  std::vector<std::vector<rowgroup_rows>> h_aligned_rgs;
+  h_aligned_rgs.reserve(segmentation.num_rowgroups());
+  std::transform(thrust::make_counting_iterator(0ul),
+                 thrust::make_counting_iterator(segmentation.num_rowgroups()),
+                 std::back_inserter(h_aligned_rgs),
+                 [&](auto idx) -> std::vector<rowgroup_rows> {
+                   return {aligned_rgs[idx].begin(), aligned_rgs[idx].end()};
+                 });
+
+  return h_aligned_rgs;
+}
+
 struct segmented_valid_cnt_input {
   bitmask_type const* mask;
   std::vector<size_type> indices;
@@ -665,7 +795,6 @@ encoded_data encode_columns(orc_table_view const& orc_table,
                             string_dictionaries&& dictionaries,
                             encoder_decimal_info&& dec_chunk_sizes,
                             file_segmentation const& segmentation,
-                            std::vector<std::vector<rowgroup_rows>> aligned_rowgroups,
                             orc_streams const& streams,
                             rmm::cuda_stream_view stream)
 {
@@ -674,6 +803,8 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   auto const stream_offsets =
     streams.compute_offsets(orc_table.columns, segmentation.num_rowgroups());
   rmm::device_uvector<uint8_t> encoded_data(stream_offsets.data_size(), stream);
+
+  auto const aligned_rowgroups = calculate_aligned_rowgroup_bounds(orc_table, segmentation, stream);
 
   // Initialize column chunks' descriptions
   std::map<size_type, segmented_valid_cnt_input> validity_check_inputs;
@@ -1551,121 +1682,6 @@ string_dictionaries allocate_dictionaries(orc_table_view const& orc_table,
           std::move(is_dict_enabled)};
 }
 
-std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
-  orc_table_view const& orc_table,
-  file_segmentation const& segmentation,
-  rmm::cuda_stream_view stream)
-{
-  if (segmentation.num_rowgroups() == 0) return {};
-
-  auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(
-    orc_table.num_columns() * segmentation.num_rowgroups(), stream);
-  auto const d_valid_counts_view = device_2dspan<cudf::size_type>{
-    d_valid_counts.data(), segmentation.num_rowgroups(), orc_table.num_columns()};
-  gpu::reduce_pushdown_masks(
-    orc_table.d_columns, segmentation.rowgroups, d_valid_counts_view, stream);
-
-  auto aligned_rowgroups = hostdevice_2dvector<rowgroup_rows>(
-    segmentation.num_rowgroups(), orc_table.num_columns(), stream);
-  CUDA_TRY(cudaMemcpyAsync(aligned_rowgroups.base_device_ptr(),
-                           segmentation.rowgroups.base_device_ptr(),
-                           aligned_rowgroups.count() * sizeof(rowgroup_rows),
-                           cudaMemcpyDefault,
-                           stream.value()));
-  auto const d_stripes = cudf::detail::make_device_uvector_async(segmentation.stripes, stream);
-
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
-    orc_table.num_columns() * segmentation.num_stripes(),
-    [columns   = device_span<orc_column_device_view const>{orc_table.d_columns},
-     stripes   = device_span<stripe_rowgroups const>{d_stripes},
-     vcounts   = d_valid_counts_view,
-     rowgroups = device_2dspan<rowgroup_rows const>{segmentation.rowgroups},  // maybe not needed
-     out_rowgroups = device_2dspan<rowgroup_rows>{aligned_rowgroups}] __device__(auto& idx) {
-      uint32_t const col_idx = idx / stripes.size();
-      // no alignment needed for root columns
-      if (not columns[col_idx].parent_index.has_value()) return;
-
-      auto const stripe_idx = idx % stripes.size();
-      auto const stripe     = stripes[stripe_idx];
-
-      auto const parent_col_idx = columns[col_idx].parent_index.value();
-      auto const parent_column  = columns[parent_col_idx];
-      auto const stripe_end     = stripe.first + stripe.size;
-
-      int previously_borrowed = 0;
-      for (auto rg_idx = stripe.first; rg_idx + 1 < stripe_end; ++rg_idx) {
-        auto& rg      = out_rowgroups[rg_idx][col_idx];
-        auto& rg_next = out_rowgroups[rg_idx + 1][col_idx];
-        if (parent_column.pushdown_mask == nullptr) {
-          if (rg.size() % 8) {
-            // size of the next rowgroup can be smaller only for the last rowgroup
-            auto const bits_to_borrow = std::min(8 - rg.size() % 8, rg_next.size());
-            rg.end += bits_to_borrow;
-            rg_next.begin += bits_to_borrow;
-          }
-          continue;
-        }
-
-        if ((vcounts[rg_idx][parent_col_idx] - previously_borrowed) % 8 == 0) {
-          previously_borrowed = 0;
-          continue;
-        }
-
-        auto bits_to_borrow = 8 - (vcounts[rg_idx][parent_col_idx] - previously_borrowed) % 8;
-        auto curr_rg        = rg_idx + 1;
-        // find rg
-        while (curr_rg < stripe_end and vcounts[curr_rg][parent_col_idx] <= bits_to_borrow) {
-          out_rowgroups[curr_rg][col_idx].begin = out_rowgroups[curr_rg][col_idx].end;  // empty
-          bits_to_borrow -= vcounts[curr_rg][parent_col_idx];
-          ++curr_rg;
-        }
-        if (curr_rg == stripe_end) {
-          rg.end = out_rowgroups[stripe_end - 1][col_idx].end;
-          break;
-        } else {
-          auto curr_bit = out_rowgroups[curr_rg][col_idx].begin;
-
-          // update to adjust the number of bits to borrow in the next rowgroup
-          previously_borrowed = bits_to_borrow;
-
-          // find word
-          while (bits_to_borrow != 0) {
-            auto const mask = cudf::detail::get_mask_offset_word(
-              parent_column.pushdown_mask, 0, curr_bit, curr_bit + 32);
-            auto const valid_in_word = __popc(mask);
-
-            if (valid_in_word > bits_to_borrow) break;
-            bits_to_borrow -= valid_in_word;
-            curr_bit += 32;
-          }
-
-          // find bit
-          while (bits_to_borrow != 0) {
-            if (bit_is_set(parent_column.pushdown_mask, curr_bit)) { --bits_to_borrow; };
-            ++curr_bit;
-          }
-
-          out_rowgroups[curr_rg][col_idx].begin = curr_bit;
-          rg.end                                = curr_bit;
-          rg_idx                                = curr_rg - 1;
-        }
-      }
-    });
-
-  aligned_rowgroups.device_to_host(stream, true);
-
-  std::vector<std::vector<rowgroup_rows>> rgs;
-  rgs.reserve(segmentation.num_rowgroups());
-  for (auto rg_idx = 0ul; rg_idx < segmentation.num_rowgroups(); ++rg_idx) {
-    auto in_rg = aligned_rowgroups[rg_idx];
-    rgs.emplace_back(in_rg.begin(), in_rg.end());
-  }
-
-  return rgs;
-}
-
 void writer::impl::write(table_view const& table)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
@@ -1710,9 +1726,6 @@ void writer::impl::write(table_view const& table)
   auto const segmentation =
     calculate_segmentation(orc_table.columns, std::move(rowgroup_bounds), max_stripe_size_);
 
-  auto const aligned_rowgroup_bounds =
-    calculate_aligned_rowgroup_bounds(orc_table, segmentation, stream);
-
   // Build stripe-level dictionaries
   hostdevice_2dvector<gpu::StripeDictionary> stripe_dict(
     segmentation.num_stripes(), orc_table.num_string_columns(), stream);
@@ -1729,13 +1742,8 @@ void writer::impl::write(table_view const& table)
 
   auto streams =
     create_streams(orc_table.columns, segmentation, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
-  auto enc_data = encode_columns(orc_table,
-                                 std::move(dictionaries),
-                                 std::move(dec_chunk_sizes),
-                                 segmentation,
-                                 aligned_rowgroup_bounds,
-                                 streams,
-                                 stream);
+  auto enc_data = encode_columns(
+    orc_table, std::move(dictionaries), std::move(dec_chunk_sizes), segmentation, streams, stream);
 
   // Assemble individual disparate column chunks into contiguous data streams
   size_type const num_index_streams = (orc_table.num_columns() + 1);
