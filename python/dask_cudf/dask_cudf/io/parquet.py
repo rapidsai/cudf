@@ -17,9 +17,9 @@ except ImportError:
     create_metadata_file_dd = None
 
 import cudf
+from cudf.api.types import cudf_dtype_from_pa_type
 from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
-from cudf.utils.dtypes import cudf_dtype_from_pa_type
 
 
 class CudfEngine(ArrowDatasetEngine):
