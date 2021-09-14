@@ -4882,11 +4882,11 @@ class SingleColumnFrame(Frame):
 
     @property
     def values(self):
-        return super().values.flatten()
+        return self._column.values
 
     @property
     def values_host(self):
-        return super().values_host.flatten()
+        return self._column.values_host
 
     def tolist(self):
 
