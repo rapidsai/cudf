@@ -19,22 +19,25 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/reshape.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/transform.hpp>
 
 #include <limits>
 
 namespace cudf {
 namespace test {
 
-// template <typename T>
+template <typename T>
+struct OneHotEncodingTestTyped : public BaseFixture {
+};
+
 struct OneHotEncodingTest : public BaseFixture {
 };
 
-// TYPED_TEST_CASE(OneHotEncodingTest, cudf::test::NumericTypes);
+TYPED_TEST_CASE(OneHotEncodingTestTyped, cudf::test::NumericTypes);
 
 // TYPED_TEST(OneHotEncodingTest, Basic) {
-TEST_F(OneHotEncodingTest, Basic)
+TYPED_TEST(OneHotEncodingTestTyped, Basic)
 {
   auto input    = fixed_width_column_wrapper<int32_t>{8, 8, 8, 9, 9};
   auto category = fixed_width_column_wrapper<int32_t>{8, 9};
@@ -44,12 +47,12 @@ TEST_F(OneHotEncodingTest, Basic)
 
   auto expected = table_view{{col0, col1}};
 
-  auto [_, got] = one_hot_encoding(input, category);
+  auto [_, got] = one_hot_encode(input, category);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
 }
 
-TEST_F(OneHotEncodingTest, Nulls)
+TYPED_TEST(OneHotEncodingTestTyped, Nulls)
 {
   auto input    = fixed_width_column_wrapper<int32_t>{{8, 8, 8, 9, 9}, {1, 1, 0, 1, 1}};
   auto category = fixed_width_column_wrapper<int32_t>({8, 9, -1}, {1, 1, 0});
@@ -60,7 +63,7 @@ TEST_F(OneHotEncodingTest, Nulls)
 
   auto expected = table_view{{col0, col1, col2}};
 
-  auto [_, got] = one_hot_encoding(input, category);
+  auto [_, got] = one_hot_encode(input, category);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
 }
@@ -78,9 +81,50 @@ TEST_F(OneHotEncodingTest, NaNs)
 
   auto expected = table_view{{col0, col1, col2}};
 
-  auto [_, got] = one_hot_encoding(input, category);
+  auto [_, got] = one_hot_encode(input, category);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
+}
+
+TEST_F(OneHotEncodingTest, Strings)
+{
+  auto input = strings_column_wrapper{
+    {"hello", "rapidsai", "cudf", "hello", "cuspatial", "hello", "world", "!"},
+    {1, 1, 1, 1, 0, 1, 1, 0}};
+  auto category = strings_column_wrapper{{"hello", "world", ""}, {1, 1, 0}};
+
+  auto col0 = fixed_width_column_wrapper<bool>{1, 0, 0, 1, 0, 1, 0, 0};
+  auto col1 = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 0, 1, 0};
+  auto col2 = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 1, 0, 0, 1};
+
+  auto expected = table_view{{col0, col1, col2}};
+
+  auto [_, got] = one_hot_encode(input, category);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
+}
+
+TEST_F(OneHotEncodingTest, Dictionary)
+{
+  auto input    = dictionary_column_wrapper<std::string>{"aa", "xx", "aa", "aa", "yy", "ef"};
+  auto category = dictionary_column_wrapper<std::string>{"aa", "ef"};
+
+  auto col0 = fixed_width_column_wrapper<bool>{1, 0, 1, 1, 0, 0};
+  auto col1 = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 1};
+
+  auto expected = table_view{{col0, col1}};
+
+  auto [_, got] = one_hot_encode(input, category);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
+}
+
+TEST_F(OneHotEncodingTest, MismatchTypes)
+{
+  auto input    = strings_column_wrapper{"xx", "yy", "xx"};
+  auto category = fixed_width_column_wrapper<int64_t>{1};
+
+  EXPECT_THROW(one_hot_encode(input, category), cudf::logic_error);
 }
 
 }  // namespace test

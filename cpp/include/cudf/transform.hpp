@@ -140,6 +140,11 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+std::pair<std::unique_ptr<column>, table_view> one_hot_encode(
+  column_view const& input_column,
+  column_view const& categories,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief Creates a boolean column from given bitmask.
  *

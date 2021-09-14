@@ -368,7 +368,6 @@ add_library(cudf
     src/reshape/byte_cast.cu
     src/reshape/interleave_columns.cu
     src/reshape/tile.cu
-    src/reshape/one_hot_encoding.cu
     src/rolling/grouped_rolling.cu
     src/rolling/range_window_bounds.cpp
     src/rolling/rolling.cu
@@ -460,6 +459,7 @@ add_library(cudf
     src/transform/encode.cu
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
+    src/transform/one_hot_encode.cu
     src/transform/row_bit_count.cu
     src/transform/transform.cpp
     src/transpose/transpose.cu

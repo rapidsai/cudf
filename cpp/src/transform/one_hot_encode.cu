@@ -35,8 +35,8 @@ namespace detail {
 namespace {
 
 template <typename InputType, bool has_nulls>
-struct one_hot_encoding_functor {
-  one_hot_encoding_functor(column_device_view input, column_device_view category)
+struct one_hot_encode_functor {
+  one_hot_encode_functor(column_device_view input, column_device_view category)
     : _equality_comparator{input, category}, _input_size{input.size()}
   {
   }
@@ -56,7 +56,7 @@ struct one_hot_encoding_functor {
 }  // anonymous namespace
 
 template <bool has_nulls>
-struct one_hot_encoding_launcher {
+struct one_hot_encode_launcher {
   template <typename InputType, CUDF_ENABLE_IF(is_equality_comparable<InputType, InputType>())>
   std::pair<std::unique_ptr<column>, table_view> operator()(column_view const& input_column,
                                                             column_view const& categories,
@@ -69,8 +69,8 @@ struct one_hot_encoding_launcher {
 
     auto d_input_column    = column_device_view::create(input_column, stream);
     auto d_category_column = column_device_view::create(categories, stream);
-    one_hot_encoding_functor<InputType, has_nulls> one_hot_encoding_compute_f(*d_input_column,
-                                                                              *d_category_column);
+    one_hot_encode_functor<InputType, has_nulls> one_hot_encoding_compute_f(*d_input_column,
+                                                                            *d_category_column);
 
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator(0),
@@ -98,20 +98,20 @@ struct one_hot_encoding_launcher {
   }
 };
 
-std::pair<std::unique_ptr<column>, table_view> one_hot_encoding(column_view const& input_column,
-                                                                column_view const& categories,
-                                                                rmm::cuda_stream_view stream,
-                                                                rmm::mr::device_memory_resource* mr)
+std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input_column,
+                                                              column_view const& categories,
+                                                              rmm::cuda_stream_view stream,
+                                                              rmm::mr::device_memory_resource* mr)
 {
   return (!input_column.nullable() and !categories.nullable())
            ? type_dispatcher(input_column.type(),
-                             one_hot_encoding_launcher<false>{},
+                             one_hot_encode_launcher<false>{},
                              input_column,
                              categories,
                              stream,
                              mr)
            : type_dispatcher(input_column.type(),
-                             one_hot_encoding_launcher<true>{},
+                             one_hot_encode_launcher<true>{},
                              input_column,
                              categories,
                              stream,
@@ -120,13 +120,13 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encoding(column_view cons
 
 }  // namespace detail
 
-std::pair<std::unique_ptr<column>, table_view> one_hot_encoding(
+std::pair<std::unique_ptr<column>, table_view> one_hot_encode(
   column_view const& input_column,
   column_view const& categories,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(input_column.type() == categories.type(),
                "Mismatch type between input and categories.");
-  return detail::one_hot_encoding(input_column, categories, rmm::cuda_stream_default, mr);
+  return detail::one_hot_encode(input_column, categories, rmm::cuda_stream_default, mr);
 }
 }  // namespace cudf
