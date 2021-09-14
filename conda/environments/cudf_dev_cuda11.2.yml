@@ -19,6 +19,7 @@ dependencies:
   - pandas>=1.0,<1.4.0dev0
   - pyarrow=5.0.0=*cuda
   - fastavro>=0.22.9
+  - python-snappy>=0.6.0
   - notebook>=0.5.0
   - cython>=0.29,<0.30
   - fsspec>=0.6.0

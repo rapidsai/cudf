@@ -21,7 +21,6 @@ import versioneer
 install_requires = [
     "numba>=0.53.1",
     "Cython>=0.29,<0.30",
-    "fastavro>=0.22.9",
     "fsspec>=0.6.0",
     "numpy",
     "pandas>=1.0,<1.3.0dev0",
@@ -38,6 +37,8 @@ extras_require = {
         "pytest-benchmark",
         "pytest-xdist",
         "hypothesis" "mimesis",
+        "fastavro>=0.22.9",
+        "python-snappy>=0.6.0",
         "pyorc",
         "msgpack",
         "transformers",
