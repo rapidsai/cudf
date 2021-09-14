@@ -114,6 +114,8 @@ rapids_find_package(Threads REQUIRED
 rapids_cpm_init()
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
+# find nvCOMP
+include(cmake/thirdparty/get_nvcomp.cmake)
 # find thrust/cub
 include(cmake/thirdparty/get_thrust.cmake)
 # find rmm
@@ -508,7 +510,8 @@ target_link_libraries(cudf
                   ${ARROW_LIBRARIES}
                   cudf::Thrust
                   rmm::rmm
-           PRIVATE cuco::cuco)
+           PRIVATE cuco::cuco
+                   nvcomp::nvcomp)
 
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
