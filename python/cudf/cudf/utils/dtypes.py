@@ -494,6 +494,15 @@ def find_common_type(dtypes):
     if len(dtypes) == 0:
         return None
 
+    # Early exit for categoricals since they're not hashable and therefore
+    # can't be put in a set.
+    if any(is_categorical_dtype(dtype) for dtype in dtypes):
+        # TODO: Is there a better behavior here? We could check if two distinct
+        # dtype objects actually had the same categories. Alternatively, should
+        # we actually combine categories (that seems wrong, but is also
+        # possible).
+        return cudf.dtype("O")
+
     # Aggregate same types
     dtypes = set(dtypes)
 

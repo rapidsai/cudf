@@ -497,6 +497,50 @@ class Frame(libcudf.table.Table):
         result._copy_type_metadata(self, include_index=keep_index)
         return result
 
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the DataFrame.
+
+        Only the values in the DataFrame will be returned, the axes labels will
+        be removed.
+
+        Returns
+        -------
+        cupy.ndarray
+            The values of the DataFrame.
+        """
+        return self.to_cupy()
+
+    @property
+    def values_host(self):
+        """
+        Return a NumPy representation of the data.
+
+        Only the values in the DataFrame will be returned, the axes labels will
+        be removed.
+
+        Returns
+        -------
+        numpy.ndarray
+            A host representation of the underlying data.
+        """
+        return self.to_numpy()
+
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not "
+            "allowed, To explicitly construct a GPU matrix, consider using "
+            ".as_gpu_matrix()\nTo explicitly construct a host "
+            "matrix, consider using .to_numpy()"
+        )
+
+    def __arrow_array__(self, type=None):
+        raise TypeError(
+            "Implicit conversion to a host PyArrow object via __arrow_array__ "
+            "is not allowed. Consider using .to_arrow()"
+        )
+
     def to_cupy(
         self,
         dtype: Union[Dtype, None] = None,
@@ -546,14 +590,37 @@ class Frame(libcudf.table.Table):
         copy: bool = False,
         # na_value=lib.no_default,
     ) -> np.ndarray:
+        # TODO: Figure out a good way to integrate this behavior with to_cupy
+        # that doesn't duplicate all this code.
         # Support data types that aren't supported by cupy. For now, that's
         # just datetime objects.
-        dtype = find_common_type([col.dtype for col in self._data.values()])
-        cupy_dtype = (
-            np.dtype("int64") if np.issubdtype(dtype, np.datetime64) else dtype
-        )
-        ret = self.to_cupy(dtype=cupy_dtype).get()
-        return ret if dtype == cupy_dtype else ret.astype(dtype)
+        # dtype = find_common_type([col.dtype for col in self._data.values()])
+        # cupy_dtype = (
+        #     np.dtype("int64") if np.issubdtype(dtype, np.datetime64) else
+        #     dtype
+        # )
+        # ret = self.to_cupy(dtype=cupy_dtype).get()
+        # return ret if dtype == cupy_dtype else ret.astype(dtype)
+
+        ncol = self._num_columns
+        if ncol == 0:
+            return np.empty(shape=(0, 0), dtype=np.dtype("float64"))
+
+        if dtype is None:
+            dtype = find_common_type(
+                [col.dtype for col in self._data.values()]
+            )
+
+        matrix = np.empty(shape=(len(self), ncol), dtype=dtype)
+        for i, col in enumerate(self._data.values()):
+            # TODO: col.values may fail if there is nullable data or an
+            # unsupported dtype. We may want to catch and provide a more
+            # suitable error.
+            matrix[:, i] = col.values_host
+            # TODO: Figure out if the astype is necessary in cases like
+            # coercing datetime to int.
+            # matrix[:, i] = col.values.astype(dtype)
+        return matrix
 
     def clip(self, lower=None, upper=None, inplace=False, axis=1):
         """
@@ -1601,21 +1668,6 @@ class Frame(libcudf.table.Table):
         data_columns = (col.shift(offset, fill_value) for col in self._columns)
         return self.__class__._from_data(
             zip(self._column_names, data_columns), self._index
-        )
-
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed, To explicitly construct a GPU array, consider using "
-            "cupy.asarray(...)\nTo explicitly construct a "
-            "host array, consider using .to_array()"
-        )
-
-    def __arrow_array__(self, type=None):
-        raise TypeError(
-            "Implicit conversion to a host PyArrow Array via __arrow_array__ "
-            "is not allowed, To explicitly construct a PyArrow Array, "
-            "consider using .to_arrow()"
         )
 
     def round(self, decimals=0, how="half_even"):
@@ -4807,55 +4859,11 @@ class SingleColumnFrame(Frame):
 
     @property
     def values(self):
-        """
-        Return a CuPy representation of the data.
-
-        Returns
-        -------
-        out : cupy.ndarray
-            A device representation of the underlying data.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, -10, 100, 20])
-        >>> ser.values
-        array([  1, -10, 100,  20])
-        >>> type(ser.values)
-        <class 'cupy.core.core.ndarray'>
-        >>> index = cudf.Index([1, -10, 100, 20])
-        >>> index.values
-        array([  1, -10, 100,  20])
-        >>> type(index.values)
-        <class 'cupy.core.core.ndarray'>
-        """
-        return self._column.values
+        return super().values.flatten()
 
     @property
     def values_host(self):
-        """
-        Return a NumPy representation of the data.
-
-        Returns
-        -------
-        out : numpy.ndarray
-            A host representation of the underlying data.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, -10, 100, 20])
-        >>> ser.values_host
-        array([  1, -10, 100,  20])
-        >>> type(ser.values_host)
-        <class 'numpy.ndarray'>
-        >>> index = cudf.Index([1, -10, 100, 20])
-        >>> index.values_host
-        array([  1, -10, 100,  20])
-        >>> type(index.values_host)
-        <class 'numpy.ndarray'>
-        """
-        return self._column.values_host
+        return super().values_host.flatten()
 
     def tolist(self):
 
@@ -4899,6 +4907,11 @@ class SingleColumnFrame(Frame):
         >>> s.to_gpu_array()
         <numba.cuda.cudadrv.devicearray.DeviceNDArray object at 0x7f1840858890>
         """
+        warnings.warn(
+            "The to_gpu_array method will be remove in a future cuDF "
+            "release. Consider using `to_cupy` instead.",
+            DeprecationWarning,
+        )
         return self._column.to_gpu_array(fillna=fillna)
 
     @classmethod

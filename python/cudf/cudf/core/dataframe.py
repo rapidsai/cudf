@@ -990,48 +990,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         else:
             return NotImplemented
 
-    @property
-    def values(self):
-        """
-        Return a CuPy representation of the DataFrame.
-
-        Only the values in the DataFrame will be returned, the axes labels will
-        be removed.
-
-        Returns
-        -------
-        out: cupy.ndarray
-            The values of the DataFrame.
-        """
-        return cupy.asarray(self.as_gpu_matrix())
-
-    @property
-    def values_host(self):
-        """
-        Return a NumPy representation of the data.
-
-        Returns
-        -------
-        out : numpy.ndarray
-            A host representation of the underlying data.
-        """
-        return self.values.get()
-
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed, To explicitly construct a GPU matrix, consider using "
-            ".as_gpu_matrix()\nTo explicitly construct a host "
-            "matrix, consider using .to_numpy()"
-        )
-
-    def __arrow_array__(self, type=None):
-        raise TypeError(
-            "Implicit conversion to a host PyArrow Table via __arrow_array__ "
-            "is not allowed, To explicitly construct a PyArrow Table, "
-            "consider using .to_arrow()"
-        )
-
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """
         columns = [
@@ -3716,6 +3674,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         -------
         A (nrow x ncol) numba device ndarray
         """
+        warnings.warn(
+            "The as_gpu_matrix method will be remove in a future cuDF "
+            "release. Consider using `to_cupy` instead.",
+            DeprecationWarning,
+        )
         if columns is None:
             columns = self._data.names
 

@@ -7260,9 +7260,8 @@ def test_cudf_arrow_array_error():
 
     with pytest.raises(
         TypeError,
-        match="Implicit conversion to a host PyArrow Table via __arrow_array__"
-        " is not allowed, To explicitly construct a PyArrow Table, consider "
-        "using .to_arrow()",
+        match="Implicit conversion to a host PyArrow object via "
+        "__arrow_array__ is not allowed. Consider using .to_arrow()",
     ):
         df.__arrow_array__()
 
@@ -7270,18 +7269,16 @@ def test_cudf_arrow_array_error():
 
     with pytest.raises(
         TypeError,
-        match="Implicit conversion to a host PyArrow Array via __arrow_array__"
-        " is not allowed, To explicitly construct a PyArrow Array, consider "
-        "using .to_arrow()",
+        match="Implicit conversion to a host PyArrow object via "
+        "__arrow_array__ is not allowed. Consider using .to_arrow()",
     ):
         sr.__arrow_array__()
 
     sr = cudf.Series(["a", "b", "c"])
     with pytest.raises(
         TypeError,
-        match="Implicit conversion to a host PyArrow Array via __arrow_array__"
-        " is not allowed, To explicitly construct a PyArrow Array, consider "
-        "using .to_arrow()",
+        match="Implicit conversion to a host PyArrow object via "
+        "__arrow_array__ is not allowed. Consider using .to_arrow()",
     ):
         sr.__arrow_array__()
 
