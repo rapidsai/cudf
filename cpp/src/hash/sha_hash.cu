@@ -334,14 +334,29 @@ struct SHA1Hash : SHAHash<SHA1Hash, sha1_intermediate_data, sha1_word_type, 64> 
   }
 };
 
-std::unique_ptr<column> sha1_hash(table_view const& input,
-                                  cudaStream_t stream,
-                                  rmm::mr::device_memory_resource* mr)
+/**
+ * @brief Call a SHA-1 or SHA-2 hash function on a table view.
+ *
+ * @tparam Hasher The struct used for computing SHA hashes.
+ *
+ * @param input The input table.
+ * @param digest_size The digest size in bytes, used to allocate the string columns containing
+ * results.
+ * @param empty_result A string representing the expected result for empty inputs.
+ * @param stream CUDA stream on which memory may be allocated if the memory
+ * resource supports streams.
+ * @param mr Memory resource to use for the device memory allocation
+ * @return A new column with the computed hash function result.
+ */
+template <typename Hasher, int digest_size>
+std::unique_ptr<column> sha_hash(table_view const& input,
+                                 string_scalar const& empty_result,
+                                 cudaStream_t stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
-    // Return the SHA-1 hash of a zero-length input.
-    const string_scalar string_160bit("da39a3ee5e6b4b0d3255bfef95601890afd80709");
-    auto output = make_column_from_scalar(string_160bit, input.num_rows(), stream, mr);
+    // Return the hash of a zero-length input.
+    auto output = make_column_from_scalar(empty_result, input.num_rows(), stream, mr);
     return output;
   }
 
@@ -349,16 +364,17 @@ std::unique_ptr<column> sha1_hash(table_view const& input,
   // TODO: Accept single layer list columns holding those types.
   CUDF_EXPECTS(
     std::all_of(input.begin(), input.end(), [](auto col) { return sha_type_check(col.type()); }),
-    "SHA-1 unsupported column type");
+    "SHA unsupported column type");
 
   // Result column allocation and creation
-  auto begin = thrust::make_constant_iterator(40);
+  auto begin = thrust::make_constant_iterator(digest_size);
   auto offsets_column =
     cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
 
-  auto chars_column = strings::detail::create_chars_child_column(input.num_rows() * 40, stream, mr);
-  auto chars_view   = chars_column->mutable_view();
-  auto d_chars      = chars_view.data<char>();
+  auto chars_column =
+    strings::detail::create_chars_child_column(input.num_rows() * digest_size, stream, mr);
+  auto chars_view = chars_column->mutable_view();
+  auto d_chars    = chars_view.data<char>();
 
   rmm::device_buffer null_mask{0, stream, mr};
 
@@ -370,7 +386,7 @@ std::unique_ptr<column> sha1_hash(table_view const& input,
                    thrust::make_counting_iterator(input.num_rows()),
                    [d_chars, device_input = *device_input] __device__(auto row_index) {
                      sha1_intermediate_data hash_state;
-                     SHA1Hash hasher = SHA1Hash{};
+                     Hasher hasher = Hasher{};
                      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
                        if (device_input.column(col_index).is_valid(row_index)) {
                          cudf::type_dispatcher<dispatch_storage_type>(
@@ -381,11 +397,20 @@ std::unique_ptr<column> sha1_hash(table_view const& input,
                            &hash_state);
                        }
                      }
-                     hasher.finalize(&hash_state, d_chars + (row_index * 40));
+                     hasher.finalize(&hash_state, d_chars + (row_index * digest_size));
                    });
 
   return make_strings_column(
     input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, std::move(null_mask));
+}
+
+std::unique_ptr<column> sha1_hash(table_view const& input,
+                                  cudaStream_t stream,
+                                  rmm::mr::device_memory_resource* mr)
+{
+  string_scalar const empty_result("da39a3ee5e6b4b0d3255bfef95601890afd80709");
+  size_type const digest_size = 40;
+  return sha_hash<SHA1Hash, digest_size>(input, empty_result, stream, mr);
 }
 
 std::unique_ptr<column> sha256_hash(table_view const& input,
