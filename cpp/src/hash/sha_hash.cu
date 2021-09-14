@@ -64,7 +64,7 @@ CUDA_DEVICE_CALLABLE uint64_t swap_endian(uint64_t x)
 
 }  // namespace
 
-template <typename IntermediateType, typename WordType, uint32_t MessageChunkSize>
+template <typename Hasher, typename IntermediateType, typename WordType, uint32_t MessageChunkSize>
 struct SHAHash {
   // Number of bytes processed in each hash step
   static constexpr auto message_chunk_size = MessageChunkSize;
@@ -72,8 +72,6 @@ struct SHAHash {
   static constexpr auto message_length_size = 8;
   using sha_intermediate_data               = IntermediateType;
   using sha_word_type                       = WordType;
-
-  virtual void __device__ hash_step(sha_intermediate_data* hash_state) const = 0;
 
   /**
    * @brief Execute SHA on input data chunks.
@@ -95,11 +93,11 @@ struct SHAHash {
       uint32_t copylen = message_chunk_size - hash_state->buffer_length;
 
       std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
-      hash_step(hash_state);
+      Hasher::hash_step(hash_state);
 
       while (len > message_chunk_size + copylen) {
         std::memcpy(hash_state->buffer, data + copylen, message_chunk_size);
-        hash_step(hash_state);
+        Hasher::hash_step(hash_state);
         copylen += message_chunk_size;
       }
 
@@ -153,7 +151,7 @@ struct SHAHash {
                      hash_state->buffer + hash_state->buffer_length + end_of_message_size,
                      (message_chunk_size - hash_state->buffer_length),
                      0x00);
-      hash_step(hash_state);
+      Hasher::hash_step(hash_state);
 
       thrust::fill_n(
         thrust::seq, hash_state->buffer, message_chunk_size - message_length_size, 0x00);
@@ -164,7 +162,23 @@ struct SHAHash {
     std::memcpy(hash_state->buffer + message_chunk_size - message_length_supported_size,
                 reinterpret_cast<uint8_t const*>(&full_length_flipped),
                 message_length_supported_size);
-    hash_step(hash_state);
+    Hasher::hash_step(hash_state);
+
+#pragma unroll
+    for (int i = 0; i < 5; i++) {
+      // Convert word representation from big-endian to little-endian.
+      sha_word_type flipped = swap_endian(hash_state->hash_value[i]);
+      if constexpr (std::is_same_v<sha_word_type, uint32_t>) {
+        uint32ToLowercaseHexString(flipped, result_location + (8 * i));
+      } else if constexpr (std::is_same_v<sha_word_type, uint32_t>) {
+        uint32_t low_bits = static_cast<uint32_t>(flipped);
+        uint32ToLowercaseHexString(low_bits, result_location + (16 * i));
+        uint32_t high_bits = static_cast<uint32_t>(flipped >> 32);
+        uint32ToLowercaseHexString(high_bits, result_location + (16 * i) + 8);
+      } else {
+        cudf_assert(false && "Unsupported SHA word type.");
+      }
+    }
   };
 
   template <typename T, typename std::enable_if_t<is_chrono<T>()>* = nullptr>
@@ -231,12 +245,12 @@ struct SHAHash {
       // the buffer and trigger a hash step.
       uint32_t copylen = message_chunk_size - hash_state->buffer_length;
       std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
-      hash_step(hash_state);
+      Hasher::hash_step(hash_state);
 
       // Take buffer-sized chunks of the data and do a hash step on each chunk.
       while (len > message_chunk_size + copylen) {
         std::memcpy(hash_state->buffer, data + copylen, message_chunk_size);
-        hash_step(hash_state);
+        Hasher::hash_step(hash_state);
         copylen += message_chunk_size;
       }
 
@@ -248,12 +262,12 @@ struct SHAHash {
   }
 };
 
-struct SHA1Hash : SHAHash<sha1_intermediate_data, sha1_word_type, 64> {
+struct SHA1Hash : SHAHash<SHA1Hash, sha1_intermediate_data, sha1_word_type, 64> {
   /**
    * @brief Core SHA-1 algorithm implementation. Processes a single 512-bit chunk,
    * updating the hash value so far. Does not zero out the buffer contents.
    */
-  virtual void __device__ hash_step(sha_intermediate_data* hash_state) const
+  static void __device__ hash_step(sha_intermediate_data* hash_state)
   {
     sha_word_type A = hash_state->hash_value[0];
     sha_word_type B = hash_state->hash_value[1];
