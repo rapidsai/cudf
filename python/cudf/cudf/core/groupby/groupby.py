@@ -504,7 +504,7 @@ class GroupBy(Serializable):
         if not len(chunk_results):
             return self.obj.head(0)
 
-        if cudf.utils.dtypes.is_scalar(chunk_results[0]):
+        if cudf.api.types.is_scalar(chunk_results[0]):
             result = cudf.Series(chunk_results, index=group_names)
             result.index.names = self.grouping.names
         elif isinstance(chunk_results[0], cudf.Series):
