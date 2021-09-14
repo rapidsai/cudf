@@ -15,16 +15,20 @@
  */
 
 #include <cudf/column/column.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <algorithm>
 
 namespace cudf {
+namespace detail {
 namespace {
 template <typename T>
-std::vector<T> split(T const& input, size_type column_size, std::vector<size_type> const& splits)
+std::vector<T> split(T const& input,
+                     size_type column_size,
+                     std::vector<size_type> const& splits,
+                     rmm::cuda_stream_view stream)
 {
   if (splits.empty() or column_size == 0) { return std::vector<T>{input}; }
   CUDF_EXPECTS(splits.back() <= column_size, "splits can't exceed size of input columns");
@@ -38,24 +42,41 @@ std::vector<T> split(T const& input, size_type column_size, std::vector<size_typ
 
   indices.push_back(column_size);  // This to include rest of the elements
 
-  return cudf::slice(input, indices);
+  return detail::slice(input, indices, stream);
 }
+
 };  // anonymous namespace
+
+std::vector<cudf::column_view> split(cudf::column_view const& input,
+                                     std::vector<size_type> const& splits,
+                                     rmm::cuda_stream_view stream)
+{
+  return split(input, input.size(), splits, stream);
+}
+
+std::vector<cudf::table_view> split(cudf::table_view const& input,
+                                    std::vector<size_type> const& splits,
+                                    rmm::cuda_stream_view stream)
+{
+  std::vector<table_view> result{};
+  if (input.num_columns() == 0) { return result; }
+  return split(input, input.column(0).size(), splits, stream);
+}
+
+}  // namespace detail
 
 std::vector<cudf::column_view> split(cudf::column_view const& input,
                                      std::vector<size_type> const& splits)
 {
   CUDF_FUNC_RANGE();
-  return split(input, input.size(), splits);
+  return detail::split(input, splits, rmm::cuda_stream_default);
 }
 
 std::vector<cudf::table_view> split(cudf::table_view const& input,
                                     std::vector<size_type> const& splits)
 {
   CUDF_FUNC_RANGE();
-  std::vector<table_view> result{};
-  if (input.num_columns() == 0) { return result; }
-  return split(input, input.column(0).size(), splits);
+  return detail::split(input, splits, rmm::cuda_stream_default);
 }
 
 }  // namespace cudf
