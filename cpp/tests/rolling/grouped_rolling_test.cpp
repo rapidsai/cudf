@@ -20,6 +20,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
@@ -2412,4 +2413,39 @@ TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingAndFollowingWindowMultiGr
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
                                  fixed_width_column_wrapper<cudf::size_type>{
                                    {3, 3, 3, 3, 3, 4, 4, 4, 4, 4}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingAndFollowingStructGroup)
+{
+  // Test that grouping on STRUCT keys produces is possible.
+
+  using namespace cudf;
+  using namespace cudf::test;
+  using T        = TypeParam;
+  using numerics = fixed_width_column_wrapper<T>;
+
+  auto const grp_col = [] {
+    auto grp_col_inner = numerics{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+    return structs_column_wrapper{{grp_col_inner}};
+  }();
+
+  // clang-format off
+  auto const agg_col = numerics{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+                                {0, 1, 1, 0, 1, 0, 1, 1, 1, 1}};
+  // clang-format on
+
+  auto const grouping_keys       = table_view{{grp_col}};
+  auto const unbounded_preceding = cudf::window_bounds::unbounded();
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods         = 1L;
+  auto const output =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 agg_col,
+                                 unbounded_preceding,
+                                 unbounded_following,
+                                 min_periods,
+                                 *cudf::make_count_aggregation<cudf::rolling_aggregation>());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 numerics{{3, 3, 3, 3, 3, 4, 4, 4, 4, 4}, iterators::no_nulls()});
 }
