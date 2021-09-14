@@ -638,7 +638,7 @@ namespace detail {
  * @brief Computes a hash value from the shallow state of the specified column
  *
  * Two `column_view`s, `c1` and `c2`, that view the exact same physical column will produce equal
- * `shallow_hash()` values, i.e., `is_shallow_equal(c0, c1)` implies `shallow_hash(c0) ==
+ * `shallow_hash()` values, i.e., `is_shallow_equivalent(c0, c1)` implies `shallow_hash(c0) ==
  * shallow_hash(c1)`.
  *
  * The complexity of computing the hash value of `input` is `O( count_descendants(input) )`, i.e.,
@@ -667,6 +667,6 @@ std::size_t shallow_hash(column_view const& input);
  * @param rhs The right `column_view` to compare
  * @return true if the shallow states of the two column views are equal
  */
-bool is_shallow_equal(column_view const& lhs, column_view const& rhs);
+bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs);
 }  // namespace detail
 }  // namespace cudf

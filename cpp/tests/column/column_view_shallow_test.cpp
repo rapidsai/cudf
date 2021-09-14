@@ -272,42 +272,42 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash_mutable)
   }
 }
 
-TYPED_TEST(ColumnViewShallowTests, is_shallow_equal_basic)
+TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_basic)
 {
   using namespace cudf::detail;
   auto col      = example_column<TypeParam>();
   auto col_view = cudf::column_view{*col};
   // same = same hash
   {
-    EXPECT_TRUE(is_shallow_equal(col_view, col_view));
+    EXPECT_TRUE(is_shallow_equivalent(col_view, col_view));
   }
   // copy column_view = same hash
   {
     auto col_view_copy = col_view;
-    EXPECT_TRUE(is_shallow_equal(col_view, col_view_copy));
+    EXPECT_TRUE(is_shallow_equivalent(col_view, col_view_copy));
   }
 
   // new column_view from column = same hash
   {
     auto col_view_new = cudf::column_view{*col};
-    EXPECT_TRUE(is_shallow_equal(col_view, col_view_new));
+    EXPECT_TRUE(is_shallow_equivalent(col_view, col_view_new));
   }
 
   // copy column = diff hash
   {
     auto col_new       = std::make_unique<cudf::column>(*col);
     auto col_view_copy = col_new->view();
-    EXPECT_FALSE(is_shallow_equal(col_view, col_view_copy));
+    EXPECT_FALSE(is_shallow_equivalent(col_view, col_view_copy));
   }
 
   // column_view, diff column = diff hash.
   {
     auto col_diff      = example_column<TypeParam>();
     auto col_view_diff = cudf::column_view{*col_diff};
-    EXPECT_FALSE(is_shallow_equal(col_view, col_view_diff));
+    EXPECT_FALSE(is_shallow_equivalent(col_view, col_view_diff));
   }
 }
-TYPED_TEST(ColumnViewShallowTests, is_shallow_equal_update_data)
+TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_update_data)
 {
   using namespace cudf::detail;
   auto col      = example_column<TypeParam>();
@@ -325,37 +325,37 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equal_update_data)
       cudf::set_null_mask(data, 2, 64, true);
     }
     auto col_view_new = cudf::column_view{*col};
-    EXPECT_TRUE(is_shallow_equal(col_view, col_view_new));
+    EXPECT_TRUE(is_shallow_equivalent(col_view, col_view_new));
   }
   // add null_mask + new column_view = diff hash.
   {
     col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID));
     auto col_view_new = cudf::column_view{*col};
-    EXPECT_FALSE(is_shallow_equal(col_view, col_view_new));
+    EXPECT_FALSE(is_shallow_equivalent(col_view, col_view_new));
     col_view_new.null_count();
-    EXPECT_FALSE(is_shallow_equal(col_view, col_view_new));
+    EXPECT_FALSE(is_shallow_equivalent(col_view, col_view_new));
     auto col_view_new2 = cudf::column_view{*col};
-    EXPECT_TRUE(is_shallow_equal(col_view_new, col_view_new2));
+    EXPECT_TRUE(is_shallow_equivalent(col_view_new, col_view_new2));
   }
   col_view = cudf::column_view{*col};  // updating after adding null_mask
   // update nulls + new column_view = same hash.
   {
     cudf::set_null_mask(col->mutable_view().null_mask(), 2, 4, false);
     auto col_view_new = cudf::column_view{*col};
-    EXPECT_TRUE(is_shallow_equal(col_view, col_view_new));
+    EXPECT_TRUE(is_shallow_equivalent(col_view, col_view_new));
   }
   // set_null_count + new column_view = same hash. set_null_count(UNKNOWN_NULL_COUNT)
   {
     col->set_null_count(cudf::UNKNOWN_NULL_COUNT);
     auto col_view_new = cudf::column_view{*col};
-    EXPECT_TRUE(is_shallow_equal(col_view, col_view_new));
+    EXPECT_TRUE(is_shallow_equivalent(col_view, col_view_new));
     col->set_null_count(col->size());
     auto col_view_new2 = cudf::column_view{*col};
-    EXPECT_TRUE(is_shallow_equal(col_view, col_view_new2));
+    EXPECT_TRUE(is_shallow_equivalent(col_view, col_view_new2));
   }
 }
 
-TYPED_TEST(ColumnViewShallowTests, is_shallow_equal_slice)
+TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_slice)
 {
   using namespace cudf::detail;
   auto col      = example_column<TypeParam>();
@@ -363,18 +363,18 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equal_slice)
   // column_view, sliced[0, size)  = same hash (for split too)
   {
     auto col_sliced = cudf::slice(col_view, {0, col_view.size()});
-    EXPECT_TRUE(is_shallow_equal(col_view, col_sliced[0]));
+    EXPECT_TRUE(is_shallow_equivalent(col_view, col_sliced[0]));
     auto col_split = cudf::split(col_view, {0});
-    EXPECT_FALSE(is_shallow_equal(col_view, col_split[0]));
-    EXPECT_TRUE(is_shallow_equal(col_view, col_split[1]));
+    EXPECT_FALSE(is_shallow_equivalent(col_view, col_split[0]));
+    EXPECT_TRUE(is_shallow_equivalent(col_view, col_split[1]));
   }
   // column_view, sliced[n:]       = diff hash (for split too)
   {
     auto col_sliced = cudf::slice(col_view, {1, col_view.size()});
-    EXPECT_FALSE(is_shallow_equal(col_view, col_sliced[0]));
+    EXPECT_FALSE(is_shallow_equivalent(col_view, col_sliced[0]));
     auto col_split = cudf::split(col_view, {1});
-    EXPECT_FALSE(is_shallow_equal(col_view, col_split[0]));
-    EXPECT_FALSE(is_shallow_equal(col_view, col_split[1]));
+    EXPECT_FALSE(is_shallow_equivalent(col_view, col_split[0]));
+    EXPECT_FALSE(is_shallow_equivalent(col_view, col_split[1]));
   }
   // column_view, col copy sliced[0, 0)  = same hash (empty column)
   {
@@ -383,11 +383,11 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equal_slice)
     auto col_sliced     = cudf::slice(col_view, {0, 0, 1, 1, col_view.size(), col_view.size()});
     auto col_new_sliced = cudf::slice(col_new_view, {0, 0, 1, 1, col_view.size(), col_view.size()});
 
-    EXPECT_TRUE(is_shallow_equal(col_sliced[0], col_sliced[1]));
-    EXPECT_TRUE(is_shallow_equal(col_sliced[1], col_sliced[2]));
-    EXPECT_TRUE(is_shallow_equal(col_sliced[0], col_new_sliced[0]));
-    EXPECT_TRUE(is_shallow_equal(col_sliced[1], col_new_sliced[1]));
-    EXPECT_TRUE(is_shallow_equal(col_sliced[2], col_new_sliced[2]));
+    EXPECT_TRUE(is_shallow_equivalent(col_sliced[0], col_sliced[1]));
+    EXPECT_TRUE(is_shallow_equivalent(col_sliced[1], col_sliced[2]));
+    EXPECT_TRUE(is_shallow_equivalent(col_sliced[0], col_new_sliced[0]));
+    EXPECT_TRUE(is_shallow_equivalent(col_sliced[1], col_new_sliced[1]));
+    EXPECT_TRUE(is_shallow_equivalent(col_sliced[2], col_new_sliced[2]));
   }
 
   // column_view, bit_cast         = diff hash
@@ -398,12 +398,12 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equal_slice)
                                          std::make_signed_t<TypeParam>>;
       auto new_type    = cudf::data_type(cudf::type_to_id<newType>());
       auto col_bitcast = cudf::bit_cast(col_view, new_type);
-      EXPECT_FALSE(is_shallow_equal(col_view, col_bitcast));
+      EXPECT_FALSE(is_shallow_equivalent(col_view, col_bitcast));
     }
   }
 }
 
-TYPED_TEST(ColumnViewShallowTests, is_shallow_equal_mutable)
+TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_mutable)
 {
   using namespace cudf::detail;
   auto col      = example_column<TypeParam>();
@@ -411,7 +411,7 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equal_mutable)
   // mutable_column_view, column_view = same hash
   {
     auto col_mutable = cudf::mutable_column_view{*col};
-    EXPECT_TRUE(is_shallow_equal(col_mutable, col_view));
+    EXPECT_TRUE(is_shallow_equivalent(col_mutable, col_view));
   }
   // mutable_column_view, modified mutable_column_view = same hash
   // update the children column data = same hash
@@ -426,9 +426,9 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equal_mutable)
       auto data = reinterpret_cast<cudf::bitmask_type*>(col->child(0).mutable_view().head());
       cudf::set_null_mask(data, 1, 32, false);
     }
-    EXPECT_TRUE(is_shallow_equal(col_view, col_mutable));
+    EXPECT_TRUE(is_shallow_equivalent(col_view, col_mutable));
     auto col_mutable_new = cudf::mutable_column_view{*col};
-    EXPECT_TRUE(is_shallow_equal(col_mutable, col_mutable_new));
+    EXPECT_TRUE(is_shallow_equivalent(col_mutable, col_mutable_new));
   }
   // update the children column_views = diff hash
   {
@@ -436,7 +436,7 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equal_mutable)
       col->child(0).set_null_mask(
         cudf::create_null_mask(col->child(0).size(), cudf::mask_state::ALL_NULL));
       auto col_child_updated = cudf::mutable_column_view{*col};
-      EXPECT_FALSE(is_shallow_equal(col_view, col_child_updated));
+      EXPECT_FALSE(is_shallow_equivalent(col_view, col_child_updated));
     }
   }
 }

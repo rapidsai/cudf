@@ -140,7 +140,7 @@ struct shallow_equal_impl {
                       });
   }
 };
-bool is_shallow_equal(column_view const& lhs, column_view const& rhs)
+bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs)
 {
   return shallow_equal_impl{}(lhs, rhs);
 }
