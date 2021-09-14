@@ -176,7 +176,7 @@ def test_categorical_index():
     assert_eq(pdf.index, gdf1.index)
     assert_eq(
         pdf.index.codes,
-        gdf1.index.codes.astype(pdf.index.codes.dtype).to_array(),
+        gdf1.index.codes.astype(pdf.index.codes.dtype).to_numpy(),
     )
 
     assert isinstance(gdf2.index, CategoricalIndex)
@@ -184,7 +184,7 @@ def test_categorical_index():
     assert_eq(pdf.index, gdf2.index)
     assert_eq(
         pdf.index.codes,
-        gdf2.index.codes.astype(pdf.index.codes.dtype).to_array(),
+        gdf2.index.codes.astype(pdf.index.codes.dtype).to_numpy(),
     )
 
 
@@ -223,7 +223,7 @@ def test_pandas_as_index():
         pdf_category_index.codes,
         gdf_category_index.codes.astype(
             pdf_category_index.codes.dtype
-        ).to_array(),
+        ).to_numpy(),
     )
 
 
@@ -291,7 +291,7 @@ def test_set_index_as_property():
     # Check set_index(Series)
     cdf.index = cdf["b"]
 
-    assert_eq(cdf.index._values.to_array(), col2)
+    assert_eq(cdf.index.to_numpy(), col2)
 
     with pytest.raises(ValueError):
         cdf.index = [list(range(10))]
@@ -459,14 +459,14 @@ def test_index_copy_deep(idx, deep):
 def test_index_isna(idx):
     pidx = pd.Index(idx, name="idx")
     gidx = cudf.core.index.Int64Index(idx, name="idx")
-    assert_eq(gidx.isna().to_array(), pidx.isna())
+    assert_eq(gidx.isna().to_numpy(), pidx.isna())
 
 
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
 def test_index_notna(idx):
     pidx = pd.Index(idx, name="idx")
     gidx = cudf.core.index.Int64Index(idx, name="idx")
-    assert_eq(gidx.notna().to_array(), pidx.notna())
+    assert_eq(gidx.notna().to_numpy(), pidx.notna())
 
 
 def test_rangeindex_slice_attr_name():
@@ -674,7 +674,7 @@ def test_index_where(data, condition, other, error):
             got = gs.where(gs_condition, other=gs_other)
             np.testing.assert_array_equal(
                 expect.codes,
-                got.codes.astype(expect.codes.dtype).fillna(-1).to_array(),
+                got.codes.astype(expect.codes.dtype).fillna(-1).to_numpy(),
             )
             assert_eq(expect.categories, got.categories)
         else:

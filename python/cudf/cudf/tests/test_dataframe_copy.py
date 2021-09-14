@@ -41,7 +41,7 @@ def test_dataframe_deep_copy(copy_parameters):
     copy_gdf["b"] = [0, 0, 0]
     pdf_is_equal = np.array_equal(pdf["b"].values, copy_pdf["b"].values)
     gdf_is_equal = np.array_equal(
-        gdf["b"].to_array(), copy_gdf["b"].to_array()
+        gdf["b"].to_numpy(), copy_gdf["b"].to_numpy()
     )
     assert pdf_is_equal == copy_parameters["expected_equality"]
     assert gdf_is_equal == copy_parameters["expected_equality"]
@@ -67,7 +67,7 @@ def test_dataframe_deep_copy_and_insert(copy_parameters):
     copy_gdf["b"] = [0, 0, 0]
     pdf_is_equal = np.array_equal(pdf["b"].values, copy_pdf["b"].values)
     gdf_is_equal = np.array_equal(
-        gdf["b"].to_array(), copy_gdf["b"].to_array()
+        gdf["b"].to_numpy(), copy_gdf["b"].to_numpy()
     )
     assert pdf_is_equal == copy_parameters["expected_equality"]
     assert gdf_is_equal == copy_parameters["expected_equality"]

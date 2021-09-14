@@ -4888,6 +4888,22 @@ class SingleColumnFrame(Frame):
     def values_host(self):
         return self._column.values_host
 
+    def to_cupy(
+        self,
+        dtype: Union[Dtype, None] = None,
+        copy: bool = True,
+        na_value=None,
+    ) -> cupy.ndarray:
+        return super().to_cupy(dtype, copy, na_value).flatten()
+
+    def to_numpy(
+        self,
+        dtype: Union[Dtype, None] = None,
+        copy: bool = True,
+        na_value=None,
+    ) -> np.ndarray:
+        return super().to_numpy(dtype, copy, na_value).flatten()
+
     def tolist(self):
 
         raise TypeError(

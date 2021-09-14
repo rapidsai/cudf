@@ -161,9 +161,9 @@ def test_dataframe_join_how(aa, bb, how, method):
 def _check_series(expect, got):
     magic = 0xDEADBEAF
 
-    direct_equal = np.all(expect.values == got.to_array())
+    direct_equal = np.all(expect.values == got.to_numpy())
     nanfilled_equal = np.all(
-        expect.fillna(magic).values == got.fillna(magic).to_array()
+        expect.fillna(magic).values == got.fillna(magic).to_numpy()
     )
     msg = "direct_equal={}, nanfilled_equal={}".format(
         direct_equal, nanfilled_equal
@@ -221,8 +221,8 @@ def test_dataframe_join_cats():
     assert list(got.columns) == ["b", "c"]
     assert len(got) > 0
     assert set(got.index.to_pandas()) & set("abc")
-    assert set(got["b"].to_array()) & set(bb)
-    assert set(got["c"].to_array()) & set(cc)
+    assert set(got["b"].to_numpy()) & set(bb)
+    assert set(got["c"].to_numpy()) & set(cc)
 
 
 def test_dataframe_join_combine_cats():
