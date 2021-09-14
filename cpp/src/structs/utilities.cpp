@@ -72,18 +72,14 @@ namespace {
  * @brief Check whether the specified column is of type `STRUCT`.
  */
 bool is_struct(cudf::column_view const& col) { return col.type().id() == type_id::STRUCT; }
+}  // namespace
 
-/**
- * @brief Check whether the specified column is of type LIST, or any LISTs in its descendent
- * columns.
- */
 bool is_or_has_nested_lists(cudf::column_view const& col)
 {
   auto is_list = [](cudf::column_view const& col) { return col.type().id() == type_id::LIST; };
 
   return is_list(col) || std::any_of(col.child_begin(), col.child_end(), is_or_has_nested_lists);
 }
-}  // namespace
 
 /**
  * @brief Flattens struct columns to constituent non-struct columns in the input table.
