@@ -198,22 +198,17 @@ def masked_scalar_is_null_impl(context, builder, sig, args):
 # else packs it up into a new one that is valid from the get go
 @cuda_lower(pack_return, MaskedType)
 def pack_return_masked_impl(context, builder, sig, args):
-    outdata = cgutils.create_struct_proxy(sig.return_type)(
-        context, builder, value=args[0]
-    )
-    return outdata._getvalue()
+    return args[0]
 
 
+@cuda_lower(pack_return, types.Boolean)
+@cuda_lower(pack_return, types.Number)
 def pack_return_scalar_impl(context, builder, sig, args):
     outdata = cgutils.create_struct_proxy(sig.return_type)(context, builder)
     outdata.value = args[0]
     outdata.valid = context.get_constant(types.boolean, 1)
 
     return outdata._getvalue()
-
-
-cuda_lower(pack_return, types.Number)(pack_return_scalar_impl)
-cuda_lower(pack_return, types.Boolean)(pack_return_scalar_impl)
 
 
 @cuda_lower(operator.truth, MaskedType)

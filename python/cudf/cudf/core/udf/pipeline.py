@@ -19,18 +19,16 @@ cuda.jit(device=True)(pack_return)
 @annotate("NUMBA JIT", color="green", domain="cudf_python")
 def compile_masked_udf(func, dtypes):
     """
-    Compile a UDF with a signature of `MaskedType`s. Assumes a
-    signature of `MaskedType(dtype)` for each dtype in `dtypes`.
-    The UDFs logic (read from `func`s bytecode) is combined with
-    the typing logic in `typing.py` to determine the UDFs output
-    dtype and compile a string containing a PTX version of the
-    the function.
+    Get the return type of a masked UDF for a given set of argument dtypes. It
+    is assumed that a `MaskedType(dtype)` is passed to the function for each
+    input dtype.
     """
     to_compiler_sig = tuple(
         MaskedType(arg)
         for arg in (numpy_support.from_dtype(np_type) for np_type in dtypes)
     )
-    # Get the inlineable PTX function
+    # Get the return type. The PTX is also returned by compile_udf, but is not
+    # needed here.
     ptx, output_type = cudautils.compile_udf(func, to_compiler_sig)
 
     if not isinstance(output_type, MaskedType):
