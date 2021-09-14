@@ -22,7 +22,9 @@
 
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
+#include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/limiting_resource_adaptor.hpp>
 #include <rmm/mr/device/logging_resource_adaptor.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
@@ -344,6 +346,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(
     bool use_pool_alloc = allocation_mode & 1;
     bool use_managed_mem = allocation_mode & 2;
     bool use_arena_alloc = allocation_mode & 4;
+    bool use_cuda_async_alloc = allocation_mode & 8;
     if (use_pool_alloc) {
       auto pool_limit = (max_pool_size > 0) ?
                             thrust::optional<std::size_t>{static_cast<std::size_t>(max_pool_size)} :
@@ -365,6 +368,17 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(
             std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_limit);
       }
+    } else if (use_cuda_async_alloc) {
+      auto const pool_limit = max_pool_size > 0 ? static_cast<std::size_t>(max_pool_size) :
+                                                  std::numeric_limits<std::size_t>::max();
+      auto const release_threshold = max_pool_size > 0 ?
+                                         thrust::optional<std::size_t>{max_pool_size} :
+                                         thrust::optional<std::size_t>{};
+      // Use `limiting_resource_adaptor` to set a hard limit on the max pool size since
+      // `cuda_async_memory_resource` only has a release threshold.
+      Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::limiting_resource_adaptor>(
+          std::make_shared<rmm::mr::cuda_async_memory_resource>(pool_size, release_threshold),
+          pool_limit);
     } else if (use_managed_mem) {
       Initialized_resource = std::make_shared<rmm::mr::managed_memory_resource>();
     } else {
