@@ -38,6 +38,7 @@ def assert_column_equal(col: _CuDFColumn, cudfcol:cudf.Series):
     assert col.num_chunks() == 1
     if col.null_count == 0 :
         pytest.raises(RuntimeError, col._get_validity_buffer)
+        assert col.get_buffers()['validity'] == None
     assert_buffer_equal(col._get_data_buffer(), cudfcol)
     null_kind, null_value = col.describe_null
     if col.null_count == 0:
@@ -57,8 +58,8 @@ def assert_dataframe_equal(dfo: DataFrameObject, df:cudf.DataFrame):
         assert_column_equal(dfo.get_column_by_name(col), df[col])
 
 
-def _test_from_dataframe_equals(dfobj, copy=False):
-    df2 = _from_dataframe(dfobj, copy=copy)
+def _test_from_dataframe_equals(dfobj):
+    df2 = _from_dataframe(dfobj)
 
     assert_dataframe_equal(dfobj, df2)
     if isinstance(dfobj._df, cudf.DataFrame):
@@ -72,23 +73,26 @@ def _test_from_dataframe_equals(dfobj, copy=False):
 
 
 def _test_from_dataframe_exception(dfobj):
-    exception_msg = "This operation must copy data from CPU to GPU. Set `copy=True` to allow it."
+    exception_msg = "This operation must copy data from CPU to GPU. Set `allow_copy=True` to allow it."
     with pytest.raises(TypeError, match=exception_msg):
-        df2 = _from_dataframe(dfobj, copy=False)
+        df2 = _from_dataframe(dfobj)
 
 def _test_datatype(data):
     cdf = cudf.DataFrame(data=data)
-    cdfobj = cdf.__dataframe__()
-    print(cdfobj)
-    _test_from_dataframe_equals(cdfobj, copy=False)
-    _test_from_dataframe_equals(cdfobj, copy=True)
+    _test_from_dataframe_equals(cdf.__dataframe__(allow_copy=False))
+    _test_from_dataframe_equals(cdf.__dataframe__(allow_copy=True))
 
     # pdf = pd.DataFrame(data=data)
     # cpu_dfobj = _CuDFDataFrame(pdf)
     # _test_from_dataframe_exception(cpu_dfobj)
-    # _test_from_dataframe_equals(cpu_dfobj, copy=True)
+    # _test_from_dataframe_equals(cpu_dfobj, allow_copy=True)
     
 
+def test_from_dataframe():
+    data = dict(a=[1, 2, 3], b=[9, 10, 11])
+    df1 = cudf.DataFrame(data=data)
+    df2 = cudf.from_dataframe(df1)
+    assert_eq(df1, df2)
     
 def test_int_dtype():
     data_int = dict(a=[1, 2, 3], b=[9, 10, 11])
@@ -98,18 +102,24 @@ def test_float_dtype():
     data_float = dict(a=[1.5, 2.5, 3.5], b=[9.2, 10.5, 11.8])
     _test_datatype(data_float)
 
-def test_mixed_intfloat_dtype():
-    data_intfloat = dict(a=[1, 2, 3], b=[1.5, 2.5, 3.5])
-    _test_datatype(data_intfloat)
-
 def test_categorical_dtype():
     cdf = cudf.DataFrame({"A": [1, 2, 5, 1]})
     cdf["A"] = cdf["A"].astype("category")
     col = cdf.__dataframe__().get_column_by_name('A')
     assert col.dtype[0] == _DtypeKind.CATEGORICAL
     assert col.describe_categorical == (False, True, {0: 1, 1: 2, 2: 5})
-    _test_from_dataframe_equals(cdf.__dataframe__(), copy=False)
-    _test_from_dataframe_equals(cdf.__dataframe__(), copy=True)
+    _test_from_dataframe_equals(cdf.__dataframe__(allow_copy=False))
+    _test_from_dataframe_equals(cdf.__dataframe__(allow_copy=True))
+
+def test_bool_dtype():
+    data_bool = dict(a=[True, True, False], b=[False, True, False])
+    _test_datatype(data_bool)
+
+def test_mixed_dtype():
+    data_mixed = dict(int=[1, 2, 3], float=[1.5, 2.5, 3.5],
+                        bool=[True, False, True], categorical=[5, 1, 5])
+    _test_datatype(data_mixed)
+
 
 def test_NA_int_dtype():
     data_int = dict(a=[1, None, 3, None, 5], 
@@ -135,12 +145,11 @@ def test_NA_categorical_dtype():
     assert col.describe_null == (3, 0)  # sentinel value -1
     assert col.num_chunks() == 1
     assert col.describe_categorical == (False, True, {0: 1, 1: 2, 2: 5})
-    _test_from_dataframe_equals(df.__dataframe__(), copy=True)
-    _test_from_dataframe_equals(df.__dataframe__(), copy=False)
+    _test_from_dataframe_equals(df.__dataframe__(allow_copy=False))
+    _test_from_dataframe_equals(df.__dataframe__(allow_copy=True))
 
-def test_bool_dtype():
-    data_bool = dict(a=[True, True, False], b=[False, True, False])
-    _test_datatype(data_bool)
+
+
 
 def test_NA_bool_dtype():
     data_bool = dict(a=[None, True, False], b=[False, None, None])

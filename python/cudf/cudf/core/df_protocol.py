@@ -51,9 +51,9 @@ def from_dataframe(df : DataFrameObject, allow_copy: bool = False) :
     return _from_dataframe(df.__dataframe__(allow_copy=allow_copy))
 
 
-def _from_dataframe(df : DataFrameObject, copy: bool = False) :
+def _from_dataframe(df : DataFrameObject) :
     """
-    Create a cudf DataFrame object from DataFrameObject Interface.
+    Create a cudf DataFrame object from DataFrameObject.
     """
     # Check number of chunks, if there's more than one we need to iterate
     if df.num_chunks() > 1:
@@ -68,9 +68,9 @@ def _from_dataframe(df : DataFrameObject, copy: bool = False) :
         col = df.get_column_by_name(name)
         if col.dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.BOOL):
             # Simple numerical or bool dtype, turn into numpy array
-            columns[name], _buf = convert_column_to_cupy_ndarray(col, copy=copy)
+            columns[name], _buf = convert_column_to_cupy_ndarray(col, allow_copy=col._allow_copy)
         elif col.dtype[0] == _k.CATEGORICAL:
-            columns[name], _buf = convert_categorical_column(col, copy=copy)
+            columns[name], _buf = convert_categorical_column(col, allow_copy=col._allow_copy)
         else:
             raise NotImplementedError(f"Data type {col.dtype[0]} not handled yet")
         
@@ -92,7 +92,7 @@ class _DtypeKind(enum.IntEnum):
     CATEGORICAL = 23
 
 
-def convert_column_to_cupy_ndarray(col : ColumnObject, copy : bool = False) -> np.ndarray:
+def convert_column_to_cupy_ndarray(col:ColumnObject, allow_copy:bool = False) -> cp.ndarray:
     """
     Convert an int, uint, float or bool column to a numpy array
     """
@@ -100,17 +100,18 @@ def convert_column_to_cupy_ndarray(col : ColumnObject, copy : bool = False) -> n
         raise NotImplementedError("column.offset > 0 not handled yet")
 
     _buffer, _dtype = col.get_buffers()['data']
-    x = buffer_to_cupy_ndarray(_buffer, _dtype, copy=copy)
+    x = buffer_to_cupy_ndarray(_buffer, _dtype, allow_copy=allow_copy)
 
     return set_missing_values(col, x), _buffer
 
 
-def buffer_to_cupy_ndarray(_buffer, _dtype, copy : bool = False) -> cp.ndarray:
+def buffer_to_cupy_ndarray(_buffer, _dtype, allow_copy : bool = False) -> cp.ndarray:
     if _buffer.__dlpack_device__()[0] == 2: # dataframe is on GPU/CUDA
         x = _gpu_buffer_to_cupy(_buffer, _dtype)
     else:
-        if not copy:
-            raise TypeError("This operation must copy data from CPU to GPU. Set `copy=True` to allow it.")
+        if not allow_copy:
+            raise TypeError("This operation must copy data from CPU to GPU."
+                            "Set `allow_copy=True` to allow it.")
         x = _cpu_buffer_to_cupy(_buffer, _dtype)
 
     return x
@@ -164,7 +165,7 @@ def _cpu_buffer_to_cupy(_buffer, _dtype):
     return cp.asarray(x, dtype=column_dtype)
 
 
-def convert_categorical_column(col : ColumnObject, copy:bool=False) :
+def convert_categorical_column(col : ColumnObject, allow_copy:bool=False) :
     """
     Convert a categorical column to a Series instance
     """
@@ -177,7 +178,8 @@ def convert_categorical_column(col : ColumnObject, copy:bool=False) :
     #    codes = col._col.values.codes
     categories = cp.asarray(list(mapping.values()))
     codes_buffer, codes_dtype = col.get_buffers()['data']
-    codes = buffer_to_cupy_ndarray(codes_buffer, codes_dtype, copy=copy)
+    codes = buffer_to_cupy_ndarray(codes_buffer, codes_dtype, 
+                                   allow_copy=allow_copy)
     values = categories[codes]
 
     # Seems like cudf can only construct with non-null values, so need to
