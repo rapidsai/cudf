@@ -329,9 +329,15 @@ TEST_F(OrcWriterTest, MultiColumn)
   column_wrapper<float> col4{col4_data.begin(), col4_data.end(), validity};
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), validity};
   column_wrapper<numeric::decimal64> col6{col6_data, col6_data + num_rows, validity};
+
   cudf::test::lists_column_wrapper<int64_t> col7{
     {9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}, {}, {-1, -2}};
-  table_view expected({col0, col1, col2, col3, col4, col5, col6, col7});
+
+  auto child_col =
+    cudf::test::fixed_width_column_wrapper<int32_t>{48, 27, 25, 31, 351, 351, 29, 15, -1, -99};
+  auto col8 = cudf::test::structs_column_wrapper{child_col};
+
+  table_view expected({col0, col1, col2, col3, col4, col5, col6, col7, col8});
 
   cudf_io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("bools");
@@ -342,6 +348,7 @@ TEST_F(OrcWriterTest, MultiColumn)
   expected_metadata.column_metadata[5].set_name("doubles");
   expected_metadata.column_metadata[6].set_name("decimal");
   expected_metadata.column_metadata[7].set_name("lists");
+  expected_metadata.column_metadata[8].set_name("structs");
 
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumn.orc");
   cudf_io::orc_writer_options out_opts =
@@ -359,7 +366,7 @@ TEST_F(OrcWriterTest, MultiColumn)
 
 TEST_F(OrcWriterTest, MultiColumnWithNulls)
 {
-  constexpr auto num_rows = 100;
+  constexpr auto num_rows = 10;
 
   auto col0_data = random_values<bool>(num_rows);
   auto col1_data = random_values<int8_t>(num_rows);
@@ -374,14 +381,14 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   auto col0_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
   auto col1_mask =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i < 10); });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i < 2); });
   auto col2_mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   auto col3_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i == (num_rows - 1)); });
   auto col4_mask =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i >= 40 && i <= 60); });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i >= 4 && i <= 6); });
   auto col5_mask =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i > 80); });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i > 8); });
   auto col6_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 3); });
 
@@ -392,7 +399,13 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   column_wrapper<float> col4{col4_data.begin(), col4_data.end(), col4_mask};
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), col5_mask};
   column_wrapper<numeric::decimal64> col6{col6_data, col6_data + num_rows, col6_mask};
-  table_view expected({col0, col1, col2, col3, col4, col5, col6});
+  cudf::test::lists_column_wrapper<int32_t> col7{
+    {{9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}, {}, {-1, -2}},
+    col0_mask};
+  auto ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
+    {48, 27, 25, 31, 351, 351, 29, 15, -1, -99}, {1, 0, 1, 1, 0, 1, 1, 1, 0, 1}};
+  auto col8 = cudf::test::structs_column_wrapper{{ages_col}, {0, 1, 1, 0, 1, 1, 0, 1, 1, 0}};
+  table_view expected({col0, col1, col2, col3, col4, col5, col6, col7, col8});
 
   cudf_io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("bools");
@@ -402,6 +415,8 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   expected_metadata.column_metadata[4].set_name("floats");
   expected_metadata.column_metadata[5].set_name("doubles");
   expected_metadata.column_metadata[6].set_name("decimal");
+  expected_metadata.column_metadata[7].set_name("lists");
+  expected_metadata.column_metadata[8].set_name("structs");
 
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumnWithNulls.orc");
   cudf_io::orc_writer_options out_opts =
