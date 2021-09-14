@@ -130,6 +130,12 @@ class ColumnBase(Column, Serializable):
         """
         Return a numpy representation of the Column.
         """
+        if len(self) == 0:
+            return np.array([], dtype=self.dtype)
+
+        if self.has_nulls:
+            raise ValueError("Column must have no nulls.")
+
         return self.data_array_view.copy_to_host()
 
     @property
@@ -138,7 +144,7 @@ class ColumnBase(Column, Serializable):
         Return a CuPy representation of the Column.
         """
         if len(self) == 0:
-            return cupy.asarray([], dtype=self.dtype)
+            return cupy.array([], dtype=self.dtype)
 
         if self.has_nulls:
             raise ValueError("Column must have no nulls.")
