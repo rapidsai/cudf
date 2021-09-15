@@ -2901,17 +2901,31 @@ def test_dataframe_empty_sort_index():
     assert_eq(expect, got, check_index_type=True)
 
 
+@pytest.mark.parametrize(
+    "index",
+    [
+        pd.RangeIndex(0, 3, 1),
+        [3.0, 1.0, np.nan],
+        pytest.param(
+            pd.RangeIndex(2, -1, -1),
+            marks=[
+                pytest.mark.xfail(
+                    reason="https://github.com/pandas-dev/pandas/issues/43591"
+                )
+            ],
+        ),
+    ],
+)
 @pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
 def test_dataframe_sort_index(
-    axis, ascending, inplace, ignore_index, na_position
+    index, axis, ascending, inplace, ignore_index, na_position
 ):
     pdf = pd.DataFrame(
-        {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]},
-        index=[3.0, 1.0, np.nan],
+        {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]}, index=index,
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
 
