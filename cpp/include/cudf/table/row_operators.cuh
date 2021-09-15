@@ -25,7 +25,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/equal.h>
-#include <thrust/logical.h>
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
 
@@ -223,66 +222,6 @@ class element_equality_comparator {
   bool nulls_are_equal;
 };
 
-namespace detail {
-
-/**
- * @brief Helper functor to check if two types `LhsType` and `RhsType` are comparable for equality.
- */
-template <typename LhsType>
-struct equality_comparable_functor {
-  template <typename RhsType>
-  bool __device__ operator()() const
-  {
-    return cudf::is_equality_comparable<LhsType, RhsType>();
-  }
-};
-
-/**
- * @brief Helper functor to check if a specified column `rhs_col` can be compared for equality
- * with type `LhsType`.
- */
-struct lhs_equality_comparable_functor {
-  template <typename LhsType>
-  bool __device__ operator()(column_device_view rhs_col) const
-  {
-    return cudf::type_dispatcher(rhs_col.type(), equality_comparable_functor<LhsType>{});
-  }
-};
-
-/**
- * @brief Checks if two columns have types that permit equality comparisons
- *
- * @param lhs Left column for equality comparisons
- * @param rhs Right column for equality comparisons
- * @return true If `lhs` and `rhs` columns have types whose values may be compared for equality
- * @return false Otherwise.
- */
-bool __device__ columns_are_equality_comparable(column_device_view lhs, column_device_view rhs)
-{
-  return cudf::type_dispatcher(lhs.type(), lhs_equality_comparable_functor{}, rhs);
-}
-
-/**
- * @brief Checks if corresponding columns in `lhs` and `rhs` tables may be compared for equality
- *
- * @param lhs Left table, whose columns are to be compared for equality.
- * @param rhs Right table, whose columns are to be compared for equality.
- * @return true If *all* columns in `lhs` permit equality comparisons with corresponding columns in
- * `rhs`.
- * @return false Otherwise.
- */
-bool all_columns_are_equality_comparable(table_device_view lhs, table_device_view rhs)
-{
-  auto columns_begin = thrust::make_counting_iterator<size_type>(0);
-  auto columns_end   = columns_begin + lhs.num_columns();
-  auto eq_comparable = [lhs, rhs] __device__(auto col_idx) {
-    return columns_are_equality_comparable(lhs.column(col_idx), rhs.column(col_idx));
-  };
-  return thrust::all_of(thrust::seq, columns_begin, columns_end, eq_comparable);
-}
-
-}  // namespace detail
-
 template <bool has_nulls = true>
 class row_equality_comparator {
  public:
@@ -290,8 +229,6 @@ class row_equality_comparator {
     : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal}
   {
     CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
-    CUDF_EXPECTS(all_columns_are_equality_comparable(lhs, rhs),
-                 "Incompatible columns in row equality comparison.");
   }
 
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
