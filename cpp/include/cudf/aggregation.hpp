@@ -501,6 +501,23 @@ std::unique_ptr<Base> make_merge_m2_aggregation();
  * Produces a tdigest (https://arxiv.org/pdf/1902.04023.pdf) column from input values.
  * The input aggregation values are expected to be fixed-width numeric types.
  *
+ * The tdigest column produced is of the following structure:
+ *
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    }
+ *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
+ * }
+ *
  * @param delta Parameter controlling compression level and accuracy on subsequent
  * queries on the output tdigest data.  Delta places an upper bound on the size of
  * the computed tdigests: A delta of 1000 will result in a tdigest containing no
@@ -517,6 +534,23 @@ std::unique_ptr<Base> make_tdigest_aggregation(int delta = 1000);
  *
  * Produces a tdigest (https://arxiv.org/pdf/1902.04023.pdf) column from input values.
  * The input aggregation values are be tdigests produced by the TDIGEST aggregation.
+ *
+ * The tdigest column produced is of the following structure:
+ *
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    }
+ *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
+ * }
  *
  * @param delta Parameter controlling compression level and accuracy on subsequent
  * queries on the output tdigest data.  Delta places an upper bound on the size of

@@ -43,7 +43,7 @@ namespace {
 
 // the most representative point within a cluster of similar
 // values. {mean, weight}
-typedef thrust::tuple<double, double, bool> centroid_tuple;
+using centroid_tuple = thrust::tuple<double, double, bool>;
 
 // make a centroid from a scalar with a weight of 1.
 template <typename T>

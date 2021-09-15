@@ -897,7 +897,7 @@ class tdigest_aggregation final : public groupby_aggregation {
  public:
   explicit tdigest_aggregation(int delta_) : aggregation{TDIGEST}, delta{delta_} {}
 
-  int delta;
+  int const delta;
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -918,7 +918,7 @@ class merge_tdigest_aggregation final : public groupby_aggregation {
  public:
   explicit merge_tdigest_aggregation(int delta_) : aggregation{MERGE_TDIGEST}, delta{delta_} {}
 
-  int delta;
+  int const delta;
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -1167,22 +1167,20 @@ struct target_type_impl<SourceType, aggregation::MERGE_M2> {
 };
 
 // Always use numeric types for TDIGEST
-template <typename Source, aggregation::Kind k>
+template <typename Source>
 struct target_type_impl<Source,
-                        k,
-                        std::enable_if_t<(is_numeric<Source>() || is_fixed_point<Source>()) &&
-                                         k == aggregation::TDIGEST>> {
+                        aggregation::TDIGEST,
+                        std::enable_if_t<(is_numeric<Source>() || is_fixed_point<Source>())>> {
   using type = struct_view;
 };
 
 // TDIGEST_MERGE. The root column type for a tdigest column is a list_view. Strictly
 // speaking, this check is not sufficient to guarantee we are actually being given a
 // real tdigest column, but we will do further verification inside the aggregation code.
-template <typename Source, aggregation::Kind k>
-struct target_type_impl<
-  Source,
-  k,
-  std::enable_if_t<std::is_same_v<Source, cudf::struct_view> && k == aggregation::MERGE_TDIGEST>> {
+template <typename Source>
+struct target_type_impl<Source,
+                        aggregation::MERGE_TDIGEST,
+                        std::enable_if_t<std::is_same_v<Source, cudf::struct_view>>> {
   using type = struct_view;
 };
 
