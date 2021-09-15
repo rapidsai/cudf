@@ -114,12 +114,7 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
 
   if (input_column.is_empty()) {
     auto empty_data = make_empty_column(data_type{type_id::BOOL8});
-    std::vector<column_view> views;
-    views.reserve(categories.size());
-    std::transform(thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(categories.size()),
-                   std::back_inserter(views),
-                   [&empty_data](size_type) { return empty_data->view(); });
+    std::vector<column_view> views(categories.size(), empty_data->view());
     return std::make_pair(std::move(empty_data), table_view{views});
   }
 

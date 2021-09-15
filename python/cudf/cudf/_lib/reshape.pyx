@@ -12,7 +12,7 @@ from cudf._lib.cpp.reshape cimport (
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport data_type, size_type
+from cudf._lib.cpp.types cimport size_type
 from cudf._lib.table cimport Table
 from cudf._lib.types cimport dtype_to_data_type
 from cudf._lib.utils cimport data_from_unique_ptr
