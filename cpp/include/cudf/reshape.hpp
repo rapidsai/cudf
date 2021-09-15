@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <memory>

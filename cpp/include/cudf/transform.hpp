@@ -140,8 +140,25 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Encode the labels in column with an indicator function
+ *
+ * The `i`th row of the `j`th column in the output table equals 1
+ * if input_column[i] == categories[j], and 0 otherwise.
+ *
+ * Examples:
+ * @code{.pseudo}
+ * input: [{'a', 'c', null, 'c', 'b'}]
+ * categories: ['c', null]
+ * output: [{0, 1, 0, 1, 0}, {0, 0, 1, 0, 0}]
+ * @endcode
+ *
+ * @param input Column containing values to be encoded
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return A pair containing the owner to all encoded data and a table view into the data
+ */
 std::pair<std::unique_ptr<column>, table_view> one_hot_encode(
-  column_view const& input_column,
+  column_view const& input,
   column_view const& categories,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

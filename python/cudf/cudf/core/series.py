@@ -3687,6 +3687,12 @@ class Series(SingleColumnFrame, Serializable):
             except TypeError:
                 raise ValueError("Cannot convert `cats` as cudf column.")
 
+            if self._column.size * cats_col.size >= np.iinfo("int32").max:
+                raise ValueError(
+                    "Size limitation exceeded: series.size * category.size < "
+                    "np.iinfo('int32').max. Consider reducing size of category"
+                )
+
             res = libcudf.transform.one_hot_encode(self._column, cats_col)
             if dtype.type == np.bool_:
                 return list(res.values())
