@@ -780,8 +780,7 @@ TEST_F(SHA1HashTest, MultiValueNulls)
     {"",
      "Different but null!",
      "A very long (greater than 128 bytes/char string) to execute a multi hash-step data point in "
-     "the "
-     "hash function being tested. This string needed to be longer.",
+     "the hash function being tested. This string needed to be longer.",
      "All work and no play makes Jack a dull boy",
      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
     {1, 0, 0, 1, 0});
