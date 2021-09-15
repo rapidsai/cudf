@@ -354,6 +354,78 @@ void compute_recurrence(rmm::device_uvector<thrust::pair<double, double>>& input
   thrust::inclusive_scan(rmm::exec_policy(stream), input.begin(), input.end(), input.begin(), op);
 }
 
+/**
+ * @brief modify the source pairs that eventually yield the numerator
+ * and denoninator to account for nan values. Pairs at nan indicies
+ * become the identity operator (1, 0). The first pair after a nan
+ * value or sequence of nan values has its first element multiplied by
+ * N factors of beta, where N is the number of preceeding NaNs.
+ */
+void pair_beta_adjust(column_view const& input,
+                      rmm::device_uvector<thrust::pair<double, double>>& pairs,
+                      double beta,
+                      rmm::cuda_stream_view stream)
+{
+  auto device_view = *column_device_view::create(input);
+  auto valid_it    = cudf::detail::make_validity_iterator(device_view);
+
+  // Holds count of nulls
+  rmm::device_vector<int> nullcnt(input.size());
+
+  // TODO - not sure why two iterators produce a different result
+  // Invert the null iterator
+  thrust::transform(rmm::exec_policy(stream),
+                    valid_it,
+                    valid_it + input.size(),
+                    nullcnt.begin(),
+                    [=] __host__ __device__(bool valid) -> bool { return 1 - valid; });
+
+  // 0, 1, 0, 1, 1, 0 -> 0, 0, 1, 0, 0, 2
+  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                nullcnt.begin(),
+                                nullcnt.end() - 1,
+                                nullcnt.begin(),
+                                nullcnt.begin() + 1);
+
+  valid_it = cudf::detail::make_validity_iterator(device_view);
+  thrust::transform(
+    rmm::exec_policy(stream),
+    valid_it,
+    valid_it + input.size(),
+    pairs.begin(),
+    pairs.begin(),
+    [=] __host__ __device__(bool valid,
+                            thrust::pair<double, double> pair) -> thrust::pair<double, double> {
+      if (!valid) {
+        return thrust::pair<double, double>(1.0, 0.0);
+      } else {
+        return pair;
+      }
+    });
+
+  valid_it           = cudf::detail::make_validity_iterator(device_view);
+  auto valid_and_exp = thrust::make_zip_iterator(thrust::make_tuple(valid_it, nullcnt.begin()));
+
+  thrust::transform(
+    rmm::exec_policy(stream),
+    valid_and_exp,
+    valid_and_exp + input.size(),
+    pairs.begin(),
+    pairs.begin(),
+    [=] __host__ __device__(thrust::tuple<bool, int> valid_and_exp,
+                            thrust::pair<double, double> pair) -> thrust::pair<double, double> {
+      bool valid = thrust::get<0>(valid_and_exp);
+      int exp    = thrust::get<1>(valid_and_exp);
+      if (valid & (exp != 0)) {
+        double beta  = thrust::get<0>(pair);
+        double scale = thrust::get<1>(pair);
+        return thrust::pair<double, double>(beta * (pow(beta, exp)), scale);
+      } else {
+        return pair;
+      }
+    });
+}
+
 void compute_ewma_adjust(column_view const& input,
                          double beta,
                          mutable_column_view output,
@@ -361,19 +433,6 @@ void compute_ewma_adjust(column_view const& input,
                          rmm::mr::device_memory_resource* mr)
 {
   rmm::device_uvector<thrust::pair<double, double>> pairs(input.size(), stream, mr);
-
-  if (input.has_nulls()) {
-    rmm::device_vector<double> null_cnt(input.size());
-
-    auto device_view = *column_device_view::create(input);
-
-    thrust::inclusive_scan_by_key(cudf::detail::make_validity_iterator(device_view),
-                                  cudf::detail::make_validity_iterator(device_view) + input.size(),
-                                  cudf::detail::make_validity_iterator(device_view),
-                                  null_cnt.begin());
-                            
-
-  }
 
   // Numerator
   // Fill with pairs
@@ -384,6 +443,8 @@ void compute_ewma_adjust(column_view const& input,
                     [=] __host__ __device__(double input) -> thrust::pair<double, double> {
                       return thrust::pair<double, double>(beta, input);
                     });
+
+  if (input.has_nulls()) { pair_beta_adjust(input, pairs, beta, stream); }
 
   compute_recurrence(pairs, stream);
 
@@ -400,6 +461,8 @@ void compute_ewma_adjust(column_view const& input,
   // Fill with pairs
   thrust::fill(
     rmm::exec_policy(stream), pairs.begin(), pairs.end(), thrust::pair<double, double>(beta, 1.0));
+
+  if (input.has_nulls()) { pair_beta_adjust(input, pairs, beta, stream); }
   compute_recurrence(pairs, stream);
 
   thrust::transform(
@@ -540,7 +603,9 @@ std::unique_ptr<column> scan_inclusive(
 {
   auto output = scan_agg_dispatch<scan_dispatcher>(input, agg, null_handling, stream, mr);
 
-  if (agg->kind == aggregation::RANK || agg->kind == aggregation::DENSE_RANK) {
+  if (agg->kind == aggregation::RANK || agg->kind == aggregation::DENSE_RANK ||
+      agg->kind == aggregation::EWMA || agg->kind == aggregation::EWMVAR ||
+      agg->kind == aggregation::EWMSTD) {
     return output;
   } else if (null_handling == null_policy::EXCLUDE) {
     output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
