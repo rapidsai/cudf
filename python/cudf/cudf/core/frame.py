@@ -428,6 +428,66 @@ class Frame(libcudf.table.Table):
             res.index.names = self._index.names
         return res
 
+    def _sort_index(
+        self,
+        axis=0,
+        level=None,
+        ascending=True,
+        inplace=False,
+        kind=None,
+        na_position="last",
+        sort_remaining=True,
+        ignore_index=False,
+    ):
+
+        if kind is not None:
+            raise NotImplementedError("kind is not yet supported")
+
+        if not sort_remaining:
+            raise NotImplementedError(
+                "sort_remaining == False is not yet supported"
+            )
+
+        if axis in (0, "index"):
+            if isinstance(self.index, cudf.MultiIndex):
+                if level is None:
+                    midx_data = self.index._source_data
+                else:
+                    # Pandas currently don't handle na_position
+                    # in case of MultiIndex
+                    if ascending is True:
+                        na_position = "first"
+                    else:
+                        na_position = "last"
+
+                    if cudf.utils.dtypes.is_list_like(level):
+                        labels = [
+                            self.index._get_level_label(lvl) for lvl in level
+                        ]
+                    else:
+                        labels = [self.index._get_level_label(level)]
+                    midx_data = self.index._source_data[labels]
+                inds = midx_data.argsort(
+                    ascending=ascending, na_position=na_position
+                )
+                outdf = self.take(inds)
+            elif (ascending and self.index.is_monotonic_increasing) or (
+                not ascending and self.index.is_monotonic_decreasing
+            ):
+                outdf = self.copy()
+            else:
+                inds = self.index.argsort(
+                    ascending=ascending, na_position=na_position
+                )
+                outdf = self.take(inds)
+        else:
+            labels = sorted(self._data.names, reverse=not ascending)
+            outdf = self[labels]
+
+        if ignore_index is True:
+            outdf = outdf.reset_index(drop=True)
+        return self._mimic_inplace(outdf, inplace=inplace)
+
     def _get_columns_by_label(self, labels, downcast=False):
         """
         Returns columns of the Frame specified by `labels`

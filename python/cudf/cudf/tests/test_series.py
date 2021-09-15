@@ -512,6 +512,7 @@ def test_series_datetime_value_counts(data, nulls, normalize, dropna):
         expected.reset_index(drop=True),
         got.reset_index(drop=True),
         check_dtype=False,
+        check_index_type=True,
     )
 
 
@@ -547,11 +548,13 @@ def test_categorical_value_counts(dropna, normalize, num_elements):
         pdf_value_counts.sort_index(),
         gdf_value_counts.sort_index(),
         check_dtype=False,
+        check_index_type=True,
     )
     assert_eq(
         pdf_value_counts.reset_index(drop=True),
         gdf_value_counts.reset_index(drop=True),
         check_dtype=False,
+        check_index_type=True,
     )
 
 

@@ -2898,7 +2898,7 @@ def test_dataframe_empty_sort_index():
     expect = pdf.sort_index()
     got = gdf.sort_index()
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_index_type=True)
 
 
 @pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
@@ -2931,9 +2931,9 @@ def test_dataframe_sort_index(
     )
 
     if inplace is True:
-        assert_eq(pdf, gdf)
+        assert_eq(pdf, gdf, check_index_type=True)
     else:
-        assert_eq(expected, got)
+        assert_eq(expected, got, check_index_type=True)
 
 
 @pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
@@ -2972,6 +2972,7 @@ def test_dataframe_mulitindex_sort_index(
     gdf = cudf.DataFrame.from_pandas(pdf)
 
     # ignore_index is supported in v.1.0
+
     expected = pdf.sort_index(
         axis=axis,
         level=level,
