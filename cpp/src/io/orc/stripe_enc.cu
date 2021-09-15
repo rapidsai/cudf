@@ -637,12 +637,12 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
     auto const t_nrows = min(max(static_cast<int32_t>(nrows) - t * 8, 0), 8);
     auto const row     = s->chunk.null_mask_start_row + present_rows + t * 8;
 
-    auto get_mask_byte = [&](bitmask_type const* mask) -> uint8_t {
+    auto get_mask_byte = [&](bitmask_type const* mask, size_type offset) -> uint8_t {
       if (t_nrows == 0) return 0;
       if (mask == nullptr) return 0xff;
 
-      auto const begin_offset = row + column.offset();
-      auto const end_offset   = min(begin_offset + 8, column.offset() + column.size());
+      auto const begin_offset = row + offset;
+      auto const end_offset   = min(begin_offset + 8, offset + column.size());
       auto const mask_word = cudf::detail::get_mask_offset_word(mask, 0, begin_offset, end_offset);
       return mask_word & 0xff;
     };
@@ -651,13 +651,13 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
     uint32_t pd_set_cnt = t_nrows;
     uint32_t offset     = t_nrows != 0 ? t * 8 : nrows;
     if (pushdown_mask != nullptr) {
-      pd_byte    = get_mask_byte(pushdown_mask) & ((1 << t_nrows) - 1);
+      pd_byte    = get_mask_byte(pushdown_mask, 0) & ((1 << t_nrows) - 1);
       pd_set_cnt = __popc(pd_byte);
       // Scan the number of valid bits to get dst offset for each thread
       cub::BlockScan<uint32_t, block_size>(scan_storage).ExclusiveSum(pd_set_cnt, offset);
     }
 
-    auto const mask_byte = get_mask_byte(column.null_mask());
+    auto const mask_byte = get_mask_byte(column.null_mask(), column.offset());
     auto dst_offset      = offset + s->nnz;
     auto vbuf_bit_idx    = [](int row) {
       // valid_buf is a circular buffer with validitiy of 8 rows in each element

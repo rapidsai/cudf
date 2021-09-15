@@ -151,7 +151,8 @@ class orc_column_view {
       _type_width{cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : 0},
       _scale{(to_orc_type(col.type().id()) == TypeKind::DECIMAL) ? -col.type().scale()
                                                                  : to_clockscale(col.type().id())},
-      _precision{orc_precision(col.type().id())},
+      _precision{metadata.is_decimal_precision_set() ? metadata.get_decimal_precision()
+                                                     : orc_precision(col.type().id())},
       _type_kind{to_orc_type(col.type().id())},
       name{metadata.get_name()}
   {
