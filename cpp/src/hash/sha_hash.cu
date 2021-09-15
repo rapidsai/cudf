@@ -41,14 +41,19 @@ bool sha_type_check(data_type dt)
 
 CUDA_DEVICE_CALLABLE uint32_t rotate_bits_left(uint32_t x, int8_t r)
 {
-  // Equivalent to (x << r) | (x >> (32 - r))
+  // This function is equivalent to (x << r) | (x >> (32 - r))
   return __funnelshift_l(x, x, r);
 }
 
 CUDA_DEVICE_CALLABLE uint32_t rotate_bits_right(uint32_t x, int8_t r)
 {
-  // Equivalent to (x >> r) | (x << (32 - r))
+  // This function is equivalent to (x >> r) | (x << (32 - r))
   return __funnelshift_r(x, x, r);
+}
+
+CUDA_DEVICE_CALLABLE uint64_t rotate_bits_right(uint64_t x, int8_t r)
+{
+  return (x >> r) | (x << (64 - r));
 }
 
 // Swap the endianness of a 32 bit value
@@ -437,6 +442,84 @@ struct SHA256Hash : SHAHash<SHA256Hash> {
   }
 };
 
+struct SHA512Hash : SHAHash<SHA512Hash> {
+  using sha_intermediate_data = sha512_intermediate_data;
+  using sha_word_type         = sha512_word_type;
+  // Number of bytes processed in each hash step
+  static constexpr auto message_chunk_size = 128;
+  // Digest size in bytes
+  static constexpr auto digest_size = 128;
+
+  /**
+   * @brief Core SHA-512 algorithm implementation. Processes a single 512-bit chunk,
+   * updating the hash value so far. Does not zero out the buffer contents.
+   */
+  static void __device__ hash_step(sha_intermediate_data* hash_state)
+  {
+    sha_word_type A = hash_state->hash_value[0];
+    sha_word_type B = hash_state->hash_value[1];
+    sha_word_type C = hash_state->hash_value[2];
+    sha_word_type D = hash_state->hash_value[3];
+    sha_word_type E = hash_state->hash_value[4];
+    sha_word_type F = hash_state->hash_value[5];
+    sha_word_type G = hash_state->hash_value[6];
+    sha_word_type H = hash_state->hash_value[7];
+
+    sha_word_type words[80];
+
+    // Word size in bytes
+    constexpr auto word_size = sizeof(sha_word_type);
+
+    // The 512-bit message buffer fills the first 16 words.
+    for (int i = 0; i < 16; i++) {
+      sha_word_type buffer_element_as_int;
+      std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * word_size), word_size);
+      // Convert word representation from little-endian to big-endian.
+      words[i] = swap_endian(buffer_element_as_int);
+    }
+
+    // The rest of the 80 words are generated from the first 16 words.
+    for (int i = 16; i < 80; i++) {
+      sha_word_type s0 = rotate_bits_right(words[i - 15], 1) ^ rotate_bits_right(words[i - 15], 8) ^
+                         (words[i - 15] >> 7);
+      sha_word_type s1 = rotate_bits_right(words[i - 2], 19) ^ rotate_bits_right(words[i - 2], 61) ^
+                         (words[i - 2] >> 6);
+      words[i] = words[i - 16] + s0 + words[i - 7] + s1;
+    }
+
+    for (int i = 0; i < 80; i++) {
+      sha_word_type const s1 =
+        rotate_bits_right(E, 14) ^ rotate_bits_right(E, 18) ^ rotate_bits_right(E, 41);
+      sha_word_type const ch    = (E & F) ^ ((~E) & G);
+      sha_word_type const temp1 = H + s1 + ch + sha512_hash_constants[i] + words[i];
+      sha_word_type const s0 =
+        rotate_bits_right(A, 28) ^ rotate_bits_right(A, 34) ^ rotate_bits_right(A, 39);
+      sha_word_type const maj   = (A & B) ^ (A & C) ^ (B & C);
+      sha_word_type const temp2 = s0 + maj;
+
+      H = G;
+      G = F;
+      F = E;
+      E = D + temp1;
+      D = C;
+      C = B;
+      B = A;
+      A = temp1 + temp2;
+    }
+
+    hash_state->hash_value[0] += A;
+    hash_state->hash_value[1] += B;
+    hash_state->hash_value[2] += C;
+    hash_state->hash_value[3] += D;
+    hash_state->hash_value[4] += E;
+    hash_state->hash_value[5] += F;
+    hash_state->hash_value[6] += G;
+    hash_state->hash_value[7] += H;
+
+    hash_state->buffer_length = 0;
+  }
+};
+
 /**
  * @brief Call a SHA-1 or SHA-2 hash function on a table view.
  *
@@ -532,8 +615,7 @@ std::unique_ptr<column> sha512_hash(table_view const& input,
   string_scalar const empty_result(
     "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec"
     "2f63b931bd47417a81a538327af927da3e");
-  // return sha_hash<SHA512Hash, digest_size>(input, empty_result, stream, mr);
-  return nullptr;
+  return sha_hash<SHA512Hash>(input, empty_result, stream, mr);
 }
 
 }  // namespace detail
