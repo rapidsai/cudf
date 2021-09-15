@@ -26,7 +26,20 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
-from cudf.api.types import is_bool_dtype, is_dict_like, is_dtype_equal
+from cudf.api.types import (
+    _is_scalar_or_zero_d_array,
+    is_bool_dtype,
+    is_categorical_dtype,
+    is_datetime_dtype,
+    is_dict_like,
+    is_dtype_equal,
+    is_list_dtype,
+    is_list_like,
+    is_numeric_dtype,
+    is_scalar,
+    is_string_dtype,
+    is_struct_dtype,
+)
 from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import (
@@ -44,19 +57,10 @@ from cudf.core.series import Series
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    _is_scalar_or_zero_d_array,
     can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
     find_common_type,
-    is_categorical_dtype,
     is_column_like,
-    is_datetime_dtype,
-    is_list_dtype,
-    is_list_like,
-    is_numerical_dtype,
-    is_scalar,
-    is_string_dtype,
-    is_struct_dtype,
     min_scalar_type,
     numeric_normalize_types,
 )
@@ -7622,7 +7626,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
         # default to the first non-null dtype
         dtypes[idx] = cols[0].dtype
         # If all the non-null dtypes are int/float, find a common dtype
-        if all(is_numerical_dtype(col.dtype) for col in cols):
+        if all(is_numeric_dtype(col.dtype) for col in cols):
             dtypes[idx] = find_common_type([col.dtype for col in cols])
         # If all categorical dtypes, combine the categories
         elif all(

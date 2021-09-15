@@ -262,7 +262,7 @@ cdef csv_reader_options make_csv_reader_options(
             csv_reader_options_c.set_dtypes(c_dtypes_map)
             csv_reader_options_c.set_parse_hex(c_hex_col_names)
         elif (
-            cudf.utils.dtypes.is_scalar(dtype) or
+            cudf.api.types.is_scalar(dtype) or
             isinstance(dtype, (
                 np.dtype, pd.core.dtypes.dtypes.ExtensionDtype, type
             ))
@@ -520,7 +520,7 @@ cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
     # TODO: Remove this Error message once the
     # following issue is fixed:
     # https://github.com/rapidsai/cudf/issues/3960
-    if cudf.utils.dtypes.is_categorical_dtype(dtype):
+    if cudf.api.types.is_categorical_dtype(dtype):
         raise NotImplementedError(
             "CategoricalDtype as dtype is not yet "
             "supported in CSV reader"

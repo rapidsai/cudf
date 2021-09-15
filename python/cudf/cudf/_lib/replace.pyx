@@ -3,7 +3,7 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf.utils.dtypes import is_scalar
+from cudf.api.types import is_scalar
 
 from cudf._lib.column cimport Column
 

@@ -65,8 +65,6 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
 )
 from cudf._lib.utils cimport data_from_table_view
 
-import cudf
-
 
 cdef class DeviceScalar:
 
