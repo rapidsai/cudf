@@ -241,23 +241,23 @@ class MultiIndex(Frame, BaseIndex):
     def set_names(self, names, level=None, inplace=False):
         if (
             level is not None
-            and not cudf.utils.dtypes.is_list_like(level)
-            and cudf.utils.dtypes.is_list_like(names)
+            and not cudf.api.types.is_list_like(level)
+            and cudf.api.types.is_list_like(names)
         ):
             raise TypeError(
                 "Names must be a string when a single level is provided."
             )
 
         if (
-            not cudf.utils.dtypes.is_list_like(names)
+            not cudf.api.types.is_list_like(names)
             and level is None
             and self.nlevels > 1
         ):
             raise TypeError("Must pass list-like as `names`.")
 
-        if not cudf.utils.dtypes.is_list_like(names):
+        if not cudf.api.types.is_list_like(names):
             names = [names]
-        if level is not None and not cudf.utils.dtypes.is_list_like(level):
+        if level is not None and not cudf.api.types.is_list_like(level):
             level = [level]
 
         if level is not None and len(names) != len(level):
@@ -700,7 +700,7 @@ class MultiIndex(Frame, BaseIndex):
         >>> midx.isin([(1, 'red'), (3, 'red')])
         array([ True, False, False])
         """
-        from cudf.utils.dtypes import is_list_like
+        from cudf.api.types import is_list_like
 
         if level is None:
             if isinstance(values, cudf.MultiIndex):

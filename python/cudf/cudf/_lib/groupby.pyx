@@ -7,7 +7,7 @@ from pandas.core.groupby.groupby import DataError
 
 import rmm
 
-from cudf.utils.dtypes import (
+from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
     is_interval_dtype,
@@ -26,7 +26,7 @@ import cudf
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, table_view_from_table
 
 from cudf._lib.scalar import as_device_scalar
 
@@ -74,7 +74,7 @@ cdef class GroupBy:
         else:
             c_null_handling = libcudf_types.null_policy.INCLUDE
 
-        cdef table_view keys_view = keys.view()
+        cdef table_view keys_view = table_view_from_table(keys)
 
         with nogil:
             self.c_obj.reset(
@@ -90,7 +90,7 @@ cdef class GroupBy:
 
     def groups(self, Table values):
 
-        cdef table_view values_view = values.view()
+        cdef table_view values_view = table_view_from_table(values)
 
         with nogil:
             c_groups = move(self.c_obj.get()[0].get_groups(values_view))
@@ -293,7 +293,7 @@ cdef class GroupBy:
         return self.aggregate_internal(values, aggregations)
 
     def shift(self, Table values, int periods, list fill_values):
-        cdef table_view view = values.view()
+        cdef table_view view = table_view_from_table(values)
         cdef size_type num_col = view.num_columns()
         cdef vector[size_type] offsets = vector[size_type](num_col, periods)
 
@@ -329,7 +329,7 @@ cdef class GroupBy:
         return shifted, grouped_keys
 
     def replace_nulls(self, Table values, object method):
-        cdef table_view val_view = values.view()
+        cdef table_view val_view = table_view_from_table(values)
         cdef pair[unique_ptr[table], unique_ptr[table]] c_result
         cdef replace_policy policy = (
             replace_policy.PRECEDING
