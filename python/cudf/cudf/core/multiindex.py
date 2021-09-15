@@ -395,21 +395,6 @@ class MultiIndex(Frame, BaseIndex):
     def __iter__(self):
         cudf.utils.utils.raise_iteration_error(obj=self)
 
-    def _popn(self, n):
-        """ Returns a copy of this index without the left-most n values.
-
-        Removes n names, labels, and codes in order to build a new index
-        for results.
-        """
-        result = MultiIndex(
-            levels=self.levels[n:],
-            codes=self.codes.iloc[:, n:],
-            names=self.names[n:],
-        )
-        if self.names is not None:
-            result.names = self.names[n:]
-        return result
-
     def __repr__(self):
         max_seq_items = get_option("display.max_seq_items") or len(self)
 
@@ -824,7 +809,14 @@ class MultiIndex(Frame, BaseIndex):
             # Otherwise pop the leftmost levels, names, and codes from the
             # source index until it has the correct number of columns (n-k)
             result.reset_index(drop=True)
-            index = index._popn(size)
+            if index.names is not None:
+                result.names = index.names[size:]
+            index = MultiIndex(
+                levels=index.levels[size:],
+                codes=index.codes.iloc[:, size:],
+                names=index.names[size:],
+            )
+
         if isinstance(index_key, tuple):
             result = result.set_index(index)
         return result
@@ -1600,9 +1592,6 @@ class MultiIndex(Frame, BaseIndex):
                     f"Index has {self.nlevels} levels."
                 ) from None
             return level
-
-    def _level_name_from_level(self, level):
-        return self.names[self._level_index_from_level(level)]
 
     def get_loc(self, key, method=None, tolerance=None):
         """
