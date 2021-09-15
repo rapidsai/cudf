@@ -100,34 +100,34 @@ struct one_hot_encode_launcher {
   }
 };
 
-std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input_column,
+std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input,
                                                               column_view const& categories,
                                                               rmm::cuda_stream_view stream,
                                                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(input_column.type() == categories.type(),
+  CUDF_EXPECTS(input.type() == categories.type(),
                "Mismatch type between input and categories.");
 
   if (categories.is_empty()) {
     return std::make_pair(make_empty_column(data_type{type_id::BOOL8}), table_view{});
   }
 
-  if (input_column.is_empty()) {
+  if (input.is_empty()) {
     auto empty_data = make_empty_column(data_type{type_id::BOOL8});
     std::vector<column_view> views(categories.size(), empty_data->view());
     return std::make_pair(std::move(empty_data), table_view{views});
   }
 
-  return (!input_column.nullable() and !categories.nullable())
-           ? type_dispatcher(input_column.type(),
+  return (!input.nullable() and !categories.nullable())
+           ? type_dispatcher(input.type(),
                              one_hot_encode_launcher<false>{},
-                             input_column,
+                             input,
                              categories,
                              stream,
                              mr)
-           : type_dispatcher(input_column.type(),
+           : type_dispatcher(input.type(),
                              one_hot_encode_launcher<true>{},
-                             input_column,
+                             input,
                              categories,
                              stream,
                              mr);
@@ -136,10 +136,10 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
 }  // namespace detail
 
 std::pair<std::unique_ptr<column>, table_view> one_hot_encode(
-  column_view const& input_column,
+  column_view const& input,
   column_view const& categories,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  rmm::mr::device_memory_resource* mr)
 {
-  return detail::one_hot_encode(input_column, categories, rmm::cuda_stream_default, mr);
+  return detail::one_hot_encode(input, categories, rmm::cuda_stream_default, mr);
 }
 }  // namespace cudf

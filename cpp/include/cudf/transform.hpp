@@ -141,10 +141,10 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Encode the labels in column with an indicator function
+ * @brief Encode the categories in column with an indicator function
  *
  * The `i`th row of the `j`th column in the output table equals 1
- * if input_column[i] == categories[j], and 0 otherwise.
+ * if input[i] == categories[j], and 0 otherwise.
  *
  * Examples:
  * @code{.pseudo}
@@ -156,7 +156,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
  * @throws cudf::logic_error if input and categories are different type
  *
  * @param input Column containing values to be encoded
- * @param categories Column containing labels
+ * @param categories Column containing categories
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return A pair containing the owner to all encoded data and a table view into the data
  */
