@@ -84,6 +84,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/sum_of_squares_tests.cpp
     groupby/sum_scan_tests.cpp
     groupby/sum_tests.cpp
+    groupby/tdigest_tests.cu
     groupby/var_tests.cpp)
 
 ###################################################################################################

@@ -16,6 +16,8 @@
 
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace detail {
 

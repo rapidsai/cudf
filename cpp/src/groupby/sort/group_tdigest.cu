@@ -49,9 +49,10 @@ typedef thrust::tuple<double, double, bool> centroid_tuple;
 template <typename T>
 struct make_centroid_tuple {
   column_device_view const col;
+
   centroid_tuple operator() __device__(size_type index)
   {
-    return {col.element<T>(index), 1, col.is_valid(index)};
+    return {static_cast<double>(col.element<T>(index)), 1, col.is_valid(index)};
   }
 };
 
@@ -531,18 +532,22 @@ struct scalar_total_weight {
 // return the min/max value of scalar inputs by group index
 template <typename T>
 struct get_scalar_minmax {
-  T const* values;
+  device_storage_type_t<T> const* values;
   device_span<size_type const> group_offsets;
   size_type const* group_valid_counts;
+
   __device__ thrust::tuple<double, double> operator()(size_type group_index)
   {
-    return {values[group_offsets[group_index]],
-            values[group_offsets[group_index] + (group_valid_counts[group_index] - 1)]};
+    return {static_cast<double>(values[group_offsets[group_index]]),
+            static_cast<double>(
+              values[group_offsets[group_index] + (group_valid_counts[group_index] - 1)])};
   }
 };
 
 struct typed_group_tdigest {
-  template <typename T, typename std::enable_if_t<cudf::is_numeric<T>()>* = nullptr>
+  template <
+    typename T,
+    typename std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& col,
                                      cudf::device_span<size_type const> group_offsets,
                                      cudf::device_span<size_type const> group_labels,
@@ -575,7 +580,9 @@ struct typed_group_tdigest {
       thrust::make_counting_iterator(0) + num_groups,
       thrust::make_zip_iterator(thrust::make_tuple(min_col->mutable_view().begin<double>(),
                                                    max_col->mutable_view().begin<double>())),
-      get_scalar_minmax<T>{col.begin<T>(), group_offsets, group_valid_counts.begin<size_type>()});
+      get_scalar_minmax<T>{col.begin<device_storage_type_t<T>>(),
+                           group_offsets,
+                           group_valid_counts.begin<size_type>()});
 
     // for simple input values, the "centroids" all have a weight of 1.
     auto d_col = cudf::column_device_view::create(col);
@@ -596,7 +603,9 @@ struct typed_group_tdigest {
                             mr);
   }
 
-  template <typename T, typename std::enable_if_t<!cudf::is_numeric<T>()>* = nullptr>
+  template <
+    typename T,
+    typename std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& col,
                                      cudf::device_span<size_type const> group_offsets,
                                      cudf::device_span<size_type const> group_labels,
