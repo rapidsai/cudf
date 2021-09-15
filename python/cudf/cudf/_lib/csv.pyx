@@ -44,7 +44,11 @@ from cudf._lib.cpp.io.types cimport (
 )
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.io.utils cimport make_sink_info, make_source_info
-from cudf._lib.table cimport Table, make_table_view
+from cudf._lib.table cimport (
+    Table,
+    table_view_from_columns,
+    table_view_from_table,
+)
 from cudf._lib.utils cimport data_from_unique_ptr
 
 ctypedef int32_t underlying_type_t_compression
@@ -458,8 +462,9 @@ cpdef write_csv(
     --------
     cudf.to_csv
     """
-    cdef table_view input_table_view = \
-        table.view() if index is True else table.data_view()
+    cdef table_view input_table_view = table_view_from_table(
+        table, not index
+    )
     cdef bool include_header_c = header
     cdef char delim_c = ord(sep)
     cdef string line_term_c = line_terminator.encode()

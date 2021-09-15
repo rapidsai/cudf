@@ -45,22 +45,6 @@ cdef vector[column_view] make_column_views(object columns):
     return views
 
 
-cdef vector[table_view] make_table_views(object tables):
-    cdef vector[table_view] views
-    views.reserve(len(tables))
-    for tbl in tables:
-        views.push_back((<Table> tbl).view())
-    return views
-
-
-cdef vector[table_view] make_table_data_views(object tables):
-    cdef vector[table_view] views
-    views.reserve(len(tables))
-    for tbl in tables:
-        views.push_back((<Table> tbl).data_view())
-    return views
-
-
 cdef vector[string] get_column_names(Table table, object index):
     cdef vector[string] column_names
     if index is not False:

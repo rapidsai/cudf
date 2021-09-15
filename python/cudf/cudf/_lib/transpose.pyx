@@ -13,7 +13,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.transpose cimport transpose as cpp_transpose
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, table_view_from_table
 from cudf._lib.utils cimport data_from_table_view
 
 
@@ -46,7 +46,8 @@ def transpose(Table source):
         raise ValueError('Columns must all have the same dtype')
 
     cdef pair[unique_ptr[column], table_view] c_result
-    cdef table_view c_input = source.data_view()
+    cdef table_view c_input = table_view_from_table(
+        source, ignore_index=True)
 
     with nogil:
         c_result = move(cpp_transpose(c_input))

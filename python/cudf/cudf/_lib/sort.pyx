@@ -23,7 +23,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport null_order, null_policy, order
 from cudf._lib.sort cimport underlying_type_t_rank_method
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, table_view_from_table
 from cudf._lib.utils cimport data_from_unique_ptr
 
 
@@ -103,7 +103,7 @@ def is_sorted(
         )
 
     cdef bool c_result
-    cdef table_view source_table_view = source_table.data_view()
+    cdef table_view source_table_view = table_view_from_table(source_table)
     with nogil:
         c_result = cpp_is_sorted(
             source_table_view,
@@ -129,7 +129,9 @@ def order_by(Table source_table, object ascending, bool na_position):
 
     """
 
-    cdef table_view source_table_view = source_table.data_view()
+    cdef table_view source_table_view = table_view_from_table(
+        source_table, ignore_index=True
+    )
     cdef vector[order] column_order
     column_order.reserve(len(ascending))
     cdef null_order pred = (
@@ -171,8 +173,10 @@ def digitize(Table source_values_table, Table bins, bool right=False):
             right or the left bin edge.
     """
 
-    cdef table_view bins_view = bins.view()
-    cdef table_view source_values_table_view = source_values_table.view()
+    cdef table_view bins_view = table_view_from_table(bins)
+    cdef table_view source_values_table_view = table_view_from_table(
+        source_values_table
+    )
     cdef vector[order] column_order = (
         vector[order](
             bins_view.num_columns(),
@@ -221,7 +225,9 @@ def rank_columns(Table source_table, object method, str na_option,
     """
     Compute numerical data ranks (1 through n) of each column in the dataframe
     """
-    cdef table_view source_table_view = source_table.data_view()
+    cdef table_view source_table_view = table_view_from_table(
+        source_table, ignore_index=True
+    )
 
     cdef rank_method c_rank_method = < rank_method > (
         < underlying_type_t_rank_method > method
