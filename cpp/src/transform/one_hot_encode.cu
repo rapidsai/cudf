@@ -45,14 +45,14 @@ struct one_hot_encode_functor {
 
   bool __device__ operator()(size_type i)
   {
-    size_type element_index  = i % _input_size;
-    size_type category_index = i / _input_size;
+    size_type const element_index  = i % _input_size;
+    size_type const category_index = i / _input_size;
     return _equality_comparator.template operator()<InputType>(element_index, category_index);
   }
 
  private:
-  element_equality_comparator<has_nulls> _equality_comparator;
-  size_type _input_size;
+  element_equality_comparator<has_nulls> const _equality_comparator;
+  size_type const _input_size;
 };
 
 }  // anonymous namespace
@@ -65,8 +65,8 @@ struct one_hot_encode_launcher {
                                                             rmm::cuda_stream_view stream,
                                                             rmm::mr::device_memory_resource* mr)
   {
-    auto total_size    = input_column.size() * categories.size();
-    auto all_encodings = make_numeric_column(
+    auto const total_size = input_column.size() * categories.size();
+    auto all_encodings    = make_numeric_column(
       data_type{type_id::BOOL8}, total_size, mask_state::UNALLOCATED, stream, mr);
 
     auto d_input_column    = column_device_view::create(input_column, stream);
@@ -105,8 +105,7 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
                                                               rmm::cuda_stream_view stream,
                                                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(input.type() == categories.type(),
-               "Mismatch type between input and categories.");
+  CUDF_EXPECTS(input.type() == categories.type(), "Mismatch type between input and categories.");
 
   if (categories.is_empty()) {
     return std::make_pair(make_empty_column(data_type{type_id::BOOL8}), table_view{});
@@ -118,27 +117,18 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
     return std::make_pair(std::move(empty_data), table_view{views});
   }
 
-  return (!input.nullable() and !categories.nullable())
-           ? type_dispatcher(input.type(),
-                             one_hot_encode_launcher<false>{},
-                             input,
-                             categories,
-                             stream,
-                             mr)
-           : type_dispatcher(input.type(),
-                             one_hot_encode_launcher<true>{},
-                             input,
-                             categories,
-                             stream,
-                             mr);
+  return (!input.nullable() && !categories.nullable())
+           ? type_dispatcher(
+               input.type(), one_hot_encode_launcher<false>{}, input, categories, stream, mr)
+           : type_dispatcher(
+               input.type(), one_hot_encode_launcher<true>{}, input, categories, stream, mr);
 }
 
 }  // namespace detail
 
-std::pair<std::unique_ptr<column>, table_view> one_hot_encode(
-  column_view const& input,
-  column_view const& categories,
-  rmm::mr::device_memory_resource* mr)
+std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input,
+                                                              column_view const& categories,
+                                                              rmm::mr::device_memory_resource* mr)
 {
   return detail::one_hot_encode(input, categories, rmm::cuda_stream_default, mr);
 }
