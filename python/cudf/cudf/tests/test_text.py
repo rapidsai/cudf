@@ -888,18 +888,18 @@ def test_read_text(datadir):
     chess_file = str(datadir) + "/chess.pgn"
     delimiter = "1."
 
-    f = open(chess_file, "r")
-    content = f.read().split(delimiter)
-    f.close()
+    with open(chess_file, "r") as f:
+        content = f.read().split(delimiter)
 
     # Since Python split removes the delimiter and read_text does
     # not we need to add it back to the 'content'
-    for i in range(len(content) - 1):
-        content[i] = content[i] + delimiter
-
-    expected = cudf.Series(content)
+    expected = cudf.Series(
+        [
+            c + delimiter if i < (len(content) - 1) else c
+            for i, c in enumerate(content)
+        ]
+    )
 
     actual = cudf.read_text(chess_file, delimiter=delimiter)
 
-    assert type(expected) == type(actual)
     assert_eq(expected, actual)

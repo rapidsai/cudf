@@ -20,7 +20,7 @@ from cudf._lib.cpp.io.text cimport (
 def read_text(object filepaths_or_buffers,
               object delimiter=None):
     """
-    Cython function to call into libcudf API, see `read_text`.
+    Cython function to call into libcudf API, see `multibyte_split`.
 
     See Also
     --------
@@ -36,5 +36,4 @@ def read_text(object filepaths_or_buffers,
         datasource = move(make_source_from_file(filename))
         c_col = move(multibyte_split(dereference(datasource), delim))
 
-    col = Column.from_unique_ptr(move(c_col))
-    return {None: col}
+    return {None: Column.from_unique_ptr(move(c_col))}

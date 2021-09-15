@@ -23,10 +23,6 @@ def read_text(
         **kwargs,
     )
 
-    print(type(filepath_or_buffer))
-
-    df = cudf.Series._from_data(
+    return cudf.Series._from_data(
         libtext.read_text(filepath_or_buffer, delimiter=delimiter,)
     )
-
-    return df

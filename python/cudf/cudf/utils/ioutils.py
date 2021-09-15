@@ -1025,6 +1025,7 @@ filepath_or_buffer : str, path object, or file-like object
 delimiter : string, default None, The delimiter that should be used
     for splitting text chunks into seperate cudf column rows. Currently
     only a single delimiter is supported.
+
 Returns
 -------
 result : GPU ``Series``
