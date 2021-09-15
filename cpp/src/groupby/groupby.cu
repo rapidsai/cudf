@@ -55,9 +55,6 @@ groupby::groupby(table_view const& keys,
     _column_order{column_order},
     _null_precedence{null_precedence}
 {
-  auto is_list  = [](auto const& col) { return col.type().id() == cudf::type_id::LIST; };
-  auto has_list = std::any_of(keys.begin(), keys.end(), is_list);
-  CUDF_EXPECTS(not has_list, "Groupby does not support LIST columns as keys.");
 }
 
 // Select hash vs. sort groupby implementation
