@@ -18,7 +18,18 @@ from pandas._config import get_option
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
-from cudf.api.types import is_bool_dtype, is_dict_like, is_dtype_equal
+from cudf.api.types import (
+    is_bool_dtype,
+    is_categorical_dtype,
+    is_decimal_dtype,
+    is_dict_like,
+    is_dtype_equal,
+    is_interval_dtype,
+    is_list_dtype,
+    is_list_like,
+    is_scalar,
+    is_struct_dtype,
+)
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     DatetimeColumn,
@@ -46,14 +57,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
     find_common_type,
-    is_categorical_dtype,
-    is_decimal_dtype,
-    is_interval_dtype,
-    is_list_dtype,
-    is_list_like,
     is_mixed_with_object_dtype,
-    is_scalar,
-    is_struct_dtype,
     min_scalar_type,
 )
 from cudf.utils.utils import (

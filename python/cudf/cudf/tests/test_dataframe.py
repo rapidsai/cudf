@@ -4470,7 +4470,7 @@ def test_isin_dataframe(data, values):
     pdf = data
     gdf = cudf.from_pandas(pdf)
 
-    if cudf.utils.dtypes.is_scalar(values):
+    if cudf.api.types.is_scalar(values):
         assert_exceptions_equal(
             lfunc=pdf.isin,
             rfunc=gdf.isin,

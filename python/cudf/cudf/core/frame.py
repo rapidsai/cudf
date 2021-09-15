@@ -25,7 +25,15 @@ from nvtx import annotate
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
-from cudf.api.types import is_dict_like, issubdtype
+from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
+    is_decimal_dtype,
+    is_dict_like,
+    is_integer_dtype,
+    is_scalar,
+    issubdtype,
+)
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -37,14 +45,7 @@ from cudf.core.join import merge
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import (
-    _is_non_decimal_numeric_dtype,
-    _is_scalar_or_zero_d_array,
-    is_column_like,
-    is_decimal_dtype,
-    is_integer_dtype,
-    is_scalar,
-)
+from cudf.utils.dtypes import is_column_like
 
 T = TypeVar("T", bound="Frame")
 
@@ -2076,7 +2077,7 @@ class Frame(libcudf.table.Table):
                     dtype = np_dtypes[name]
                 elif pandas_dtypes[
                     name
-                ] == "object" and cudf.utils.dtypes.is_struct_dtype(
+                ] == "object" and cudf.api.types.is_struct_dtype(
                     np_dtypes[name]
                 ):
                     # Incase of struct column, libcudf is not aware of names of
@@ -5144,7 +5145,7 @@ def _get_replacement_values_for_columns(
     if is_scalar(to_replace) and is_scalar(value):
         to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
         values_columns = {col: [value] for col in columns_dtype_map}
-    elif cudf.utils.dtypes.is_list_like(to_replace) or isinstance(
+    elif cudf.api.types.is_list_like(to_replace) or isinstance(
         to_replace, ColumnBase
     ):
         if is_scalar(value):
@@ -5157,7 +5158,7 @@ def _get_replacement_values_for_columns(
                 )
                 for col in columns_dtype_map
             }
-        elif cudf.utils.dtypes.is_list_like(value):
+        elif cudf.api.types.is_list_like(value):
             if len(to_replace) != len(value):
                 raise ValueError(
                     f"Replacement lists must be "

@@ -13,7 +13,7 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M
 
 import cudf as gd
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.api.types import is_categorical_dtype
 
 
 def set_index_post(df, index_name, drop, column_dtype):

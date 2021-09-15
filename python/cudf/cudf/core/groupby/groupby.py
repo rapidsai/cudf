@@ -11,9 +11,9 @@ import cudf
 from cudf._lib import groupby as libgroupby
 from cudf._lib.table import Table
 from cudf._typing import DataFrameOrSeries
+from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import arange
-from cudf.utils.dtypes import is_list_like
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
@@ -504,7 +504,7 @@ class GroupBy(Serializable):
         if not len(chunk_results):
             return self.obj.head(0)
 
-        if cudf.utils.dtypes.is_scalar(chunk_results[0]):
+        if cudf.api.types.is_scalar(chunk_results[0]):
             result = cudf.Series(chunk_results, index=group_names)
             result.index.names = self.grouping.names
         elif isinstance(chunk_results[0], cudf.Series):
