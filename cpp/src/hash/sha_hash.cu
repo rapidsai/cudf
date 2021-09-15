@@ -20,6 +20,7 @@
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/table/table_device_view.cuh>
 
+#include <hash/hash_constants.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 #include <type_traits>
@@ -169,14 +170,15 @@ struct SHAHash {
                 message_length_supported_size);
     Hasher::hash_step(hash_state);
 
-    auto constexpr num_words = Hasher::digest_size / sizeof(typename Hasher::sha_word_type);
+    // Each byte in the word generates two bytes in the hexadecimal string digest.
+    auto constexpr num_words = Hasher::digest_size / (2 * sizeof(typename Hasher::sha_word_type));
 #pragma unroll
     for (int i = 0; i < num_words; i++) {
       // Convert word representation from big-endian to little-endian.
       typename Hasher::sha_word_type flipped = swap_endian(hash_state->hash_value[i]);
       if constexpr (std::is_same_v<typename Hasher::sha_word_type, uint32_t>) {
         uint32ToLowercaseHexString(flipped, result_location + (8 * i));
-      } else if constexpr (std::is_same_v<typename Hasher::sha_word_type, uint32_t>) {
+      } else if constexpr (std::is_same_v<typename Hasher::sha_word_type, uint64_t>) {
         uint32_t low_bits = static_cast<uint32_t>(flipped);
         uint32ToLowercaseHexString(low_bits, result_location + (16 * i));
         uint32_t high_bits = static_cast<uint32_t>(flipped >> 32);
@@ -422,18 +424,14 @@ struct SHA256Hash : SHAHash<SHA256Hash> {
       A = temp1 + temp2;
     }
 
-    for (int i = 0; i < 8; i++) {
-      hash_state->hash_value[i] = words[i];
-    }
-
-    // hash_state->hash_value[0] += A;
-    // hash_state->hash_value[1] += B;
-    // hash_state->hash_value[2] += C;
-    // hash_state->hash_value[3] += D;
-    // hash_state->hash_value[4] += E;
-    // hash_state->hash_value[5] += F;
-    // hash_state->hash_value[6] += G;
-    // hash_state->hash_value[7] += H;
+    hash_state->hash_value[0] += A;
+    hash_state->hash_value[1] += B;
+    hash_state->hash_value[2] += C;
+    hash_state->hash_value[3] += D;
+    hash_state->hash_value[4] += E;
+    hash_state->hash_value[5] += F;
+    hash_state->hash_value[6] += G;
+    hash_state->hash_value[7] += H;
 
     hash_state->buffer_length = 0;
   }

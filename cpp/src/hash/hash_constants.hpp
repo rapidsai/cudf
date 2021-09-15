@@ -75,7 +75,8 @@ using sha256_word_type = uint32_t;
 struct sha256_intermediate_data {
   uint64_t message_length = 0;
   uint32_t buffer_length  = 0;
-  uint32_t hash_value[8];
+  uint32_t hash_value[8]  = {
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
   uint8_t buffer[64];
 };
 
