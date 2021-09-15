@@ -834,6 +834,8 @@ encoded_data encode_columns(orc_table_view const& orc_table,
     }
   }
   chunks.host_to_device(stream);
+  // TODO (future): pass columns separately from chunks (to skip this step)
+  // and remove info from chunks that is common for the entire column
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator(0ul),
@@ -1326,10 +1328,17 @@ void pushdown_lists_null_mask(orc_column_view const& col,
     });
 }
 
+/**
+ * @brief All pushdown masks in a table.
+ *
+ * Pushdown masks are applied to child column(s). Only bits of the child column null mask that
+ * correspond to set pushdown mask bits are encoded into the output file. Similarly, rows where
+ * pushdown mask is 0 are treated as invalid and not included in the output.
+ */
 struct pushdown_null_masks {
-  // owning vector
+  // Owning vector for masks in device memory
   std::vector<rmm::device_uvector<bitmask_type>> data;
-  // vector of pointers, pre-order
+  // Pointers to pushdown masks in device memory. Can be same for multiple columns.
   std::vector<bitmask_type const*> masks;
 };
 
@@ -1340,6 +1349,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
   mask_ptrs.reserve(orc_table.num_columns());
   std::vector<rmm::device_uvector<bitmask_type>> pd_masks;
   for (auto const& col : orc_table.columns) {
+    // Leaf columns don't need pushdown masks
     if (col.orc_kind() != LIST && col.orc_kind() != STRUCT) {
       mask_ptrs.emplace_back(nullptr);
       continue;
@@ -1355,34 +1365,35 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
     }
     if (col.orc_kind() == STRUCT) {
       if (null_mask != nullptr and parent_pd_mask == nullptr) {
-        // reuse own null mask
+        // Reuse own null mask
         mask_ptrs.emplace_back(null_mask);
       } else if (null_mask == nullptr and parent_pd_mask != nullptr) {
-        // reuse parent's pushdown mask
+        // Reuse parent's pushdown mask
         mask_ptrs.emplace_back(parent_pd_mask);
       } else {
-        // both are nullable, allocate pushdown mask
+        // Both are nullable, allocate new pushdown mask
         pd_masks.emplace_back(num_bitmask_words(col.size()), stream);
         mask_ptrs.emplace_back(pd_masks.back().data());
 
-        // calc mask (async)
         thrust::transform(rmm::exec_policy(stream),
                           null_mask,
                           null_mask + pd_masks.back().size(),
                           parent_pd_mask,
                           pd_masks.back().data(),
-                          [] __device__(auto& l, auto& r) { return l & r; });
+                          thrust::bit_and<bitmask_type>());
       }
     }
     if (col.orc_kind() == LIST) {
+      // Need a new pushdown mask unless both the parent and current colmn are not nullable
       auto const child_col = orc_table.column(col.child_begin()[0]);
+      // pushdown mask applies to child column; use the child column size
       pd_masks.emplace_back(num_bitmask_words(child_col.size()), stream);
       mask_ptrs.emplace_back(pd_masks.back().data());
       pushdown_lists_null_mask(col, orc_table.d_columns, parent_pd_mask, pd_masks.back(), stream);
     }
   }
 
-  // attach null masks to device column views (async)
+  // Attach null masks to device column views (async)
   auto const d_mask_ptrs = cudf::detail::make_device_uvector_async(mask_ptrs, stream);
   thrust::for_each_n(
     rmm::exec_policy(stream),
@@ -1929,10 +1940,16 @@ void writer::impl::write(table_view const& table)
       // In preorder traversal the column after a list column is always the child column
       if (column.orc_kind() == LIST) { schema_type.subtypes.emplace_back(column.id() + 1); }
       if (column.orc_kind() == STRUCT) {
-        for (auto child_it = column.child_begin(); child_it != column.child_end(); ++child_it) {
-          schema_type.subtypes.emplace_back(orc_table.column(*child_it).id());
-          schema_type.fieldNames.emplace_back(orc_table.column(*child_it).orc_name());
-        }
+        std::transform(column.child_begin(),
+                       column.child_end(),
+                       std::back_inserter(schema_type.subtypes),
+                       [&](auto const& child_idx) { return orc_table.column(child_idx).id(); });
+        std::transform(column.child_begin(),
+                       column.child_end(),
+                       std::back_inserter(schema_type.fieldNames),
+                       [&](auto const& child_idx) {
+                         return std::string{orc_table.column(child_idx).orc_name()};
+                       });
       }
     }
   } else {
@@ -1959,9 +1976,13 @@ void writer::impl::close()
   PostScript ps;
 
   ff.contentLength = out_sink_->bytes_written();
-  for (auto it = table_meta->user_data.begin(); it != table_meta->user_data.end(); it++) {
-    ff.metadata.push_back({it->first, it->second});
-  }
+  std::transform(table_meta->user_data.begin(),
+                 table_meta->user_data.end(),
+                 std::back_inserter(ff.metadata),
+                 [&](auto const& udata) {
+                   return UserMetadataItem{udata.first, udata.second};
+                 });
+
   // Write statistics metadata
   if (md.stripeStats.size() != 0) {
     buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
