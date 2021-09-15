@@ -4002,11 +4002,16 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 inds = self.index._source_data[labels].argsort(
                     ascending=ascending, na_position=na_position
                 )
+                outdf = self.take(inds)
+            elif (ascending and self.index.is_monotonic_increasing) or (
+                not ascending and self.index.is_monotonic_decreasing
+            ):
+                outdf = self.copy()
             else:
                 inds = self.index.argsort(
                     ascending=ascending, na_position=na_position
                 )
-            outdf = self.take(inds)
+                outdf = self.take(inds)
         else:
             labels = sorted(self._data.names, reverse=not ascending)
             outdf = self[labels]
