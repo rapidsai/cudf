@@ -234,7 +234,6 @@ add_library(cudf
     src/groupby/sort/group_sum.cu
     src/groupby/sort/scan.cpp
     src/groupby/sort/group_count_scan.cu
-    src/groupby/sort/group_dense_rank_scan.cu
     src/groupby/sort/group_max_scan.cu
     src/groupby/sort/group_min_scan.cu
     src/groupby/sort/group_rank_scan.cu
@@ -741,7 +740,7 @@ rapids_export(BUILD cudf
     FINAL_CODE_BLOCK build_code_string)
 
 export(EXPORT cudf-testing-exports
-    FILE ${CUDF_BINARY_DIR}/cudf-testing.cmake
+    FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
     NAMESPACE   cudf::)
 rapids_export_write_dependencies(BUILD cudf-testing-exports
     "${CUDF_BINARY_DIR}/cudf-testing-dependencies.cmake")

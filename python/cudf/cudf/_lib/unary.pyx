@@ -2,7 +2,7 @@
 
 from enum import IntEnum
 
-from cudf.utils.dtypes import is_decimal_dtype
+from cudf.api.types import is_decimal_dtype
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr

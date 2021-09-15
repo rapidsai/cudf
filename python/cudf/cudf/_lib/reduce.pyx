@@ -1,7 +1,8 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import cudf
-from cudf.utils.dtypes import is_decimal_dtype
+from cudf.api.types import is_decimal_dtype
+from cudf.core.dtypes import Decimal64Dtype
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
