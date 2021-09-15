@@ -3681,16 +3681,17 @@ class Series(SingleColumnFrame, Serializable):
             cats = pd.Series(cats, dtype="object")
         dtype = cudf.dtype(dtype)
 
-        if cats is not None and can_convert_to_column(cats):
-            if is_categorical_dtype(self.dtype):
-                col = self._column._get_decategorized_column()
+        if cats is not None:
+            try:
+                cats_col = as_column(cats, nan_as_null=False, dtype=self.dtype)
+            except TypeError:
+                raise ValueError("Cannot convert `cats` as cudf column.")
+
+            res = libcudf.transform.one_hot_encode(self._column, cats_col)
+            if dtype.type == np.bool_:
+                return list(res.values())
             else:
-                col = self._column
-            col = col.nans_to_nulls()
-            res = libcudf.reshape.one_hot_encoding(
-                col, as_column(cats), dtype
-            )
-            return list(res[0].values())
+                return [x.astype(dtype) for x in list(res.values())]
 
         def encode(cat):
             if cat is None:

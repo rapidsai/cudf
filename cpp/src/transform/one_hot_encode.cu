@@ -29,6 +29,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <algorithm>
+
 namespace cudf {
 namespace detail {
 
@@ -79,7 +81,7 @@ struct one_hot_encode_launcher {
                       one_hot_encoding_compute_f);
 
     auto split_iter = make_counting_transform_iterator(
-      1, [&input_column](auto i) { return i * input_column.size(); });
+      1, [width = input_column.size()](auto i) { return i * width; });
     std::vector<size_type> split_indices(split_iter, split_iter + categories.size() - 1);
 
     // TODO: use detail interface, gh9226
@@ -103,6 +105,24 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
                                                               rmm::cuda_stream_view stream,
                                                               rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(input_column.type() == categories.type(),
+               "Mismatch type between input and categories.");
+
+  if (categories.is_empty()) {
+    return std::make_pair(make_empty_column(data_type{type_id::BOOL8}), table_view{});
+  }
+
+  if (input_column.is_empty()) {
+    auto empty_data = make_empty_column(data_type{type_id::BOOL8});
+    std::vector<column_view> views;
+    views.reserve(categories.size());
+    std::transform(thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(categories.size()),
+                   std::back_inserter(views),
+                   [&empty_data](size_type) { return empty_data->view(); });
+    return std::make_pair(std::move(empty_data), table_view{views});
+  }
+
   return (!input_column.nullable() and !categories.nullable())
            ? type_dispatcher(input_column.type(),
                              one_hot_encode_launcher<false>{},
@@ -125,8 +145,6 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(
   column_view const& categories,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(input_column.type() == categories.type(),
-               "Mismatch type between input and categories.");
   return detail::one_hot_encode(input_column, categories, rmm::cuda_stream_default, mr);
 }
 }  // namespace cudf
