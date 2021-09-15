@@ -551,10 +551,11 @@ class Frame(libcudf.table.Table):
     ) -> Union[cupy.ndarray, np.ndarray]:
         # Internal function to implement to_cupy and to_numpy, which are nearly
         # identical except for the attribute they access to generate values.
-        if na_value is not None:
-            raise NotImplementedError(
-                "The na_value parameter is not yet supported."
-            )
+
+        def get_column_values_na(col):
+            if na_value is not None:
+                col = col.fillna(na_value)
+            return get_column_values(col)
 
         # Early exit for an empty Frame.
         ncol = self._num_columns
@@ -571,7 +572,7 @@ class Frame(libcudf.table.Table):
             # TODO: col.values may fail if there is nullable data or an
             # unsupported dtype. We may want to catch and provide a more
             # suitable error.
-            matrix[:, i] = get_column_values(col)
+            matrix[:, i] = get_column_values_na(col)
         return matrix
 
     def to_cupy(
@@ -642,7 +643,7 @@ class Frame(libcudf.table.Table):
             )
 
         return self._to_array(
-            lambda col: col.values_host, np.empty, dtype, na_value
+            (lambda col: col.values_host), np.empty, dtype, na_value
         )
 
     def clip(self, lower=None, upper=None, inplace=False, axis=1):
