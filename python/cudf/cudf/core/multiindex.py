@@ -270,10 +270,6 @@ class MultiIndex(Frame, BaseIndex):
         return obj
 
     @property
-    def shape(self):
-        return (self._data.nrows, len(self._data.names))
-
-    @property
     def name(self):
         return self._name
 
@@ -396,19 +392,7 @@ class MultiIndex(Frame, BaseIndex):
 
         return mi
 
-    def deepcopy(self):
-        return self.copy(deep=True)
-
-    def __copy__(self):
-        return self.copy(deep=True)
-
     def __iter__(self):
-        """
-        Iterating over a GPU object is not effecient and hence not supported.
-
-        Consider using ``.to_arrow()``, ``.to_pandas()`` or ``.values_host``
-        if you wish to iterate over the values.
-        """
         cudf.utils.utils.raise_iteration_error(obj=self)
 
     def _popn(self, n):
@@ -896,24 +880,6 @@ class MultiIndex(Frame, BaseIndex):
             for i in indexer:
                 self._validate_indexer(i)
 
-    def _split_tuples(self, tuples):
-        if len(tuples) == 1:
-            return tuples, slice(None)
-        elif isinstance(tuples[0], tuple):
-            row = tuples[0]
-            if len(tuples) == 1:
-                column = slice(None)
-            else:
-                column = tuples[1]
-            return row, column
-        elif isinstance(tuples[0], slice):
-            return tuples
-        else:
-            return tuples, slice(None)
-
-    def __len__(self):
-        return self._data.nrows
-
     def __eq__(self, other):
         if isinstance(other, MultiIndex):
             for self_col, other_col in zip(
@@ -923,14 +889,6 @@ class MultiIndex(Frame, BaseIndex):
                     return False
             return self.names == other.names
         return NotImplemented
-
-    @property
-    def is_contiguous(self):
-        return True
-
-    @property
-    def size(self):
-        return len(self)
 
     def take(self, indices):
         from collections.abc import Sequence
@@ -1427,18 +1385,6 @@ class MultiIndex(Frame, BaseIndex):
         return len(self) == len(self.unique())
 
     @property
-    def is_monotonic(self):
-        """Return boolean if values in the object are monotonic_increasing.
-
-        This property is an alias for :attr:`is_monotonic_increasing`.
-
-        Returns
-        -------
-        bool
-        """
-        return self.is_monotonic_increasing
-
-    @property
     def is_monotonic_increasing(self):
         """
         Return if the index is monotonic increasing
@@ -1608,12 +1554,6 @@ class MultiIndex(Frame, BaseIndex):
                 )
 
         return MultiIndex._concat(to_concat)
-
-    def nan_to_num(*args, **kwargs):
-        return args[0]
-
-    def array_equal(*args, **kwargs):
-        return args[0] == args[1]
 
     def __array_function__(self, func, types, args, kwargs):
         cudf_df_module = MultiIndex
