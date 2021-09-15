@@ -2809,7 +2809,7 @@ class Frame(libcudf.table.Table):
         """
         result = self.copy(deep=False)
         for col in result._data:
-            min_float_dtype = cudf.api.types.get_min_float_dtype(
+            min_float_dtype = cudf.utils.dtypes.get_min_float_dtype(
                 result._data[col]
             )
             result._data[col] = result._data[col].astype(min_float_dtype)
