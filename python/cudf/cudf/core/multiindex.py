@@ -1514,7 +1514,7 @@ class MultiIndex(Frame, BaseIndex):
         return super().fillna(value=value)
 
     def unique(self):
-        return self.drop_duplicates()
+        return self.drop_duplicates(ignore_index=True)
 
     def _clean_nulls_from_index(self):
         """
