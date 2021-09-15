@@ -933,15 +933,11 @@ class MultiIndex(Frame, BaseIndex):
         return cls._from_data(dict(zip(names, columns)))
 
     def __getitem__(self, index):
-        match = self.take(index)
-        if isinstance(index, slice):
-            return match
         if isinstance(index, int):
             # we are indexing into a single row of the MultiIndex,
             # return that row as a tuple:
-            return match.to_pandas()[0]
-        else:
-            return match
+            return self.take(index).to_pandas()[0]
+        return self.take(index)
 
     def to_frame(self, index=True, name=None):
         # TODO: Currently this function makes a shallow copy, which is
@@ -953,7 +949,7 @@ class MultiIndex(Frame, BaseIndex):
         if name is not None:
             if len(name) != len(self.levels):
                 raise ValueError(
-                    "'name' should have th same length as "
+                    "'name' should have the same length as "
                     "number of levels on index."
                 )
             df.columns = name
