@@ -1477,13 +1477,9 @@ class MultiIndex(Frame, BaseIndex):
         return n
 
     def difference(self, other, sort=None):
-        temp_self = self
-        temp_other = other
-        if hasattr(self, "to_pandas"):
-            temp_self = self.to_pandas()
         if hasattr(other, "to_pandas"):
-            temp_other = self.to_pandas()
-        return temp_self.difference(temp_other, sort)
+            other = other.to_pandas()
+        return self.to_pandas().difference(other, sort)
 
     def append(self, other):
         """
