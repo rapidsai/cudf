@@ -87,9 +87,7 @@ auto generate_empty_output(strings_column_view const& input,
                              std::move(offsets_column),
                              std::move(chars_column),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 /**
@@ -163,9 +161,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                              std::move(offsets_column),
                              std::move(chars_column),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 namespace {
@@ -330,9 +326,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                              std::move(offsets_column),
                              std::move(chars_column),
                              UNKNOWN_NULL_COUNT,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(

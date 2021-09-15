@@ -176,7 +176,8 @@ class reader::impl {
    */
   column_buffer&& assemble_buffer(const int32_t orc_col_id,
                                   std::vector<std::vector<column_buffer>>& col_buffers,
-                                  const size_t level);
+                                  const size_t level,
+                                  rmm::cuda_stream_view stream);
 
   /**
    * @brief Create columns and respective schema information from the buffer.

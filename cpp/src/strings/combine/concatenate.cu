@@ -156,9 +156,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                              std::move(children.first),
                              std::move(children.second),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 namespace {
@@ -254,9 +252,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                              std::move(children.first),
                              std::move(children.second),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

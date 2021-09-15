@@ -423,27 +423,9 @@ def test_dataframe_drop_index(pdf, index, inplace):
         ("speed", 1),
         ("weight", 1),
         ("length", 1),
-        pytest.param(
-            "cow",
-            None,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/36293"
-            ),
-        ),
-        pytest.param(
-            "lama",
-            None,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/36293"
-            ),
-        ),
-        pytest.param(
-            "falcon",
-            None,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/36293"
-            ),
-        ),
+        ("cow", None),
+        ("lama", None,),
+        ("falcon", None,),
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
@@ -1259,7 +1241,7 @@ def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
     else:
         pres = pd.concat([df1, df2])
         gres = cudf.concat([cudf.from_pandas(df1), cudf.from_pandas(df2)])
-        assert_eq(cudf.from_pandas(pres), gres)
+        assert_eq(pres, gres, check_dtype=False, check_index_type=True)
 
 
 def test_dataframe_concat_different_column_types():
@@ -1287,7 +1269,7 @@ def test_concat_empty_dataframe(df_1, df_2):
     # ignoring dtypes as pandas upcasts int to float
     # on concatenation with empty dataframes
 
-    assert_eq(got, expect, check_dtype=False)
+    assert_eq(got, expect, check_dtype=False, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -1325,7 +1307,7 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
     for col in numeric_cols:
         got[col] = got[col].astype(np.float64).fillna(np.nan)
 
-    assert_eq(got, expect, check_dtype=False)
+    assert_eq(got, expect, check_dtype=False, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -1336,7 +1318,7 @@ def test_concat_empty_series(ser_1, ser_2):
     got = cudf.concat([cudf.Series(ser_1), cudf.Series(ser_2)])
     expect = pd.concat([ser_1, ser_2])
 
-    assert_eq(got, expect)
+    assert_eq(got, expect, check_index_type=True)
 
 
 def test_concat_with_axis():
@@ -1349,7 +1331,7 @@ def test_concat_with_axis():
 
     # concat only dataframes
     concat_cdf = cudf.concat([cdf1, cdf2], axis=1)
-    assert_eq(concat_cdf, concat_df)
+    assert_eq(concat_cdf, concat_df, check_index_type=True)
 
     # concat only series
     concat_s = pd.concat([df1.x, df1.y], axis=1)
@@ -1357,7 +1339,7 @@ def test_concat_with_axis():
     cs2 = cudf.Series.from_pandas(df1.y)
     concat_cdf_s = cudf.concat([cs1, cs2], axis=1)
 
-    assert_eq(concat_cdf_s, concat_s)
+    assert_eq(concat_cdf_s, concat_s, check_index_type=True)
 
     # concat series and dataframes
     s3 = pd.Series(np.random.random(5))
@@ -1365,7 +1347,7 @@ def test_concat_with_axis():
 
     concat_cdf_all = cudf.concat([cdf1, cs3, cdf2], axis=1)
     concat_df_all = pd.concat([df1, s3, df2], axis=1)
-    assert_eq(concat_cdf_all, concat_df_all)
+    assert_eq(concat_cdf_all, concat_df_all, check_index_type=True)
 
     # concat manual multi index
     midf1 = cudf.from_pandas(df1)
@@ -1379,10 +1361,20 @@ def test_concat_with_axis():
     mipdf1 = midf1.to_pandas()
     mipdf2 = midf2.to_pandas()
 
-    assert_eq(cudf.concat([midf1, midf2]), pd.concat([mipdf1, mipdf2]))
-    assert_eq(cudf.concat([midf2, midf1]), pd.concat([mipdf2, mipdf1]))
     assert_eq(
-        cudf.concat([midf1, midf2, midf1]), pd.concat([mipdf1, mipdf2, mipdf1])
+        cudf.concat([midf1, midf2]),
+        pd.concat([mipdf1, mipdf2]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([midf2, midf1]),
+        pd.concat([mipdf2, mipdf1]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([midf1, midf2, midf1]),
+        pd.concat([mipdf1, mipdf2, mipdf1]),
+        check_index_type=True,
     )
 
     # concat groupby multi index
@@ -1400,8 +1392,16 @@ def test_concat_with_axis():
     pdg1 = gdg1.to_pandas()
     pdg2 = gdg2.to_pandas()
 
-    assert_eq(cudf.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]))
-    assert_eq(cudf.concat([gdg2, gdg1]), pd.concat([pdg2, pdg1]))
+    assert_eq(
+        cudf.concat([gdg1, gdg2]),
+        pd.concat([pdg1, pdg2]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([gdg2, gdg1]),
+        pd.concat([pdg2, pdg1]),
+        check_index_type=True,
+    )
 
     # series multi index concat
     gdgz1 = gdg1.z
@@ -1409,8 +1409,16 @@ def test_concat_with_axis():
     pdgz1 = gdgz1.to_pandas()
     pdgz2 = gdgz2.to_pandas()
 
-    assert_eq(cudf.concat([gdgz1, gdgz2]), pd.concat([pdgz1, pdgz2]))
-    assert_eq(cudf.concat([gdgz2, gdgz1]), pd.concat([pdgz2, pdgz1]))
+    assert_eq(
+        cudf.concat([gdgz1, gdgz2]),
+        pd.concat([pdgz1, pdgz2]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([gdgz2, gdgz1]),
+        pd.concat([pdgz2, pdgz1]),
+        check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize("nrows", [0, 3, 10, 100, 1000])
@@ -1761,18 +1769,60 @@ def test_dataframe_shape_empty():
 @pytest.mark.parametrize("dtype", dtypes)
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
+    # In case of `bool` dtype: pandas <= 1.2.5 type-casts
+    # a boolean series to `float64` series if a `np.nan` is assigned to it:
+    # >>> s = pd.Series([True, False, True])
+    # >>> s
+    # 0     True
+    # 1    False
+    # 2     True
+    # dtype: bool
+    # >>> s[[2]] = np.nan
+    # >>> s
+    # 0    1.0
+    # 1    0.0
+    # 2    NaN
+    # dtype: float64
+    # In pandas >= 1.3.2 this behavior is fixed:
+    # >>> s = pd.Series([True, False, True])
+    # >>> s
+    # 0
+    # True
+    # 1
+    # False
+    # 2
+    # True
+    # dtype: bool
+    # >>> s[[2]] = np.nan
+    # >>> s
+    # 0
+    # True
+    # 1
+    # False
+    # 2
+    # NaN
+    # dtype: object
+    # In cudf we change `object` dtype to `str` type - for which there
+    # is no transpose implemented yet. Hence we need to test transpose
+    # against pandas nullable types as they are the ones that closely
+    # resemble `cudf` dtypes behavior.
     pdf = pd.DataFrame()
 
     null_rep = np.nan if dtype in ["float32", "float64"] else None
-
+    np_dtype = dtype
+    dtype = np.dtype(dtype)
+    dtype = cudf.utils.dtypes.np_dtypes_to_pandas_dtypes.get(dtype, dtype)
     for i in range(num_cols):
         colname = string.ascii_lowercase[i]
-        data = pd.Series(np.random.randint(0, 26, num_rows).astype(dtype))
+        data = pd.Series(
+            np.random.randint(0, 26, num_rows).astype(np_dtype), dtype=dtype,
+        )
         if nulls == "some":
             idx = np.random.choice(
                 num_rows, size=int(num_rows / 2), replace=False
             )
-            data[idx] = null_rep
+            if len(idx):
+                data[idx] = null_rep
         elif nulls == "all":
             data[:] = null_rep
         pdf[colname] = data
@@ -1784,8 +1834,8 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
 
     expect = pdf.transpose()
 
-    assert_eq(expect, got_function)
-    assert_eq(expect, got_property)
+    assert_eq(expect, got_function.to_pandas(nullable=True))
+    assert_eq(expect, got_property.to_pandas(nullable=True))
 
 
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
@@ -1937,9 +1987,6 @@ def test_dataframe_count_reduction(data, func):
 def test_dataframe_min_count_ops(data, ops, skipna, min_count):
     psr = pd.DataFrame(data)
     gsr = cudf.DataFrame(data)
-
-    if PANDAS_GE_120 and psr.shape[0] * psr.shape[1] < min_count:
-        pytest.xfail("https://github.com/pandas-dev/pandas/issues/39738")
 
     assert_eq(
         getattr(psr, ops)(skipna=skipna, min_count=min_count),
@@ -4031,10 +4078,7 @@ def test_series_values_property(data):
                 reason="Nulls not supported by as_gpu_matrix"
             ),
         ),
-        pytest.param(
-            {"A": [], "B": []},
-            marks=pytest.mark.xfail(reason="Requires at least 1 row"),
-        ),
+        {"A": [], "B": []},
         pytest.param(
             {"A": [1, 2, 3], "B": ["a", "b", "c"]},
             marks=pytest.mark.xfail(
@@ -7844,8 +7888,13 @@ def test_describe_misc_exclude(df, exclude):
         cudf.DataFrame(
             {
                 "a": ["hello", "world", "rapids", "ai", "nvidia"],
-                "b": cudf.Series([1, 21, 21, 11, 11], dtype="timedelta64[s]"),
-            }
+                "b": cudf.Series(
+                    [1, 21, 21, 11, 11],
+                    dtype="timedelta64[s]",
+                    index=["a", "b", "c", "d", " e"],
+                ),
+            },
+            index=["a", "b", "c", "d", " e"],
         ),
         cudf.DataFrame(
             {
@@ -8602,7 +8651,14 @@ def test_explode(data, labels, ignore_index, p_index, label_to_explode):
     pdf = pd.DataFrame(data, index=p_index, columns=labels)
     gdf = cudf.from_pandas(pdf)
 
-    expect = pdf.explode(label_to_explode, ignore_index)
+    # TODO: Remove this workaround after
+    #  following issue is fixed:
+    # https://github.com/pandas-dev/pandas/issues/43314
+    if isinstance(label_to_explode, int):
+        pdlabel_to_explode = [label_to_explode]
+    else:
+        pdlabel_to_explode = label_to_explode
+    expect = pdf.explode(pdlabel_to_explode, ignore_index)
     got = gdf.explode(label_to_explode, ignore_index)
 
     assert_eq(expect, got, check_dtype=False)

@@ -505,9 +505,7 @@ struct dispatch_from_floats_fn {
                                std::move(offsets_column),
                                std::move(chars_column),
                                floats.null_count(),
-                               std::move(null_mask),
-                               stream,
-                               mr);
+                               std::move(null_mask));
   }
 
   // non-float types throw an exception
