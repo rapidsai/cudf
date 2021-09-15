@@ -532,8 +532,9 @@ std::unique_ptr<Base> make_tdigest_aggregation(int delta = 1000);
 /**
  * @brief Factory to create a MERGE_TDIGEST aggregation
  *
- * Produces a tdigest (https://arxiv.org/pdf/1902.04023.pdf) column from input values.
- * The input aggregation values are be tdigests produced by the TDIGEST aggregation.
+ * Merges the results from a previous aggregation resulting from a `make_tdigest_aggregation`
+ * or `make_merge_tdigest_aggregation` to produce a new a tdigest
+ * (https://arxiv.org/pdf/1902.04023.pdf) column.
  *
  * The tdigest column produced is of the following structure:
  *
