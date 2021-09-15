@@ -9,8 +9,8 @@ from pyarrow import orc as orc
 
 import cudf
 from cudf._lib import orc as liborc
+from cudf.api.types import is_list_like
 from cudf.utils import ioutils
-from cudf.utils.dtypes import is_list_like
 from cudf.utils.metadata import (  # type: ignore
     orc_column_statistics_pb2 as cs_pb2,
 )

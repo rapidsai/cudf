@@ -71,86 +71,9 @@ cdef class Table:
         """
         return self._data.columns
 
-    cdef table_view view(self) except *:
-        """
-        Return a cudf::table_view of all columns (including index columns)
-        of this Table.
-        """
-        if self._index is None:
-            return make_table_view(
-                self._data.columns
-            )
-        return make_table_view(
-            itertools.chain(
-                self._index._data.columns,
-                self._data.columns,
-            )
-        )
 
-    cdef mutable_table_view mutable_view(self) except *:
-        """
-        Return a cudf::mutable_table_view of all columns
-        (including index columns) of this Table.
-        """
-        if self._index is None:
-            return make_mutable_table_view(
-                self._data.columns
-            )
-        return make_mutable_table_view(
-            itertools.chain(
-                self._index._data.columns,
-                self._data.columns,
-            )
-        )
-
-    cdef table_view data_view(self) except *:
-        """
-        Return a cudf::table_view of just the data columns
-        of this Table.
-        """
-        return make_table_view(
-            self._data.columns
-        )
-
-    cdef mutable_table_view mutable_data_view(self) except *:
-        """
-        Return a cudf::mutable_table_view of just the data columns
-        of this Table.
-        """
-        return make_mutable_table_view(
-            self._data.columns
-        )
-
-    cdef table_view index_view(self) except *:
-        """
-        Return a cudf::table_view of just the index columns
-        of this Table.
-        """
-        if self._index is None:
-            raise ValueError("Cannot get index_view of a Table "
-                             "that has no index")
-        return make_table_view(
-            self._index.values()
-        )
-
-    cdef mutable_table_view mutable_index_view(self) except *:
-        """
-        Return a cudf::mutable_table_view of just the index columns
-        of this Table.
-        """
-        if self._index is None:
-            raise ValueError("Cannot get mutable_index_view of a Table "
-                             "that has no index")
-        return make_mutable_table_view(
-            self._index._data.columns
-        )
-
-
-cdef table_view make_table_view(columns) except*:
-    """
-    Helper function to create a cudf::table_view from
-    a list of Columns
-    """
+cdef table_view table_view_from_columns(columns) except*:
+    """Create a cudf::table_view from an iterable of Columns."""
     cdef vector[column_view] column_views
 
     cdef Column col
@@ -159,34 +82,17 @@ cdef table_view make_table_view(columns) except*:
 
     return table_view(column_views)
 
-cdef mutable_table_view make_mutable_table_view(columns) except*:
-    """
-    Helper function to create a cudf::mutable_table_view from
-    a list of Columns
-    """
-    cdef vector[mutable_column_view] mutable_column_views
 
-    cdef Column col
-    for col in columns:
-        mutable_column_views.push_back(col.mutable_view())
-
-    return mutable_table_view(mutable_column_views)
-
-cdef columns_from_ptr(unique_ptr[table] c_tbl):
-    """
-    Return a list of table columns from a unique pointer
+cdef table_view table_view_from_table(Table tbl, ignore_index=False) except*:
+    """Create a cudf::table_view from a Table.
 
     Parameters
     ----------
-    c_tbl : unique_ptr[cudf::table]
+    ignore_index : bool, default False
+        If True, don't include the index in the columns.
     """
-    num_columns = c_tbl.get().num_columns()
-    cdef vector[unique_ptr[column]] columns
-    columns = move(c_tbl.get()[0].release())
-    cdef vector[unique_ptr[column]].iterator it = columns.begin()
-
-    result = [None] * num_columns
-    for i in range(num_columns):
-        result[i] = Column.from_unique_ptr(move(dereference(it)))
-        it += 1
-    return result
+    return table_view_from_columns(
+        tbl._index._data.columns + tbl._data.columns
+        if not ignore_index and tbl._index is not None
+        else tbl._data.columns
+    )

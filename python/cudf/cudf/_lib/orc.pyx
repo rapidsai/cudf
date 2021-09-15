@@ -40,7 +40,7 @@ from cudf._lib.io.utils cimport (
     update_column_struct_field_names,
     update_struct_field_names,
 )
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, table_view_from_table
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
@@ -51,7 +51,7 @@ import numpy as np
 from cudf._lib.utils cimport data_from_unique_ptr, get_column_names
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
-from cudf.utils.dtypes import is_list_dtype, is_struct_dtype
+from cudf.api.types import is_list_dtype, is_struct_dtype
 
 
 cpdef read_raw_orc_statistics(filepath_or_buffer):
@@ -150,7 +150,7 @@ cpdef write_orc(Table table,
     cdef unique_ptr[table_input_metadata] tbl_meta
 
     if not isinstance(table._index, cudf.RangeIndex):
-        tv = table.view()
+        tv = table_view_from_table(table)
         tbl_meta = make_unique[table_input_metadata](tv)
         for level, idx_name in enumerate(table._index.names):
             tbl_meta.get().column_metadata[level].set_name(
@@ -160,7 +160,7 @@ cpdef write_orc(Table table,
             )
         num_index_cols_meta = len(table._index.names)
     else:
-        tv = table.data_view()
+        tv = table_view_from_table(table, ignore_index=True)
         tbl_meta = make_unique[table_input_metadata](tv)
         num_index_cols_meta = 0
 
@@ -171,8 +171,9 @@ cpdef write_orc(Table table,
         )
 
     cdef orc_writer_options c_orc_writer_options = move(
-        orc_writer_options.builder(sink_info_c, table.data_view())
-        .metadata(tbl_meta.get())
+        orc_writer_options.builder(
+            sink_info_c, table_view_from_table(table, ignore_index=True)
+        ).metadata(tbl_meta.get())
         .compression(compression_)
         .enable_statistics(<bool> (True if enable_statistics else False))
         .build()
@@ -262,13 +263,11 @@ cdef class ORCWriter:
         if not self.initialized:
             self._initialize_chunked_state(table)
 
-        cdef table_view tv
-        if self.index is not False and (
+        keep_index = self.index is not False and (
             table._index.name is not None or
-                isinstance(table._index, cudf.core.multiindex.MultiIndex)):
-            tv = table.view()
-        else:
-            tv = table.data_view()
+            isinstance(table._index, cudf.core.multiindex.MultiIndex)
+        )
+        tv = table_view_from_table(table, not keep_index)
 
         with nogil:
             self.writer.get()[0].write(tv)
@@ -291,10 +290,12 @@ cdef class ORCWriter:
 
         # Set the table_metadata
         num_index_cols_meta = 0
-        self.tbl_meta = make_unique[table_input_metadata](table.data_view())
+        self.tbl_meta = make_unique[table_input_metadata](
+            table_view_from_table(table, ignore_index=True)
+        )
         if self.index is not False:
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
-                tv = table.view()
+                tv = table_view_from_table(table)
                 self.tbl_meta = make_unique[table_input_metadata](tv)
                 for level, idx_name in enumerate(table._index.names):
                     self.tbl_meta.get().column_metadata[level].set_name(
@@ -303,7 +304,7 @@ cdef class ORCWriter:
                 num_index_cols_meta = len(table._index.names)
             else:
                 if table._index.name is not None:
-                    tv = table.view()
+                    tv = table_view_from_table(table)
                     self.tbl_meta = make_unique[table_input_metadata](tv)
                     self.tbl_meta.get().column_metadata[0].set_name(
                         str.encode(table._index.name)

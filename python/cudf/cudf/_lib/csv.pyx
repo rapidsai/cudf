@@ -44,7 +44,11 @@ from cudf._lib.cpp.io.types cimport (
 )
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.io.utils cimport make_sink_info, make_source_info
-from cudf._lib.table cimport Table, make_table_view
+from cudf._lib.table cimport (
+    Table,
+    table_view_from_columns,
+    table_view_from_table,
+)
 from cudf._lib.utils cimport data_from_unique_ptr
 
 ctypedef int32_t underlying_type_t_compression
@@ -258,7 +262,7 @@ cdef csv_reader_options make_csv_reader_options(
             csv_reader_options_c.set_dtypes(c_dtypes_map)
             csv_reader_options_c.set_parse_hex(c_hex_col_names)
         elif (
-            cudf.utils.dtypes.is_scalar(dtype) or
+            cudf.api.types.is_scalar(dtype) or
             isinstance(dtype, (
                 np.dtype, pd.core.dtypes.dtypes.ExtensionDtype, type
             ))
@@ -458,8 +462,9 @@ cpdef write_csv(
     --------
     cudf.to_csv
     """
-    cdef table_view input_table_view = \
-        table.view() if index is True else table.data_view()
+    cdef table_view input_table_view = table_view_from_table(
+        table, not index
+    )
     cdef bool include_header_c = header
     cdef char delim_c = ord(sep)
     cdef string line_term_c = line_terminator.encode()
@@ -515,7 +520,7 @@ cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
     # TODO: Remove this Error message once the
     # following issue is fixed:
     # https://github.com/rapidsai/cudf/issues/3960
-    if cudf.utils.dtypes.is_categorical_dtype(dtype):
+    if cudf.api.types.is_categorical_dtype(dtype):
         raise NotImplementedError(
             "CategoricalDtype as dtype is not yet "
             "supported in CSV reader"
