@@ -55,6 +55,11 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         CUDA 'cudf::udf_type::CUDA'
         PTX 'cudf::udf_type::PTX'
 
+    ctypedef enum correlation_type:
+        PEARSON 'cudf::correlation_type::PEARSON'
+        KENDALL 'cudf::correlation_type::KENDALL'
+        SPEARMAN 'cudf::correlation_type::SPEARMAN'
+
     cdef unique_ptr[T] make_sum_aggregation[T]() except +
 
     cdef unique_ptr[T] make_product_aggregation[T]() except +
@@ -109,4 +114,5 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         string user_defined_aggregator,
         data_type output_type) except +
 
-    cdef unique_ptr[T] make_correlation_aggregation[T]() except +
+    cdef unique_ptr[T] make_correlation_aggregation[T](
+        correlation_type type) except +
