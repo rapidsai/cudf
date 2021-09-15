@@ -1170,7 +1170,8 @@ struct target_type_impl<SourceType, aggregation::MERGE_M2> {
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<Source,
                         k,
-                        std::enable_if_t<is_numeric<Source>() && k == aggregation::TDIGEST>> {
+                        std::enable_if_t<(is_numeric<Source>() || is_fixed_point<Source>()) &&
+                                         k == aggregation::TDIGEST>> {
   using type = struct_view;
 };
 
