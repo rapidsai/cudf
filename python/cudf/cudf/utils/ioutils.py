@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import pyarrow.fs as pa_fs
 from fsspec.core import get_fs_token_paths
-from pyarrow._fs import LocalFileSystem
+from pyarrow.fs import LocalFileSystem
 from pyarrow.lib import ArrowInvalid, NativeFile
 
 from cudf.utils.docutils import docfmt_partial

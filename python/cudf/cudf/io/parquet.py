@@ -328,13 +328,15 @@ def read_parquet(
 
     # Get required byte ranges (used with non-local fsspec filesystems)
     byte_ranges, footers, file_sizes = None, None, None
-    if need_byte_ranges or (
-        filepath_or_buffer
-        and isinstance(
-            filepath_or_buffer[0], fsspec.spec.AbstractBufferedFile,
+    if (
+        need_byte_ranges
+        or (
+            filepath_or_buffer
+            and isinstance(
+                filepath_or_buffer[0], fsspec.spec.AbstractBufferedFile,
+            )
         )
-        and not legacy_transfer
-    ):
+    ) and not legacy_transfer:
         byte_ranges, footers, file_sizes = _get_byte_ranges(
             filepath_or_buffer, row_groups, columns, fs,
         )
