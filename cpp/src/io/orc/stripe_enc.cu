@@ -784,8 +784,8 @@ __global__ void __launch_bounds__(block_size)
 
       auto const is_value_valid = [&]() {
         if (t >= nrows) return false;
-        return bit_is_set_or(pushdown_mask, column.offset() + row, true) and
-               bit_is_set_or(column.null_mask(), column.offset() + row, true);
+        return bit_value_or(pushdown_mask, column.offset() + row, true) and
+               bit_value_or(column.null_mask(), column.offset() + row, true);
       }();
       s->buf.u32[t] = is_value_valid ? 1u : 0u;
 

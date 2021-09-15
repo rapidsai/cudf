@@ -1318,7 +1318,7 @@ void pushdown_lists_null_mask(orc_column_view const& col,
     col.size(),
     [d_columns, col_idx = col.index(), parent_pd_mask, out_mask] __device__(auto& idx) {
       auto const d_col        = d_columns[col_idx].cudf_column;
-      auto const is_row_valid = d_col.is_valid(idx) and bit_is_set_or(parent_pd_mask, idx, true);
+      auto const is_row_valid = d_col.is_valid(idx) and bit_value_or(parent_pd_mask, idx, true);
       if (not is_row_valid) {
         auto offsets                = d_col.child(lists_column_view::offsets_column_index);
         auto const child_rows_begin = offsets.element<size_type>(idx);
@@ -1576,7 +1576,7 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
                            if (!parent_index.has_value()) return nullptr;
                            return d_cols[parent_index.value()].pushdown_mask;
                          }();
-                         if (col.is_null(idx) or not bit_is_set_or(pushdown_mask, idx, true))
+                         if (col.is_null(idx) or not bit_value_or(pushdown_mask, idx, true))
                            return 0u;
                          int64_t const element   = (col.type().id() == type_id::DECIMAL32)
                                                      ? col.element<int32_t>(idx)
