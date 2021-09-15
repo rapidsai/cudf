@@ -153,7 +153,10 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
  * output: [{0, 1, 0, 1, 0}, {0, 0, 1, 0, 0}]
  * @endcode
  *
+ * @throws cudf::logic_error if input and categories are different type
+ *
  * @param input Column containing values to be encoded
+ * @param categories Column containing labels
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return A pair containing the owner to all encoded data and a table view into the data
  */
