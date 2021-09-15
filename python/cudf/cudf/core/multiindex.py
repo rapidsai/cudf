@@ -764,9 +764,7 @@ class MultiIndex(Frame, BaseIndex):
         ) or isinstance(index_key[0], slice):
             index_key = index_key[0]
 
-        slice_access = False
-        if isinstance(index_key, slice):
-            slice_access = True
+        slice_access = isinstance(index_key, slice)
         out_index = cudf.DataFrame()
         # Select the last n-k columns where n is the number of columns and k is
         # the length of the indexing tuple
@@ -774,30 +772,24 @@ class MultiIndex(Frame, BaseIndex):
         if not isinstance(index_key, (numbers.Number, slice)):
             size = len(index_key)
         for k in range(size, len(index._data)):
-            if index.names is None:
-                name = k
-            else:
-                name = index.names[k]
             out_index.insert(
-                len(out_index.columns),
-                name,
+                out_index._num_columns,
+                k if index.names is None else index.names[k],
                 cudf.Series._from_data({None: index._data.columns[k]}),
             )
 
-        if len(result) == 1 and size == 0 and slice_access is False:
+        if len(result) == 1 and size == 0 and not slice_access:
             # If the final result is one row and it was not mapped into
             # directly, return a Series with a tuple as name.
             result = result.T
             result = result[result._data.names[0]]
-        elif len(result) == 0 and slice_access is False:
+        elif len(result) == 0 and not slice_access:
             # Pandas returns an empty Series with a tuple as name
             # the one expected result column
-            series_name = []
-            for col in index._data.columns:
-                series_name.append(col[0])
-            result = cudf.Series([])
-            result.name = tuple(series_name)
-        elif len(out_index.columns) == 1:
+            result = cudf.Series._from_data(
+                {}, name=tuple((col[0] for col in index._data.columns))
+            )
+        elif out_index._num_columns == 1:
             # If there's only one column remaining in the output index, convert
             # it into an Index and name the final index values according
             # to that column's name.
@@ -805,7 +797,7 @@ class MultiIndex(Frame, BaseIndex):
             out_index = as_index(last_column)
             out_index.name = index.names[-1]
             index = out_index
-        elif len(out_index.columns) > 1:
+        elif out_index._num_columns > 1:
             # Otherwise pop the leftmost levels, names, and codes from the
             # source index until it has the correct number of columns (n-k)
             result.reset_index(drop=True)
