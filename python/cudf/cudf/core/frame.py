@@ -488,7 +488,7 @@ class Frame(libcudf.table.Table):
                     else:
                         na_position = "last"
 
-                    if cudf.utils.dtypes.is_list_like(level):
+                    if cudf.api.types.is_list_like(level):
                         labels = [
                             self.index._get_level_label(lvl) for lvl in level
                         ]
