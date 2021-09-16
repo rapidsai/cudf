@@ -14,7 +14,7 @@ from libcpp.utility cimport move
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf._lib.column cimport Column
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, table_view_from_table
 
 from cudf.core.buffer import Buffer
 
@@ -127,7 +127,8 @@ def transform(Column input, op):
 
 
 def table_encode(Table input):
-    cdef table_view c_input = input.data_view()
+    cdef table_view c_input = table_view_from_table(
+        input, ignore_index=True)
     cdef pair[unique_ptr[table], unique_ptr[column]] c_result
 
     with nogil:

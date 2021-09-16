@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ struct nunique_functor {
 
     if (num_groups == 0) { return result; }
 
-    auto values_view = column_device_view::create(values);
+    auto values_view = column_device_view::create(values, stream);
     if (values.has_nulls()) {
       auto equal              = element_equality_comparator<true>{*values_view, *values_view};
       auto is_unique_iterator = thrust::make_transform_iterator(

@@ -128,7 +128,7 @@ class NumericalBaseColumn(ColumnBase):
     def quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> NumericalBaseColumn:
-        if isinstance(q, Number) or cudf.utils.dtypes.is_list_like(q):
+        if isinstance(q, Number) or cudf.api.types.is_list_like(q):
             np_array_q = np.asarray(q)
             if np.logical_or(np_array_q < 0, np_array_q > 1).any():
                 raise ValueError(
