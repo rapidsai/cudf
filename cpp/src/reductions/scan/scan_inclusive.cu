@@ -427,9 +427,9 @@ void pair_beta_adjust(column_view const& input,
 }
 
 rmm::device_uvector<double> compute_ewma_adjust(column_view const& input,
-                         double beta,
-                         rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource* mr)
+                                                double beta,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr)
 {
   rmm::device_uvector<double> output(input.size(), stream, mr);
   rmm::device_uvector<thrust::pair<double, double>> pairs(input.size(), stream, mr);
@@ -478,9 +478,9 @@ rmm::device_uvector<double> compute_ewma_adjust(column_view const& input,
 }
 
 rmm::device_uvector<double> compute_ewma_noadjust(column_view const& input,
-                           double beta,
-                           rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr)
+                                                  double beta,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr)
 {
   rmm::device_uvector<double> output(input.size(), stream, mr);
   rmm::device_uvector<thrust::pair<double, double>> pairs(input.size(), stream, mr);
@@ -503,22 +503,23 @@ rmm::device_uvector<double> compute_ewma_noadjust(column_view const& input,
                       return thrust::pair<double, double>(beta, input);
                     });
   if (input.has_nulls()) {
-
     auto device_view = *column_device_view::create(input);
     auto valid_it    = cudf::detail::make_validity_iterator(device_view);
-  
-    thrust::transform(rmm::exec_policy(stream),
-                      valid_it,
-                      valid_it + input.size(),
-                      pairs.begin(),
-                      pairs.begin(),
-                      [=] __host__ __device__ (bool valid, thrust::pair<double, double> pair) -> thrust::pair<double, double> {
-                        if (!valid) {
-                          return thrust::pair<double, double>(1.0, 0.0);
-                        } else {
-                          return pair;
-                        }
-                      });               
+
+    thrust::transform(
+      rmm::exec_policy(stream),
+      valid_it,
+      valid_it + input.size(),
+      pairs.begin(),
+      pairs.begin(),
+      [=] __host__ __device__(bool valid,
+                              thrust::pair<double, double> pair) -> thrust::pair<double, double> {
+        if (!valid) {
+          return thrust::pair<double, double>(1.0, 0.0);
+        } else {
+          return pair;
+        }
+      });
   }
   compute_recurrence(pairs, stream);
   // copy the second elements to the output for now
@@ -548,44 +549,67 @@ std::unique_ptr<column> ewma(column_view const& input,
   } else {
     data = compute_ewma_noadjust(input, beta, stream, mr);
   }
-  auto col = std::make_unique<column>(cudf::data_type{cudf::type_id::FLOAT64}, input.size(), std::move(data.release()));
+  auto col = std::make_unique<column>(
+    cudf::data_type{cudf::type_id::FLOAT64}, input.size(), std::move(data.release()));
   return col;
 }
 
+void print_col(std::unique_ptr<column>& input, rmm::cuda_stream_view stream)
+{
+  auto real_input = input.get()[0].view();
+  rmm::device_vector<double> input_vec(input.get()[0].size());
+  thrust::copy(rmm::exec_policy(stream),
+               real_input.begin<double>(),
+               real_input.end<double>(),
+               input_vec.begin());
+  thrust::host_vector<double> input_vec_host = input_vec;
+
+  for (int i = 0; i < real_input.size(); i++) {
+    std::cout << input_vec_host[i] << " ";
+  }
+  std::cout << std::endl;
+}
+
+/**
+ * @brief Compute exponentially weighted moving variance
+ * EWMVAR[i] is defined as EWMVAR[i] = EWMA[xi**2] - EWMA[xi]**2
+ */
 std::unique_ptr<column> ewmvar(column_view const& input,
                                double com,
                                bool adjust,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  // get means
-  auto input_sqr = make_fixed_width_column(cudf::data_type{cudf::type_id::FLOAT64}, input.size());
-  auto input_sqr_d = input_sqr->mutable_view();
+  // get xi**2
+  std::unique_ptr<column> xi_sqr = make_fixed_width_column(
+    cudf::data_type{cudf::type_id::FLOAT64}, input.size(), copy_bitmask(input));
+  mutable_column_view xi_sqr_d = xi_sqr->mutable_view();
   thrust::transform(rmm::exec_policy(stream),
                     input.begin<double>(),
                     input.end<double>(),
-                    input_sqr_d.begin<double>(),
-                    [=] __host__ __device__ (double input) -> double {
-                      return input * input;
-                    }
-                   );
+                    xi_sqr_d.begin<double>(),
+                    [=] __host__ __device__(double input) -> double { return input * input; });
+  print_col(xi_sqr, stream);
 
-  std::unique_ptr<column> ewma_x = ewma(input, com, adjust, stream, mr);
-  std::unique_ptr<column> ewma_xsqr = ewma(input_sqr.get()[0].view(), com, adjust, stream, mr);
-  auto output = make_fixed_width_column(cudf::data_type{cudf::type_id::FLOAT64}, input.size());
-  auto output_view = output->mutable_view();
+  // get EWMA[xi**2]
+  std::unique_ptr<column> ewma_xi_sqr = ewma((*xi_sqr).view(), com, adjust, stream, mr);
+  print_col(ewma_xi_sqr, stream);
 
-  thrust::transform(rmm::exec_policy(stream),
-                    ewma_x.get()[0].view().begin<double>(),
-                    ewma_x.get()[0].view().end<double>(),
-                    ewma_xsqr.get()[0].view().begin<double>(),
-                    output_view.begin<double>(),
-                    [=] __host__ __device__ (double x, double xsqrd) -> double {
-                      return xsqrd - x * x;
-                    });
+  // get EWMA[xi]
+  std::unique_ptr<column> ewma_xi = ewma(input, com, adjust, stream, mr);
+  print_col(ewma_xi, stream);
+
+  // reuse the memory from computing xi_sqr to write the output
+  thrust::transform(
+    rmm::exec_policy(stream),
+    ewma_xi.get()[0].view().begin<double>(),
+    ewma_xi.get()[0].view().end<double>(),
+    ewma_xi_sqr.get()[0].view().begin<double>(),
+    ewma_xi.get()[0].mutable_view().begin<double>(),
+    [=] __host__ __device__(double x, double xsqrd) -> double { return xsqrd - x * x; });
 
   // return means;
-  return output;
+  return ewma_xi;
 }
 
 std::unique_ptr<column> ewmstd(column_view const& input,
@@ -597,6 +621,7 @@ std::unique_ptr<column> ewmstd(column_view const& input,
   std::unique_ptr<column> var = ewmvar(input, com, adjust, stream, mr);
   auto var_view               = var.get()[0].mutable_view();
 
+  // write into the same memory
   thrust::transform(rmm::exec_policy(stream),
                     var_view.begin<double>(),
                     var_view.end<double>(),
@@ -626,7 +651,8 @@ std::unique_ptr<column> ewm(column_view const& input,
       double com  = (dynamic_cast<ewmstd_aggregation*>(agg.get()))->com;
       bool adjust = (dynamic_cast<ewmstd_aggregation*>(agg.get()))->adjust;
       return ewmstd(input, com, adjust, stream, mr);
-    } default: CUDF_FAIL("Unsupported aggregation operator for scan");
+    }
+    default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
 }
 

@@ -36,7 +36,8 @@ def test_ewma(data, params, adjust):
     assert_eq(expect, got)
 
 @pytest.mark.parametrize('data', [
-    [1.0, 2.0, 3.0, 4.0, 5.0]
+    [1.0, 2.0, 3.0, 4.0, 5.0],
+    [1.0, 2.0, float('nan'), 4.0, 5.0]
 ])
 @pytest.mark.parametrize('params', [
     {'com': 0.1},
