@@ -25,6 +25,7 @@
 #include <rmm/exec_policy.hpp>
 #include <type_traits>
 
+#include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
 
@@ -78,9 +79,6 @@ CUDA_DEVICE_CALLABLE uint64_t swap_endian(uint64_t x)
 
 template <typename HasherT>
 struct SHAHash {
-  // Number of bytes used for the message length
-  static constexpr auto message_length_size = 8;
-
   /**
    * @brief Execute SHA on input data chunks.
    *
@@ -145,27 +143,30 @@ struct SHAHash {
     // bits. We always pad the upper 64 bits with zeros.
     constexpr auto message_length_supported_size = sizeof(message_length_in_bits);
 
-    if (hash_state->buffer_length + message_length_size + end_of_message_size <=
+    if (hash_state->buffer_length + Hasher::message_length_size + end_of_message_size <=
         Hasher::message_chunk_size) {
       // Fill the remainder of the buffer with zeros up to the space reserved
       // for the message length. The message length fits in this hash step.
-      thrust::fill_n(thrust::seq,
-                     hash_state->buffer + hash_state->buffer_length + 1,
-                     (Hasher::message_chunk_size - message_length_supported_size -
-                      end_of_message_size - hash_state->buffer_length),
-                     0x00);
+      thrust::fill(thrust::seq,
+                   hash_state->buffer + hash_state->buffer_length + end_of_message_size,
+                   hash_state->buffer + Hasher::message_chunk_size - message_length_supported_size,
+                   0x00);
     } else {
       // Fill the remainder of the buffer with zeros. The message length doesn't
       // fit and will be processed in a subsequent hash step comprised of only
       // zeros followed by the message length.
-      thrust::fill_n(thrust::seq,
-                     hash_state->buffer + hash_state->buffer_length + end_of_message_size,
-                     (Hasher::message_chunk_size - hash_state->buffer_length),
-                     0x00);
+      thrust::fill(thrust::seq,
+                   hash_state->buffer + hash_state->buffer_length + end_of_message_size,
+                   hash_state->buffer + Hasher::message_chunk_size,
+                   0x00);
       Hasher::hash_step(hash_state);
 
-      thrust::fill_n(
-        thrust::seq, hash_state->buffer, Hasher::message_chunk_size - message_length_size, 0x00);
+      // Fill the entire message with zeros up to the final bytes reserved for
+      // the message length.
+      thrust::fill_n(thrust::seq,
+                     hash_state->buffer,
+                     Hasher::message_chunk_size - message_length_supported_size,
+                     0x00);
     }
 
     // Convert the 64-bit message length from little-endian to big-endian.
@@ -292,6 +293,8 @@ struct SHA1Hash : SHAHash<SHA1Hash> {
   static constexpr auto message_chunk_size = 64;
   // Digest size in bytes
   static constexpr auto digest_size = 40;
+  // Number of bytes used for the message length
+  static constexpr auto message_length_size = 8;
 
   /**
    * @brief Core SHA-1 algorithm implementation. Processes a single 512-bit chunk,
@@ -371,6 +374,8 @@ struct SHA256Hash : SHAHash<SHA256Hash> {
   static constexpr auto message_chunk_size = 64;
   // Digest size in bytes
   static constexpr auto digest_size = 64;
+  // Number of bytes used for the message length
+  static constexpr auto message_length_size = 8;
 
   /**
    * @brief Core SHA-256 algorithm implementation. Processes a single 512-bit chunk,
@@ -449,6 +454,8 @@ struct SHA512Hash : SHAHash<SHA512Hash> {
   static constexpr auto message_chunk_size = 128;
   // Digest size in bytes
   static constexpr auto digest_size = 128;
+  // Number of bytes used for the message length
+  static constexpr auto message_length_size = 16;
 
   /**
    * @brief Core SHA-512 algorithm implementation. Processes a single 512-bit chunk,
@@ -541,6 +548,7 @@ std::unique_ptr<column> sha_hash(table_view const& input,
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
     // Return the hash of a zero-length input.
+    // TODO: This probably needs tested!
     auto output = make_column_from_scalar(empty_result, input.num_rows(), stream, mr);
     return output;
   }
@@ -559,7 +567,7 @@ std::unique_ptr<column> sha_hash(table_view const& input,
   auto chars_column =
     strings::detail::create_chars_child_column(input.num_rows() * Hasher::digest_size, stream, mr);
   auto chars_view = chars_column->mutable_view();
-  auto d_chars    = chars_view.data<char>();
+  auto d_chars    = chars_view.template data<char>();
 
   rmm::device_buffer null_mask{0, stream, mr};
 
