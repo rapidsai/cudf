@@ -36,6 +36,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <nvcomp/snappy.h>
+
 #include <algorithm>
 #include <cstring>
 #include <numeric>
@@ -1472,9 +1474,14 @@ void writer::impl::write(table_view const& table)
   }
 
   // Allocate intermediate output stream buffer
-  size_t compressed_bfr_size   = 0;
-  size_t num_compressed_blocks = 0;
-  auto stream_output           = [&]() {
+  size_t compressed_bfr_size       = 0;
+  size_t num_compressed_blocks     = 0;
+  size_t max_compressed_block_size = 0;
+  if (compression_kind_ != NONE) {
+    nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
+      compression_blocksize_, nvcompBatchedSnappyDefaultOpts, &max_compressed_block_size);
+  }
+  auto stream_output = [&]() {
     size_t max_stream_size = 0;
     bool all_device_write  = true;
 
@@ -1491,7 +1498,8 @@ void writer::impl::write(table_view const& table)
             (stream_size + compression_blocksize_ - 1) / compression_blocksize_, 1);
           stream_size += num_blocks * 3;
           num_compressed_blocks += num_blocks;
-          compressed_bfr_size += stream_size;
+          compressed_bfr_size += (max_compressed_block_size + 3) * num_blocks;
+          // compressed_bfr_size += stream_size;
         }
         max_stream_size = std::max(max_stream_size, stream_size);
       }
@@ -1519,6 +1527,7 @@ void writer::impl::write(table_view const& table)
                                 num_compressed_blocks,
                                 compression_kind_,
                                 compression_blocksize_,
+                                max_compressed_block_size,
                                 strm_descs,
                                 enc_data.streams,
                                 comp_in.device_ptr(),
