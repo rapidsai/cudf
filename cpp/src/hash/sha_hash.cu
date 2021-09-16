@@ -657,8 +657,7 @@ std::unique_ptr<column> sha224_hash(table_view const& input,
                                     rmm::mr::device_memory_resource* mr)
 {
   string_scalar const empty_result("d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f");
-  return nullptr;
-  // return sha_hash<SHA224Hash>(input, empty_result, stream, mr);
+  return sha_hash<SHA224Hash>(input, empty_result, stream, mr);
 }
 
 std::unique_ptr<column> sha256_hash(table_view const& input,
@@ -677,8 +676,7 @@ std::unique_ptr<column> sha384_hash(table_view const& input,
   string_scalar const empty_result(
     "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b9"
     "5b");
-  return nullptr;
-  // return sha_hash<SHA384Hash>(input, empty_result, stream, mr);
+  return sha_hash<SHA384Hash>(input, empty_result, stream, mr);
 }
 
 std::unique_ptr<column> sha512_hash(table_view const& input,
