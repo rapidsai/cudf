@@ -2204,7 +2204,7 @@ def as_index(arbitrary, **kwargs) -> BaseIndex:
     elif isinstance(arbitrary, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(arbitrary)
     elif isinstance(arbitrary, cudf.DataFrame):
-        return cudf.MultiIndex(source_data=arbitrary)
+        return cudf.MultiIndex.from_frame(arbitrary)
     return as_index(
         column.as_column(arbitrary, dtype=kwargs.get("dtype", None)), **kwargs
     )

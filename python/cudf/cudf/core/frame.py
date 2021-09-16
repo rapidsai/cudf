@@ -1857,7 +1857,7 @@ class Frame(libcudf.table.Table):
             if isinstance(self, cudf.MultiIndex):
                 # TODO: Need to update this once MultiIndex is refactored,
                 # should be able to treat it similar to other Frame object
-                result = cudf.Index(self._source_data[gather_map])
+                result = cudf.Index(self.to_frame(index=False)[gather_map])
             else:
                 result = self[gather_map]
                 if not keep_index:
@@ -3169,9 +3169,13 @@ class Frame(libcudf.table.Table):
             index = cudf.core.index.as_index(index)
 
             if isinstance(index, cudf.MultiIndex):
-                idx_dtype_match = (
-                    df.index._source_data.dtypes == index._source_data.dtypes
-                ).all()
+                idx_dtype_match = all(
+                    left_dtype == right_dtype
+                    for left_dtype, right_dtype in zip(
+                        (col.dtype for col in df.index._data.columns),
+                        (col.dtype for col in index._data.columns),
+                    )
+                )
             else:
                 idx_dtype_match = df.index.dtype == index.dtype
 
@@ -5221,7 +5225,7 @@ def _drop_rows_by_labels(
         # 1. Merge Index df and data df along column axis:
         # | id | ._index df | data column(s) |
         idx_nlv = obj._index.nlevels
-        working_df = obj._index._source_data
+        working_df = obj._index.to_frame(index=False)
         working_df.columns = [i for i in range(idx_nlv)]
         for i, col in enumerate(obj._data):
             working_df[idx_nlv + i] = obj._data[col]

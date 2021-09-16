@@ -4003,7 +4003,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     ]
                 else:
                     labels = [self.index._get_level_label(level)]
-                inds = self.index._source_data[labels].argsort(
+                inds = self.index.to_frame(index=False)[labels].argsort(
                     ascending=ascending, na_position=na_position
                 )
             else:
