@@ -31,6 +31,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -43,19 +44,6 @@
 
 namespace cudf {
 namespace groupby {
-namespace {
-/**
- * @brief Helper functor to check if a specified type supports equality comparisons.
- */
-struct equality_comparable_functor {
-  template <typename T>
-  bool operator()() const
-  {
-    return cudf::is_equality_comparable<T, T>();
-  }
-};
-}  // namespace
-
 // Constructor
 groupby::groupby(table_view const& keys,
                  null_policy include_null_keys,
@@ -68,12 +56,13 @@ groupby::groupby(table_view const& keys,
     _column_order{column_order},
     _null_precedence{null_precedence}
 {
-  auto is_equality_comparable = [](auto const& col) {
-    return cudf::type_dispatcher(col.type(), equality_comparable_functor{});
+  auto is_supported_key_type = [](auto col) {
+    return col.type().id() == type_id::STRUCT     // Struct does not support ==.
+           or col.type().id() == type_id::STRING  // String does not support == on __host__.
+           or cudf::is_equality_comparable(col.type());
   };
-  auto all_keys_equality_comparable = std::all_of(keys.begin(), keys.end(), is_equality_comparable);
-  CUDF_EXPECTS(all_keys_equality_comparable,
-               "Unsupported groupby key type does not support equality comparison.");
+  CUDF_EXPECTS(std::all_of(keys.begin(), keys.end(), is_supported_key_type),
+               "Unsupported groupby key type");
 }
 
 // Select hash vs. sort groupby implementation
