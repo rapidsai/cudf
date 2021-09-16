@@ -14,13 +14,13 @@ install_requires = [
     "distributed>=2021.6.0",
     "fsspec>=0.6.0",
     "numpy",
-    "pandas>=1.0,<1.3.0dev0",
+    "pandas>=1.0,<1.4.0dev0",
 ]
 
 extras_require = {
     "test": [
         "numpy",
-        "pandas>=1.0,<1.3.0dev0",
+        "pandas>=1.0,<1.4.0dev0",
         "pytest",
         "numba>=0.53.1",
         "dask>=2021.6.0",

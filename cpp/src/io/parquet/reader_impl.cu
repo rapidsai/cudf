@@ -1016,8 +1016,9 @@ void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
   size_t num_comp_pages = comp_in.size();
   size_t temp_size;
 
-  CUDF_EXPECTS(nvcompStatus_t::nvcompSuccess == nvcompBatchedSnappyDecompressGetTempSize(
-                                                  num_comp_pages, max_uncomp_page_size, &temp_size),
+  nvcompStatus_t nvcomp_status =
+    nvcompBatchedSnappyDecompressGetTempSize(num_comp_pages, max_uncomp_page_size, &temp_size);
+  CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
                "Unable to get scratch size for snappy decompression");
 
   // Not needed now but nvcomp API makes no promises about future
@@ -1048,17 +1049,18 @@ void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
                     [] __device__(gpu_inflate_input_s in) {
                       return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice, in.dstSize);
                     });
-  CUDF_EXPECTS(nvcompStatus_t::nvcompSuccess ==
-                 nvcompBatchedSnappyDecompressAsync(compressed_data_ptrs.data(),
-                                                    compressed_data_sizes.data(),
-                                                    uncompressed_data_sizes.data(),
-                                                    actual_uncompressed_data_sizes.data(),
-                                                    num_comp_pages,
-                                                    scratch.data(),
-                                                    scratch.size(),
-                                                    uncompressed_data_ptrs.data(),
-                                                    statuses.data(),
-                                                    stream.value()),
+
+  nvcomp_status = nvcompBatchedSnappyDecompressAsync(compressed_data_ptrs.data(),
+                                                     compressed_data_sizes.data(),
+                                                     uncompressed_data_sizes.data(),
+                                                     actual_uncompressed_data_sizes.data(),
+                                                     num_comp_pages,
+                                                     scratch.data(),
+                                                     scratch.size(),
+                                                     uncompressed_data_ptrs.data(),
+                                                     statuses.data(),
+                                                     stream.value());
+  CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
                "unable to perform snappy decompression");
 
   CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
