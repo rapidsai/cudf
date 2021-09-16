@@ -296,9 +296,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_approxPercentile(
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *n_input_column = reinterpret_cast<cudf::column_view *>(input_column);
+    std::unique_ptr<cudf::structs_column_view> input_view =
+        std::make_unique<cudf::structs_column_view>(*n_input_column);
     cudf::column_view *n_percentiles_column = reinterpret_cast<cudf::column_view *>(percentiles_column);
+    cudf::data_type n_data_type = cudf::data_type(cudf::type_id::FLOAT64);
     std::unique_ptr<cudf::column> result =
-        cudf::percentile_approx(*n_input_column, *n_percentiles_column);
+        cudf::percentile_approx(*input_view, *n_percentiles_column, n_data_type);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
