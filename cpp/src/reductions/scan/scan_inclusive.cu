@@ -554,22 +554,6 @@ std::unique_ptr<column> ewma(column_view const& input,
   return col;
 }
 
-void print_col(std::unique_ptr<column>& input, rmm::cuda_stream_view stream)
-{
-  auto real_input = input.get()[0].view();
-  rmm::device_vector<double> input_vec(input.get()[0].size());
-  thrust::copy(rmm::exec_policy(stream),
-               real_input.begin<double>(),
-               real_input.end<double>(),
-               input_vec.begin());
-  thrust::host_vector<double> input_vec_host = input_vec;
-
-  for (int i = 0; i < real_input.size(); i++) {
-    std::cout << input_vec_host[i] << " ";
-  }
-  std::cout << std::endl;
-}
-
 /**
  * @brief Compute exponentially weighted moving variance
  * EWMVAR[i] is defined as EWMVAR[i] = EWMA[xi**2] - EWMA[xi]**2
@@ -593,11 +577,9 @@ std::unique_ptr<column> ewmvar(column_view const& input,
 
   // get EWMA[xi**2]
   std::unique_ptr<column> ewma_xi_sqr = ewma((*xi_sqr).view(), com, adjust, stream, mr);
-  print_col(ewma_xi_sqr, stream);
 
   // get EWMA[xi]
   std::unique_ptr<column> ewma_xi = ewma(input, com, adjust, stream, mr);
-  print_col(ewma_xi, stream);
 
   // reuse the memory from computing xi_sqr to write the output
   thrust::transform(
