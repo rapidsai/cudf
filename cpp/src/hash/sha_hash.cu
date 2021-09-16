@@ -590,7 +590,7 @@ struct SHA512Hash : SHAHash<SHA512Hash> {
 template <typename Hasher>
 std::unique_ptr<column> sha_hash(table_view const& input,
                                  string_scalar const& empty_result,
-                                 cudaStream_t stream,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
@@ -645,7 +645,7 @@ std::unique_ptr<column> sha_hash(table_view const& input,
 }
 
 std::unique_ptr<column> sha1_hash(table_view const& input,
-                                  cudaStream_t stream,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   string_scalar const empty_result("da39a3ee5e6b4b0d3255bfef95601890afd80709");
@@ -653,7 +653,7 @@ std::unique_ptr<column> sha1_hash(table_view const& input,
 }
 
 std::unique_ptr<column> sha224_hash(table_view const& input,
-                                    cudaStream_t stream,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   string_scalar const empty_result("d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f");
@@ -661,7 +661,7 @@ std::unique_ptr<column> sha224_hash(table_view const& input,
 }
 
 std::unique_ptr<column> sha256_hash(table_view const& input,
-                                    cudaStream_t stream,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   string_scalar const empty_result(
@@ -670,7 +670,7 @@ std::unique_ptr<column> sha256_hash(table_view const& input,
 }
 
 std::unique_ptr<column> sha384_hash(table_view const& input,
-                                    cudaStream_t stream,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   string_scalar const empty_result(
@@ -680,7 +680,7 @@ std::unique_ptr<column> sha384_hash(table_view const& input,
 }
 
 std::unique_ptr<column> sha512_hash(table_view const& input,
-                                    cudaStream_t stream,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   string_scalar const empty_result(

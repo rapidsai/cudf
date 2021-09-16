@@ -55,27 +55,27 @@ std::unique_ptr<column> serial_murmur_hash3_32(
 
 std::unique_ptr<column> sha1_hash(
   table_view const& input,
-  cudaStream_t stream                 = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> sha224_hash(
   table_view const& input,
-  cudaStream_t stream                 = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> sha256_hash(
   table_view const& input,
-  cudaStream_t stream                 = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> sha384_hash(
   table_view const& input,
-  cudaStream_t stream                 = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> sha512_hash(
   table_view const& input,
-  cudaStream_t stream                 = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
