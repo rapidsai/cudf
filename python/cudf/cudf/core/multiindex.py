@@ -17,6 +17,7 @@ from pandas._config import get_option
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
+from cudf.api.types import is_list_like
 from cudf.core import column
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.frame import Frame
@@ -81,8 +82,6 @@ class MultiIndex(Frame, BaseIndex):
                 "Use `names`, `name` is not yet supported"
             )
 
-        super().__init__()
-
         if copy:
             if isinstance(codes, cudf.DataFrame):
                 codes = codes.copy(deep=True)
@@ -117,7 +116,7 @@ class MultiIndex(Frame, BaseIndex):
         self._levels = [cudf.Series(level) for level in levels]
         self._validate_levels_and_codes(self._levels, self._codes)
 
-        source_data = cudf.DataFrame()
+        source_data = {}
         for i, n in enumerate(self._codes.columns):
             codes = as_index(self._codes[n]._column)
             if -1 in self._codes[n].values:
@@ -132,7 +131,7 @@ class MultiIndex(Frame, BaseIndex):
                 level, codes._data.columns[0]
             )[0][n]
 
-        self._data = source_data._data
+        super().__init__(source_data)
         self.names = names
 
     @property
@@ -207,23 +206,19 @@ class MultiIndex(Frame, BaseIndex):
     def set_names(self, names, level=None, inplace=False):
         if (
             level is not None
-            and not cudf.api.types.is_list_like(level)
-            and cudf.api.types.is_list_like(names)
+            and not is_list_like(level)
+            and is_list_like(names)
         ):
             raise TypeError(
                 "Names must be a string when a single level is provided."
             )
 
-        if (
-            not cudf.api.types.is_list_like(names)
-            and level is None
-            and self.nlevels > 1
-        ):
+        if not is_list_like(names) and level is None and self.nlevels > 1:
             raise TypeError("Must pass list-like as `names`.")
 
-        if not cudf.api.types.is_list_like(names):
+        if not is_list_like(names):
             names = [names]
-        if level is not None and not cudf.api.types.is_list_like(level):
+        if level is not None and not is_list_like(level):
             level = [level]
 
         if level is not None and len(names) != len(level):
@@ -607,8 +602,6 @@ class MultiIndex(Frame, BaseIndex):
         >>> midx.isin([(1, 'red'), (3, 'red')])
         array([ True, False, False])
         """
-        from cudf.api.types import is_list_like
-
         if level is None:
             if isinstance(values, cudf.MultiIndex):
                 values_idx = values
@@ -656,11 +649,6 @@ class MultiIndex(Frame, BaseIndex):
             result = level_series.isin(values)
 
         return result
-
-    def mask(self, cond, other=None, inplace=False):
-        raise NotImplementedError(
-            ".mask is not supported for MultiIndex operations"
-        )
 
     def where(self, cond, other=None, inplace=False):
         raise NotImplementedError(
