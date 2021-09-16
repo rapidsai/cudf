@@ -1485,23 +1485,20 @@ void writer::impl::write(table_view const& table)
     size_t max_stream_size = 0;
     bool all_device_write  = true;
 
-    for (size_t stripe_id = 0; stripe_id < segmentation.num_stripes(); stripe_id++) {
-      for (size_t i = 0; i < num_data_streams; i++) {  // TODO range for (at least)
-        gpu::StripeStream* ss = &strm_descs[stripe_id][i];
-        if (!out_sink_->is_device_write_preferred(ss->stream_size)) { all_device_write = false; }
-        size_t stream_size = ss->stream_size;
-        if (compression_kind_ != NONE) {
-          ss->first_block = num_compressed_blocks;
-          ss->bfr_offset  = compressed_bfr_size;
+    for (auto& ss : strm_descs.host_view().flat_view()) {
+      if (!out_sink_->is_device_write_preferred(ss.stream_size)) { all_device_write = false; }
+      size_t stream_size = ss.stream_size;
+      if (compression_kind_ != NONE) {
+        ss.first_block = num_compressed_blocks;
+        ss.bfr_offset  = compressed_bfr_size;
 
-          auto num_blocks = std::max<uint32_t>(
-            (stream_size + compression_blocksize_ - 1) / compression_blocksize_, 1);
-          stream_size += num_blocks * 3;
-          num_compressed_blocks += num_blocks;
-          compressed_bfr_size += (max_compressed_block_size + 3) * num_blocks;
-        }
-        max_stream_size = std::max(max_stream_size, stream_size);
+        auto num_blocks = std::max<uint32_t>(
+          (stream_size + compression_blocksize_ - 1) / compression_blocksize_, 1);
+        stream_size += num_blocks * 3;
+        num_compressed_blocks += num_blocks;
+        compressed_bfr_size += (max_compressed_block_size + 3) * num_blocks;
       }
+      max_stream_size = std::max(max_stream_size, stream_size);
     }
 
     if (all_device_write) {
