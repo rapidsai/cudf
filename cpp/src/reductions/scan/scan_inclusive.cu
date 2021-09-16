@@ -426,12 +426,12 @@ void pair_beta_adjust(column_view const& input,
     });
 }
 
-void compute_ewma_adjust(column_view const& input,
+rmm::device_uvector<double> compute_ewma_adjust(column_view const& input,
                          double beta,
-                         mutable_column_view output,
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource* mr)
 {
+  rmm::device_uvector<double> output(input.size(), stream, mr);
   rmm::device_uvector<thrust::pair<double, double>> pairs(input.size(), stream, mr);
 
   // Numerator
@@ -452,7 +452,7 @@ void compute_ewma_adjust(column_view const& input,
   thrust::transform(rmm::exec_policy(stream),
                     pairs.begin(),
                     pairs.end(),
-                    output.begin<double>(),
+                    output.begin(),
                     [=] __host__ __device__(thrust::pair<double, double> pair) -> double {
                       return thrust::get<1>(pair);
                     });
@@ -469,19 +469,20 @@ void compute_ewma_adjust(column_view const& input,
     rmm::exec_policy(stream),
     pairs.begin(),
     pairs.end(),
-    output.begin<double>(),
-    output.begin<double>(),
+    output.begin(),
+    output.begin(),
     [=] __host__ __device__(thrust::pair<double, double> pair, double numerator) -> double {
       return numerator / thrust::get<1>(pair);
     });
+  return output;
 }
 
-void compute_ewma_noadjust(column_view const& input,
+rmm::device_uvector<double> compute_ewma_noadjust(column_view const& input,
                            double beta,
-                           mutable_column_view output,
                            rmm::cuda_stream_view stream,
                            rmm::mr::device_memory_resource* mr)
 {
+  rmm::device_uvector<double> output(input.size(), stream, mr);
   rmm::device_uvector<thrust::pair<double, double>> pairs(input.size(), stream, mr);
 
   thrust::transform(rmm::exec_policy(stream),
@@ -501,16 +502,34 @@ void compute_ewma_noadjust(column_view const& input,
                     [=] __host__ __device__(double input) -> thrust::pair<double, double> {
                       return thrust::pair<double, double>(beta, input);
                     });
+  if (input.has_nulls()) {
 
+    auto device_view = *column_device_view::create(input);
+    auto valid_it    = cudf::detail::make_validity_iterator(device_view);
+  
+    thrust::transform(rmm::exec_policy(stream),
+                      valid_it,
+                      valid_it + input.size(),
+                      pairs.begin(),
+                      pairs.begin(),
+                      [=] __host__ __device__ (bool valid, thrust::pair<double, double> pair) -> thrust::pair<double, double> {
+                        if (!valid) {
+                          return thrust::pair<double, double>(1.0, 0.0);
+                        } else {
+                          return pair;
+                        }
+                      });               
+  }
   compute_recurrence(pairs, stream);
   // copy the second elements to the output for now
   thrust::transform(rmm::exec_policy(stream),
                     pairs.begin(),
                     pairs.end(),
-                    output.begin<double>(),
+                    output.begin(),
                     [=] __host__ __device__(thrust::pair<double, double> pair) -> double {
                       return thrust::get<1>(pair);
                     });
+  return output;
 }
 
 std::unique_ptr<column> ewma(column_view const& input,
@@ -523,15 +542,14 @@ std::unique_ptr<column> ewma(column_view const& input,
 
   double beta = 1.0 - (1.0 / (com + 1.0));
 
-  auto output = make_fixed_width_column(cudf::data_type{cudf::type_id::FLOAT64}, input.size());
-  mutable_column_view output_mutable_view = output->mutable_view();
-
+  rmm::device_uvector<double> data(input.size(), stream, mr);
   if (adjust) {
-    compute_ewma_adjust(input, beta, output_mutable_view, stream, mr);
+    data = compute_ewma_adjust(input, beta, stream, mr);
   } else {
-    compute_ewma_noadjust(input, beta, output_mutable_view, stream, mr);
+    data = compute_ewma_noadjust(input, beta, stream, mr);
   }
-  return output;
+  auto col = std::make_unique<column>(cudf::data_type{cudf::type_id::FLOAT64}, input.size(), std::move(data.release()));
+  return col;
 }
 
 std::unique_ptr<column> ewmvar(column_view const& input,
@@ -541,39 +559,33 @@ std::unique_ptr<column> ewmvar(column_view const& input,
                                rmm::mr::device_memory_resource* mr)
 {
   // get means
-  std::unique_ptr<column> means = ewma(input, com, adjust, stream, mr);
-  auto means_view               = means.get()[0].mutable_view();
-
-  // construct deltas: (x_i - mu_i)(x_i - mu_{i-1})
-  rmm::device_uvector<double> d_this(input.size(), stream, mr);
-  rmm::device_uvector<double> d_last(input.size(), stream, mr);
-
-  // x_i - mu_i
+  auto input_sqr = make_fixed_width_column(cudf::data_type{cudf::type_id::FLOAT64}, input.size());
+  auto input_sqr_d = input_sqr->mutable_view();
   thrust::transform(rmm::exec_policy(stream),
-                    input.begin<double>() + 1,
+                    input.begin<double>(),
                     input.end<double>(),
-                    means_view.begin<double>() + 1,
-                    d_this.begin() + 1,
-                    thrust::minus<double>());
+                    input_sqr_d.begin<double>(),
+                    [=] __host__ __device__ (double input) -> double {
+                      return input * input;
+                    }
+                   );
 
-  // x_i - mu_{i-1}
-  thrust::transform(rmm::exec_policy(stream),
-                    input.begin<double>() + 1,
-                    input.end<double>(),
-                    means_view.begin<double>(),
-                    d_last.begin() + 1,
-                    thrust::minus<double>());
+  std::unique_ptr<column> ewma_x = ewma(input, com, adjust, stream, mr);
+  std::unique_ptr<column> ewma_xsqr = ewma(input_sqr.get()[0].view(), com, adjust, stream, mr);
+  auto output = make_fixed_width_column(cudf::data_type{cudf::type_id::FLOAT64}, input.size());
+  auto output_view = output->mutable_view();
 
-  // (x_i - mu_i)(x_i - mu_{i-1})
   thrust::transform(rmm::exec_policy(stream),
-                    d_this.begin(),
-                    d_this.end(),
-                    d_last.begin(),
-                    means_view.begin<double>(),
-                    thrust::multiplies<double>());
+                    ewma_x.get()[0].view().begin<double>(),
+                    ewma_x.get()[0].view().end<double>(),
+                    ewma_xsqr.get()[0].view().begin<double>(),
+                    output_view.begin<double>(),
+                    [=] __host__ __device__ (double x, double xsqrd) -> double {
+                      return xsqrd - x * x;
+                    });
 
   // return means;
-  return ewma(means.get()[0].view(), com, adjust, stream, mr);
+  return output;
 }
 
 std::unique_ptr<column> ewmstd(column_view const& input,
@@ -592,6 +604,30 @@ std::unique_ptr<column> ewmstd(column_view const& input,
                     [=] __host__ __device__(double input) -> double { return sqrt(input); });
 
   return var;
+}
+
+std::unique_ptr<column> ewm(column_view const& input,
+                            std::unique_ptr<aggregation> const& agg,
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr)
+{
+  switch (agg->kind) {
+    case aggregation::EWMA: {
+      double com  = (dynamic_cast<ewma_aggregation*>(agg.get()))->com;
+      bool adjust = (dynamic_cast<ewma_aggregation*>(agg.get()))->adjust;
+      return ewma(input, com, adjust, stream, mr);
+    }
+    case aggregation::EWMVAR: {
+      double com  = (dynamic_cast<ewmvar_aggregation*>(agg.get()))->com;
+      bool adjust = (dynamic_cast<ewmvar_aggregation*>(agg.get()))->adjust;
+      return ewmvar(input, com, adjust, stream, mr);
+    }
+    case aggregation::EWMSTD: {
+      double com  = (dynamic_cast<ewmstd_aggregation*>(agg.get()))->com;
+      bool adjust = (dynamic_cast<ewmstd_aggregation*>(agg.get()))->adjust;
+      return ewmstd(input, com, adjust, stream, mr);
+    } default: CUDF_FAIL("Unsupported aggregation operator for scan");
+  }
 }
 
 std::unique_ptr<column> scan_inclusive(
