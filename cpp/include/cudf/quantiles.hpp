@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -102,8 +103,8 @@ std::unique_ptr<table> quantiles(
  * compressed representations of a very large input data set that can be
  * queried for quantile information.
  *
- * Produces a LIST column where each row N represents output from querying the
- * corresponding tdigest from `input` row N. The length of each output list
+ * Produces a LIST column where each row `i` represents output from querying the
+ * corresponding tdigest from `input` row `i`. The length of each output list
  * is the number of percentages specified in `percentages`.
  *
  * @param input           tdigest input data. One tdigest per row.
@@ -115,7 +116,7 @@ std::unique_ptr<table> quantiles(
  * @returns LIST Column containing requested percentile values.
  */
 std::unique_ptr<column> percentile_approx(
-  column_view const& input,
+  structs_column_view const& input,
   column_view const& percentages,
   cudf::data_type output_type         = data_type{type_id::FLOAT64},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
