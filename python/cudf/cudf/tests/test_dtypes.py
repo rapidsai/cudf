@@ -326,10 +326,10 @@ def test_dtype_raise(in_dtype):
         cudf.dtype(in_dtype)
 
 
-def test_dtype_np_bool_to_pa_bool(self):
+def test_dtype_np_bool_to_pa_bool():
     """This test case captures that utility np_to_pa_dtype
     should map np.bool_ to pa.bool_, nuances on bit width
     difference should be handled elsewhere.
     """
 
-    assert np_to_pa_dtype(np.bool_) == pa.bool_()
+    assert np_to_pa_dtype(np.dtype("bool")) == pa.bool_()
