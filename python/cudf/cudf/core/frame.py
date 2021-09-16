@@ -479,7 +479,7 @@ class Frame(libcudf.table.Table):
         if axis in (0, "index"):
             if isinstance(self.index, cudf.MultiIndex):
                 if level is None:
-                    midx_data = self.index._source_data
+                    midx_data = self.index.to_frame(index=False)
                 else:
                     # Pandas currently don't handle na_position
                     # in case of MultiIndex
