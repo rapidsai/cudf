@@ -77,11 +77,16 @@ class MultiIndex(Frame, BaseIndex):
 
         if sortorder is not None:
             raise NotImplementedError("sortorder is not yet supported")
-
         if name is not None:
             raise NotImplementedError(
                 "Use `names`, `name` is not yet supported"
             )
+        if len(levels) == 0:
+            raise ValueError("Must pass non-zero number of levels/codes")
+        if not isinstance(codes, cudf.DataFrame) and not isinstance(
+            codes[0], (Sequence, np.ndarray)
+        ):
+            raise TypeError("Codes is not a Sequence of sequences")
 
         if copy:
             if isinstance(codes, cudf.DataFrame):
@@ -89,20 +94,10 @@ class MultiIndex(Frame, BaseIndex):
             if len(levels) > 0 and isinstance(levels[0], cudf.Series):
                 levels = [level.copy(deep=True) for level in levels]
 
-        self._name = None
-
-        if len(levels) == 0:
-            raise ValueError("Must pass non-zero number of levels/codes")
-
-        if not isinstance(codes, cudf.DataFrame) and not isinstance(
-            codes[0], (Sequence, np.ndarray)
-        ):
-            raise TypeError("Codes is not a Sequence of sequences")
-
         if isinstance(codes, cudf.DataFrame):
-            self._codes = codes
+            codes = codes
         elif len(levels) == len(codes):
-            self._codes = cudf.DataFrame._from_data(
+            codes = cudf.DataFrame._from_data(
                 {
                     i: column.as_column(code).astype(np.int64)
                     for i, code in enumerate(codes)
@@ -114,25 +109,46 @@ class MultiIndex(Frame, BaseIndex):
                 "codes and is inconsistent!"
             )
 
-        self._levels = [cudf.Series(level) for level in levels]
-        self._validate_levels_and_codes(self._levels, self._codes)
+        levels = [cudf.Series(level) for level in levels]
+
+        if len(levels) != len(codes.columns):
+            raise ValueError(
+                "MultiIndex has unequal number of levels and "
+                "codes and is inconsistent!"
+            )
+        code_length = len(codes[codes.columns[0]])
+        for index, code in enumerate(codes):
+            if code_length != len(codes[code]):
+                raise ValueError(
+                    "MultiIndex length of codes does not match "
+                    "and is inconsistent!"
+                )
+        for index, code in enumerate(codes):
+            if codes[code].max() > len(levels[index]) - 1:
+                raise ValueError(
+                    "MultiIndex code %d contains value %d larger "
+                    "than maximum level size at this position"
+                )
 
         source_data = {}
-        for i, n in enumerate(self._codes.columns):
-            codes = as_index(self._codes[n]._column)
-            if -1 in self._codes[n].values:
+        for i, n in enumerate(codes.columns):
+            tmp_codes = as_index(codes[n]._column)
+            if -1 in codes[n].values:
                 level = cudf.DataFrame(
-                    {n: [None] + list(self._levels[i])},
-                    index=range(-1, len(self._levels[i])),
+                    {n: [None] + list(levels[i])},
+                    index=range(-1, len(levels[i])),
                 )
             else:
-                level = cudf.DataFrame({n: self._levels[i]})
+                level = cudf.DataFrame({n: levels[i]})
 
             source_data[n] = libcudf.copying.gather(
-                level, codes._data.columns[0]
+                level, tmp_codes._data.columns[0]
             )[0][n]
 
         super().__init__(source_data)
+        self._levels = levels
+        self._codes = codes
+        self._name = None
         self.names = names
 
     @property
@@ -260,26 +276,6 @@ class MultiIndex(Frame, BaseIndex):
     @name.setter
     def name(self, value):
         self._name = value
-
-    def _validate_levels_and_codes(self, levels, codes):
-        if len(levels) != len(codes.columns):
-            raise ValueError(
-                "MultiIndex has unequal number of levels and "
-                "codes and is inconsistent!"
-            )
-        code_length = len(codes[codes.columns[0]])
-        for index, code in enumerate(codes):
-            if code_length != len(codes[code]):
-                raise ValueError(
-                    "MultiIndex length of codes does not match "
-                    "and is inconsistent!"
-                )
-        for index, code in enumerate(codes):
-            if codes[code].max() > len(levels[index]) - 1:
-                raise ValueError(
-                    "MultiIndex code %d contains value %d larger "
-                    "than maximum level size at this position"
-                )
 
     def copy(
         self,
