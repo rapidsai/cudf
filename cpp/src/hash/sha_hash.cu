@@ -179,7 +179,8 @@ struct SHAHash {
     // Each byte in the word generates two bytes in the hexadecimal string digest.
     // SHA-224 and SHA-384 digests are truncated because their digest does not
     // include all of the hash values.
-    auto constexpr num_words_to_copy = Hasher::digest_size / (2 * sizeof(typename Hasher::sha_word_type));
+    auto constexpr num_words_to_copy =
+      Hasher::digest_size / (2 * sizeof(typename Hasher::sha_word_type));
 #pragma unroll
     for (int i = 0; i < num_words_to_copy; i++) {
       // Convert word representation from big-endian to little-endian.
@@ -304,20 +305,20 @@ struct SHA1Hash : SHAHash<SHA1Hash> {
    */
   static void __device__ hash_step(sha_intermediate_data* hash_state)
   {
-    sha_word_type A = hash_state->hash_value[0];
-    sha_word_type B = hash_state->hash_value[1];
-    sha_word_type C = hash_state->hash_value[2];
-    sha_word_type D = hash_state->hash_value[3];
-    sha_word_type E = hash_state->hash_value[4];
+    uint32_t A = hash_state->hash_value[0];
+    uint32_t B = hash_state->hash_value[1];
+    uint32_t C = hash_state->hash_value[2];
+    uint32_t D = hash_state->hash_value[3];
+    uint32_t E = hash_state->hash_value[4];
 
-    sha_word_type words[80];
+    uint32_t words[80];
 
     // Word size in bytes
-    constexpr auto word_size = sizeof(sha_word_type);
+    constexpr auto word_size = sizeof(uint32_t);
 
     // The 512-bit message buffer fills the first 16 words.
     for (int i = 0; i < 16; i++) {
-      sha_word_type buffer_element_as_int;
+      uint32_t buffer_element_as_int;
       std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * word_size), word_size);
       // Convert word representation from little-endian to big-endian.
       words[i] = swap_endian(buffer_element_as_int);
@@ -325,14 +326,14 @@ struct SHA1Hash : SHAHash<SHA1Hash> {
 
     // The rest of the 80 words are generated from the first 16 words.
     for (int i = 16; i < 80; i++) {
-      sha_word_type temp = words[i - 3] ^ words[i - 8] ^ words[i - 14] ^ words[i - 16];
-      words[i]           = rotate_bits_left(temp, 1);
+      uint32_t temp = words[i - 3] ^ words[i - 8] ^ words[i - 14] ^ words[i - 16];
+      words[i]      = rotate_bits_left(temp, 1);
     }
 
     for (int i = 0; i < 80; i++) {
-      sha_word_type F;
-      sha_word_type temp;
-      sha_word_type k;
+      uint32_t F;
+      uint32_t temp;
+      uint32_t k;
       switch (i / 20) {
         case 0:
           F = D ^ (B & (C ^ D));
@@ -369,6 +370,92 @@ struct SHA1Hash : SHAHash<SHA1Hash> {
   }
 };
 
+/**
+ * @brief Core SHA-256 algorithm implementation. Processes a single 512-bit chunk,
+ * updating the hash value so far. Does not zero out the buffer contents.
+ */
+template <typename sha_intermediate_data>
+void __device__ sha256_hash_step(sha_intermediate_data* hash_state)
+{
+  uint32_t A = hash_state->hash_value[0];
+  uint32_t B = hash_state->hash_value[1];
+  uint32_t C = hash_state->hash_value[2];
+  uint32_t D = hash_state->hash_value[3];
+  uint32_t E = hash_state->hash_value[4];
+  uint32_t F = hash_state->hash_value[5];
+  uint32_t G = hash_state->hash_value[6];
+  uint32_t H = hash_state->hash_value[7];
+
+  uint32_t words[64];
+
+  // Word size in bytes
+  constexpr auto word_size = sizeof(uint32_t);
+
+  // The 512-bit message buffer fills the first 16 words.
+  for (int i = 0; i < 16; i++) {
+    uint32_t buffer_element_as_int;
+    std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * word_size), word_size);
+    // Convert word representation from little-endian to big-endian.
+    words[i] = swap_endian(buffer_element_as_int);
+  }
+
+  // The rest of the 64 words are generated from the first 16 words.
+  for (int i = 16; i < 64; i++) {
+    uint32_t s0 = rotate_bits_right(words[i - 15], 7) ^ rotate_bits_right(words[i - 15], 18) ^
+                  (words[i - 15] >> 3);
+    uint32_t s1 = rotate_bits_right(words[i - 2], 17) ^ rotate_bits_right(words[i - 2], 19) ^
+                  (words[i - 2] >> 10);
+    words[i] = words[i - 16] + s0 + words[i - 7] + s1;
+  }
+
+  for (int i = 0; i < 64; i++) {
+    uint32_t const s1 =
+      rotate_bits_right(E, 6) ^ rotate_bits_right(E, 11) ^ rotate_bits_right(E, 25);
+    uint32_t const ch    = (E & F) ^ ((~E) & G);
+    uint32_t const temp1 = H + s1 + ch + sha256_hash_constants[i] + words[i];
+    uint32_t const s0 =
+      rotate_bits_right(A, 2) ^ rotate_bits_right(A, 13) ^ rotate_bits_right(A, 22);
+    uint32_t const maj   = (A & B) ^ (A & C) ^ (B & C);
+    uint32_t const temp2 = s0 + maj;
+
+    H = G;
+    G = F;
+    F = E;
+    E = D + temp1;
+    D = C;
+    C = B;
+    B = A;
+    A = temp1 + temp2;
+  }
+
+  hash_state->hash_value[0] += A;
+  hash_state->hash_value[1] += B;
+  hash_state->hash_value[2] += C;
+  hash_state->hash_value[3] += D;
+  hash_state->hash_value[4] += E;
+  hash_state->hash_value[5] += F;
+  hash_state->hash_value[6] += G;
+  hash_state->hash_value[7] += H;
+
+  hash_state->buffer_length = 0;
+}
+
+struct SHA224Hash : SHAHash<SHA224Hash> {
+  using sha_intermediate_data = sha224_intermediate_data;
+  using sha_word_type         = sha256_word_type;
+  // Number of bytes processed in each hash step
+  static constexpr auto message_chunk_size = 64;
+  // Digest size in bytes. This is truncated from SHA-256.
+  static constexpr auto digest_size = 56;
+  // Number of bytes used for the message length
+  static constexpr auto message_length_size = 8;
+
+  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
+  {
+    sha256_hash_step(hash_state);
+  }
+};
+
 struct SHA256Hash : SHAHash<SHA256Hash> {
   using sha_intermediate_data = sha256_intermediate_data;
   using sha_word_type         = sha256_word_type;
@@ -379,73 +466,95 @@ struct SHA256Hash : SHAHash<SHA256Hash> {
   // Number of bytes used for the message length
   static constexpr auto message_length_size = 8;
 
-  /**
-   * @brief Core SHA-256 algorithm implementation. Processes a single 512-bit chunk,
-   * updating the hash value so far. Does not zero out the buffer contents.
-   */
-  static void __device__ hash_step(sha_intermediate_data* hash_state)
+  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
   {
-    sha_word_type A = hash_state->hash_value[0];
-    sha_word_type B = hash_state->hash_value[1];
-    sha_word_type C = hash_state->hash_value[2];
-    sha_word_type D = hash_state->hash_value[3];
-    sha_word_type E = hash_state->hash_value[4];
-    sha_word_type F = hash_state->hash_value[5];
-    sha_word_type G = hash_state->hash_value[6];
-    sha_word_type H = hash_state->hash_value[7];
+    sha256_hash_step(hash_state);
+  }
+};
 
-    sha_word_type words[64];
+/**
+ * @brief Core SHA-512 algorithm implementation. Processes a single 1024-bit chunk,
+ * updating the hash value so far. Does not zero out the buffer contents.
+ */
+template <typename sha_intermediate_data>
+void __device__ sha512_hash_step(sha_intermediate_data* hash_state)
+{
+  uint64_t A = hash_state->hash_value[0];
+  uint64_t B = hash_state->hash_value[1];
+  uint64_t C = hash_state->hash_value[2];
+  uint64_t D = hash_state->hash_value[3];
+  uint64_t E = hash_state->hash_value[4];
+  uint64_t F = hash_state->hash_value[5];
+  uint64_t G = hash_state->hash_value[6];
+  uint64_t H = hash_state->hash_value[7];
 
-    // Word size in bytes
-    constexpr auto word_size = sizeof(sha_word_type);
+  uint64_t words[80];
 
-    // The 512-bit message buffer fills the first 16 words.
-    for (int i = 0; i < 16; i++) {
-      sha_word_type buffer_element_as_int;
-      std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * word_size), word_size);
-      // Convert word representation from little-endian to big-endian.
-      words[i] = swap_endian(buffer_element_as_int);
-    }
+  // Word size in bytes
+  constexpr auto word_size = sizeof(uint64_t);
 
-    // The rest of the 64 words are generated from the first 16 words.
-    for (int i = 16; i < 64; i++) {
-      sha_word_type s0 = rotate_bits_right(words[i - 15], 7) ^
-                         rotate_bits_right(words[i - 15], 18) ^ (words[i - 15] >> 3);
-      sha_word_type s1 = rotate_bits_right(words[i - 2], 17) ^ rotate_bits_right(words[i - 2], 19) ^
-                         (words[i - 2] >> 10);
-      words[i] = words[i - 16] + s0 + words[i - 7] + s1;
-    }
+  // The 512-bit message buffer fills the first 16 words.
+  for (int i = 0; i < 16; i++) {
+    uint64_t buffer_element_as_int;
+    std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * word_size), word_size);
+    // Convert word representation from little-endian to big-endian.
+    words[i] = swap_endian(buffer_element_as_int);
+  }
 
-    for (int i = 0; i < 64; i++) {
-      sha_word_type const s1 =
-        rotate_bits_right(E, 6) ^ rotate_bits_right(E, 11) ^ rotate_bits_right(E, 25);
-      sha_word_type const ch    = (E & F) ^ ((~E) & G);
-      sha_word_type const temp1 = H + s1 + ch + sha256_hash_constants[i] + words[i];
-      sha_word_type const s0 =
-        rotate_bits_right(A, 2) ^ rotate_bits_right(A, 13) ^ rotate_bits_right(A, 22);
-      sha_word_type const maj   = (A & B) ^ (A & C) ^ (B & C);
-      sha_word_type const temp2 = s0 + maj;
+  // The rest of the 80 words are generated from the first 16 words.
+  for (int i = 16; i < 80; i++) {
+    uint64_t s0 = rotate_bits_right(words[i - 15], 1) ^ rotate_bits_right(words[i - 15], 8) ^
+                  (words[i - 15] >> 7);
+    uint64_t s1 = rotate_bits_right(words[i - 2], 19) ^ rotate_bits_right(words[i - 2], 61) ^
+                  (words[i - 2] >> 6);
+    words[i] = words[i - 16] + s0 + words[i - 7] + s1;
+  }
 
-      H = G;
-      G = F;
-      F = E;
-      E = D + temp1;
-      D = C;
-      C = B;
-      B = A;
-      A = temp1 + temp2;
-    }
+  for (int i = 0; i < 80; i++) {
+    uint64_t const s1 =
+      rotate_bits_right(E, 14) ^ rotate_bits_right(E, 18) ^ rotate_bits_right(E, 41);
+    uint64_t const ch    = (E & F) ^ ((~E) & G);
+    uint64_t const temp1 = H + s1 + ch + sha512_hash_constants[i] + words[i];
+    uint64_t const s0 =
+      rotate_bits_right(A, 28) ^ rotate_bits_right(A, 34) ^ rotate_bits_right(A, 39);
+    uint64_t const maj   = (A & B) ^ (A & C) ^ (B & C);
+    uint64_t const temp2 = s0 + maj;
 
-    hash_state->hash_value[0] += A;
-    hash_state->hash_value[1] += B;
-    hash_state->hash_value[2] += C;
-    hash_state->hash_value[3] += D;
-    hash_state->hash_value[4] += E;
-    hash_state->hash_value[5] += F;
-    hash_state->hash_value[6] += G;
-    hash_state->hash_value[7] += H;
+    H = G;
+    G = F;
+    F = E;
+    E = D + temp1;
+    D = C;
+    C = B;
+    B = A;
+    A = temp1 + temp2;
+  }
 
-    hash_state->buffer_length = 0;
+  hash_state->hash_value[0] += A;
+  hash_state->hash_value[1] += B;
+  hash_state->hash_value[2] += C;
+  hash_state->hash_value[3] += D;
+  hash_state->hash_value[4] += E;
+  hash_state->hash_value[5] += F;
+  hash_state->hash_value[6] += G;
+  hash_state->hash_value[7] += H;
+
+  hash_state->buffer_length = 0;
+}
+
+struct SHA384Hash : SHAHash<SHA384Hash> {
+  using sha_intermediate_data = sha384_intermediate_data;
+  using sha_word_type         = sha512_word_type;
+  // Number of bytes processed in each hash step
+  static constexpr auto message_chunk_size = 128;
+  // Digest size in bytes. This is truncated from SHA-512.
+  static constexpr auto digest_size = 96;
+  // Number of bytes used for the message length
+  static constexpr auto message_length_size = 16;
+
+  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
+  {
+    sha512_hash_step(hash_state);
   }
 };
 
@@ -459,73 +568,9 @@ struct SHA512Hash : SHAHash<SHA512Hash> {
   // Number of bytes used for the message length
   static constexpr auto message_length_size = 16;
 
-  /**
-   * @brief Core SHA-512 algorithm implementation. Processes a single 512-bit chunk,
-   * updating the hash value so far. Does not zero out the buffer contents.
-   */
-  static void __device__ hash_step(sha_intermediate_data* hash_state)
+  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
   {
-    sha_word_type A = hash_state->hash_value[0];
-    sha_word_type B = hash_state->hash_value[1];
-    sha_word_type C = hash_state->hash_value[2];
-    sha_word_type D = hash_state->hash_value[3];
-    sha_word_type E = hash_state->hash_value[4];
-    sha_word_type F = hash_state->hash_value[5];
-    sha_word_type G = hash_state->hash_value[6];
-    sha_word_type H = hash_state->hash_value[7];
-
-    sha_word_type words[80];
-
-    // Word size in bytes
-    constexpr auto word_size = sizeof(sha_word_type);
-
-    // The 512-bit message buffer fills the first 16 words.
-    for (int i = 0; i < 16; i++) {
-      sha_word_type buffer_element_as_int;
-      std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * word_size), word_size);
-      // Convert word representation from little-endian to big-endian.
-      words[i] = swap_endian(buffer_element_as_int);
-    }
-
-    // The rest of the 80 words are generated from the first 16 words.
-    for (int i = 16; i < 80; i++) {
-      sha_word_type s0 = rotate_bits_right(words[i - 15], 1) ^ rotate_bits_right(words[i - 15], 8) ^
-                         (words[i - 15] >> 7);
-      sha_word_type s1 = rotate_bits_right(words[i - 2], 19) ^ rotate_bits_right(words[i - 2], 61) ^
-                         (words[i - 2] >> 6);
-      words[i] = words[i - 16] + s0 + words[i - 7] + s1;
-    }
-
-    for (int i = 0; i < 80; i++) {
-      sha_word_type const s1 =
-        rotate_bits_right(E, 14) ^ rotate_bits_right(E, 18) ^ rotate_bits_right(E, 41);
-      sha_word_type const ch    = (E & F) ^ ((~E) & G);
-      sha_word_type const temp1 = H + s1 + ch + sha512_hash_constants[i] + words[i];
-      sha_word_type const s0 =
-        rotate_bits_right(A, 28) ^ rotate_bits_right(A, 34) ^ rotate_bits_right(A, 39);
-      sha_word_type const maj   = (A & B) ^ (A & C) ^ (B & C);
-      sha_word_type const temp2 = s0 + maj;
-
-      H = G;
-      G = F;
-      F = E;
-      E = D + temp1;
-      D = C;
-      C = B;
-      B = A;
-      A = temp1 + temp2;
-    }
-
-    hash_state->hash_value[0] += A;
-    hash_state->hash_value[1] += B;
-    hash_state->hash_value[2] += C;
-    hash_state->hash_value[3] += D;
-    hash_state->hash_value[4] += E;
-    hash_state->hash_value[5] += F;
-    hash_state->hash_value[6] += G;
-    hash_state->hash_value[7] += H;
-
-    hash_state->buffer_length = 0;
+    sha512_hash_step(hash_state);
   }
 };
 
@@ -611,8 +656,7 @@ std::unique_ptr<column> sha224_hash(table_view const& input,
                                     cudaStream_t stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  string_scalar const empty_result(
-    "d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f");
+  string_scalar const empty_result("d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f");
   return nullptr;
   // return sha_hash<SHA224Hash>(input, empty_result, stream, mr);
 }
@@ -630,7 +674,9 @@ std::unique_ptr<column> sha384_hash(table_view const& input,
                                     cudaStream_t stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  string_scalar const empty_result("38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b");
+  string_scalar const empty_result(
+    "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b9"
+    "5b");
   return nullptr;
   // return sha_hash<SHA384Hash>(input, empty_result, stream, mr);
 }
