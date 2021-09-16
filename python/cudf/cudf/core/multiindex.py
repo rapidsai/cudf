@@ -94,20 +94,19 @@ class MultiIndex(Frame, BaseIndex):
             if len(levels) > 0 and isinstance(levels[0], cudf.Series):
                 levels = [level.copy(deep=True) for level in levels]
 
-        if isinstance(codes, cudf.DataFrame):
-            codes = codes
-        elif len(levels) == len(codes):
-            codes = cudf.DataFrame._from_data(
-                {
-                    i: column.as_column(code).astype(np.int64)
-                    for i, code in enumerate(codes)
-                }
-            )
-        else:
-            raise ValueError(
-                "MultiIndex has unequal number of levels and "
-                "codes and is inconsistent!"
-            )
+        if not isinstance(codes, cudf.DataFrame):
+            if len(levels) == len(codes):
+                codes = cudf.DataFrame._from_data(
+                    {
+                        i: column.as_column(code).astype(np.int64)
+                        for i, code in enumerate(codes)
+                    }
+                )
+            else:
+                raise ValueError(
+                    "MultiIndex has unequal number of levels and "
+                    "codes and is inconsistent!"
+                )
 
         levels = [cudf.Series(level) for level in levels]
 
@@ -131,19 +130,16 @@ class MultiIndex(Frame, BaseIndex):
                 )
 
         source_data = {}
-        for i, n in enumerate(codes.columns):
-            tmp_codes = as_index(codes[n]._column)
-            if -1 in codes[n].values:
+        for i, (cname, col) in enumerate(codes._data.items()):
+            if -1 in col.values:
                 level = cudf.DataFrame(
-                    {n: [None] + list(levels[i])},
+                    {cname: [None] + list(levels[i])},
                     index=range(-1, len(levels[i])),
                 )
             else:
-                level = cudf.DataFrame({n: levels[i]})
+                level = cudf.DataFrame({cname: levels[i]})
 
-            source_data[n] = libcudf.copying.gather(
-                level, tmp_codes._data.columns[0]
-            )[0][n]
+            source_data[cname] = libcudf.copying.gather(level, col)[0][cname]
 
         super().__init__(source_data)
         self._levels = levels
