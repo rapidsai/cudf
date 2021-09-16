@@ -1105,13 +1105,14 @@ __global__ void __launch_bounds__(1024)
  * @param[out] comp_out Per-block compression status
  * @param[in] compressed_bfr Compression output buffer
  * @param[in] comp_blk_size Compression block size
+ * @param[in] max_comp_blk_size Max size of any block after compression
  */
 // blockDim {256,1,1}
 __global__ void __launch_bounds__(256)
   gpuInitCompressionBlocks(device_2dspan<StripeStream const> strm_desc,
                            device_2dspan<encoder_chunk_streams> streams,  // const?
-                           gpu_inflate_input_s* comp_in,
-                           gpu_inflate_status_s* comp_out,
+                           device_span<gpu_inflate_input_s> comp_in,
+                           device_span<gpu_inflate_status_s> comp_out,
                            uint8_t* compressed_bfr,
                            uint32_t comp_blk_size,
                            uint32_t max_comp_blk_size)
@@ -1157,12 +1158,13 @@ __global__ void __launch_bounds__(256)
  * @param[in] comp_out Per-block compression status
  * @param[in] compressed_bfr Compression output buffer
  * @param[in] comp_blk_size Compression block size
+ * @param[in] max_comp_blk_size Max size of any block after compression
  */
 // blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024)
   gpuCompactCompressedBlocks(device_2dspan<StripeStream> strm_desc,
-                             gpu_inflate_input_s* comp_in,
-                             gpu_inflate_status_s* comp_out,
+                             device_span<gpu_inflate_input_s> comp_in,
+                             device_span<gpu_inflate_status_s> comp_out,
                              uint8_t* compressed_bfr,
                              uint32_t comp_blk_size,
                              uint32_t max_comp_blk_size)
@@ -1279,8 +1281,8 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             uint32_t max_comp_blk_size,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
-                            gpu_inflate_input_s* comp_in,
-                            gpu_inflate_status_s* comp_out,
+                            device_span<gpu_inflate_input_s> comp_in,
+                            device_span<gpu_inflate_status_s> comp_out,
                             rmm::cuda_stream_view stream)
 {
   dim3 dim_block_init(256, 1);
@@ -1306,8 +1308,8 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                                                uncompressed_data_sizes.begin(),
                                                compressed_data_ptrs.begin());
       thrust::transform(rmm::exec_policy(stream),
-                        comp_in,
-                        comp_in + num_compressed_blocks,
+                        comp_in.begin(),
+                        comp_in.end(),
                         comp_it,
                         [] __device__(gpu_inflate_input_s in) {
                           return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice);
@@ -1328,7 +1330,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
       thrust::transform(rmm::exec_policy(stream),
                         compressed_bytes_written.begin(),
                         compressed_bytes_written.end(),
-                        comp_out,
+                        comp_out.begin(),
                         [] __device__(size_t size) {
                           gpu_inflate_status_s status{};
                           status.bytes_written = size;
@@ -1338,8 +1340,8 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
       // If we reach this then there was an error in compressing so set an error status for each
       // block
       thrust::for_each(rmm::exec_policy(stream),
-                       comp_out,
-                       comp_out + num_compressed_blocks,
+                       comp_out.begin(),
+                       comp_out.end(),
                        [] __device__(gpu_inflate_status_s & stat) { stat.status = 1; });
     };
 

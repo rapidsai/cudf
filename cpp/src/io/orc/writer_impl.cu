@@ -1499,7 +1499,6 @@ void writer::impl::write(table_view const& table)
           stream_size += num_blocks * 3;
           num_compressed_blocks += num_blocks;
           compressed_bfr_size += (max_compressed_block_size + 3) * num_blocks;
-          // compressed_bfr_size += stream_size;
         }
         max_stream_size = std::max(max_stream_size, stream_size);
       }
@@ -1530,8 +1529,8 @@ void writer::impl::write(table_view const& table)
                                 max_compressed_block_size,
                                 strm_descs,
                                 enc_data.streams,
-                                comp_in.device_ptr(),
-                                comp_out.device_ptr(),
+                                comp_in,
+                                comp_out,
                                 stream);
     strm_descs.device_to_host(stream);
     comp_out.device_to_host(stream, true);
