@@ -637,9 +637,7 @@ namespace detail {
 /**
  * @brief Computes a hash value from the shallow state of the specified column
  *
- * Two `column_view`s, `c1` and `c2`, that view the exact same physical column will produce equal
- * `shallow_hash()` values, i.e., `is_shallow_equivalent(c0, c1)` implies `shallow_hash(c0) ==
- * shallow_hash(c1)`.
+ * For any two columns, if `is_shallow_equivalent(c0,c1)` then `shallow_hash(c0) == shallow_hash(c1)`. 
  *
  * The complexity of computing the hash value of `input` is `O( count_descendants(input) )`, i.e.,
  * it is independent of the number of elements in the column.
@@ -648,24 +646,27 @@ namespace detail {
  * any kernels.
  *
  * @param input The `column_view` to compute hash
- * @return The hash value
+ * @return The hash value derived from the shallow state of `input`. 
  */
 std::size_t shallow_hash(column_view const& input);
 
 /**
- * @brief Equality operator for column views based on the shallow state of the column view.
+ * @brief Uses only shallow state to determine if two `column_view`s view equivalent columns 
  *
- * Only shallow states used for the hash computation are: type, size, data pointer, null_mask
- * pointer, offset and the column_view of the children recursively. Note that `null_count` is not
- * used.
+ *  Two columns are equivalent if for any operation `F` then:
+ *   ```
+ *    is_shallow_equivalent(c0, c1) ==> is_shallow_equivalent(F(c0),F(c1))
+ *   ```
+ * For any two non-empty columns, `is_shallow_equivalent(c0,c1)` is true only if they view the exact same physical column. In other words, two physically independent columns may have exactly equivalent elements but their shallow state would not be equivalent. 
+ * 
+ * The complexity of this function is `O( min(count_descendants(lhs), count_descendants(rhs)) )`, i.e., it is independent of the number of elements in either column.
  *
- * Note: This equality function will consider a column not equal to a copy of the same column with
- * exactly same contents. It is guarenteed to return true for same column_view only, even if the
- * underlying data changes.
- *
+ * This function does _not_ inspect the elements of `lhs` or `rhs` nor access any device memory nor launch
+ * any kernels.
+ * 
  * @param lhs The left `column_view` to compare
  * @param rhs The right `column_view` to compare
- * @return true if the shallow states of the two column views are equal
+ * @return If `lhs` and `rhs` have equivalent shallow state
  */
 bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs);
 }  // namespace detail
