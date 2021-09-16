@@ -613,15 +613,6 @@ class metadata {
 };
 
 /**
- * @brief `column_device_view` and additional, ORC specific, information on the column.
- */
-struct orc_column_device_view {
-  column_device_view cudf_column;
-  thrust::optional<uint32_t> parent_index;
-  bitmask_type const* pushdown_mask = nullptr;
-};
-
-/**
  * @brief Range of rows within a single rowgroup.
  */
 struct rowgroup_rows {

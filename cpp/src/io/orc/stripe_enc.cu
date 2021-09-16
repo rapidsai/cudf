@@ -625,7 +625,7 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
 {
   if (s->stream.ids[CI_PRESENT] < 0) return;
 
-  auto const column = s->chunk.column->cudf_column;
+  auto const column = *s->chunk.column;
   while (s->present_rows < s->chunk.null_mask_num_rows or s->numvals > 0) {
     // Number of rows read so far
     auto present_rows = s->present_rows;
@@ -765,7 +765,7 @@ __global__ void __launch_bounds__(block_size)
   encode_null_mask<block_size>(s, pushdown_mask, temp_storage.scan_u32, t);
   __syncthreads();
 
-  auto const column = s->chunk.column->cudf_column;
+  auto const column = *s->chunk.column;
   while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
     // Fetch non-null values
     if (s->chunk.type_kind != LIST && !s->stream.data_ptrs[CI_DATA]) {

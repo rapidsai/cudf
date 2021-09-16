@@ -32,6 +32,19 @@
 namespace cudf {
 namespace io {
 namespace orc {
+
+/**
+ * @brief `column_device_view` and additional, ORC specific, information on the column.
+ */
+struct orc_column_device_view : public column_device_view {
+  thrust::optional<uint32_t> parent_index;
+  bitmask_type const* pushdown_mask = nullptr;
+  __device__ orc_column_device_view(column_device_view col, thrust::optional<uint32_t> parent_idx)
+    : column_device_view{col}, parent_index{parent_idx}
+  {
+  }
+  // TODO element, offset
+};
 namespace gpu {
 
 using cudf::detail::device_2dspan;
@@ -182,7 +195,7 @@ struct DictionaryChunk {
   uint32_t num_dict_strings;  // number of strings in dictionary
   uint32_t dict_char_count;   // size of dictionary string data for this chunk
 
-  column_device_view const* leaf_column;  //!< Pointer to string column
+  orc_column_device_view const* leaf_column;  //!< Pointer to string column
 };
 
 /**
@@ -197,7 +210,7 @@ struct StripeDictionary {
   uint32_t num_strings;      // number of unique strings in the dictionary
   uint32_t dict_char_count;  // total size of dictionary string data
 
-  column_device_view const* leaf_column;  //!< Pointer to string column
+  orc_column_device_view const* leaf_column;  //!< Pointer to string column
 };
 
 constexpr uint32_t encode_block_size = 512;

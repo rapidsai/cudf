@@ -1015,11 +1015,10 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
                              device_span<stats_column_desc> stat_desc,
                              rmm::cuda_stream_view stream)
 {
-  thrust::for_each(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0ul),
-    thrust::make_counting_iterator(stat_desc.size()),
-    [=] __device__(auto idx) { stat_desc[idx].leaf_column = &columns[idx].cudf_column; });
+  thrust::for_each(rmm::exec_policy(stream),
+                   thrust::make_counting_iterator(0ul),
+                   thrust::make_counting_iterator(stat_desc.size()),
+                   [=] __device__(auto idx) { stat_desc[idx].leaf_column = &columns[idx]; });
 }
 
 std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
@@ -1317,7 +1316,7 @@ void pushdown_lists_null_mask(orc_column_view const& col,
     thrust::make_counting_iterator(0u),
     col.size(),
     [d_columns, col_idx = col.index(), parent_pd_mask, out_mask] __device__(auto& idx) {
-      auto const d_col        = d_columns[col_idx].cudf_column;
+      auto const d_col        = d_columns[col_idx];
       auto const is_row_valid = d_col.is_valid(idx) and bit_value_or(parent_pd_mask, idx, true);
       if (not is_row_valid) {
         auto offsets                = d_col.child(lists_column_view::offsets_column_index);
@@ -1531,13 +1530,12 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
           // Root column
           if (!col.parent_index.has_value()) {
             size_type const rows_begin = rg_idx * rowgroup_size;
-            auto const rows_end =
-              thrust::min<size_type>((rg_idx + 1) * rowgroup_size, col.cudf_column.size());
+            auto const rows_end = thrust::min<size_type>((rg_idx + 1) * rowgroup_size, col.size());
             return rowgroup_rows{rows_begin, rows_end};
           } else {
             // Child column
             auto const parent_index       = *col.parent_index;
-            column_device_view parent_col = cols[parent_index].cudf_column;
+            column_device_view parent_col = cols[parent_index];
             if (parent_col.type().id() != type_id::LIST) return rg_bounds[rg_idx][parent_index];
 
             auto parent_offsets = parent_col.child(lists_column_view::offsets_column_index);
@@ -1570,7 +1568,7 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
                        current_sizes.end(),
                        [d_cols  = device_span<orc_column_device_view const>{orc_table.d_columns},
                         col_idx = orc_col.index()] __device__(auto idx) {
-                         auto const& col          = d_cols[col_idx].cudf_column;
+                         auto const& col          = d_cols[col_idx];
                          auto const pushdown_mask = [&]() -> cudf::bitmask_type const* {
                            auto const parent_index = d_cols[col_idx].parent_index;
                            if (!parent_index.has_value()) return nullptr;

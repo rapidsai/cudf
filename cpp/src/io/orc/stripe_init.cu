@@ -479,14 +479,13 @@ __global__ void __launch_bounds__(block_size)
 
   auto const column_id   = blockIdx.x;
   auto const rowgroup_id = blockIdx.y;
-  auto const orc_column  = orc_columns[column_id];
+  auto const column      = orc_columns[column_id];
   auto const t           = threadIdx.x;
 
-  auto const column       = orc_column.cudf_column;
   auto const use_child_rg = column.type().id() == type_id::LIST;
   auto const rg           = rowgroup_bounds[rowgroup_id][column_id + (use_child_rg ? 1 : 0)];
 
-  if (orc_column.pushdown_mask == nullptr) {
+  if (column.pushdown_mask == nullptr) {
     // All elements are valid if the null mask is not present
     if (t == 0) { set_counts[rowgroup_id][column_id] = rg.size(); }
     return;
@@ -499,7 +498,7 @@ __global__ void __launch_bounds__(block_size)
     auto const end_bit   = min(static_cast<size_type>(row + bits_per_word), rg.end);
     auto const mask_len  = end_bit - begin_bit;
     auto const mask_word =
-      cudf::detail::get_mask_offset_word(orc_column.pushdown_mask, 0, row, end_bit) &
+      cudf::detail::get_mask_offset_word(column.pushdown_mask, 0, row, end_bit) &
       ((1 << mask_len) - 1);
     count += __popc(mask_word);
   }
