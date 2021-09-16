@@ -33,8 +33,6 @@ class MultiIndex(Frame, BaseIndex):
     ----------
     levels : sequence of arrays
         The unique labels for each level.
-    labels : sequence of arrays
-        labels is depreciated, please use levels
     codes: sequence of arrays
         Integers for each level designating which label at each location.
     sortorder : optional int
@@ -68,7 +66,6 @@ class MultiIndex(Frame, BaseIndex):
         levels=None,
         codes=None,
         sortorder=None,
-        labels=None,
         names=None,
         dtype=None,
         copy=False,
@@ -93,14 +90,6 @@ class MultiIndex(Frame, BaseIndex):
                 levels = [level.copy(deep=True) for level in levels]
 
         self._name = None
-
-        if labels:
-            warnings.warn(
-                "the 'labels' keyword is deprecated, use 'codes' " "instead",
-                FutureWarning,
-            )
-        if labels and not codes:
-            codes = labels
 
         if len(levels) == 0:
             raise ValueError("Must pass non-zero number of levels/codes")
@@ -544,15 +533,6 @@ class MultiIndex(Frame, BaseIndex):
         if self._levels is None:
             self._compute_levels_and_codes()
         return self._levels
-
-    @property
-    def labels(self):
-        warnings.warn(
-            "This feature is deprecated in pandas and will be"
-            "dropped from cudf as well.",
-            FutureWarning,
-        )
-        return self.codes
 
     @property
     def ndim(self):
