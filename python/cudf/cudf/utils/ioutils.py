@@ -1267,12 +1267,10 @@ def get_filepath_or_buffer(
                 path_or_data = [fs.open_input_file(fpath) for fpath in paths]
             else:
                 path_or_data = [
-                    BytesIO(
-                        fs.open(fpath, mode=mode).read()
-                        if legacy_transfer
-                        else _fsspec_data_transfer(
-                            fpath, fs=fs, mode=mode, **kwargs
-                        )
+                    BytesIO(fs.open(fpath, mode=mode).read())
+                    if legacy_transfer
+                    else _fsspec_data_transfer(
+                        fpath, fs=fs, mode=mode, **kwargs
                     )
                     for fpath in paths
                 ]
@@ -1284,8 +1282,8 @@ def get_filepath_or_buffer(
             path_or_data = path_or_data.buffer
         if legacy_transfer:
             path_or_data.seek(0)
-        path_or_data = BytesIO(
-            path_or_data.read()
+        path_or_data = (
+            BytesIO(path_or_data.read())
             if legacy_transfer
             else _fsspec_data_transfer(path_or_data, mode=mode, **kwargs)
         )
