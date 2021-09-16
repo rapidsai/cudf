@@ -25,6 +25,7 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <groupby/common/utils.hpp>
 #include <structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -102,6 +103,7 @@ sort_groupby_helper::sort_groupby_helper(table_view const& keys,
 
   auto [flattened_keys, _, __, struct_null_vectors] =
     flatten_nested_columns(keys, {}, {}, column_nullability::FORCE);
+  cudf::groupby::detail::assert_keys_equality_comparable(flattened_keys);
   _struct_null_vectors = std::move(struct_null_vectors);
   _keys                = flattened_keys;
 

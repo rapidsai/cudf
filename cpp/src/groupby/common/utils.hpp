@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-20, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,14 @@ inline std::vector<aggregation_result> extract_results(host_span<RequestType con
   }
   return results;
 }
+
+/**
+ * @brief Fails an assert if any of the specified `keys` columns do not support equality
+ * comparisons.
+ *
+ * @param keys Grouping keys to be checked for equality comparisons.
+ */
+void assert_keys_equality_comparable(cudf::table_view const& keys);
 
 }  // namespace detail
 }  // namespace groupby
