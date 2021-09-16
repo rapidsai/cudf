@@ -177,9 +177,11 @@ struct SHAHash {
     Hasher::hash_step(hash_state);
 
     // Each byte in the word generates two bytes in the hexadecimal string digest.
-    auto constexpr num_words = Hasher::digest_size / (2 * sizeof(typename Hasher::sha_word_type));
+    // SHA-224 and SHA-384 digests are truncated because their digest does not
+    // include all of the hash values.
+    auto constexpr num_words_to_copy = Hasher::digest_size / (2 * sizeof(typename Hasher::sha_word_type));
 #pragma unroll
-    for (int i = 0; i < num_words; i++) {
+    for (int i = 0; i < num_words_to_copy; i++) {
       // Convert word representation from big-endian to little-endian.
       typename Hasher::sha_word_type flipped = swap_endian(hash_state->hash_value[i]);
       if constexpr (std::is_same_v<typename Hasher::sha_word_type, uint32_t>) {
@@ -605,8 +607,17 @@ std::unique_ptr<column> sha1_hash(table_view const& input,
   return sha_hash<SHA1Hash>(input, empty_result, stream, mr);
 }
 
+std::unique_ptr<column> sha224_hash(table_view const& input,
+                                    cudaStream_t stream,
+                                    rmm::mr::device_memory_resource* mr)
+{
+  string_scalar const empty_result(
+    "d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f");
+  return nullptr;
+  // return sha_hash<SHA224Hash>(input, empty_result, stream, mr);
+}
+
 std::unique_ptr<column> sha256_hash(table_view const& input,
-                                    bool truncate_output,
                                     cudaStream_t stream,
                                     rmm::mr::device_memory_resource* mr)
 {
@@ -615,8 +626,16 @@ std::unique_ptr<column> sha256_hash(table_view const& input,
   return sha_hash<SHA256Hash>(input, empty_result, stream, mr);
 }
 
+std::unique_ptr<column> sha384_hash(table_view const& input,
+                                    cudaStream_t stream,
+                                    rmm::mr::device_memory_resource* mr)
+{
+  string_scalar const empty_result("38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b");
+  return nullptr;
+  // return sha_hash<SHA384Hash>(input, empty_result, stream, mr);
+}
+
 std::unique_ptr<column> sha512_hash(table_view const& input,
-                                    bool truncate_output,
                                     cudaStream_t stream,
                                     rmm::mr::device_memory_resource* mr)
 {
