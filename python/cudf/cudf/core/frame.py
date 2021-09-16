@@ -494,7 +494,7 @@ class Frame(libcudf.table.Table):
                         ]
                     else:
                         labels = [self.index._get_level_label(level)]
-                    midx_data = self.index._source_data[labels]
+                    midx_data = self.index.to_frame(index=False)[labels]
                 inds = midx_data.argsort(
                     ascending=ascending, na_position=na_position
                 )
