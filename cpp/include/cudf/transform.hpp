@@ -141,9 +141,11 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Encodes `input` by generating a new column for each value in `categories` indicating the presence of that value in `input`. 
+ * @brief Encodes `input` by generating a new column for each value in `categories` indicating the
+ * presence of that value in `input`.
  *
- * The resulting per-category columns are returned concatenated as a single column viewed by a `table_view`.
+ * The resulting per-category columns are returned concatenated as a single column viewed by a
+ * `table_view`.
  *
  * The `i`th row of the `j`th column in the output table equals 1
  * if `input[i] == categories[j]`, and 0 otherwise.

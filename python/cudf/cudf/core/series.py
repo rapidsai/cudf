@@ -3531,40 +3531,22 @@ class Series(SingleColumnFrame, Serializable):
             cats = pd.Series(cats, dtype="object")
         dtype = cudf.dtype(dtype)
 
-        if cats is not None:
-            try:
-                cats_col = as_column(cats, nan_as_null=False, dtype=self.dtype)
-            except TypeError:
-                raise ValueError("Cannot convert `cats` as cudf column.")
+        try:
+            cats_col = as_column(cats, nan_as_null=False, dtype=self.dtype)
+        except TypeError:
+            raise ValueError("Cannot convert `cats` as cudf column.")
 
-            if self._column.size * cats_col.size >= np.iinfo("int32").max:
-                raise ValueError(
-                    "Size limitation exceeded: series.size * category.size < "
-                    "np.iinfo('int32').max. Consider reducing size of category"
-                )
+        if self._column.size * cats_col.size >= np.iinfo("int32").max:
+            raise ValueError(
+                "Size limitation exceeded: series.size * category.size < "
+                "np.iinfo('int32').max. Consider reducing size of category"
+            )
 
-            res = libcudf.transform.one_hot_encode(self._column, cats_col)
-            if dtype.type == np.bool_:
-                return list(res.values())
-            else:
-                return [x.astype(dtype) for x in list(res.values())]
-
-        def encode(cat):
-            if cat is None:
-                if self.dtype.kind == "f":
-                    # Need to ignore `np.nan` values incase
-                    # of a float column
-                    return self.__class__(
-                        libcudf.unary.is_null((self._column))
-                    )
-                else:
-                    return self.isnull()
-            elif np.issubdtype(type(cat), np.floating) and np.isnan(cat):
-                return self.__class__(libcudf.unary.is_nan(self._column))
-            else:
-                raise ValueError("Unsupported cat type.")
-
-        return [encode(cat).astype(dtype) for cat in cats]
+        res = libcudf.transform.one_hot_encode(self._column, cats_col)
+        if dtype.type == np.bool_:
+            return list(res.values())
+        else:
+            return [x.astype(dtype) for x in list(res.values())]
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding
