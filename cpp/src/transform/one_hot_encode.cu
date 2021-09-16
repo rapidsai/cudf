@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -130,6 +131,7 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
                                                               column_view const& categories,
                                                               rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::one_hot_encode(input, categories, rmm::cuda_stream_default, mr);
 }
 }  // namespace cudf
