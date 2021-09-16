@@ -7,6 +7,7 @@ import numbers
 import pickle
 import warnings
 from collections.abc import Sequence
+from numbers import Integral
 from typing import Any, List, MutableMapping, Optional, Tuple, Union
 
 import cupy
@@ -17,7 +18,7 @@ from pandas._config import get_option
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
-from cudf.api.types import is_list_like
+from cudf.api.types import is_integer, is_list_like
 from cudf.core import column
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.frame import Frame
@@ -204,21 +205,20 @@ class MultiIndex(Frame, BaseIndex):
         return self.set_names(names, level=None, inplace=inplace)
 
     def set_names(self, names, level=None, inplace=False):
-        if (
-            level is not None
-            and not is_list_like(level)
-            and is_list_like(names)
-        ):
+        names_is_list_like = is_list_like(names)
+        level_is_list_like = is_list_like(level)
+
+        if level is not None and not level_is_list_like and names_is_list_like:
             raise TypeError(
                 "Names must be a string when a single level is provided."
             )
 
-        if not is_list_like(names) and level is None and self.nlevels > 1:
+        if not names_is_list_like and level is None and self.nlevels > 1:
             raise TypeError("Must pass list-like as `names`.")
 
-        if not is_list_like(names):
+        if not names_is_list_like:
             names = [names]
-        if level is not None and not is_list_like(level):
+        if level is not None and not level_is_list_like:
             level = [level]
 
         if level is not None and len(names) != len(level):
@@ -848,15 +848,10 @@ class MultiIndex(Frame, BaseIndex):
         return self._num_rows
 
     def take(self, indices):
-        from collections.abc import Sequence
-        from numbers import Integral
-
         if isinstance(indices, (Integral, Sequence)):
             indices = np.array(indices)
-        elif isinstance(indices, cudf.Series):
-            if indices.has_nulls:
-                raise ValueError("Column must have no nulls.")
-            indices = indices
+        elif isinstance(indices, cudf.Series) and indices.has_nulls:
+            raise ValueError("Column must have no nulls.")
         elif isinstance(indices, slice):
             start, stop, step = indices.indices(len(self))
             indices = column.arange(start, stop, step)
@@ -1006,8 +1001,7 @@ class MultiIndex(Frame, BaseIndex):
         """
         # Use Pandas for handling Python host objects
         pdi = pd.MultiIndex.from_tuples(tuples, names=names)
-        result = cls.from_pandas(pdi)
-        return result
+        return cls.from_pandas(pdi)
 
     @property
     def values_host(self):
@@ -1539,8 +1533,8 @@ class MultiIndex(Frame, BaseIndex):
         try:
             return self.names.index(level)
         except ValueError:
-            if not pd.api.types.is_integer(level):
-                raise KeyError(f"Level {level} not found") from None
+            if not is_integer(level):
+                raise KeyError(f"Level {level} not found")
             if level < 0:
                 level += self.nlevels
             if level >= self.nlevels:
