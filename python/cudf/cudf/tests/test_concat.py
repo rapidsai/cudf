@@ -8,9 +8,9 @@ import pandas as pd
 import pytest
 
 import cudf as gd
+from cudf.api.types import is_categorical_dtype
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
-from cudf.utils.dtypes import is_categorical_dtype
 
 
 def make_frames(index=None, nulls="none"):
@@ -64,13 +64,25 @@ def test_concat_dataframe(index, nulls, axis):
     # DataFrame
     res = gd.concat([gdf, gdf2, gdf, gdf_empty1], axis=axis).to_pandas()
     sol = pd.concat([df, df2, df, df_empty1], axis=axis)
-    assert_eq(res, sol, check_names=False, check_categorical=False)
+    assert_eq(
+        res,
+        sol,
+        check_names=False,
+        check_categorical=False,
+        check_index_type=True,
+    )
 
     # Series
     for c in [i for i in ("x", "y", "z") if i != index]:
         res = gd.concat([gdf[c], gdf2[c], gdf[c]], axis=axis).to_pandas()
         sol = pd.concat([df[c], df2[c], df[c]], axis=axis)
-        assert_eq(res, sol, check_names=False, check_categorical=False)
+        assert_eq(
+            res,
+            sol,
+            check_names=False,
+            check_categorical=False,
+            check_index_type=True,
+        )
 
     # Index
     res = gd.concat([gdf.index, gdf2.index], axis=axis).to_pandas()
@@ -91,7 +103,13 @@ def test_concat_all_nulls(values):
     gb = gd.Series([None])
     gs = gd.concat([ga, gb])
 
-    assert_eq(ps, gs, check_dtype=False, check_categorical=False)
+    assert_eq(
+        ps,
+        gs,
+        check_dtype=False,
+        check_categorical=False,
+        check_index_type=True,
+    )
 
 
 def test_concat_errors():
@@ -167,7 +185,13 @@ def test_concat_misordered_columns():
     res = gd.concat([gdf, gdf2]).to_pandas()
     sol = pd.concat([df, df2], sort=False)
 
-    assert_eq(res, sol, check_names=False, check_categorical=False)
+    assert_eq(
+        res,
+        sol,
+        check_names=False,
+        check_categorical=False,
+        check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize("axis", [1, "columns"])
@@ -182,7 +206,7 @@ def test_concat_columns(axis):
     expect = pd.concat([pdf1, pdf2], axis=axis)
     got = gd.concat([gdf1, gdf2], axis=axis)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_index_type=True)
 
 
 def test_concat_multiindex_dataframe():
@@ -201,7 +225,9 @@ def test_concat_multiindex_dataframe():
     gdg1 = gd.from_pandas(pdg1)
     gdg2 = gd.from_pandas(pdg2)
     assert_eq(
-        gd.concat([gdg1, gdg2]).astype("float64"), pd.concat([pdg1, pdg2])
+        gd.concat([gdg1, gdg2]).astype("float64"),
+        pd.concat([pdg1, pdg2]),
+        check_index_type=True,
     )
     assert_eq(gd.concat([gdg1, gdg2], axis=1), pd.concat([pdg1, pdg2], axis=1))
 
@@ -221,7 +247,9 @@ def test_concat_multiindex_series():
     pdg2 = pdg["z"]
     gdg1 = gd.from_pandas(pdg1)
     gdg2 = gd.from_pandas(pdg2)
-    assert_eq(gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]))
+    assert_eq(
+        gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]), check_index_type=True
+    )
     assert_eq(gd.concat([gdg1, gdg2], axis=1), pd.concat([pdg1, pdg2], axis=1))
 
 
@@ -363,10 +391,19 @@ def test_concat_mixed_input():
     assert_eq(
         pd.concat([pdf1, None, pdf2, None]),
         gd.concat([gdf1, None, gdf2, None]),
+        check_index_type=True,
     )
-    assert_eq(pd.concat([pdf1, None]), gd.concat([gdf1, None]))
-    assert_eq(pd.concat([None, pdf2]), gd.concat([None, gdf2]))
-    assert_eq(pd.concat([None, pdf2, pdf1]), gd.concat([None, gdf2, gdf1]))
+    assert_eq(
+        pd.concat([pdf1, None]), gd.concat([gdf1, None]), check_index_type=True
+    )
+    assert_eq(
+        pd.concat([None, pdf2]), gd.concat([None, gdf2]), check_index_type=True
+    )
+    assert_eq(
+        pd.concat([None, pdf2, pdf1]),
+        gd.concat([None, gdf2, gdf1]),
+        check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize(
@@ -540,7 +577,7 @@ def test_concat_empty_dataframes(df, other, ignore_index):
             else:
                 expected[key] = expected[key].fillna(-1)
                 actual[key] = col.fillna(-1)
-        assert_eq(expected, actual, check_dtype=False)
+        assert_eq(expected, actual, check_dtype=False, check_index_type=True)
     else:
         assert_eq(
             expected, actual, check_index_type=False if gdf.empty else True
@@ -564,7 +601,7 @@ def test_concat_empty_and_nonempty_series(ignore_index, data, axis):
     got = gd.concat([s1, s2], axis=axis, ignore_index=ignore_index)
     expect = pd.concat([ps1, ps2], axis=axis, ignore_index=ignore_index)
 
-    assert_eq(got, expect)
+    assert_eq(got, expect, check_index_type=True)
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -577,7 +614,7 @@ def test_concat_two_empty_series(ignore_index, axis):
     got = gd.concat([s1, s2], axis=axis, ignore_index=ignore_index)
     expect = pd.concat([ps1, ps2], axis=axis, ignore_index=ignore_index)
 
-    assert_eq(got, expect)
+    assert_eq(got, expect, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -670,6 +707,7 @@ def test_concat_join(objs, ignore_index, sort, join, axis):
             ignore_index=ignore_index,
             axis=axis,
         ),
+        check_index_type=True,
     )
 
 
@@ -1247,6 +1285,7 @@ def test_concat_preserve_order():
     assert_eq(
         pd.concat(dfs, join="inner"),
         gd.concat([gd.DataFrame(df) for df in dfs], join="inner"),
+        check_index_type=True,
     )
 
 
@@ -1255,7 +1294,11 @@ def test_concat_preserve_order():
 def test_concat_single_object(ignore_index, typ):
     """Ensure that concat on a single object does not change it."""
     obj = typ([1, 2, 3])
-    assert_eq(gd.concat([obj], ignore_index=ignore_index, axis=0), obj)
+    assert_eq(
+        gd.concat([obj], ignore_index=ignore_index, axis=0),
+        obj,
+        check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize("ltype", [Decimal64Dtype(3, 1), Decimal64Dtype(7, 2)])
@@ -1277,7 +1320,7 @@ def test_concat_decimal_dataframe(ltype, rtype):
     got = gd.concat([gdf1, gdf2])
     expected = pd.concat([pdf1, pdf2])
 
-    assert_eq(expected, got)
+    assert_eq(expected, got, check_index_type=True)
 
 
 @pytest.mark.parametrize("ltype", [Decimal64Dtype(4, 1), Decimal64Dtype(8, 2)])
@@ -1294,7 +1337,7 @@ def test_concat_decimal_series(ltype, rtype):
     got = gd.concat([gs1, gs2])
     expected = pd.concat([ps1, ps2])
 
-    assert_eq(expected, got)
+    assert_eq(expected, got, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -1395,7 +1438,7 @@ def test_concat_decimal_series(ltype, rtype):
 )
 def test_concat_decimal_numeric_dataframe(df1, df2, df3, expected):
     df = gd.concat([df1, df2, df3])
-    assert_eq(df, expected)
+    assert_eq(df, expected, check_index_type=True)
     assert_eq(df.val.dtype, expected.val.dtype)
 
 
@@ -1487,7 +1530,7 @@ def test_concat_decimal_numeric_dataframe(df1, df2, df3, expected):
 )
 def test_concat_decimal_numeric_series(s1, s2, s3, expected):
     s = gd.concat([s1, s2, s3])
-    assert_eq(s, expected)
+    assert_eq(s, expected, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -1558,7 +1601,7 @@ def test_concat_decimal_numeric_series(s1, s2, s3, expected):
 )
 def test_concat_decimal_non_numeric(s1, s2, expected):
     s = gd.concat([s1, s2])
-    assert_eq(s, expected)
+    assert_eq(s, expected, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -1581,4 +1624,4 @@ def test_concat_decimal_non_numeric(s1, s2, expected):
 )
 def test_concat_struct_column(s1, s2, expected):
     s = gd.concat([s1, s2])
-    assert_eq(s, expected)
+    assert_eq(s, expected, check_index_type=True)

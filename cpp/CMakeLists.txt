@@ -114,6 +114,8 @@ rapids_find_package(Threads REQUIRED
 rapids_cpm_init()
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
+# find nvCOMP
+include(cmake/thirdparty/get_nvcomp.cmake)
 # find thrust/cub
 include(cmake/thirdparty/get_thrust.cmake)
 # find rmm
@@ -232,7 +234,6 @@ add_library(cudf
     src/groupby/sort/group_sum.cu
     src/groupby/sort/scan.cpp
     src/groupby/sort/group_count_scan.cu
-    src/groupby/sort/group_dense_rank_scan.cu
     src/groupby/sort/group_max_scan.cu
     src/groupby/sort/group_min_scan.cu
     src/groupby/sort/group_rank_scan.cu
@@ -509,7 +510,8 @@ target_link_libraries(cudf
                   ${ARROW_LIBRARIES}
                   cudf::Thrust
                   rmm::rmm
-           PRIVATE cuco::cuco)
+           PRIVATE cuco::cuco
+                   nvcomp::nvcomp)
 
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
@@ -738,7 +740,7 @@ rapids_export(BUILD cudf
     FINAL_CODE_BLOCK build_code_string)
 
 export(EXPORT cudf-testing-exports
-    FILE ${CUDF_BINARY_DIR}/cudf-testing.cmake
+    FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
     NAMESPACE   cudf::)
 rapids_export_write_dependencies(BUILD cudf-testing-exports
     "${CUDF_BINARY_DIR}/cudf-testing-dependencies.cmake")

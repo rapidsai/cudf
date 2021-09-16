@@ -12,20 +12,20 @@ from cudf._lib.concat import concat_columns
 from cudf._lib.scalar import _is_null_host_scalar
 from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
 from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
     is_bool_dtype,
+    is_categorical_dtype,
     is_integer,
     is_integer_dtype,
+    is_list_like,
     is_numeric_dtype,
+    is_scalar,
 )
 from cudf.core.column.column import as_column
 from cudf.utils.dtypes import (
-    _is_non_decimal_numeric_dtype,
-    _is_scalar_or_zero_d_array,
     find_common_type,
-    is_categorical_dtype,
     is_column_like,
-    is_list_like,
-    is_scalar,
     to_cudf_compatible_scalar,
 )
 
@@ -562,7 +562,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
 
 def _normalize_dtypes(df):
-    if len(df.columns) > 0:
+    if df._num_columns > 0:
         dtypes = df.dtypes.values.tolist()
         normalized_dtype = np.result_type(*dtypes)
         for name, col in df._data.items():
