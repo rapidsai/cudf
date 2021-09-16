@@ -874,6 +874,11 @@ class MultiIndex(Frame, BaseIndex):
             return self.names == other.names
         return NotImplemented
 
+    @property
+    def size(self):
+        # The size of a MultiIndex is only dependent on the number of rows.
+        return self._num_rows
+
     def take(self, indices):
         from collections.abc import Sequence
         from numbers import Integral
