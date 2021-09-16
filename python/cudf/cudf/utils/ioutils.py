@@ -1247,6 +1247,8 @@ def get_filepath_or_buffer(
         paths = [path_or_data]
         if fs is None:
             fs, paths = _get_filesystem_and_paths(path_or_data, **kwargs)
+            if fs is None:
+                return path_or_data, compression
 
         if len(paths) == 0:
             raise FileNotFoundError(
