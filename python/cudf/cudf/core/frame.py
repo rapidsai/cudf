@@ -25,7 +25,15 @@ from nvtx import annotate
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
-from cudf.api.types import is_dict_like, issubdtype
+from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
+    is_decimal_dtype,
+    is_dict_like,
+    is_integer_dtype,
+    is_scalar,
+    issubdtype,
+)
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -37,14 +45,7 @@ from cudf.core.join import merge
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import (
-    _is_non_decimal_numeric_dtype,
-    _is_scalar_or_zero_d_array,
-    is_column_like,
-    is_decimal_dtype,
-    is_integer_dtype,
-    is_scalar,
-)
+from cudf.utils.dtypes import is_column_like
 
 T = TypeVar("T", bound="Frame")
 
@@ -1856,7 +1857,7 @@ class Frame(libcudf.table.Table):
             if isinstance(self, cudf.MultiIndex):
                 # TODO: Need to update this once MultiIndex is refactored,
                 # should be able to treat it similar to other Frame object
-                result = cudf.Index(self._source_data[gather_map])
+                result = cudf.Index(self.to_frame(index=False)[gather_map])
             else:
                 result = self[gather_map]
                 if not keep_index:
@@ -1989,7 +1990,7 @@ class Frame(libcudf.table.Table):
                     dtype = np_dtypes[name]
                 elif pandas_dtypes[
                     name
-                ] == "object" and cudf.utils.dtypes.is_struct_dtype(
+                ] == "object" and cudf.api.types.is_struct_dtype(
                     np_dtypes[name]
                 ):
                     # Incase of struct column, libcudf is not aware of names of
@@ -3168,9 +3169,13 @@ class Frame(libcudf.table.Table):
             index = cudf.core.index.as_index(index)
 
             if isinstance(index, cudf.MultiIndex):
-                idx_dtype_match = (
-                    df.index._source_data.dtypes == index._source_data.dtypes
-                ).all()
+                idx_dtype_match = all(
+                    left_dtype == right_dtype
+                    for left_dtype, right_dtype in zip(
+                        (col.dtype for col in df.index._data.columns),
+                        (col.dtype for col in index._data.columns),
+                    )
+                )
             else:
                 idx_dtype_match = df.index.dtype == index.dtype
 
@@ -5057,7 +5062,7 @@ def _get_replacement_values_for_columns(
     if is_scalar(to_replace) and is_scalar(value):
         to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
         values_columns = {col: [value] for col in columns_dtype_map}
-    elif cudf.utils.dtypes.is_list_like(to_replace) or isinstance(
+    elif cudf.api.types.is_list_like(to_replace) or isinstance(
         to_replace, ColumnBase
     ):
         if is_scalar(value):
@@ -5070,7 +5075,7 @@ def _get_replacement_values_for_columns(
                 )
                 for col in columns_dtype_map
             }
-        elif cudf.utils.dtypes.is_list_like(value):
+        elif cudf.api.types.is_list_like(value):
             if len(to_replace) != len(value):
                 raise ValueError(
                     f"Replacement lists must be "
@@ -5220,7 +5225,7 @@ def _drop_rows_by_labels(
         # 1. Merge Index df and data df along column axis:
         # | id | ._index df | data column(s) |
         idx_nlv = obj._index.nlevels
-        working_df = obj._index._source_data
+        working_df = obj._index.to_frame(index=False)
         working_df.columns = [i for i in range(idx_nlv)]
         for i, col in enumerate(obj._data):
             working_df[idx_nlv + i] = obj._data[col]
