@@ -509,7 +509,7 @@ target_link_libraries(cudf
                   cudf::Thrust
                   rmm::rmm
            PRIVATE cuco::cuco
-	                 ZLIB::ZLIB
+	             ZLIB::ZLIB
                    nvcomp::nvcomp)
 
 # Add Conda library, and include paths if specified
