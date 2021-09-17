@@ -23,6 +23,7 @@
 #include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <exception>
 #include <numeric>
 #include <vector>
@@ -78,36 +79,62 @@ size_type column_view_base::null_count(size_type begin, size_type end) const
            : cudf::count_unset_bits(null_mask(), offset() + begin, offset() + end);
 }
 
+// Alternative fast hash functions
 // simple prime number multiplication algorithm.
 // Adapted from http://myeyesareblind.com/2017/02/06/Combine-hash-values/#apachecommons
-constexpr void combine_hash(size_t& h1, size_t h2) { h1 = h1 * 127 + h2; }
+// constexpr std::size_t combine_hash(std::size_t h1, std::size_t h2) { return h1 * 127 + h2; }
 
-size_t shallow_hash(column_view const& input)
+// Struct to use custom hash combine and fold expression
+struct HashValue {
+  std::size_t hash;
+  explicit HashValue(std::size_t h) : hash{h} {}
+  HashValue operator^(HashValue const& other) const
+  {
+    return HashValue{hash_combine(hash, other.hash)};
+  }
+};
+
+template <typename... Ts>
+constexpr auto hash(Ts&&... ts)
 {
-  size_t hash = 0;
-  combine_hash(hash, std::hash<data_type>{}(input.type()));
-  combine_hash(hash, std::hash<size_type>{}(input.size()));
-  combine_hash(hash, std::hash<void const*>{}(input.head()));
-  combine_hash(hash, std::hash<void const*>{}(input.null_mask()));
-  combine_hash(hash, std::hash<size_type>{}(input.offset()));
-  std::for_each(input.child_begin(), input.child_end(), [&hash](auto const& child) {
-    combine_hash(hash, shallow_hash(child));
-  });
-  return hash;
+  return (... ^ HashValue(std::hash<Ts>{}(ts))).hash;
 }
 
-bool is_shallow_equal(column_view const& lhs, column_view const& rhs)
+std::size_t shallow_hash_impl(column_view const& c, bool is_parent_empty = false)
 {
-  return (lhs.type() == rhs.type()) and (lhs.size() == rhs.size()) and
-         (lhs.head() == rhs.head()) and (lhs.null_mask() == rhs.null_mask()) and
-         (lhs.offset() == rhs.offset()) and
+  std::size_t const init = (c.is_empty() or is_parent_empty)
+                             ? hash(c.type(), c.size())
+                             : hash(c.type(), c.size(), c.head(), c.null_mask(), c.offset());
+  return std::accumulate(c.child_begin(),
+                         c.child_end(),
+                         init,
+                         [&c, is_parent_empty](std::size_t hash, auto const& child) {
+                           return hash_combine(
+                             hash, shallow_hash_impl(child, c.is_empty() or is_parent_empty));
+                         });
+}
+
+std::size_t shallow_hash(column_view const& input) { return shallow_hash_impl(input); }
+
+bool shallow_equal_impl(column_view const& lhs,
+                        column_view const& rhs,
+                        bool is_parent_empty = false)
+{
+  bool const is_empty = (lhs.is_empty() and rhs.is_empty()) or is_parent_empty;
+  return (lhs.type() == rhs.type()) and
+         (is_empty or ((lhs.size() == rhs.size()) and (lhs.head() == rhs.head()) and
+                       (lhs.null_mask() == rhs.null_mask()) and (lhs.offset() == rhs.offset()))) and
          std::equal(lhs.child_begin(),
                     lhs.child_end(),
                     rhs.child_begin(),
                     rhs.child_end(),
-                    [](auto const& lhs_child, auto const& rhs_child) {
-                      return is_shallow_equal(lhs_child, rhs_child);
+                    [is_empty](auto const& lhs_child, auto const& rhs_child) {
+                      return shallow_equal_impl(lhs_child, rhs_child, is_empty);
                     });
+}
+bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs)
+{
+  return shallow_equal_impl(lhs, rhs);
 }
 }  // namespace detail
 

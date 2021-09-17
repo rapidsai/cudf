@@ -27,6 +27,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <iterator>
 
 /**
@@ -328,6 +329,22 @@ inline bool operator!=(data_type const& lhs, data_type const& rhs) { return !(lh
 std::size_t size_of(data_type t);
 
 /**
+ * @brief Combines two hashed values into a single hashed value.
+ *
+ * Adapted from Boost hash_combine function, modified for 64-bit
+ * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
+ * https://stackoverflow.com/a/4948967/1550940
+ *
+ * @param lhs The first hashed value
+ * @param rhs The second hashed value
+ * @return Combined hash value
+ */
+constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
+{
+  lhs ^= rhs + 0x9e3779b97f4a7c15 + (lhs << 6) + (lhs >> 2);
+  return lhs;
+}
+/**
  *  @brief Identifies the hash function to be used
  */
 enum class hash_id {
@@ -352,8 +369,8 @@ template <>
 struct hash<cudf::data_type> {
   std::size_t operator()(cudf::data_type const& type) const noexcept
   {
-    return std::hash<int32_t>{}(static_cast<int32_t>(type.id())) * 127 +
-           std::hash<int32_t>{}(type.scale());
+    return cudf::hash_combine(std::hash<int32_t>{}(static_cast<int32_t>(type.id())),
+                              std::hash<int32_t>{}(type.scale()));
   }
 };
 }  // namespace std
