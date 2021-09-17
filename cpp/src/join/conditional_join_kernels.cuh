@@ -70,14 +70,15 @@ __global__ void compute_conditional_join_output_size(
   cudf::size_type const right_num_rows = right_table.num_rows();
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data, thread_intermediate_storage);
+    left_table, right_table, device_expression_data);
 
   for (cudf::size_type left_row_index = left_start_idx; left_row_index < left_num_rows;
        left_row_index += left_stride) {
     bool found_match = false;
     for (cudf::size_type right_row_index = 0; right_row_index < right_num_rows; right_row_index++) {
       auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
-      evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
+      evaluator.evaluate(
+        output_dest, left_row_index, right_row_index, 0, thread_intermediate_storage);
       if (output_dest.is_valid() && output_dest.value()) {
         if ((join_type != join_kind::LEFT_ANTI_JOIN) &&
             !(join_type == join_kind::LEFT_SEMI_JOIN && found_match)) {
@@ -161,13 +162,14 @@ __global__ void conditional_join(table_device_view left_table,
   unsigned int const activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data, thread_intermediate_storage);
+    left_table, right_table, device_expression_data);
 
   if (left_row_index < left_num_rows) {
     bool found_match = false;
     for (size_type right_row_index(0); right_row_index < right_num_rows; ++right_row_index) {
       auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
-      evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
+      evaluator.evaluate(
+        output_dest, left_row_index, right_row_index, 0, thread_intermediate_storage);
 
       if (output_dest.is_valid() && output_dest.value()) {
         // If the rows are equal, then we have found a true match
