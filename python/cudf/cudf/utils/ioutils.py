@@ -1012,6 +1012,28 @@ delimiter : string, default None, optional delimiter to insert into the
 doc_kafka_datasource = docfmt_partial(docstring=_docstring_kafka_datasource)
 
 
+_docstring_text_datasource = """
+Configuration object for a text Datasource
+
+Parameters
+----------
+filepath_or_buffer : str, path object, or file-like object
+    Either a path to a file (a `str`, `pathlib.Path`, or
+    `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
+    or any object with a `read()` method (such as builtin `open()` file handler
+    function or `StringIO`).
+delimiter : string, default None, The delimiter that should be used
+    for splitting text chunks into seperate cudf column rows. Currently
+    only a single delimiter is supported.
+
+Returns
+-------
+result : GPU ``Series``
+
+"""
+doc_read_text = docfmt_partial(docstring=_docstring_text_datasource)
+
+
 def is_url(url):
     """Check if a string is a valid URL to a network location.
 
