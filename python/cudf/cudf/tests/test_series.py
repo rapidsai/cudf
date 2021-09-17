@@ -285,25 +285,25 @@ def test_series_append_existing_buffers():
     a2 = cudf.Series(np.arange(5))
     gs = gs.append(a2)
     assert len(gs) == 15
-    np.testing.assert_equal(gs.to_array(), np.hstack([a1, a2.to_array()]))
+    np.testing.assert_equal(gs.to_numpy(), np.hstack([a1, a2.to_numpy()]))
 
     # Ensure appending to previous buffer
     a3 = cudf.Series(np.arange(3))
     gs = gs.append(a3)
     assert len(gs) == 18
-    a4 = np.hstack([a1, a2.to_array(), a3.to_array()])
-    np.testing.assert_equal(gs.to_array(), a4)
+    a4 = np.hstack([a1, a2.to_numpy(), a3.to_numpy()])
+    np.testing.assert_equal(gs.to_numpy(), a4)
 
     # Appending different dtype
     a5 = cudf.Series(np.array([1, 2, 3], dtype=np.int32))
     a6 = cudf.Series(np.array([4.5, 5.5, 6.5], dtype=np.float64))
     gs = a5.append(a6)
     np.testing.assert_equal(
-        gs.to_array(), np.hstack([a5.to_array(), a6.to_array()])
+        gs.to_numpy(), np.hstack([a5.to_numpy(), a6.to_numpy()])
     )
     gs = cudf.Series(a6).append(a5)
     np.testing.assert_equal(
-        gs.to_array(), np.hstack([a6.to_array(), a5.to_array()])
+        gs.to_numpy(), np.hstack([a6.to_numpy(), a5.to_numpy()])
     )
 
 
@@ -691,7 +691,6 @@ def test_series_round(arr, decimals):
     expected = pser.round(decimals)
 
     assert_eq(result, expected)
-    np.array_equal(ser.nullmask.to_array(), result.to_array())
 
 
 def test_series_round_half_up():
