@@ -1645,7 +1645,7 @@ class DatetimeIndex(GenericIndex):
 
         @property
         def day(self):
-            return indexSeries["iso_day"]
+            return indexSeries["day"]
 
         @property
         def week(self):
