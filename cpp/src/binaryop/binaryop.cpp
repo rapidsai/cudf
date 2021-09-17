@@ -432,11 +432,10 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
     return detail::binary_operation(lhs, rhs, op, output_type, stream, mr);
 
-  // if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type())) TODO
-  //   return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
-
   // Check for datatype
   CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
+  CUDF_EXPECTS(not is_fixed_point(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(not is_fixed_point(rhs.type()), "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
@@ -460,11 +459,10 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
     return detail::binary_operation(lhs, rhs, op, output_type, stream, mr);
 
-  // if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
-  //   return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
-
   // Check for datatype
   CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
+  CUDF_EXPECTS(not is_fixed_point(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(not is_fixed_point(rhs.type()), "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
@@ -490,11 +488,10 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
     return detail::binary_operation(lhs, rhs, op, output_type, stream, mr);
 
-  // if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type())) // TODO
-  //   return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
-
   // Check for datatype
   CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
+  CUDF_EXPECTS(not is_fixed_point(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(not is_fixed_point(rhs.type()), "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
