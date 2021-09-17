@@ -5525,7 +5525,7 @@ class DatetimeProperties(object):
 
         @property
         def year(self):
-            return isoSeries["iso_year"]
+            return isoSeries["year"]
 
         return isoSeries
 
