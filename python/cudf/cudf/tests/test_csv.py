@@ -1487,7 +1487,7 @@ def test_csv_writer_file_append(tmpdir):
 
     result = cudf.read_csv(gdf_df_fname)
     expected = cudf.concat([gdf1, gdf2], ignore_index=True)
-    assert_eq(result, expected)
+    assert_eq(result, expected, check_index_type=True)
 
 
 def test_csv_writer_buffer(tmpdir):
