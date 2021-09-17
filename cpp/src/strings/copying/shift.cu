@@ -96,8 +96,9 @@ std::unique_ptr<column> shift(strings_column_view const& input,
 
   // output offsets column is the same size as the input
   auto const input_offsets =
-    cudf::slice(input.offsets(),
-                std::vector<size_type>{input.offset(), input.offset() + input.size() + 1})
+    cudf::detail::slice(input.offsets(),
+                        std::vector<size_type>{input.offset(), input.offset() + input.size() + 1},
+                        stream)
       .front();
   auto const offsets_size = input_offsets.size();
   auto offsets_column     = cudf::detail::allocate_like(
